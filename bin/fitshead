@@ -1,0 +1,37 @@
+#!/usr/bin/env python
+"""
+usage:
+    fitshead filename [extension]
+
+Print out the fits header.  Defaults to extension 0
+
+Required pyfits
+"""
+
+import sys
+try:
+    import pyfits
+except:
+    try:
+        from esutil import pyfits
+    except:
+        raise ImportError("Could not import pyfits")
+
+def usage():
+    sys.stdout.write('usage: fitshead filename [extension]\n')
+    sys.stdout.write("  extension is numerical, zero offset.  "
+                     "Defaults to zero, the first\n")
+
+if len(sys.argv) < 2:
+    usage()
+    sys.exit(45)
+
+fname=sys.argv[1]
+
+ext=0
+if len(sys.argv) >= 3:
+    ext=int(sys.argv[2])
+
+hdr = pyfits.getheader(fname, ext=ext)
+
+sys.stdout.write('%s\n' % hdr)

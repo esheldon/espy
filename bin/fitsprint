@@ -1,0 +1,104 @@
+#!/usr/bin/env python
+"""
+usage:
+    %prog [options] filename extension
+
+Description:
+
+    Print out columns from a fits binary table.  By default, all columns are
+    printed.  Specify -c/--columns to print a subset.  By default, the
+    delimiter is comma "," for CSV, but this can be specified using the
+    -d/--delimiter keywords.
+
+    The extension is numerical, starting from zero.
+
+Requirements:
+    Requires esutil
+
+"""
+
+import sys
+import esutil as eu
+
+from optparse import OptionParser
+
+parser=OptionParser(__doc__)
+
+parser.add_option("-c","--columns",default=None, 
+    help="A comma-separated list of columns to print.  "
+         "Can be numerical or strings. Column names should be "
+         "specified in all lower case.  By default all columns are printed. ")
+
+parser.add_option("-d","--delim",default=None, 
+    help="The delimiter to be used between fields.  Default is a space.")
+parser.add_option("--array-delim",default=None, 
+    help="The delimiter to be used between elements of arrays.  "
+                  "Default is a the same as --delim, except when arrays are."
+                  "bracketed when the default is a comma")
+
+parser.add_option("-n","--nlines",default=None, 
+    help="The number of rows to print.  Default is all.")
+
+
+parser.add_option('-b','--bracket-arrays',default=False,action="store_true",
+                  help="Bracket arrays to indicate dimensions.")
+
+parser.add_option('-f','--fancy',default=False,action="store_true",
+                  help="Use fancy printing.")
+
+parser.add_option('-H','--header',default=False,action="store_true",
+                  help="For simple printing, write a header with column names")
+
+if __name__=="__main__":
+    options, args = parser.parse_args(sys.argv[1:])
+
+    if len(args) < 2:
+        parser.print_help()
+        sys.exit(45)
+
+    fname=args[0]
+    ext = int(args[1])
+
+    data = eu.io.read(fname, ext=ext, lower=True)
+    columns = options.columns
+    header = options.header
+    delim = options.delim
+    array_delim = options.array_delim
+    fancy = options.fancy
+    bracket_arrays = options.bracket_arrays
+    nlines = options.nlines
+    
+    keys = {}
+    if delim is not None:
+        keys['delim'] = delim
+    if array_delim is not None:
+        keys['array_delim'] = array_delim
+
+    keys['bracket_arrays'] = bracket_arrays
+    keys['fancy'] = fancy
+    aw = eu.numpy_util.ArrayWriter(**keys)
+
+    write_keys = {}
+
+    write_keys['header'] = header
+    if columns is not None:
+        columns = columns.split(',')
+        if not eu.misc.isstring(eval("'"+columns[0]+"'")):
+            columns = [int(c) for c in columns]
+        write_keys['fields'] = columns
+    if nlines is not None:
+        nlines = int(nlines)
+        write_keys['nlines'] = nlines
+    
+    # catch a particular type of error: broken pipe.
+    # this is a python bug which occurs when sending
+    # the output through a pipe
+    try:
+        aw.write(data, **write_keys)
+    except IOError as (errno, strerror):
+        if errno == 32:
+            pass
+        else:
+            sys.stderr.write("Unexpected error:%s\n" % sys.exc_info()[0])
+    del aw
+

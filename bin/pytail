@@ -1,0 +1,367 @@
+#!/usr/bin/env python
+"""
+    %prog [options] file1 file2 file3 ...
+
+Description:
+
+    Tail multiple files.  The files are shown in a grid of windows, with the
+    number of columns specified by the -c/--columns options.  By default a
+    single column is used.
+
+    e.g. for two columns
+
+        --------n1---------------n4-------
+                        |
+                        |
+                        |
+                        |
+        --------n2---------------n5-------
+                        |
+                        |
+                        |
+                        |
+        --------n3---------------n6-------
+                        |
+                        |
+                        |
+                        |
+
+    where n1,n2... etc. show where the file names are displayed.  The number of
+    rows is automatically adjusted to fit all the files within the specified
+    number of columns.  
+
+    The default poll time is 1 second. This can be adjusted using the -p/--poll
+    options.
+
+    If the file names become too long, the are truncated to fit with a
+    preceding ...  You can also use the -b/--basename options and only the base
+    name will be shown, which might be more clear.
+
+    To exit the program, hit ctrl-c
+
+Dependencies:
+    python and the python curses package
+
+"""
+
+
+import os
+import sys
+from sys import stdout,stderr
+from optparse import OptionParser
+import curses
+import time
+import copy
+
+try:
+    # newer version 
+    import curses.wrapper.wrapper as curses_wrapper
+except:
+    import curses.wrapper as curses_wrapper
+
+
+parser=OptionParser(__doc__)
+
+parser.add_option("-p","--poll",default=1, 
+                  help="poll time in seconds.  Default: %default")
+parser.add_option("-c","--columns",default=1, 
+                  help="Number of columns.  Default: %default")
+parser.add_option("-b","--basename",action='store_true',default=False, 
+                  help="Only display the basename of each file.  Default: %default")
+class MTail:
+    def __init__(self, scr, poll, ncolumns, file_names, basename=False):
+        self.scr = scr
+        self.poll=poll
+        self.ncolumns=ncolumns
+        self.file_names=file_names
+        self.nfiles = len(file_names)
+        self.basename = basename
+
+        self.open_files()
+
+        self.set_overall_win_size()
+        self.set_win_geom()
+        self.draw_separators()
+        self.draw_names()
+        self.create_windows()
+
+    def open_files(self):
+        self.files = []
+        self.stats = []
+        for f in self.file_names:
+
+            fname = os.path.expanduser(f)
+            fname = os.path.expandvars(fname)
+            fobj = open(fname,'r')
+            self.files.append(fobj)
+
+            st = os.stat(fname)
+            self.stats.append(st)
+
+    def set_overall_win_size(self):
+        self.ymax, self.xmax = self.scr.getmaxyx()
+
+    def set_win_geom(self):
+        """
+        Set the size and location of each window.  
+
+        """
+        
+        # this is the number of files verticaly gridded, not the number of lines
+        self.nrows = (self.nfiles/self.ncolumns)
+        if (self.nfiles % self.ncolumns) != 0:
+            self.nrows += 1
+
+        # There will be a separator between rows, so subtract self.nrows
+        self.ywinsize = (self.ymax - self.nrows)/self.nrows
+        self.extra_ychars = self.ymax - self.ywinsize*self.nrows - self.nrows
+        
+        # only separator *between* columns, so only subtract ncolumns-1
+        self.xwinsize = (self.xmax-(self.ncolumns-1))/self.ncolumns
+        self.extra_xchars = self.xmax - self.xwinsize*self.ncolumns - (self.ncolumns-1)
+
+        self.ystart = []
+        self.ysize = []
+        self.xstart = []
+        self.xsize = []
+
+        column = -1
+        row=0
+        for fi in xrange(self.nfiles):
+
+            if (fi % self.nrows) == 0:
+                # move to next column: increment column and reset row to 0
+                row = 0
+                column += 1
+
+            # note the +1 to account for the separators.  We will not actually
+            # define the windows to cover those areas
+
+            self.ystart.append(self.get_yseparator_position(row)+1)
+            if row == 0:
+                self.ysize.append(self.ywinsize + self.extra_ychars)
+            else:
+                self.ysize.append(self.ywinsize)
+
+            if column == 0:
+                self.xstart.append(0)
+                self.xsize.append(self.xwinsize + self.extra_xchars)
+            else:
+                self.xstart.append(self.get_xseparator_position(column)+1)
+                self.xsize.append(self.xwinsize)
+            row += 1
+
+    def draw_separators(self):
+        """
+        e.g.
+
+        ----------------------------------
+                        |
+                        |
+                        |
+                        |
+        ----------------------------------
+                        |
+                        |
+                        |
+                        |
+        ----------------------------------
+                        |
+                        |
+                        |
+                        |
+        """
+        # using a zero for the character instead of a string
+        # will cause it to join the dashes
+        linechar = 0
+        for col in xrange(1,self.ncolumns):
+            x = self.get_xseparator_position(col)
+            self.scr.vline(0, x, linechar, self.ymax)
+
+        for row in xrange(self.nrows):
+            y = self.get_yseparator_position(row)
+            self.scr.hline(y, 0, linechar, self.xmax)
+
+        # fill in gaps created by the lines
+        column = -1
+        row=0
+        for fi in xrange(self.nfiles):
+
+            if (fi % self.nrows) == 0:
+                # move to next column: increment column and reset row to 0
+                row = 0
+                column += 1
+
+            if (column != (self.ncolumns-1)):
+                y = self.ystart[fi]-1
+                x = self.xstart[fi] + self.xsize[fi]
+                if row == 0:
+                    self.scr.addch(y, x, curses.ACS_TTEE) # T shape so not to protrude up
+                else:
+                    self.scr.addch(y, x, curses.ACS_PLUS) # plus fills gap nicely
+            row += 1
+
+
+        self.scr.refresh()
+
+    def get_yseparator_position(self, row):
+        if row == 0:
+            y=0
+        else:
+            y = (self.ywinsize+1)*row + self.extra_ychars
+        return y
+
+    def get_xseparator_position(self, column):
+        if column == 0:
+            raise ValueError("no separator for column 0")
+        # we subtract 1 because the first column does not have separator
+        x = self.extra_xchars + self.xwinsize*column + (column -1)
+        return x
+
+    def get_title_position(self, filenum):
+        name = self.get_fname_for_display(filenum)
+        y = self.ystart[filenum]-1
+        midpoint = (self.xsize[filenum] - len(name))/2
+        if midpoint < 0:
+            midpoint = 0
+        x = self.xstart[filenum] + midpoint
+        return y, x
+
+    def get_fname_for_display(self, filenum):
+        name = copy.copy(self.file_names[filenum])
+
+        if self.basename:
+            name = os.path.basename(name)
+
+        lname = len(name)
+        maxlen = self.xsize[filenum] - 2
+        if lname > maxlen:
+            name = '...'+name[lname-maxlen+3:]
+        return name
+
+    def draw_names(self):
+        """
+        e.g.
+
+        --------n1---------------n4-------
+                        |
+                        |
+                        |
+                        |
+        --------n2---------------n5-------
+                        |
+                        |
+                        |
+                        |
+        --------n3---------------n6-------
+                        |
+                        |
+                        |
+                        |
+        """
+        for fi in xrange(self.nfiles):
+            name = self.get_fname_for_display(fi)
+
+            y,x = self.get_title_position(fi)
+            self.scr.addstr(y,x,name)
+        self.scr.refresh()
+
+
+    def create_windows(self):
+        """
+        Create the scrollable windows using our pre-defined geometries
+        """
+        self.windows = []
+
+        #self.scr.refresh()
+        for fi in xrange(self.nfiles):
+            subwin = self.scr.subwin(self.ysize[fi], 
+                                     self.xsize[fi], 
+                                     self.ystart[fi], 
+                                     self.xstart[fi])
+            subwin.scrollok(True)
+            self.windows.append(subwin)
+        #self.scr.refresh()
+
+    def tail_files(self):
+        self.load_existing_data()
+        self.update_files()
+
+    def load_existing_data(self):
+        """
+        This is the initial load of the files into the windows
+        """
+
+        # this is initial load
+
+        for fi in xrange(len(self.files)):
+
+            st = self.stats[fi]
+            f = self.files[fi]
+            win = self.windows[fi]
+            
+            # this would be the right amount to skip if all the lines were full
+            seekpos = st.st_size - (self.ywinsize+2)*self.xwinsize
+            if seekpos > 0:
+                f.seek(seekpos)
+
+            self.refresh_window(fi)
+
+    def update_files(self):
+        """
+        Now we watch the files for changes
+        """
+
+        while True:
+
+            for fi in xrange(len(self.files)):
+                newstat = os.stat(self.file_names[fi])
+                if newstat.st_size > self.stats[fi].st_size:
+                    # load the new text
+                    self.refresh_window(fi)
+                    self.stats[fi] = newstat
+            time.sleep(self.poll)
+
+    def refresh_window(self, filenum):
+        """
+
+        Simply read any text from the file and update the corresponding
+        window
+
+        """
+
+        data = self.files[filenum].read()
+        self.windows[filenum].addstr(data)
+        self.windows[filenum].refresh()
+
+
+            
+def mtail(scr, poll, columns, files, basename):
+    
+    # Allow use of default values for colors on terminals supporting this
+    # feature.  Use this to support transparency in your application. The
+    # default color is assigned to the color number -1. After calling this
+    # function, init_pair(x, curses.COLOR_RED, -1)  initializes, for instance,
+    # color pair x to a red foreground color on the default background.
+
+    curses.use_default_colors()
+
+    mt = MTail(scr, poll, columns, files, basename)
+    try:
+        mt.tail_files()
+    except KeyboardInterrupt:
+        pass
+
+if __name__=="__main__":
+
+    options, args = parser.parse_args(sys.argv[1:])
+    if len(args) < 1:
+        parser.print_help()
+        sys.exit(45)
+
+    poll = int(options.poll)
+    columns = int(options.columns)
+    basename = options.basename
+    files=args[:]
+
+    curses_wrapper(mtail, poll, columns, files, basename)

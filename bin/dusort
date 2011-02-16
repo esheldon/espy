@@ -1,0 +1,44 @@
+#!/usr/bin/env python
+
+import os
+import sys
+
+def get_uname():
+    # get system type
+    typeiter = os.popen("uname")
+    typeinfo = [t.rstrip() for t in typeiter]
+    type = typeinfo[0]
+    return type
+
+
+if __name__=="__main__":
+
+
+    uname = get_uname()
+    if uname == "Linux":
+        scommand = "du -a --max-depth=1"
+        hcommand = "du -ah --max-depth=1"
+    elif uname == "Darwin":
+        scommand = "/usr/bin/du -d 1"
+        hcommand = "/usr/bin/du -d 1 -h"
+
+    # human readable
+    human_readable = os.popen(hcommand)
+    # standard for sorting
+    sortable = os.popen(scommand)
+
+    hhash = {}
+    for s in sortable:
+        # also get human readable
+        hr = human_readable.readline()
+
+        # split by white space
+        ts = s.split()
+
+        key = int( ts[0] )
+        # removes trailing whitespace, including newline
+        hhash[key] = hr.rstrip()
+
+    for key in sorted(hhash):
+        sys.stdout.write('%s\n' % hhash[key])
+

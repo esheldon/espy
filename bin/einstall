@@ -1,0 +1,1345 @@
+#!/usr/bin/env python
+"""
+    %prog [options] product [version]
+
+Description:
+    Install the requested product.  Dependencies are also installed. 
+    By default the product is also "declared" to the EUPS system.
+
+    If version is not given, the default version is taken from the
+    install configuration.
+
+    The install configuration is assumed to be in
+        $EUPS_PATH/install-config/$product.install
+    But this can be given using the command line input.
+
+    Product Install Configuration:
+
+        Install configurations are python scripts.  Variables created in these
+        scripts are available to the installer.
+        
+        Data/variables in the installer can be referred to in the script, e.g.
+        self.version
+
+        The right combination of variables must be present in order to
+        install, such as the URL, source type, and install method.
+
+        The following is a list of variables that can be used during
+        installation:
+
+            Required values:
+
+                url: 
+                    The url to the code source.  Can be http, ftp, svn, or a
+                    local file.
+
+                source_type: 
+                    The type of the source.  Currently support svn, tar,
+                    tarbomb
+
+            You must either set "build_method" and "install_method", or
+            alternatively just an "install_method" that both builds
+            and installs, such as "configure-make-install".
+
+                build_method: 
+                    How the code should be built.  E.g.  scons, make,
+                    configure-make, cmake-make.  This is optional if
+                    install_method also builds the product.
+
+                install_method: 
+                    The method of installation.  configure-make-install,
+                    make-install, copy, python-setup, cmake-make-install
+                
+            Optional Values:
+
+                get_method:  The method for retrieving code from the url.
+                    Can be urllib, 'svn checkout', 'svn export', rsync
+                    Default is urllib.
+
+                default_version: 
+                    If set, then version need not be given on the command
+                    line.
+
+                create_ups: 
+                    A string to write to the file
+                    $PRODUCT_DIR/ups/product_name.table  This info is used by
+                    EUPS for "setting up"  the product and it's dependencies.
+
+                build_subdir:
+                    This indicates that the build should occur in a
+                    subdirectory.  E.g.  if the tarball untars to a directory
+                    prodname, we may have to change to the directory
+                    prodname/subdir to compile.
+
+        Example:
+
+            This is an example install configuration for vim.
+
+                default_version='7.2'
+
+                url=\"\"\"
+                'http://ftp.vim.org/pub/vim/unix/vim-%s.tar.bz2' % (self.version,)\"\"\"
+
+                source_type = 'tar'
+
+                # this will use the install_dir as prefix in configure
+                install_method = 'configure-make-install'
+
+                # create the ups table file after installation
+                create_ups=\"\"\"
+                envPrepend(PATH,${PRODUCT_DIR}/bin)
+                envPrepend(MANPATH,${PRODUCT_DIR}/share/man)
+                \"\"\"
+
+            
+            This is for installing numerical python:
+
+                default_version='1.3.0'
+                url=\"\"\"
+                'http://downloads.sourceforge.net/project/numpy/NumPy/%s/numpy-%s.tar.gz' % (self.version,self.version)\"\"\"
+                source_type = 'tar'
+
+                # this will use the install_dir as prefix in configure
+                install_method = 'python-setup'
+
+                # create the ups table file after installation
+                import platform
+                pyvers=platform.python_version_tuple()
+
+                # grab major version.  We'll have to add a path for both lib and lib64 
+                # just in case
+
+                # weird difference on mac where it is not strings but integers:
+                if not isinstance(pyvers[0], str):
+                    pyvers = [str(v) for v in pyvers]
+                pyvers='.'.join(pyvers[0:2])
+                create_ups=\"\"\"
+                setupOptional("python")
+                envPrepend(PYTHONPATH,${PRODUCT_DIR}/lib/python%s/site-packages)
+                envPrepend(PYTHONPATH,${PRODUCT_DIR}/lib64/python%s/site-packages)
+                \"\"\" % (pyvers,pyvers)
+                    
+"""
+
+modification_history="""
+    Created: 2009-07-26, Erin Sheldon, BNL.  Written in python.
+"""
+
+import os, sys
+from sys import stdout,stderr
+import shutil
+import tempfile
+import subprocess
+import datetime
+from optparse import OptionParser
+import eups
+
+try:
+    import svn.core
+    import svn.client
+    have_svnlib=True
+except:
+    stdout.write('Could not import svn.  Will call via the shell\n')
+    have_svnlib=False
+
+
+datestring = datetime.datetime.now().strftime("%Y-%m-%d-%H:%M")
+
+parser=OptionParser(__doc__)
+
+parser.add_option("--config-url",dest="config_url",
+                  help="Where to find an installation configuration file. "+\
+                  "Default is $EUPS_PATH/install-config/product.install. "+\
+                  "Only file system paths currently supported.")
+
+parser.add_option("-r","--install-dir",
+                  default=None,
+                  dest="install_dir",
+                  help="Install under this directory.  '-r' is historical.")
+
+parser.add_option("--nodeclare",action="store_true",
+        dest="nodeclare",
+        default=False,
+        help="Don't declare the product. Useful for local installs. "
+            "Default %default")
+parser.add_option("-c","--declare-current",action="store_true",
+        dest="declare_current",
+        default=False,
+        help="Declare the installed product as current. Default %default")
+
+parser.add_option("-y","--noprompt",action="store_true",
+        dest="noprompt",
+        default=False,
+        help="Don't prompt before installing dependencies. Default %default")
+
+parser.add_option("--force",action="store_true",
+        dest="force",
+        default=False,
+        help="Force use of listed install_dir even if it already "
+            "exists. Useful if must install into another pacakges root, as with basemap into matplotlib.  Default %default")
+
+config_ignores=[]
+class ProductInstaller(object):
+    def __init__(self, name, 
+                 version=None, 
+                 install_config=None, 
+                 nodeclare=False,
+                 verbose=True, **keys):
+        """
+        Class:
+            ProductInstaller
+        Construction:
+
+            info can be all specified as arguments or all specified in the
+            config file
+
+            Arguments:
+                name            The name of the product.  E.g. tmv
+
+            Keywords:
+                version         The version of the product, e.g. v1.5.1
+                default_version The default version to use, e.g. trunk
+                install_config  A config file containing relevant installation
+                                info. In the future will support remote urls.
+                nodeclare       Don't declare the product.  Useful for local
+                                installs.  Default False.
+
+
+            Additional keywords:
+                These are usually gotten from the install config.  See
+                the primary docs for einstall for a description of
+                the install configuarion.
+
+                source_type     Type of source, e.g. svn, tar, tarbomb.
+
+                get_method      Method for getting the source.  E.g. 
+                                local,urllib,rsync,svn export,svn checkout.  
+                                Default is urllib, which works for http, ftp, 
+                                and local files.
+
+                url             url of the source.  Can be http, svn, etc. but
+                                must be understood by the get_method
+
+                build_method    E.g. scons, make, configure-make, cmake-make
+                install_method  e.g. configure-make-install, make-install,
+                                copy, python-setup, cmake-make-install
+
+                verbose         if True print lots of info. Currently
+                                verbose=False is still pretty loud.
+
+                prompt          If True, then prompt before installing 
+                                dependencies.  Default True. 
+        """
+
+        self.dirstack = DirStack(verbose=True)
+
+        self.original_dir = os.getcwd()
+
+        self.verbose=verbose
+
+        self.nodeclare = nodeclare
+
+        
+        self.pars={}
+        self.name=name
+        if self.verbose:
+            stdout.write('\nProduct name = %s\n' % name)
+
+        # load a config file
+        if install_config is None:
+            install_config = DefaultInstallConfig(name) 
+        if os.path.exists(install_config):
+            self.LoadConfig(install_config)
+        else:
+            stdout.write(('\nInstall config %s not found, trying to'
+                          'work from the command line '
+                          'arguments\n' % install_config))
+
+        # keywords can override options in the build file
+        self.LoadKeywords(version=version, **keys)
+ 
+        # make sure we have enough info to get/build/install
+        self.ProcessPars()
+
+        if self.verbose:
+            stdout.flush()
+
+    def DoInstall(self, prompt=None):
+        if prompt is None:
+            prompt=self.prompt
+
+        self.Get()
+        self.Extract()
+        self.InstallDeps(prompt=prompt)
+        self.SetupDeps()
+        self.Build()
+        self.Install()
+        self.Declare()
+        self.Cleanup()
+
+    
+    def Get(self):
+        """
+        Creates the build_dir, changes into that directory, and gets the
+        data.  The CWD remains the build_dir after running this program
+        """
+
+        if self.verbose:
+            stdout.write('\nCreating temporary build dir...  ')
+        self.build_dir=self.TempBuildDir()
+        if self.verbose:
+            stdout.write('%s\n' % self.build_dir)
+
+        # from here on out everything references the build dir except for
+        # the install dir
+        if self.verbose:
+            stdout.write('Changing CWD to build dir\n')
+        self.dirstack.push(self.build_dir)
+
+        # This actually gets the data into the CWD
+        self._get()
+
+        
+    def _get(self):
+        if 'svn' in self.get_method:
+            if self.get_method in ['svn checkout','svn-checkout']:
+                checkout=True
+            elif self.get_method in ['svn export','svn-export']:
+                checkout=False
+            else:
+                raise ValueError("Bad svn method: '%s'" % self.get_method)
+
+            url=self.GetSVNURL()
+            local_path=self.prod_dir_name
+
+            SVNGet(url, local_path, checkout=checkout)
+        elif self.get_method == 'rsync':
+            url = self.GetURL()
+            Rsync(url)
+        elif self.get_method in ['urllib','local']:
+            # Use urllib to retrieve the data
+            url = self.GetURL()
+            try:
+                URLLibGet(url)
+            except:
+                URLLib2Get(url)
+        else:
+            raise ValueError("Unsupported get_method: '%s'" % self.get_method)
+
+
+    def Extract(self):
+        """
+        Extract tar (.gz,.bz,..) archives.  CWD unchanged
+        """
+        # for archives we need to get the contents out as well
+        if self.source_type.find('tar') != -1:
+            url = self.GetURL()
+            if os.path.exists(url):
+                archive_name = os.path.basename(url)
+            else:
+                archive_name = GetWebBasename(url)
+
+            if self.source_type == 'tarbomb':
+                # we are already in the temp directory, make this relative and
+                # untar into it
+                os.mkdir(self.prod_dir_name)
+                self.Untar(archive_name, outdir=self.prod_dir_name)
+            elif self.source_type == 'tar':
+                self.Untar(archive_name, linkto=self.prod_dir_name)
+            else:
+                raise ValueError('Unsupported tar type: %s' % self.source_type)
+        else:
+            if self.verbose:
+                stdout.write('\nNo extraction required\n')
+                stdout.flush()
+
+    def Untar(self, archive_name, outdir='.', mode='r', 
+              linkto=None, renameto=None):
+        """
+        We will loop over the members individually.  The method to do everything
+        is only 2.5 or greater, and we want to be able to pick out the top
+        directory, which is assumed to be the first name when the archive is not
+        a tarbomb
+        """
+        import tarfile
+        if self.verbose:
+            stdout.write('\nUntarring %s\n' % archive_name)
+        tf=tarfile.open(archive_name, mode)
+        first=None
+        for member in tf.getmembers():
+            name=member.name
+            if first is None:
+                first=name
+                if first[-1] == os.sep:
+                    first=first[0:-1]
+
+            if outdir is not '.':
+                name=os.path.join(outdir, name)
+            if self.verbose:
+                stdout.write('%s\n' % name)
+            tf.extract(member,outdir)
+
+        if renameto is not None:
+            if renameto[-1] == os.sep:
+                renameto=renameto[0:-1]
+            oldname=os.path.join(outdir, first)
+            newname=os.path.join(outdir, renameto)
+            if first != renameto:
+                if self.verbose:
+                    stdout.write('\nRenaming %s to %s\n' % (oldname, newname))
+                os.rename(oldname, newname)
+        elif linkto is not None:
+            if linkto[-1] == os.sep:
+                linkto=linkto[0:-1]
+            oldname=os.path.join(outdir, first)
+            linkname=os.path.join(outdir, linkto)
+            # two checks for case-insensitive file systems
+            if first != linkto and not os.path.exists(linkto):
+                if self.verbose:
+                    stdout.write('\nLinking %s to %s\n' % (oldname, linkname))
+                os.symlink(oldname, linkname)
+
+
+
+        if self.verbose:
+            stdout.flush()
+
+    def GetDeps(self):
+        """
+        Return a list of dependencies.
+        """
+        table_file = self.GetTableFilename()
+        if table_file is None:
+            return []
+        
+        e=eups.Eups()
+        deplist = e.dependencies_from_table(table_file)
+        return deplist
+
+    def GetMissingDeps(self):
+        """
+        Search for the missing deps that need to be
+        installed
+        """
+        deps = self.GetDeps()
+        e=eups.Eups()
+        missing_deps=[]
+        for dep in deps:
+            prod, optional, currentRequested = dep
+            if not optional:
+                try:
+                    tprod = e.getProduct(prod.name, prod.version)
+                except:
+                    missing_deps.append(dep)
+
+        return missing_deps
+
+    def InstallDeps(self, prompt=True):
+        """
+        Recursively install dependencies
+        """
+        missing_deps = self.GetMissingDeps()
+        if len(missing_deps) == 0:
+            return
+
+        if self.nodeclare:
+            raise ValueError("You cannot set nodeclare=True when installing "
+                             "dependencies, it's not supported yet.")
+
+        if self.verbose or prompt:
+            stdout.write('\nDependencies to be installed:\n')
+            for dep in missing_deps:
+                prod, optional, currentRequested = dep
+                if currentRequested:
+                    version=None
+                    version_name='current'
+                else:
+                    version=prod.version
+                    version_name=version
+
+                stdout.write('    %s-%s\n' % (prod.name,version_name))
+            stdout.flush()
+            if prompt:
+                response=raw_input('Continue: (y/n)? ')
+                if response.lower() != 'y':
+                    raise RuntimeError('Aborted install of dependencies')
+
+        e=eups.Eups()
+        for dep in missing_deps:
+            prod, optional, currentRequested = dep
+            if currentRequested:
+                version=None
+            else:
+                version=prod.version
+
+            installer = \
+                    ProductInstaller(prod.name, 
+                                     version,
+                                     declare_current=True)
+            installer.DoInstall(prompt=False)
+    
+            e.declare(installer.name, 
+                      installer.version, 
+                      installer.install_dir, 
+                      declareCurrent=True)
+            e.setup(installer.name)
+
+
+    def SetupDeps(self):
+        """
+        Make sure deps are set up in case needed for
+        compilation
+        """
+        deps = self.GetDeps()
+        e=eups.Eups()
+        for dep in deps:
+            prod, optional, currentRequested = dep
+            e.setup(prod.name, prod.version)
+
+
+
+    def GetTableFilename(self):
+        """
+
+        If the create_ups statement is present in the install file then it's
+        contents are used to make a temporary file.  Otherwise a table file is
+        searched for a ups subdirectory
+
+        Assumes the CWD is the build_dir for cleaning up temporary
+        files
+        """
+        
+        if 'create_ups' in self.pars:
+            # create the ups table with the given string
+            tmpdir = tempfile.mkdtemp(dir='.', prefix='scratchdir-')
+            table_file = os.path.join(tmpdir, self.name+'.table')
+            if self.verbose:
+                stdout.write('\nCreating temporary ups table for getting deps: %s\n' % table_file)
+                stdout.flush()
+            fobj=open(table_file,'w')
+            fobj.write(self.pars['create_ups'])
+            fobj.close()
+        else:
+            # look for the ups subdirectory
+            # should we add other possibilities?
+            subdir = os.path.join(self.prod_dir_name, 'ups')
+            if not os.path.exists(subdir):
+                if self.verbose:
+                    stdout.write('ups directory not found, assuming no dependencies]n')
+                return None
+            else:
+                table_file = os.path.join(subdir, self.name+'.table')
+                if not os.path.exists(table_file):
+                    if self.verbose:
+                        stdout.write('table file not found, assuming no dependencies]n')
+                    return None
+                else:
+                    return os.path.abspath(table_file)
+        return table_file
+
+    def get_build_subdir(self):
+        build_subdir = self.prod_dir_name
+        if 'build_subdir' in self.pars:
+            build_subdir = os.path.join(build_subdir, self.pars['build_subdir'])
+        return build_subdir
+
+    def Build(self):
+        """
+        This program cds into the subdirectory containing the data,
+        builds the program, and then returns to the build_dir
+        """
+
+        if 'build_method' not in self.pars:
+            if self.verbose:
+                stdout.write('\nNo build_method found; doing a '+\
+                             'straight install\n')
+                stdout.flush()
+                return
+
+        if self.verbose:
+            stdout.write('\nBuilding product\n')
+
+        build_subdir = self.get_build_subdir()
+        stdout.write("moving to build_subdir: %s\n" % build_subdir)
+        self.dirstack.push(build_subdir)
+
+        build_method = self.pars['build_method']
+        if build_method == 'scons':
+            self.RunScons()
+        elif build_method == 'configure-make':
+            self.RunMake(configure=True)
+        elif build_method == 'make':
+            self.RunMake()
+        elif build_method == 'cmake-make':
+            self.RunCMake()
+        else:
+            raise ValueError("Unsupported build_method '%s'" % build_method)
+        self.dirstack.pop()
+
+    def Install(self):
+        """
+        This program changes into the subdirectory containing the data,
+        installs the program, and then returns to the build_dir
+        """
+
+        # for now just throw an exception.  We could make a command line
+        # option to remove  the existing directory
+        if os.path.exists(self.install_dir) and not self.pars['force']:
+            raise RuntimeError("install dir %s already "
+                               "exists" % self.install_dir)
+
+
+        build_subdir = self.get_build_subdir()
+        stdout.write("moving to build_subdir: %s\n" % build_subdir)
+        self.dirstack.push(build_subdir)
+
+        if 'install_command' in self.pars:
+            install_command = eval(self.pars['install_command'])
+            stdout.write("Executing install command: %s\n" % install_command)
+            ExecuteCommand(install_command)
+        elif self.install_method == 'copy':
+            self.CopyInstall()
+        elif self.install_method == 'scons':
+            self.RunScons(install=True)
+        elif self.install_method == 'configure-make-install':
+            self.RunMake(configure=True, install=True)
+        elif self.install_method == 'make-install':
+            self.RunMake(install=True)
+        elif self.install_method == 'cmake-make-install':
+            self.RunCMake(install=True)
+        elif self.install_method == 'python-setup':
+            self.RunPythonSetup()
+        else:
+            raise ValueError('Unsupported install method %s' % self.install_method)
+
+        self.PostInstall()
+
+        self.dirstack.pop()
+
+        if 'create_ups' in self.pars:
+            # create the ups table with the given string
+            ups_dir = os.path.join(self.install_dir, 'ups')
+            if not os.path.exists(ups_dir):
+                os.mkdir(ups_dir)
+            table_file = os.path.join(ups_dir, self.name+'.table')
+            if self.verbose:
+                stdout.write('\nCreating ups table: %s\n' % table_file)
+                stdout.flush()
+            fobj=open(table_file,'w')
+            fobj.write(self.pars['create_ups'])
+            fobj.close()
+
+
+    def CopyInstall(self):
+
+        if self.verbose:
+            stdout.write('\nCreating install directory: %s\n' % \
+                         self.install_dir)
+        # we need to make the directories up to the last bit since 
+        # shutil.copytree doesn't want the last piece
+        install_dir_base = os.path.dirname(self.install_dir)
+        if not os.path.exists(install_dir_base):
+            os.makedirs(install_dir_base)
+
+        if self.verbose:
+            stdout.write('\nCopying from %s to %s/\n' % \
+                (os.path.abspath('.'),os.path.abspath(self.install_dir)))
+            stdout.flush()
+        shutil.copytree('.',self.install_dir)
+
+
+    def PostInstall(self):
+        if 'post_install' in self.pars:
+            eval(self.pars['post_install'])
+
+    def Declare(self):
+        if self.nodeclare:
+            stdout.write("\nNot declaring product at user request.\n")
+            return
+
+        e=eups.Eups()
+        if self.verbose:
+            if self.declare_current:
+                dc="as current"
+            else:
+                dc=""
+            mess="\nDeclaring product %s %s %s in install_dir %s\n" % \
+                    (self.name, self.version, dc, self.install_dir)
+            stdout.write(mess)
+        e.declare(self.name, self.version, self.install_dir, 
+                  declareCurrent=self.declare_current)
+
+    def Cleanup(self):
+        if self.verbose:
+            stdout.write('\nCleaning up build_dir: %s\n' % self.build_dir)
+        shutil.rmtree(self.build_dir)
+        # we should already be here if we remembered to pop() the dir
+        # but this is just in case
+        os.chdir(self.original_dir)
+
+
+
+
+    def DefaultInstallDir(self):
+        flavor_dir=FlavorDir()
+        install_dir=os.path.join(flavor_dir, self.name)
+        install_dir=os.path.join(install_dir, self.version)
+        return install_dir
+
+
+    def RunScons(self, install=False):
+        command = 'scons'
+        if 'build_flags' in self.pars:
+            command += ' '+self.pars['build_flags']
+        if install:
+            command += ' install PREFIX='+self.install_dir
+        ExecuteCommand(command)
+
+
+    def RunMake(self, configure=False, install=False):
+        command = ['make']
+        if configure:
+            ccommand = './configure --prefix='+self.install_dir
+            if 'config_flags' in self.pars:
+                ccommand += ' '+self.pars['config_flags']
+            command = [ccommand]+command
+        if install:
+            # Some Makefiles we use take this environment variable rather
+            # than doing ./configure --prefix
+            os.putenv('INSTALL_DIR',self.install_dir)
+            # cover all the bases: put PREFIX= also
+            command += ['make install PREFIX='+self.install_dir]
+        command = ' && '.join(command)
+        ExecuteCommand(command)
+
+    def RunCMake(self, install=False):
+        command = 'cmake -DCMAKE_INSTALL_PREFIX='+self.install_dir
+        if 'config_flags' in self.pars:
+            command += ' '+self.pars['config_flags']
+        command = [command,'make']
+
+        if install:
+            # Some Makefiles we use take this environment variable rather
+            # than doing ./configure --prefix
+            os.putenv('INSTALL_DIR',self.install_dir)
+            command += ['make install']
+        command = ' && '.join(command)
+        ExecuteCommand(command)
+
+
+
+
+    def RunPythonSetup(self):
+        # First build
+        if 'build_command' in self.pars:
+            command=self.pars['build_command']
+        else:
+            command = 'python setup.py build'
+            if 'build_args' in self.pars:
+                command += ' '+self.pars['build_args']
+        ExecuteCommand(command)
+
+        # now run the install
+        if 'install_command' in self.pars:
+            command = self.pars['install_command']
+        else:
+            command = 'python setup.py install'
+            if 'install_args' in self.pars:
+                command += ' '+self.pars['install_args']
+
+        command += ' --prefix='+self.install_dir
+        ExecuteCommand(command)
+
+    def GetSVNURL(self):
+        if not 'base_url' in self.pars:
+            raise ValueError('You must set base_url for svn exports')
+        if self.version == 'trunk':
+            # note this is a network address and requires /
+            url = self.pars['base_url'] + '/trunk'
+        else:
+            url = self.pars['base_url'] + '/tags/'+self.version
+        return url
+
+    def GetURL(self):
+        if 'url' in self.pars:
+            url = self.TryEval(self.pars['url'])
+        else:
+            raise ValueError("For this method you must give a url "
+                             "expression in the install file or command line")
+        return url
+
+    def TempBuildDir(self):
+        # Create a temporary directory in the CWD for building
+        # the install.  We will have to delete it.
+        prefix=self.name+'-'+self.version+'-'
+        tmpdir=tempfile.mkdtemp(prefix=prefix, dir='.',suffix='-eupsbuild')
+        tmpdir = os.path.abspath(tmpdir)
+        return tmpdir
+
+    def ProcessPars(self):
+        """
+        Process the input pars 
+        """
+
+        # figure out what version we are dealing with
+        if 'version' not in self.pars:
+            if 'default_version' not in self.pars:
+                raise ValueError("If no version is specified explicitly "
+                                 "then a default_version must be specified")
+            self.pars['version'] = self.pars['default_version']
+
+        self.version = self.pars['version']
+            
+        # This is the name of the subdirectory that will contain the data
+        self.prod_dir_name=self.name+'-'+self.version
+
+        # prompt for dependencies?
+        if 'prompt' in self.pars:
+            self.prompt=self.pars['prompt']
+        else:
+            self.prompt=True
+
+        # figure out how to get it
+        if 'source_type' in self.pars:
+            self.source_type=self.pars['source_type']
+        else:
+            raise ValueError('You must specify a source type')
+        if 'get_method' in self.pars:
+            self.get_method=self.pars['get_method']
+        else:
+            # default to looking for a local file or using urllib
+            self.get_method = 'urllib'
+        
+        if 'install_method' in self.pars:
+            self.install_method = self.pars['install_method']
+        else:
+            self.install_method = 'copy'
+
+        self.install_dir = self.pars.get('install_dir',None)
+        if self.install_dir is None:
+            self.install_dir = self.DefaultInstallDir()
+        else:
+            self.install_dir = os.path.abspath(self.install_dir)
+
+        if 'declare_current' in self.pars:
+            self.declare_current = self.pars['declare_current']
+        else:
+            self.declare_current = False
+
+    def TryEval(self,expression):
+        """
+        Try to evaluate an expression that may use internal or global 
+        variables. e.g
+            'http://some.base.url/some-name-%s.tar.gz' % (self.version)
+        if the eval fails, the string itself is returned
+        """
+        try:
+            val=eval(expression)
+        except:
+            val=expression
+        return val
+
+    def LoadKeywords(self, version=None, **keys):
+        if self.verbose:
+            stdout.write('\nChecking command line keywords\n')
+
+
+        if version is not None:
+            self.pars['version'] = version
+
+        for k in keys:
+            self.pars[k] = keys[k]
+            if self.verbose:
+                stdout.write('    %s = %s\n' % (k,self.pars[k]))
+
+
+
+    def LoadConfig(self,filename):
+        """
+        Load the python config file using an exec() statement.
+        """
+
+        glob={}
+        loc={}
+
+        exec(open(filename),glob,loc)
+
+        if self.verbose:
+            stdout.write('\nLoading install config: %s\n' % filename)
+        for key in loc:
+            if loc[key] not in config_ignores:
+                self.pars[key] = loc[key]
+                if self.verbose:
+                    stdout.write('    %s = %s\n' % (key,self.pars[key]))
+
+
+
+# copied from esutil.ostools
+class DirStack(object):
+    """
+    Class:
+        DirStack
+    Purpose:
+        A simple directory stack.
+
+    Construction:
+        ds=DirStack(verbose=False):  If verbose=True a message is
+            printed for push and pop similar to that printed on 
+            unix systems.
+    Methods:
+        push(directory): Change to the input directory.  Push the
+            current working directory onto the stack.
+        pop: Pop the last directory from the stack and change to
+            that directory.
+
+    Example:
+        >>> ds=DirStack(verbose=True)
+        >>> ds.push('~/data')
+        ~/data ~
+        >>> ds.push('/usr/bin')
+        /usr/bin ~/data ~
+        >>> ds.pop()
+        ~/data ~
+        >>> ds.pop()
+        ~
+
+    """
+    def __init__(self, verbose=False):
+        self.verbose=verbose
+        self._home = os.path.expanduser('~')
+        self._dirs = []
+
+    def push(self, dir):
+        """
+        push(dir):  Change to the indicated dir and push the current
+            working directory onto the stack
+        """
+        dir=os.path.expandvars(dir)
+        dir=os.path.expanduser(dir)
+
+        old_dir = os.getcwd()
+
+        os.chdir(dir)
+        
+        # only do this *after* we successfully chdir
+        self._dirs.append(old_dir)
+        if self.verbose:
+            self.print_stack()
+
+
+    def pop(self):
+        """
+        pop(): Pop the last directory from the stack and change to
+            that directory.
+        """
+        if len(self._dirs) == 0:
+            stdout.write("Directory stack is empty\n")
+            return
+
+        dir = self._dirs.pop()
+        os.chdir(dir)
+
+        if self.verbose:
+            self.print_stack()
+
+    def getstack(self):
+        """
+        getstack(): Return the current stack.
+        """
+        return self._dirs
+
+    def print_stack(self):
+        self.print_dir(os.getcwd())
+        for i in xrange(len(self._dirs)-1,-1,-1):
+            d=self._dirs[i]
+            self.print_dir(d)
+        stdout.write('\n')
+    def print_dir(self, dir):
+        dir = dir.replace(self._home, '~')
+        stdout.write('%s ' % dir)
+
+
+
+def ExecuteCommand(command, get_output=False, verbose=True):
+    if verbose:
+        stdout.write('\nExecuting: %s\n' % command)
+        stdout.flush()
+    if get_output:
+        retcode=subprocess.Popen(command, shell=True,
+                                 stdout=subprocess.PIPE, 
+                                 stderr=subprocess.PIPE)
+        if pobj.returncode != 0:
+            raise RuntimeError('%s failed' % command)
+        (stdout_data, stderr_data) = pobj.communicate()
+        return stdout_data, stderr_data
+        
+    else:
+        # stdout/stderr will go to the screen
+        retcode=subprocess.call(command, shell=True)
+        if retcode != 0:
+            raise RuntimeError('%s failed' % command)
+        return None
+
+def URLLibGet(url):
+    """
+    use urllib to download the source into CWD
+    """
+    import urllib
+
+    if os.path.exists(url):
+        # It's a local file
+        dest = os.path.basename(url)
+    else:
+        # Its a web/ftp address
+        dest = GetWebBasename(url)
+
+    stdout.write("\nCopying from '%s' to '%s'\n" % (url, dest))
+    urllib.urlretrieve(url, dest)
+
+    stdout.flush()
+
+def URLLib2Get(url):
+    """
+    use urllib2 to download the source into CWD
+
+    not actually using this yet
+    """
+    import urllib2
+
+    if os.path.exists(url):
+        # It's a local file
+        dest = os.path.basename(url)
+    else:
+        # Its a web/ftp address
+        dest = GetWebBasename(url)
+
+    stdout.write("\nCopying from '%s' to '%s'\n" % (url, dest))
+    #urllib2.urlretrieve(url, dest)
+
+    try:
+        req = urllib2.Request(url)
+        f = urllib2.urlopen(req)
+        local_file = open(dest, 'w')
+        local_file.write( f.read() )
+        local_file.close()
+    except urllib2.URLError:
+        stdout.write('Failed to get url')
+        stdout.write('trying with proxy\n')
+        URLLib2GetWithProxy(url)
+
+    stdout.flush()
+
+
+def URLLib2GetWithProxy(url):
+    """
+    use urllib2 to download the source into CWD with a proxy
+
+    not actually using this yet
+    """
+
+    import urllib2
+    
+    #req = urllib2.Request(url)
+    opener = urllib2.build_opener(urllib2.ProxyBasicAuthHandler)
+
+    #f = opener.open(req)
+    f = opener.open(url)
+    local_file = open(dest, 'w')
+    local_file.write( f.read() )
+    local_file.close()
+
+    stdout.flush()
+
+
+
+def Rsync(source, dest='.'):
+    """
+    rsync -av source into dest
+    """
+    command = 'rsync -av %s %s' % (source, dest)
+    ExecuteCommand(command)
+
+def SVNGet(url_in, local_path, checkout=False, verbose=True):
+
+    try:
+        import svn.core
+        import svn.client
+        #if have_svnlib:
+        # We have the bindings to the svn C library
+        url=url_in
+        if url[-1] == '/':
+            # the c library chokes on the ending / when exporting
+            url=url[0:-1]
+
+        # This is all setup for the checkout/export
+        pool = svn.core.svn_pool_create(None)
+
+        svn.core.svn_config_ensure( None, pool )
+
+        ctx = svn.client.svn_client_ctx_t()
+
+        config = svn.core.svn_config_get_config( None, pool )
+        ctx.config = config
+
+        rev = svn.core.svn_opt_revision_t()
+        rev.kind = svn.core.svn_opt_revision_head
+        rev.number = 0
+
+        ctx.auth_baton = svn.core.svn_auth_open( [], pool )
+
+        recurse=True
+
+        if checkout:
+            gettype='checkout'
+            if verbose:
+                stdout.write('\nsvn checkout %s %s\n' % (url, local_path) )
+            revision=svn.client.svn_client_checkout(url, local_path, 
+                                                    rev, recurse, 
+                                                    ctx, pool)
+        else:
+            gettype='export'
+            if verbose:
+                stdout.write('\nsvn export %s %s\n' % (url, local_path) )
+            revision = svn.client.svn_client_export(url, local_path, 
+                                                    rev, recurse, 
+                                                    ctx, pool)
+
+        if revision == -1:
+            raise RuntimeError('Failed to %s url %s' % (gettype, url))
+
+        if verbose:
+            stdout.write('At revision %s\n' % revision)
+            stdout.flush()
+        svn.core.svn_pool_destroy(pool)
+
+    except:
+        # no bindings to the C library or a problem with authentication.  
+        # Try spawning the command.  this is less platform independent.
+        if checkout:
+            svn_comm='checkout'
+        else:
+            svn_comm='export'
+        command='svn %s %s %s' % (svn_comm, url_in, local_path)
+        ExecuteCommand(command)
+
+
+def GetWebBasename(url):
+    # separator on the web is /
+    urlsplit=url.split('/')
+    if urlsplit[-1] != '':
+        name=urlsplit[-1]
+    else:
+        name=urlsplit[-2]
+    return name
+
+
+
+
+def GetEnv(name):
+    if not os.environ.has_key(name):
+        raise ValueError('%s is not set' % name)
+    return os.getenv(name)
+
+def FlavorDir():
+    eups_path=GetEnv('EUPS_PATH')
+    flavor=eups.flavor()
+    return os.path.join(eups_path, flavor)
+
+def InstallConfigDir():
+    eups_path=GetEnv('EUPS_PATH')
+    return os.path.join(eups_path,'install-config')
+def DefaultInstallConfig(name):
+    return os.path.join(InstallConfigDir(), name+'.install')
+
+
+
+
+
+
+
+
+#
+# probably not going to use all this, using an external call
+# seems simpler and works
+#
+def SconsVersion():
+    """
+    If they would only print just the damn version
+    """
+    command='scons -v'
+    stdout_data, stderr_data = \
+        ExecuteCommand(command, 
+                       get_output=True,
+                       verbose=False)
+    script=stdout_data.split('\n')[1]
+    longv=script.split(':')[1].strip()
+    v='.'.join( longv.split('.')[0:3] )
+    # remove the front "v"
+    v=v[1:]
+    return v
+
+def SconsSetup():
+    """ 
+    This is a kludge because scons isn't installed as a library
+    """
+    # BEGIN STANDARD SCons SCRIPT HEADER
+    #
+    # This is the cut-and-paste logic so that a self-contained script can
+    # interoperate correctly with different SCons versions and installation
+    # locations for the engine.  If you modify anything in this section, you
+    # should also change other scripts that use this same header.
+
+    # Strip the script directory from sys.path() so on case-insensitive
+    # (WIN32) systems Python doesn't think that the "scons" script is the
+    # "SCons" package.  Replace it with our own library directories
+    # (version-specific first, in case they installed by hand there,
+    # followed by generic) so we pick up the right version of the build
+    # engine modules if they're in either directory.
+
+    # my local modification: E.S.S.
+    #script_dir = sys.path[0]
+    command='which scons'
+    stdout_data, stderr_data = \
+        ExecuteCommand(command, 
+                       verbose=False,
+                       get_output=True)
+    script_dir = os.path.dirname(stdout_data)
+    stdout.write('scons found at: %s\n' % script_dir)
+
+    if script_dir in sys.path:
+        sys.path.remove(script_dir)
+
+    libs = []
+
+    #__version__ = "1.2.0"
+    __version__ = SconsVersion()
+    stdout.write('scons version="%s"\n' % __version__)
+    if os.environ.has_key("SCONS_LIB_DIR"):
+        libs.append(os.environ["SCONS_LIB_DIR"])
+
+    local_version = 'scons-local-' + __version__
+    local = 'scons-local'
+    if script_dir:
+        local_version = os.path.join(script_dir, local_version)
+        local = os.path.join(script_dir, local)
+    libs.append(os.path.abspath(local_version))
+    libs.append(os.path.abspath(local))
+
+    scons_version = 'scons-%s' % __version__
+
+    prefs = []
+
+    if sys.platform == 'win32':
+        # sys.prefix is (likely) C:\Python*;
+        # check only C:\Python*.
+        prefs.append(sys.prefix)
+        prefs.append(os.path.join(sys.prefix, 'Lib', 'site-packages'))
+    else:
+        # On other (POSIX) platforms, things are more complicated due to
+        # the variety of path names and library locations.  Try to be smart
+        # about it.
+        if script_dir == 'bin':
+            # script_dir is `pwd`/bin;
+            # check `pwd`/lib/scons*.
+            prefs.append(os.getcwd())
+        else:
+            if script_dir == '.' or script_dir == '':
+                script_dir = os.getcwd()
+            head, tail = os.path.split(script_dir)
+            if tail == "bin":
+                # script_dir is /foo/bin;
+                # check /foo/lib/scons*.
+                prefs.append(head)
+
+        head, tail = os.path.split(sys.prefix)
+        if tail == "usr":
+            # sys.prefix is /foo/usr;
+            # check /foo/usr/lib/scons* first,
+            # then /foo/usr/local/lib/scons*.
+            prefs.append(sys.prefix)
+            prefs.append(os.path.join(sys.prefix, "local"))
+        elif tail == "local":
+            h, t = os.path.split(head)
+            if t == "usr":
+                # sys.prefix is /foo/usr/local;
+                # check /foo/usr/local/lib/scons* first,
+                # then /foo/usr/lib/scons*.
+                prefs.append(sys.prefix)
+                prefs.append(head)
+            else:
+                # sys.prefix is /foo/local;
+                # check only /foo/local/lib/scons*.
+                prefs.append(sys.prefix)
+        else:
+            # sys.prefix is /foo (ends in neither /usr or /local);
+            # check only /foo/lib/scons*.
+            prefs.append(sys.prefix)
+
+        temp = map(lambda x: os.path.join(x, 'lib'), prefs)
+        temp.extend(map(lambda x: os.path.join(x,
+                                               'lib',
+                                               'python' + sys.version[:3],
+                                               'site-packages'),
+                               prefs))
+        prefs = temp
+
+        # Add the parent directory of the current python's library to the
+        # preferences.  On SuSE-91/AMD64, for example, this is /usr/lib64,
+        # not /usr/lib.
+        try:
+            libpath = os.__file__
+        except AttributeError:
+            pass
+        else:
+            # Split /usr/libfoo/python*/os.py to /usr/libfoo/python*.
+            libpath, tail = os.path.split(libpath)
+            # Split /usr/libfoo/python* to /usr/libfoo
+            libpath, tail = os.path.split(libpath)
+            # Check /usr/libfoo/scons*.
+            prefs.append(libpath)
+
+# Look first for 'scons-__version__' in all of our preference libs,
+# then for 'scons'.
+    libs.extend(map(lambda x: os.path.join(x, scons_version), prefs))
+    libs.extend(map(lambda x: os.path.join(x, 'scons'), prefs))
+
+    sys.path = libs + sys.path
+
+
+
+
+
+
+
+
+
+
+if __name__=="__main__":
+    options, args = parser.parse_args(sys.argv[1:])
+    nargs=len(args)
+    if nargs < 1:
+        parser.print_help()
+        sys.exit(45)
+
+    product=args[0]
+    if nargs > 1:
+        version=args[1]
+    else:
+        version=None
+
+    if options.noprompt:
+        prompt=False
+    else:
+        prompt=True
+
+    force=options.force
+
+    prod=ProductInstaller(product, version, 
+                          prompt=prompt,
+                          install_config=options.config_url,
+                          nodeclare=options.nodeclare,
+                          declare_current=options.declare_current, 
+                          install_dir=options.install_dir, 
+                          force=force) 
+    prod.DoInstall()
+

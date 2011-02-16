@@ -1,0 +1,305 @@
+#!/usr/bin/env python
+"""
+    wikidoc indir outdir
+"""
+
+import sys
+import os
+import re
+from copy import copy
+from optparse import OptionParser
+
+# All extensions that are treated as code.  These files get their own
+# wiki page
+code_patterns = ['\.pro$', '\.c$','\.cpp$','\.cc$','\.h$','\.hpp$','\.py$',
+                 'Makefile','configure',
+                 'AUTHORS','CHANGES.txt','DESCRIPTION','README.txt',
+                 'gpl.txt']
+codereg = [re.compile(cp) for cp in code_patterns]
+baddir_patterns = ['\.svn']
+baddir_reg = [re.compile(bp) for bp in baddir_patterns]
+
+# The root directory is kept as a global variable
+global_data={}
+
+# Command line stuff
+parser=OptionParser(__doc__)
+
+def RemoveComments(inline):
+    line=copy(inline)
+    cf = line.find('#')
+    if cf > 0:
+        line = line[0:cf]
+    return line
+def ReadDescription(fname):
+    desc={}
+    desc['title'] = ''
+    desc['description'] = ''
+    for line in open(fname,'r'):
+        line=line.strip()
+        if line != '':
+            ls = line.split()
+            if len(ls) >= 2:
+                key = ls[0].lower()
+                val = ' '.join(ls[1:])
+                desc[key] = val
+
+    return desc
+
+def PrintDirInfo(info, tabs=[]):
+    ptab=''.join(tabs)
+    sendtabs=copy(tabs)
+    sendtabs.append('\t')
+    # Print directory info first
+    for dinfo in info['subdirs']:
+        if dinfo['info']['desc'] != '':
+            desc=dinfo['info']['desc']
+            #print ptab+dinfo['name']+'('+desc['title']+'):',desc['description'])
+            sys.stdout.write('%s%s(%s): %s\n' %
+                             (ptab,dinfo['name'],desc['title'],desc['description']))
+        else:
+            #print ptab+dinfo['name']
+            sys.stdout.write('%s%s\n' % (ptab,dinfo['name']))
+        PrintDirInfo(dinfo['info'], tabs=sendtabs)
+    for finfo in info['files']:
+        #print ptab+finfo['name']
+        sys.stdout.write('%s%s\n' % (ptab,finfo['name']) )
+        #print '\t\t\tWiki name:',MakeWikiFilename(finfo['path'])
+        sys.stdout.write('\t\t\tWiki name: %s\n' %
+                         MakeWikiFilename(finfo['path']))
+        if finfo['name'] == 'path_join.pro':
+            MakeCodeWiki(finfo['path'])
+
+def MakeCodeWiki(path):
+    wikipath = MakeWikiFilename(path)
+    f = open(wikipath, 'w')
+    f.write('{{{\n')
+
+    pathtext = open(path, 'r').read()
+
+    f.write(pathtext)
+    f.write('}}}\n')
+    f.close()
+
+def MakeDirWiki(info):
+    wikipath = MakeWikiFilename(info['path'])
+
+    f = open(wikipath, 'w')
+    f.write('#summary '+info['desc'])
+
+    f.write('\n\n')
+    
+
+    f.write('=== Sub Directories ===\n')
+    for dinfo in info['subdirs']:
+        wikifile = MakeWikiFilename(dinfo['path'])
+        wikiname = os.path.basename(wikifile)
+        wikiref = wikiname.replace('.wiki','')
+        #f.write('    * ['+wikiref+' '+dinfo['info']['title']+'] '+dinfo['info']['desc']+'\n')
+        f.write('    * ['+wikiref+' '+dinfo['name']+']')
+        if dinfo['info']['desc'] != '':
+            f.write(' -- '+dinfo['info']['desc'])
+        f.write('\n')
+        MakeDirWiki(dinfo['info'])
+
+    f.write('=== Files ===\n')
+    for finfo in info['files']:
+        f.write('    * ['+MakeSVNURL(finfo['path'])+' '+finfo['name']+']\n' )
+        """
+        wikifile = MakeWikiFilename(finfo['path'])
+        wikiname = os.path.basename(wikifile)
+        wikiref = wikiname.replace('.wiki','')
+        f.write('    * ['+wikiref+' '+finfo['name']+']\n')
+        MakeCodeWiki(finfo['path'])
+        """
+
+def MakeSVNURL(path):
+    relpath = path.replace(global_data['rootdir'], '',1)
+    vers='v1.4'
+    url = 'http://code.google.com/p/sdssidl/source/browse/tags/'+vers
+    add='/'
+    if len(relpath) > 0:
+        if relpath[0] == '/':
+            add=''
+
+    url = url + add + relpath
+    return url
+
+def Capitalize(string):
+    if len(string) == 0:
+        return string
+    else:
+        tl = list(string)
+        tl[0] = tl[0].upper()
+        return ''.join(tl)
+
+def MakeWikiFilename(path):
+    """
+    Convert a path to a wiki name and copy in the contents of the
+    file with {{{ }}} around the text so it knows it is code
+    """
+
+    # remove the root directory from the path name
+    relpath = path.replace(global_data['rootdir'], '')
+    if len(relpath) == 0:
+        return os.path.join(global_data['outdir'],'DocMain.wiki')
+
+    if relpath[0] == os.sep:
+        relpath = relpath[1:]
+
+    reldir = os.path.dirname(relpath)
+    name = os.path.basename(relpath)
+
+    name = Capitalize(name)
+    # Split and capitalize by directory
+    idsplit = reldir.split(os.sep)
+    dsplit=[]
+    for d in idsplit:
+        tcap = Capitalize(d)
+        dsplit.append(tcap)
+    dir_wikiname = ''.join(dsplit)
+    file_wikiname = name.replace('.','')+'.wiki'
+
+    wiki_name = dir_wikiname + file_wikiname
+
+    wiki_fullpath = os.path.join(global_data['outdir'], wiki_name)
+    return wiki_fullpath
+
+def FileMatch(filename, regexp_list, inverse=False):
+    """
+    check if the file matches any of the regexp given
+    """
+    if not inverse:
+        retval = True
+    else:
+        retval = False
+
+    for reg in regexp_list:
+        if reg.search(filename):
+            return retval
+    return not retval
+
+def FileNoMatch(filename, regexp_list):
+    """
+    check if the file matches any of the regexp given
+    """
+    for reg in regexp_list:
+        if reg.search(filename):
+            return False
+    return True
+
+
+
+def GetDirInfo(path):
+    """ 
+    For each file that matches the patterns, make a wiki file and an entry 
+    in the main page for this directory.
+    For each directory look for a DESCRIPTION file as well as matching files.
+    """
+
+    info = {}
+    info['path'] = path
+    info['subdirs'] = []
+    info['files'] = []
+    info['desc'] = ''
+    info['title'] = os.path.basename(path)
+    info['filecount'] = 0
+
+    names = os.listdir(path)
+    names.sort()
+    for name in names:
+        fpath=os.path.join(path, name)
+        finfo = {}
+        finfo['name'] = name
+        # temporary perhaps
+        finfo['path'] = fpath
+        if os.path.isdir(fpath):
+            if FileMatch(fpath, baddir_reg, inverse=True):
+                finfo['isdir'] = True
+                finfo['info'] = GetDirInfo(fpath)
+                info['subdirs'].append(finfo)
+        else:
+            if FileMatch(finfo['path'], codereg):
+                finfo['isdir'] = False
+                if name == 'DESCRIPTION':
+                    desc = ReadDescription(fpath)
+                    info['desc'] = desc['description']
+                    if desc['title'] != '':
+                        info['title'] = desc['title']
+                info['files'].append(finfo)
+
+            """
+            for reg in codereg:
+                if reg.search(finfo['path']):
+                    finfo['isdir'] = False
+                    if name == 'DESCRIPTION':
+                        desc = ReadDescription(fpath)
+                        info['desc'] = desc['description']
+                        if desc['title'] != '':
+                            info['title'] = desc['title']
+                    info['files'].append(finfo)
+                    break
+            """
+    return info
+
+def GetDirInfoOld(path):
+    """ 
+    For each file that matches the patterns, make a wiki file and an entry 
+    in the main page for this directory.
+    For each directory look for a DESCRIPTION file as well as matching files.
+    """
+
+    info = {}
+    info['path'] = path
+    info['subdirs'] = []
+    info['files'] = []
+    names = os.listdir(path)
+    names.sort()
+    for name in names:
+        f=os.path.join(path, name)
+        if os.path.isdir(f):
+            dinfo = {}
+            dinfo['name'] = name
+            dinfo['desc'] = ''
+
+            dinfo['path'] = f
+
+            # See if there is a description file
+            desc=os.path.join(path, 'DESCRIPTION')
+            if os.path.exists(desc):
+                desc=ReadDescription(desc)
+                if 'title' in desc:
+                    dinfo['name']=desc['title']
+                if 'description' in desc:
+                    dinfo['desc']=desc['description']
+            info['subdirs'].append(dinfo)
+        else:
+            finfo = {}
+            finfo['dir'] = path
+            finfo['name'] = name
+            finfo['path'] = f
+            info['fileinfo'].append(finfo)
+    return info
+
+
+if __name__=="__main__":
+    options, args = parser.parse_args(sys.argv[1:])
+    if len(args) < 2:
+        parser.print_help()
+        sys.exit(45)
+
+    indir=args[0]
+    outdir=args[1]
+    # This is a global variable
+    rootdir = os.path.expanduser(indir)
+    outdir  = os.path.expanduser(outdir)
+    tabs=[]
+
+    global_data['rootdir'] = rootdir
+    global_data['outdir'] = outdir
+
+    info = GetDirInfo(rootdir)
+    MakeDirWiki(info)
+    #PrintDirInfo(info, tabs=tabs)
+
+

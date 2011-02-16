@@ -1,0 +1,68 @@
+#!/usr/bin/env python
+"""
+This set's up the proxy info we need.
+
+Since I use foxy proxy and select the right wpad by hand, I no longer
+bother with the symlinks in Tom's original program.
+
+Instead this focuses on setting the right svn config
+
+"""
+
+import os
+import sys
+from sys import stdout,stderr
+
+import subprocess
+from subprocess import PIPE
+
+def get_ip():
+    if sys.platform == "linux2":
+        command="ifconfig  | grep 'inet ' | grep -v 'inet addr:127' | awk '{print $2}' | cut -d ':' -f 2"
+    elif sys.platform == "darwin":
+        command="ifconfig | grep 'inet ' | grep -v 'inet addr:127' | cut -d ' ' -f 2"
+    else:
+        raise RuntimeError("Don't recognize platform: %s" % sys.platform)
+    
+    p = subprocess.Popen(command,shell=True,stderr=PIPE,stdout=PIPE)
+    stdout,stderr = p.communicate()
+    returncode = p.returncode
+    if returncode != 0:
+        raise ValueError("Error getting ip address: %s", stderr)
+    
+    return stdout.strip()
+
+def main():
+
+    svn_dir = os.path.expanduser("~/.subversion")
+
+    ip = get_ip()
+
+    svn_servers_onsite = 'servers.inside';
+    svn_servers_offsite = 'servers.outside';
+    svn_servers_corus = 'servers.corus';
+    svn_servers = 'servers';
+
+
+    #if ip.find('130.199.15') != -1:
+    if ip.find('130.199.175') != -1:
+        svn_servers_active = svn_servers_corus
+        stdout.write('corus: ')
+    elif ip.find('172.16.100.') != -1:
+        # this is my little internal network
+        svn_servers_active = svn_servers_onsite
+        stdout.write('onsite: ')
+    elif ip.find('130.199.') != -1:
+        svn_servers_active = svn_servers_onsite
+        stdout.write('onsite: ')
+    else:
+        svn_servers_active = svn_servers_offsite
+        stdout.write('offsite: ')
+    stdout.write(ip+'\n')
+
+    os.chdir(svn_dir)
+    os.remove(svn_servers)
+    os.symlink(svn_servers_active, svn_servers)
+
+if __name__=="__main__":
+    main()

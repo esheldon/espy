@@ -1,0 +1,56 @@
+#!/usr/bin/env python
+"""usage: 
+    
+    convert_csv delim file1 file2 ...
+
+    Replace the commas in a csv file with another delimiter.  The delim 
+    argument can be either a literal string, such as " ", or the word tab.
+"""
+
+import csv
+import sys
+from optparse import OptionParser
+
+def csv2tab(csvfile):
+    reader = csv.reader(open(csvfile))
+    for row in reader:
+        num=len(row)
+        i=0
+
+        for col in row:
+            sys.stdout.write(col)
+            if i < (num-1):
+                sys.stdout.write('\t')
+            i=i+1
+        sys.stdout.write('\n')
+
+def convert(csvfile, delim):
+    reader = csv.reader(open(csvfile))
+    for row in reader:
+        num=len(row)
+        i=0
+
+        for col in row:
+            sys.stdout.write(col)
+            if i < (num-1):
+                sys.stdout.write(delim)
+            i=i+1
+        sys.stdout.write('\n')
+
+
+if __name__=="__main__":
+    if len(sys.argv) < 3:
+        sys.stderr.write("%s\n" % __doc__)
+        sys.exit(45)
+
+    delim_type = sys.argv[1]
+    fnames = sys.argv[2:]
+
+    if delim_type == 'tab':
+        delim = '\t'
+    else:
+        delim = delim_type
+
+    for f in fnames:
+        convert(f, delim)
+

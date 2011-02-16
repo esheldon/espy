@@ -1,0 +1,177 @@
+#! /usr/bin/env python
+
+'''
+    %prog [options filename]
+
+Description
+
+    A wrapper for muttprint that replaces binary attachments with a
+
+      "# Attachment: filename (type)" 
+
+    line, uses w3m to convert html into text, and then pipes the modified email
+    into muttprint.
+
+    if no file name argument is given, the data is read from standard input.
+
+    You can specify an output file with -o/--output-file.
+
+    If no output file name is given, a unique one is created and it is assumed
+    this is temporary, and will be erased on exit.  Of course, this is only
+    really useful if you wish to view the file, so the -v switch is turned on in
+    that case.
+
+    If viewing, then on linux it tries first "gv" and then "evince", on darwin
+    it runs "open"
+
+'''
+
+import email
+import os
+import sys
+from sys import stdout,stderr
+import subprocess
+from subprocess import Popen,PIPE,STDOUT
+import tempfile
+
+
+from optparse import OptionParser
+
+parser=OptionParser(__doc__)
+
+
+parser.add_option("-o","--output-file",
+                  default=None,dest="ofile", 
+                  help="Output file name. If none is sent, a unique "
+                       "one is generated and the -v switched is enabled. "
+                       "The temporary file will be removed on exit")
+
+parser.add_option("-v","--view",action="store_true",dest="view",
+                  default=False,
+                  help="Attempt to view the output file.  This is the "
+                       "default if an output file is not sent, else %default")
+parser.add_option("-b","--background",action="store_true",dest="background",
+                  default=False,
+                  help="When viewing, put the process in the background. "
+                  "Note the temporary file will be left in /tmp. default: %default")
+
+
+if sys.platform == "linux2":
+    #open_programs = ["gv","evince"]
+    open_programs = ["evince","gv"]
+elif sys.platform == "darwin":
+    open_programs = "open"
+else:
+    raise RuntimeError("Don't recognize platform: %s" % sys.platform)
+
+# read in the email message from an arg or stdin
+def get_message(args):
+    if len(args) > 0:
+        fp = open(args[0])
+    else:
+        fp = sys.stdin
+    return email.message_from_file(fp)
+
+def view_psfile(psfile, background=False):
+    if not os.path.exists(psfile):
+        stderr.write("file not found: %s\n", psfile)
+        return
+
+    for prog in open_programs:
+        command = "%s %s" % (prog, psfile)
+        try:
+            p=subprocess.Popen(command,shell=True,stdout=PIPE,stderr=STDOUT)
+            if not background:
+                retcode = p.wait()
+            return
+        except:
+            pass
+    stderr.write("Could not view file: %s\n", psfile)
+    stderr.write("    viewer not found perhaps?\n")
+
+
+# open a pipe to muttprint
+def open_muttprint(psfile):
+
+    command="muttprint -p TO_FILE:%s" % psfile
+    try:
+        mutt = Popen(command,shell=True,stdin=PIPE,
+                     stdout=open('/dev/null', 'w'), 
+                     stderr=subprocess.STDOUT)
+
+    except OSError, e:
+        print "popen muttprint failed:", e
+        sys.exit()
+    return mutt
+
+# write all the headers to muttprint
+def write_header( msg, mutt ):
+    for key in msg.keys( ):
+        val = msg.__getitem__(key)
+        pipe_mutt( "%s: %s\n" % ( key, val ), mutt )
+    pipe_mutt( "\n", mutt ) # one extra newline in case text abuts headers
+
+# utility for piping text to mutt
+# useful for debugging, select sys.stdout instead of mutt.stdin 
+def pipe_mutt( text, mutt ):
+    mutt.stdin.write(text)
+    #sys.stdout.write(text)
+
+# write all the text or html parts to muttprint
+# otherwise write an attachment notation
+def write_part( part, mutt ):
+    type = part.get_content_type()
+    if part.get_filename() is not None:
+        pipe_mutt("# Attachment: %s (%s)\n" % (part.get_filename(),type),mutt)
+    if type == "text/plain" or type == "text/html":
+        command = "w3m -dump -T %s" % type
+        try:
+            ch = Popen(command,shell=True,stdin=PIPE,stdout=PIPE,stderr=PIPE)
+        except OSError, e:
+            stderr.write("Execution failed: %s\n" % e)
+            sys.exit()
+        ch.stdin.write(str(part.get_payload(decode=True)))
+        ch.stdin.close()
+        out = ch.stdout.read().strip()
+        err = ch.stderr.read()
+        ch.wait()
+        if len(err):
+            print "Error with w3m: %s" % err
+            sys.exit()
+        pipe_mutt( out + "\n", mutt )
+
+if __name__ == '__main__':
+
+    options, args = parser.parse_args(sys.argv[1:])
+
+    msg  = get_message(args)
+
+    if options.ofile is not None:
+        remove_output=False
+        psfile=options.ofile
+    else:
+        remove_output=True
+        psfile=tempfile.mktemp(prefix='sup-muttprint-',suffix='.ps')
+        # this is a temporary file, we assume the user
+        # wants to view it
+        options.view=True
+
+    view=options.view
+    background=options.background
+
+    mutt = open_muttprint(psfile)
+
+    write_header( msg, mutt )
+    for part in msg.walk(): 
+        write_part( part, mutt )
+    mutt.stdin.close()
+    # wait until muttprint finishes
+    mutt.wait()
+
+    # now view the file
+    if view:
+        view_psfile(psfile, background=background)
+    else:
+        # only remove the file if we aren't viewing it in the background
+        if remove_output and not background:
+            os.remove(psfile)

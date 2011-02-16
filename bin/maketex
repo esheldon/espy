@@ -1,0 +1,59 @@
+#!/usr/bin/env python
+
+import sys
+if len(sys.argv) < 2:
+    sys.stderr.write("-syntax: maketex texfile\n")
+    sys.exit(45)
+
+texfile=sys.argv[1]
+
+# strip off the trailing .tex if it is there
+ind=texfile.find('.')
+if ind != -1:
+    texfile=texfile[0:ind]
+
+makefile="""
+TEXFILE=%s
+default: dvi
+
+# just run it
+bib: 
+	bibtex ${TEXFILE}
+
+dvi: 
+	latex ${TEXFILE}
+	latex ${TEXFILE}
+
+ps: 
+	latex ${TEXFILE}
+	latex ${TEXFILE}
+	dvips -t letter ${TEXFILE} -o ${TEXFILE}.ps
+
+pdf:
+	latex ${TEXFILE}
+	latex ${TEXFILE}
+	dvips -t letter ${TEXFILE} -o ${TEXFILE}.ps
+	ps2pdf ${TEXFILE}.ps
+    # this screws up figures
+    #dvipdfm -o ${TEXFILE}.pdf ${TEXFILE}.dvi 
+
+all: 
+	latex ${TEXFILE}
+	latex ${TEXFILE}
+	dvips -t letter ${TEXFILE} -o ${TEXFILE}.ps
+	dvipdfm -o ${TEXFILE}.pdf ${TEXFILE}.dvi 
+
+clean:
+	rm -f \\
+	${TEXFILE}.dvi \\
+	${TEXFILE}.ps \\
+	${TEXFILE}.pdf \\
+	${TEXFILE}.aux \\
+	${TEXFILE}.bbl \\
+	${TEXFILE}.blg \\
+	${TEXFILE}.toc \\
+	${TEXFILE}.log
+""" % texfile
+
+sys.stdout.write(makefile)
+

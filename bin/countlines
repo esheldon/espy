@@ -1,0 +1,187 @@
+#!/usr/bin/env python
+
+import os, sys
+import re
+from optparse import OptionParser
+
+usage="""
+    %prog [options] file/dir
+
+    Count lines in a file, or all files in a directory or dir structure.  By
+    default, empty lines are ignored, as are .svn directories.  Comment lines
+    can also be ignored by specifying comment strings.
+
+"""
+
+parser=OptionParser(usage)
+parser.add_option("-e","--ext", 
+                  dest="ext",
+                  help="File extension", 
+                  default=None)
+parser.add_option("-c","--comment", 
+                  dest="comment",
+                  help="Comment string, can be comma separated list", 
+                  default=None)
+parser.add_option("-r","--recurse", 
+                  action="store_true", 
+                  dest="recurse",
+                  help="Search directories recursively", 
+                  default=False)
+parser.add_option("-a","--all", 
+                  action="store_true", 
+                  dest="all",
+                  help="Count empty lines also (comment can override)", 
+                  default=False)
+parser.add_option("-v","--verbose",
+                  action="store_true",
+                  default=False,
+                  help="Verbose. Print a line for each file in directory mode")
+parser.add_option("--show-ignored",
+                  action="store_true",
+                  help="Show ignored files.  Requires verbose is also set")
+
+ignorelist = [re.compile('.*\.svn.*'),
+              re.compile('.*\.swp'),
+              re.compile('.*~'),
+              re.compile('.*\.pyc')]
+
+def StripComments(line, comment_list):
+    newline = line
+
+    for comment in comment_list:
+        ls = newline.split(comment)
+        if len(ls) == 0:
+            newline=''
+            break
+        else:
+            newline = ls[0]
+    return newline
+
+def IgnoreFile(file):
+    for i in ignorelist:
+        if i.match(file):
+            return True
+    return False
+
+def ProcessFile(fname, all=False, comment=None):
+    fp=open(fname,'r')
+    nlines=0
+
+    try:
+        for line in fp:
+            #sys.stdout.write(line)
+
+            # remove white space
+            line=line.strip()
+
+            # how do we deal with empty lines?
+            if line == '':
+                if all:
+                    nlines+= 1
+            else:
+                # should we deal with comments?
+                if comment is None:
+                    nlines+=1
+                else:
+                    line=StripComments(line, comment)
+                    if line != '':
+                        nlines+=1
+    except (UnicodeDecodeError):
+        err="""        
+            Unicode error for file:%s  
+            Probably binary, skipping\n\n""" % fname
+        sys.stderr.write(err)
+        nlines=0
+    fp.close()
+
+    return nlines
+
+
+def ProcessDir(dir, ext=None, recurse=False, all=False, comment=None,
+               verbose=False, show_ignored=False):
+
+
+    # This way we can print relative paths
+    os.chdir(dir)
+    if ext is not None:
+        pattern = '.*\\'+ext+'$'
+        ereg = re.compile(pattern)
+
+    ntot=0
+    if recurse:
+        sys.stdout.write('\nRecursively searching directory: %s\n' % dir)
+        for root, dirs, fnames in os.walk('./'):
+            for fname in fnames:
+                if ext is None:
+                    cont=True
+                else:
+                    cont=ereg.match(fname)
+                if cont:
+                    fpath = os.path.join(root, fname)
+                    if not IgnoreFile(fpath):
+                        nlines=ProcessFile(fpath, all=all, comment=comment)
+                        ntot+=nlines
+                        if verbose:
+                            sys.stdout.write('   %s: %s\n' % (fpath,nlines) )
+                    else:
+                        if show_ignored and verbose:
+                            sys.stdout.write('       ignoring: %s\n' % (fpath) )
+
+    else:
+        sys.stdout.write('\nSearching directory: %s\n' % dir)
+        l = os.listdir('./')
+        for name in l:
+            if ext is None:
+                cont=True
+            else:
+                cont=ereg.match(name)
+ 
+            if cont:
+                fpath = os.path.join(dir,name)
+                if os.path.isfile(fpath):
+                    if not IgnoreFile(fpath):
+                        nlines=ProcessFile(fpath, all=all, comment=comment)
+                        ntot+=nlines
+                        if verbose:
+                            sys.stdout.write('   %s: %s\n' % (name,nlines) )
+                    else:
+                        if show_ignored and verbose:
+                            sys.stdout.write('       ignoring: %s\n' % (fpath) )
+
+    if verbose:
+        line='-'*70
+        sys.stdout.write('%s\n' % line)
+    sys.stdout.write('Total lines: %s\n\n' % ntot)
+            
+
+def main(argv):
+
+    # process the options and arguments
+    (options, args) = parser.parse_args(argv[1:])
+    if len(args) < 1:
+        parser.print_help()
+        sys.exit(45)
+
+    ext=options.ext
+    comment=options.comment
+    if comment is not None:
+        comment = comment.split(',')
+    recurse=options.recurse
+    all=options.all
+    verbose=options.verbose
+
+    # the input path, a file or dir
+    path = args[0]
+
+    if not os.path.exists(path):
+        raise IOError("path %s does not exist" % path)
+
+    if os.path.isdir(path):
+        ProcessDir(path, ext=ext, recurse=recurse, all=all, comment=comment,
+                   verbose=verbose, show_ignored=options.show_ignored)
+    else:
+        nlines = ProcessFile(path, all=all, comment=comment)
+        sys.stdout.write("%s: %d\n" % (path,nlines))
+
+if __name__=="__main__":
+    main(sys.argv)

@@ -1,0 +1,137 @@
+#!/usr/bin/env python
+"""dfall [options]
+
+  Run df on all automounted disks and print the sorted result.
+  Uses the /etc/auto.mount to get a list of auto-mounted disks"""
+
+import os
+import sys
+from optparse import OptionParser
+
+parser=OptionParser(__doc__)
+
+parser.add_option("-s","--sortby",default="avail", dest="sortby",
+    help="Specify the sort ordering.  Default is '%default'.  Possibilities are 'size','used','avail','perc','name'. The secondary sort is by name, e.g. avail-name")
+parser.add_option("-P","--portability",action="store_true",
+                  dest="portable",default=False,
+                  help="Use the POSIX output format, which is more easily parsed by a machine.  This is the same as the -P option to df on linux except the header is not printed.")
+
+
+#
+# Some data
+#
+prefix = 'mount'
+dlist_name = '/etc/auto.'+prefix
+blocksize='1G'
+# How to order the sorting
+sort_reverse = \
+        {'size':True,'used':True,'avail':True,'perc':False,'name':False}
+
+
+def ExtractInfo(line):
+    """
+    This extracts the required info from a line in the auto.mount file
+    """
+    line = line.strip()
+    lsplit = line.split()
+    if len(lsplit) == 3:
+        (disk, options, mountpoint) = lsplit
+        location = '/'+prefix+'/'+disk
+        return (disk, location)
+    else:
+        return (None,None)
+
+def Df(location, portable=False):
+    """
+    Run df and parse the output
+    """
+
+    # auto-mount the disk
+    os.popen('cd '+location)
+    # run df for display
+    if portable:
+        command = 'df -P --block-size='+blocksize+' '+location
+    else:
+        command = 'df -h '+location
+    display_line = os.popen(command).readlines()
+
+    # should be at least a header and one other line
+    if len(display_line) >= 2:
+        header = display_line[0]
+        display_line = display_line[1:]
+        display_line = ''.join(display_line)
+    else:
+        return None
+
+    # run df again for parsing/sorting
+    command = 'df -P --block-size='+blocksize+' '+location
+    res = os.popen(command)
+    res = res.readlines()
+
+    # Skip the header
+    if len(res) < 2:
+        return None
+
+    res = res[1]
+    res = res.split()
+    size = int(res[1])
+    used = int(res[2])
+    avail = int(res[3])
+    perc = res[4]
+
+    tdict = {'loc': location,
+             'size':size,
+             'used':used,
+             'avail':avail,
+             'perc':perc,
+             'displine': display_line,
+             'header':header}
+
+    return tdict
+
+def MakeKey(tdict, sortby=None):
+    if sortby is None:
+        sortby = 'avail'
+    key = '%010s-%s' % (tdict[sortby], tdict['name'])
+    return key
+
+
+def main():
+    options, args = parser.parse_args(sys.argv[1:])
+    sortby = options.sortby
+    portable=options.portable
+
+    if sortby not in sort_reverse:
+        sys.stderr.write("Bad SORTBY specification: %s\n" % sortby)
+        sys.exit(45)
+
+    disklist = open(dlist_name, 'r')
+
+    ddict = {}
+    for line in disklist:
+        line = line.strip()
+        (diskname, location) = ExtractInfo(line)
+        if diskname is None:
+            return
+
+        tdict = Df(location, portable=portable)
+        if tdict is None:
+            return
+
+        tdict['name'] = diskname
+
+        key = MakeKey(tdict, sortby=sortby)
+        ddict[key] = tdict
+
+    if not portable:
+        sys.stdout.write(ddict[key]['header'])
+
+    for key in sorted(ddict, reverse=sort_reverse[sortby]):
+        sys.stdout.write(ddict[key]['displine'])
+
+    disklist.close()
+
+
+
+# run the main program
+main()

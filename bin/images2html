@@ -1,0 +1,86 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import re
+import imtools
+import getopt
+
+conf={}
+conf['cssfile'] = 'images2html.css'
+conf['configfile'] = 'images2html.conf'
+
+conf['thumbsize'] = (128,128)
+conf['reducedsize'] = (640,480)
+conf['overwrite'] = False
+
+conf['ncol'] = 3
+conf['nrow'] = 3
+
+__doc__ = \
+"""
+    %s -o|--overwrite directory
+""" % sys.argv[0]
+
+
+
+def ParseInput(argv):
+    options = 'ot:r:'
+    loptions = ['overwrite=','tsize=','rsize=']
+    opts, args = getopt.getopt(argv[1:],options,loptions)
+
+    # regular arguments
+    if len(args) != 1:
+        sys.stdout.write('%s\n' % __doc__)
+        sys.exit(45)
+    dir = args[0]
+    conf['dir'] = dir
+
+    # switches and optional inputs
+    for o,v in opts:
+        if o == '-o' or o == '--overwrite':
+            conf['overwrite'] = True
+        if o == '-t' or o == '--tsize':
+            sx,sy = imtools.ExtractSize(v)
+            conf['thumbsize'] = (sx,sy)
+        if o == '-r' or o == '--rsize':
+            sx,sy = imtools.ExtractSize(v)
+            conf['reducedsize'] = (sx,sy)
+
+    sys.stdout.write("Configuration: \n")
+    for c in conf:
+        sys.stdout.write("%20s: %s\n" % (c,conf[c]))
+
+def GetFlist():
+    flist = imtools.GetImageFileList(conf['dir'])
+
+    if len(flist) == 0:
+        sys.stdout.write("no images found of the form: %s\n" % pattern)
+        sys.exit(45)
+
+    conf['imlist'] = flist
+    conf['thumblist'] = imtools.ResizeNames(flist)
+    conf['redlist'] = imtools.ResizeNames(flist,ftype='reduced')
+
+def MakeReduced():
+    size = conf['thumbsize']
+    imtools.ResizeDirImages(conf['dir'], size, overwrite=conf['overwrite'])
+    size = conf['reducedsize']
+    imtools.ResizeDirImages(conf['dir'], size, ftype='reduced',
+                            overwrite=conf['overwrite'])
+
+def WriteCSS():
+    file=os.path.join(conf['dir'],conf['cssfile'])
+    imtools.WriteCSS(file)
+
+def main(argv):
+    ParseInput(argv)
+    GetFlist()
+    MakeReduced()
+    WriteCSS()
+    imtools.MakeWebpages(conf)
+
+if __name__=="__main__":
+    main(sys.argv)
+
+

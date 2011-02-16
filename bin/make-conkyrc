@@ -1,0 +1,165 @@
+#!/usr/bin/env python
+
+import sys
+
+from optparse import OptionParser
+parser=OptionParser(__doc__)
+
+parser.add_option("-e","--ethernet",default="eth0",
+                  help="eth0, eth1, etc")
+parser.add_option("-c","--ncpu",default=2,
+                  help="number of cpus, default 2")
+
+
+options, args = parser.parse_args(sys.argv[1:])
+
+ethernet = options.ethernet
+ncpu = options.ncpu
+
+cpu_text=""
+for i in xrange(ncpu):
+    istr = str(i+1)
+    cpu_text += "CPU"+istr+": ${color skyblue} $alignr ${cpu cpu"+istr+"}%$color\n"
+    cpu_text += "${color lightgrey}${cpugraph cpu"+istr+" 006400 00FF00}$color\n"
+
+
+header="""
+# set to yes if you want Conky to be forked in the background
+background no
+
+cpu_avg_samples 2
+net_avg_samples 2
+
+out_to_console no
+
+# X font when Xft is disabled, you can pick one with program xfontsel
+#font 7x12
+#font 6x10
+#font 7x13
+#font 8x13
+#font 7x12
+#font *mintsmild.se*
+#font -*-*-*-*-*-*-34-*-*-*-*-*-*-*
+#font -artwiz-snap-normal-r-normal-*-*-100-*-*-p-*-iso8859-1
+#font fixed
+
+# Use Xft?
+use_xft yes
+
+# Xft font when Xft is enabled
+#xftfont Bitstream Vera Sans Mono:size=8
+xftfont peep:size=12
+
+own_window_transparent no
+own_window_colour hotpink
+# Text alpha when using Xft
+xftalpha 0.8
+
+
+# mail spool
+mail_spool $MAIL
+
+# Update interval in seconds
+update_interval 2
+# Create own window instead of using desktop (required in nautilus)
+#own_window no
+
+# For xfce
+own_window yes
+# for xmonad
+#own_window_type desktop
+own_window_type override
+own_window_hints undecorated,below,skip_taskbar
+own_window_transparent yes
+
+# Use double buffering (reduces flicker, may not work for everyone)
+double_buffer yes
+
+# Minimum size of text area
+#minimum_size 280 5
+#maximum_width 150
+
+# Draw shades?
+draw_shades yes
+
+# Draw outlines?
+draw_outline no
+
+# Draw borders around text
+draw_borders no
+
+# Stippled borders?
+stippled_borders 10
+
+
+# border width
+border_width 1
+
+# Default colors and also border colors
+default_color white
+default_shade_color black
+default_outline_color white
+
+# Text alignment, other possible values are commented
+#alignment top_left
+#minimum_size 10 10
+#gap_x 13
+#gap_y 13
+#alignment top_right
+#gap_x 13
+#gap_y 50
+#gap_y 200
+#alignment bottom_left
+#alignment bottom_right
+#alignment top_right
+alignment middle_right
+gap_y 50
+
+
+# Gap between borders of screen and text
+
+# Add spaces to keep things from moving about?  This only affects certain objects.
+use_spacer none
+
+# Subtract file system buffers from used memory?
+no_buffers yes
+
+# set to yes if you want all text to be in uppercase
+uppercase no
+
+# boinc (seti) dir
+# seti_dir /opt/seti
+
+"""
+
+body="""
+TEXT
+$nodename $alignr $kernel
+${hr}
+Uptime: $alignr ${color lightgrey} $uptime$color
+${time %H:%M:%S%p} $alignr ${time %F}
+
+"""+cpu_text+"""
+Down:${color skyblue} ${downspeed eth0} $alignr ${color lightgrey} Tot: ${color skyblue}${totaldown eth0}$color
+${color lightgrey}${downspeedgraph eth0 2554C7 306EFF 1000}$color
+Up:  ${color FBB117} ${upspeed eth0} $alignr ${color lightgrey} Tot: ${color FBB117}${totalup eth0}$color
+${color lightgrey}${upspeedgraph eth0 AF7817 FBB117 100}$color
+RAM: ${mem}/${memmax}
+${color skyblue}${memgraph 006400 00FF00}$color
+
+/ ${color orange}${voffset -2}${font Pie charts for maps:size=14}${execi 60 bash ~/.dotfiles/conky/scripts/df2piefont.sh /}${font}$color${voffset -6}   Swap ${color yellow}${voffset -2}${font Pie charts for maps:size=14}${execi 60 bash ~/.dotfiles/conky/scripts/free2piefont.sh swap}${font}$color
+
+${color}Proc by CPU      PID       %
+${color #ddaa00} ${top name 1}${top pid 1} ${top cpu 1}
+${color lightgrey} ${top name 2}${top pid 2} ${top cpu 2}
+${color lightgrey} ${top name 3}${top pid 3} ${top cpu 3}
+${color}Proc by Mem
+${color #ddaa00} ${top_mem name 1}${top_mem pid 1} ${top_mem mem 1}
+${color lightgrey} ${top_mem name 2}${top_mem pid 2} ${top_mem mem 2}
+${color lightgrey} ${top_mem name 3}${top_mem pid 3} ${top_mem mem 3}"""
+
+body=body.replace('eth0',ethernet)
+
+print header
+print body
+
