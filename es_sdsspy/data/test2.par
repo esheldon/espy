@@ -1,0 +1,28 @@
+# an example .par file
+name John Smith
+age 35
+
+typedef struct {
+  char flag[20];  # Flag name
+  short bit;      # Bit number, 0-indexed
+  char label[20]; # Bit label
+} maskbits;
+
+typedef struct {
+  char flag[20];  # Flag name
+  short datatype; # Data type {8, 16, 32, 64}
+} masktype;
+
+masktype SPPIXMASK 32
+# The following mask bits are for the fiber, set in FIBERMASK_BITS()
+maskbits SPPIXMASK  0 NOPLUG          # Fiber not listed in plugmap file
+maskbits SPPIXMASK  1 BADTRACE        # Bad trace from routine TRACE320CRUDE
+maskbits SPPIXMASK  \
+		2 BADFLAT         # Low counts in fiberflat
+
+masktype TARGET 32
+maskbits TARGET  0 QSO_HIZ
+maskbits TARGET  1 QSO_CAP
+maskbits TARGET  2 QSO_SKIRT
+
+
