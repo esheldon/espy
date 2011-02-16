@@ -1,0 +1,7 @@
+{
+    "train_sample":"03",
+    "photo_sample":"02",
+    "sdss_rmax":19.6,
+    "zmin":-0.001,
+    "zmax":2.0
+}
