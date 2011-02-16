@@ -1,0 +1,36 @@
+# vim: set filetype=python :
+import distutils.sysconfig
+import os
+
+default_version='1.4.1'
+url="""
+'http://downloads.sourceforge.net/project/numpy/NumPy/%s/numpy-%s.tar.gz' % (self.version,self.version)"""
+source_type = 'tar'
+
+# this will use the install_dir as prefix in configure
+install_method = 'python-setup'
+build_args = '--fcompiler=gnu95'
+
+# on rhel 5.3 lapack and blas are linked against gfortran
+# but tests claim linked also against g77, don't get it
+#build_command = 'python setup.py config_fc --fcompiler=gnu95 build'
+#install_command = 'python setup.py config_fc --fcompiler=gnu95 install'
+
+# create the ups directory after installation
+import platform
+pyvers=platform.python_version_tuple()
+# grab major version.  We'll have to add a path for both lib and lib64 
+# just in case
+# wierd difference on mac:
+if not isinstance(pyvers[0], str):
+    pyvers = [str(v) for v in pyvers]
+pyvers='.'.join(pyvers[0:2])
+
+main_libdir=distutils.sysconfig.get_python_lib()
+pylib_install_subdir = main_libdir.replace(distutils.sysconfig.PREFIX+os.sep,'')
+
+create_ups="""
+setupOptional("python")
+envPrepend(PATH,${PRODUCT_DIR}/bin)
+envPrepend(PYTHONPATH,${PRODUCT_DIR}/%s)
+""" % pylib_install_subdir 

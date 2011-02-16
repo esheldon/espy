@@ -1,0 +1,20 @@
+# vim: set filetype=python :
+import os
+
+default_version = 'v0.64'
+base_url = 'https://desweb.cosmology.illinois.edu/svn/desdm/devel/tmv'
+source_type = 'svn'
+get_method = 'svn export'
+install_method = 'scons'
+
+# figure out how many processors we can use
+# this will work on unix/posix only I think
+try:
+    nproc = os.sysconf('SC_NPROCESSORS_ONLN')
+    if not isinstance(nproc,int) or nproc <= 0:
+        nproc=1
+except:
+    nproc=1
+#build_flags = 'IMPORT_PATHS=True WITH_LAPACK=False WITH_UPS=True WITH_OPENMP=False -j %s' % nproc
+build_flags = 'WITH_LAPACK=False WITH_UPS=True WITH_OPENMP=False SHARED=True -j %s' % nproc
+

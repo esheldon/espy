@@ -1,0 +1,16 @@
+# vim: set filetype=python :
+default_version='6.1'
+
+url="""
+'http://downloads.sourceforge.net/project/fbpanel/fbpanel/%s/fbpanel-%s.tbz2' % (self.version,self.version)"""
+
+source_type = 'tar'
+
+# this will use the install_dir as prefix in configure
+install_method = 'configure-make-install'
+
+
+# create the ups directory after installation
+create_ups="""
+envPrepend(PATH,${PRODUCT_DIR}/bin)
+"""

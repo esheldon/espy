@@ -1,0 +1,20 @@
+# vim: set filetype=python :
+base_url="svn+ssh://howdy.physics.nyu.edu/usr/local/svn/esheldon/trunk/ccode/pyfits-2.2.2espatch"
+
+default_version = 'trunk'
+get_method = 'svn-export'
+source_type = 'svn'
+install_method = 'python-setup'
+
+
+# create the ups directory after installation
+import platform
+pyvers=platform.python_version_tuple()
+# grab major version.  We'll have to add a path for both lib and lib64 
+# just in case
+pyvers='.'.join(pyvers[0:2])
+create_ups="""
+setupOptional("numpy")
+envPrepend(PYTHONPATH,${PRODUCT_DIR}/lib/python%s/site-packages)
+envPrepend(PYTHONPATH,${PRODUCT_DIR}/lib64/python%s/site-packages)
+""" % (pyvers,pyvers)

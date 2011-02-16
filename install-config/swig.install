@@ -1,0 +1,16 @@
+# vim: set filetype=python :
+#default_version='1.3.40'
+default_version='2.0.0'
+
+
+#url="""'http://downloads.sourceforge.net/project/swig/swig/swig-%s/swig-%s.tar.gz' % (self.version,self.version)"""
+url="""'http://prdownloads.sourceforge.net/swig/swig-%s.tar.gz' % self.version"""
+source_type = 'tar'
+
+# this will use the install_dir as prefix in configure
+install_method = 'configure-make-install'
+
+# create the ups directory after installation
+create_ups="""
+envPrepend(PATH,${PRODUCT_DIR}/bin)
+"""

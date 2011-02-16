@@ -1,0 +1,8 @@
+# vim: set filetype=python :
+base_url = 'http://sdssidl.googlecode.com/svn'
+get_method = 'svn-export'
+source_type = 'svn'
+build_method = 'scons'
+install_method = 'copy'
+default_version = 'trunk'
+

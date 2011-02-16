@@ -1,0 +1,15 @@
+# vim: set filetype=python :
+default_version='7.2'
+
+url="""
+'http://ftp.vim.org/pub/vim/unix/vim-%s.tar.bz2' % (self.version,)"""
+
+source_type = 'tar'
+
+# this will use the install_dir as prefix in configure
+install_method = 'configure-make-install'
+
+# create the ups directory after installation
+create_ups="""
+envPrepend(PATH,${PRODUCT_DIR}/bin)
+"""

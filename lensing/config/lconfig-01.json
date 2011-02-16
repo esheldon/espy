@@ -1,0 +1,19 @@
+{
+    "run":"01",
+    "lens_catalog":"desmocks",
+    "lens_version":"2.13",
+    "lens_sample":"desmocks-2.13",
+    "src_catalog":"desmocks",
+    "src_version":"2.13",
+    "src_sample":"desmocks-2.13",
+    "nsplit":100,
+    "H0":100.0,
+    "omega_m":0.25,
+    "nbin": 20,
+    "rmin": 0.02,
+    "rmax": 10.0,
+    "sigmacrit_style":1,
+    "nside":4096,
+    "nest":0,
+    "npts":5
+}

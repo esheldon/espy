@@ -1,0 +1,14 @@
+default_version = '2011-02-07'
+
+# they stopped releasing versioned tar balls with the internal directory
+# structure.  So I make my own. Also these are not tarbombs. ess
+
+url="""'http://www.cosmo.bnl.gov/www/esheldon/code/idl/idlgoddard-%s.tar.gz' % self.version"""
+source_type = 'tar'
+
+install_method = 'copy'
+
+# create the ups directory after installation
+create_ups="""
+envPrepend(IDL_PATH,+${PRODUCT_DIR}/pro)
+"""

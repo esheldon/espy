@@ -1,0 +1,21 @@
+# vim: set filetype=python :
+default_version='1.0.5'
+url="""
+'http://pypi.python.org/packages/source/p/python-cjson/python-cjson-%s.tar.gz' % (self.version,)"""
+source_type = 'tar'
+
+
+# this will use the install_dir as prefix in configure
+install_method = 'python-setup'
+
+# create the ups directory after installation
+import platform
+pyvers=platform.python_version_tuple()
+# grab major version.  We'll have to add a path for both lib and lib64 
+# just in case
+pyvers='.'.join(pyvers[0:2])
+create_ups="""
+setupOptional("python")
+envPrepend(PYTHONPATH,${PRODUCT_DIR}/lib/python%s/site-packages)
+envPrepend(PYTHONPATH,${PRODUCT_DIR}/lib64/python%s/site-packages)
+""" % (pyvers,pyvers)

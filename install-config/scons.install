@@ -1,0 +1,23 @@
+# vim: set filetype=python :
+# This really only works for installing the default version
+#default_version='1.2.0'
+default_version='2.0.0.final.0'
+
+url="""
+'http://prdownloads.sourceforge.net/scons/scons-%s.tar.gz' % self.version"""
+source_type = 'tar'
+
+# this will use the install_dir as prefix in configure
+install_method = 'python-setup'
+
+# create the ups directory after installation
+import platform
+pyvers=platform.python_version_tuple()
+# grab major version.  We'll have to add a path for both lib and lib64 
+# just in case
+pyvers='.'.join(pyvers[0:2])
+create_ups="""
+setupOptional("python")
+envPrepend(PATH,${PRODUCT_DIR}/bin)
+envPrepend(PYTHONPATH,${PRODUCT_DIR}/lib/scons-${PRODUCT_VERSION})
+"""
