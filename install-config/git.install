@@ -1,5 +1,9 @@
 # vim: set filetype=python :
-default_version='1.6.5.1'
+
+# FOR SOME REASON THIS DOESN'T work properly,
+# I always get "not a get repo" in every directory.
+# regular install worked
+default_version='1.7.4.1'
 
 url="""
 'http://kernel.org/pub/software/scm/git/git-%s.tar.gz' % (self.version,)"""
@@ -7,7 +11,9 @@ url="""
 source_type = 'tar'
 
 # this will use the install_dir as prefix in configure
-install_method = 'configure-make-install'
+#install_method = 'configure-make-install'
+
+install_command = """'make prefix='+self.install_dir+' all && make prefix='+self.install_dir+' install'"""
 
 
 # create the ups directory after installation
