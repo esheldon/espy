@@ -11,6 +11,12 @@ import biggles
 
 import pprint
 
+def test_admom():
+    '''
+    Test the admom code with different sub-pixel corrections by
+    generating fake images with sub-pixel integration in them.
+    '''
+
 def test_convolve():
     n=14
     facvals = numpy.linspace(1.0,6.0,n)

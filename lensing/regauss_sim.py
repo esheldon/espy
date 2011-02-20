@@ -2,7 +2,7 @@ from __future__ import print_function
 import os
 import sys
 import numpy
-from numpy import sqrt
+from numpy import sqrt, array
 import images
 
 import admom
@@ -35,7 +35,15 @@ def shear_fracdiff(e, em, deriv=1.0):
     """
     return ((1-e**2)*deriv + em/e)/(2-em**2) - 1.0
 
-
+def expsigma(sigma):
+    '''
+    Assuming the exponential was defined as
+        exp(-(r/sigma))
+    where r=sqrt(x^2+y^2), then return the expected
+    measured value for sigma in either x,y which is
+        1.16*sigma
+    '''
+    return 1.16*sigma
 
 class RegaussSimPlotter(dict):
     def __init__(self, run, objmodel, psfmodel, psf_ellip=0.0):
@@ -54,54 +62,6 @@ class RegaussSimPlotter(dict):
             print("Making plot dir:",pdir)
             os.makedirs(pdir)
 
-    def ploteach(self, show=False):
-        # plot accuracy vs object ellipticity for each value of s2
-        for st in self.alldata:
-
-            # this s2 is the value we were aiming for, could be pretty
-            # far off for some models
-            s2 = st['s2'][0]
-            pfile = plotfile(self['run'],self['objmodel'],self['psfmodel'], s2=s2)
-            print("plotfile:",pfile)
-
-            s = st['etrue'].argsort()
-            etrue = st['etrue'][s]
-
-            gamma_frac = shear_fracdiff(etrue, st['ecorr'][s])
-            gamma_frac_rg = shear_fracdiff(etrue, st['ecorr_rg'][s])
-
-
-            s2mean = numpy.median( st['s2prepsf'] )
-            Rmean = numpy.median( st['R'] )
-
-            plt = biggles.FramedPlot()
-            c = biggles.Curve(etrue, gamma_frac, color='red')
-            c.label = 'AM+'
-            crg = biggles.Curve(etrue, gamma_frac_rg, color='blue')
-            crg.label = 'RG'
-
-            key=biggles.PlotKey(0.1,0.9,[c,crg])
-
-            lx=0.9
-            lpsf=biggles.PlotLabel(lx,0.9,'psf: '+self['psfmodel'], halign='right')
-            lobj=biggles.PlotLabel(lx,0.85,'obj: '+self['objmodel'], halign='right')
-            ls2=biggles.PlotLabel(lx,0.8,'s2: %0.2f' % s2mean, halign='right')
-            lR=biggles.PlotLabel(lx,0.75,'R: %0.2f' % Rmean, halign='right')
-
-            plt.add( c, crg, key, lpsf, lobj, ls2, lR)
-
-            plt.xlabel='object ellipticity'
-            plt.ylabel=r'$\Delta \gamma/\gamma$'
-
-            rng = max(  max(abs(gamma_frac)), max(abs(gamma_frac_rg)) )
-            #yrange = [-rng,rng]
-            #plt.yrange=yrange
-            plt.write_eps(pfile)
-            if show:
-                plt.show()
-                res=raw_input("hit a key (q to quit): ")
-                if res == 'q': 
-                    return
 
     def plotall(self, Rmin=0.33, show=False, yrange=None):
         pfile = plotfile(self['run'],self['objmodel'],self['psfmodel'])
@@ -209,7 +169,7 @@ class RegaussSimPlotter(dict):
                                  ('R','f4')])
         return st
 
-def run_many_s2(run, objmodel, psfmodel):
+def run_many_s2(run, objmodel, psfmodel, verbose=False):
     """
 
     Run lots of s2
@@ -223,7 +183,7 @@ def run_many_s2(run, objmodel, psfmodel):
         print("-"*70)
         print("s2:",s2)
         #rs = RegaussSimulator(run, s2, objmodel, psfmodel)
-        rs = RegaussSimulatorRescontrol(run, s2, objmodel, psfmodel)
+        rs = RegaussSimulatorRescontrol(run, s2, objmodel, psfmodel, verbose=verbose)
         rs.run_many_ellip()
 
     print("Done")
@@ -237,7 +197,8 @@ class RegaussSimulatorRescontrol(dict):
     Simulate objects convolved with the PSF. 
 
     This is distinguished from the SDSS simulator because
-    you have precise control over the resolution effects.
+    you have precise control over the resolution effects
+    in the PSF.
 
     Also, because the resolution will be set high, there is
     little need to use random orientations, although each
@@ -248,26 +209,61 @@ class RegaussSimulatorRescontrol(dict):
 
     """
     def __init__(self, run, s2, objmodel, psfmodel, 
-                 psf_ellip=0.0, Tratio_psf=2., fluxfrac1=0.8, 
-                 psf_fwhm=100.0,
-                 mine=0.05, maxe=0.8, nume=20):
+                 psf_ellip=0.0, 
+                 psf_sigma=3.0,
+                 psf_sigrat=2.3, psf_cenrat=0.09,  # for dgauss models
+                 mine=0.05, maxe=0.8, nume=20,
+                 verbose=False,
+                 conv='fconv'):
         self['run']=run
         self['s2']=s2
         self['objmodel']=objmodel
         self['psfmodel']=psfmodel
         self['psf_ellip']=psf_ellip
-        self['Tratio_psf']=Tratio_psf
-        self['fluxfrac1']=fluxfrac1
-        self['psf_fwhm']=psf_fwhm # pixels
+        self['psf_sigma']=psf_sigma # pixels
+
+        self['psf_sigrat']=psf_sigrat
+        self['psf_cenrat']=psf_cenrat
+
         self['mine']=mine
         self['maxe']=maxe
         self['nume']=nume
+
+        self['verbose'] = verbose
+
+        self['conv'] = conv
 
     def run_many_ellip(self):
         for ellip in self.ellipvals():
             self.run_ellip(ellip)
         print("Done many_ellip")
 
+    def new_convolved_image(self, ellip):
+        pcovar=array(fimage.conversions.ellip2mom(2*self['psf_sigma']**2,e=self['psf_ellip'],theta=0))
+        if self['psfmodel'] == 'dgauss':
+            pcovar1=pcovar
+            pcovar2=pcovar*self['psf_sigrat']**2
+            b=self['psf_cenrat']
+            psfpars = dict(model = 'dgauss',
+                           covar1 = pcovar1,
+                           covar2 = pcovar2,
+                           cenrat=b)
+        else:
+            psfpars = dict(model = 'gauss',
+                           covar = pcovar)
+
+        sigma = self['psf_sigma']/sqrt(self['s2'])
+        if self['objmodel'] == 'exp':
+            sigma = expsigma(sigma)
+        covar=array(fimage.conversions.ellip2mom(2*sigma**2,e=ellip,theta=0))
+        objpars = dict(model = self['objmodel'],
+                       covar=covar)
+
+        ci = fimage.convolved.ConvolvedImage(objpars,psfpars,
+                                             verbose=self['verbose'],
+                                             conv=self['conv'])
+        return ci
+        
     def run_ellip(self, ellip):
 
         print("ellip:",ellip)
@@ -286,20 +282,24 @@ class RegaussSimulatorRescontrol(dict):
         robj=None
 
         # get a n ew RandomConvolvedImage with this ellip
-        rci = self.new_random_convolved_image(ellip)
+        print("getting convolved image")
+        ci = self.new_convolved_image(ellip)
 
-        Tguess=rci['Irr'] + rci['Icc']
-        Tguess_psf = rci['Irr_psf'] + rci['Icc_psf']
+        guess = (ci['covar'][0] + ci['covar'][2])/2
+        guess_psf = (ci['covar_psf'][0] + ci['covar_psf'][2])/2
 
         # get moments before convolution
-        amtrue = admom.admom(rci.image0, rci['cen'][0], rci['cen'][1],
-                             Tguess=rci['Irr']+rci['Icc'])
+        print("running admom")
+        amtrue = admom.admom(ci.image0, ci['cen'][0], ci['cen'][1],
+                             guess=guess)
 
         if amtrue['whyflag'] != 0:
             raise RuntimeError("Failed to process image0")
 
-        rg = admom.ReGauss(rci.image, rci['cen'][0], rci['cen'][1],
-                           rci.psf, Tguess=Tguess,Tguess_psf=Tguess_psf)
+        print("running regauss")
+        rg = admom.ReGauss(ci.image, ci['cen'][0], ci['cen'][1],
+                           ci.psf, guess=guess,guess_psf=guess_psf,
+                           verbose=self['verbose'])
         rg.do_all()
 
         if rg['rgstats'] == None or rg['rgcorrstats'] == None:
@@ -307,13 +307,13 @@ class RegaussSimulatorRescontrol(dict):
         if rg['rgstats']['whyflag'] != 0:
             raise RuntimeError("Failed to run regauss")
         # copy out the data
-        output = self.copy_output(amtrue, rci, rg)
+        output = self.copy_output(amtrue, ci, rg)
 
         eu.io.write(outfile, output)
 
         #sys.stdout.flush()
 
-    def copy_output(self, amtrue, rci, rg):
+    def copy_output(self, amtrue, ci, rg):
         st = numpy.zeros(1, dtype=self.out_dtype())
         ims = rg['imstats']
         psfs = rg['psfstats']
@@ -372,15 +372,6 @@ class RegaussSimulatorRescontrol(dict):
         return simfile(self['run'], 
                        self['objmodel'], self['psfmodel'], 
                        self['s2'], ellip, self['psf_ellip'])
-
-    def new_random_convolved_image(self, ellip):
-        rci = RandomConvolvedImage(self['s2'], self['objmodel'], ellip,
-                                   self['psfmodel'], 
-                                   psf_ellip=self['psf_ellip'], 
-                                   Tratio_psf=self['Tratio_psf'], 
-                                   fluxfrac1=self['fluxfrac1'], 
-                                   psf_fwhm=self['psf_fwhm'])
-        return rci
 
 
 class RandomSDSSPSF(dict):
