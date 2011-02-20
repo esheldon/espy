@@ -31,6 +31,7 @@ else
 	fi
 	rsync -av \
 		--exclude "*svn*" \
+		--exclude "*git*" \
 		--exclude "*swp" \
 		--exclude "*~" \
 		--exclude "*pyc" ./ $(PREFIX)/

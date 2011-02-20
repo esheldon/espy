@@ -1,7 +1,5 @@
 {"run":"09",
  "objmodel":"gauss",
  "psfmodel":"gauss",
- "conv":"fast",
- "nrand":100,
- "trialfac":10}
+ "conv":"fconv"}
 

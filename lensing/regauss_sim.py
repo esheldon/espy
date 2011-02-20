@@ -954,12 +954,19 @@ rs.run_many_ellip()
     else:
         commands="""
 import lensing
-rs = lensing.regauss_sim.RegaussSimulatorRescontrol('{run}', {s2}, '{objmodel}', '{psfmodel}')
+rs = lensing.regauss_sim.RegaussSimulatorRescontrol('{run}', {s2}, '{objmodel}', '{psfmodel}',conv='{conv}')
 rs.run_many_ellip()
         """
 
     for s2 in s2vals:
-        plist.append({'run':run,'objmodel':objmodel,'psfmodel':psfmodel,'s2':s2,'conv':c['conv'],'nrand':c['nrand'],'trialfac':c['trialfac']})
+        p={'run':run,
+           'objmodel':objmodel,
+           'psfmodel':psfmodel,
+           's2':s2,'conv':c['conv']}
+        if psfmodel == 'sdss':
+            p['nrand']=c['nrand']
+            p['trialfac'] = c['trialfac']
+        plist.append(p)
     
     queue='fast'
     pbs.create_many(dir, name, commands, plist, python=True,
