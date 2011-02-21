@@ -20,6 +20,8 @@ import glob
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
+parser.add_option("-r","--recurse",action="store_true",
+                  help="copy files recursively the directory")
 
 junk="""
 parser.add_option("--noindex",action="store_true",
@@ -73,11 +75,18 @@ def main():
 
     url = args[0]
 
+    recurse=options.recurse
+    if recurse:
+        depth='inf'
+    else:
+        depth='1'
     cut_dirs = get_cut_dirs(url)
 
     
     command=['wget',
-             '--mirror',
+             '-N',
+             '-r',
+             '-l '+depth,
              '-nH',  # -nH prevents putting hostname directory here
              '--cut-dirs=%s' % cut_dirs,
              '--no-parent', # never ascend to parent dir
