@@ -1,5 +1,5 @@
-{"run":"09",
- "objmodel":"gauss",
+{"run":"10",
+ "objmodel":"exp",
  "psfmodel":"gauss",
  "psf_ellip":0.0,
  "conv":"fconv"}

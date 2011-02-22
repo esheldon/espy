@@ -46,14 +46,17 @@ def expsigma(sigma):
     return 1.16*sigma
 
 class RegaussSimPlotter(dict):
-    def __init__(self, run, objmodel, psfmodel, psf_ellip=0.0):
+    def __init__(self, run):
+
+        c = read_config(run)
         self['run'] = run
-        self['objmodel'] = objmodel
-        self['psfmodel'] = psfmodel
+        self.config = c
+        self['objmodel'] = c['objmodel']
+        self['psfmodel'] = c['psfmodel']
 
         self['psf_ellip'] = None
-        if psfmodel != 'sdss':
-            self['psf_ellip'] = psf_ellip
+        if self['psfmodel'] != 'sdss':
+            self['psf_ellip'] = c['psf_ellip']
 
         self.read_data()
 
@@ -63,7 +66,7 @@ class RegaussSimPlotter(dict):
             os.makedirs(pdir)
 
 
-    def plotall(self, Rmin=0.33, show=False, yrange=None):
+    def plotall(self, Rmin=0.0, show=False, yrange=None):
         pfile = plotfile(self['run'],self['objmodel'],self['psfmodel'])
 
         ndata = len(self.alldata)

@@ -1,6 +1,6 @@
-{"run":"09",
+{"run":"10",
  "objmodel":"gauss",
- "psfmodel":"gauss",
+ "psfmodel":"dgauss",
  "psf_ellip":0.0,
  "conv":"fconv"}
 
