@@ -150,7 +150,7 @@ class RegaussSimPlotter(dict):
                             s2, '*', self['psf_ellip'])
             print(pattern)
             flist = glob.glob(pattern)
-            if len(flist) != 0:
+            if len(sorted(flist)) != 0:
                 st = self.struct(len(flist))
                 for i in xrange(len(flist)):
                     f=flist[i]
@@ -211,30 +211,30 @@ class RegaussSimulatorRescontrol(dict):
     realization of each ellip is used.
 
     """
-    def __init__(self, run, s2, objmodel, psfmodel, 
-                 psf_ellip=0.0, 
-                 psf_sigma=3.0,
-                 psf_sigrat=2.3, psf_cenrat=0.09,  # for dgauss models
-                 mine=0.05, maxe=0.8, nume=20,
-                 verbose=False,
-                 conv='fconv'):
+    def __init__(self, run, s2, verbose=False):
+
+        c = read_config(run)
         self['run']=run
         self['s2']=s2
-        self['objmodel']=objmodel
-        self['psfmodel']=psfmodel
-        self['psf_ellip']=psf_ellip
-        self['psf_sigma']=psf_sigma # pixels
+        self['objmodel']=c['objmodel']
+        self['psfmodel']=c['psfmodel']
+        self['psf_ellip']=c.get('psf_ellip',0.0)
+        self['psf_sigma']=c.get('psf_sigma',3.0)
 
-        self['psf_sigrat']=psf_sigrat
-        self['psf_cenrat']=psf_cenrat
+        # for dgauss PSF
+        self['psf_sigrat']=c.get('psf_sigrat',2.3)
+        self['psf_cenrat']=c.get('psf_cenrat',0.09)
 
-        self['mine']=mine
-        self['maxe']=maxe
-        self['nume']=nume
+        self['mine']=c.get('mine',0.05)
+        self['maxe']=c.get('maxe',0.8)
+        self['nume']=c.get('nume',20)
 
         self['verbose'] = verbose
 
-        self['conv'] = conv
+        self['conv'] = c.get('conv','fconv')
+        self['forcegauss'] = c.get('forcegauss',False)
+
+        self['nsub'] = c.get('nsub',4)
 
     def run_many_ellip(self):
         for ellip in self.ellipvals():
@@ -264,6 +264,7 @@ class RegaussSimulatorRescontrol(dict):
 
         ci = fimage.convolved.ConvolvedImage(objpars,psfpars,
                                              verbose=self['verbose'],
+                                             forcegauss=self['forcegauss'],
                                              conv=self['conv'])
         return ci
         
@@ -957,18 +958,12 @@ rs.run_many_ellip()
     else:
         commands="""
 import lensing
-rs = lensing.regauss_sim.RegaussSimulatorRescontrol('{run}', {s2}, '{objmodel}', '{psfmodel}',conv='{conv}')
+rs = lensing.regauss_sim.RegaussSimulatorRescontrol('{run}', {s2})
 rs.run_many_ellip()
         """
 
     for s2 in s2vals:
-        p={'run':run,
-           'objmodel':objmodel,
-           'psfmodel':psfmodel,
-           's2':s2,'conv':c['conv']}
-        if psfmodel == 'sdss':
-            p['nrand']=c['nrand']
-            p['trialfac'] = c['trialfac']
+        p={'run':run, 's2':s2}
         plist.append(p)
     
     queue='fast'
