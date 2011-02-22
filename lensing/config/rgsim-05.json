@@ -1,0 +1,17 @@
+{"run":"05",
+ "objmodel":"gauss",
+ "psfmodel":"dgauss",
+ "psf_sigma":5.0,
+ "psf_ellip":0.0,
+ "psf_sigrat":2.3, 
+ "psf_cenrat":0.07,
+ "conv":"fconv",
+ "forcegauss":true,
+ "mins2":0.1,
+ "maxs2":4.0,
+ "ns2":20,
+ "mine":0.05,
+ "maxe":0.8,
+ "nume":20,
+ "comments":"very high res PSF, convolutions performed with fconv. starting s2 at 0.1 for speed reasons"}
+

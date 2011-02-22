@@ -139,7 +139,8 @@ class RegaussSimPlotter(dict):
 
 
     def read_data(self):
-        s2vals=sample_s2()
+        c=self.config
+        s2vals=sample_s2(c['mins2'],c['maxs2'],c['ns2'])
 
         self.alldata = []
         for s2 in s2vals:
@@ -181,7 +182,8 @@ def run_many_s2(run, objmodel, psfmodel, verbose=False):
 
     """
 
-    s2list = sample_s2()
+    c=read_config(run)
+    s2list=sample_s2(c['mins2'],c['maxs2'],c['ns2'])
     for s2 in s2list:
         print("-"*70)
         print("s2:",s2)
@@ -191,8 +193,8 @@ def run_many_s2(run, objmodel, psfmodel, verbose=False):
 
     print("Done")
 
-def sample_s2(n=20):
-    s2vals = numpy.linspace(0.05, 4.0, n)
+def sample_s2(mins2,maxs2,ns2):
+    s2vals = numpy.linspace(mins2, maxs2, ns2)
     return s2vals
 
 class RegaussSimulatorRescontrol(dict):
@@ -211,7 +213,7 @@ class RegaussSimulatorRescontrol(dict):
     realization of each ellip is used.
 
     """
-    def __init__(self, run, s2, verbose=False):
+    def __init__(self, run, s2, debug=False, verbose=False):
 
         c = read_config(run)
         self['run']=run
@@ -235,6 +237,8 @@ class RegaussSimulatorRescontrol(dict):
         self['forcegauss'] = c.get('forcegauss',False)
 
         self['nsub'] = c.get('nsub',4)
+        self.debug=debug
+
 
     def run_many_ellip(self):
         for ellip in self.ellipvals():
@@ -265,7 +269,8 @@ class RegaussSimulatorRescontrol(dict):
         ci = fimage.convolved.ConvolvedImage(objpars,psfpars,
                                              verbose=self['verbose'],
                                              forcegauss=self['forcegauss'],
-                                             conv=self['conv'])
+                                             conv=self['conv'],
+                                             nsub=self['nsub'])
         return ci
         
     def run_ellip(self, ellip):
@@ -303,7 +308,9 @@ class RegaussSimulatorRescontrol(dict):
         print("running regauss")
         rg = admom.ReGauss(ci.image, ci['cen'][0], ci['cen'][1],
                            ci.psf, guess=guess,guess_psf=guess_psf,
-                           verbose=self['verbose'])
+                           verbose=self['verbose'],
+                           nsub=self['nsub'],
+                           debug=self.debug)
         rg.do_all()
 
         if rg['rgstats'] == None or rg['rgcorrstats'] == None:
@@ -433,6 +440,20 @@ class RandomSDSSPSF(dict):
         self.i = 0
         self.current_i = 0
 
+    def getmany(self, n):
+        if self['type'] !=  'dgauss':
+            raise ValueError("only support dgauss with getmany for now")
+        res=numpy.zeros(n,dtype=[('sigma1','f4'),
+                                 ('sigma2','f4'),
+                                 ('b','f4')])
+        for i in xrange(n):
+            tmp = self.get()
+            res['sigma1'][i] = tmp['sigma1']
+            res['sigma2'][i] = tmp['sigma2']
+            res['b'][i] = tmp['b']
+            self.next()
+        
+        return res
 
     def get(self, meta=False):
         if self['type'] == 'dgauss':
@@ -946,7 +967,7 @@ setup sdsspy -r ~/exports/sdsspy-work
 setup espy -r ~/exports/espy-work
     """
 
-    s2vals=sample_s2()
+    s2vals=sample_s2(c['mins2'],c['maxs2'],c['ns2'])
     plist=[]
 
     if psfmodel == 'sdss':
