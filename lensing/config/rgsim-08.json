@@ -1,7 +1,0 @@
-{"run":"08",
- "objmodel":"gauss",
- "psfmodel":"sdss",
- "conv":"slow",
- "nrand":1,
- "trialfac":10}
-
