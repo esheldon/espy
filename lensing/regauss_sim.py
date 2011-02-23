@@ -173,7 +173,7 @@ class RegaussSimPlotter(dict):
                                  ('R','f4')])
         return st
 
-def run_many_s2(run, objmodel, psfmodel, verbose=False):
+def run_many_s2(run, verbose=False):
     """
 
     Run lots of s2
@@ -187,8 +187,7 @@ def run_many_s2(run, objmodel, psfmodel, verbose=False):
     for s2 in s2list:
         print("-"*70)
         print("s2:",s2)
-        #rs = RegaussSimulator(run, s2, objmodel, psfmodel)
-        rs = RegaussSimulatorRescontrol(run, s2, objmodel, psfmodel, verbose=verbose)
+        rs = RegaussSimulatorRescontrol(run, s2, verbose=verbose)
         rs.run_many_ellip()
 
     print("Done")
