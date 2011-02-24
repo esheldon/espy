@@ -17,24 +17,24 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 
-PREFIX := ""
+prefix := ""
 
 copy :
-ifeq ($(PREFIX),"")
-	@echo PREFIX is not set, aborting
+ifeq ($(prefix),"")
+	@echo prefix is not set, aborting
 else
 
-	@echo "rsyncing to $(PREFIX)"
-	@if [ ! -e $(PREFIX) ]; then \
-		echo Creating directory $(PREFIX); \
-		mkdir -p $(PREFIX); \
+	@echo "rsyncing to $(prefix)"
+	@if [ ! -e $(prefix) ]; then \
+		echo Creating directory $(prefix); \
+		mkdir -p $(prefix); \
 	fi
 	rsync -av \
 		--exclude "*svn*" \
 		--exclude "*git*" \
 		--exclude "*swp" \
 		--exclude "*~" \
-		--exclude "*pyc" ./ $(PREFIX)/
+		--exclude "*pyc" ./ $(prefix)/
 
 endif
 

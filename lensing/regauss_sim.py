@@ -261,7 +261,7 @@ class RegaussSimulatorRescontrol(dict):
         sigma = self['psf_sigma']/sqrt(self['s2'])
         if self['objmodel'] == 'exp':
             sigma = expsigma(sigma)
-        covar=array(fimage.conversions.ellip2mom(2*sigma**2,e=ellip,theta=0))
+        covar=array(fimage.conversions.ellip2mom(2*sigma**2,e=ellip,theta=45))
         objpars = dict(model = self['objmodel'],
                        covar=covar)
 
