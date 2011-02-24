@@ -1,0 +1,15 @@
+{"run":       "14",
+ "objmodel":  "exp",
+ "psfmodel":  "dgauss",
+ "psf_sigma": 1.4,
+ "psf_ellip": 0.0,
+ "conv":      "fft",
+ "mins2":     0.1,
+ "maxs2":     4.0,
+ "ns2":       20,
+ "mine":      0.05,
+ "maxe":      0.8,
+ "nume":      20,
+ "nsub":      1,
+ "comments":  "this is the same as run 13 but nsub=1 everywhere"}
+
