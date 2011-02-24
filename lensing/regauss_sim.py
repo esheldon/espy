@@ -237,6 +237,12 @@ class RegaussSimulatorRescontrol(dict):
         self['forcegauss'] = c.get('forcegauss',False)
 
         self['nsub'] = c.get('nsub',8)
+
+        self.convkeys = {'debug':debug, 'verbose':verbose}
+        for k in ['conv','nsub','fft_nsub','eps','forcegauss']:
+            if k in c:
+                self.convkeys[k] = c[k]
+
         print("  -> RegussSimulatorRescontrol nsub:",self['nsub'])
         self.debug=debug
 
@@ -268,10 +274,8 @@ class RegaussSimulatorRescontrol(dict):
                        covar=covar)
 
         # default in convolved image is 16
-        ci = fimage.convolved.ConvolvedImage(objpars,psfpars,
-                                             verbose=self['verbose'],
-                                             forcegauss=self['forcegauss'],
-                                             conv=self['conv'], nsub=self['nsub'])
+        ci = fimage.convolved.ConvolvedImage(objpars,psfpars, **self.convkeys)
+
         return ci
         
     def run_ellip(self, ellip):

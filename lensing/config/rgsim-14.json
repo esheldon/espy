@@ -10,6 +10,6 @@
  "mine":      0.05,
  "maxe":      0.8,
  "nume":      20,
- "nsub":      1,
- "comments":  "this is the same as run 13 but nsub=1 everywhere"}
+ "fft_nsub":  1,
+ "comments":  "this is the same as run 13 but fft_nsub=1, just to see if bug is gone"}
 
