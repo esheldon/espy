@@ -1,0 +1,155 @@
+    Gauss-Gauss
+        run 00: 
+            objmodel gauss
+            psfmodel gauss
+            psf_sigma=5
+            forcegauss=False
+
+            Result: Works essentially perfectly
+        run 01:
+            objmodel gauss
+            psfmodel gauss
+            psf_sigma=5
+            forcegauss=True
+            conv fft
+
+            Result: not so great, only good to 2% at high ellip.
+
+        run 02:
+            objmodel gauss
+            psfmodel gauss
+            psf_sigma=5
+            forcegauss=True
+            conv fconv
+
+            Result: Performs almost as well as analytic
+            (Much slower!)
+
+    Gauss-dgauss
+        run 03: 
+            objmodel gauss
+            psfmodel dauss
+            psf_sigma=5
+            forcegauss=False
+
+            Result: +/- 0.015
+        run 04:
+            objmodel gauss
+            psfmodel dauss
+            psf_sigma=5
+            forcegauss=True
+            conv fft
+
+            Result: +/- 0.015
+
+        run 05:
+            objmodel gauss
+            psfmodel dauss
+            psf_sigma=5
+            forcegauss=True
+            conv fconv
+
+            Result: +/- 0.015
+
+        NOTE for the above they result in different simulations, for example
+        at the same chosen s2 get different actual R due to subtleties of
+        the convolution.
+
+        NOTE: I ran at even higher resolution but the result did not change.
+
+
+    Exp object
+        run 06:
+            objmodel  exp
+            psfmodel  gauss
+            psf_sigma 5
+            conv      fft
+            fft_nsub  1
+
+            Result: a bit over 0.02
+
+        run 07:
+            objmodel  exp
+            psfmodel  gauss
+            psf_sigma 5
+            conv      fconv
+
+            Result: Slightly worse than the fft, about 0.03
+
+        run 08:
+            objmodel  exp
+            psfmodel  dgauss
+            psf_sigma 5
+            conv      fft
+            fft_nsub  1
+
+            Result:  about 0.03
+
+        run 09:
+            objmodel  exp
+            psfmodel  dgauss
+            psf_sigma 5
+            conv      fconv
+
+            Result: Slightly worse than the fft, about 0.035
+
+
+    Lower res: Exp object, dgauss PSF and sigma=1.4 (1.3'' FWHM for sloan)
+        run 10:
+            objmodel  exp
+            psfmodel  dgauss
+            psf_sigma 1.4
+            conv      fft
+            fft_nsub  1
+
+            Result: Looks like a bug
+
+        run 11:
+            objmodel  exp
+            psfmodel  dgauss
+            psf_sigma 1.4
+            conv      fconv
+
+            Result: As bad as 0.08
+
+        run 12:
+            objmodel  exp
+            psfmodel  dgauss
+            psf_sigma 1.4
+            conv      fconvint - Trying full integral
+
+            Result: Very bad, probably a bug somewhere
+
+        
+        run 13: FIRST USING fft_nsub
+            objmodel  exp
+            psfmodel  dgauss
+            psf_sigma 1.4
+            conv      fft
+            fft_nsub  5
+
+            Result:  A bit better than run 11 with fconv, but bug looks gone.
+
+        run 14: FIRST USING fft_nsub
+            objmodel  exp
+            psfmodel  dgauss
+            psf_sigma 1.4
+            conv      fft
+            fft_nsub  1
+
+            Result:  Looks better then when we sub-sample...maybe sub-sampling is
+                introducing some bugs.
+
+                Actually looks better than gaussian, but the gaussian also had a 
+                bug.  Let's redo it: see run 15
+        
+        run 15: FIX FOR run 10
+            objmodel  exp
+            psfmodel  gauss
+            psf_sigma 1.4
+            conv      fft
+            fft_nsub  1
+
+            Result:  Good to 0.01. Should rerun all these from scratch now.
+ 
+
