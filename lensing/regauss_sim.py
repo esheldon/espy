@@ -98,7 +98,7 @@ class RegaussSimPlotter(dict):
                 allplots.append({'c':c, 'crg':crg})
                 i += 1
 
-        conv=self.config['conv']
+        conv=self.config.get('conv', 'analytic')
         title='obj: %s psf: %s run: %s conv: %s' % (self['objmodel'],self['psfmodel'],self['run'],conv)
         arr=biggles.FramedArray(2,1, title=title)
         arr.xlabel='object ellipticity'
@@ -236,7 +236,7 @@ class RegaussSimulatorRescontrol(dict):
         self['conv'] = c.get('conv','fconv')
         self['forcegauss'] = c.get('forcegauss',False)
 
-        self['nsub'] = c.get('nsub',8)
+        self['nsub'] = c.get('nsub',4)
 
         self.convkeys = {'debug':debug, 'verbose':verbose}
         for k in ['conv','nsub','fft_nsub','eps','forcegauss']:
