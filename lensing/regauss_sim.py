@@ -98,7 +98,8 @@ class RegaussSimPlotter(dict):
                 allplots.append({'c':c, 'crg':crg})
                 i += 1
 
-        title='obj: %s psf: %s run: %s' % (self['objmodel'],self['psfmodel'],self['run'])
+        conv=self.config['conv']
+        title='obj: %s psf: %s run: %s conv: %s' % (self['objmodel'],self['psfmodel'],self['run'],conv)
         arr=biggles.FramedArray(2,1, title=title)
         arr.xlabel='object ellipticity'
         arr.ylabel=r'$\Delta \gamma/\gamma$'
@@ -235,7 +236,8 @@ class RegaussSimulatorRescontrol(dict):
         self['conv'] = c.get('conv','fconv')
         self['forcegauss'] = c.get('forcegauss',False)
 
-        self['nsub'] = c.get('nsub',4)
+        self['nsub'] = c.get('nsub',8)
+        print("  -> RegussSimulatorRescontrol nsub:",self['nsub'])
         self.debug=debug
 
 
@@ -265,11 +267,11 @@ class RegaussSimulatorRescontrol(dict):
         objpars = dict(model = self['objmodel'],
                        covar=covar)
 
+        # default in convolved image is 16
         ci = fimage.convolved.ConvolvedImage(objpars,psfpars,
                                              verbose=self['verbose'],
                                              forcegauss=self['forcegauss'],
-                                             conv=self['conv'],
-                                             nsub=self['nsub'])
+                                             conv=self['conv'], nsub=self['nsub'])
         return ci
         
     def run_ellip(self, ellip):
@@ -293,8 +295,8 @@ class RegaussSimulatorRescontrol(dict):
         print("getting convolved image")
         ci = self.new_convolved_image(ellip)
 
-        guess = (ci['covar'][0] + ci['covar'][2])/2
-        guess_psf = (ci['covar_psf'][0] + ci['covar_psf'][2])/2
+        guess = (ci['covar_admom'][0] + ci['covar_admom'][2])/2
+        guess_psf = (ci['covar_psf_admom'][0] + ci['covar_psf_admom'][2])/2
 
         # get moments before convolution
         print("running admom")

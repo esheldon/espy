@@ -4,7 +4,6 @@
  "psf_sigma":1.4,
  "psf_ellip":0.0,
  "conv":"fconv",
- "forcegauss":false,
  "mins2":0.1,
  "maxs2":4.0,
  "ns2":20,
