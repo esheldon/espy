@@ -1,14 +1,16 @@
 {"run":"10",
- "objmodel":"exp",
+ "objmodel":"gauss",
  "psfmodel":"dgauss",
  "psf_sigma":1.4,
  "psf_ellip":0.0,
- "conv":"fft",
- "mins2":0.1,
- "maxs2":4.0,
+ "psf_sigrat":2.3, 
+ "psf_cenrat":0.07,
+ "forcegauss":false,
+ "mins2":0.05,
+ "maxs2":2.5,
  "ns2":20,
  "mine":0.05,
  "maxe":0.8,
  "nume":20,
- "comments":"lower res exp galaxy, gauss psf, fft convolutions. 1.4 pix -> 1.3'' fwhm for sdss"}
+ "comments":"analytic gauss.  1.4 pix -> 1.3'' for sloan"}
 

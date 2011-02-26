@@ -1,15 +1,15 @@
 {"run":"09",
- "objmodel":"exp",
+ "objmodel":"gauss",
  "psfmodel":"dgauss",
- "psf_sigma":5.0,
+ "psf_sigma":20.0,
  "psf_ellip":0.0,
  "conv":"fconv",
- "forcegauss":false,
+ "forcegauss":true,
  "mins2":0.1,
- "maxs2":4.0,
+ "maxs2":2.5,
  "ns2":20,
  "mine":0.05,
  "maxe":0.8,
  "nume":20,
- "comments":"exp galaxy, gauss psf, fft convolutions"}
+ "comments":"hires, fconv"}
 

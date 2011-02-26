@@ -35,15 +35,6 @@ def shear_fracdiff(e, em, deriv=1.0):
     """
     return ((1-e**2)*deriv + em/e)/(2-em**2) - 1.0
 
-def expsigma(sigma):
-    '''
-    Assuming the exponential was defined as
-        exp(-(r/sigma))
-    where r=sqrt(x^2+y^2), then return the expected
-    measured value for sigma in either x,y which is
-        1.16*sigma
-    '''
-    return 1.16*sigma
 
 class RegaussSimPlotter(dict):
     def __init__(self, run):
@@ -66,30 +57,43 @@ class RegaussSimPlotter(dict):
             os.makedirs(pdir)
 
 
-    def plotall(self, Rmin=0.0, show=False, yrange=None):
+    def plotall(self, Rmin=0.0, show=False, yrange=None, unweighted=False):
         pfile = plotfile(self['run'],self['objmodel'],self['psfmodel'])
 
-        ndata = len(self.alldata)
+        """
+        keepdata = []
+        for st in self.alldata:
+            if numpy.median(st['R']) > Rmin:
+                keepdata.append(st)
+
+        """
+        keepdata = self.alldata
+        ndata = len(keepdata)
         colors=pcolors.rainbow(ndata, 'hex')
 
         allplots=[]
         i=0
-        for st in self.alldata:
+        for st in keepdata:
             # this s2 is the value we were aiming for, could be pretty
             # far off for some models
-            s2 = st['s2'][0]
+            if 's2noweight' in st.dtype.names:
+                s2 = st['s2noweight'][0]
+            else:
+                s2 = st['s2'][0]
 
             s = st['etrue'].argsort()
             etrue = st['etrue'][s]
 
-            gamma_frac = shear_fracdiff(etrue, st['ecorr'][s])
+            if unweighted:
+                gamma_frac = shear_fracdiff(etrue, st['ecorr_uw'][s])
+            else:
+                gamma_frac = shear_fracdiff(etrue, st['ecorr'][s])
             gamma_frac_rg = shear_fracdiff(etrue, st['ecorr_rg'][s])
 
-            s2mean = numpy.median( st['s2prepsf'] )
             Rmean = numpy.median( st['R'] )
 
             if Rmean >= Rmin:
-                label = 's2: %0.2f R: %0.2f' % (s2mean,Rmean)
+                label = 's2: %0.2f R: %0.2f' % (s2,Rmean)
                 c = biggles.Curve(etrue, gamma_frac, color=colors[i])
                 c.label = label 
                 crg = biggles.Curve(etrue, gamma_frac_rg, color=colors[i])
@@ -123,7 +127,10 @@ class RegaussSimPlotter(dict):
         key2 = biggles.PlotKey(0.95,0.9, allc2, halign='right', fontsize=fsize)
         arr[1,0].add(key2)
 
-        l1 = biggles.PlotLabel(0.1,0.9,'AM+', halign='left')
+        if unweighted:
+            l1 = biggles.PlotLabel(0.1,0.9,'UW', halign='left')
+        else:
+            l1 = biggles.PlotLabel(0.1,0.9,'AM+', halign='left')
         l2 = biggles.PlotLabel(0.1,0.9,'RG',  halign='left')
         arr[0,0].add(l1)
         arr[1,0].add(l2)
@@ -156,19 +163,23 @@ class RegaussSimPlotter(dict):
                 st = self.struct(len(flist))
                 for i in xrange(len(flist)):
                     f=flist[i]
-                    print("    Found %s" % f)
+                    #print("    Found %s" % f)
                     t=eu.io.read(f)
 
                     for n in st.dtype.names:
-                        st[n][i] = t[n].mean()
+                        if n in t.dtype.names:
+                            st[n][i] = t[n].mean()
                 self.alldata.append(st)
+            else:
+                print("FOUND NO FILES")
  
 
     def struct(self, n):
         st=numpy.zeros(n, dtype=[('s2','f4'),
-                                 ('s2prepsf','f4'),
+                                 ('s2noweight','f4'),
                                  ('etrue','f4'),
                                  ('econv','f4'),
+                                 ('ecorr_uw','f4'),
                                  ('ecorr','f4'),
                                  ('ecorr_rg','f4'),
                                  ('R','f4')])
@@ -218,6 +229,7 @@ class RegaussSimulatorRescontrol(dict):
         c = read_config(run)
         self['run']=run
         self['s2']=s2
+        self['s2']=s2
         self['objmodel']=c['objmodel']
         self['psfmodel']=c['psfmodel']
         self['psf_ellip']=c.get('psf_ellip',0.0)
@@ -253,7 +265,7 @@ class RegaussSimulatorRescontrol(dict):
         print("Done many_ellip")
 
     def new_convolved_image(self, ellip):
-        pcovar=array(fimage.conversions.ellip2mom(2*self['psf_sigma']**2,e=self['psf_ellip'],theta=0))
+        pcovar=fimage.conversions.ellip2mom(2*self['psf_sigma']**2,e=self['psf_ellip'],theta=0)
         if self['psfmodel'] == 'dgauss':
             pcovar1=pcovar
             pcovar2=pcovar*self['psf_sigrat']**2
@@ -267,9 +279,7 @@ class RegaussSimulatorRescontrol(dict):
                            covar = pcovar)
 
         sigma = self['psf_sigma']/sqrt(self['s2'])
-        if self['objmodel'] == 'exp':
-            sigma = expsigma(sigma)
-        covar=array(fimage.conversions.ellip2mom(2*sigma**2,e=ellip,theta=45))
+        covar=fimage.conversions.ellip2mom(2*sigma**2,e=ellip,theta=45)
         objpars = dict(model = self['objmodel'],
                        covar=covar)
 
@@ -339,8 +349,8 @@ class RegaussSimulatorRescontrol(dict):
         rgcorrs = rg['rgcorrstats']
 
         st['s2'] = self['s2']
-        st['s2prepsf'] = (psfs['Irr']+psfs['Icc'])/(amtrue['Irr'] + amtrue['Icc'])
-        st['s2postpsf'] = (psfs['Irr']+psfs['Icc'])/(ims['Irr']+ims['Icc'])
+        st['s2noweight'] = (ci['covar_psf'][0]+ci['covar_psf'][2])/(ci['covar'][0]+ci['covar'][2])
+        st['s2admom'] = (ci['covar_psf_admom'][0]+ci['covar_psf_admom'][2])/(ci['covar_admom'][0]+ci['covar_admom'][2])
 
         st['e1true'] = amtrue['e1']
         st['e2true'] = amtrue['e2']
@@ -359,12 +369,17 @@ class RegaussSimulatorRescontrol(dict):
         st['e2corr_rg'] = rgcorrs['e2']
         st['ecorr_rg'] = sqrt( rgcorrs['e1']**2 + rgcorrs['e2']**2 )
 
+        uwcorrs = rg['uwstats']
+        st['e1corr_uw'] = uwcorrs['e1']
+        st['e2corr_uw'] = uwcorrs['e2']
+        st['ecorr_uw'] = sqrt( uwcorrs['e1']**2 + uwcorrs['e2']**2 )
+
         return st
 
     def out_dtype(self):
         dt = [('s2','f4'),
-              ('s2prepsf','f4'),
-              ('s2postpsf','f4'),
+              ('s2noweight','f4'), # actual s2 of object
+              ('s2admom','f4'),    # s2 from admom, generally different
               ('e1true','f4'),
               ('e2true','f4'),
               ('etrue','f4'),
@@ -377,7 +392,10 @@ class RegaussSimulatorRescontrol(dict):
               ('ecorr','f4'),
               ('e1corr_rg','f4'),
               ('e2corr_rg','f4'),
-              ('ecorr_rg','f4')]
+              ('ecorr_rg','f4'),
+              ('e1corr_uw','f4'),
+              ('e2corr_uw','f4'),
+              ('ecorr_uw','f4')]
         return dt
 
     def ellipvals(self):
