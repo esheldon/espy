@@ -57,7 +57,7 @@ class RegaussSimPlotter(dict):
             os.makedirs(pdir)
 
 
-    def plotall(self, Rmin=0.0, show=False, yrange=None, unweighted=False):
+    def plotall(self, Rmin=0.0, show=True, yrange=None, unweighted=False):
         pfile = plotfile(self['run'],self['objmodel'],self['psfmodel'])
 
         """
@@ -81,20 +81,24 @@ class RegaussSimPlotter(dict):
             else:
                 s2 = st['s2'][0]
 
+            # this "etrue" is adaptive moments of pre-psf image
             s = st['etrue'].argsort()
             etrue = st['etrue'][s]
 
+            # the top plot will be the regular analytic correction or the
+            # unweighted correction. 
             if unweighted:
-                gamma_frac = shear_fracdiff(etrue, st['ecorr_uw'][s])
+                gamma_frac_alt = shear_fracdiff(etrue, st['ecorr_uw'][s])
             else:
-                gamma_frac = shear_fracdiff(etrue, st['ecorr'][s])
+                gamma_frac_alt = shear_fracdiff(etrue, st['ecorr'][s])
+
             gamma_frac_rg = shear_fracdiff(etrue, st['ecorr_rg'][s])
 
             Rmean = numpy.median( st['R'] )
 
             if Rmean >= Rmin:
                 label = 's2: %0.2f R: %0.2f' % (s2,Rmean)
-                c = biggles.Curve(etrue, gamma_frac, color=colors[i])
+                c = biggles.Curve(etrue, gamma_frac_alt, color=colors[i])
                 c.label = label 
                 crg = biggles.Curve(etrue, gamma_frac_rg, color=colors[i])
                 crg.label=label
@@ -102,8 +106,12 @@ class RegaussSimPlotter(dict):
                 allplots.append({'c':c, 'crg':crg})
                 i += 1
 
-        conv=self.config.get('conv', 'analytic')
-        title='obj: %s psf: %s run: %s conv: %s' % (self['objmodel'],self['psfmodel'],self['run'],conv)
+        conv=self.config.get('sim_conv', 'analytic')
+        #title='obj: %s psf: %s run: %s conv: %s' % (self['objmodel'],self['psfmodel'],self['run'],conv)
+        title='obj: %s psf: %s run: %s' % (self['objmodel'],self['psfmodel'],self['run'])
+        if 'forcegauss' in self.config:
+            if self.config['forcegauss']:
+                title += ' forcegauss'
         arr=biggles.FramedArray(2,1, title=title)
         arr.xlabel='object ellipticity'
         arr.ylabel=r'$\Delta \gamma/\gamma$'
@@ -128,10 +136,10 @@ class RegaussSimPlotter(dict):
         arr[1,0].add(key2)
 
         if unweighted:
-            l1 = biggles.PlotLabel(0.1,0.9,'UW', halign='left')
+            l1 = biggles.PlotLabel(0.1,0.9,'UnWeighted', halign='left')
         else:
             l1 = biggles.PlotLabel(0.1,0.9,'AM+', halign='left')
-        l2 = biggles.PlotLabel(0.1,0.9,'RG',  halign='left')
+        l2 = biggles.PlotLabel(0.1,0.9,'ReGauss',  halign='left')
         arr[0,0].add(l1)
         arr[1,0].add(l2)
 
@@ -179,6 +187,7 @@ class RegaussSimPlotter(dict):
                                  ('s2noweight','f4'),
                                  ('etrue','f4'),
                                  ('econv','f4'),
+                                 ('etrue_uw','f4'),
                                  ('ecorr_uw','f4'),
                                  ('ecorr','f4'),
                                  ('ecorr_rg','f4'),
@@ -245,18 +254,26 @@ class RegaussSimulatorRescontrol(dict):
 
         self['verbose'] = verbose
 
-        self['conv'] = c.get('conv','fconv')
-        self['forcegauss'] = c.get('forcegauss',False)
 
-        self['nsub'] = c.get('nsub',4)
-
-        self.convkeys = {'debug':debug, 'verbose':verbose}
-        for k in ['conv','nsub','fft_nsub','eps','forcegauss']:
+        # keywords for the ConvolvedImage
+        convkeys = {'debug':debug, 'verbose':verbose}
+        if 'sim_conv' in c:
+            convkeys['conv'] = c['sim_conv']
+        for k in ['minres','image_nsub','fft_nsub','eps','forcegauss']:
             if k in c:
-                self.convkeys[k] = c[k]
+                convkeys[k] = c[k]
 
-        print("  -> RegussSimulatorRescontrol nsub:",self['nsub'])
-        self.debug=debug
+        rgkeys = {'debug':debug, 'verbose':verbose}
+        if 'regauss_conv' in c:
+            convkeys['conv'] = c['regauss_conv']
+
+        for k in ['image_nsub','admom_nsub']:
+            if k in c:
+                rgkeys[k] = c[k]
+
+        self.convkeys=convkeys
+        self.rgkeys=rgkeys
+        self['debug']=debug
 
 
     def run_many_ellip(self):
@@ -265,26 +282,27 @@ class RegaussSimulatorRescontrol(dict):
         print("Done many_ellip")
 
     def new_convolved_image(self, ellip):
-        pcovar=fimage.conversions.ellip2mom(2*self['psf_sigma']**2,e=self['psf_ellip'],theta=0)
+        pcov=fimage.conversions.ellip2mom(2*self['psf_sigma']**2,e=self['psf_ellip'],theta=0)
         if self['psfmodel'] == 'dgauss':
-            pcovar1=pcovar
-            pcovar2=pcovar*self['psf_sigrat']**2
+            pcov1=pcov
+            pcov2=pcov*self['psf_sigrat']**2
             b=self['psf_cenrat']
             psfpars = dict(model = 'dgauss',
-                           covar1 = pcovar1,
-                           covar2 = pcovar2,
+                           cov1 = pcov1,
+                           cov2 = pcov2,
                            cenrat=b)
         else:
             psfpars = dict(model = 'gauss',
-                           covar = pcovar)
+                           cov = pcov)
 
         sigma = self['psf_sigma']/sqrt(self['s2'])
-        covar=fimage.conversions.ellip2mom(2*sigma**2,e=ellip,theta=45)
+        cov=fimage.conversions.ellip2mom(2*sigma**2,e=ellip,theta=45)
         objpars = dict(model = self['objmodel'],
-                       covar=covar)
+                       cov=cov)
 
         # default in convolved image is 16
-        ci = fimage.convolved.ConvolvedImage(objpars,psfpars, **self.convkeys)
+        #ci = fimage.convolved.ConvolvedImage(objpars,psfpars, **self.convkeys)
+        ci = fimage.convolved.ConvolvedImageFFT(objpars,psfpars, **self.convkeys)
 
         return ci
         
@@ -308,38 +326,46 @@ class RegaussSimulatorRescontrol(dict):
         # get a n ew RandomConvolvedImage with this ellip
         print("getting convolved image")
         ci = self.new_convolved_image(ellip)
+        rgkeys = self.rgkeys
 
-        guess = (ci['covar_admom'][0] + ci['covar_admom'][2])/2
-        guess_psf = (ci['covar_psf_admom'][0] + ci['covar_psf_admom'][2])/2
+        rgkeys['guess'] = (ci['cov_admom'][0] + ci['cov_admom'][2])/2
+        rgkeys['guess_psf'] = (ci['cov_psf_admom'][0] + ci['cov_psf_admom'][2])/2
 
-        # get moments before convolution
-        print("running admom")
-        amtrue = admom.admom(ci.image0, ci['cen'][0], ci['cen'][1],
-                             guess=guess)
-
-        if amtrue['whyflag'] != 0:
-            raise RuntimeError("Failed to process image0")
 
         print("running regauss")
-        rg = admom.ReGauss(ci.image, ci['cen'][0], ci['cen'][1],
-                           ci.psf, guess=guess,guess_psf=guess_psf,
-                           verbose=self['verbose'],
-                           nsub=self['nsub'],
-                           debug=self.debug)
+        rg = admom.ReGauss(ci.image, ci['cen'][0], ci['cen'][1], ci.psf, **rgkeys)
         rg.do_all()
+        self.add_unweighted_truth(rg, ci.image0)
+
 
         if rg['rgstats'] == None or rg['rgcorrstats'] == None:
             raise RuntimeError("Failed to run regauss")
         if rg['rgstats']['whyflag'] != 0:
             raise RuntimeError("Failed to run regauss")
         # copy out the data
-        output = self.copy_output(amtrue, ci, rg)
+        output = self.copy_output(ci, rg)
 
         eu.io.write(outfile, output)
 
         #sys.stdout.flush()
 
-    def copy_output(self, amtrue, ci, rg):
+    def add_unweighted_truth(self, rg, image0):
+        mom0=fimage.stat.fmom(image0)
+
+        uw = rg['uwcorrstats']
+
+        uw['cen_image0'] = mom0['cen']
+        uw['cov_image0'] = mom0['cov']
+
+        T0 = mom0['cov'][0]+mom0['cov'][2]
+        uw['e1_image0']=(mom0['cov'][2]-mom0['cov'][0])/T0
+        uw['e2_image0']=2*mom0['cov'][1]/T0
+        uw['e_image0'] = sqrt( uw['e1_image0']**2 + uw['e2_image0']**2 )
+
+        rg['uwcorrstats'] = uw
+
+
+    def copy_output(self, ci, rg):
         st = numpy.zeros(1, dtype=self.out_dtype())
         ims = rg['imstats']
         psfs = rg['psfstats']
@@ -349,12 +375,12 @@ class RegaussSimulatorRescontrol(dict):
         rgcorrs = rg['rgcorrstats']
 
         st['s2'] = self['s2']
-        st['s2noweight'] = (ci['covar_psf'][0]+ci['covar_psf'][2])/(ci['covar'][0]+ci['covar'][2])
-        st['s2admom'] = (ci['covar_psf_admom'][0]+ci['covar_psf_admom'][2])/(ci['covar_admom'][0]+ci['covar_admom'][2])
+        st['s2noweight'] = (ci['cov_psf_uw'][0]+ci['cov_psf_uw'][2])/(ci['cov_uw'][0]+ci['cov_uw'][2])
+        st['s2admom'] = (ci['cov_psf_admom'][0]+ci['cov_psf_admom'][2])/(ci['cov_admom'][0]+ci['cov_admom'][2])
 
-        st['e1true'] = amtrue['e1']
-        st['e2true'] = amtrue['e2']
-        st['etrue'] = sqrt( amtrue['e1']**2 + amtrue['e2']**2 )
+        st['e1true'] = ci['e1true']
+        st['e2true'] = ci['e2true']
+        st['etrue']  = ci['etrue']
 
         st['e1conv'] = ims['e1']
         st['e2conv'] = ims['e2']
@@ -369,10 +395,10 @@ class RegaussSimulatorRescontrol(dict):
         st['e2corr_rg'] = rgcorrs['e2']
         st['ecorr_rg'] = sqrt( rgcorrs['e1']**2 + rgcorrs['e2']**2 )
 
-        uwcorrs = rg['uwstats']
+        uwcorrs = rg['uwcorrstats']
         st['e1corr_uw'] = uwcorrs['e1']
         st['e2corr_uw'] = uwcorrs['e2']
-        st['ecorr_uw'] = sqrt( uwcorrs['e1']**2 + uwcorrs['e2']**2 )
+        st['ecorr_uw'] = uwcorrs['e']
 
         return st
 

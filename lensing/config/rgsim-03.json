@@ -3,8 +3,6 @@
  "psfmodel":"gauss",
  "psf_sigma":1.4,
  "psf_ellip":0.0,
- "psf_sigrat":2.3, 
- "psf_cenrat":0.07,
  "forcegauss":false,
  "mins2":0.05,
  "maxs2":2.5,

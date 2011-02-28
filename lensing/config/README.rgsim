@@ -1,3 +1,4 @@
+Gaussian Objects
     Gauss-Gauss
         run 00: 
             objmodel gauss
@@ -5,72 +6,31 @@
             psf_sigma=20
             forcegauss=False
 
-            Result: good to 0.0005
+            Result:
 
         run 01:
             objmodel gauss
             psfmodel gauss
             psf_sigma=20
             forcegauss=True
-            conv fft
 
-            Result: good to 0.002
+            Result:
 
-        run 02:
-            objmodel gauss
-            psfmodel gauss
-            psf_sigma=20
-            forcegauss=True
-            conv fconv
-
-            Result: Good to 0.0014
-
-        GOING TO LOW RES
         run 03:
             objmodel gauss
             psfmodel gauss
             psf_sigma=1.4
             forcegauss=False
 
-            Result: Good to about 0.01
-
-            NOTE: 
-                unweighted just *just as well* on these objects, indicating
-                that the sub-pixel corrections may not be the dominant error;
-                unless the problem is the weight function itself somehow.
+            Result: Good to better than 0.01
 
         run 04:
             objmodel gauss
             psfmodel gauss
             psf_sigma=1.4
             forcegauss=True
-            conv fft
-            fft_nsub 1
 
-            Result: TERRIBLE, only about 0.1!
-
-        run 05:
-            objmodel gauss
-            psfmodel gauss
-            psf_sigma=1.4
-            forcegauss=True
-            conv fconv
-
-            Result: Good to about 0.01
-
-        Try to improve fft with sub-sampling
-        run 06:
-            objmodel gauss
-            psfmodel gauss
-            psf_sigma=1.4
-            forcegauss=True
-            conv fft
-            fft_nsub 5
-
-            Result: AHA! good to 0.003!  Unweighted does only
-            slightly worse.
-
-
+            Result:
 
     Gauss-Double Gauss 
         run 07: 
@@ -79,107 +39,65 @@
             psf_sigma=20
             forcegauss=False
 
-            Result: good to +/- 0.02
+            Result:
 
         run 08:
             objmodel gauss
             psfmodel dgauss
             psf_sigma=20
             forcegauss=True
-            conv fft
-            fft_nsub 1
 
-            Result: ALSO +/- 0.02.  Perhaps limitation is elsewhere, in admom sub-pixel depending
-                                    on gauss weight func?
+            Result:
 
-        run 09:
-            objmodel gauss
-            psfmodel dgauss
-            psf_sigma=20
-            forcegauss=True
-            conv fconv
-
-            Result: TAKING TOO LONG!!
-
-        GOING TO LOW RES
         run 10:
             objmodel gauss
             psfmodel dgauss
             psf_sigma=1.4
             forcegauss=False
 
-            Result: Good to 0.02
+            Result:
 
         run 11:
             objmodel gauss
             psfmodel dgauss
             psf_sigma=1.4
             forcegauss=True
-            conv fft
-            fft_nsub 1
 
             Result: bad
-
-        run 12:
-            objmodel gauss
-            psfmodel dgauss
-            psf_sigma=1.4
-            forcegauss=True
-            conv fconv
-
-            Result: 0.04
-
-        Try to improve fft with sub-sampling
-        run 13:
-            objmodel gauss
-            psfmodel dgauss
-            psf_sigma=1.4
-            forcegauss=True
-            conv fft
-            fft_nsub 5
-
-            Result: 0.02, best actually
-
 
 
 Exponential objects
 
     Exp-Gauss
 
-        * HI RES
         run 14: 
             objmodel:  exp
             psfmodel:  gauss
             psf_sigma: 20
-            conv:      fft
-            fft_nsub:  1 (should be fine for high res)
 
-            Result: Good to 0.025 or so.  Unweighted works *very* well as expected.
+            Result:
 
-        * LOW RES
         run 15: 
             objmodel:  exp
             psfmodel:  gauss
             psf_sigma: 1.4
-            conv:      fft
-            fft_nsub:  5
 
             Result: 
-            
-                Not Good, 0.0675 or so.  I also plotted the unweighted and it
-                also sucks only a little worse, 0.0575
 
-                Note for gauss-gauss, even worse resolved really, unweighted
-                and fft works fine, so may not be a pixel effect. So why
-                unweighted not working here?  Simulation just wrong?
-
-        run 16: 
+    Exp-dgauss:
+        run 20: 
             objmodel:  exp
-            psfmodel:  gauss
-            psf_sigma: 100
-            conv:      fft
-            fft_nsub:  1
+            psfmodel:  dgauss
+            psf_sigma: 20
 
             Result: 
+
+        run 21:  LO RES
+            objmodel:  exp
+            psfmodel:  dgauss
+            psf_sigma: 1.4
+
+            Result:
+
 
 
