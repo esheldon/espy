@@ -16,7 +16,7 @@ Gaussian Objects
 
             Result:
 
-        run 03:
+        run 03: -> 02
             objmodel gauss
             psfmodel gauss
             psf_sigma=1.4
@@ -24,7 +24,7 @@ Gaussian Objects
 
             Result: Good to better than 0.01
 
-        run 04:
+        run 04: -> 03
             objmodel gauss
             psfmodel gauss
             psf_sigma=1.4
@@ -33,7 +33,7 @@ Gaussian Objects
             Result:
 
     Gauss-Double Gauss 
-        run 07: 
+        run 07: -> 04
             objmodel gauss
             psfmodel dgauss
             psf_sigma=20
@@ -41,7 +41,7 @@ Gaussian Objects
 
             Result:
 
-        run 08:
+        run 08: -> 05
             objmodel gauss
             psfmodel dgauss
             psf_sigma=20
@@ -49,7 +49,7 @@ Gaussian Objects
 
             Result:
 
-        run 10:
+        run 10: -> 06
             objmodel gauss
             psfmodel dgauss
             psf_sigma=1.4
@@ -57,7 +57,7 @@ Gaussian Objects
 
             Result:
 
-        run 11:
+        run 11: -> 07
             objmodel gauss
             psfmodel dgauss
             psf_sigma=1.4
