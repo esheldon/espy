@@ -1,7 +1,7 @@
 {"run":"00",
  "objmodel":"gauss",
  "psfmodel":"gauss",
- "psf_sigma":20.0,
+ "psf_sigma":40.0,
  "psf_ellip":0.0,
  "forcegauss":false,
  "mins2":0.05,

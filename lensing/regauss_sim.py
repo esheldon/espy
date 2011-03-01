@@ -15,6 +15,8 @@ import biggles
 
 import pcolors
 
+from pprint import pprint
+
 try:
     import scipy.signal
 except:
@@ -34,6 +36,23 @@ def shear_fracdiff(e, em, deriv=1.0):
 
     """
     return ((1-e**2)*deriv + em/e)/(2-em**2) - 1.0
+
+def plot_many():
+    runs=['%02i' % r for r in xrange(12)]
+    for run in runs:
+        rsp = RegaussSimPlotter(run)
+
+        for Rmin in [0.0, 0.33]:
+            for yrange in [None, [-0.1,0.1]]:
+                for dotitle in [False,True]:
+                    rsp.plot('regauss',show=False, Rmin=Rmin,yrange=yrange,dotitle=dotitle)
+                    rsp.plot('noweight',show=False, Rmin=Rmin,yrange=yrange,dotitle=dotitle)
+                    rsp.plot('am+',show=False, Rmin=Rmin,yrange=yrange,dotitle=dotitle)
+
+                    rsp.plot_with_alt('am+',show=False, Rmin=Rmin,yrange=yrange,dotitle=dotitle)
+                    rsp.plot_with_alt('noweight',show=False, Rmin=Rmin,yrange=yrange,dotitle=dotitle)
+
+
 
 
 class RegaussSimPlotter(dict):
@@ -56,18 +75,135 @@ class RegaussSimPlotter(dict):
             print("Making plot dir:",pdir)
             os.makedirs(pdir)
 
+    def plotfile(self, run, objmodel, psfmodel, type, alt=None, s2=None, Rmin=None, dotitle=False, yrange=None):
+        dir = plotdir(run, objmodel, psfmodel)
+        f = 'rgsim-%sobj-%spsf-%s' % (objmodel, psfmodel, type)
+        if alt is not None:
+            f += '-alt'+alt
+        if s2 is not None:
+            f += '-s2-%0.2f' % s2
+        if Rmin is not None:
+            f += '-Rmin%0.2f' % Rmin
+        if dotitle:
+            f += '-tit'
 
-    def plotall(self, Rmin=0.0, show=True, yrange=None, unweighted=False):
-        pfile = plotfile(self['run'],self['objmodel'],self['psfmodel'])
+        if yrange is not None:
+            f += '-yr%0.2f-%0.2f' % tuple(yrange)
+        f += '.eps'
+        f = path_join(dir, f)
+        return f
 
-        """
+    def plot(self, type, Rmin=0.0, show=True, yrange=None, dotitle=False):
+        pfile = self.plotfile(self['run'],
+                              self['objmodel'],
+                              self['psfmodel'], 
+                              type,
+                              Rmin=Rmin,
+                              yrange=yrange, 
+                              dotitle=dotitle)
+
+        if 'R_rg' in self.alldata[0].dtype.names:
+            print("using R_rg")
+            rname = 'R_rg'
+        else:
+            rname = 'R'
+        #rname='R'
+        keepdata = []
+        for st in self.alldata:
+            if numpy.median(st[rname]) > Rmin:
+                keepdata.append(st)
+
+
+        #keepdata = self.alldata
+        ndata = len(keepdata)
+        colors=pcolors.rainbow(ndata, 'hex')
+
+        plt = biggles.FramedPlot()
+        plt.xlabel='object ellipticity'
+        plt.ylabel=r'$\Delta \gamma/\gamma$'
+
+        allplots=[]
+        i=0
+        for st in keepdata:
+            # this s2 is the value we were aiming for, could be pretty
+            # far off for some models
+            if 's2noweight' in st.dtype.names:
+                s2 = st['s2noweight'][0]
+            else:
+                s2 = st['s2'][0]
+
+            # this "etrue" is adaptive moments of pre-psf image
+            s = st['etrue'].argsort()
+            etrue = st['etrue'][s]
+
+            if type == 'regauss':
+                emeas = st['ecorr_rg'][s]
+            elif type == 'am+':
+                emeas = st['ecorr'][s]
+            elif type == 'noweight':
+                emeas = st['ecorr_uw'][s]
+            else:
+                raise ValueError("type should be 'regauss','am+', or 'noweight'")
+
+            gamma_frac_rg = shear_fracdiff(etrue, emeas)
+
+            Rmean = numpy.median( st[rname] )
+
+            label = 's2: %0.2f R: %0.2f' % (s2,Rmean)
+
+            crg = biggles.Curve(etrue, gamma_frac_rg, color=colors[i])
+            crg.label=label
+
+            plt.add(crg)
+            
+            allplots.append(crg)
+            i += 1
+
+        if dotitle:
+            title='obj: %s psf: %s run: %s' % (self['objmodel'],self['psfmodel'],self['run'])
+
+            if 'forcegauss' in self.config:
+                if self.config['forcegauss']:
+                    title += ' forcegauss'
+            plt.title=title
+
+
+        fsize=1.5
+        key = biggles.PlotKey(0.95,0.9, allplots, halign='right', fontsize=fsize)
+        plt.add(key)
+
+        l = biggles.PlotLabel(0.1,0.9, type, halign='left')
+        plt.add(l)
+
+        plt.xrange = [0,1.2]
+        if yrange is not None:
+            plt.yrange = yrange
+        print("Writing plot file:",pfile)
+        plt.write_eps(pfile)
+        if show:
+            plt.show()
+
+
+
+
+    def plot_with_alt(self, alt, Rmin=0.0, show=True, yrange=None, dotitle=False):
+        '''
+        Plot the regauss with another for comparison, e.g. noweight or AM+
+        '''
+        pfile = self.plotfile(self['run'],
+                              self['objmodel'],
+                              self['psfmodel'], 
+                              'regauss-'+alt,
+                              alt=alt, Rmin=Rmin, yrange=yrange,
+                              dotitle=dotitle)
+
         keepdata = []
         for st in self.alldata:
             if numpy.median(st['R']) > Rmin:
                 keepdata.append(st)
 
-        """
-        keepdata = self.alldata
+
+        #keepdata = self.alldata
         ndata = len(keepdata)
         colors=pcolors.rainbow(ndata, 'hex')
 
@@ -87,31 +223,42 @@ class RegaussSimPlotter(dict):
 
             # the top plot will be the regular analytic correction or the
             # unweighted correction. 
-            if unweighted:
+            if alt == 'noweight':
                 gamma_frac_alt = shear_fracdiff(etrue, st['ecorr_uw'][s])
-            else:
+            elif alt == 'am+':
                 gamma_frac_alt = shear_fracdiff(etrue, st['ecorr'][s])
+            else:
+                raise ValueError("alt should be am+ or noweight")
 
             gamma_frac_rg = shear_fracdiff(etrue, st['ecorr_rg'][s])
 
             Rmean = numpy.median( st['R'] )
 
             if Rmean >= Rmin:
+                pdict={}
                 label = 's2: %0.2f R: %0.2f' % (s2,Rmean)
-                c = biggles.Curve(etrue, gamma_frac_alt, color=colors[i])
-                c.label = label 
+
+                calt = biggles.Curve(etrue, gamma_frac_alt, color=colors[i])
+                calt.label = label 
+                pdict['calt'] = calt
+
                 crg = biggles.Curve(etrue, gamma_frac_rg, color=colors[i])
                 crg.label=label
+                pdict['crg'] = crg
                 
-                allplots.append({'c':c, 'crg':crg})
+                allplots.append(pdict)
                 i += 1
 
         conv=self.config.get('sim_conv', 'analytic')
-        #title='obj: %s psf: %s run: %s conv: %s' % (self['objmodel'],self['psfmodel'],self['run'],conv)
-        title='obj: %s psf: %s run: %s' % (self['objmodel'],self['psfmodel'],self['run'])
-        if 'forcegauss' in self.config:
-            if self.config['forcegauss']:
-                title += ' forcegauss'
+        if dotitle:
+            title='obj: %s psf: %s run: %s' % (self['objmodel'],self['psfmodel'],self['run'])
+
+            if 'forcegauss' in self.config:
+                if self.config['forcegauss']:
+                    title += ' forcegauss'
+        else:
+            title=None
+
         arr=biggles.FramedArray(2,1, title=title)
         arr.xlabel='object ellipticity'
         arr.ylabel=r'$\Delta \gamma/\gamma$'
@@ -121,12 +268,12 @@ class RegaussSimPlotter(dict):
         allc2 = []
         i=0
         for p in allplots:
-            arr[0,0].add( p['c'] )
+            arr[0,0].add( p['calt'] )
             arr[1,0].add( p['crg'] )
             if i < (ndata//2):
-                allc1.append(p['c'])
+                allc1.append(p['calt'])
             else:
-                allc2.append(p['c'])
+                allc2.append(p['calt'])
             i+=1
 
         fsize=2
@@ -135,7 +282,7 @@ class RegaussSimPlotter(dict):
         key2 = biggles.PlotKey(0.95,0.9, allc2, halign='right', fontsize=fsize)
         arr[1,0].add(key2)
 
-        if unweighted:
+        if alt == 'noweight':
             l1 = biggles.PlotLabel(0.1,0.9,'UnWeighted', halign='left')
         else:
             l1 = biggles.PlotLabel(0.1,0.9,'AM+', halign='left')
@@ -145,7 +292,7 @@ class RegaussSimPlotter(dict):
 
         arr.uniform_limits = 1
 
-        arr.xrange = [0,1.1]
+        arr.xrange = [0,1.2]
         if yrange is not None:
             arr.yrange = yrange
         print("Writing plot file:",pfile)
@@ -183,15 +330,16 @@ class RegaussSimPlotter(dict):
  
 
     def struct(self, n):
-        st=numpy.zeros(n, dtype=[('s2','f4'),
-                                 ('s2noweight','f4'),
-                                 ('etrue','f4'),
-                                 ('econv','f4'),
-                                 ('etrue_uw','f4'),
-                                 ('ecorr_uw','f4'),
-                                 ('ecorr','f4'),
-                                 ('ecorr_rg','f4'),
-                                 ('R','f4')])
+        st=numpy.zeros(n, dtype=[('s2','f8'),
+                                 ('s2noweight','f8'),
+                                 ('etrue','f8'),
+                                 ('econv','f8'),
+                                 ('etrue_uw','f8'),
+                                 ('ecorr_uw','f8'),
+                                 ('ecorr','f8'),
+                                 ('ecorr_rg','f8'),
+                                 ('R','f8'),
+                                 ('R_rg','f8')])
         return st
 
 def run_many_s2(run, verbose=False):
@@ -336,17 +484,22 @@ class RegaussSimulatorRescontrol(dict):
         rg = admom.ReGauss(ci.image, ci['cen'][0], ci['cen'][1], ci.psf, **rgkeys)
         rg.do_all()
         self.add_unweighted_truth(rg, ci.image0)
+        if self['verbose']:
+            print("uwcorrstats")
+            pprint(rg['uwcorrstats'])
 
 
         if rg['rgstats'] == None or rg['rgcorrstats'] == None:
             raise RuntimeError("Failed to run regauss")
         if rg['rgstats']['whyflag'] != 0:
-            raise RuntimeError("Failed to run regauss")
+            raise RuntimeError("regauss failed: '%s'" % rg['rgstats']['whystr'])
         # copy out the data
         output = self.copy_output(ci, rg)
 
         eu.io.write(outfile, output)
 
+        if self['debug']:
+            self.write_images(ellip, ci)
         #sys.stdout.flush()
 
     def add_unweighted_truth(self, rg, image0):
@@ -375,8 +528,8 @@ class RegaussSimulatorRescontrol(dict):
         rgcorrs = rg['rgcorrstats']
 
         st['s2'] = self['s2']
-        st['s2noweight'] = (ci['cov_psf_uw'][0]+ci['cov_psf_uw'][2])/(ci['cov_uw'][0]+ci['cov_uw'][2])
-        st['s2admom'] = (ci['cov_psf_admom'][0]+ci['cov_psf_admom'][2])/(ci['cov_admom'][0]+ci['cov_admom'][2])
+        st['s2noweight'] = (ci['cov_psf_uw'][0]+ci['cov_psf_uw'][2])/(ci['cov_image0_uw'][0]+ci['cov_image0_uw'][2])
+        st['s2admom'] = (ci['cov_psf_admom'][0]+ci['cov_psf_admom'][2])/(ci['cov_image0_admom'][0]+ci['cov_image0_admom'][2])
 
         st['e1true'] = ci['e1true']
         st['e2true'] = ci['e2true']
@@ -387,6 +540,7 @@ class RegaussSimulatorRescontrol(dict):
         st['econv'] = sqrt( ims['e1']**2 + ims['e2']**2 )
 
         st['R'] = corrs['R']
+        st['R_rg'] = rgcorrs['R']
         st['e1corr'] = corrs['e1']
         st['e2corr'] = corrs['e2']
         st['ecorr'] = sqrt( corrs['e1']**2 + corrs['e2']**2 )
@@ -403,35 +557,52 @@ class RegaussSimulatorRescontrol(dict):
         return st
 
     def out_dtype(self):
-        dt = [('s2','f4'),
-              ('s2noweight','f4'), # actual s2 of object
-              ('s2admom','f4'),    # s2 from admom, generally different
-              ('e1true','f4'),
-              ('e2true','f4'),
-              ('etrue','f4'),
-              ('e1conv','f4'),
-              ('e2conv','f4'),
-              ('econv','f4'),
-              ('R','f4'),
-              ('e1corr','f4'),
-              ('e2corr','f4'),
-              ('ecorr','f4'),
-              ('e1corr_rg','f4'),
-              ('e2corr_rg','f4'),
-              ('ecorr_rg','f4'),
-              ('e1corr_uw','f4'),
-              ('e2corr_uw','f4'),
-              ('ecorr_uw','f4')]
+        dt = [('s2','f8'),
+              ('s2noweight','f8'), # actual s2 of object
+              ('s2admom','f8'),    # s2 from admom, generally different
+              ('e1true','f8'),
+              ('e2true','f8'),
+              ('etrue','f8'),
+              ('e1conv','f8'),
+              ('e2conv','f8'),
+              ('econv','f8'),
+              ('R','f8'),
+              ('R_rg','f8'),
+              ('e1corr','f8'),
+              ('e2corr','f8'),
+              ('ecorr','f8'),
+              ('e1corr_rg','f8'),
+              ('e2corr_rg','f8'),
+              ('ecorr_rg','f8'),
+              ('e1corr_uw','f8'),
+              ('e2corr_uw','f8'),
+              ('ecorr_uw','f8')]
         return dt
 
     def ellipvals(self):
         ellipvals = numpy.linspace(self['mine'], self['maxe'], self['nume'])
         return ellipvals
 
-    def outfile(self, ellip):
+    def write_images(self, ellip, ci):
+        f=self.outfile(ellip, 'image')
+        print("writing image file:",f)
+        eu.io.write(f, ci.image, clobber=True)
+
+        f=self.outfile(ellip, 'image0')
+        print("writing image0 file:",f)
+        eu.io.write(f, ci.image0, clobber=True)
+
+        f=self.outfile(ellip, 'psf')
+        print("writing psf file:",f)
+        eu.io.write(f, ci.psf, clobber=True)
+
+    def outfile(self, ellip, type='res'):
         return simfile(self['run'], 
                        self['objmodel'], self['psfmodel'], 
-                       self['s2'], ellip, self['psf_ellip'])
+                       self['s2'], ellip, self['psf_ellip'],
+                       type=type)
+
+
 
 
 class RandomSDSSPSF(dict):
@@ -492,9 +663,9 @@ class RandomSDSSPSF(dict):
     def getmany(self, n):
         if self['type'] !=  'dgauss':
             raise ValueError("only support dgauss with getmany for now")
-        res=numpy.zeros(n,dtype=[('sigma1','f4'),
-                                 ('sigma2','f4'),
-                                 ('b','f4')])
+        res=numpy.zeros(n,dtype=[('sigma1','f8'),
+                                 ('sigma2','f8'),
+                                 ('b','f8')])
         for i in xrange(n):
             tmp = self.get()
             res['sigma1'][i] = tmp['sigma1']
@@ -731,23 +902,23 @@ class RegaussSDSSSimulator(dict):
         return st
 
     def out_dtype(self):
-        dt = [('theta','f4'),
-              ('s2','f4'),
-              ('s2prepsf','f4'),
-              ('s2postpsf','f4'),
-              ('e1true','f4'),
-              ('e2true','f4'),
-              ('etrue','f4'),
-              ('e1conv','f4'),
-              ('e2conv','f4'),
-              ('econv','f4'),
-              ('R','f4'),
-              ('e1corr','f4'),
-              ('e2corr','f4'),
-              ('ecorr','f4'),
-              ('e1corr_rg','f4'),
-              ('e2corr_rg','f4'),
-              ('ecorr_rg','f4')]
+        dt = [('theta','f8'),
+              ('s2','f8'),
+              ('s2prepsf','f8'),
+              ('s2postpsf','f8'),
+              ('e1true','f8'),
+              ('e2true','f8'),
+              ('etrue','f8'),
+              ('e1conv','f8'),
+              ('e2conv','f8'),
+              ('econv','f8'),
+              ('R','f8'),
+              ('e1corr','f8'),
+              ('e2corr','f8'),
+              ('ecorr','f8'),
+              ('e1corr_rg','f8'),
+              ('e2corr_rg','f8'),
+              ('ecorr_rg','f8')]
         return dt
 
     def ellipvals(self):
@@ -819,7 +990,7 @@ def pbsdir(run):
     dir = path_join(dir,'pbs')
     return dir
 
-def simfile(run, objmodel, psfmodel, s2, ellip, psf_ellip=None):
+def simfile(run, objmodel, psfmodel, s2, ellip, psf_ellip=None, type='res'):
     dir=simdir(run, objmodel, psfmodel)
 
     if ellip != '*':
@@ -828,19 +999,19 @@ def simfile(run, objmodel, psfmodel, s2, ellip, psf_ellip=None):
     f = 'rgsim-%sobj-%s-%spsf' % (objmodel, ellip, psfmodel)
     if psf_ellip is not None:
         f += '-%0.2f' % psf_ellip
-    f += '-s2-%0.2f.rec' % s2
+    f += '-s2-%0.2f' % s2
+
+    if type == 'res':
+        f += '.rec'
+    elif type in ['image','image0','psf']:
+        f += '-%s.fits' % type
+    else:
+        raise ValueError("type must be 'rec','image','image0','psf'")
+
     #f = 'rgsim-%sobj-%s-%spsf-%0.2f-s2-%0.2f.rec' % (objmodel, ellip, psfmodel, psf_ellip, s2)
     f = path_join(dir, f)
     return f
 
-def plotfile(run, objmodel, psfmodel, s2=None, psf_ellip=0.0):
-    dir = plotdir(run, objmodel, psfmodel)
-    f = 'rgsim-%sobj-%spsf-%0.2f' % (objmodel, psfmodel, psf_ellip)
-    if s2 is not None:
-        f += '-s2-%0.2f' % s2
-    f += '.eps'
-    f = path_join(dir, f)
-    return f
 
 def plotdir(run, objmodel, psfmodel):
     dir = simdir(run, objmodel, psfmodel)

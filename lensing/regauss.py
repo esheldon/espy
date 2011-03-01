@@ -39,6 +39,9 @@ class RegaussAtlas:
         self.field_key = None
 
     def regauss1(self, type, run, camcol, field, id, filter):
+        """
+        Run regauss on a single object in a single band
+        """
 
         c = sdsspy.FILTERNUM[filter]
 
@@ -48,7 +51,7 @@ class RegaussAtlas:
 
         self.cache_atlas(run, camcol, field, id)
 
-        im = numpy.array( self.atls['images'][c], dtype='f4')
+        im = numpy.array( self.atls['images'][c], dtype='f8')
         im -= self.atls['SOFT_BIAS']
 
 
@@ -63,21 +66,16 @@ class RegaussAtlas:
         # sometimes we get very negative pixels, not sure why
         #im=im.clip(-3*sigsky, im.max())
 
-        Tguess_psf=admom.fwhm2mom( obj['psf_fwhm'][c], pixscale=0.4)
+        guess_psf=admom.fwhm2mom( obj['psf_fwhm'][c], pixscale=0.4)/2.
         if obj['m_rr_cc'][c] > Tguess_psf:
-            Tguess=obj['m_rr_cc'][c]
+            guess=obj['m_rr_cc'][c]/2
         else:
-            Tguess=Tguess_psf
+            guess=guess_psf
 
         rg = admom.ReGauss(im, row, col, psf, 
-                           sigsky=sigsky, Tguess=Tguess, Tguess_psf=Tguess_psf,
+                           sigsky=sigsky, guess=guess, guess_psf=guess_psf,
                            verbose=self.verbose)
- 
-        rg.do_admom()
-        rg.do_psf_admom()
-        rg.do_basic_corr()
-        rg.do_regauss()
-        rg.do_rg_corr()
+        rg.do_all() 
 
         # keep these things in case we want to call show()
         self.rg=rg
@@ -126,8 +124,11 @@ class RegaussAtlas:
 
     def cache_psf(self, run, camcol, field):
         """
-        This will cache reads so it can be used for multiple
-        filter processings
+
+        This will cache reads so it can be used for multiple filter
+        processings.  So process all objects from a field in order to be most
+        efficient.
+
         """
         key = '%06i-%i-%04i' % (run,camcol,field)
         if self.field_key != key:
@@ -178,7 +179,7 @@ def admom_atlas(type, run, camcol, field, id, filter,
         obj = objs[w[0]]
 
     atls = sdsspy.read('fpAtlas',run,camcol,field,id, trim=True)
-    im = numpy.array( atls['images'][c], dtype='f4') - atls['SOFT_BIAS']
+    im = numpy.array( atls['images'][c], dtype='f8') - atls['SOFT_BIAS']
 
     psfield = sdsspy.read('psField', run, camcol, field, lower=True)
 
@@ -230,40 +231,40 @@ def admom_atlas(type, run, camcol, field, id, filter,
 class SweepCache:
     def __init__(self, verbose=False):
         self.verbose=verbose
-        if not hasattr(SweepCache,'_key'):
-            SweepCache._key = None
-            SweepCache._data = None
+        if not hasattr(SweepCache,'key'):
+            SweepCache.key = None
+            SweepCache.data = None
 
 
     def read(self,type,run,camcol, **keys):
-        self._cache_data(type, run,camcol, **keys)
-        return SweepCache._data
+        self.cache_column(type, run,camcol, **keys)
+        return SweepCache.data
 
     def readfield(self, type, run, camcol, field, **keys):    
-        self._cache_data(type, run, camcol, **keys)
-        data = SweepCache._data
+        self.cache_column(type, run, camcol, **keys)
+        data = SweepCache.data
         w=where1(data['field'] == field)
         if w.size == 0:
             raise ValueError("field not found: %06i-%i-%04i" % (run,camcol,field))
         return data[w]
 
     def readobj(self, type, run, camcol, field, id, **keys):    
-        self._cache_data(type, run, camcol, **keys)
-        data = SweepCache._data
+        self.cache_column(type, run, camcol, **keys)
+        data = SweepCache.data
         w=where1( (data['field'] == field) & (data['id'] == id) )
         if w.size == 0:
             raise ValueError("object not found: %06i-%i-%04i-%05i" % (run,camcol,field,id))
         return data[w[0]]
 
 
-    def _cache_data(self, type,run,camcol, **keys):
+    def cache_column(self, type,run,camcol, **keys):
         key = '%s-%06i-%d' % (type,run,camcol)
-        if SweepCache._key != key:
+        if SweepCache.key != key:
             data = sdsspy.read('calibobj.%s' % type,
                                run,camcol, lower=True, verbose=self.verbose, 
                                **keys)
-            SweepCache._key = key
-            SweepCache._data = data
+            SweepCache.key = key
+            SweepCache.data = data
 
 
 class RunTester(dict):
@@ -643,41 +644,41 @@ class Collator:
                  ('rowc','5f4'),
                  ('m_rr_cc','5f4'),
 
-                 ('ixx', '5f4'), 
-                 ('iyy', '5f4'), 
-                 ('ixy', '5f4'), 
-                 ('a4', '5f4'), 
-                 ('s2', '5f4'), 
-                 ('momerr', '5f4'), 
+                 ('ixx', '5f8'), 
+                 ('iyy', '5f8'), 
+                 ('ixy', '5f8'), 
+                 ('a4', '5f8'), 
+                 ('s2', '5f8'), 
+                 ('momerr', '5f8'), 
                  ('whyflag', '5i2'), 
 
-                 ('ixx_psf', '5f4'), 
-                 ('iyy_psf', '5f4'), 
-                 ('ixy_psf', '5f4'), 
-                 ('a4_psf', '5f4'), 
-                 ('s2_psf', '5f4'), 
+                 ('ixx_psf', '5f8'), 
+                 ('iyy_psf', '5f8'), 
+                 ('ixy_psf', '5f8'), 
+                 ('a4_psf', '5f8'), 
+                 ('s2_psf', '5f8'), 
                  ('whyflag_psf', '5i2'), 
 
-                 ('ixx_rg', '5f4'), 
-                 ('iyy_rg', '5f4'), 
-                 ('ixy_rg', '5f4'), 
-                 ('a4_rg', '5f4'), 
-                 ('s2_rg', '5f4'), 
-                 ('momerr_rg', '5f4'), 
+                 ('ixx_rg', '5f8'), 
+                 ('iyy_rg', '5f8'), 
+                 ('ixy_rg', '5f8'), 
+                 ('a4_rg', '5f8'), 
+                 ('s2_rg', '5f8'), 
+                 ('momerr_rg', '5f8'), 
                  ('whyflag_rg', '5i2'), 
 
-                 ('ixx_f0', '5f4'), 
-                 ('ixy_f0', '5f4'), 
-                 ('iyy_f0', '5f4'), 
-                 ('detf0', '5f4'), 
+                 ('ixx_f0', '5f8'), 
+                 ('ixy_f0', '5f8'), 
+                 ('iyy_f0', '5f8'), 
+                 ('detf0', '5f8'), 
 
-                 ('r', '5f4'), 
-                 ('e1', '5f4'), 
-                 ('e2', '5f4'), 
+                 ('r', '5f8'), 
+                 ('e1', '5f8'), 
+                 ('e2', '5f8'), 
 
-                 ('r_rg', '5f4'), 
-                 ('e1_rg', '5f4'), 
-                 ('e2_rg', '5f4')]
+                 ('r_rg', '5f8'), 
+                 ('e1_rg', '5f8'), 
+                 ('e2_rg', '5f8')]
 
         st = numpy.zeros(n, dtype=descr)
         return st

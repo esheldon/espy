@@ -1,55 +1,65 @@
+Switched to doubles: ALWAYS USE DOUBLES
+
 Gaussian Objects
     Gauss-Gauss
         run 00: 
             objmodel gauss
             psfmodel gauss
-            psf_sigma=20
+            psf_sigma=40
             forcegauss=False
 
-            Result:
+            Result: 
+                Good to 1.e-5, 1.e-6 for R > 0.33
+                unweighted good to 2.5e-4 R > 0.33
 
         run 01:
             objmodel gauss
             psfmodel gauss
-            psf_sigma=20
+            psf_sigma=40
             forcegauss=True
 
             Result:
+                Good to 2.5e-4, 1.4e-4 for R> 0.33
+                Unweighted good to 1.e-4, ... better?
 
-        run 03: -> 02
+        run 02:
             objmodel gauss
             psfmodel gauss
             psf_sigma=1.4
             forcegauss=False
 
-            Result: Good to better than 0.01
+            Result: 
+                weird feature at low ellip good to 4.e-4 but only 1.4e-3 at low ellip
+                Unweighted good to 4.e-4
 
-        run 04: -> 03
+        run 03:
             objmodel gauss
             psfmodel gauss
             psf_sigma=1.4
             forcegauss=True
 
             Result:
+                Weird feature at low ellip. Good to 2.e-3
+                Unweighted good to 1.5e-3
 
     Gauss-Double Gauss 
-        run 07: -> 04
+        run 04:
             objmodel gauss
             psfmodel dgauss
-            psf_sigma=20
+            psf_sigma=40
             forcegauss=False
 
             Result:
 
-        run 08: -> 05
+        run 05:
             objmodel gauss
             psfmodel dgauss
-            psf_sigma=20
+            psf_sigma=40
             forcegauss=True
 
             Result:
 
-        run 10: -> 06
+        run 06:
             objmodel gauss
             psfmodel dgauss
             psf_sigma=1.4
@@ -57,7 +67,7 @@ Gaussian Objects
 
             Result:
 
-        run 11: -> 07
+        run 07:
             objmodel gauss
             psfmodel dgauss
             psf_sigma=1.4
@@ -70,14 +80,14 @@ Exponential objects
 
     Exp-Gauss
 
-        run 14: 
+        run 08:
             objmodel:  exp
             psfmodel:  gauss
-            psf_sigma: 20
+            psf_sigma: 40
 
             Result:
 
-        run 15: 
+        run 09:
             objmodel:  exp
             psfmodel:  gauss
             psf_sigma: 1.4
@@ -85,14 +95,14 @@ Exponential objects
             Result: 
 
     Exp-dgauss:
-        run 20: 
+        run 10:
             objmodel:  exp
             psfmodel:  dgauss
-            psf_sigma: 20
+            psf_sigma: 40
 
             Result: 
 
-        run 21:  LO RES
+        run 11:
             objmodel:  exp
             psfmodel:  dgauss
             psf_sigma: 1.4
