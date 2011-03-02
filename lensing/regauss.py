@@ -29,6 +29,102 @@ def output_dir(procrun):
     coll = Collator(procrun)
     return coll.output_dir()
 
+class RegaussSweep:
+    def __init__(self, type, run, camcol):
+        self.type = type
+        self.run=run
+        self.camcol=camcol
+        self.ra = RegaussAtlas()
+
+    def run(self):
+        ra = self.ra
+        ra.sweep_cache.cache_column(self.type, self.run, self.camcol)
+        
+        data = ra.sweep_cache.data
+
+        self.make_output(data.size)
+
+        b=eu.stat.Binner(data['field'])
+        b.dohist(binsize=1, rev=True)
+        
+        rev = b['rev']
+        for i in xrange(b['hist'].size):
+            if rev[i] != rev[i+1]:
+                w=rev[ rev[i]:rev[i+1] ]
+
+                for j in w:
+                    id = data['id'][j]
+                    for filter in ['u','g','r','i','z']:
+                        rg = ra.regauss1(type, run, camcol, field, id, filter)
+
+                        self.copy2output(rg, filter)
+
+    def copy2output(self, index, rg, filter):
+        '''
+        Remember to deal with None rg
+        '''
+        
+        fnum = sdsspy.FILTERNUM[filter]
+        if rg is None:
+            self.output['has_atlas'][index] = 0
+            return
+
+        self.output['has_atlas'][index] = 1
+
+
+    def make_output(self, size):
+        dtype = self.output_dtype()
+        self.output = numpy.zeros(size, dtype=dtype)
+
+        eu.numpy_util.copy_fields(self.ra.data, self.output)
+
+    def output_dtype(self):
+        dt=[('run','i2'),
+            ('rerun','i2'),
+            ('camcol','i1'),
+            ('field','i2'),
+            ('id','i2'),
+            ('thing_id','i4'),
+            ('ra','f8'),  # do we need these?
+            ('dec','f8'),
+
+            ('has_atlas','i1'), # zero for no atlas
+
+            ('wrow','5f8'),
+            ('wcol','5f8'),
+            ('Irr','5f8'),
+            ('Irc','5f8'),
+            ('Icc','5f8'),
+            ('a4','5f8'),
+            ('momerr','5f8'),
+            ('flags','5i2'),
+
+            ('Irr_psf','5f8'),
+            ('Irc_psf','5f8'),
+            ('Icc_psf','5f8'),
+            ('a4_psf','5f8'),
+            ('flags_psf','5i2'),
+
+            ('e1_lin','5f8'),
+            ('e2_lin','5f8'),
+            ('R_lin','5f8'),
+            ('corrflags_lin','5i2'),  # flags during compea4 correction
+
+            ('Irr_rg','5f8'),
+            ('Irc_rg','5f8'),
+            ('Icc_rg','5f8'),
+            ('a4_rg','5f8'),
+            ('momerr_rg','5f8'),
+            ('flags_rg','5i2'), # flags running admom on f0-epsilon in the rg process
+            ('e1_rg','5f8'),    # corrected ellipticity
+            ('e2_rg','5f8'),
+            ('R_rg','5f8'),     # this is more stable than R_lin
+            ('corrflags_rg','5i2')]  # flags during compea4 correction
+
+
+
+
+
 
 class RegaussAtlas:
     def __init__(self, verbose=False):
@@ -37,6 +133,7 @@ class RegaussAtlas:
         self.sweep_cache = SweepCache(verbose=self.verbose)
         self.atls_key = None
         self.field_key = None
+
 
     def regauss1(self, type, run, camcol, field, id, filter):
         """
@@ -49,7 +146,11 @@ class RegaussAtlas:
 
         self.cache_psf(run, camcol, field)
 
-        self.cache_atlas(run, camcol, field, id)
+        try:
+            self.cache_atlas(run, camcol, field, id)
+        except NoAtlasImageError:
+            # we can safely ignore such errors
+            return None
 
         im = numpy.array( self.atls['images'][c], dtype='f8')
         im -= self.atls['SOFT_BIAS']

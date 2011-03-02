@@ -1,4 +1,5 @@
 import sdsspy
+import es_sdsspy
 
 class Selector:
     '''
@@ -58,10 +59,10 @@ class Selector:
 
     def load_mask(self, masktype):
         if masktype not in self.masks:
-            self.masks[masktype] = sdsspy.stomp_maps.load('boss',masktype,verbose=True)
+            self.masks[masktype] = es_sdsspy.stomp_maps.load('boss',masktype,verbose=True)
 
     def cmodelmag_logic(self, filter, limit, dered=True):
-        fnum = sdsspy.FILTERNUM(filter)
+        fnum = sdsspy.FILTERNUM[filter]
         if dered:
             name='cmodel_dered'
         else:

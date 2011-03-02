@@ -34,6 +34,10 @@
 
 import sys
 
+try:
+    from . import select
+except:
+    sys.stderr.write('sdsspy.select not loaded\n')
 
 try:
     from . import transform

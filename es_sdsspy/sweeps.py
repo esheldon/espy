@@ -213,7 +213,7 @@ class Proc():
         if type is None:
             type=self.type
         data = sdsspy.files.read('calibobj',run,rerun=rerun,camcol=camcol,
-                                 type=type,verbose=True)
+                                 type=type,verbose=True,lower=True)
         return data
 
                          
