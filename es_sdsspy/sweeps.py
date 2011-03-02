@@ -20,7 +20,7 @@ flagdict = {'read_failed':2**0,
 
 
 def open_columns(type, primary=True):
-    sel = Selector(type, primary=primary)
+    sel = ColumnSelector(type, primary=primary)
     dir = sel.columns_dir()
     return columns.Columns(dir)
 
@@ -309,7 +309,7 @@ class Proc():
 
     def make_columns(self):
         """
-        Note if all you want is primary, use the PrimSelector class
+        If you want everything or just primary, use ColumnSelector.
         """
         import columns
 
@@ -341,7 +341,7 @@ class Proc():
                 del status
 
 
-class Selector:
+class ColumnSelector:
     """
 
     Put all the objects into a columns database.  It will go under 

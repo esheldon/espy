@@ -21,6 +21,6 @@ type = args[0]
 primary = options.primary
 
 #make_indices = options.make_indices
-sel = sdsspy.sweeps.Selector(type,primary=primary)
+sel = sdsspy.sweeps.ColumnSelector(type,primary=primary)
 sel.process_all()
 
