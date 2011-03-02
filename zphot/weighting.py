@@ -89,7 +89,7 @@ Add the p(z) from summed individual (see below)
     /bin/weighting-qaplots.py -z --pzrun pzrun wrun
 
 To make p(z) for each object
-    /bin/create_pbs.py pofz pzrun
+    /bin/create_pbs.py -n 50 pofz pzrun
 
 Which will require a pofz run defined in pofz-{pzrun}.json in the
 config directory, e.g.

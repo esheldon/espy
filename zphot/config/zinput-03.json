@@ -1,0 +1,12 @@
+{
+ "photo_sample":"03",
+ "proctype":"sdssgal",
+ "procrun":"prim04",
+ "cmodel_rmin":15.0,
+ "cmodel_rmax":21.8,
+ "modelmag_min":15.0,
+ "modelmag_max":29.0,
+ "weighting":true,
+ "masktype":"tycho",
+ "filetype":"rec"
+}

@@ -49,6 +49,12 @@ sample/run tree:
             |-> wrun: 08
                 |-> pzrun: 10
 
+    photo_sample: 03
+        # same as 09 (with primus) but photo sample 03, r < 21.8
+        |-> train_sample: 10
+            |-> wrun: 10
+                |-> pzrun 12 # MAKE THIS
+
 
 zinput-{photo_sample}.json
     photo_sample: The photometric smaple, e.g. "01"

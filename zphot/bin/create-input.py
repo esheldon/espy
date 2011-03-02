@@ -6,8 +6,8 @@ Description:
     Create input samples for photoz codes.  You need to create the config file
     first in ${ESPY_DIR}/zphot/config/zinput-{sample}.json.  
 
-    For weighting you will want the overall file plus a split into chunks, e.g.
-    -n 50
+    For weighting you will want run to make the overall file, and run again to
+    split into chunks, e.g.  -n 50
 
 """
 import sys
