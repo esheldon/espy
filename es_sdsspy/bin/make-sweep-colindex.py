@@ -32,6 +32,6 @@ if columns is not None:
     columns = columns.split(',')
 
 #make_indices = options.make_indices
-sel = sdsspy.sweeps.Selector(type,primary=primary)
+sel = sdsspy.sweeps.ColumnSelector(type,primary=primary)
 sel.make_indices(tempdir=tempdir,columns=columns)
 
