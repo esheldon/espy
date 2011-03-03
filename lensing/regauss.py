@@ -30,25 +30,47 @@ def output_dir(procrun):
     return coll.output_dir()
 
 class RegaussSweep:
-    def __init__(self, procrun, type, run, camcol):
-        self.procrun = procrun
-        self.type = type
-        self.run=run
-        self.camcol=camcol
+    def __init__(self, objs, **keys):
+        self.objs = objs
         self.ra = RegaussAtlas()
 
-    def run(self):
+        self.rmax = keys.get('rmax',22.5)
+
+    def select(self):
+        s = es_sdsspy.select.Selector(self.objs)
+        print("  getting resolve logic")
+        resolve_logic = s.resolve_logic()
+        print("  getting tycho logic")
+        tycho_logic = s.mask_logic('tycho')
+
+        print("  getting flag logic")
+        flag_logic = s.flag_logic()
+
+        print("  getting rmag logic")
+        rmag_logic = s.cmodelmag_logic("r", self.rmax)
+
+        logic = \
+            resolve_logic & tycho_logic & flag_logic & rmag_logic
+
+        self.keep = where1(logic)
+        print("  keeping %i/%i" % self.keep.size, self.objs.size)
+
+    def process(self):
+
+        self.select()
+        if self.keep.size == 0:
+            return None
+        keep = self.keep
+
         ra = self.ra
 
         run=self.run
         camcol=self.camcol
-        ra.sweep_cache.cache_column(self.type, self.run, self.camcol)
-        
-        data = ra.sweep_cache.data
 
-        self.make_output(data.size)
+        objs = self.objs
+        self.make_output(keep.size)
 
-        b=eu.stat.Binner(data['field'])
+        b=eu.stat.Binner(objs['field'][keep])
         b.dohist(binsize=1, rev=True)
         
         rev = b['rev']
@@ -56,70 +78,75 @@ class RegaussSweep:
             if rev[i] != rev[i+1]:
                 w=rev[ rev[i]:rev[i+1] ]
 
-                field = data['field'][w[0]]
+                field = objs['field'][w[0]]
                 print("Processing %i in %06i-%i-%04ifield" % (w.size,self.run,self.camcol,field))
                 
-                for index in w:
-                    id = data['id'][index]
+                for i in w:
+                    index = keep[i]
 
-                    if ra.has_atlas(run,camcol,field,id):
+                    obj = objs[index]
+
+                    if ra.has_atlas(obj['run'],obj['camcol'],field,obj['id']):
 
                         self.output['has_atlas'][index] = 1
 
-                        for filter in ['u','g','r','i','z']:
-                            rg = ra.regauss1(type, run, camcol, field, id, filter)
+                        for fnum in [0,1,2,3,4]:
+                            rg = ra.regauss_obj(obj, fnum)
                             if rg is not None:
-                                self.copy2output(index, rg, filter)
+                                self.copy2output(index, rg, fnum)
+        return self.output
 
-    def copy2output(self, index, rg, filter):
+    def copy2output(self, index, rg, fnum):
         
-        output = self.output
-        fnum = sdsspy.FILTERNUM[filter]
+        # get a reference to this row, modifications to this will
+        # also affect self.output
+        data = self.output[index]
+
         if 'imstats' in rg:
             s = rg['imstats']
-            output['wrow'][index, fnum] = s['wrow']
-            output['wcol'][index, fnum] = s['wcol']
-            output['Irr'][index, fnum] = s['Irr']
-            output['Irc'][index, fnum] = s['Irc']
-            output['Icc'][index, fnum] = s['Icc']
-            output['a4'][index, fnum] = s['a4']
-            output['uncer'][index, fnum] = s['uncer']
-            output['amflags'][index, fnum] = s['whyflag']
-            output['numiter'][index, fnum] = s['numiter']
+            data['wrow'][fnum]    = s['wrow']
+            data['wcol'][fnum]    = s['wcol']
+            data['Irr'][fnum]     = s['Irr']
+            data['Irc'][fnum]     = s['Irc']
+            data['Icc'][fnum]     = s['Icc']
+            data['a4'][fnum]      = s['a4']
+            data['uncer'][fnum]   = s['uncer']
+            data['amflags'][fnum] = s['whyflag']
+            data['numiter'][fnum] = s['numiter']
             
         if 'psfstats' in rg:
             s = rg['psfstats']
-            output['Irr_psf'][index, fnum] = s['Irr']
-            output['Irc_psf'][index, fnum] = s['Irc']
-            output['Icc_psf'][index, fnum] = s['Icc']
-            output['a4_psf'][index, fnum] = s['a4']
-            output['amflags_psf'][index, fnum] = s['whyflag']
+            data['Irr_psf'][fnum]     = s['Irr']
+            data['Irc_psf'][fnum]     = s['Irc']
+            data['Icc_psf'][fnum]     = s['Icc']
+            data['a4_psf'][fnum]      = s['a4']
+            data['amflags_psf'][fnum] = s['whyflag']
  
         if 'corrstats' in rg:
             s = rg['corrstats']
-            output['e1_lin'] = s['e1']
-            output['e2_lin'] = s['e2']
-            output['R_lin'] = s['R']
-            output['corrflags_lin'] = s['flags']
+            data['e1_lin'][fnum]        = s['e1']
+            data['e2_lin'][fnum]        = s['e2']
+            data['R_lin'][fnum]         = s['R']
+            data['corrflags_lin'][fnum] = s['flags']
 
 
         if 'rgstats' in rg:
             s = rg['rgstats']
-            output['Irr_rg'][index, fnum] = s['Irr']
-            output['Irc_rg'][index, fnum] = s['Irc']
-            output['Icc_rg'][index, fnum] = s['Icc']
-            output['a4_rg'][index, fnum] = s['a4']
-            output['uncer_rg'][index, fnum] = s['uncer']
-            output['amflags_rg'][index, fnum] = s['whyflag']
-            output['numiter_rg'][index, fnum] = s['numiter']
+            data['Irr_rg'][fnum]     = s['Irr']
+            data['Irc_rg'][fnum]     = s['Irc']
+            data['Icc_rg'][fnum]     = s['Icc']
+            data['a4_rg'][fnum]      = s['a4']
+            data['uncer_rg'][fnum]   = s['uncer']
+            data['amflags_rg'][fnum] = s['whyflag']
+            data['numiter_rg'][fnum] = s['numiter']
  
 
         if 'rgcorrstats' in rg:
             s = rg['rgcorrstats']
-            output['e1_rg'] = s['e1']
-            output['e2_rg'] = s['e2']
-            output['R_rg'] = s['R']
-            output['corrflags_rg'] = s['flags']
+            data['e1_rg'][fnum]        = s['e1']
+            data['e2_rg'][fnum]        = s['e2']
+            data['R_rg'][fnum]         = s['R']
+            data['corrflags_rg'][fnum] = s['flags']
 
 
 
@@ -205,28 +232,6 @@ class RegaussSweep:
             ('R_rg','5f8'),     # this is more stable than R_lin
             ('corrflags_rg','5i2')]  # flags during compea4 correction
 
-    def write_output(self):
-        f = self.output_file()
-
-        resdir = getenv_check('PHOTO_RESOLVE')
-        calibdir = getenv_check('PHOTO_CALIB')
-        sweepdir = getenv_check('PHOTO_SWEEP')
-
-        eu.io.write(f, self.output, clobber=True)
-
-    def output_file(self):
-        d=self.output_dir()
-        f='regauss-%05i-%s-%s-%s.fits' % (self.run,self.camcol,self.rerun,self.procrun)
-        f = path_join(d,f)
-        return f
-
-
-    def output_dir(self):
-        dir=getenv_check('SWEEP_REDUCE')
-        dir = path_join(dir,'regauss',self.procrun)
-        return dir
-
-
 
 
 class RegaussAtlas:
@@ -238,14 +243,21 @@ class RegaussAtlas:
         self.field_key = None
 
 
-    def regauss1(self, type, run, camcol, field, id, filter):
+    def regauss_id(self, type, run, camcol, field, id, filter):
         """
         Run regauss on a single object in a single band
         """
 
-        c = sdsspy.FILTERNUM[filter]
-
         obj = self.readobj(type, run, camcol, field, id)
+        return self.regauss_obj(obj, filter)
+
+    def regauss_obj(self, obj, filter):
+        run = obj['run']
+        camcol = obj['camcol']
+        field = obj['field']
+        id = obj['id']
+
+        c = sdsspy.FILTERNUM[filter]
 
         self.cache_psf(run, camcol, field)
 
@@ -443,20 +455,29 @@ def admom_atlas(type, run, camcol, field, id, filter,
 
 
 class SweepCache:
-    def __init__(self, verbose=False):
+    def __init__(self, type=None, data=None, verbose=False):
         self.verbose=verbose
-        if not hasattr(SweepCache,'key'):
-            SweepCache.key = None
-            SweepCache.data = None
+        self.init(type=type, data=data)
+
+    def init(self, type=None, data=None):
+        if type is not None and data is not None:
+            run=data['run'][0]
+            camcol=data['camcol'][0]
+            key = '%s-%06i-%d' % (type,run,camcol)
+            self.key = key
+            self.data = data
+        else:
+            self.key=None
+            self.data=None
 
 
     def read(self,type,run,camcol, **keys):
-        self.cache_column(type, run,camcol, **keys)
-        return SweepCache.data
+        self.cache_column(type, run, camcol, **keys)
+        return self.data
 
     def readfield(self, type, run, camcol, field, **keys):    
         self.cache_column(type, run, camcol, **keys)
-        data = SweepCache.data
+        data = self.data
         w=where1(data['field'] == field)
         if w.size == 0:
             raise ValueError("field not found: %06i-%i-%04i" % (run,camcol,field))
@@ -464,7 +485,7 @@ class SweepCache:
 
     def readobj(self, type, run, camcol, field, id, **keys):    
         self.cache_column(type, run, camcol, **keys)
-        data = SweepCache.data
+        data = self.data
         w=where1( (data['field'] == field) & (data['id'] == id) )
         if w.size == 0:
             raise ValueError("object not found: %06i-%i-%04i-%05i" % (run,camcol,field,id))
@@ -473,12 +494,12 @@ class SweepCache:
 
     def cache_column(self, type,run,camcol, **keys):
         key = '%s-%06i-%d' % (type,run,camcol)
-        if SweepCache.key != key:
+        if self.key != key:
             data = sdsspy.read('calibobj.%s' % type,
                                run,camcol, lower=True, verbose=self.verbose, 
                                **keys)
-            SweepCache.key = key
-            SweepCache.data = data
+            self.key = key
+            self.data = data
 
 
 class RunTester(dict):
