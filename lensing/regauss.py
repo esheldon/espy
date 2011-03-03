@@ -43,9 +43,12 @@ class RegaussSweep:
         self.objs = objs
         self.ra = RegaussAtlas()
 
-        self.rmax = keys.get('rmax',22.5)
+        self.rmax = keys.get('rmax',22.)
+
+        self.verbosity = keys.get('verbosity',1)
 
     def select(self):
+        print("Selecting objects")
         s = es_sdsspy.select.Selector(self.objs)
         print("  getting resolve logic")
         resolve_logic = s.resolve_logic()
@@ -59,47 +62,57 @@ class RegaussSweep:
         rmag_logic = s.cmodelmag_logic("r", self.rmax)
 
         logic = \
-            resolve_logic & tycho_logic & flag_logic & rmag_logic
+            resolve_logic & flag_logic & rmag_logic
 
-        self.keep = where1(logic)
-        print("  keeping %i/%i" % self.keep.size, self.objs.size)
+        keep = where1(logic)
+        print("  keeping %i/%i" % (keep.size, self.objs.size))
+
+        if keep.size > 0:
+            # original objs will live on with the caller
+            self.objs = self.objs[keep]
+        else:
+            self.objs = None
 
     def process(self):
 
         self.select()
-        if self.keep.size == 0:
+        if self.objs == None:
             return None
-        keep = self.keep
 
         ra = self.ra
 
-        run=self.run
-        camcol=self.camcol
+        run=self.objs['run'][0]
+        camcol=self.objs['camcol'][0]
 
         objs = self.objs
-        self.make_output(keep.size)
+        self.make_output()
 
-        b=eu.stat.Binner(objs['field'][keep])
+        b=eu.stat.Binner(objs['field'])
         b.dohist(binsize=1, rev=True)
         
         rev = b['rev']
+        print("Processing objects by field")
         for i in xrange(b['hist'].size):
             if rev[i] != rev[i+1]:
                 w=rev[ rev[i]:rev[i+1] ]
 
                 field = objs['field'][w[0]]
-                print("Processing %i in %06i-%i-%04ifield" % (w.size,self.run,self.camcol,field))
+                print("  Processing %4i in %06i-%i-%04i" % (w.size,run,camcol,field))
                 
-                for i in w:
-                    index = keep[i]
+                for index in w:
 
                     obj = objs[index]
+                    id = obj['id']
+                    if ra.has_atlas(run,camcol,field,id):
 
-                    if ra.has_atlas(obj['run'],obj['camcol'],field,obj['id']):
-
+                        if self.verbosity > 1:
+                            print("    Processing %06i-%i-%04i-%04i" % (run,camcol,field,id))
                         self.output['has_atlas'][index] = 1
 
                         for fnum in [0,1,2,3,4]:
+                            if self.verbosity > 1:
+                                print("        ",sdsspy.FILTERCHAR[fnum])
+
                             rg = ra.regauss_obj(obj, fnum)
                             if rg is not None:
                                 self.copy2output(index, rg, fnum)
@@ -113,59 +126,70 @@ class RegaussSweep:
 
         if 'imstats' in rg:
             s = rg['imstats']
-            data['wrow'][fnum]    = s['wrow']
-            data['wcol'][fnum]    = s['wcol']
-            data['Irr'][fnum]     = s['Irr']
-            data['Irc'][fnum]     = s['Irc']
-            data['Icc'][fnum]     = s['Icc']
-            data['a4'][fnum]      = s['a4']
-            data['uncer'][fnum]   = s['uncer']
-            data['amflags'][fnum] = s['whyflag']
-            data['numiter'][fnum] = s['numiter']
-            
+            if s is not None:
+                data['wrow'][fnum]    = s['wrow']
+                data['wcol'][fnum]    = s['wcol']
+                data['Irr'][fnum]     = s['Irr']
+                data['Irc'][fnum]     = s['Irc']
+                data['Icc'][fnum]     = s['Icc']
+                data['a4'][fnum]      = s['a4']
+                data['uncer'][fnum]   = s['uncer']
+                data['amflags'][fnum] = s['whyflag']
+                data['amflags_str'][fnum] = s['whystr']
+                data['numiter'][fnum] = s['numiter']
+                
         if 'psfstats' in rg:
             s = rg['psfstats']
-            data['Irr_psf'][fnum]     = s['Irr']
-            data['Irc_psf'][fnum]     = s['Irc']
-            data['Icc_psf'][fnum]     = s['Icc']
-            data['a4_psf'][fnum]      = s['a4']
-            data['amflags_psf'][fnum] = s['whyflag']
+            if s is not None:
+                data['Irr_psf'][fnum]     = s['Irr']
+                data['Irc_psf'][fnum]     = s['Irc']
+                data['Icc_psf'][fnum]     = s['Icc']
+                data['a4_psf'][fnum]      = s['a4']
+                data['amflags_psf'][fnum] = s['whyflag']
+                data['amflags_psf_str'][fnum] = s['whystr']
  
         if 'corrstats' in rg:
             s = rg['corrstats']
-            data['e1_lin'][fnum]        = s['e1']
-            data['e2_lin'][fnum]        = s['e2']
-            data['R_lin'][fnum]         = s['R']
-            data['corrflags_lin'][fnum] = s['flags']
+            if s is not None:
+                data['e1_lin'][fnum]        = s['e1']
+                data['e2_lin'][fnum]        = s['e2']
+                data['R_lin'][fnum]         = s['R']
+                data['corrflags_lin'][fnum] = s['flags']
 
 
         if 'rgstats' in rg:
             s = rg['rgstats']
-            data['Irr_rg'][fnum]     = s['Irr']
-            data['Irc_rg'][fnum]     = s['Irc']
-            data['Icc_rg'][fnum]     = s['Icc']
-            data['a4_rg'][fnum]      = s['a4']
-            data['uncer_rg'][fnum]   = s['uncer']
-            data['amflags_rg'][fnum] = s['whyflag']
-            data['numiter_rg'][fnum] = s['numiter']
- 
+            if s is not None:
+                data['f0flags'][fnum]    = s['f0flags']
+                if s['f0flags'] == 0:
+                    # we only get here if we were able to make f0
+                    data['Irr_rg'][fnum]     = s['Irr']
+                    data['Irc_rg'][fnum]     = s['Irc']
+                    data['Icc_rg'][fnum]     = s['Icc']
+                    data['a4_rg'][fnum]      = s['a4']
+                    data['uncer_rg'][fnum]   = s['uncer']
+                    data['amflags_rg'][fnum] = s['whyflag']
+                    data['amflags_rg_str'][fnum] = s['whystr']
+                    data['numiter_rg'][fnum] = s['numiter']
+     
 
         if 'rgcorrstats' in rg:
             s = rg['rgcorrstats']
-            data['e1_rg'][fnum]        = s['e1']
-            data['e2_rg'][fnum]        = s['e2']
-            data['R_rg'][fnum]         = s['R']
-            data['corrflags_rg'][fnum] = s['flags']
+            if s is not None:
+                data['e1_rg'][fnum]        = s['e1']
+                data['e2_rg'][fnum]        = s['e2']
+                data['R_rg'][fnum]         = s['R']
+                data['corrflags_rg'][fnum] = s['flags']
 
 
 
-    def make_output(self, size):
+    def make_output(self):
         print("creating output")
         dtype = self.output_dtype()
-        self.output = numpy.zeros(size, dtype=dtype)
+        self.output = numpy.zeros(self.objs.size, dtype=dtype)
 
         print("    copying from objs")
-        eu.numpy_util.copy_fields(self.ra.data, self.output)
+        eu.numpy_util.copy_fields(self.objs, self.output)
 
         # set defaults
         output = self.output
@@ -216,31 +240,36 @@ class RegaussSweep:
             ('uncer','5f8'),
             ('numiter','5i1'),
             ('amflags','5i2'),
+            ('amflags_str','5S5'),
 
             ('Irr_psf','5f8'),
             ('Irc_psf','5f8'),
             ('Icc_psf','5f8'),
             ('a4_psf','5f8'),
             ('amflags_psf','5i2'),
+            ('amflags_psf_str','5S5'),
 
             ('e1_lin','5f8'),
             ('e2_lin','5f8'),
             ('R_lin','5f8'),
             ('corrflags_lin','5i2'),  # flags during compea4 correction
 
+            ('f0flags','5i1'),
             ('Irr_rg','5f8'),
             ('Irc_rg','5f8'),
             ('Icc_rg','5f8'),
             ('a4_rg','5f8'),
             ('uncer_rg','5f8'),
-            ('numiter','5i1'),
+            ('numiter_rg','5i1'),
             ('amflags_rg','5i2'), # flags running admom on f0-epsilon in the rg process
+            ('amflags_rg_str','5S5'),
 
             ('e1_rg','5f8'),    # corrected ellipticity
             ('e2_rg','5f8'),
             ('R_rg','5f8'),     # this is more stable than R_lin
             ('corrflags_rg','5i2')]  # flags during compea4 correction
 
+        return dt
 
 
 class RegaussAtlas:
@@ -293,10 +322,10 @@ class RegaussAtlas:
         #im=im.clip(-3*sigsky, im.max())
 
         guess_psf=admom.fwhm2mom( obj['psf_fwhm'][c], pixscale=0.4)/2.
-        if obj['m_rr_cc'][c] > Tguess_psf:
-            guess=obj['m_rr_cc'][c]/2
-        else:
-            guess=guess_psf
+        guess = guess_psf
+        if 'm_rr_cc' in obj.dtype.names:
+            if obj['m_rr_cc'][c] > guess_psf:
+                guess=obj['m_rr_cc'][c]/2
 
         rg = admom.ReGauss(im, row, col, psf, 
                            sigsky=sigsky, guess=guess, guess_psf=guess_psf,
