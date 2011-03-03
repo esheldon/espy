@@ -1,5 +1,14 @@
 """
 
+classes:
+
+    RegaussSweep
+    RegaussAtlas
+    SweepCache
+    Collator
+
+    RunTester
+    Tester
 
 """
 from __future__ import print_function
