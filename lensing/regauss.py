@@ -30,7 +30,8 @@ def output_dir(procrun):
     return coll.output_dir()
 
 class RegaussSweep:
-    def __init__(self, type, run, camcol):
+    def __init__(self, procrun, type, run, camcol):
+        self.procrun = procrun
         self.type = type
         self.run=run
         self.camcol=camcol
@@ -38,6 +39,9 @@ class RegaussSweep:
 
     def run(self):
         ra = self.ra
+
+        run=self.run
+        camcol=self.camcol
         ra.sweep_cache.cache_column(self.type, self.run, self.camcol)
         
         data = ra.sweep_cache.data
@@ -52,31 +56,108 @@ class RegaussSweep:
             if rev[i] != rev[i+1]:
                 w=rev[ rev[i]:rev[i+1] ]
 
-                for j in w:
-                    id = data['id'][j]
-                    for filter in ['u','g','r','i','z']:
-                        rg = ra.regauss1(type, run, camcol, field, id, filter)
+                field = data['field'][w[0]]
+                print("Processing %i in %06i-%i-%04ifield" % (w.size,self.run,self.camcol,field))
+                
+                for index in w:
+                    id = data['id'][index]
 
-                        self.copy2output(rg, filter)
+                    if ra.has_atlas(run,camcol,field,id):
+
+                        self.output['has_atlas'][index] = 1
+
+                        for filter in ['u','g','r','i','z']:
+                            rg = ra.regauss1(type, run, camcol, field, id, filter)
+                            if rg is not None:
+                                self.copy2output(index, rg, filter)
 
     def copy2output(self, index, rg, filter):
-        '''
-        Remember to deal with None rg
-        '''
         
+        output = self.output
         fnum = sdsspy.FILTERNUM[filter]
-        if rg is None:
-            self.output['has_atlas'][index] = 0
-            return
+        if 'imstats' in rg:
+            s = rg['imstats']
+            output['wrow'][index, fnum] = s['wrow']
+            output['wcol'][index, fnum] = s['wcol']
+            output['Irr'][index, fnum] = s['Irr']
+            output['Irc'][index, fnum] = s['Irc']
+            output['Icc'][index, fnum] = s['Icc']
+            output['a4'][index, fnum] = s['a4']
+            output['uncer'][index, fnum] = s['uncer']
+            output['amflags'][index, fnum] = s['whyflag']
+            output['numiter'][index, fnum] = s['numiter']
+            
+        if 'psfstats' in rg:
+            s = rg['psfstats']
+            output['Irr_psf'][index, fnum] = s['Irr']
+            output['Irc_psf'][index, fnum] = s['Irc']
+            output['Icc_psf'][index, fnum] = s['Icc']
+            output['a4_psf'][index, fnum] = s['a4']
+            output['amflags_psf'][index, fnum] = s['whyflag']
+ 
+        if 'corrstats' in rg:
+            s = rg['corrstats']
+            output['e1_lin'] = s['e1']
+            output['e2_lin'] = s['e2']
+            output['R_lin'] = s['R']
+            output['corrflags_lin'] = s['flags']
 
-        self.output['has_atlas'][index] = 1
+
+        if 'rgstats' in rg:
+            s = rg['rgstats']
+            output['Irr_rg'][index, fnum] = s['Irr']
+            output['Irc_rg'][index, fnum] = s['Irc']
+            output['Icc_rg'][index, fnum] = s['Icc']
+            output['a4_rg'][index, fnum] = s['a4']
+            output['uncer_rg'][index, fnum] = s['uncer']
+            output['amflags_rg'][index, fnum] = s['whyflag']
+            output['numiter_rg'][index, fnum] = s['numiter']
+ 
+
+        if 'rgcorrstats' in rg:
+            s = rg['rgcorrstats']
+            output['e1_rg'] = s['e1']
+            output['e2_rg'] = s['e2']
+            output['R_rg'] = s['R']
+            output['corrflags_rg'] = s['flags']
+
 
 
     def make_output(self, size):
+        print("creating output")
         dtype = self.output_dtype()
         self.output = numpy.zeros(size, dtype=dtype)
 
+        print("    copying from objs")
         eu.numpy_util.copy_fields(self.ra.data, self.output)
+
+        # set defaults
+        output = self.output
+
+        print("    setting defaults")
+        # these get set to 9999
+        flist = ['uncer','uncer_rg']
+        for f in flist:
+            for fnum in [0,1,2,3,4]:
+                output[f][:,fnum] = 9999
+
+        # these get set to 2**15 = -32768 which means not processed
+        flist = ['amflags','amflags_psf','amflags_rg',
+                 'corrflags_lin','corrflags_rg']
+        for f in flist:
+            for fnum in [0,1,2,3,4]:
+                output[f][:,fnum] = 2**15
+
+        # these get set to -9999
+        flist = ['wrow','wcol',
+                 'Irr','Irc','Icc','a4',
+                 'Irr_psf','Irc_psf','Icc_psf','a4_psf',
+                 'Irr_rg','Irc_rg','Icc_rg','a4_rg',
+                 'e1_lin','e2_lin','R_lin',
+                 'e1_rg','e2_rg','R_rg']
+        for f in flist:
+            for fnum in [0,1,2,3,4]:
+                output[f][:,fnum] = -9999
 
     def output_dtype(self):
         dt=[('run','i2'),
@@ -96,14 +177,15 @@ class RegaussSweep:
             ('Irc','5f8'),
             ('Icc','5f8'),
             ('a4','5f8'),
-            ('momerr','5f8'),
-            ('flags','5i2'),
+            ('uncer','5f8'),
+            ('numiter','5i1'),
+            ('amflags','5i2'),
 
             ('Irr_psf','5f8'),
             ('Irc_psf','5f8'),
             ('Icc_psf','5f8'),
             ('a4_psf','5f8'),
-            ('flags_psf','5i2'),
+            ('amflags_psf','5i2'),
 
             ('e1_lin','5f8'),
             ('e2_lin','5f8'),
@@ -114,14 +196,35 @@ class RegaussSweep:
             ('Irc_rg','5f8'),
             ('Icc_rg','5f8'),
             ('a4_rg','5f8'),
-            ('momerr_rg','5f8'),
-            ('flags_rg','5i2'), # flags running admom on f0-epsilon in the rg process
+            ('uncer_rg','5f8'),
+            ('numiter','5i1'),
+            ('amflags_rg','5i2'), # flags running admom on f0-epsilon in the rg process
+
             ('e1_rg','5f8'),    # corrected ellipticity
             ('e2_rg','5f8'),
             ('R_rg','5f8'),     # this is more stable than R_lin
             ('corrflags_rg','5i2')]  # flags during compea4 correction
 
+    def write_output(self):
+        f = self.output_file()
 
+        resdir = getenv_check('PHOTO_RESOLVE')
+        calibdir = getenv_check('PHOTO_CALIB')
+        sweepdir = getenv_check('PHOTO_SWEEP')
+
+        eu.io.write(f, self.output, clobber=True)
+
+    def output_file(self):
+        d=self.output_dir()
+        f='regauss-%05i-%s-%s-%s.fits' % (self.run,self.camcol,self.rerun,self.procrun)
+        f = path_join(d,f)
+        return f
+
+
+    def output_dir(self):
+        dir=getenv_check('SWEEP_REDUCE')
+        dir = path_join(dir,'regauss',self.procrun)
+        return dir
 
 
 
@@ -149,7 +252,8 @@ class RegaussAtlas:
         try:
             self.cache_atlas(run, camcol, field, id)
         except NoAtlasImageError:
-            # we can safely ignore such errors
+            # we can safely ignore such errors, but we return
+            # nothing
             return None
 
         im = numpy.array( self.atls['images'][c], dtype='f8')
@@ -210,6 +314,15 @@ class RegaussAtlas:
     def readobj(self, type, run, camcol, field, id):
         obj = self.sweep_cache.readobj(type, run, camcol, field, id)
         return obj
+
+    def has_atlas(self, run, camcol, field, id):
+        try:
+            self.cache_atlas(run, camcol, field, id)
+            return True
+        except NoAtlasImageError:
+            # we can safely ignore such errors
+            return False
+
 
     def cache_atlas(self, run, camcol, field, id):
         """
