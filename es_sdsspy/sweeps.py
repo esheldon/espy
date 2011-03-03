@@ -309,7 +309,9 @@ class Proc():
 
     def make_columns(self):
         """
-        If you want everything or just primary, use ColumnSelector.
+        This is for the specialized runs.
+
+        If you want everything from all sweeps or just primary, use ColumnSelector.
         """
         import columns
 
