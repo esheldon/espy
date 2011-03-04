@@ -67,7 +67,7 @@ def main():
             psize = nformat(size/(1024.**3))+'G'
 
 
-        print "%s%s"%(psize,mo.group(2))
+        sys.stdout.write("%s%s\n" % (psize,mo.group(2)))
 
 
 
