@@ -62,7 +62,7 @@ class RegaussSweep:
         rmag_logic = s.cmodelmag_logic("r", self.rmax)
 
         logic = \
-            resolve_logic & flag_logic & rmag_logic
+            resolve_logic & tycho_logic & flag_logic & rmag_logic
 
         keep = where1(logic)
         print("  keeping %i/%i" % (keep.size, self.objs.size))
@@ -296,6 +296,7 @@ class RegaussAtlas:
         id = obj['id']
 
         c = sdsspy.FILTERNUM[filter]
+
 
         self.cache_psf(run, camcol, field)
 
