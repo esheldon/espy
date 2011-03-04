@@ -1,44 +1,74 @@
 #!/usr/bin/env python
+"""
+    %prog [options]
+
+Description:
+
+    Print the disk usage in human readable form, sorted smallest to largest.  The
+    procedure is to run
+
+        du -a --block-size=1 --max-depth=1 | sort -n
+
+    And then re-format the reported sizes in a more readable form, e.g. 443K,
+    1.5M, 8.6G, etc
+        
+
+"""
 
 import os
 import sys
+import re
 
-def get_uname():
-    # get system type
-    typeiter = os.popen("uname")
-    typeinfo = [t.rstrip() for t in typeiter]
-    type = typeinfo[0]
-    return type
+from optparse import OptionParser
+
+parser=OptionParser(__doc__)
+
+parser.add_option("-a","--apparent-size",action="store_true",
+    help=("print apparent sizes, rather than disk usage; although the apparent "
+          "size is usually smaller, it may be larger due to holes in (`sparse') files, "
+          "internal fragmentation, indirect blocks, and the like"))
 
 
-if __name__=="__main__":
+
+def nformat(num):
+    if num < 10:
+        return '%0.1f' % num
+    else:
+        return str(int(num))
+
+def main():
+
+    options, args = parser.parse_args(sys.argv[1:])
+    apparent_size = options.apparent_size
+
+    command = 'du -a --block-size=1 --max-depth=1'
+    if apparent_size:
+        command += ' --apparent-size'
+    command += ' | sort -n'
+
+    sizeRe = re.compile(r"^(\d+)(.*)$")
+    lines = os.popen(command)
+
+    parts = []
+    max_size_len = 0
+    for line in lines:
+
+        mo = sizeRe.match(line)
+        size = int(mo.group(1))
+
+        # remember du outputs multiples of 4k
+        if size < 1024:
+            psize = nformat(size)
+        elif size < 1024**2:
+            psize = nformat(size/1024.)+'K'
+        elif size < 1024**3:
+            psize = nformat(size/(1024.**2))+'M'
+        else:
+            psize = nformat(size/(1024.**3))+'G'
 
 
-    uname = get_uname()
-    if uname == "Linux":
-        scommand = "du -a --max-depth=1"
-        hcommand = "du -ah --max-depth=1"
-    elif uname == "Darwin":
-        scommand = "/usr/bin/du -d 1"
-        hcommand = "/usr/bin/du -d 1 -h"
+        print "%s%s"%(psize,mo.group(2))
 
-    # human readable
-    human_readable = os.popen(hcommand)
-    # standard for sorting
-    sortable = os.popen(scommand)
 
-    hhash = {}
-    for s in sortable:
-        # also get human readable
-        hr = human_readable.readline()
 
-        # split by white space
-        ts = s.split()
-
-        key = int( ts[0] )
-        # removes trailing whitespace, including newline
-        hhash[key] = hr.rstrip()
-
-    for key in sorted(hhash):
-        sys.stdout.write('%s\n' % hhash[key])
-
+main()
