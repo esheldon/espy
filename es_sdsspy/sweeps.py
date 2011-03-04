@@ -32,8 +32,8 @@ def verify(proctype,
            reload=False):
 
     p=Proc(proctype,procrun,'junk')
-    status = p.verify(runs=runs,camcols=camcols,reload=reload)
-    return status
+    flag_status = p.verify(runs=runs,camcols=camcols,reload=reload)
+    return flag_status
 
 class Proc():
     def __init__(self, 
@@ -78,6 +78,7 @@ class Proc():
         resdir = getenv_check('PHOTO_RESOLVE')
         calibdir = getenv_check('PHOTO_CALIB')
         sweepdir = getenv_check('PHOTO_SWEEP')
+        redux = getenv_check('PHOTO_REDUX')
 
         runs2use,reruns2use = self.matchruns(runs)
         if camcols is None:
@@ -95,13 +96,14 @@ class Proc():
                     self.output_file(run=run,rerun=rerun,camcol=camcol)
                 #stdout.write("Will output to file: %s\n" % output_file)
                 # begin the status info
-                now = datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S"),
+                now = datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
                 status = \
                     {'run':run,
                      'rerun':rerun,
                      'photo_resolve':resdir,
                      'photo_calib':calibdir,
                      'photo_sweep':sweepdir,
+                     'photo_redux':redux,
                      'esutilvers': esutil.version(),
                      'date': now,
                      'output_file':output_file}
@@ -115,26 +117,24 @@ class Proc():
                 status['nresult'] = nres
 
                 print 'status:'
-                #pprint.pprint(status)
-
-                status_struct = esutil.numpy_util.dict2array(status)
-                esutil.numpy_util.ahelp(status_struct,pretty=False)
-
-                self.write_result(output_file, status_struct, res)
+                pprint.pprint(status)
+                self.write_result(output_file, status, res)
                 del res
 
 
-    def write_result(self, output_file, status_struct, result):
+    def write_result(self, output_file, status, result):
         dir=os.path.dirname(output_file)
         if not os.path.exists(dir):
             stdout.write("Creating output directory: %s\n" % dir)
             os.makedirs(dir)
 
-        esutil.io.write(output_file, status_struct, 
-                        clobber=True, verbose=True)
-        if result is not None:
-            esutil.io.write(output_file, result, verbose=True, append=True)
+        if result is None:
+            result = numpy.array([])
 
+        esutil.io.write(output_file, result, 
+                        header=status,
+                        verbose=True,
+                        clobber=True)
 
     def process_sweep(self,run,rerun,camcol,pyclass,**keys):
         flags = 0
@@ -188,7 +188,7 @@ class Proc():
                     extra=None):
 
         dir = self.output_dir()
-        fname=['sweep',self.proctype,self.procrun]
+        fname=[self.proctype,self.type,self.procrun]
 
         if not gather and not collate:
             if run is None or rerun is None or camcol is None:
@@ -205,15 +205,16 @@ class Proc():
         if extra is not None:
             fname.append(extra)
 
-        fname = '-'.join(fname) +'.fits'
+        #fname = '-'.join(fname) +'.fits'
+        fname = '-'.join(fname) +'.rec'
         fname = os.path.join(dir, fname)
         return fname
 
     def read_sweep(self, run, rerun, camcol, type=None):
         if type is None:
             type=self.type
-        data = sdsspy.files.read('calibobj',run,rerun=rerun,camcol=camcol,
-                                 type=type,verbose=True,lower=True)
+        data = sdsspy.files.read('calibObj.'+type,run,camcol,rerun=rerun,
+                                 verbose=True,lower=True)
         return data
 
                          
@@ -253,7 +254,6 @@ class Proc():
 
         stdout.write("Verifying %s runs\n" % len(runs2use))
 
-        status_structs = []
 
         nrun = len(runs2use)
         ncamcol=len(camcols)
@@ -261,6 +261,10 @@ class Proc():
         ntot = nrun*ncamcol
 
         stdout.write("%3d/%3d" % (0,nrun))
+
+        flags = numpy.zeros(nrun*6, 'i4')
+
+        ii=0
         for irun in range(nrun):
             if (irun+1) % 10 == 0:
                 stdout.write('\b'*7)
@@ -278,33 +282,31 @@ class Proc():
                     err="missing file: %s.\n    Halting" % output_file
                     raise RuntimeError(err)
                 
-                status=esutil.io.read(output_file,ext=1)
-
-                status_structs.append(status)
+                status=esutil.sfile.read_header(output_file)
+                flags[ii] = status['flags']
+                ii += 1
 
         stdout.write('\b'*7)
         stdout.write("%3d/%3d" % (nrun,nrun))
         stdout.write('\n')
 
-        status = esutil.numpy_util.combine_arrlist(status_structs)
-
         stdout.write("Checking flags\n")
-        flagstatus={}
+        flag_status={}
         for flagname in flagdict:
             flag=flagdict[flagname]
-            wbad, = where( (status['flags'] & flag) != 0)
+            wbad, = where( (flags & flag) != 0)
             if wbad.size > 0:
                 stdout.write("    %s: %3d/%3d\n" % (flagname,wbad.size,ntot))
 
-            flagstatus[flagname] = wbad.size
+            flag_status[flagname] = wbad.size
         
-        for flagname in flagstatus:
-            if flagstatus[flagname] != 0:
+        for flagname in flag_status:
+            if flag_status[flagname] != 0:
                 if flagname == 'noresult' and not require_result:
                     stdout.write("No results required, ignoring noresult flag\n")
                 else:
                     raise ValueError("Bad files found for flag : '%s'" % flagname)
-        return status
+        return flag_status
 
 
     def make_columns(self):
@@ -334,9 +336,12 @@ class Proc():
 
             for camcol in [1,2,3,4,5,6]:
                 f=self.output_file(run=run,rerun=rerun,camcol=camcol)
-                status = esutil.io.read(f,ext=1)
+
+                status = esutil.sfile.read_header(f)
+
                 if status['flags'] == 0:
-                    c.from_fits(f,ext=2, ensure_native=True)
+                    data = esutil.io.read(f)
+                    c.write_columns(data)
                 else:
                     stdout.write("no results in file %s\n" % f)
 

@@ -318,10 +318,10 @@ class GalSelector():
 
             # the python commands to execute
             python_commands = """
-import sdsspy
+import es_sdsspy
 import sdssgal
 gs=sdssgal.GalSelector
-p=sdsspy.sweeps.Proc('sdssgal','%s','gal')
+p=es_sdsspy.sweeps.Proc('sdssgal','%s','gal')
 p.process_runs(gs, runs=%s%s)""" % (procrun,run,extra)
 
             ppy = pbs.PBSPython(pbsfilename,python_commands,

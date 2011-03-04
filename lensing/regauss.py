@@ -20,7 +20,7 @@ import columns
 import numpy
 import esutil as eu
 from esutil.numpy_util import where1
-from esutil.ostools import path_join
+from esutil.ostools import path_join, expand_path
 
 import biggles
 from biggles import FramedPlot, PlotKey, Table, PlotLabel, Points, \
@@ -37,6 +37,68 @@ def open_columns(procrun):
 def output_dir(procrun):
     coll = Collator(procrun)
     return coll.output_dir()
+
+def create_pbs(type, procrun):
+    import pbs
+    proctype='regauss'
+    procshort='rg'
+    minscore=0.1
+    queue = 'slow'
+
+    pbsdir=path_join('~/pbs',proctype,procrun)
+    pbsdir = expand_path(pbsdir)
+    if not os.path.exists(pbsdir):
+        os.makedirs(pbsdir)
+
+    espy_v = "-r ~esheldon/exports/espy-work"
+    esutil_v="-r ~esheldon/exports/esutil-work"
+    stomp_v="-r ~esheldon/exports/stomp-work"
+    admom_v="-r ~esheldon/exports/admom-work"
+    fimage_v="-r ~esheldon/exports/fimage-work"
+    sdsspy_v="-r ~esheldon/exports/sdsspy-work"
+
+    photo_redux   = os.environ['PHOTO_REDUX']
+    photo_sweep   = os.environ["PHOTO_SWEEP"]
+    photo_resolve = os.environ["PHOTO_RESOLVE"]
+    photo_calib   = os.environ["PHOTO_CALIB"]
+
+    setups = [espy_v,esutil_v,stomp_v,admom_v,fimage_v,sdsspy_v]
+    setups = ['setup '+s for s in setups]
+
+    setups += ['export PHOTO_REDUX=%s' % photo_redux,
+               'export PHOTO_SWEEP=%s' % photo_sweep,
+               'export PHOTO_CALIB=%s' % photo_calib,
+               'export PHOTO_RESOLVE=%s' % photo_resolve]
+
+    win = sdsspy.window.Window()
+    runs, reruns = win.runlist(minscore)
+
+    runs.sort()
+    print("writing to",pbsdir)
+    for run in runs:
+        for camcol in [1,2,3,4,5,6]:
+            # create the pbs file name
+            rstr=sdsspy.files.run2string(run)
+            job_name = '%s%s-%s-%s' % (procshort,type,run,camcol)
+
+            pbsfilename='%s%s-%s-%s-%s.pbs' % (procshort, type, procrun, rstr, camcol)
+            pbsfilename=path_join(pbsdir, pbsfilename)
+
+            # the python commands to execute
+            python_commands = """
+from lensing.regauss import RegaussSweep
+from es_sdsspy import sweeps
+p=sweeps.Proc('%s','%s','%s')
+p.process_runs(RegaussSweep, runs=%s, camcols=%s)""" % (proctype,procrun,type,run,camcol)
+
+            ppy = pbs.PBSPython(pbsfilename,
+                                python_commands,
+                                job_name=job_name, 
+                                setups=setups, 
+                                queue=queue)
+            ppy.write()
+
+
 
 class RegaussSweep:
     def __init__(self, objs, **keys):
@@ -92,12 +154,13 @@ class RegaussSweep:
         
         rev = b['rev']
         print("Processing objects by field")
-        for i in xrange(b['hist'].size):
+        nf = b['hist'].size
+        for i in xrange(nf):
             if rev[i] != rev[i+1]:
                 w=rev[ rev[i]:rev[i+1] ]
 
                 field = objs['field'][w[0]]
-                print("  Processing %4i in %06i-%i-%04i" % (w.size,run,camcol,field))
+                print("  Processing %4i in %06i-%i-%04i  %3i/%3i" % (w.size,run,camcol,field,i+1,nf))
                 
                 for index in w:
 
@@ -207,6 +270,11 @@ class RegaussSweep:
         for f in flist:
             for fnum in [0,1,2,3,4]:
                 output[f][:,fnum] = 2**15
+
+        for fnum in [0,1,2,3,4]:
+            output['amflags_str'][:,fnum] = 'norun'
+            output['amflags_psf_str'][:,fnum] = 'norun'
+            output['amflags_rg_str'][:,fnum] = 'norun'
 
         # these get set to -9999
         flist = ['wrow','wcol',

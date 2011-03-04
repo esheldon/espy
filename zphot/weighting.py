@@ -68,7 +68,7 @@ First do a match and then make the versions formatted for input to weighting:
 
 
 Then run to get the overall weights.  Create the pbs file.  
--
+
     /bin/create_pbs.py weights wrun
 
 For that you'll need to create a weights-{wrun}.json file:
