@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os,sys
 from sys import stdout
 
@@ -11,11 +12,13 @@ import datetime
 import pprint
 
 import columns
+import copy
 
 flagdict = {'read_failed':2**0,
             'noresult': 2**1,
             'nofile': 2**2,
-            'proc_failed': 2**3}
+            'proc_failed': 2**3,
+            'missing_file':2**15}
 
 
 
@@ -70,15 +73,12 @@ class Proc():
             win = sdsspy.window.Window()
             Proc._runs, Proc._reruns = win.runlist(self.minscore)
 
-    
+  
     def process_runs(self, pyclass, runs=None, camcols=None, **keys):
         self.load_runlist()
         self.split_runlist()
 
-        resdir = getenv_check('PHOTO_RESOLVE')
-        calibdir = getenv_check('PHOTO_CALIB')
-        sweepdir = getenv_check('PHOTO_SWEEP')
-        redux = getenv_check('PHOTO_REDUX')
+        e = self.get_environ()
 
         runs2use,reruns2use = self.matchruns(runs)
         if camcols is None:
@@ -97,16 +97,12 @@ class Proc():
                 #stdout.write("Will output to file: %s\n" % output_file)
                 # begin the status info
                 now = datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
-                status = \
-                    {'run':run,
-                     'rerun':rerun,
-                     'photo_resolve':resdir,
-                     'photo_calib':calibdir,
-                     'photo_sweep':sweepdir,
-                     'photo_redux':redux,
-                     'esutilvers': esutil.version(),
-                     'date': now,
-                     'output_file':output_file}
+
+                status = copy.deepcopy(e)
+                status['run'] = run
+                status['rerun'] = rerun
+                status['date'] = now
+                status['output_file'] = output_file
 
                 res,flags = self.process_sweep(run,rerun,camcol,pyclass,**keys)
                 status['flags'] = flags
@@ -116,7 +112,7 @@ class Proc():
                     nres = res.size
                 status['nresult'] = nres
 
-                print 'status:'
+                print('status:')
                 pprint.pprint(status)
                 self.write_result(output_file, status, res)
                 del res
@@ -129,7 +125,7 @@ class Proc():
             os.makedirs(dir)
 
         if result is None:
-            result = numpy.array([])
+            result = numpy.array([],'i4')
 
         esutil.io.write(output_file, result, 
                         header=status,
@@ -245,14 +241,15 @@ class Proc():
                runs=None, 
                camcols=None, 
                require_result=False,
-               reload=False):
+               reload=False,
+               nohalt=False):
 
         if camcols is None:
             camcols=[1,2,3,4,5,6]
         runs2use,reruns2use = self.matchruns(runs, reload=reload)
         camcols2use = numpy.array(camcols, ndmin=1, copy=False) 
 
-        stdout.write("Verifying %s runs\n" % len(runs2use))
+        print("Verifying",len(runs2use),"runs")
 
 
         nrun = len(runs2use)
@@ -262,14 +259,18 @@ class Proc():
 
         stdout.write("%3d/%3d" % (0,nrun))
 
-        flags = numpy.zeros(nrun*6, 'i4')
+        missing = numpy.zeros(nrun*6, 'i1')
+        flags = numpy.zeros(nrun*6, 'i2')
 
         ii=0
+
+        printed_error=False
         for irun in range(nrun):
             if (irun+1) % 10 == 0:
                 stdout.write('\b'*7)
                 stdout.write("%3d/%3d" % ((irun+1),nrun) )
                 stdout.flush()
+                printed_errors=False
 
             run=runs2use[irun]
             rerun=reruns2use[irun]
@@ -279,33 +280,39 @@ class Proc():
                     self.output_file(run=run,rerun=rerun,camcol=camcol)
 
                 if not os.path.exists(output_file):
-                    err="missing file: %s.\n    Halting" % output_file
-                    raise RuntimeError(err)
-                
-                status=esutil.sfile.read_header(output_file)
-                flags[ii] = status['flags']
+                    missing[ii] = 1
+                    if not printed_errors:
+                        print("")
+                    print("missing file:",output_file)
+                    printed_errors=True
+                    flags[ii] = flagdict['missing_file']
+                else: 
+                    status=esutil.sfile.read_header(output_file)
+                    flags[ii] = status['flags']
                 ii += 1
 
         stdout.write('\b'*7)
         stdout.write("%3d/%3d" % (nrun,nrun))
         stdout.write('\n')
 
-        stdout.write("Checking flags\n")
+        print("Checking flags")
         flag_status={}
+
+        die=False
         for flagname in flagdict:
             flag=flagdict[flagname]
             wbad, = where( (flags & flag) != 0)
             if wbad.size > 0:
-                stdout.write("    %s: %3d/%3d\n" % (flagname,wbad.size,ntot))
+                print("    %s: %3d/%3d" % (flagname,wbad.size,ntot))
+                if flagname == 'noresult' and not require_result:
+                    pass
+                else:
+                    die=True
 
             flag_status[flagname] = wbad.size
         
-        for flagname in flag_status:
-            if flag_status[flagname] != 0:
-                if flagname == 'noresult' and not require_result:
-                    stdout.write("No results required, ignoring noresult flag\n")
-                else:
-                    raise ValueError("Bad files found for flag : '%s'" % flagname)
+        if die and not nohalt:
+            raise ValueError("Fatal errors found")
         return flag_status
 
 
@@ -346,6 +353,34 @@ class Proc():
                     stdout.write("no results in file %s\n" % f)
 
                 del status
+
+    def get_environ(self):
+        resdir   = getenv_check('PHOTO_RESOLVE')
+        calibdir = getenv_check('PHOTO_CALIB')
+        sweepdir = getenv_check('PHOTO_SWEEP')
+        redux    = getenv_check('PHOTO_REDUX')
+
+        espyvers   = os.path.basename( getenv_check("ESPY_DIR") )
+        stompvers  = os.path.basename( getenv_check("STOMP_DIR") )
+        admomvers  = os.path.basename( getenv_check("ADMOM_DIR") )
+        fimagevers = os.path.basename( getenv_check("FIMAGE_DIR") )
+        sdsspyvers = os.path.basename( getenv_check("SDSSPY_DIR") )
+        e = \
+            {'run':run,
+             'rerun':rerun,
+             'photo_resolve':resdir,
+             'photo_calib':calibdir,
+             'photo_sweep':sweepdir,
+             'photo_redux':redux,
+             'esutilvers': esutil.version(),
+             'espyvers': espyvers,
+             'stompvers': stompvers,
+             'admomvers': admomvers,
+             'fimagevers': fimagevers,
+             'sdsspyvers': sdsspyvers,
+             'date': now,
+             'output_file':output_file}
+        return e        
 
 
 class ColumnSelector:

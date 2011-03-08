@@ -39,27 +39,28 @@ Then fits and plots:
                                           epsfile=None)
 
 """
-import sigmacrit
-import test_estimators
-import lcat
-import scat
-import convert
-import config
-import regauss
-import regauss_sim
-import princeton
-import files
-import pbslens
+from . import sigmacrit
+from . import test_estimators
+from . import lcat
+from . import scat
+from . import convert
+from . import config
+from . import regauss
+from . import regauss_test
+from . import regauss_sim
+from . import princeton
+from . import files
+from . import pbslens
 
-import outputs
+from . import outputs
 
 
-import fit
-import nfw
-import linear
-import project
-import invert
+from . import fit
+from . import nfw
+from . import linear
+from . import project
+from . import invert
 
-import plotting
+from . import plotting
 
-import testing
+from . import testing

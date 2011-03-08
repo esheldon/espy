@@ -16,7 +16,138 @@ from esutil.ostools import path_join
 import lensing
 
 import biggles
-from biggles import FramedPlot, PlotKey, Table, PlotLabel
+from biggles import FramedPlot, PlotKey, Table, PlotLabel, Points, \
+            SymmetricErrorBarsY as SymErrY, SymmetricErrorBarsX as SymErrX
+
+
+
+class Tester(dict):
+    def __init__(self, run='any'):
+        import pgnumpy
+        self.run=run
+        self.pg = pgnumpy.PgNumpy()
+    
+    def load_data(self):
+        if 'e1_rg' not in self:
+            if self.run == 'any':
+                run_select=''
+            else:
+                run_select = 'run = %s and' % self.run
+            query="""
+            select 
+                e1pix as e1_rg,
+                e2pix as e2_rg,
+                e1e1err as uncer_rg,
+                r_r as r_rg,
+                seeing as psf_fwhm,
+                cmodelmag[3] as cmodelmag_dered_r
+            from 
+                scat_princeton
+            where 
+                {run_select}
+                r_r > 0.33333
+                and r_r < 1.0
+                and cmodelmag[3] < 22
+                and e1pix between -4.0 and 4.0
+                and e2pix between -4.0 and 4.0
+            """.format(run_select=run_select)
+            print(query)
+            self.data = self.pg.fetchall(query)
+
+            for n in self.data.dtype.names:
+                self[n] = self.data[n]
+
+            self['psf_sigma'] = self['psf_fwhm']/2.35/0.4
+
+    def plot_ellip_vs_field(self, field, rmag_max=21.8, fmin=None, fmax=None, nbin=20, nperbin=50000,
+                            yrange=None, show=True):
+        self.load_data()
+
+        w=where1((self['cmodelmag_dered_r'] > 18.0) & (self['cmodelmag_dered_r'] < rmag_max) )
+
+        if w.size == 0:
+            print("no good objects")
+            return
+
+        weights = 1.0/(0.32**2 + self['uncer_rg'][w]**2)
+
+        if field == 'psf_fwhm':
+            field_data = self['psf_fwhm'][w]
+            fstr = 'PSF FWHM (arcsec)'
+        elif field == 'psf_sigma':
+            field_data = self['psf_sigma'][w]
+            fstr = r'$\sigma_{PSF}$'
+        elif field == 'R_rg':
+            field_data = self['r_rg'][w]
+            fstr = 'R_rg'
+        else:
+            field_data = self[field][w]
+            fstr=field
+
+        print("Plotting mean e for field:",field)
+
+        fstr = fstr.replace('_','\_')
+
+        be1 = eu.stat.Binner(field_data, self['e1_rg'][w], weights=weights)
+        be2 = eu.stat.Binner(field_data, self['e2_rg'][w], weights=weights)
+
+        print("  hist  e1")
+        be1.dohist(nperbin=nperbin, min=fmin, max=fmax)
+        #be1.dohist(nbin=nbin, min=fmin, max=fmax)
+        print("  stats e1")
+        be1.calc_stats()
+        print("  hist  e2")
+        be2.dohist(nperbin=nperbin, min=fmin, max=fmax)
+        #be2.dohist(nbin=nbin, min=fmin, max=fmax)
+        print("  stats e2")
+        be2.calc_stats()
+
+        plt = FramedPlot()
+        p1 = Points( be1['wxmean'], be1['wymean'], type='filled circle', color='blue')
+        p1err = SymErrY( be1['wxmean'], be1['wymean'], be1['wyerr2'], color='blue')
+        p1.label = r'$e_1$'
+
+        p2 = Points( be2['wxmean'], be2['wymean'], type='filled circle', color='red')
+        p2.label = r'$e_2$'
+        p2err = SymErrY( be2['wxmean'], be2['wymean'], be2['wyerr2'], color='red')
+
+        key = PlotKey(0.8, 0.9, [p1,p2])
+        plt.add(p1, p1err, p2, p2err, key)
+
+        if field != 'cmodelmag_dered_r':
+            rmag_lab = PlotLabel(0.1,0.05,'rmag < %0.2f' % rmag_max, halign='left')
+            plt.add(rmag_lab)
+
+        plab = PlotLabel(0.1,0.1, 'CH+RM', halign='left')
+        plt.add(plab)
+
+        plt.xlabel = r'$'+fstr+'$'
+        plt.ylabel = r'$<e>$'
+
+        if yrange is not None:
+            plt.yrange=yrange
+
+        if show:
+            plt.show()
+        epsfile = self.plotfile(field, rmag_max)
+        print("  Writing eps file:",epsfile)
+        plt.write_eps(epsfile)
+
+
+
+    def plotfile(self, field, rmag_max):
+        f = 'chrm-meane-ri-vs-%s-rmag%0.2f' % (field, rmag_max)
+        if self.run != 'any':
+            f += '-%06i' % self.run
+        f += '.eps'
+        d=self.plotdir()
+        f=path_join(d,f)
+        return f
+    def plotdir(self):
+        d=os.environ['LENSDIR']
+        d=path_join(d,'regauss-tests')
+        return d
+
 
 def cache_all_matches(procrun,band):
     """
@@ -49,6 +180,7 @@ def cache_all_matches(procrun,band):
 
         i+=1
 
+ 
 class Comparator:
     def __init__(self,procrun, band):
         """
