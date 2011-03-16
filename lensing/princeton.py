@@ -1,6 +1,8 @@
 """
 
-Compare the princeton outputs with my regauss
+Testing princeton outputs. 
+
+Also some stuff to compare with mine, but not sure how useful it is
 
 """
 

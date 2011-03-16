@@ -1,9 +1,10 @@
 """
-    %prog make-objshear-scat.py sample
+    %prog make-objshear-input.py type run
 
 Description:
-    Create an input source catalog for objshear.  The sample
-    id implies a config file in ${ESPY_DIR}/lensing/config. 
+    Create an input catalog for objshear.  type must be 'scat' or 'lcat'.  The
+    run id implies a config file in ${ESPY_DIR}/lensing/config. 
+
 """
 import sys
 import lensing
@@ -16,6 +17,12 @@ if len(args) < 1:
     parser.print_help()
     sys.exit(1)
 
-sample = args[0]
-wt = zphot.weighting.WeightedTraining(train_sample)
-wt.convert_training()
+type = args[0]
+run = args[1]
+if type == 'scat':
+    lensing.scat.create_input(run)
+elif type == 'lcat':
+    lensing.lcat.create_input(run)
+else:
+    raise ValueError("type must be 'scat' or 'lcat'")
+

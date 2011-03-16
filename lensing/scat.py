@@ -7,25 +7,22 @@ from esutil.ostools import path_join
 
 import lensing
 
-def create_input(catalog, version, sample):
+def create_input(run):
     """
-        create_input('desmocks','2.13','desmocks-2.13')
-        create_input('dr8','1.0','dr8-1.0')
-        create_input('dr8','1.0','dr8-1.0-redo')
+        create_input('05')
     """
+
+    conf = lensing.files.json_read(run)
+    cat=conf['src_catalog']
+    version=conf['src_version']
+    sample=conf['src_sample']
+
     scc = lensing.convert.CatalogConverter('scat')
 
     if catalog == 'desmocks':
         scc.convert(DESMockSrcCatalog, version, sample)
     else:
         raise ValueError("don't know about catalog: '%s'" % catalog)
-
-
-
-#def create_desmocks_input(sample):
-#    scc = lensing.lcat.CatalogConverter('scat')
-#
-#    scc.convert(DESMockSourceCatalog, '2.13', sample)
 
 
 
@@ -59,7 +56,7 @@ class DESMockSrcCatalog:
         if self.version == '2.13':
             print 'changing sign of gamma1'
             output['g1'] = -data['gamma1']
-        elif self.version == '2.13o':
+        elif self.version in ['2.13o','2.13o-f8']:
             print 'not changing sign of gamma1'
             output['g1'] = data['gamma1']
         else:
@@ -89,6 +86,9 @@ class DESMockSrcCatalog:
             extra='-fix'
             ext='.fits'
         elif self.version == '2.13o':
+            extra='-origshear'
+            ext='.rec'
+        elif self.version == '2.13o-f8':
             extra='-origshear'
             ext='.rec'
         else:

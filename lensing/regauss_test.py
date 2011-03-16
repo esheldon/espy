@@ -51,6 +51,7 @@ class Tester(dict):
                            'amflags_rg':'whyflag_rg',
                            'e1_rg':'e1_rg','e2_rg':'e2_rg',
                            'uncer_rg':'momerr_rg',
+                           'Irr':'iyy','Icc':'ixx',
                            'Irr_psf':'iyy_rg','Icc_psf':'ixx_rg',
                            'e1_psf':'e1_psf','e2_psf':'e2_psf'}
                 for n in cn_byband:
@@ -66,6 +67,7 @@ class Tester(dict):
                            'amflags_rg',
                            'e1_rg','e2_rg',
                            'uncer_rg',
+                           'Irr','Icc',
                            'Irr_psf','Icc_psf',
                            'e1_psf','e2_psf']
 
@@ -80,6 +82,9 @@ class Tester(dict):
             Tpsf = self['Irr_psf'] + self['Icc_psf']
             self['psf_sigma'] = mom2sigma(Tpsf)
             self['psf_fwhm'] = mom2fwhm(Tpsf, pixscale=0.396)
+
+            Tobj = self['Irr'] + self['Icc']
+            self['sigma'] = mom2sigma(Tobj)
 
             cn = ['field','cmodelmag_dered_r']
             for name in cn:
@@ -115,13 +120,16 @@ class Tester(dict):
         elif field == 'psf_sigma':
             field_data = self['psf_sigma'][w]
             fstr = r'$\sigma_{PSF}$'
+        elif field == 'sigma':
+            field_data = self['sigma'][w]
+            fstr = r'$\sigma_{obj+PSF}$'
         else:
             field_data = self[field][w]
             fstr=field
+            fstr = fstr.replace('_','\_')
 
         print("Plotting mean e for field:",field)
 
-        fstr = fstr.replace('_','\_')
 
         be1 = eu.stat.Binner(field_data, self['e1_rg'][w], weights=weights)
         be2 = eu.stat.Binner(field_data, self['e2_rg'][w], weights=weights)

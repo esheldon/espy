@@ -281,8 +281,8 @@ def lcat_read(file=None, sample=None, split=None):
 def lcat_dtype():
     dt=[('ra','f8'),
         ('dec','f8'),
-        ('z','f4'),
-        ('dc','f4'),
+        ('z','f8'),
+        ('dc','f8'),
         ('zindex','i4'),
         ('padding','i4')]
     return dt
@@ -335,7 +335,7 @@ def scat_read(file=None, sample=None, interp_scinv=False):
 
     return data
 
-def scat_dtype(interp_scinv=False, nz=20):
+def scat_dtype(interp_scinv=False, nz=20, old=False):
     if interp_scinv:
         dt=[('ra','f8'),
             ('dec','f8'),
@@ -346,14 +346,26 @@ def scat_dtype(interp_scinv=False, nz=20):
             ('mean_scinv','f4',nz)]
 
     else:
-        dt=[('ra','f8'),
-            ('dec','f8'),
-            ('g1','f4'),
-            ('g2','f4'),
-            ('err','f4'),
-            ('hpixid','i4'),
-            ('z','f4'),
-            ('dc','f4')]
+        if old:
+            dt=[('ra','f8'),
+                ('dec','f8'),
+                ('g1','f4'),
+                ('g2','f4'),
+                ('err','f4'),
+                ('hpixid','i4'),
+                ('z','f4'),
+                ('dc','f4')]
+        else:
+            dt=[('ra','f8'),
+                ('dec','f8'),
+                ('g1','f8'),
+                ('g2','f8'),
+                ('err','f8'),
+                ('hpixid','i4'),
+                ('z','f8'),
+                ('dc','f8'),
+                ('padding','i4')]
+ 
     return dt
 
 

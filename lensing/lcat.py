@@ -23,21 +23,24 @@ def read_catalog(catalog, version):
 
 
 
-def create_input(catalog, version, sample, nsplit=0):
+def create_input(run):
     """
-    e.g.
-        create_input('desmocks','2.13','desmocks-2.13')
-        create_input('desmocks','2.13','desmocks-2.13-redo')
+    e.g.  create_input('05')
+    """
 
-        create_input('desmocks','2.13','desmocks-2.13-redo', nsplit=100)
-    """
+    conf = lensing.files.json_read(run)
+    cat=conf['src_catalog']
+    version=conf['src_version']
+    sample=conf['src_sample']
+    nsplit = conf['nsplit']
+
     scc = lensing.convert.CatalogConverter('lcat')
 
     if catalog == 'desmocks':
         scc.convert(DESMockLensCatalog, version, sample)
-        if nsplit != 0:
-            fname = scc.sample_file(sample)
-            split_cat(fname, nsplit)
+
+        fname = lensing.files.sample_file('lcat',sample)
+        split_cat(fname, nsplit)
     else:
         raise ValueError("don't know about catalog: '%s'" % catalog)
 
