@@ -47,7 +47,7 @@ class ScinvCalculator:
         self.npts = npts
         self.n_zlens = n_zlens
 
-        zlvals = numpy.arange(n_zlens, dtype='f4')
+        zlvals = numpy.arange(n_zlens, dtype='f8')
         self.zlvals = esutil.numpy_util.arrscl(zlvals, zlmin, zlmax)
 
         # now gauss-legendre weights and x vals used for integration
@@ -63,7 +63,7 @@ class ScinvCalculator:
         stdout.write("Precomputing scinv on a grid of zl,npts=%d... " % npts)
         stdout.flush()
         # precompute
-        self.scinv = numpy.zeros((n_zlens, npts),dtype='f4')
+        self.scinv = numpy.zeros((n_zlens, npts),dtype='f8')
 
         c = cosmo.Cosmo(omega_m=omega_m, 
                         omega_l=omega_l, 
@@ -87,7 +87,7 @@ class ScinvCalculator:
         """
         pz will be interpolated to the self.zsvals_int locations
         """
-        mean_scinv = numpy.zeros(self.zlvals.size, dtype='f4')
+        mean_scinv = numpy.zeros(self.zlvals.size, dtype='f8')
 
         pzinterp = self.interpolate_pofz(z, pz)
 

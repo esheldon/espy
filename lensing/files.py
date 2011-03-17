@@ -339,11 +339,12 @@ def scat_dtype(interp_scinv=False, nz=20, old=False):
     if interp_scinv:
         dt=[('ra','f8'),
             ('dec','f8'),
-            ('g1','f4'),
-            ('g2','f4'),
-            ('err','f4'),
+            ('g1','f8'),
+            ('g2','f8'),
+            ('err','f8'),
+            ('mean_scinv','f8',nz),
             ('hpixid','i4'),
-            ('mean_scinv','f4',nz)]
+            ('padding','i4')]
 
     else:
         if old:
@@ -361,9 +362,9 @@ def scat_dtype(interp_scinv=False, nz=20, old=False):
                 ('g1','f8'),
                 ('g2','f8'),
                 ('err','f8'),
-                ('hpixid','i4'),
                 ('z','f8'),
                 ('dc','f8'),
+                ('hpixid','i4'),
                 ('padding','i4')]
  
     return dt
@@ -375,17 +376,17 @@ def scat_dtype(interp_scinv=False, nz=20, old=False):
 # hand written json run config files
 #
 
-def json_read(run):
+def json_read(type,id):
     """
     You can also do:
         rc = lensing.config.RunConfig(run)
     and rc is inherited from a dict
     """
-    return eu.io.read(json_file(run))
+    return eu.io.read(json_file(type,id))
 
-def json_file(run):
+def json_file(type, id):
     dir = json_dir()
-    fname = 'lconfig-%s.json' % run
+    fname = '%s-%s.json' % (type,id)
     fname = path_join(dir,fname)
     return fname
 

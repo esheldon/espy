@@ -1,0 +1,11 @@
+{
+    "run":"01",
+    "comment":"This one is first with separate config for lens, source, cosmo samples",
+    "lens_sample":"01",
+    "cosmo_sample":"01",
+    "src_sample":"01",
+    "nbin": 21,
+    "rmin": 0.02,
+    "rmax": 36.567,
+    "nside":4096
+}

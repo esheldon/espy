@@ -1,5 +1,5 @@
 """
-    %prog make-objshear-input.py type run
+    %prog type run
 
 Description:
     Create an input catalog for objshear.  type must be 'scat' or 'lcat'.  The
@@ -13,7 +13,7 @@ from optparse import OptionParser
 parser=OptionParser(__doc__)
 options,args = parser.parse_args(sys.argv[1:])
 
-if len(args) < 1:
+if len(args) < 2:
     parser.print_help()
     sys.exit(1)
 

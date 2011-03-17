@@ -14,75 +14,43 @@ import lensing
 import esutil
 from esutil.ostools import path_join
 
-def read_catalog(catalog, version):
-    if catalog == 'desmocks':
-        c = DESMockLensCatalog(version)
-        return c.read_original()
-    else:
-        raise ValueError("don't know about catalog: '%s'" % catalog)
 
-
-
-def create_input(run):
+def create_input(sample):
     """
-    e.g.  create_input('05')
+    e.g.  create_input('01')
     """
 
-    conf = lensing.files.json_read(run)
-    cat=conf['src_catalog']
-    version=conf['src_version']
-    sample=conf['src_sample']
-    nsplit = conf['nsplit']
-
-    scc = lensing.convert.CatalogConverter('lcat')
-
-    if catalog == 'desmocks':
-        scc.convert(DESMockLensCatalog, version, sample)
-
-        fname = lensing.files.sample_file('lcat',sample)
-        split_cat(fname, nsplit)
-    else:
-        raise ValueError("don't know about catalog: '%s'" % catalog)
-
-def split_cat(fname, nsplit):
-    """
-    Split the lens file into nsplit parts
-    """
-
-    data = lensing.files.lcat_read(file=fname)
-
-    ntot = data.size
-    nper = ntot/nsplit
-    nleft = ntot % nsplit
+    c = DESMockLensCatalog(sample)
+    c.create_objshear_input()
+    c.split_cat()
 
 
-    for i in xrange(nsplit):
-        sstr = '%03d' % i
-        beg = i*nper
-        end = (i+1)*nper
-        if i == (nsplit-1):
-            end += nleft
-        sdata = data[beg:end]
-        sfile = fname.replace('.bin','-'+sstr+'.bin') 
-
-        lensing.files.lcat_write(sdata, file=sfile)
-
-
-
-def read_mocks(version):
-    dm=DESMockLensCatalog(version)
-    return dm.read_original()
-
-class DESMockLensCatalog:
+class DESMockLensCatalog(dict):
     """
     Provides the interface needed by CatalogConverter
     """
 
-    def __init__(self, version, **keys):
-        self.version = version
-        self.lam = keys.get('lam',False)
+    def __init__(self, sample, **keys):
+        conf = lensing.files.json_read('lcat',sample)
+        for k in conf:
+            self[k] = conf[k]
 
-    def create_objshear_input(self, filename):
+        if self['catalog'] not in ['desmocks-2.13']:
+            raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
+
+        if self['sample'] != sample:
+            raise ValueError("The config sample '%s' doesn't match input '%s'" % (self['sample'],sample))
+
+    def file(self):
+        fname = lensing.files.sample_file('lcat',self['sample'])
+        return fname
+
+    def read(self, split=None):
+        return lensing.files.lcat_read(sample=self['sample'], split=split)
+
+    def create_objshear_input(self):
+        fname = self.file()
+
         data = self.read_original()
 
         print 'creating output array'
@@ -96,23 +64,47 @@ class DESMockLensCatalog:
         output['dc'] = -9999.0
         output['padding'] = -9999
 
-        lensing.files.lcat_write(output, file=filename)
+        lensing.files.lcat_write(output, file=fname)
 
-    def type(self):
-        return 'desmocks'
+
+    def split_cat(self):
+        """
+        Split the lens file into nsplit parts
+        """
+
+        data = self.read()
+        fname=self.file()
+        nsplit = self['nsplit']
+        if nsplit == 0:
+            return
+
+        ntot = data.size
+        nper = ntot/nsplit
+        nleft = ntot % nsplit
+
+
+        for i in xrange(nsplit):
+            sstr = '%03d' % i
+            beg = i*nper
+            end = (i+1)*nper
+            if i == (nsplit-1):
+                end += nleft
+            sdata = data[beg:end]
+            sfile = fname.replace('.bin','-'+sstr+'.bin') 
+
+            lensing.files.lcat_write(sdata, file=sfile)
+
+
+
 
     def original_dir(self):
         catdir = lensing.files.catalog_dir()
-        d = path_join(catdir, self.type()+'-'+self.version)
+        d = path_join(catdir, self['catalog'])
         return d
 
     def original_file(self):
         d = self.original_dir()
-        extra=''
-        if self.lam:
-            extra='_lambda'
-        f='DES_Mock_v{version}_halos{extra}.fit'.format(version=self.version,
-                                                        extra=extra)
+        f='%s-halos.fit' % self['catalog']
         infile = path_join(d, f)
         return infile
 

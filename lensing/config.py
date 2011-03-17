@@ -18,14 +18,36 @@ class RunConfig(dict):
     """
 
     def __init__(self, run):
-        conf = lensing.files.json_read(run)
+        conf = lensing.files.json_read('run',run)
         for key in conf:
             self[key] = conf[key]
 
         if self['run'] != run:
-            raise ValueError("mismatch between run numbers: %s %s" \
+            raise ValueError("mismatch between run ids: %s %s" \
                              % (run,self['run']))
 
+        # make sure the cosmology is consistent
+        l = lensing.files.json_read('lcat',self['lens_sample'])
+        s = lensing.files.json_read('scat',self['src_sample'])
+
+        csample = self['cosmo_sample']
+        if (csample != l['cosmo_sample'] or csample != s['cosmo_sample']):
+            err= """
+            cosmo sample ismatch:
+                run config:  %s
+                lcat config: %s
+                scat config: %s
+            """ % (self['cosmo_sample'],l['cosmo_sample'],s['cosmo_sample'])
+            raise ValueError(err)
+
+        self['lens_config'] = l
+        self['src_config'] = s
+        cosmo = lensing.files.json_read('cosmo',csample)
+        for key in cosmo:
+            self[key] = cosmo[key]
+        self['nsplit'] = l['nsplit']
+        self['sigmacrit_style'] = s['sigmacrit_style']
+        
     # inputs to objshear
     def write_config(self):
 
@@ -68,7 +90,7 @@ class RunConfig(dict):
         fobj.write('output_file\n')
         fobj.write(ofile+'\n')
 
-        for key in ['H0','omega_m','npts','nside','nest',
+        for key in ['H0','omega_m','npts','nside',
                     'sigmacrit_style','nbin','rmin','rmax']:
             fobj.write(key+'\n')
             fobj.write('%s\n' % self[key])

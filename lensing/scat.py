@@ -7,30 +7,16 @@ from esutil.ostools import path_join
 
 import lensing
 
-def create_input(run):
+def create_input(sample):
     """
-        create_input('05')
+        create_input('01')
     """
 
-    conf = lensing.files.json_read(run)
-    cat=conf['src_catalog']
-    version=conf['src_version']
-    sample=conf['src_sample']
-
-    scc = lensing.convert.CatalogConverter('scat')
-
-    if catalog == 'desmocks':
-        scc.convert(DESMockSrcCatalog, version, sample)
-    else:
-        raise ValueError("don't know about catalog: '%s'" % catalog)
+    c = DESMockSrcCatalog(sample)
+    c.create_objshear_input()
 
 
-
-
-def read_mocks(version):
-    dc = DESMockSrcCatalog(version)
-    return dc.read_original()
-class DESMockSrcCatalog:
+class DESMockSrcCatalog(dict):
     """
     This reads the mock catalog and creates an input
     catalog for objshear
@@ -40,11 +26,28 @@ class DESMockSrcCatalog:
     of sigma crit inv we are using.
     """
 
-    def __init__(self, version):
+    def __init__(self, sample):
+        conf = lensing.files.json_read('scat',sample)
+        for k in conf:
+            self[k] = conf[k]
 
-        self.version = version
+        if self['catalog'] not in ['desmocks-2.13o-f8']:
+            raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
-    def create_objshear_input(self, outfile):
+        if self['sample'] != sample:
+            raise ValueError("The config sample '%s' doesn't match input '%s'" % (self['sample'],sample))
+
+        self['cosmo'] = lensing.files.json_read('cosmo',self['cosmo_sample'])
+
+    def file(self):
+        fname = lensing.files.sample_file('scat',self['sample'])
+        return fname
+    def read(self):
+        return lensing.files.scat_read(sample=self['sample'])
+
+    def create_objshear_input(self):
+        outfile = self.file()
+
         data = self.read_original()
 
         print 'creating output array'
@@ -53,15 +56,9 @@ class DESMockSrcCatalog:
         print 'copying data'
         output['ra'] = data['ora']
         output['dec'] = data['odec']
-        if self.version == '2.13':
-            print 'changing sign of gamma1'
-            output['g1'] = -data['gamma1']
-        elif self.version in ['2.13o','2.13o-f8']:
-            print 'not changing sign of gamma1'
-            output['g1'] = data['gamma1']
-        else:
-            raise ValueError("Dont' know shear convention "
-                             "for version '%s'" % self.version)
+
+        print 'not changing sign of gamma1'
+        output['g1'] = data['gamma1']
 
         output['g2'] = data['gamma2']
         output['err'] = 0.0
@@ -71,30 +68,15 @@ class DESMockSrcCatalog:
 
         lensing.files.scat_write(output, file=outfile)
 
-    def type(self):
-        return 'desmocks'
 
     def original_dir(self):
         catdir = lensing.files.catalog_dir()
-        d = path_join(catdir, self.type()+'-'+self.version)
+        d = path_join(catdir, self['catalog'])
         return d
 
     def original_file(self):
         d = self.original_dir()
-        extra=''
-        if self.version == '2.13':
-            extra='-fix'
-            ext='.fits'
-        elif self.version == '2.13o':
-            extra='-origshear'
-            ext='.rec'
-        elif self.version == '2.13o-f8':
-            extra='-origshear'
-            ext='.rec'
-        else:
-            ext='.fits'
-        f = 'galaxies-full-{version}{extra}{ext}'.format(version=self.version,
-                                                         extra=extra,ext=ext)
+        f='%s-sources.rec' % self['catalog']
         infile = path_join(d, f)
         return infile
 
