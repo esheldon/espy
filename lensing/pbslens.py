@@ -39,10 +39,10 @@ class RunPbs:
 
         setups=['source /global/data/products/eups/bin/setups.sh',
                 'setup objshear -r ~/exports/objshear-work']
-        command='objshear %s' % conf_file
+        command='time -p OMP_NUM_THREADS=2 objshear %s' % conf_file
 
         stdout.write('Writing pbs file: %s\n' % pbsf)
-        p = pbs.PBS(pbsf,command,setups=setups,job_name=jobname)
+        p = pbs.PBS(pbsf,command,setups=setups,job_name=jobname,ppn=2)
         p.write()
 
 
