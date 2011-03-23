@@ -9,9 +9,8 @@ import zphot
 from math import pi as PI
 
 class ScinvCalculator:
-    def __init__(self, zsvals, 
+    def __init__(self, zsvals, dzl, zlmin, zlmax,
                  npts=100, 
-                 n_zlens=20, zlmin=0.02, zlmax=0.6,
                  omega_m=0.3, 
                  omega_l=0.7,
                  omega_k=0.0,
@@ -20,7 +19,7 @@ class ScinvCalculator:
         """
 
         Specialized calculator for integrating over a p(zs) to get a mean
-        inverse critical density on a grid of zlens.
+        inverse critical density on a pre-determined grid of zlens.
             
             NOTE: npts for the distance calculations is always 5, which is
             good to 1.e-8 to redshift 1
@@ -28,15 +27,20 @@ class ScinvCalculator:
         The input zsvals are used for the integration.  Each call to
         calc_mean_scinv must send a p(z) on that input grid. 
 
-        The zlmin,zlmax are used to create a grid in zlens, and it is on this
-        grid that the final mean inverse critical density will be computed.
+        The dzl,zlmin,zlmax are used to create a grid in zlens, and it is on
+        this grid that the final mean inverse critical density will be
+        computed.
 
         usage:
-            # initialize for the given range in zlens and zsource
-            scalc=ScinvCalculator(zs, zlmin=0.02, zlmax=0.6, npts=100)
+            # initialize for 
+            #  dzl=0.015
+            #  zlmin=0.02
+            #  zlmax=0.6
+            #  npts=100 # integration of p(z)
+            scalc=ScinvCalculator(zs, 0.015, 0.02, 0.6, npts=100)
 
             # now for a given function p(zsource) evaluated at points
-            # zsource, return the scinv(zlens).
+            # zs, return the scinv(zlens).
 
             mean_scinv = scalc.calc_mean_scinv(pzsource)
         """
@@ -47,6 +51,10 @@ class ScinvCalculator:
         zsmin=zsvals.min()
 
         self.npts = npts
+
+
+        n_zlens = int( round( (zlmax-zlmin)/dzl ) )
+
         self.n_zlens = n_zlens
 
         zlvals = numpy.arange(n_zlens, dtype='f8')
@@ -62,7 +70,7 @@ class ScinvCalculator:
         self.zsvals_int = self.xii*self.f1 + self.f2
 
 
-        print("Precomputing scinv on a grid of zl (npts=%d)... " % npts,end='')
+        print("Precomputing scinv on a grid of dzl: %0.3f nzl: %d npts: %d... " % (dzl,n_zlens,npts),end='')
         # precompute
         self.scinv = numpy.zeros((n_zlens, npts),dtype='f8')
 
@@ -191,6 +199,139 @@ class Tester:
     def load_example_data(self, chunk=0):
         self.data = zphot.weighting.read_pofz_byrun(self.pzrun,chunk)
 
+    def test_scinv_dz(self, nplot, show=False, reload=False, type='png'):
+        """
+
+        Test accuracy of interpolating scinv as a function of dzl, the
+        lens redshift spacing.
+
+
+        """
+
+        zlmin = 0.02
+        zlmax = 0.6
+
+        from biggles import Points,FramedPlot,PlotKey, Table,Histogram,Curve
+        from time import time
+        import lensing
+        import pcolors
+
+        if self.data is None or reload:
+            self.load_example_data()
+
+
+        dzl_vals = numpy.linspace(0.001,0.015,10)
+        numcheck = len(dzl_vals)
+        colors=pcolors.rainbow(numcheck, 'hex')
+        scalc = []
+        for dzl in dzl_vals:
+            scalc.append(ScinvCalculator(self.zs, dzl, zlmin, zlmax, npts=100))
+
+        times = numpy.zeros(numcheck, dtype='f8')
+         
+        # we'll fill this in
+        #scinv_all = numpy.zeros( (numcheck, scalc[0].zlvals.size) )
+
+
+        xlim = [0, scalc[0].zsvals.max()]
+        for i in xrange(nplot):
+            scinv_all = []
+            pz = self.data['pofz'][i]
+
+            for j in xrange(numcheck):
+                dzl = dzl_vals[j]
+                print("%f " % dzl,end='')
+                tm0=time()
+                #scinv_all[j,:] = scalc[j].calc_mean_scinv(pz)
+                scinv_all.append( scalc[j].calc_mean_scinv(pz) )
+                times[j] += time()-tm0
+
+            print("\nplotting")
+
+
+            # plot the p(z)
+            tab = Table(3,1)
+
+            binsize=scalc[0].zsvals[1]-scalc[0].zsvals[0]
+            pzh = Histogram(pz, x0=scalc[0].zsvals[0], binsize=binsize)
+            plt_pzh = FramedPlot()
+            plt_pzh.xrange = xlim
+
+            plt_pzh.xtitle=r'$z_s$'
+            plt_pzh.ytitle=r'$P(z_s)$'
+            plt_pzh.add(pzh)
+            tab[0,0] = plt_pzh
+
+            # plot scinv for each dzl
+            plt_scinv = FramedPlot()
+            plt_scinv.xrange = xlim
+
+            scinv_plots=[]
+            for j in xrange(numcheck):
+                dzl = dzl_vals[j]
+                p = Curve(scalc[j].zlvals, scinv_all[j], type='solid',
+                          color=colors[j])
+                p.label = r'$dz_{lens}: %0.3f$' % dzl
+                
+                plt_scinv.add(p)
+                scinv_plots.append(p)
+
+            scinv_key = PlotKey(0.95,0.9,scinv_plots,halign='right')
+            plt_scinv.add(scinv_key)
+
+            plt_scinv.ylabel=r'$\langle \Sigma_{crit}^{-1}(z_{lens}) \rangle$'
+            plt_scinv.xlabel=r'$z_{lens}$'
+            plt_scinv.yrange = [0,2.1e-4]
+
+            tab[1,0] = plt_scinv
+
+            # %diff to best dz
+
+            plt_pdiff=FramedPlot()
+            plt_pdiff.xrange = xlim
+            plt_pdiff.yrange = [-0.05,0.05]
+            pdiff_plots=[]
+
+            zl_interp = numpy.linspace(zlmin,zlmax,1000)
+            scinv_interp_best = esutil.stat.interplin(scinv_all[0], scalc[0].zlvals, zl_interp)
+
+            w=where1(scinv_interp_best > 0)
+            for j in xrange(numcheck):
+                dzl = dzl_vals[j]
+
+                scinv_interp = esutil.stat.interplin(scinv_all[j], scalc[j].zlvals, zl_interp)
+
+                pdiff = scinv_interp[w]/scinv_interp_best[w] - 1.0
+
+                p = Curve(zl_interp[w], pdiff, type='solid',color=colors[j])
+                p.label = r'$dz_{lens}: %0.3f$' % dzl
+
+                plt_pdiff.add(p)
+                pdiff_plots.append(p)
+
+            key = PlotKey(0.95,0.9,pdiff_plots,halign='right')
+            plt_pdiff.add(key)
+
+            plt_pdiff.ylabel=r'$\langle \Sigma_{crit}^{-1} \rangle / \langle \Sigma_{crit}^{-1} \rangle_{best} - 1$'
+            plt_pdiff.xlabel=r'$z_{lens}$'
+
+            tab[2,0] = plt_pdiff
+
+            if show:
+                tab.show()
+
+            plotfile=self.dzl_plot_file(i, type)
+            print("writing to file:",plotfile)
+            if type == 'png':
+                tab.write_img(1000,1000,plotfile)
+            else:
+                tab.write_eps(plotfile)
+
+        for j in xrange(numcheck):
+            dzl = dzl_vals[j]
+            print("time dzl=%s: %s" % (dzl,times[j]))
+
+
 
     def test_scinv_npts(self, nplot, show=False, reload=False, type='png'):
         """
@@ -200,6 +341,11 @@ class Tester:
 
 
         """
+
+        dzl = 0.015
+        zlmin = 0.02
+        zlmax = 0.6
+
         from biggles import Points,FramedPlot,PlotKey, Table,Histogram,Curve
         from time import time
         import lensing
@@ -211,7 +357,7 @@ class Tester:
 
         # this is old ScinvCalculator, need to make work
         # with new one
-        scalc1000 = ScinvCalculator(self.zs, npts=1000)
+        scalc1000 = ScinvCalculator(self.zs, dzl, zlmin, zlmax, npts=1000)
 
 
         nptsvals = [100,200,300,400,500,600,700,800,900]
@@ -220,7 +366,7 @@ class Tester:
         colors=pcolors.rainbow(len(nptsvals), 'hex')
         scalc = []
         for npts in nptsvals:
-            scalc.append(ScinvCalculator(self.zs, npts=npts))
+            scalc.append(ScinvCalculator(self.zs, dzl, zlmin, zlmax, npts=npts))
 
         times = numpy.zeros(numcheck, dtype='f8')
         time1000 = 0.0
@@ -340,5 +486,10 @@ class Tester:
         f=path_join(dir,f)
         return f
 
+    def dzl_plot_file(self, index, type='png'):
+        dir=self.plot_dir()
+        f='sigmacrit-%s-test-dzl-%06i.png' % (self.pzrun,index)
+        f=path_join(dir,f)
+        return f
 
 
