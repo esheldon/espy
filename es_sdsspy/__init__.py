@@ -60,6 +60,13 @@ except:
     sys.stderr.write('sdsspy.sweeps module not loaded\n')
 
 try:
+    from . import sweeps_collate
+except:
+    sys.stderr.write('sdsspy.sweeps_collate module not loaded\n')
+
+
+
+try:
     import yanny
 except:
     sys.stderr.write('sdsspy.yanny module not loaded\n')

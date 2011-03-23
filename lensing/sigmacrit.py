@@ -1,12 +1,15 @@
-from sys import stdout
+from __future__ import print_function
+import os
 import numpy
 import esutil
 from esutil import cosmology as cosmo
+from esutil.ostools import path_join
+from esutil.numpy_util import where1
 import zphot
 from math import pi as PI
 
 class ScinvCalculator:
-    def __init__(self, zsmin, zsmax,
+    def __init__(self, zsvals, 
                  npts=100, 
                  n_zlens=20, zlmin=0.02, zlmax=0.6,
                  omega_m=0.3, 
@@ -22,27 +25,26 @@ class ScinvCalculator:
             NOTE: npts for the distance calculations is always 5, which is
             good to 1.e-8 to redshift 1
 
-        The input zsmin,zsmax are used to pre-compute gauss-legendre xvals and
-        weights.   The zs and p(zs) input later should be on a subset of this
-        range.
+        The input zsvals are used for the integration.  Each call to
+        calc_mean_scinv must send a p(z) on that input grid. 
 
         The zlmin,zlmax are used to create a grid in zlens, and it is on this
         grid that the final mean inverse critical density will be computed.
 
         usage:
             # initialize for the given range in zlens and zsource
-            zsmin=0.03
-            zsmax=1.47
-            scalc=ScinvCalculator(zsmin, zsmax, 
-                                  zlmin=0.02, zlmax=0.6, npts=100)
+            scalc=ScinvCalculator(zs, zlmin=0.02, zlmax=0.6, npts=100)
 
             # now for a given function p(zsource) evaluated at points
             # zsource, return the scinv(zlens).
 
-            mean_scinv = scalc.calc_mean_sigmacritinv(zsource, pzsource)
+            mean_scinv = scalc.calc_mean_scinv(pzsource)
         """
 
 
+        self.zsvals = zsvals
+        zsmax=zsvals.max()
+        zsmin=zsvals.min()
 
         self.npts = npts
         self.n_zlens = n_zlens
@@ -52,7 +54,7 @@ class ScinvCalculator:
 
         # now gauss-legendre weights and x vals used for integration
         # over zs
-        self.xii, self.wii = esutil.math_util.gauleg(-1.0, 1.0, npts)
+        self.xii, self.wii = esutil.integrate.gauleg(-1.0, 1.0, npts)
 
         self.f1 = (zsmax - zsmin)/2.0
         self.f2 = (zsmax + zsmin)/2.0
@@ -60,8 +62,7 @@ class ScinvCalculator:
         self.zsvals_int = self.xii*self.f1 + self.f2
 
 
-        stdout.write("Precomputing scinv on a grid of zl,npts=%d... " % npts)
-        stdout.flush()
+        print("Precomputing scinv on a grid of zl (npts=%d)... " % npts,end='')
         # precompute
         self.scinv = numpy.zeros((n_zlens, npts),dtype='f8')
 
@@ -73,7 +74,7 @@ class ScinvCalculator:
         for i in range(n_zlens):
             zl = self.zlvals[i]
             self.scinv[i,:] = c.sigmacritinv(zl,self.zsvals_int)
-        stdout.write("done\n")
+        print("done")
 
 
     def interpolate_pofz(self, z, pz):
@@ -83,13 +84,21 @@ class ScinvCalculator:
         pzvals = esutil.stat.interplin(pz, z, self.zsvals_int)
         return pzvals
        
-    def calc_mean_sigmacritinv(self, z, pz):
+    def calc_mean_scinv(self, pz):
         """
-        pz will be interpolated to the self.zsvals_int locations
+        pz must correspond exactly to the zsvals input
+
+        pz will be interpolated onto the gauss-legendra
+        abcissa
+
         """
+        if pz.size != self.zsvals.size:
+            raise ValueError("pz must be same size as zsvals")
+
         mean_scinv = numpy.zeros(self.zlvals.size, dtype='f8')
 
-        pzinterp = self.interpolate_pofz(z, pz)
+        # get p(z) interpolated to the zsvals_int points
+        pzinterp = self.interpolate_pofz(self.zsvals, pz)
 
         for i in range(self.zlvals.size):
             # we've pre-computed scinv at zl,zs locations of relevance
@@ -158,7 +167,7 @@ logf="%s"
 python ~esheldon/python/zphot/bin/add-scinv.py %s &> "$logf"
         """ % (shortname,pbslog,logf,f)
 
-        stdout.write("%s\n" % pbsname)
+        print(pbsname)
         fobj=open(pbsname,'w')
         fobj.write(pbs)
         fobj.close()
@@ -166,50 +175,52 @@ python ~esheldon/python/zphot/bin/add-scinv.py %s &> "$logf"
 
 
 class Tester:
-    def __init__(self):
+    def __init__(self, pzrun):
+        self.pzrun = pzrun
+        self.wo = zphot.weighting.WeightedOutputs()
+
+        # get the zs values
+        # the z values for the histogram
+        z_file = self.wo.z_file(pzrun,chunk=0)
+        zsfull = zphot.weighting.read_z(z_file)
+        self.zs = (zsfull['zmin']+zsfull['zmax'])/2
+
+
         self.data=None
-        self.zphot = zphot.cas.CasZphot()
 
-    def get_example_data(self):
-        dir = self.zphot.output_dir()
-        self.example_fname = 'pofz.ra4.2h.dat'
-        fname=os.path.join(dir, self.example_fname)
-        stdout.write("Reading sample data: %s\n" % fname)
-        self.data = self.zphot.read_raw(fname)
-
-    def plot_dir(self):
-        return os.path.join(self.zphot.basedir,'test_sigmacritinv')
-
-    def plot_file(self, num):
-        dir=self.plot_dir()
-        f=self.example_fname.replace('.dat','')
-        f = f+'-%d.png' % num
-        f = os.path.join(dir, f)
-        return f
+    def load_example_data(self, chunk=0):
+        self.data = zphot.weighting.read_pofz_byrun(self.pzrun,chunk)
 
 
-    def test_sigmacritinv(self, nplot, reload=False):
+    def test_scinv_npts(self, nplot, show=False, reload=False, type='png'):
+        """
 
+        Test accuracy as a function of the numer of points used in the
+        integration.
+
+
+        """
+        from biggles import Points,FramedPlot,PlotKey, Table,Histogram,Curve
         from time import time
         import lensing
+        import pcolors
 
-        plot_dir = self.plot_dir()
-        import lensing
         if self.data is None or reload:
-            self.get_example_data()
+            self.load_example_data()
 
 
         # this is old ScinvCalculator, need to make work
         # with new one
-        scalc1000 = lensing.ScinvCalculator(1000)
+        scalc1000 = ScinvCalculator(self.zs, npts=1000)
 
 
-        nptsvals = [10,20,40,60,80,100]
+        nptsvals = [100,200,300,400,500,600,700,800,900]
         numcheck = len(nptsvals)
-        colors=['black','magenta','blue','green','orange','red']
+        #colors=['black','magenta','blue','green','orange','red']
+        colors=pcolors.rainbow(len(nptsvals), 'hex')
         scalc = []
         for npts in nptsvals:
-            scalc.append(ScinvCalculator(npts))
+            scalc.append(ScinvCalculator(self.zs, npts=npts))
 
         times = numpy.zeros(numcheck, dtype='f8')
         time1000 = 0.0
@@ -217,93 +228,117 @@ class Tester:
         # we'll fill this in
         scinv_all = numpy.zeros( (numcheck, scalc1000.zlvals.size) )
 
-        figsize=(6.8,8.8)
-        plt = esutil.plotting.setuplot(backend='Agg',
-                                       params={'figure.figsize':figsize})
-        #fig1 = plt.subplot(2,1,1)
-        #fig2 = plt.subplot(2,1,2)
 
         xlim = [0, scalc1000.zsvals.max()]
-        for i in range(nplot):
-            pz = self.data['pz'][i]
+        for i in xrange(nplot):
+            pz = self.data['pofz'][i]
 
-            stdout.write("Doing 1000..."); stdout.flush()
+            print("Doing 1000...",end='')
             
             tm0 = time()
-            scinv1000 = scalc1000.calc_mean_sigmacritinv(pz)
+            scinv1000 = scalc1000.calc_mean_scinv(pz)
             time1000 += time()-tm0
 
-            stdout.write("done\n"); stdout.flush()
+            print("done")
 
 
-            for j in range(numcheck):
+            for j in xrange(numcheck):
                 npts = nptsvals[j]
-                stdout.write("%d " % npts)
-                stdout.flush()
-                #scinv_old = lensing.tools.mean_sigmacritinv(zl,self.zsvals,pz,
-                #                                        npts=npts)
+                print("%d " % npts,end='')
                 tm0=time()
-                scinv_all[j,:] = scalc[j].calc_mean_sigmacritinv(pz)
+                scinv_all[j,:] = scalc[j].calc_mean_scinv(pz)
                 times[j] += time()-tm0
 
-            stdout.write("\nplotting\n"); stdout.flush()
+            print("\nplotting")
 
-            
 
             # plot the p(z)
-            plt.clf()
+            tab = Table(3,1)
 
-            plt.subplot(3,1,1)
-            plt.plot(scalc1000.zsvals, pz)
-            plt.ylabel(r'$P(z_{source})$')
-            plt.xlabel(r'$z_{source}$')
-            plt.xlim(xlim)
+            binsize=scalc1000.zsvals[1]-scalc1000.zsvals[0]
+            pzh = Histogram(pz, x0=scalc1000.zsvals[0], binsize=binsize)
+            plt_pzh = FramedPlot()
+            plt_pzh.xrange = xlim
 
+            plt_pzh.xtitle=r'$z_s$'
+            plt_pzh.ytitle=r'$P(z_s)$'
+            plt_pzh.add(pzh)
+            tab[0,0] = plt_pzh
 
+            # plot scinv for each npts value
+            plt_scinv = FramedPlot()
+            plt_scinv.xrange = xlim
 
-
-            # now plot the inverse critical densities
-            plt.subplot(3,1,2)
-
-            for j in range(numcheck):
+            scinv_plots=[]
+            for j in xrange(numcheck):
                 npts = nptsvals[j]
-                plt.plot(scalc[j].zlvals, scinv_all[j,:],
-                         color=colors[j], label='npts=%d' % npts)
+                p = Curve(scalc[j].zlvals, scinv_all[j,:], type='solid',
+                          color=colors[j])
+                p.label = 'npts: %d' % npts
+                
+                plt_scinv.add(p)
+                scinv_plots.append(p)
 
-            leg = plt.legend()
-            leg.draw_frame(False)
-            plt.ylabel(r'$\langle \Sigma_{crit}(z_{lens}) \rangle$')
-            plt.xlabel(r'$z_{lens}$')
-            plt.xlim(xlim)
+            scinv_key = PlotKey(0.95,0.9,scinv_plots,halign='right')
+            plt_scinv.add(scinv_key)
 
+            plt_scinv.ylabel=r'$\langle \Sigma_{crit}^{-1}(z_{lens}) \rangle$'
+            plt_scinv.xlabel=r'$z_{lens}$'
+            plt_scinv.yrange = [0,2.1e-4]
 
-            # now ratios w.r.g. npts=1000
-            plt.subplot(3,1,3)
-            for j in range(numcheck):
+            tab[1,0] = plt_scinv
+
+            # ratio to 1000 points
+
+            plt_rat=FramedPlot()
+            plt_rat.xrange = xlim
+            plt_rat.yrange = [1-1.e-2,1+1.e-2]
+            rat_plots=[]
+            for j in xrange(numcheck):
                 npts = nptsvals[j]
-                ratio=scinv_all[j,:]/scinv1000[:]
+                w=where1(scinv1000 > 0)
+                ratio = scinv_all[j,w]/scinv1000[w]
+                #ratio=scinv_all[j,:]/scinv1000[:]
 
-                plt.plot(scalc[j].zlvals, ratio, 
-                         color=colors[j], label='npts=%d' % npts)
+                p = Curve(scalc[j].zlvals[w], ratio,type='solid',color=colors[j])
+                p.label = 'npts: %d' % npts
 
-            leg = plt.legend()
-            leg.draw_frame(False)
-            plt.ylabel(r'$\langle \Sigma_{crit} \rangle / \langle \Sigma_{crit} \rangle_{1000}$')
-            plt.xlabel(r'$z_{lens}$')
-            plt.xlim(xlim)
-            plt.ylim([0.95,1.05])
+                plt_rat.add(p)
+                rat_plots.append(p)
 
-            stdout.write("done\n")
-            stdout.flush()
+            key = PlotKey(0.95,0.9,rat_plots,halign='right')
+            plt_rat.add(key)
 
-            plotfile=self.plot_file(i)
-            stdout.write("writing to file: %s  ..." % plotfile)
-            plt.savefig(plotfile)
-            stdout.write("done\n")
+            plt_rat.ylabel=r'$\langle \Sigma_{crit}^{-1} \rangle / \langle \Sigma_{crit}^{-1} \rangle_{1000}$'
+            plt_rat.xlabel=r'$z_{lens}$'
 
-        stdout.write("time npts=1000: %s\n" % time1000)
-        for j in range(numcheck):
+            tab[2,0] = plt_rat
+
+            if show:
+                tab.show()
+
+            plotfile=self.npts_plot_file(i, type)
+            print("writing to file:",plotfile)
+            if type == 'png':
+                tab.write_img(1000,1000,plotfile)
+            else:
+                tab.write_eps(plotfile)
+
+        print("time npts=1000:",time1000)
+        for j in xrange(numcheck):
             npts=nptsvals[j]
-            stdout.write("time npts=%s: %s\n" % (npts,times[j]))
+            print("time npts=%s: %s" % (npts,times[j]))
+
+    def plot_dir(self):
+        d=os.environ['LENSDIR']
+        d = path_join(d,'sigmacrit-tests')
+        return d
+
+    def npts_plot_file(self, index, type='png'):
+        dir=self.plot_dir()
+        f='sigmacrit-%s-test-npts-%06i.png' % (self.pzrun,index)
+        f=path_join(dir,f)
+        return f
+
 
 

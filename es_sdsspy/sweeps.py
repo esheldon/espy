@@ -386,6 +386,11 @@ class Proc():
 class ColumnSelector:
     """
 
+    This one is older, it doesn't split by bandpass and
+    it doesn't have all the columns.
+
+    See sweeps_collate.py for the new one
+
     Put all the objects into a columns database.  It will go under 
         ~/sweeps_reduce/{PHOTO_SWEEP}/{type}.cols
     If doing primary, it will be

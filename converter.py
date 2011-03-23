@@ -25,19 +25,21 @@ def convert(filename, type=None, dpi=None, crop=False, margins=None, noclobber=F
     command = ['converter']
 
     if type is not None:
-        command += ['-t %s' % type]
+        #command += ['-t %s' % type]
+        command += ['-t',type]
     if dpi is not None:
-        command += ['-d %s' % dpi]
+        #command += ['-d %s' % dpi]
+        command += ['-d', '%s' % dpi]
     if crop:
         command += ['-c']
     if margins is not None:
-        command += ['-m %s' % margins]
+        command += ['-m','%s' % margins]
     if noclobber:
         command += ['-n']
     if dosubdir:
         command += ['-s']
     if rotation is not None:
-        command += ['-r %s' % rotation]
+        command += ['-r','%s' % rotation]
     if verbose:
         command += ['-v']
     if debug:
