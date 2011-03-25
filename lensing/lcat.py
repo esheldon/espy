@@ -57,12 +57,11 @@ class DESMockLensCatalog(dict):
         output = self.output_array(data.size)
 
         print 'copying data'
-        output['zindex'] = numpy.arange(data.size,dtype='i4')
+        output['zindex'] = numpy.arange(data.size,dtype='i8')
         output['ra'] = data['ra']
         output['dec'] = data['dec']
         output['z'] = data['z']
         output['dc'] = -9999.0
-        output['padding'] = -9999
 
         lensing.files.lcat_write(output, file=fname)
 

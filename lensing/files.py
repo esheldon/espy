@@ -161,10 +161,10 @@ def lensout_read(file=None, run=None, split=None, silent=False):
         stdout.write('Opening lensout file: %s\n' % file)
     fobj = open(file,'r')
 
-    nlens = numpy.fromfile(fobj,dtype='i4',count=1)
+    nlens = numpy.fromfile(fobj,dtype='i8',count=1)
     if not silent:
         stdout.write('  nlens: %s\n' % nlens[0])
-    nbin  = numpy.fromfile(fobj,dtype='i4',count=1)
+    nbin  = numpy.fromfile(fobj,dtype='i8',count=1)
     if not silent:
         stdout.write('  nbin: %s\n' % nbin[0])
 
@@ -189,8 +189,8 @@ def lensout_read_byrun(run):
     for i in xrange(nsplit):
         file = sample_file('lensout', run, split=i)
         fobj = open(file,'r')
-        nlens = numpy.fromfile(fobj,dtype='i4',count=1)
-        nbin  = numpy.fromfile(fobj,dtype='i4',count=1)
+        nlens = numpy.fromfile(fobj,dtype='i8',count=1)
+        nbin  = numpy.fromfile(fobj,dtype='i8',count=1)
         fobj.close()
         ntot += nlens[0]
 
@@ -215,7 +215,7 @@ def lensout_read_byrun(run):
 def lensout_dtype(nbin):
 
     nbin = int(nbin)
-    dt=[('zindex','i4'),
+    dt=[('zindex','i8'),
         ('weight','f8'),
         ('npair','i8',nbin),
         ('rsum','f8',nbin),
@@ -244,7 +244,7 @@ def lcat_write(data, file=None, sample=None, split=None):
 
     fobj = open(file,'w')
 
-    narr =  numpy.array([data.size],dtype='i4')
+    narr =  numpy.array([data.size],dtype='i8')
     narr.tofile(fobj)
 
     data.tofile(fobj)
@@ -268,7 +268,7 @@ def lcat_read(file=None, sample=None, split=None):
     stdout.write('Reading lens cat: %s\n' % file)
     fobj = open(file,'r')
 
-    narr = numpy.fromfile(fobj, dtype='i4', count=1)
+    narr = numpy.fromfile(fobj, dtype='i8', count=1)
 
     stdout.write('Reading %d lenses\n' % narr[0])
     dt = lcat_dtype()
@@ -283,7 +283,7 @@ def lcat_dtype():
         ('dec','f8'),
         ('z','f8'),
         ('dc','f8'),
-        ('zindex','i4')]
+        ('zindex','i8')]
     return dt
 
 
@@ -308,7 +308,7 @@ def scat_write(data, file=None, sample=None):
 
     fobj = open(file,'w')
 
-    narr =  numpy.array([data.size],dtype='i4')
+    narr =  numpy.array([data.size],dtype='i8')
     narr.tofile(fobj)
 
     data.tofile(fobj)
@@ -324,7 +324,7 @@ def scat_read(file=None, sample=None, interp_scinv=False):
     stdout.write('Reading source_ztrue to: %s\n' % file)
     fobj = open(file,'r')
 
-    narr = numpy.fromfile(fobj, dtype='i4', count=1)
+    narr = numpy.fromfile(fobj, dtype='i8', count=1)
 
     stdout.write('Reading %d sources\n' % narr[0])
     dt = scat_dtype(interp_scinv=interp_scinv)

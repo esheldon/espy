@@ -1,0 +1,7 @@
+{
+    "sample":"02",
+    "catalog":"desmocks-2.13o-f8",
+    "sigmacrit_style":1,
+    "cosmo_sample":"01",
+    "comment":"same as 01 but hpixid is 8 byte"
+}
