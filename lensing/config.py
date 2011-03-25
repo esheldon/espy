@@ -83,17 +83,13 @@ class RunConfig(dict):
         print 'Writing config file:',config_file
         fobj = open(config_file,'w')
 
-        fobj.write('lens_file\n')
-        fobj.write(lfile+'\n')
-        fobj.write('source_file\n')
-        fobj.write(sfile+'\n')
-        fobj.write('output_file\n')
-        fobj.write(ofile+'\n')
+        fobj.write('lens_file %s\n' % lfile)
+        fobj.write('source_file %s\n' % sfile)
+        fobj.write('output_file %s\n' % ofile)
 
         for key in ['H0','omega_m','npts','nside',
                     'sigmacrit_style','nbin','rmin','rmax']:
-            fobj.write(key+'\n')
-            fobj.write('%s\n' % self[key])
+            fobj.write('%s %s\n' % (key,self[key]))
 
         fobj.close()
 

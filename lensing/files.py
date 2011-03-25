@@ -283,8 +283,7 @@ def lcat_dtype():
         ('dec','f8'),
         ('z','f8'),
         ('dc','f8'),
-        ('zindex','i4'),
-        ('padding','i4')]
+        ('zindex','i4')]
     return dt
 
 
@@ -343,8 +342,7 @@ def scat_dtype(interp_scinv=False, nz=20, old=False):
             ('g2','f8'),
             ('err','f8'),
             ('mean_scinv','f8',nz),
-            ('hpixid','i4'),
-            ('padding','i4')]
+            ('hpixid','i8')]
 
     else:
         if old:
@@ -364,8 +362,7 @@ def scat_dtype(interp_scinv=False, nz=20, old=False):
                 ('err','f8'),
                 ('z','f8'),
                 ('dc','f8'),
-                ('hpixid','i4'),
-                ('padding','i4')]
+                ('hpixid','i8')]
  
     return dt
 
