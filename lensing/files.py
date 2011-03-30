@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 from sys import stdout
 import lensing
@@ -37,11 +38,13 @@ def sample_dir(type,sample):
     d = path_join(d,type,sample)
     return d
 
-def sample_file(type,sample,split=None):
+def sample_file(type,sample,split=None, extra=None):
     d = sample_dir(type,sample)
     fname=path_join(d, '%s-%s' % (type,sample))
     if split is not None:
         fname += '-%03d' % split
+    if extra is not None:
+        fname += '-%s' % extra
     fname += finfo[type]['ext']
     return fname
 
@@ -292,78 +295,105 @@ def lcat_dtype():
 #
 
 
-def scat_write(data, file=None, sample=None):
-    if file is None and sample is None:
-        raise ValueError("usage: scat_write(data, file=, sample=)")
-    if file is None:
-        file = sample_file('scat',sample, split=split)
+def scat_write(sample, data):
+    file = sample_file('scat',sample)
+    conf = json_read('scat', sample)
+    style=conf['sigmacrit_style']
+    if style not in [1,2]:
+        raise ValueError("sigmacrit_style should be in [1,2]")
 
 
-    stdout.write("Writing binary source file:'%s'\n" % file)
+    if style == 2:
+        if 'minzl' not in conf or 'maxzl' not in conf or 'dzl' not in conf:
+            raise ValueError("You must have minzl,maxzl,dzl in config")
 
+        nzl = int( round( (conf['maxzl']-conf['minzl'])/conf['dzl'] ) )
+        if data['scinv'][0].size != nzl:
+            raise ValueError("unexpected nzl in scat:",data['scinv'][0].size,"vs",nzl)
+        zl = conf['minzl'] + dzl*numpy.arange(nzl,dtype='f8')
+
+
+    print("Writing binary source file:",file)
     d = os.path.dirname(file)
     if not os.path.exists(d):
         stdout.write("Making dir: '%s'\n" % d)
         os.makedirs(d)
-
     fobj = open(file,'w')
 
+
+    print("Writing style:",style,"to file")
+    stylewrite = numpy.array([style],dtype='i8')
+    stylewrite.tofile(fobj)
+
+    if style == 2:
+        nzlwrite = numpy.array([nzl],dtype='i8')
+        zlwrite = numpy.array(zl,dtype='f8')
+
+        print("Writing nzl:",nzl,"to file")
+        nzlwrite.tofile(fobj)
+        print("Writing zl to file")
+        zlwrite.tofile(fobj)
+
     narr =  numpy.array([data.size],dtype='i8')
+    print("Writing narr:",narr[0],"to file")
     narr.tofile(fobj)
 
     data.tofile(fobj)
 
     fobj.close()
 
-def scat_read(file=None, sample=None, interp_scinv=False):
-    if file is None and sample is None:
-        raise ValueError("usage: scat_write(data, file=, sample=)")
-    if file is None:
-        file = sample_file('scat',sample)
+def scat_read(sample):
 
-    stdout.write('Reading source_ztrue to: %s\n' % file)
+    file = sample_file('scat',sample)
+    conf = json_read('scat', sample)
+
+
+    stdout.write('Reading sources: %s\n' % file)
     fobj = open(file,'r')
+
+    style = numpy.fromfile(fobj, dtype='i8', count=1)[0]
+    print("Found sigmacrit_style",style)
+
+    if style == 2:
+        nzl = numpy.fromfile(fobj, dtype='i8', count=1)[0]
+        print("found nzl =",nzl)
+        print("reading zl values")
+        zl = numpy.fromfile(fobj, dtype='f8', count=nzl)
+    elif style == 1:
+        nzl=None
+    else:
+        raise ValueError("sigmacrit_style should be in [1,2]")
+    dt = scat_dtype(style, nzl=nzl)
 
     narr = numpy.fromfile(fobj, dtype='i8', count=1)
 
     stdout.write('Reading %d sources\n' % narr[0])
-    dt = scat_dtype(interp_scinv=interp_scinv)
 
     data = numpy.fromfile(fobj, dtype=dt, count=narr[0])
     fobj.close()
 
-    return data
-
-def scat_dtype(interp_scinv=False, nz=20, old=False):
-    if interp_scinv:
-        dt=[('ra','f8'),
-            ('dec','f8'),
-            ('g1','f8'),
-            ('g2','f8'),
-            ('err','f8'),
-            ('mean_scinv','f8',nz),
-            ('hpixid','i8')]
-
+    if style == 2:
+        return data, zl
     else:
-        if old:
-            dt=[('ra','f8'),
-                ('dec','f8'),
-                ('g1','f4'),
-                ('g2','f4'),
-                ('err','f4'),
-                ('hpixid','i4'),
-                ('z','f4'),
-                ('dc','f4')]
-        else:
-            dt=[('ra','f8'),
-                ('dec','f8'),
-                ('g1','f8'),
-                ('g2','f8'),
-                ('err','f8'),
-                ('z','f8'),
-                ('dc','f8'),
-                ('hpixid','i8')]
- 
+        return data
+
+def scat_dtype(sigmacrit_style, nzl=None):
+    dt=[('ra','f8'),
+        ('dec','f8'),
+        ('g1','f8'),
+        ('g2','f8'),
+        ('err','f8'),
+        ('hpixid','i8')]
+
+    if sigmacrit_style == 1:
+        dt += [('z','f8'), ('dc','f8')]
+    elif sigmacrit_style == 2:
+        if nzl == None:
+            raise ValueError('you must send nzl for sigmacrit_style of 2')
+        dt += [('scinv','f8',nzl)]
+    else:
+        raise ValueError("sigmacrit_style should be in [1,2]")
+
     return dt
 
 

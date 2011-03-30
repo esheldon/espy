@@ -72,7 +72,6 @@ class ScinvCalculator:
 
 
         print("Precomputing scinv on a grid of dzl: %0.3f nzl: %d npts: %d... " % (dzl,n_zlens,npts),end='')
-        # precompute
         self.scinv = numpy.zeros((n_zlens, npts),dtype='f8')
 
         c = cosmo.Cosmo(omega_m=omega_m, 
@@ -280,7 +279,7 @@ class Tester:
             scinv_key = PlotKey(0.95,0.9,scinv_plots,halign='right')
             plt_scinv.add(scinv_key)
 
-            plt_scinv.ylabel=r'$\langle \Sigma_{crit}^{-1}(z_{lens}) \rangle$'
+            plt_scinv.ylabel=r'$\langle \Sigma_{crit}^{-1}(z_{lens})\rangle$'
             plt_scinv.xlabel=r'$z_{lens}$'
             plt_scinv.yrange = [0,2.1e-4]
 

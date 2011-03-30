@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy
 import os,sys
 from sys import stdout
@@ -43,30 +44,42 @@ class DESMockSrcCatalog(dict):
         fname = lensing.files.sample_file('scat',self['sample'])
         return fname
     def read(self):
-        return lensing.files.scat_read(sample=self['sample'])
+        return lensing.files.scat_read(self['sample'])
+
+    def add_scinv(self):
+        if 'minzl' not in self or 'maxzl' not in self or 'dzl' not in self:
+            raise ValueError("You must have minzl,maxzl,dzl in config")
+
+        nzl = int( round( (self['maxzl']-self['minzl'])/self['dzl'] ) )
+        zl = self['minzl'] + dzl*numpy.arange(nzl,dtype='f8')
+
 
     def create_objshear_input(self):
         outfile = self.file()
 
         data = self.read_original()
 
-        print 'creating output array'
+        print('creating output array')
         output = self.output_array(data.size)
 
-        print 'copying data'
+        print('copying data')
         output['ra'] = data['ora']
         output['dec'] = data['odec']
 
-        print 'not changing sign of gamma1'
+        print('not changing sign of gamma1')
         output['g1'] = data['gamma1']
 
         output['g2'] = data['gamma2']
         output['err'] = 0.0
-        output['z'] = data['z']
-        output['dc'] = -9999
         output['hpixid'] = -9999
 
-        lensing.files.scat_write(output, file=outfile)
+        if self['sigmacrit_style'] == 1:
+            output['z'] = data['z']
+            output['dc'] = -9999
+        else:
+            output['scinv'] = data['scinv']
+
+        lensing.files.scat_write(self['sample'], output)
 
 
     def original_dir(self):
@@ -89,7 +102,7 @@ class DESMockSrcCatalog(dict):
         return data
 
     def output_array(self, num):
-        dt = lensing.files.scat_dtype()
+        dt = lensing.files.scat_dtype(self['sigmacrit_style'])
         output = numpy.zeros(num, dtype=dt)
         return output
 
