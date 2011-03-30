@@ -29,7 +29,8 @@ class ScinvCalculator:
 
         The dzl,zlmin,zlmax are used to create a grid in zlens, and it is on
         this grid that the final mean inverse critical density will be
-        computed.
+        computed.  It seems a dzl of 0.015 works pretty well.  This results
+        in 19 lens z vals between 0.02 and 0.30
 
         usage:
             # initialize for 
