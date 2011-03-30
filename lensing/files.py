@@ -296,6 +296,7 @@ def lcat_dtype():
 
 
 def scat_write(sample, data):
+    from . import sigmacrit
     file = sample_file('scat',sample)
     conf = json_read('scat', sample)
     style=conf['sigmacrit_style']
@@ -304,14 +305,11 @@ def scat_write(sample, data):
 
 
     if style == 2:
-        if 'minzl' not in conf or 'maxzl' not in conf or 'dzl' not in conf:
-            raise ValueError("You must have minzl,maxzl,dzl in config")
+        if 'zlmin' not in conf or 'zlmax' not in conf or 'dzl' not in conf:
+            raise ValueError("You must have zlmin,zlmax,dzl in config")
 
-        nzl = int( round( (conf['maxzl']-conf['minzl'])/conf['dzl'] ) )
-        if data['scinv'][0].size != nzl:
-            raise ValueError("unexpected nzl in scat:",data['scinv'][0].size,"vs",nzl)
-        zl = conf['minzl'] + dzl*numpy.arange(nzl,dtype='f8')
-
+        zlvals=sigmacrit.make_zlvals(conf['dzl'], conf['zlmin'], conf['zlmax'])
+        nzl = zlvals.size
 
     print("Writing binary source file:",file)
     d = os.path.dirname(file)
@@ -327,7 +325,7 @@ def scat_write(sample, data):
 
     if style == 2:
         nzlwrite = numpy.array([nzl],dtype='i8')
-        zlwrite = numpy.array(zl,dtype='f8')
+        zlwrite = numpy.array(zlvals,dtype='f8',copy=False)
 
         print("Writing nzl:",nzl,"to file")
         nzlwrite.tofile(fobj)

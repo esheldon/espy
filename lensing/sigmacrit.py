@@ -8,6 +8,23 @@ from esutil.numpy_util import where1
 import zphot
 from math import pi as PI
 
+def make_zlvals(dzl, zlmin, zlmax):
+    """
+
+    Given the input, generate the zlvals for the <scinv> as a function of zl.
+    Make sure the last point is >= zlmax
+
+    """
+
+    n_zlens = int( (zlmax-zlmin)/dzl ) + 1
+    while True:
+        zlvals = zlmin + dzl*numpy.arange(n_zlens, dtype='f8')
+        if zlvals[-1] >= zlmax:
+            return zlvals
+        else:
+            n_zlens += 1
+
+
 class ScinvCalculator:
     def __init__(self, zsvals, dzl, zlmin, zlmax,
                  npts=100, 
@@ -53,13 +70,8 @@ class ScinvCalculator:
 
         self.npts = npts
 
-
-        n_zlens = int( round( (zlmax-zlmin)/dzl ) )
-
-        self.n_zlens = n_zlens
-
-        zlvals = numpy.arange(n_zlens, dtype='f8')
-        self.zlvals = esutil.numpy_util.arrscl(zlvals, zlmin, zlmax)
+        self.zlvals = make_zlvals(dzl, zlmin, zlmax)
+        self.n_zlens = self.zlvals.size
 
         # now gauss-legendre weights and x vals used for integration
         # over zs
@@ -71,15 +83,16 @@ class ScinvCalculator:
         self.zsvals_int = self.xii*self.f1 + self.f2
 
 
-        print("Precomputing scinv on a grid of dzl: %0.3f nzl: %d npts: %d... " % (dzl,n_zlens,npts),end='')
-        self.scinv = numpy.zeros((n_zlens, npts),dtype='f8')
+        print("Precomputing scinv on a grid of dzl: %0.3f nzl: %d npts: %d... " % \
+              (dzl,self.n_zlens,npts),end='')
+        self.scinv = numpy.zeros((self.n_zlens, npts),dtype='f8')
 
         c = cosmo.Cosmo(omega_m=omega_m, 
                         omega_l=omega_l, 
                         omega_k=omega_k, 
                         h=h, flat=flat)
 
-        for i in range(n_zlens):
+        for i in range(self.n_zlens):
             zl = self.zlvals[i]
             self.scinv[i,:] = c.sigmacritinv(zl,self.zsvals_int)
         print("done")

@@ -3,7 +3,7 @@ import numpy
 import os,sys
 from sys import stdout
 
-import esutil
+import esutil as eu
 from esutil.ostools import path_join
 
 import lensing
@@ -47,20 +47,88 @@ class DESMockSrcCatalog(dict):
         return lensing.files.scat_read(self['sample'])
 
     def add_scinv(self):
-        if 'minzl' not in self or 'maxzl' not in self or 'dzl' not in self:
-            raise ValueError("You must have minzl,maxzl,dzl in config")
+        from . import sigmacrit
+        import zphot
+        if 'zlmin' not in self or 'zlmax' not in self or 'dzl' not in self:
+            raise ValueError("You must have zlmin,zlmax,dzl in config")
 
-        nzl = int( round( (self['maxzl']-self['minzl'])/self['dzl'] ) )
-        zl = self['minzl'] + dzl*numpy.arange(nzl,dtype='f8')
 
+        """
+        note we don't really need this because we have perfect zs, but this
+        is what you would do with a real sample
+
+        wo = zphot.WeightedOutputs()
+        z_file = wo.z_file(self['pzrun'], chunk=0)
+        zscols = zphot.weighting.read_z(z_file)
+        zsvals = (zscols['zmax']+zscols['zmin'])/2.0
+        
+        sc = sigmacrit.ScinvCalculator(zsvals, 
+                                       self['dzl'],
+                                       self['zlmin'],
+                                       self['zlmax'])
+        """
+
+        # ok, now read the original file and add to it
+        # the man scinv as a function of zlens
+        # for now just using exact z
+
+        zlvals = sigmacrit.make_zlvals(self['dzl'],
+                                       self['zlmin'],
+                                       self['zlmax'])
+        n_zlens=zlvals.size
+        
+        data = self.read_original()
+        dt=data.dtype.descr
+        new_dtype = dt + [('scinv','f8',n_zlens)]
+        out = numpy.zeros(data.size, dtype=new_dtype)
+        eu.numpy_util.copy_fields(data, out)
+
+
+        # actually not using sc since redshifts are exact
+        cosmo=self['cosmo']
+        c = eu.cosmology.Cosmo(omega_m=cosmo['omega_m'], h=cosmo['H0']/100.)
+
+        # units are Mpc
+        print("pre-calculating dcl_vals")
+        #dlvals = c.Da(0.0, zlvals)
+        dcl_vals = c.Dc(0.0, zlvals)
+        print("pre-calculating dcs_vals")
+        #dsvals = c.Da(0.0, data['z'])
+        dcs_vals = c.Dc(0.0, data['z'])
+
+        print('adding scinv to each')
+
+        for i in xrange(data.size):
+            if ((i+1) % 1000) == 0:
+                print("%s/%s  %s%%" % (i+1,data.size,float(i+1)/data.size*100.))
+
+            zs = data['z'][i]
+            dcs = dcs_vals[i]
+
+            w,=numpy.where(zlvals <= zs)
+
+            if w.size > 0:
+                out['scinv'][i,w] = \
+                    dcl_vals[w]/(1+zlvals[w])*(1.0-dcl_vals[w]/dcs)*c._four_pi_G_over_c_squared
+
+        outf=self.original_file(scinv=True)
+        print("writing scinv file:",outf)
+        h={'zlvals':zlvals}
+        eu.io.write(outf, out, header=h)
 
     def create_objshear_input(self):
         outfile = self.file()
 
-        data = self.read_original()
+        print("sigmacrit_style:",self['sigmacrit_style'])
+        if self['sigmacrit_style'] == 2:
+            data = self.read_original(scinv=True)
+            print('creating output array')
+            output = self.output_array(data.size, nzl=data['scinv'][0,:].size)
+        else:
+            data = self.read_original()
+            print('creating output array')
+            output = self.output_array(data.size)
 
-        print('creating output array')
-        output = self.output_array(data.size)
 
         print('copying data')
         output['ra'] = data['ora']
@@ -87,22 +155,24 @@ class DESMockSrcCatalog(dict):
         d = path_join(catdir, self['catalog'])
         return d
 
-    def original_file(self):
+    def original_file(self, scinv=False):
         d = self.original_dir()
         f='%s-sources.rec' % self['catalog']
+        if scinv:
+            f=f.replace('sources','sources-scinv')
         infile = path_join(d, f)
         return infile
 
-    def read_original(self):
-        infile = self.original_file()
+    def read_original(self, scinv=False):
+        infile = self.original_file(scinv=scinv)
         if not os.path.exists(infile):
             raise ValueError("File not found: %s\n" % infile)
 
-        data = esutil.io.read(infile, lower=True, verbose=True)
+        data = eu.io.read(infile, lower=True, verbose=True)
         return data
 
-    def output_array(self, num):
-        dt = lensing.files.scat_dtype(self['sigmacrit_style'])
+    def output_array(self, num, nzl=None):
+        dt = lensing.files.scat_dtype(self['sigmacrit_style'], nzl=nzl)
         output = numpy.zeros(num, dtype=dt)
         return output
 

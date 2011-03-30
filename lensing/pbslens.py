@@ -4,13 +4,14 @@ from sys import stdout
 import lensing
 import pbs
 
-def write_pbs(run):
-    rp = RunPbs(run)
+def write_pbs(run, nthreads=2):
+    rp = RunPbs(run, nthreads=nthreads)
     rp.write_pbs()
 
 
 class RunPbs:
-    def __init__(self, run):
+    def __init__(self, run, nthreads=2):
+        self.nthreads=nthreads
         #self.conf = lensing.files.json_read(run)
         self.conf = lensing.config.RunConfig(run)
 
@@ -39,7 +40,7 @@ class RunPbs:
 
         setups=['source /global/data/products/eups/bin/setups.sh',
                 'setup objshear -r ~/exports/objshear-work']
-        command='time -p OMP_NUM_THREADS=2 objshear %s' % conf_file
+        command='time -p OMP_NUM_THREADS=%s objshear %s' % (self.nthreads,conf_file)
 
         stdout.write('Writing pbs file: %s\n' % pbsf)
         p = pbs.PBS(pbsf,command,setups=setups,job_name=jobname,ppn=2)
