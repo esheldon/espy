@@ -7,5 +7,5 @@
     "zlmax":0.6,
     "dzl":0.015,
     "cosmo_sample":"01",
-    "comment":"this version has man scinv.  delta zl = 0.015 gives nzl=39. Note pzrun is just token here since we have real z"
+    "comment":"this version has mean scinv.  delta zl = 0.015 gives nzl=39. Note pzrun is just token here since we have real z"
 }
