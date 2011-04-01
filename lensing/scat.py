@@ -92,10 +92,8 @@ class DESMockSrcCatalog(dict):
 
         # units are Mpc
         print("pre-calculating dcl_vals")
-        #dlvals = c.Da(0.0, zlvals)
         dcl_vals = c.Dc(0.0, zlvals)
         print("pre-calculating dcs_vals")
-        #dsvals = c.Da(0.0, data['z'])
         dcs_vals = c.Dc(0.0, data['z'])
 
         print('adding scinv to each')
