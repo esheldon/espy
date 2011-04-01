@@ -1,4 +1,7 @@
 # vim: set filetype=python :
+import distutils.sysconfig
+import os
+
 default_version='1.6.6'
 url="""
 'http://ftp.heanet.ie/mirrors/sourceforge/b/project/bi/biggles/biggles/%s/python2-biggles-%s.tar.gz' % (self.version,self.version)"""
@@ -8,18 +11,11 @@ source_type = 'tar'
 # this will use the install_dir as prefix in configure
 install_method = 'python-setup'
 
-# create the ups directory after installation
-import platform
-pyvers=platform.python_version_tuple()
-# grab major version.  We'll have to add a path for both lib and lib64 
-# just in case
-# wierd difference on mac:
-if not isinstance(pyvers[0], str):
-    pyvers = [str(v) for v in pyvers]
-pyvers='.'.join(pyvers[0:2])
+main_libdir=distutils.sysconfig.get_python_lib()
+pylib_install_subdir = main_libdir.replace(distutils.sysconfig.PREFIX+os.sep,'')
+
 create_ups="""
 setupOptional("numpy")
 setupOptional("plotutils")
-envPrepend(PYTHONPATH,${PRODUCT_DIR}/lib/python%s/site-packages)
-envPrepend(PYTHONPATH,${PRODUCT_DIR}/lib64/python%s/site-packages)
-""" % (pyvers,pyvers)
+envPrepend(PYTHONPATH,${PRODUCT_DIR}/%s)
+""" % pylib_install_subdir 
