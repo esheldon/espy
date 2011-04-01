@@ -8,6 +8,8 @@ from esutil.ostools import path_join
 
 import lensing
 
+import cosmology
+
 def create_input(sample):
     """
         create_input('01')
@@ -86,7 +88,7 @@ class DESMockSrcCatalog(dict):
 
         # actually not using sc since redshifts are exact
         cosmo=self['cosmo']
-        c = eu.cosmology.Cosmo(omega_m=cosmo['omega_m'], h=cosmo['H0']/100.)
+        c = cosmology.Cosmo(omega_m=cosmo['omega_m'], H0=cosmo['H0'])
 
         # units are Mpc
         print("pre-calculating dcl_vals")
