@@ -254,7 +254,7 @@ def lcat_write(data, file=None, sample=None, split=None):
 
     fobj.close()
 
-def lcat_read(file=None, sample=None, split=None):
+def lcat_read(sample=None, file=None, split=None):
     """
     import lensing
     d = lcat_read(file='somefile')
@@ -266,7 +266,7 @@ def lcat_read(file=None, sample=None, split=None):
         raise ValueError("usage: lcat_write(data, file=, sample=)")
 
     if file is None:
-        file = sample_file('lcat',sample, split=split)
+        file = sample_file('lcat', sample, split=split)
 
     stdout.write('Reading lens cat: %s\n' % file)
     fobj = open(file,'r')
@@ -340,10 +340,13 @@ def scat_write(sample, data):
 
     fobj.close()
 
-def scat_read(sample):
+def scat_read(sample=None, file=None):
 
-    file = sample_file('scat',sample)
-    conf = json_read('scat', sample)
+    if file is None and sample is None:
+        raise ValueError("usage: scat_write(data, file=, sample=)")
+    
+    if file is None:
+        file = sample_file('scat',sample)
 
 
     stdout.write('Reading sources: %s\n' % file)

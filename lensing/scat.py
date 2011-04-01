@@ -9,6 +9,7 @@ from esutil.ostools import path_join
 import lensing
 
 import cosmology
+import copy
 
 def create_input(sample):
     """
@@ -90,12 +91,6 @@ class DESMockSrcCatalog(dict):
         cosmo=self['cosmo']
         c = cosmology.Cosmo(omega_m=cosmo['omega_m'], H0=cosmo['H0'])
 
-        # units are Mpc
-        print("pre-calculating dcl_vals")
-        dcl_vals = c.Dc(0.0, zlvals)
-        print("pre-calculating dcs_vals")
-        dcs_vals = c.Dc(0.0, data['z'])
-
         print('adding scinv to each')
 
         for i in xrange(data.size):
@@ -103,17 +98,14 @@ class DESMockSrcCatalog(dict):
                 print("%s/%s  %s%%" % (i+1,data.size,float(i+1)/data.size*100.))
 
             zs = data['z'][i]
-            dcs = dcs_vals[i]
+            out['scinv'][i,:] = c.sigmacritinv(zlvals, zs)
 
-            w,=numpy.where(zlvals <= zs)
-
-            if w.size > 0:
-                out['scinv'][i,w] = \
-                    dcl_vals[w]/(1+zlvals[w])*(1.0-dcl_vals[w]/dcs)*c._four_pi_G_over_c_squared
+        h=copy.deepcopy(cosmo)
+        h['zlvals'] = zlvals
 
         outf=self.original_file(scinv=True)
         print("writing scinv file:",outf)
-        h={'zlvals':zlvals}
+
         eu.io.write(outf, out, header=h)
 
     def create_objshear_input(self):
