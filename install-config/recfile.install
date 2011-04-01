@@ -1,5 +1,8 @@
 # vim: set filetype=python :
 
+import distutils.sysconfig
+import os
+
 default_version='v0.40'
 
 source_type = 'tar'
@@ -12,15 +15,10 @@ url="""
 install_method = 'python-setup'
 build_command = 'python setup.py with_ups build'
 
+main_libdir=distutils.sysconfig.get_python_lib()
+pylib_install_subdir = main_libdir.replace(distutils.sysconfig.PREFIX+os.sep,'')
 
-# create the ups directory after installation
-import platform
-pyvers=platform.python_version_tuple()
-# grab major version.  We'll have to add a path for both lib and lib64 
-# just in case
-pyvers='.'.join(pyvers[0:2])
 create_ups="""
 setupOptional("numpy")
-envPrepend(PYTHONPATH,${PRODUCT_DIR}/lib/python%s/site-packages)
-envPrepend(PYTHONPATH,${PRODUCT_DIR}/lib64/python%s/site-packages)
-""" % (pyvers,pyvers)
+envPrepend(PYTHONPATH,${PRODUCT_DIR}/%s)
+""" % pylib_install_subdir 

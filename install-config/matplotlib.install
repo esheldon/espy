@@ -1,6 +1,10 @@
 # vim: set filetype=python :
 # they messed up their naming conventions, making it hard to do this.  So
 # I'm mirroring it on our system.
+
+import distutils.sysconfig
+import os
+
 default_version='0.99.0'
 url="""
 'http://www.cosmo.bnl.gov/www/esheldon/code/python/matplotlib-%s.tar.gz' % (self.version)"""
@@ -9,20 +13,10 @@ source_type = 'tar'
 # this will use the install_dir as prefix in configure
 install_method = 'python-setup'
 
-# create the ups directory after installation
-import platform
-pyvers=platform.python_version_tuple()
-# grab major version.  We'll have to add a path for both lib and lib64 
-# just in case
-
-# wierd difference on mac:
-if not isinstance(pyvers[0], str):
-    pyvers = [str(v) for v in pyvers]
-
-pyvers='.'.join(pyvers[0:2])
+main_libdir=distutils.sysconfig.get_python_lib()
+pylib_install_subdir = main_libdir.replace(distutils.sysconfig.PREFIX+os.sep,'')
 
 create_ups="""
 setupOptional("numpy")
-envPrepend(PYTHONPATH,${PRODUCT_DIR}/lib/python%s/site-packages)
-envPrepend(PYTHONPATH,${PRODUCT_DIR}/lib64/python%s/site-packages)
-""" % (pyvers,pyvers)
+envPrepend(PYTHONPATH,${PRODUCT_DIR}/%s)
+""" % pylib_install_subdir 
