@@ -6,7 +6,7 @@ class FITS(dict):
         self.fobj = open(filename, 'r')
         self.hdus = []
 
-        self.hdus[0] = self.read_header(0)
+        self.hdus.append(self.read_header(0))
 
     def read_header(self, ext):
         if ext != 0:
