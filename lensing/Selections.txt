@@ -12,8 +12,13 @@ object1_flags           Y              Y
 objc bdb                Y              Y 
 binned ri               Y              Y
 calib                   Y              N
-cmodel r               22          21.5/21.8
-model all               N           [15,29]
+cmodelmag r            22          21.5/21.8
+modelmag all            N           [15,29]
+
+
+Cutting on calib was a mistake, but it doesn't really matter that much since we
+don't care about completeness.  It makes a *little* difference for canceling
+some systematics (e.g. 90 degree pairs), but it shouldn't be dominant.
 
 
 in the regauss sweep code:

@@ -7,12 +7,13 @@ get_method = 'svn-export'
 source_type = 'svn'
 default_version='v0.4.0'
 install_method = 'python-setup'
+build_args = '--fcompiler=gnu95'
 
-main_libdir=distutils.sysconfig.get_python_lib()
-pylib_install_subdir = main_libdir.replace(distutils.sysconfig.PREFIX+os.sep,'')
+#main_libdir=distutils.sysconfig.get_python_lib()
+#pylib_install_subdir = main_libdir.replace(distutils.sysconfig.PREFIX+os.sep,'')
 
-create_ups="""
-setupOptional("cjson")
-setupOptional("numpy")
-envPrepend(PYTHONPATH,${PRODUCT_DIR}/%s)
-""" % pylib_install_subdir 
+#create_ups="""
+#setupOptional("cjson")
+#setupOptional("numpy")
+#envPrepend(PYTHONPATH,${PRODUCT_DIR}/%s)
+#""" % pylib_install_subdir 
