@@ -1,6 +1,7 @@
 """
 See docs in weighting.py
 """
+from __future__ import print_function
 import os
 from sys import stdout,stderr
 import pprint
@@ -133,6 +134,7 @@ Carlos
         dt.append( ('modelmag_dered_err','f4',5) )
         dt.append( ('cmodelmag_dered','f4',5) )
         dt.append( ('cmodelmag_dered_err','f4',5) )
+        dt.append( ('psf_fwhm','f4',5) )
 
         if 'primus' in type:
             dt.append( ('z','f4') )
@@ -181,6 +183,8 @@ Carlos
             cmag = zcs.cols['cmodelmag_dered'][indices]
             cmagerr = zcs.cols['cmodelmag_dered_err'][indices]
 
+            psf_fwhm = zcs.cols['psf_fwhm'][indices]
+
             rmin = zcs.conf['cmodel_rmin']
             rmax = zcs.conf['cmodel_rmax']
 
@@ -219,7 +223,7 @@ Carlos
                                       htmrev2=htmrev)
 
             mphot_u = numpy.unique1d(mphot)
-            print '%s/%s are unique' % (mphot_u.size,mphot.size)
+            print('%s/%s are unique' % (mphot_u.size,mphot.size))
             stdout.write("Matched: %s/%s\n" % (mspec.size,spec.size))
             dt = self.matched_dtype(spec.dtype.descr, type)
             output = numpy.zeros(mspec.size,dtype=dt)
@@ -241,6 +245,7 @@ Carlos
             output['modelmag_dered_err']  = magerr[mphot]
             output['cmodelmag_dered']     = cmag[mphot]
             output['cmodelmag_dered_err'] = cmagerr[mphot]
+            output['psf_fwhm'] = psf_fwhm[mphot]
 
             # sanity check
             if not self.no_photo_cuts:
@@ -324,11 +329,13 @@ Carlos
         dir = self.dir_matched
         return path_join(dir, 'plots')
 
-    def plotfile(self, type):
+    def plotfile(self, type, extra=None):
         dir = self.plotdir()
         fname = self.fname_matched(type)
         fname = os.path.basename(fname)
         fname = fname.replace('.rec','.eps')
+        if extra is not None:
+            fname = fname.replace('.eps','-'+extra+'.eps')
         fname = path_join(dir,fname)
         return fname
 
@@ -369,5 +376,102 @@ Carlos
         stdout.write("Writing eps file: %s\n" % psfile)
         plt.write_eps(psfile)
         converter.convert(psfile, dpi=120, verbose=True)
+
+
+    def plot_seeing(self):
+        import pcolors
+        import es_sdsspy
+        import converter
+
+        binsize=0.025
+
+
+        plt=biggles.FramedPlot()
+        ntype=len(self.types)
+        colors=pcolors.rainbow(ntype, 'hex')
+
+        allhist=[]
+        
+        print("Opening columns:")
+        collator = es_sdsspy.sweeps_collate.Collator()
+        c = collator.open_columns()
+        print("  dir:",c.dir)
+        print("Reading all psf_fwhm")
+        print("  checking window")
+        inbasic = c['inbasic'][:]
+        psf_fwhm = c['psf_fwhm_r'][:]
+        mag = c['cmodelmag_dered_r'][:]
+        print("  psf_fwhm_r shape:",psf_fwhm.shape)
+
+        w=where1((inbasic == 1) & (mag < 21.8))
+        print("  keeping: %s/%s" %(w.size,c['inbasic'].size))
+        psf_fwhm = psf_fwhm[w]
+        print("median seeing:",numpy.median(psf_fwhm))
+        
+        b=eu.stat.Binner(psf_fwhm)
+        xmin=0.6
+        xmax=1.8
+        b.dohist(binsize=binsize, min=xmin, max=xmax)
+        b.calc_stats()
+        h = b['hist']/float(b['hist'].sum())
+        htot = h.copy()
+        x = b['center']
+
+        print("  histogramming")
+        ph = biggles.Histogram(h, x0=b['low'][0], binsize=binsize, width=2)
+        ph.label = 'All BOSS'
+
+        allhist.append(ph)
+        plt.add(ph)
+
+        fill=biggles.FillBelow(x, h, color='black')
+        plt.add(fill)
+
+
+        for i in xrange(ntype):
+            type = self.types[i]
+            t= self.read_matched(type)
+
+            b=eu.stat.Binner(t['psf_fwhm'][:,2])
+            b.dohist(binsize=binsize, min=xmin, max=xmax)
+            b.calc_stats()
+            h = b['hist']/float(b['hist'].sum())
+            x = b['center']
+
+            htot += h
+
+            if type.find('primus') != -1:
+                width=2
+            else:
+                width=1
+            ph = biggles.Histogram(h, x0=b['low'][0], binsize=binsize, color=colors[i], width=width)
+            ph.label = type
+
+            allhist.append(ph)
+            plt.add(ph)
+
+        htot = htot/float(htot.sum())
+        ph = biggles.Histogram(htot, x0=b['low'][0], binsize=binsize, width=3, color='magenta')
+        ph.label = 'All Matches'
+
+        allhist.append(ph)
+        plt.add(ph)
+
+
+
+
+        key=biggles.PlotKey(0.1, 0.95, allhist)
+
+        plt.add(key)
+
+        plt.xrange = [0.6, 1.8]
+        plt.yrange = [0.0, 0.45]
+        plt.xlabel = 'seeing'
+        plt.show()
+
+        epsfile=self.plotfile('all',extra='seeing')
+        print("Writing eps file:",epsfile)
+        plt.write_eps(epsfile)
+        converter.convert(epsfile, dpi=120, verbose=True)
 
 
