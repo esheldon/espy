@@ -47,7 +47,7 @@ sample/run tree:
         # has cuts on training set
         |-> train_sample: 08 
             |-> wrun: 08
-                |-> pzrun: 10
+                |-> pzrun: 10 (never ran)
 
     photo_sample: 03
         # same as 09 (with primus) but photo sample 03, r < 21.8
