@@ -311,6 +311,10 @@ def scat_write(sample, data):
         zlvals=sigmacrit.make_zlvals(conf['dzl'], conf['zlmin'], conf['zlmax'])
         nzl = zlvals.size
 
+        data_nzl = data['scinv'].shape[1]
+        if nzl != data_nzl:
+            raise ValueError("Calculated nzl of %d but data has nzl of %d" % (nzl,data_nzl))
+
     print("Writing binary source file:",file)
     d = os.path.dirname(file)
     if not os.path.exists(d):

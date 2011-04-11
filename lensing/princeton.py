@@ -1,6 +1,8 @@
 """
 
-Testing princeton outputs. 
+Testing princeton outputs using Tester class.  
+
+Also TestRot compares my rotation angles.
 
 Also some stuff to compare with mine, but not sure how useful it is
 
@@ -508,4 +510,5 @@ class Comparator:
         data = eu.io.read(files, combine=True)
         outfile=self.match_file('all')
         eu.io.write(outfile,data,verbose=True)
+
 

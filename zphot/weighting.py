@@ -1371,3 +1371,71 @@ def get_frac_lowz(wrun):
 
         fraclow = lowsum/totsum
         stdout.write("Fraction with z < %s: %s\n" % (zlow, fraclow))
+
+
+def pofz_correction(pzrun):
+    """
+    Get the "correction", the ratio of recovered weighted
+    N(z) to the summed p(z)
+    """
+    from biggles import FramedPlot, Histogram, PlotKey
+    pzconf = zphot.cascade_config(pzrun)
+
+    wo = zphot.weighting.WeightedOutputs()
+
+    pofz_file = wo.zhist_file(pzrun)
+    if not os.path.exists(pofz_file):
+        print("generating overall pofz summed hist")
+        wo.make_pofz_hist(pzrun)
+    sumpofz_struct = eu.io.read(pofz_file)
+
+    minz = sumpofz_struct['zmin'][0]
+    maxz = sumpofz_struct['zmax'][-1]
+    nbin = sumpofz_struct['zmin'].size
+
+    iteration=2
+    wtrain = wo.read_weights(pzconf['weights']['wrun'], iteration)
+
+    bs = eu.stat.Binner(wtrain['z'], weights=wtrain['weight'])
+
+    bs.dohist(nbin=nbin, min=minz, max=maxz)
+    bs.calc_stats()
+
+    if bs['whist'].size != nbin:
+        raise ValueError("whist not same size as summed pofz: %s/%s" % (bs['whist'].size,nbin))
+
+
+
+
+
+    print("overall pofz")
+    eu.numpy_util.aprint(sumpofz_struct, format='%15.8f')
+    print("summed N(z)")
+    eu.misc.colprint(bs['low'], bs['high'], bs['whist'], format='%15.8f')
+
+
+    binsize = bs['high'][0] - bs['low'][0]
+    zmin = bs['low'][0]
+    sumpofz = sumpofz_struct['pofz']
+    wnofz = bs['whist']
+
+    sumpofz_h = Histogram(sumpofz/sumpofz.sum(), x0=zmin, binsize=binsize, color='red')
+    sumpofz_h.label = 'summed p(z)'
+    wnofz_h = Histogram(wnofz/wnofz.sum(), x0=zmin, binsize=binsize, color='blue')
+    wnofz_h.label = 'Weighted N(z)'
+
+    key = PlotKey(0.6,0.9, [sumpofz_h, wnofz_h])
+    plt=FramedPlot()
+    plt.add(sumpofz_h, wnofz_h, key)
+    plt.show()
+
+
+    sumpofz_norm = sumpofz/sumpofz.sum()
+    wnofz_norm = wnofz/wnofz.sum()
+
+    corr = wnofz_norm/sumpofz_norm
+    eu.misc.colprint(corr)
+    print("correction factor")
+
+    return corr
+

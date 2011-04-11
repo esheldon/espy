@@ -5,7 +5,16 @@ classes:
     RegaussSweep
     RegaussAtlas
     SweepCache
-    Collator
+
+    Collator: 
+        - Collate into columns
+
+    Zphot:
+        - add a match index into photoz column databases
+        - add interpolated inverse critical density curves
+
+    match_zphot: Match to the photoz outputs and add a column with this
+        match index to the columns database.
 
     RunTester
     Tester
@@ -32,13 +41,63 @@ import fimage
 from fimage.conversions import mom2fwhm
 import admom
 
-def open_columns(procrun):
-    coll = Collator(procrun)
+import zphot
+
+def open_columns(procrun, sweeptype='gal'):
+    coll = Collator(procrun, sweeptype)
     return coll.open_columns()
 
-def output_dir(procrun):
-    coll = Collator(procrun)
+def output_dir(procrun, sweeptype='gal'):
+    coll = Collator(procrun, sweeptype)
     return coll.output_dir()
+
+
+def zphot_match(procrun, pzrun, sweeptype='gal'):
+    '''
+    add a match index into photoz column databases
+    '''
+
+    print("opening regauss columns for procrun:",procrun)
+    rgcols = open_columns(procrun, sweeptype)
+    print("  #rows:",rgcols['photoid'].size)
+    print("opening zphot columns for pzrun:",pzrun)
+    pzcols = zphot.weighting.open_pofz_columns(pzrun)
+    print("  #rows:",pzcols['photoid'].size)
+
+
+
+    print("reading num from regauss")
+    num = pzcols['num'][:]
+
+    print("reading photoid from regauss")
+    rg_photoid = rgcols['photoid'][:]
+    print("reading photoid from zphot")
+    pz_photoid = pzcols['photoid'][:]
+
+    print("matching")
+    mrg, mpz =  eu.numpy_util.match(rg_photoid, pz_photoid)
+    print("  matched:",mrg.size)
+
+
+    print("now determining which zphot are recoverable")
+    w_recover = where1(num[mpz] > 0)
+    print("  found:",w_recover.size)
+
+    mrg = mrg[w_recover]
+    mpz = mpz[w_recover]
+
+    matches = numpy.empty(rg_photoid.size, dtype='i4')
+    matches[:] = -1
+
+    # must explicitly convert to i4
+    matches[mrg] = numpy.array(mpz, dtype='i4')
+
+    match_column = 'match_zphot%s' % pzrun
+    print("Adding zphot match column:",match_column)
+    rgcols.write_column(match_column, matches, create=True)
+    print("Creating index")
+    rgcols[match_column].create_index()
+
 
 def create_pbs(type, procrun):
     import pbs
@@ -613,7 +672,6 @@ class SweepCache:
                                **keys)
             self.key = key
             self.data = data
-
 
 
 class Collator:

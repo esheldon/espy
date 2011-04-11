@@ -15,10 +15,16 @@ calib                   Y              N
 cmodelmag r            22          21.5/21.8
 modelmag all            N           [15,29]
 
+For photoz 21.5 use pzrun 11, 21.8 use pzrun 12.  The column directories are
+in, for example, 
+    $PHOTOZ_DIR/weighting/dr8/pofz-12.cols 
 
 Cutting on calib was a mistake, but it doesn't really matter that much since we
 don't care about completeness.  It makes a *little* difference for canceling
 some systematics (e.g. 90 degree pairs), but it shouldn't be dominant.
+
+The regauss columns directories are in, for example
+    $SWEEP_REDUCE/regauss/04.cols
 
 
 in the regauss sweep code:
@@ -100,6 +106,10 @@ in the regauss sweep code:
 
 In the zphot selection code
 
+    resolve
+
+    tycho mask
+
     binned_logic = sdssgal.binned_logic_ri(flags)
             binned1 = sdsspy.flagval('object1','binned1')
             binned2 = sdsspy.flagval('object1','binned2')
@@ -178,7 +188,6 @@ In the zphot selection code
         logic = logic & cmag_logic
 
 
-    tycho mask
 
 
 

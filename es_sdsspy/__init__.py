@@ -34,62 +34,25 @@
 
 import sys
 
-try:
-    from . import select
-except:
-    sys.stderr.write('sdsspy.select not loaded\n')
+from . import rotation
+from . import select
+from . import transform
+from . import files
+from . import window
+from . import sweeps
+from . import sweeps_collate
+import yanny
 
-try:
-    from . import transform
-except:
-    sys.stderr.write('sdsspy.transform not loaded\n')
-
-try:
-    from . import files
-except:
-    sys.stderr.write('sdsspy.files module not loaded\n')
-
-try:
-    from . import window
-except:
-    sys.stderr.write('sdsspy.window module not loaded\n')
-
-try:
-    from . import sweeps
-except:
-    sys.stderr.write('sdsspy.sweeps module not loaded\n')
-
-try:
-    from . import sweeps_collate
-except:
-    sys.stderr.write('sdsspy.sweeps_collate module not loaded\n')
+import flags
+from flags import flagval
 
 
-
-try:
-    import yanny
-except:
-    sys.stderr.write('sdsspy.yanny module not loaded\n')
-
-try:
-    import flags
-    from flags import flagval
-except:
-    sys.stderr.write('sdsspy.flags module not loaded\n')
-
-
-try:
-    import util
-    from util import *
-except:
-    sys.stderr.write('sdsspy.util module not loaded\n')
+import util
+from util import *
 
 import stomp_maps
 import cas
 
-try:
-    import pg
-except:
-    pass
+import pg
 
 import target
