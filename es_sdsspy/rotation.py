@@ -28,12 +28,13 @@ def rotdir(type='eq'):
     return d
 
 class Rotator:
-    def __init__(self):
+    def __init__(self, type='eq'):
+        self.type=type
         self.current_run=None
     
-    def def load_run(self, run):
+    def load_run(self, run):
         if self.current_run != run:
-            self.rotstruct = read_rotfile(run)
+            self.rotstruct = read_rotfile(run, self.type)
             self.current_run = run
 
     def rotate_e1e2(self, run, camcol, field, filternum, e1pix, e2pix):
