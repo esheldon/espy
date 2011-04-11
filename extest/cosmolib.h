@@ -32,89 +32,22 @@ struct cosmo* cosmo_new(
         double omega_k);
 
 double ez_inverse(struct cosmo* c, double z);
-void ez_inverse_vec(struct cosmo* c, int nz, double* z, int nezi, double* ezi);
 double ez_inverse_integral(struct cosmo* c, double zmin, double zmax);
 
 /* comoving distance in Mpc */
 double cdist(struct cosmo* c, double zmin, double zmax);
-void cdist_vec1(struct cosmo* c, 
-                int n, double* zmin, double zmax, double* d);
-void cdist_vec2(struct cosmo* c, 
-                int n, double zmin, double* zmax, double* d);
-void cdist_2vec(
-        struct cosmo* c, 
-        int n, double* zmin, double* zmax, double* d);
-
-
 
 // transverse comoving distance
 double tcdist(struct cosmo* c, double zmin, double zmax);
 
-void tcdist_vec1(
-        struct cosmo* c, 
-        int nzmin, double* zmin, 
-        double zmax, 
-        int ndm, double* dm);
-void tcdist_vec2(
-        struct cosmo* c, 
-        double zmin, 
-        int nzmax, double* zmax, 
-        int ndm, double* dm);
-void tcdist_2vec(
-        struct cosmo* c, 
-        int nzmin, double* zmin, 
-        int nzmax, double* zmax, 
-        int ndm, double* dm);
-
-
 // angular diameter distances
 double angdist(struct cosmo* c, double zmin, double zmax);
-
-void angdist_vec1(
-        struct cosmo* c, 
-        int nzmin, double* zmin, 
-        double zmax, 
-        int ndm, double* dm);
-void angdist_vec2(
-        struct cosmo* c, 
-        double zmin, 
-        int nzmax, double* zmax, 
-        int ndm, double* dm);
-void angdist_2vec(
-        struct cosmo* c, 
-        int nzmin, double* zmin, 
-        int nzmax, double* zmax, 
-        int ndm, double* dm);
 
 // luminosity distances
 double lumdist(struct cosmo* c, double zmin, double zmax);
 
-void lumdist_vec1(
-        struct cosmo* c, 
-        int nzmin, double* zmin, 
-        double zmax, 
-        int nd, double* d);
-
-void lumdist_vec2(
-        struct cosmo* c, 
-        double zmin, 
-        int nzmax, double* zmax, 
-        int nd, double* d);
-
-void lumdist_2vec(
-        struct cosmo* c, 
-        int nzmin, double* zmin, 
-        int nzmax, double* zmax, 
-        int nd, double* d);
-
-
 // comoving volume element
 double dV(struct cosmo* c, double z);
-void dV_vec(
-        struct cosmo* c, 
-        int nz, double* z, 
-        int ndv, double* dv);
-
 
 // comoving volume between zmin and zmax
 double volume(struct cosmo* c, double zmin, double zmax);
@@ -122,25 +55,7 @@ double volume(struct cosmo* c, double zmin, double zmax);
 // inverse critical density for lensing
 double scinv(struct cosmo* c, double zl, double zs);
 
-
-void scinv_vec1(
-        struct cosmo* c, 
-        int nzl, double* zl, 
-        double zs, 
-        int nsci, double* sci);
-void scinv_vec2(
-        struct cosmo* c, 
-        double zl, 
-        int nzs, double* zs, 
-        int nsci, double* sci);
-void scinv_2vec(
-        struct cosmo* c, 
-        int nzl, double* zl, 
-        int nzs, double* zs, 
-        int nsci, double* sci);
-
-
-
+// generate gauss-legendre abcissa and weights
 void gauleg(double x1, double x2, int npts, double* x, double* w);
 
 
