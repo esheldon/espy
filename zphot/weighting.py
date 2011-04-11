@@ -106,6 +106,8 @@ Then you can sum up the p(z) to get an overall histogram
 
 Which can be overplotted as shown above:
 """
+from __future__ import print_function
+
 import os
 from sys import stdout,stderr
 import glob
@@ -130,10 +132,16 @@ import pbs
 
 import zphot
 
+import columns
+
+
 _sample='dr8'
 _basedir = '~esheldon/photoz/weighting/%s' % _sample
 _basedir = os.path.expanduser(_basedir)
 
+def open_pofz_columns(pzrun):
+    wo=WeightedOutputs()
+    return wo.open_pofz_columns(pzrun)
 
 def num_dtype():
     return [('photoid','i8'),('num','i4')]
@@ -505,7 +513,7 @@ class WeightedTraining:
             newt['z'] = t['z']
 
             newf = self.filename(type)
-            print 'Writing weighting input:',newf
+            print('Writing weighting input:',newf)
             r=eu.recfile.Open(newf, 'w', delim=' ')
             r.write(newt)
             r.close()
@@ -590,6 +598,13 @@ class WeightedOutputs:
         f = 'num-%s-%s.dat' % (wrun,n_near)
         return path_join(dir, f)
  
+    def open_pofz_columns(self, pzrun):
+        d=self.pofz_columns_dir(pzrun)
+        return columns.Columns(d)
+
+    def pofz_columns_dir(self, pzrun):
+        return path_join(self.basedir,'pofz-%s.cols' % pzrun)
+
     def pofz_dir(self, pzrun):
         return path_join(self.basedir,'pofz-%s' % pzrun)
 
@@ -618,6 +633,91 @@ class WeightedOutputs:
             f = f + '-chunk%03i' % chunk
         f = f+'.dat'
         return path_join(dir, f)
+
+    def make_columns(self, pzrun):
+        """
+        Collate the outputs into a columns database
+        """
+        conf = zphot.cascade_config(pzrun)
+        #pzconf = zphot.read_config('pofz',pzrun)
+        #wrun = pzconf['wrun']
+        #wconf = zphot.read_config('weights',wrun)
+        #train_sample = wconf['train_sample']
+        #tconf = zphot.read_config('train',train_sample)
+        #photo_sample = tconf['photo_sample']
+        #pconf = zphot.read_config('zinput', photo_sample)
+
+        pprint.pprint(conf)
+
+        coldir = self.pofz_columns_dir(pzrun)
+        if os.path.exists(coldir):
+            raise ValueError("coldir exists, start fresh: " + coldir)
+        cols = columns.Columns(coldir)
+        cols.create()
+
+        # get the config
+        nz = conf['pofz']['nz']
+
+        #
+        # metadata
+        #
+
+        cols.write_column('conf', conf, type='json')
+
+        #
+        # the z values of the histogram
+        #
+
+        z_file = self.z_file(pzrun,chunk=0)
+        zdata = read_z(z_file)
+
+        print("Writing zbins column")
+        cols.write_column('zbins', zdata)
+
+        pofz_dt = [('photoid','i8'),('pofz','f8',nz)]
+
+        # the num file, to determine of an object is "recoverable"
+        iteration=2
+        num_file = self.num_file(conf['pofz']['wrun'],iteration)
+        numdata = read_num(num_file)
+        
+
+        pofz_dir=self.pofz_dir(pzrun)
+        pattern=path_join(pofz_dir,'pofz-%s-chunk*.dat' % pzrun)
+        flist = glob.glob(pattern)
+        ntot = len(flist)
+        if ntot == 0:
+            raise ValueError("No files matched pattern: '%s'" % pattern)
+
+        flist.sort()
+
+        # ii keeps track of location in the overall num file
+        ii = 0
+        zhist=None
+        for f in flist:
+            print(f)
+            r=eu.recfile.Open(f,'r',delim=' ',dtype=pofz_dt)
+            data = r.read()
+            r.close()
+            n = data.size
+
+            # make sure they line up
+            wbad,=where(numdata['photoid'][ii:ii+n] != data['photoid'])
+            if wbad.size != 0:
+                raise ValueError("photoid mismatch for file %s" % f)
+
+            tnum = numdata['num'][ii:ii+n]
+
+            cols.write_column('photoid', data['photoid'])
+            cols.write_column('num', tnum)
+            cols.write_column('pofz', data['pofz'])
+
+
+            ii += n
+
+        cols['photoid'].create_index()
+        cols['num'].create_index()
+
 
     def make_pofz_hist(self, pzrun, num=None, numdata=None, keepflags=None):
         output = self.calculate_pofz_hist(pzrun,num,numdata,keepflags)
@@ -663,11 +763,12 @@ class WeightedOutputs:
         output = numpy.zeros(zdata.size, dtype=out_dt)
         output['zmin'] = zdata['zmin']
         output['zmax'] = zdata['zmax']
-        print 'nz:',nz
-        print 'n(zmin):',output['zmin'].size
-        print 'n(pofz):',output['pofz'].size
+        print('nz:',nz)
+        print('n(zmin):',output['zmin'].size)
+        print('n(pofz):',output['pofz'].size)
 
         dir=self.pofz_dir(pzrun)
+
         pattern=path_join(dir,'pofz-%s-chunk*.dat' % pzrun)
         flist = glob.glob(pattern)
         ntot = len(flist)

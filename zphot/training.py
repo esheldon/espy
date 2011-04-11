@@ -378,16 +378,22 @@ Carlos
         converter.convert(psfile, dpi=120, verbose=True)
 
 
-    def plot_seeing(self):
+    def plot_seeing(self, types=None, yrange=None):
         import pcolors
         import es_sdsspy
         import converter
 
         binsize=0.025
 
+        if types is None:
+            name='all'
+            types=self.types
+        else:
+            name='-'.join(types)
+
 
         plt=biggles.FramedPlot()
-        ntype=len(self.types)
+        ntype=len(types)
         colors=pcolors.rainbow(ntype, 'hex')
 
         allhist=[]
@@ -418,18 +424,21 @@ Carlos
         x = b['center']
 
         print("  histogramming")
+        # regular histogram just for the key
         ph = biggles.Histogram(h, x0=b['low'][0], binsize=binsize, width=2)
         ph.label = 'All BOSS'
 
-        allhist.append(ph)
-        plt.add(ph)
+        #allhist.append(ph)
+        #plt.add(ph)
 
         fill=biggles.FillBelow(x, h, color='black')
+        fill.label = 'ALL BOSS'
         plt.add(fill)
+        allhist.append(fill)
 
 
         for i in xrange(ntype):
-            type = self.types[i]
+            type = types[i]
             t= self.read_matched(type)
 
             b=eu.stat.Binner(t['psf_fwhm'][:,2])
@@ -465,11 +474,13 @@ Carlos
         plt.add(key)
 
         plt.xrange = [0.6, 1.8]
-        plt.yrange = [0.0, 0.45]
+        if yrange is None:
+            yrange = [0.0, 0.45]
+        plt.yrange = yrange
         plt.xlabel = 'seeing'
         plt.show()
 
-        epsfile=self.plotfile('all',extra='seeing')
+        epsfile=self.plotfile(name, extra='seeing')
         print("Writing eps file:",epsfile)
         plt.write_eps(epsfile)
         converter.convert(epsfile, dpi=120, verbose=True)
