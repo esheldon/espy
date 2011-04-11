@@ -1,0 +1,12 @@
+{
+    "sample":"04",
+    "catalog":"dr8regauss",
+    "sigmacrit_style":2,
+    "procrun":"04",
+    "pzrun":11,
+    "zlmin":0.02,
+    "zlmax":0.35,
+    "dzl":0.015,
+    "cosmo_sample":"01",
+    "comment":"first try with regauss catalog and mean scinv"
+}
