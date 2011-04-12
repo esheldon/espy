@@ -34,7 +34,6 @@
 
 import sys
 
-from . import rotation
 from . import select
 from . import transform
 from . import files

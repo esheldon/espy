@@ -777,8 +777,7 @@ class Collator:
     def create_indices(self):
         c = self.open_columns()
 
-        '''
-        cnames = ['run','thing_id','photoid',
+        cnames = ['run','camcol','thing_id','photoid',
                   'cmodelmag_dered_r',
                   'amflags_r','amflags_i',
                   'amflags_rg_r','amflags_rg_i',
@@ -799,6 +798,7 @@ class Collator:
                   'e2_lin_r','e2_lin_i',
                   'e1_rg_r','e1_rg_i',
                   'e2_rg_r','e2_rg_i']
+        '''
 
 
 

@@ -39,6 +39,9 @@ Then fits and plots:
                                           epsfile=None)
 
 """
+
+from . import rotation
+
 from . import sigmacrit
 from . import test_estimators
 from . import lcat

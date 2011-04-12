@@ -10,11 +10,14 @@ from esutil.numpy_util import where1
 import numpy
 from numpy import pi as PI
 
+import lensing
+
 
 def read_rotfile(run, type='eq'):
     f = rotfile(run, type)
     if not os.path.exists(f):
         raise ValueError("Rotation file not found: %s" % f)
+    print("Reading rotation:",f)
     return eu.io.read(f, lower=True)
 
 def rotfile(run, type='eq'):
@@ -37,22 +40,93 @@ class Rotator:
             self.rotstruct = read_rotfile(run, self.type)
             self.current_run = run
 
-    def rotate_e1e2(self, run, camcol, field, filternum, e1pix, e2pix):
+    def rotate_e1e2(self, run, camcol, field, filternum, e1pix, e2pix, kludge=False):
         self.load_run(run)
 
-        w,=where1((self.rotstruct['camcol'] == camcol) & (self.rotstruct['field'] == field) )
+        w=where1((self.rotstruct['camcol'] == camcol) & (self.rotstruct['field'] == field) )
         if w.size != 1:
-            raise ValueError("expected single match for %06i-%i-%04i" % (run,camcol,field))
+            print("expected single match for %06i-%i-%04i, got %i" % (run,camcol,field,w.size))
+            fields = numpy.unique(self.rotstruct['field'])
+            print("here are the fields:",fields)
+            raise ValueError("stopping")
 
-        cos2angle = self.rotstruct['cos2angle'][w,filternum]
-        sin2angle = self.rotstruct['sin2angle'][w,filternum]
+        if not kludge:
+            cos2angle = self.rotstruct['cos2angle'][w,filternum]
+            sin2angle = self.rotstruct['sin2angle'][w,filternum]
+        else:
+            angle = self.rotstruct['angle'][w,filternum]
+            #angle = numpy.pi/2. - angle
+            #angle = angle - numpy.pi/2.
+            #angle = - angle
+            cos2angle = numpy.cos(2.*angle)
+            sin2angle = numpy.sin(2.*angle)
+
+        # note we also need to flip the coordinate system across the 45 degree
+        # line for equatorial
+        if self.type eq 'eq':
+            e1pix *= -1
 
         e1 =  e1pix*cos2angle + e2pix*sin2angle
         e2 = -e1pix*sin2angle + e2pix*cos2angle
 
         return e1,e2
 
+def make_rotation_test_data(run=3910, camcol=3, field=100):
+    c=lensing.regauss.open_columns('04')
+    # note logic returns indices for Columns columns!
+    w=c['run'] == run
+    if w.size == 0:
+        raise ValueError("no objects found for run %d" % run)
+    
+    flags = c['corrflags_rg_r'][w]
+    camcols = c['camcol'][w]
+    fields = c['field'][w]
+    w2=where1((camcols == camcol) & (flags == 0) & (fields==field))
+    if w2.size == 0:
+        raise ValueError("not objects in camcol %s with flags==0" % camcol)
+    w=w[w2]
 
+    data = c.read_columns(['ra','dec','field','e1_rg_r','e2_rg_r'], rows=w)
+
+    output = numpy.zeros(data.size, 
+                          dtype=[('ra','f8'),('dec','f8'),
+                                 ('g1eq','f8'),('g2eq','f8'),
+                                 ('clambda','f8'),('ceta','f8'),
+                                 ('g1survey','f8'),('g2survey','f8')])
+
+    output['ra'] = data['ra']
+    output['dec'] = data['dec']
+
+    lam, eta = eu.coords.eq2sdss(data['ra'],data['dec'])
+    output['clambda'] =  lam
+    output['ceta'] = eta
+
+    eq_rotator = Rotator('eq')
+    survey_rotator = Rotator('survey')
+
+    for field in xrange(data['field'].min(), 1+data['field'].max()):
+        w=where1(data['field'] == field)
+        print("field:",field,"nobj:",w.size)
+        if w.size > 0:
+            e1eq, e2eq = eq_rotator.rotate_e1e2(run,camcol,field,2,
+                                                data['e1_rg_r'][w],data['e2_rg_r'][w])
+            e1surv, e2surv = survey_rotator.rotate_e1e2(run,camcol,field,2,
+                                                        data['e1_rg_r'][w],data['e2_rg_r'][w])
+
+            output['g1eq'][w] = e1eq/2
+            output['g2eq'][w] = e2eq/2
+            output['g1survey'][w] = e1surv/2
+            output['g2survey'][w] = e2surv/2
+
+    output_file=os.path.expanduser('~/tmp/test-rot/test-rot.rec')
+    print("writing output file:",output_file)
+    fobj = open(output_file,'w')
+    num = numpy.array([output.size], dtype='i8')
+    num.tofile(fobj)
+    #robj = eu.recfile.Recfile(output_file, 'w', delim=' ')
+    robj = eu.recfile.Recfile(fobj, 'r+')
+    robj.write(output)
+    robj.close()
 
 
 
