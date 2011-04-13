@@ -35,22 +35,22 @@ double ez_inverse(struct cosmo* c, double z);
 double ez_inverse_integral(struct cosmo* c, double zmin, double zmax);
 
 /* comoving distance in Mpc */
-double cdist(struct cosmo* c, double zmin, double zmax);
+double Dc(struct cosmo* c, double zmin, double zmax);
 
 // transverse comoving distance
-double tcdist(struct cosmo* c, double zmin, double zmax);
+double Dm(struct cosmo* c, double zmin, double zmax);
 
 // angular diameter distances
-double angdist(struct cosmo* c, double zmin, double zmax);
+double Da(struct cosmo* c, double zmin, double zmax);
 
 // luminosity distances
-double lumdist(struct cosmo* c, double zmin, double zmax);
+double Dl(struct cosmo* c, double zmin, double zmax);
 
 // comoving volume element
 double dV(struct cosmo* c, double z);
 
 // comoving volume between zmin and zmax
-double volume(struct cosmo* c, double zmin, double zmax);
+double V(struct cosmo* c, double zmin, double zmax);
 
 // inverse critical density for lensing
 double scinv(struct cosmo* c, double zl, double zs);

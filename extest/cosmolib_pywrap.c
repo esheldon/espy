@@ -1,3 +1,29 @@
+/*
+ 
+ This is a python class definition, wrapping the cosmological distance
+ calculations in cosmolib.c.  The "struct cosmo" is the underlying
+ "class" and the functions are the methods.
+ 
+ These wrappers are minimal.  Scalars are converted as needed, but there is no
+ conversion of the input types to arrays for the "vec" vectorized versions of
+ the functions.  It is the responsibility of the python wrapper in cosmology.py
+ to take care of that.
+
+ I think this is the right compromise:  it is messier to write the C versions
+ of these type checks, but is fairly trivial to write the python checks and
+ conversions.
+
+ I also could have generated this with SWIG.  But I'm experienced enough in
+ creating these classes that it is actually less work to write it explicitly
+ than mess around with SWIG complications.  And this file is a factor of
+ ten smaller than the corresponding SWIG wrapper. The size of the SWIG wrapper
+ is dominated by all the type conversions, which I do in the python wrapper.
+
+ April 2011
+ Erin Sheldon, Brookhaven National Laboratory
+
+ */
+
 #include <Python.h>
 #include "cosmolib.h"
 #include <numpy/arrayobject.h> 
@@ -82,6 +108,31 @@ PyCosmoObject_ez_inverse(struct PyCosmoObject* self, PyObject* args) {
     ezinv = ez_inverse(self->cosmo, z);
     return PyFloat_FromDouble(ezinv);
 }
+static PyObject*
+PyCosmoObject_ez_inverse_vec(struct PyCosmoObject* self, PyObject* args) {
+    PyObject* zObj=NULL, *resObj=NULL;;
+    double *z, *res;
+    npy_intp n, i;
+
+    if (!PyArg_ParseTuple(args, (char*)"O", &zObj)) {
+        return NULL;
+    }
+
+    n = PyArray_SIZE(zObj);
+    z = (double* )PyArray_DATA(zObj);
+
+    resObj = PyArray_ZEROS(1, &n, NPY_FLOAT64, 0);
+    res = (double* )PyArray_DATA(resObj);
+
+    for (i=0; i<n; i++) {
+        res[i] = ez_inverse(self->cosmo, z[i]);
+    }
+
+    return resObj;
+
+}
+
+
 
 static PyObject*
 PyCosmoObject_ez_inverse_integral(struct PyCosmoObject* self, PyObject* args) {
@@ -101,7 +152,7 @@ PyCosmoObject_ez_inverse_integral(struct PyCosmoObject* self, PyObject* args) {
 
 // comoving distance and vectorizations
 static PyObject*
-PyCosmoObject_cdist(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Dc(struct PyCosmoObject* self, PyObject* args) {
     double zmin, zmax;
     double d;
 
@@ -109,14 +160,14 @@ PyCosmoObject_cdist(struct PyCosmoObject* self, PyObject* args) {
         return NULL;
     }
 
-    d = cdist(self->cosmo, zmin, zmax);
+    d = Dc(self->cosmo, zmin, zmax);
     return PyFloat_FromDouble(d);
 
 }
 
 
 static PyObject*
-PyCosmoObject_cdist_vec1(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Dc_vec1(struct PyCosmoObject* self, PyObject* args) {
     PyObject* zminObj=NULL, *resObj=NULL;;
     double *zmin, zmax, *res;
     npy_intp n, i;
@@ -140,7 +191,7 @@ PyCosmoObject_cdist_vec1(struct PyCosmoObject* self, PyObject* args) {
 }
 
 static PyObject*
-PyCosmoObject_cdist_vec2(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Dc_vec2(struct PyCosmoObject* self, PyObject* args) {
     PyObject* zmaxObj=NULL, *resObj=NULL;;
     double zmin, *zmax, *res;
     npy_intp n, i;
@@ -163,7 +214,7 @@ PyCosmoObject_cdist_vec2(struct PyCosmoObject* self, PyObject* args) {
 }
 
 static PyObject*
-PyCosmoObject_cdist_2vec(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Dc_2vec(struct PyCosmoObject* self, PyObject* args) {
     PyObject* zmaxObj, *zminObj=NULL, *resObj=NULL;
     double *zmin, *zmax, *res;
     npy_intp n, i;
@@ -188,7 +239,7 @@ PyCosmoObject_cdist_2vec(struct PyCosmoObject* self, PyObject* args) {
 
 // transverse comoving distance and vectorizations
 static PyObject*
-PyCosmoObject_tcdist(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Dm(struct PyCosmoObject* self, PyObject* args) {
     double zmin, zmax;
     double d;
 
@@ -196,13 +247,13 @@ PyCosmoObject_tcdist(struct PyCosmoObject* self, PyObject* args) {
         return NULL;
     }
 
-    d = tcdist(self->cosmo, zmin, zmax);
+    d = Dm(self->cosmo, zmin, zmax);
     return PyFloat_FromDouble(d);
 
 }
 
 static PyObject*
-PyCosmoObject_tcdist_vec1(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Dm_vec1(struct PyCosmoObject* self, PyObject* args) {
     PyObject* zminObj=NULL, *resObj=NULL;;
     double *zmin, zmax, *res;
     npy_intp n, i;
@@ -218,7 +269,7 @@ PyCosmoObject_tcdist_vec1(struct PyCosmoObject* self, PyObject* args) {
     res = (double* )PyArray_DATA(resObj);
 
     for (i=0; i<n; i++) {
-        res[i] = tcdist(self->cosmo, zmin[i], zmax); 
+        res[i] = Dm(self->cosmo, zmin[i], zmax); 
     }
 
     return resObj;
@@ -226,7 +277,7 @@ PyCosmoObject_tcdist_vec1(struct PyCosmoObject* self, PyObject* args) {
 }
 
 static PyObject*
-PyCosmoObject_tcdist_vec2(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Dm_vec2(struct PyCosmoObject* self, PyObject* args) {
     PyObject* zmaxObj=NULL, *resObj=NULL;;
     double zmin, *zmax, *res;
     npy_intp n, i;
@@ -242,14 +293,14 @@ PyCosmoObject_tcdist_vec2(struct PyCosmoObject* self, PyObject* args) {
     res = (double* )PyArray_DATA(resObj);
 
     for (i=0; i<n; i++) {
-        res[i] = tcdist(self->cosmo, zmin, zmax[i]); 
+        res[i] = Dm(self->cosmo, zmin, zmax[i]); 
     }
 
     return resObj;
 }
 
 static PyObject*
-PyCosmoObject_tcdist_2vec(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Dm_2vec(struct PyCosmoObject* self, PyObject* args) {
     PyObject* zmaxObj, *zminObj=NULL, *resObj=NULL;
     double *zmin, *zmax, *res;
     npy_intp n, i;
@@ -266,7 +317,7 @@ PyCosmoObject_tcdist_2vec(struct PyCosmoObject* self, PyObject* args) {
     res = (double* )PyArray_DATA(resObj);
 
     for (i=0; i<n; i++) {
-        res[i] = tcdist(self->cosmo, zmin[i], zmax[i]); 
+        res[i] = Dm(self->cosmo, zmin[i], zmax[i]); 
     }
 
     return resObj;
@@ -275,7 +326,7 @@ PyCosmoObject_tcdist_2vec(struct PyCosmoObject* self, PyObject* args) {
 
 // Angular diameter distance
 static PyObject*
-PyCosmoObject_angdist(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Da(struct PyCosmoObject* self, PyObject* args) {
     double zmin, zmax;
     double d;
 
@@ -283,13 +334,13 @@ PyCosmoObject_angdist(struct PyCosmoObject* self, PyObject* args) {
         return NULL;
     }
 
-    d = angdist(self->cosmo, zmin, zmax);
+    d = Da(self->cosmo, zmin, zmax);
     return PyFloat_FromDouble(d);
 
 }
 
 static PyObject*
-PyCosmoObject_angdist_vec1(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Da_vec1(struct PyCosmoObject* self, PyObject* args) {
     PyObject* zminObj=NULL, *resObj=NULL;;
     double *zmin, zmax, *res;
     npy_intp n, i;
@@ -305,7 +356,7 @@ PyCosmoObject_angdist_vec1(struct PyCosmoObject* self, PyObject* args) {
     res = (double* )PyArray_DATA(resObj);
 
     for (i=0; i<n; i++) {
-        res[i] = angdist(self->cosmo, zmin[i], zmax); 
+        res[i] = Da(self->cosmo, zmin[i], zmax); 
     }
 
     return resObj;
@@ -313,7 +364,7 @@ PyCosmoObject_angdist_vec1(struct PyCosmoObject* self, PyObject* args) {
 }
 
 static PyObject*
-PyCosmoObject_angdist_vec2(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Da_vec2(struct PyCosmoObject* self, PyObject* args) {
     PyObject* zmaxObj=NULL, *resObj=NULL;;
     double zmin, *zmax, *res;
     npy_intp n, i;
@@ -329,14 +380,14 @@ PyCosmoObject_angdist_vec2(struct PyCosmoObject* self, PyObject* args) {
     res = (double* )PyArray_DATA(resObj);
 
     for (i=0; i<n; i++) {
-        res[i] = angdist(self->cosmo, zmin, zmax[i]); 
+        res[i] = Da(self->cosmo, zmin, zmax[i]); 
     }
 
     return resObj;
 }
 
 static PyObject*
-PyCosmoObject_angdist_2vec(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Da_2vec(struct PyCosmoObject* self, PyObject* args) {
     PyObject* zmaxObj, *zminObj=NULL, *resObj=NULL;
     double *zmin, *zmax, *res;
     npy_intp n, i;
@@ -353,7 +404,7 @@ PyCosmoObject_angdist_2vec(struct PyCosmoObject* self, PyObject* args) {
     res = (double* )PyArray_DATA(resObj);
 
     for (i=0; i<n; i++) {
-        res[i] = angdist(self->cosmo, zmin[i], zmax[i]); 
+        res[i] = Da(self->cosmo, zmin[i], zmax[i]); 
     }
 
     return resObj;
@@ -362,7 +413,7 @@ PyCosmoObject_angdist_2vec(struct PyCosmoObject* self, PyObject* args) {
 
 // luminosity distance
 static PyObject*
-PyCosmoObject_lumdist(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Dl(struct PyCosmoObject* self, PyObject* args) {
     double zmin, zmax;
     double d;
 
@@ -370,13 +421,13 @@ PyCosmoObject_lumdist(struct PyCosmoObject* self, PyObject* args) {
         return NULL;
     }
 
-    d = lumdist(self->cosmo, zmin, zmax);
+    d = Dl(self->cosmo, zmin, zmax);
     return PyFloat_FromDouble(d);
 
 }
 
 static PyObject*
-PyCosmoObject_lumdist_vec1(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Dl_vec1(struct PyCosmoObject* self, PyObject* args) {
     PyObject* zminObj=NULL, *resObj=NULL;;
     double *zmin, zmax, *res;
     npy_intp n, i;
@@ -392,7 +443,7 @@ PyCosmoObject_lumdist_vec1(struct PyCosmoObject* self, PyObject* args) {
     res = (double* )PyArray_DATA(resObj);
 
     for (i=0; i<n; i++) {
-        res[i] = lumdist(self->cosmo, zmin[i], zmax); 
+        res[i] = Dl(self->cosmo, zmin[i], zmax); 
     }
 
     return resObj;
@@ -400,7 +451,7 @@ PyCosmoObject_lumdist_vec1(struct PyCosmoObject* self, PyObject* args) {
 }
 
 static PyObject*
-PyCosmoObject_lumdist_vec2(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Dl_vec2(struct PyCosmoObject* self, PyObject* args) {
     PyObject* zmaxObj=NULL, *resObj=NULL;;
     double zmin, *zmax, *res;
     npy_intp n, i;
@@ -416,14 +467,14 @@ PyCosmoObject_lumdist_vec2(struct PyCosmoObject* self, PyObject* args) {
     res = (double* )PyArray_DATA(resObj);
 
     for (i=0; i<n; i++) {
-        res[i] = lumdist(self->cosmo, zmin, zmax[i]); 
+        res[i] = Dl(self->cosmo, zmin, zmax[i]); 
     }
 
     return resObj;
 }
 
 static PyObject*
-PyCosmoObject_lumdist_2vec(struct PyCosmoObject* self, PyObject* args) {
+PyCosmoObject_Dl_2vec(struct PyCosmoObject* self, PyObject* args) {
     PyObject* zmaxObj, *zminObj=NULL, *resObj=NULL;
     double *zmin, *zmax, *res;
     npy_intp n, i;
@@ -440,7 +491,7 @@ PyCosmoObject_lumdist_2vec(struct PyCosmoObject* self, PyObject* args) {
     res = (double* )PyArray_DATA(resObj);
 
     for (i=0; i<n; i++) {
-        res[i] = lumdist(self->cosmo, zmin[i], zmax[i]); 
+        res[i] = Dl(self->cosmo, zmin[i], zmax[i]); 
     }
 
     return resObj;
@@ -495,7 +546,7 @@ PyCosmoObject_V(struct PyCosmoObject* self, PyObject* args) {
         return NULL;
     }
 
-    v = volume(self->cosmo, zmin, zmax);
+    v = V(self->cosmo, zmin, zmax);
     return PyFloat_FromDouble(v);
 
 }
@@ -593,26 +644,27 @@ PyCosmoObject_scinv_2vec(struct PyCosmoObject* self, PyObject* args) {
 
 static PyMethodDef PyCosmoObject_methods[] = {
     {"ez_inverse",          (PyCFunction)PyCosmoObject_ez_inverse,          METH_VARARGS, "ez_inverse(z)\n\nGet 1/E(z)"},
+    {"ez_inverse_vec",          (PyCFunction)PyCosmoObject_ez_inverse_vec,          METH_VARARGS, "ez_inverse_vec(z)\n\nGet 1/E(z) for z an array"},
     {"ez_inverse_integral", (PyCFunction)PyCosmoObject_ez_inverse_integral, METH_VARARGS, "ez_inverse_integral(zmin, zmax)\n\nGet integral of 1/E(z) from zmin to zmax"},
-    {"cdist",               (PyCFunction)PyCosmoObject_cdist,               METH_VARARGS, "cdist(zmin,zmax)\n\nComoving distance between zmin and zmax"},
-    {"cdist_vec1",          (PyCFunction)PyCosmoObject_cdist_vec1,          METH_VARARGS, "cdist_vec1(zmin,zmax)\n\nComoving distance between zmin(array) and zmax"},
-    {"cdist_vec2",          (PyCFunction)PyCosmoObject_cdist_vec2,          METH_VARARGS, "cdist_vec2(zmin,zmax)\n\nComoving distance between zmin and zmax(array)"},
-    {"cdist_2vec",          (PyCFunction)PyCosmoObject_cdist_2vec,          METH_VARARGS, "cdist_2vec(zmin,zmax)\n\nComoving distance between zmin and zmax both arrays"},
-    {"tcdist",              (PyCFunction)PyCosmoObject_tcdist,              METH_VARARGS, "tcdist(zmin,zmax)\n\nTransverse comoving distance between zmin and zmax"},
-    {"tcdist_vec1",         (PyCFunction)PyCosmoObject_tcdist_vec1,         METH_VARARGS, "tcdist_vec1(zmin,zmax)\n\nTransverse Comoving distance between zmin(array) and zmax"},
-    {"tcdist_vec2",         (PyCFunction)PyCosmoObject_tcdist_vec2,         METH_VARARGS, "tcdist_vec2(zmin,zmax)\n\nTransverse Comoving distance between zmin and zmax(array)"},
-    {"tcdist_2vec",         (PyCFunction)PyCosmoObject_tcdist_2vec,         METH_VARARGS, "tcdist_2vec(zmin,zmax)\n\nTransverse Comoving distance between zmin and zmax both arrays"},
-    {"angdist",             (PyCFunction)PyCosmoObject_angdist,             METH_VARARGS, "angdist(zmin,zmax)\n\nAngular diameter distance distance between zmin and zmax"},
-    {"angdist_vec1",        (PyCFunction)PyCosmoObject_angdist_vec1,        METH_VARARGS, "angdist_vec1(zmin,zmax)\n\nAngular diameter distance distance between zmin(array) and zmax"},
-    {"angdist_vec2",        (PyCFunction)PyCosmoObject_angdist_vec2,        METH_VARARGS, "angdist_vec2(zmin,zmax)\n\nAngular diameter distance distance between zmin and zmax(array)"},
-    {"angdist_2vec",        (PyCFunction)PyCosmoObject_angdist_2vec,        METH_VARARGS, "angdist_2vec(zmin,zmax)\n\nAngular diameter distance distance between zmin and zmax both arrays"},
-    {"lumdist",             (PyCFunction)PyCosmoObject_lumdist,             METH_VARARGS, "lumdist(zmin,zmax)\n\nLuminosity distance distance between zmin and zmax"},
-    {"lumdist_vec1",        (PyCFunction)PyCosmoObject_lumdist_vec1,        METH_VARARGS, "lumdist_vec1(zmin,zmax)\n\nLuminosity distance distance between zmin(array) and zmax"},
-    {"lumdist_vec2",        (PyCFunction)PyCosmoObject_lumdist_vec2,        METH_VARARGS, "lumdist_vec2(zmin,zmax)\n\nLuminosity distance distance between zmin and zmax(array)"},
-    {"lumdist_2vec",        (PyCFunction)PyCosmoObject_lumdist_2vec,        METH_VARARGS, "lumdist_2vec(zmin,zmax)\n\nLuminosity distance distance between zmin and zmax both arrays"},
+    {"Dc",               (PyCFunction)PyCosmoObject_Dc,               METH_VARARGS, "Dc(zmin,zmax)\n\nComoving distance between zmin and zmax"},
+    {"Dc_vec1",          (PyCFunction)PyCosmoObject_Dc_vec1,          METH_VARARGS, "Dc_vec1(zmin,zmax)\n\nComoving distance between zmin(array) and zmax"},
+    {"Dc_vec2",          (PyCFunction)PyCosmoObject_Dc_vec2,          METH_VARARGS, "Dc_vec2(zmin,zmax)\n\nComoving distance between zmin and zmax(array)"},
+    {"Dc_2vec",          (PyCFunction)PyCosmoObject_Dc_2vec,          METH_VARARGS, "Dc_2vec(zmin,zmax)\n\nComoving distance between zmin and zmax both arrays"},
+    {"Dm",              (PyCFunction)PyCosmoObject_Dm,              METH_VARARGS, "Dm(zmin,zmax)\n\nTransverse comoving distance between zmin and zmax"},
+    {"Dm_vec1",         (PyCFunction)PyCosmoObject_Dm_vec1,         METH_VARARGS, "Dm_vec1(zmin,zmax)\n\nTransverse Comoving distance between zmin(array) and zmax"},
+    {"Dm_vec2",         (PyCFunction)PyCosmoObject_Dm_vec2,         METH_VARARGS, "Dm_vec2(zmin,zmax)\n\nTransverse Comoving distance between zmin and zmax(array)"},
+    {"Dm_2vec",         (PyCFunction)PyCosmoObject_Dm_2vec,         METH_VARARGS, "Dm_2vec(zmin,zmax)\n\nTransverse Comoving distance between zmin and zmax both arrays"},
+    {"Da",             (PyCFunction)PyCosmoObject_Da,             METH_VARARGS, "Da(zmin,zmax)\n\nAngular diameter distance distance between zmin and zmax"},
+    {"Da_vec1",        (PyCFunction)PyCosmoObject_Da_vec1,        METH_VARARGS, "Da_vec1(zmin,zmax)\n\nAngular diameter distance distance between zmin(array) and zmax"},
+    {"Da_vec2",        (PyCFunction)PyCosmoObject_Da_vec2,        METH_VARARGS, "Da_vec2(zmin,zmax)\n\nAngular diameter distance distance between zmin and zmax(array)"},
+    {"Da_2vec",        (PyCFunction)PyCosmoObject_Da_2vec,        METH_VARARGS, "Da_2vec(zmin,zmax)\n\nAngular diameter distance distance between zmin and zmax both arrays"},
+    {"Dl",             (PyCFunction)PyCosmoObject_Dl,             METH_VARARGS, "Dl(zmin,zmax)\n\nLuminosity distance distance between zmin and zmax"},
+    {"Dl_vec1",        (PyCFunction)PyCosmoObject_Dl_vec1,        METH_VARARGS, "Dl_vec1(zmin,zmax)\n\nLuminosity distance distance between zmin(array) and zmax"},
+    {"Dl_vec2",        (PyCFunction)PyCosmoObject_Dl_vec2,        METH_VARARGS, "Dl_vec2(zmin,zmax)\n\nLuminosity distance distance between zmin and zmax(array)"},
+    {"Dl_2vec",        (PyCFunction)PyCosmoObject_Dl_2vec,        METH_VARARGS, "Dl_2vec(zmin,zmax)\n\nLuminosity distance distance between zmin and zmax both arrays"},
     {"dV",                  (PyCFunction)PyCosmoObject_dV,                  METH_VARARGS, "dV(z)\n\nComoving volume element at redshift z"},
     {"dV_vec",              (PyCFunction)PyCosmoObject_dV_vec,              METH_VARARGS, "dV(z)\n\nComoving volume element at redshift z(array)"},
-    {"V",                   (PyCFunction)PyCosmoObject_V,                   METH_VARARGS, "volume(z)\n\nComoving volume between zmin and zmax"},
+    {"V",                   (PyCFunction)PyCosmoObject_V,                   METH_VARARGS, "V(z)\n\nComoving volume between zmin and zmax"},
     {"scinv",               (PyCFunction)PyCosmoObject_scinv,               METH_VARARGS, "scinv(zl,zs)\n\nInverse critical density distance between zl and zs"},
     {"scinv_vec1",          (PyCFunction)PyCosmoObject_scinv_vec1,          METH_VARARGS, "scinv_vec1(zl,zs)\n\nInverse critical density distance between zl(array) and zs"},
     {"scinv_vec2",          (PyCFunction)PyCosmoObject_scinv_vec2,          METH_VARARGS, "scinv_vec2(zl,zs)\n\nInverse critical density distance between zl and zs(array)"},
@@ -628,7 +680,7 @@ static PyMethodDef PyCosmoObject_methods[] = {
 static PyTypeObject PyCosmoType = {
     PyObject_HEAD_INIT(NULL)
     0,                         /*ob_size*/
-    "cosmolib.cosmo",             /*tp_name*/
+    "_cosmolib.cosmo",             /*tp_name*/
     sizeof(struct PyCosmoObject), /*tp_basicsize*/
     0,                         /*tp_itemsize*/
     (destructor)PyCosmoObject_dealloc, /*tp_dealloc*/
@@ -680,7 +732,7 @@ static PyMethodDef cosmotype_methods[] = {
 #define PyMODINIT_FUNC void
 #endif
 PyMODINIT_FUNC
-initcosmolib(void) 
+init_cosmolib(void) 
 {
     PyObject* m;
 
@@ -688,7 +740,7 @@ initcosmolib(void)
     if (PyType_Ready(&PyCosmoType) < 0)
         return;
 
-    m = Py_InitModule3("cosmolib", cosmotype_methods, "Define cosmo type and methods.");
+    m = Py_InitModule3("_cosmolib", cosmotype_methods, "Define cosmo type and methods.");
 
     Py_INCREF(&PyCosmoType);
     PyModule_AddObject(m, "cosmo", (PyObject *)&PyCosmoType);

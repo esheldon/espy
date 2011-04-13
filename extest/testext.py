@@ -1,5 +1,5 @@
 import numpy
-import cosmolib
+import cosmology
 import esutil
 import time
 

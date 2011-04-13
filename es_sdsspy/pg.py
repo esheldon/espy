@@ -1,7 +1,13 @@
 import os,sys
 from sys import stdout,stderr
 import time
-import pgnumpy
+
+try:
+    import pgnumpy
+except:
+    print 'could not import pgnumpy'
+
+
 import esutil
 import sdsspy
 

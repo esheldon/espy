@@ -40,17 +40,17 @@ struct cosmo* cosmo_new(
 
 
 /* comoving distance in Mpc */
-double cdist(struct cosmo* c, double zmin, double zmax) {
+double Dc(struct cosmo* c, double zmin, double zmax) {
     return c->DH*ez_inverse_integral(c, zmin, zmax);
 }
 
 
 // transverse comoving distance
-double tcdist(struct cosmo* c, double zmin, double zmax) {
+double Dm(struct cosmo* c, double zmin, double zmax) {
 
     double d;
 
-    d = cdist(c, zmin, zmax);
+    d = Dc(c, zmin, zmax);
 
     if (!c->flat) {
         if (c->omega_k > 0) {
@@ -65,9 +65,9 @@ double tcdist(struct cosmo* c, double zmin, double zmax) {
 
 
 // angular diameter distances
-double angdist(struct cosmo* c, double zmin, double zmax) {
+double Da(struct cosmo* c, double zmin, double zmax) {
     double d;
-    d = tcdist(c, zmin, zmax);
+    d = Dm(c, zmin, zmax);
     d /= (1.+zmax);
     return d;
 }
@@ -76,9 +76,9 @@ double angdist(struct cosmo* c, double zmin, double zmax) {
 
 
 // luminosity distances
-double lumdist(struct cosmo* c, double zmin, double zmax) {
+double Dl(struct cosmo* c, double zmin, double zmax) {
     double d;
-    d = tcdist(c, zmin, zmax);
+    d = Dm(c, zmin, zmax);
     d *= (1.+zmax);
     return d;
 }
@@ -90,7 +90,7 @@ double dV(struct cosmo* c, double z) {
 
     oneplusz = 1.+z;
 
-    da = angdist(c, 0.0, z);
+    da = Da(c, 0.0, z);
     ezinv = ez_inverse(c, z);
     dv = c->DH*da*da*ezinv*oneplusz*oneplusz;
 
@@ -98,7 +98,7 @@ double dV(struct cosmo* c, double z) {
 }
 
 // comoving volume between zmin and zmax
-double volume(struct cosmo* c, double zmin, double zmax) {
+double V(struct cosmo* c, double zmin, double zmax) {
     int i;
     double f1,f2,z;
     double dv;
@@ -126,9 +126,9 @@ double scinv(struct cosmo* c, double zl, double zs) {
         return 0.0;
     }
 
-    dl = angdist(c, 0.0, zl);
-    ds = angdist(c, 0.0, zs);
-    dls = angdist(c, zl, zs);
+    dl = Da(c, 0.0, zl);
+    ds = Da(c, 0.0, zs);
+    dls = Da(c, zl, zs);
     return dls*dl/ds*FOUR_PI_G_OVER_C_SQUARED;
 }
 
