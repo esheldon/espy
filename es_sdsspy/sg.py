@@ -32,3 +32,5 @@ def avg_gri(flux_g, ivar_g,
     return flux, ivarsum
 
 
+def calc_c(modelflux, psfflux):
+    return 1.0-psfflux/modelflux
