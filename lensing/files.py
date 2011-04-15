@@ -181,7 +181,8 @@ def lensout_read(file=None, run=None, split=None, silent=False):
     return data
 
 def lensout_read_byrun(run):
-    conf = json_read(run)
+    runconf = json_read('run',run)
+    conf = json_read('lcat', runconf['lens_sample'])
     nsplit = conf['nsplit']
     if nsplit == 0:
         file = sample_file('lensout', run)
@@ -195,6 +196,7 @@ def lensout_read_byrun(run):
         nlens = numpy.fromfile(fobj,dtype='i8',count=1)
         nbin  = numpy.fromfile(fobj,dtype='i8',count=1)
         fobj.close()
+        print("    %s:  nlens: %i   nbin: %i" % (file,nlens,nbin) )
         ntot += nlens[0]
 
     stdout.write("Reading %s from %s files\n" % (ntot,nsplit))

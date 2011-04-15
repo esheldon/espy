@@ -31,7 +31,8 @@ class ScinvCalculator:
                  omega_m=0.3, 
                  omega_l=0.7,
                  omega_k=0.0,
-                 h=1.0,
+                 H0=100.0, 
+                 h=None,
                  flat=True):
         """
 
@@ -63,6 +64,8 @@ class ScinvCalculator:
             mean_scinv = scalc.calc_mean_scinv(pzsource)
         """
 
+        if h is not None:
+            H0 = 100.0*h
 
         self.zsvals = zsvals
         zsmax=zsvals.max()
@@ -90,7 +93,7 @@ class ScinvCalculator:
         c = cosmo.Cosmo(omega_m=omega_m, 
                         omega_l=omega_l, 
                         omega_k=omega_k, 
-                        h=h, flat=flat)
+                        H0=H0, flat=flat)
 
         for i in range(self.n_zlens):
             zl = self.zlvals[i]

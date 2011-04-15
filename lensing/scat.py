@@ -6,10 +6,14 @@ from sys import stdout
 import esutil as eu
 from esutil.ostools import path_join
 from esutil.numpy_util import where1
+from esutil import cosmology
+#import cosmology
 
 import lensing
+from . import files
+from . import sigmacrit
+from . import regauss
 
-import cosmology
 import copy
 
 import zphot
@@ -126,12 +130,23 @@ class DR8Catalog(dict):
         return wgood, matches
 
 
-
-    def calc_scinv(self, pzrun, show=False):
+    def add_scinv(self, docorr=False, clobber=False, chunksize=100000):
         """
 
-        THIS NEEDS TO BE FINISHED
+        Add a column to the REGAUSS db that is the man scinv as a function of
+        lens redshift.
 
+        if docorr=True, then create scinv using the *corrected* p(z).  This
+        is separate so I can run them in parallel.
+
+        This will be particular to the source sample, and will have name
+        scinv{sample}
+
+        The zlvals will be in the meta data, although they are
+        easily generated using sigmcrit.make_zlvals(dzl, zlmin, zlmax)
+
+        Procedure
+        ---------
         - get the correction factor N(z)/sumpofz(z)
             calls zphot.weighting.pofz_correction(pzrun)
 
@@ -141,8 +156,88 @@ class DR8Catalog(dict):
 
         """
 
-        pzconf = zphot.cascade_config(pzrun)
+        print("\nopening columns '%s'" % self['procrun'])
+        cols = regauss.open_columns(self['procrun'],self['sweeptype'])
+
+        # the colum which will hold the inverse critical density.
+        # depending on keywords, we might want to raise an error
+        if docorr:
+            colname = 'scinv_corr%s' % self['sample']
+        else:
+            colname = 'scinv%s' % self['sample']
+        print("Writing to column:\n",colname)
+        if colname in cols:
+            if not clobber:
+                raise ValueError("Column already exists")
+            else:
+                print("  removing column")
+                cols[colname].delete()
+
+        # get the matches
+        zphot_matchname = 'match_zphot%s' % self['pzrun']
+        if zphot_matchname not in cols:
+            raise ValueError("zphot match column not found: '%s'" % zphot_matchname)
+
+        # get the source z vals
+        pzconf = zphot.cascade_config(self['pzrun'])
+        cosmo = files.json_read('cosmo', self['cosmo_sample'])
+
         wo = zphot.weighting.WeightedOutputs()
+        pofz_file = wo.zhist_file(self['pzrun'])
+        print("reading summed p(z)")
+        sumpofz_struct = eu.io.read(pofz_file)
+        zs = (sumpofz_struct['zmin']+sumpofz_struct['zmax'])/2.
+
+        #
+        # correction factor to apply to all p(z)
+        #
+        if docorr:
+            print("getting p(z) correction function\n")
+            corr = zphot.weighting.pofz_correction(self['pzrun'])
+
+
+        print("")
+        scalc = sigmacrit.ScinvCalculator(zs, self['dzl'], self['zlmin'], self['zlmax'],
+                                          H0=cosmo['H0'], omega_m=cosmo['omega_m'])
+
+        zlvals = scalc.zlvals
+
+
+
+        print("opening corresponding p(z) columns: '%s'\n" % self['pzrun'])
+        pzcols = zphot.weighting.open_pofz_columns(self['pzrun'])
+
+        # work on chunks
+        print("using chunksize:",chunksize)
+        ntot = cols['run'].size
+        nchunk = ntot/chunksize
+        if (ntot % chunksize) > 0:
+            nchunk += 1
+
+        print("nchunk:",nchunk)
+        for i in xrange(nchunk):
+            imin = i*chunksize
+            imax = (i+1)*chunksize
+            print("  ",imin,imax)
+            match = cols[zphot_matchname][imin:imax]
+            
+            nrows = match.size
+            scinv = numpy.zeros((nrows, zlvals.size), dtype='f8') -9999.
+
+            w=where1(match >= 0)
+            print("    ",w.size,"with good matches")
+            if w.size > 0:
+                # read the p(z) for the matches
+                pofz = pzcols['pofz'][match[w]]
+
+                if docorr:
+                    pofz = pofz[:]*corr[:]
+
+                for j in xrange(w.size):
+                    scinv[w[j], :] = scalc.calc_mean_scinv(pofz[j])
+            # metadata only gets written once
+            cols.write_column(colname, scinv, meta={'zlvals':zlvals})
+
 
 
 class DESMockSrcCatalog(dict):

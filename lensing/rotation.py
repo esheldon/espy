@@ -8,18 +8,19 @@ import esutil as eu
 from esutil.ostools import path_join
 from esutil.numpy_util import where1
 import numpy
-from numpy import pi as PI, cos, sin
+from numpy import pi as PI, cos, sin, unique
 
 import lensing
 
+try:
+    import sdsspy
+except:
+    print("lensing.rotation: could not import sdsspy")
 
 def read_rotfile(run, type='eq'):
     f = rotfile(run, type)
-    if not os.path.exists(f):
-        raise ValueError("Rotation file not found: %s" % f)
     print("Reading rotation:",f)
     return eu.io.read(f, lower=True)
-
 def rotfile(run, type='eq'):
     d = rotdir(type)
     f = '%srot-%06i-301.fits' % (type, run)
@@ -30,18 +31,72 @@ def rotdir(type='eq'):
     d = path_join(d, 'sdss-shape-rot', type)
     return d
 
-class Rotator:
-    def __init__(self, type='eq'):
-        self.type=type
+class SDSSRotator:
+    """
+    Rotate objecs from CCD coordinates into either equatorial or survey coords. 
+    """
+    def __init__(self, system='eq'):
+        self.system=system
         self.current_run=None
-    
-    def load_run(self, run):
-        if self.current_run != run:
-            self.rotstruct = read_rotfile(run, self.type)
-            self.current_run = run
 
-    def rotate_e1e2(self, run, camcol, field, filternum, e1pix, e2pix):
+    def rotate_multi(self, runs, camcols, fields, filter, e1pix, e2pix, 
+                     getrot=False, verbose=False):
+
+        e1=numpy.zeros(runs.size, dtype='f8')
+        e2=e1.copy()
+        if getrot:
+            angles = e1.copy()
+
+        urun = unique(runs)
+        for run in urun:
+            if verbose:
+                print("  run:",run)
+            wrun=where1(runs == run)
+            ucamcols = unique(camcols[wrun])
+            for camcol in ucamcols:
+                if verbose:
+                    print("    camcol:",camcol)
+                wc=where1( camcols[wrun] == camcol)
+                wc=wrun[wc]
+                h,rev=eu.stat.histogram(fields[wc], binsize=1, rev=True)
+                for i in xrange(h.size):
+                    if rev[i] != rev[i+1]:
+
+                        wf = rev[rev[i]:rev[i+1]]
+                        wf = wc[wf]
+
+                        #uf = unique(fields[wf])
+                        #if uf.size != 1:
+                        #    raise ValueError("expected unique field")
+
+                        field = fields[wf[0]]
+                        #print("      field:",field)
+
+                        res=self.rotate(run, camcol, field, filter, e1pix[wf], e2pix[wf], 
+                                        getrot=getrot, verbose=verbose)
+                        e1[wf] = res[0]
+                        e2[wf] = res[1]
+                        if getrot:
+                            angles[wf] = res[2]
+
+        if getrot:
+            return e1,e2,angles
+        else:
+            return e1,e2
+
+
+
+
+    def rotate(self, run, camcol, field, filter, e1pix, e2pix,
+               getrot=False, verbose=False):
+        if not numpy.isscalar(run):
+            return self.rotate_multi(run,camcol,field,filter,e1pix,e2pix,
+                                     getrot=getrot, verbose=verbose)
+
         self.load_run(run)
+
+        if verbose:
+            print("%06i-%i-%04i" % (run,camcol,field))
 
         w=where1((self.rotstruct['camcol'] == camcol) & (self.rotstruct['field'] == field) )
         if w.size != 1:
@@ -50,13 +105,25 @@ class Rotator:
             print("here are the fields:",fields)
             raise ValueError("stopping")
 
+        filternum = sdsspy.FILTERNUM[filter]
         cos2angle = self.rotstruct['cos2angle'][w,filternum]
         sin2angle = self.rotstruct['sin2angle'][w,filternum]
 
+        # hmm... this seems to be applying -2*angle rotation...
         e1 =  e1pix*cos2angle + e2pix*sin2angle
         e2 = -e1pix*sin2angle + e2pix*cos2angle
 
-        return e1,e2
+        if getrot:
+            angle = self.rotstruct['angle'][w,filternum]
+            angles = numpy.zeros(e1.size, dtype='f8') + angle[0]
+            return e1, e2, angles
+        else:
+            return e1,e2
+
+    def load_run(self, run):
+        if self.current_run != run:
+            self.rotstruct = read_rotfile(run, self.system)
+            self.current_run = run
 
 def make_rotation_test_data(run=4335, camcol=3, field=100):
     c=lensing.regauss.open_columns('04')
@@ -69,11 +136,12 @@ def make_rotation_test_data(run=4335, camcol=3, field=100):
     camcols = c['camcol'][w]
     fields = c['field'][w]
     w2=where1((camcols == camcol) & (flags == 0) & (fields==field))
+    #w2=where1( camcols == camcol )
     if w2.size == 0:
         raise ValueError("not objects in camcol %s with flags==0" % camcol)
     w=w[w2]
 
-    data = c.read_columns(['ra','dec','field','e1_rg_r','e2_rg_r'], rows=w)
+    data = c.read_columns(['ra','dec','run','camcol','field','e1_rg_r','e2_rg_r'], rows=w)
 
     output = numpy.zeros(data.size, 
                           dtype=[('ra','f8'),('dec','f8'),
@@ -88,22 +156,14 @@ def make_rotation_test_data(run=4335, camcol=3, field=100):
     output['clambda'] =  lam
     output['ceta'] = eta
 
-    eq_rotator = Rotator('eq')
-    survey_rotator = Rotator('survey')
+    eq_rotator = SDSSRotator('eq')
+    survey_rotator = SDSSRotator('survey')
 
-    for field in xrange(data['field'].min(), 1+data['field'].max()):
-        w=where1(data['field'] == field)
-        print("field:",field,"nobj:",w.size)
-        if w.size > 0:
-            e1eq, e2eq = eq_rotator.rotate_e1e2(run,camcol,field,2,
-                                                data['e1_rg_r'][w],data['e2_rg_r'][w])
-            e1surv, e2surv = survey_rotator.rotate_e1e2(run,camcol,field,2,
-                                                        data['e1_rg_r'][w],data['e2_rg_r'][w])
+    g1eq_alt,g2eq_alt = eq_rotator.rotate(data['run'],data['camcol'],data['field'],2,
+                                          data['e1_rg_r'],data['e2_rg_r'],verbose=True)
+    g1eq_alt /= 2 
+    g2eq_alt /= 2 
 
-            output['g1eq'][w] = e1eq/2
-            output['g2eq'][w] = e2eq/2
-            output['g1survey'][w] = e1surv/2
-            output['g2survey'][w] = e2surv/2
 
     output_file=os.path.expanduser('~/tmp/test-rot/test-rot.rec')
     print("writing output file:",output_file)

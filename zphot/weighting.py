@@ -1378,7 +1378,8 @@ def pofz_correction(pzrun):
     Get the "correction", the ratio of recovered weighted
     N(z) to the summed p(z)
     """
-    from biggles import FramedPlot, Histogram, PlotKey
+    import converter
+    from biggles import FramedPlot, Histogram, PlotKey, Table, Points, Curve
     pzconf = zphot.cascade_config(pzrun)
 
     wo = zphot.weighting.WeightedOutputs()
@@ -1405,13 +1406,7 @@ def pofz_correction(pzrun):
         raise ValueError("whist not same size as summed pofz: %s/%s" % (bs['whist'].size,nbin))
 
 
-
-
-
-    print("overall pofz")
-    eu.numpy_util.aprint(sumpofz_struct, format='%15.8f')
-    print("summed N(z)")
-    eu.misc.colprint(bs['low'], bs['high'], bs['whist'], format='%15.8f')
+    #eu.numpy_util.aprint(sumpofz_struct, format='%15.8f')
 
 
     binsize = bs['high'][0] - bs['low'][0]
@@ -1424,18 +1419,43 @@ def pofz_correction(pzrun):
     wnofz_h = Histogram(wnofz/wnofz.sum(), x0=zmin, binsize=binsize, color='blue')
     wnofz_h.label = 'Weighted N(z)'
 
-    key = PlotKey(0.6,0.9, [sumpofz_h, wnofz_h])
-    plt=FramedPlot()
-    plt.add(sumpofz_h, wnofz_h, key)
-    plt.show()
-
 
     sumpofz_norm = sumpofz/sumpofz.sum()
     wnofz_norm = wnofz/wnofz.sum()
 
-    corr = wnofz_norm/sumpofz_norm
-    eu.misc.colprint(corr)
-    print("correction factor")
+    corrall = wnofz_norm/sumpofz_norm
+
+    w=where((bs['center'] > 0.85))
+    corr = corrall.copy()
+    corr[w] = corrall[w].mean()
+
+
+
+    key = PlotKey(0.6,0.9, [sumpofz_h, wnofz_h])
+    hplt=FramedPlot()
+    hplt.xlabel = 'z'
+    hplt.ylabel = 'N(z)'
+    hplt.add(sumpofz_h, wnofz_h, key)
+
+    cplt = FramedPlot()
+    cplt.add( Curve(bs['center'], corrall) )
+    cplt.add( Points(bs['center'], corrall, type='filled circle') )
+    cplt.add( Points(bs['center'], corr, color='blue', type='filled circle') )
+    cplt.xlabel = 'z'
+    cplt.ylabel = r'$N(z)/\Sigma p(z)$'
+
+
+    tab = Table(2,1)
+    tab[0,0] = hplt
+    tab[1,0] = cplt
+    tab.show()
+
+    wo=WeightedOutputs()
+    dir=wo.pofz_dir(pzrun)
+    epsfile=path_join(dir,'pofz-correct-%s.eps' % pzrun)
+    print("Writing eps file:",epsfile)
+    tab.write_eps(epsfile)
+    converter.convert(epsfile, dpi=120, verbose=True)
 
     return corr
 

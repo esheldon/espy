@@ -55,6 +55,8 @@ def output_dir(procrun, sweeptype='gal'):
 def zphot_match(procrun, pzrun, sweeptype='gal'):
     '''
     add a match index into photoz column databases
+
+    The column name will be match_zphot{pzrun}
     '''
 
     print("opening regauss columns for procrun:",procrun)
@@ -693,6 +695,51 @@ class Collator:
         self.procrun=procrun
 
         self.sweep_cols = es_sdsspy.sweeps.open_columns(sweeptype)
+
+    def add_rotated_e1e2(self, filters=['u','g','r','i','z'], system='eq'):
+        from . import rotation
+        rotator = rotation.SDSSRotator(system)
+        c=self.open_columns()
+        print("reading id info")
+        runs    = c['run'][:]
+        camcols = c['camcol'][:]
+        fields  = c['field'][:]
+
+
+        for filter in filters:
+            print("filter: '%s'" % filter)
+
+            e1col='e1_rg_'+system+'_'+filter
+            e2col='e2_rg_'+system+'_'+filter
+            rotcol='rot_'+system+'_'+filter
+
+            print("  Reading corrflags,e1,e2")
+
+            flags = c['corrflags_rg_'+filter][:]
+            e1pix = c['e1_rg_'+filter][:]
+            e2pix = c['e2_rg_'+filter][:]
+            print("  selecting corrflags == 0")
+            w=where1(flags == 0)
+            print("    found: %i/%i" % (w.size,flags.size))
+            print("  rotating")
+            te1, te2, tangle = rotator.rotate(runs[w], camcols[w], fields[w], filter,
+                                              e1pix[w], e2pix[w], getrot=True)
+
+            e1new = numpy.zeros(e1pix.size, dtype='f8') - 9999.
+            e2new = e1new.copy()
+            angles = e1new.copy()
+
+            e1new[w] = te1
+            e2new[w] = te2
+            angles[w] = tangle
+
+            print("writing new column:",e1col)
+            c.write_column(e1col, e1new, create=True)
+            print("writing new column:",e2col)
+            c.write_column(e2col, e2new, create=True)
+            print("writing rotation column:",rotcol)
+            c.write_column(rotcol, angles, create=True)
+
 
     def collate_as_columns_byband(self):
         """
