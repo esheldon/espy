@@ -1,3 +1,17 @@
+"""
+
+Find objects with > N observations.  Start by limiting to the stripe82 runs,
+and then just read through them. Save a collated file of 
+
+    combined flux in each band
+    single epoch fluxes.
+    seeing
+
+Based on the combined flux, we can do excellent s/g separation.  Then bin the
+objects by their single-epoch flux and seeing and look at the distribution of
+concentration.
+
+"""
 from __future__ import print_function
 
 import numpy
