@@ -34,6 +34,8 @@
 
 import sys
 
+from . import sg
+
 from . import select
 from . import transform
 from . import files
