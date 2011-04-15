@@ -36,6 +36,8 @@ class DR8Catalog(dict):
     Before using, make sure you have matched the regauss cols with your chosen
     photoz sample using lensing.regauss.zphot_match()
 
+    Run add_scinv() before running create_objshear_input()
+
     """
     def __init__(self, sample):
         conf = lensing.files.json_read('scat', sample)
@@ -49,13 +51,6 @@ class DR8Catalog(dict):
 
         self.open_all_columns()
 
-    def open_all_columns(self):
-        print("opening regauss columns for procrun:",self['procrun'])
-        self.rgcols = lensing.regauss.open_columns(self['procrun'], self['sweeptype'])
-        print("  #rows:",self.rgcols['photoid'].size)
-        print("opening zphot columns for pzrun:",self['pzrun'])
-        self.pzcols = zphot.weighting.open_pofz_columns(self['pzrun'])
-        print("  #rows:",self.pzcols['photoid'].size)
 
     def create_objshear_input(self):
         filter=self['filter']
@@ -69,13 +64,17 @@ class DR8Catalog(dict):
         output = numpy.zeros(keep.size, dtype=dt)
 
         print("extracting basic columns and copying into output")
+        scinv_colname = 'scinv%s' % self['sample']
+        print("  reading ra,dec,g1,g2,err")
         output['ra'][:] = self.rgcols['ra'][keep]
         output['dec'][:] = self.rgcols['dec'][keep]
-        #output['g1'][:] = self.rgcols['e1_rg_'+filter+'_eq'][keep]
-        #output['g2'][:] = self.rgcols['e2_rg_'+filter+'_eq'][keep]
-        output['g1'][:] = self.rgcols['e1_rg_'+filter][keep]
-        output['g2'][:] = self.rgcols['e2_rg_'+filter][keep]
+        output['g1'][:] = self.rgcols['e1_rg_'+filter+'_eq'][keep]
+        output['g2'][:] = self.rgcols['e2_rg_'+filter+'_eq'][keep]
+        #output['g1'][:] = self.rgcols['e1_rg_'+filter][keep]
+        #output['g2'][:] = self.rgcols['e2_rg_'+filter][keep]
         output['err'][:] = self.rgcols['uncer_rg_'+filter][keep]
+        print("  reading",scinv_colname)
+        output['scinv'][:] = self.rgcols[scinv_colname][keep]
         
         return output
         raise ValueError("need to add equatorial rotated shapes")
@@ -238,6 +237,13 @@ class DR8Catalog(dict):
             # metadata only gets written once
             cols.write_column(colname, scinv, meta={'zlvals':zlvals})
 
+    def open_all_columns(self):
+        print("opening regauss columns for procrun:",self['procrun'])
+        self.rgcols = lensing.regauss.open_columns(self['procrun'], self['sweeptype'])
+        print("  #rows:",self.rgcols['photoid'].size)
+        print("opening zphot columns for pzrun:",self['pzrun'])
+        self.pzcols = zphot.weighting.open_pofz_columns(self['pzrun'])
+        print("  #rows:",self.pzcols['photoid'].size)
 
 
 class DESMockSrcCatalog(dict):
