@@ -231,8 +231,8 @@ class Stripe82Epochs:
                  ('flags','i4',5),
                  ('flags2','i4',5),
                  ('calib_status','i4',5),
-                 ('cmodelflux','f4',5),
-                 ('cmodelflux_ivar','f4',5),
+                 ('modelflux','f4',5),
+                 ('modelflux_ivar','f4',5),
                  ('psfflux','f4',5),
                  ('psfflux_ivar','f4',5)]
 
@@ -248,9 +248,8 @@ class Stripe82Epochs:
             out['objc_flags'][0:mg.size] = gal['objc_flags']
             out['calib_status'][0:mg.size] = gal['calib_status']
 
-            flux,ivar = sdsspy.make_cmodelflux(gal)
-            out['cmodelflux'][0:mg.size] = flux
-            out['cmodelflux_ivar'][0:mg.size] = ivar
+            out['modelflux'][0:mg.size] = gal['modelflux']
+            out['modelflux_ivar'][0:mg.size] = gal['modelflux_ivar']
             out['psfflux'][0:mg.size] = gal['psfflux']
             out['psfflux_ivar'][0:mg.size] = gal['psfflux_ivar']
 
@@ -265,9 +264,8 @@ class Stripe82Epochs:
             out['objc_flags'][mg.size:] = star['objc_flags']
             out['calib_status'][mg.size:] = star['calib_status']
 
-            flux,ivar = sdsspy.make_cmodelflux(star)
-            out['cmodelflux'][mg.size:] = flux
-            out['cmodelflux_ivar'][mg.size:] = ivar
+            out['modelflux'][mg.size:] = star['modelflux']
+            out['modelflux_ivar'][mg.size:] = star['modelflux_ivar']
             out['psfflux'][mg.size:] = star['psfflux']
             out['psfflux_ivar'][mg.size:] = star['psfflux_ivar']
 
@@ -346,8 +344,14 @@ class Stripe82Epochs:
         for ftype in ['psf','cmodel']:
             for filter in ['g','r','i']:
                 fnum=sdsspy.FILTERNUM[filter]
-                out[ftype+'flux_'+filter] = data[ftype+'flux'][:,fnum]
-                out[ftype+'flux_ivar_'+filter] = data[ftype+'flux_ivar'][:,fnum]
+
+                if ftype == 'cmodel':
+                    # we couldn't get cmodel because stars don't have dev,exp
+                    out['modelflux_'+filter] = data['modelflux'][:,fnum]
+                    out['modelflux_ivar_'+filter] = data['modelflux_ivar'][:,fnum]
+                else:
+                    out[ftype+'flux_'+filter] = data[ftype+'flux'][:,fnum]
+                    out[ftype+'flux_ivar_'+filter] = data[ftype+'flux_ivar'][:,fnum]
 
                 out[ftype+'_nuse_'+filter] = data[ftype+'_nuse'][:,fnum]
 
@@ -413,12 +417,13 @@ class Stripe82Epochs:
 
                  ('objc_type','i1'),
 
-                 ('cmodelflux_g','f4'),
-                 ('cmodelflux_ivar_g','f4'),
-                 ('cmodelflux_r','f4'),
-                 ('cmodelflux_ivar_r','f4'),
-                 ('cmodelflux_i','f4'),
-                 ('cmodelflux_ivar_i','f4'),
+                 # can't use cmodel because stars don't have exp/dev!
+                 ('modelflux_g','f4'),
+                 ('modelflux_ivar_g','f4'),
+                 ('modelflux_r','f4'),
+                 ('modelflux_ivar_r','f4'),
+                 ('modelflux_i','f4'),
+                 ('modelflux_ivar_i','f4'),
 
                  ('psfflux_g','f4'),
                  ('psfflux_ivar_g','f4'),
@@ -515,7 +520,7 @@ class Stripe82Epochs:
             cmodel_mean_r = cols['cmodelflux_mean_r'][w]
             psf_mean_r = cols['psfflux_mean_r'][w]
 
-        cmodel_r = cols['cmodelflux_r'][w]
+        model_r = cols['modelflux_r'][w]
         psf_r = cols['psfflux_r'][w]
 
         logcmodel_mean_r = log10( cmodel_mean_r.clip(0.001,cmodel_mean_r.max()) )
@@ -525,7 +530,7 @@ class Stripe82Epochs:
         maxc=1.
         cbinsize=0.01
         cmean = 1.0-psf_mean_r/cmodel_mean_r
-        c = 1.0-psf_r/cmodel_r
+        c = 1.0-psf_r/model_r
 
         w=where1((cmean > minc) & (cmean < maxc) )
 
@@ -646,8 +651,9 @@ def get_select_logic(objs, rflux_lim):
     fl = sel.flag_logic()
 
 
-    flux = sdsspy.make_cmodelflux(objs, doivar=False)
-    flux_logic = flux[:,2] > rflux_lim
+    #flux = sdsspy.make_cmodelflux(objs, doivar=False)
+    rflux = objs['modelflux'][:,2]
+    flux_logic = rflux > rflux_lim
 
     return flux_logic & fl
 
