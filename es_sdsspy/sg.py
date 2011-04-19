@@ -491,7 +491,26 @@ class Stripe82Epochs:
         return cmodelflux, cmodelflux_ivar, psfflux, psfflux_ivar
 
 
-    def primary_sg(self, nrunmin=10, combine_gri=True):
+    def plot_nuse(self, cmodel_nuse, psf_nuse):
+        import biggles
+
+        hcmodel=eu.stat.histogram(cmodel_nuse,more=True)
+        hpsf=eu.stat.histogram(psf_nuse,more=True)
+        plt=biggles.FramedPlot()
+
+        p_hcmodel = biggles.Histogram(hcmodel['hist'], x0=hcmodel['low'][0], binsize=1, color='blue')
+        p_hpsf = biggles.Histogram(hpsf['hist'], x0=hpsf['low'][0], binsize=1, color='red')
+
+        p_hcmodel.label = 'cmodel'
+        p_hpsf.label = 'psf'
+
+        key=biggles.PlotKey(0.9,0.9,[p_hcmodel,p_hpsf], halign='right')
+
+        plt.add(p_hcmodel, p_hpsf, key)
+        plt.xlabel = 'number of exposures'
+        plt.show()
+
+    def primary_sg(self, nrunmin=10, combine_gri=True, nperbin=100000, linear=True):
         """
         Do s/g separation on the primary, coadd fluxes
 
@@ -507,7 +526,17 @@ class Stripe82Epochs:
 
         cmodel_nuse = cols['cmodel_nuse_r'][:]
         psf_nuse = cols['psf_nuse_r'][:]
+
+        # make plot *before* cut
+        self.plot_nuse(cmodel_nuse, psf_nuse)
+
         w=where1((cmodel_nuse >= nrunmin) & (psf_nuse >= nrunmin))
+        if w.size == 0:
+            raise ValueError("none passed nrunmim of",nrunmin)
+
+        cmodel_nuse=cmodel_nuse[w]
+        psf_nuse=psf_nuse[w]
+
 
         if combine_gri:
             print("getting combined gri for mean flux")
@@ -526,21 +555,40 @@ class Stripe82Epochs:
         logcmodel_mean_r = log10( cmodel_mean_r.clip(0.001,cmodel_mean_r.max()) )
 
         # 1.9 is about 21.8
-        minc=-.1
-        maxc=1.
-        cbinsize=0.01
-        cmean = 1.0-psf_mean_r/cmodel_mean_r
-        c = 1.0-psf_r/model_r
+        if linear:
+            minc=-.1
+            maxc=1.
+            cbinsize=0.01
+            cmean = 1.0-psf_mean_r/cmodel_mean_r
+            c = 1.0-psf_r/model_r
+            xtitle='1-psf/cmodel'
+        else:
+            minc=-0.05
+            maxc=0.6
+            cbinsize=0.005
+            cmean = -log10(psf_mean_r/cmodel_mean_r)
+            c     = -log10(psf_r/model_r)
+
+            #cmean -= 0.03
+            #c -= 0.03
+            off=0.2
+            power=0.4
+            cmean = (cmean+off)**power - off**power
+            c = (c+off)**power - off**power
+            minc = -0.1
+            maxc=0.4
+            xtitle=r'$log_{10}(cmodel/psf)$'
 
         w=where1((cmean > minc) & (cmean < maxc) )
 
-        nperbin=100000
         hdict = eu.stat.histogram(logcmodel_mean_r[w], 
                                   min=0.2, 
                                   nperbin=nperbin, 
                                   more=True)
         h=hdict['hist']
         rev=hdict['rev']
+
+        nruntext = biggles.PlotLabel(0.9,0.9,'nexp >= %d' % nrunmin, halign='right')
         for i in xrange(hdict['hist'].size):
             if rev[i] != rev[i+1]:
                 wbin=rev[ rev[i]:rev[i+1] ]
@@ -563,13 +611,17 @@ class Stripe82Epochs:
 
                 plt=biggles.FramedPlot()
                 plt.add(p_cmean_h, p_c_h, key)
-                plt.xtitle='1-psf/cmodel'
-                ftext=biggles.PlotLabel(0.9,0.9,r'$%0.2f < log_{10}(f) < %0.2f$' % (min_logr,max_logr),
+                plt.xtitle=xtitle
+
+                ftext=biggles.PlotLabel(0.9,0.85,r'$%0.2f < log_{10}(f) < %0.2f$' % (min_logr,max_logr),
                                         halign='right')
-                mtext=biggles.PlotLabel(0.9,0.8,r'$%0.2f < mag < %0.2f$' % (22.5-2.5*min_logr,22.5-2.5*max_logr),
+                mtext=biggles.PlotLabel(0.9,0.8,r'$%0.2f > mag > %0.2f$' % (22.5-2.5*min_logr,22.5-2.5*max_logr),
                                         halign='right')
+                zerocurve =biggles.Curve([0.0,0.0],[0.0,cmean_h.max()*1.1], color='blue')
                 plt.add(ftext)
                 plt.add(mtext)
+                plt.add(nruntext)
+                plt.add(zerocurve)
                 plt.show()
                 k=raw_input('hit a key (q to quit): ')
                 if k == 'q':
@@ -795,3 +847,5 @@ def test(data=None, logc=False):
     tab.show()
 
 
+#class MCMC2Gauss:
+#    pass
