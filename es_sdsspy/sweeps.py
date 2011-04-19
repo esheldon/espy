@@ -1,3 +1,10 @@
+"""
+Classes
+-------
+    Proc: process the sweeps by run,camcol
+    ColumnSelector: Select into a pycolumns database
+
+"""
 from __future__ import print_function
 import os,sys
 from sys import stdout
@@ -6,6 +13,7 @@ import numpy
 from numpy import where
 import sdsspy
 import esutil
+import esutil as eu
 from esutil.ostools import getenv_check, path_join
 
 import datetime
@@ -632,4 +640,78 @@ class ColumnSelector:
 
 
 
+
+class SweepExtractor:
+    def __init__(self, photoid, allow_nomatch=False):
+        self.photoid=photoid
+
+        run,rerun,camcol,field,id=sdsspy.photoid_extract(photoid)
+        self.run=run
+        self.rerun=rerun
+        self.camcol=camcol
+        self.field=field
+        self.id=id
+
+        self.allow_nomatch = allow_nomatch
+
+    def histogram_runcamcol(self):
+        # histogram on a run-camcol combination
+        print("histogramming run-camcol")
+        combid = self.run*10 + self.camcol
+        h,rev = eu.stat.histogram(combid, binsize=1, rev=True)
+        return h,rev
+
+    def open_output(self, filename):
+        print("opening file:",filename)
+        filename=os.path.expandvars(filename)
+        filename=os.path.expanduser(filename)
+        if os.path.exists(filename):
+            print("Removing existing file")
+            os.remove(filename)
+
+        return eu.sfile.Open(filename,'w')
+
+    def extract(self, columns, filename):
+        fobj = self.open_output(filename)
+        h,rev = self.histogram_runcamcol()
+        for i in xrange(h.size):
+            if rev[i] != rev[i+1]:
+                print("%i/%i" % (i+1,h.size))
+                w=rev[ rev[i]:rev[i+1] ]
+                data = self.extract_runcamcol(w, columns)
+                fobj.write(data)
+
+        fobj.close()
+
+    def extract_runcamcol(self, w, columns):
+        run = self.run[w[0]]
+        camcol = self.camcol[w[0]]
+
+        gal = sdsspy.read('calibobj.gal', run, camcol, lower=True,verbose=True)
+        star = sdsspy.read('calibobj.star', run, camcol, lower=True, verbose=True)
+
+        gid = sdsspy.photoid(gal)
+        sid = sdsspy.photoid(star)
+
+        data = []
+        m,mg = eu.numpy_util.match(self.photoid[w], gid)
+        if m.size > 0:
+            gal = gal[mg]
+            gdata = eu.numpy_util.extract_fields(gal, columns, strict=True)
+            data.append(gdata)
+
+        m,ms = eu.numpy_util.match(self.photoid[w], sid)
+        if m.size > 0:
+            star = star[ms]
+            sdata = eu.numpy_util.extract_fields(star, columns, strict=True)
+            data.append(sdata)
+
+        data = eu.numpy_util.combine_arrlist(data)
+        if data.size != w.size:
+            mess = "Some objects did not match: %i/%i" % (data.size,w.size)
+            if not self.allow_nomatch:
+                raise mess
+            else:
+                print(mess)
+        return data
 

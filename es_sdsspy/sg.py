@@ -42,6 +42,12 @@ class Stripe82Epochs:
             default 10
         rlim: scalar, optional
             limit on not extinction corrected r-band flux. Default is 1.0 (22.5)
+
+        Run methods in this order
+            collate()  collate the primary objects and epochs
+            extract_psf_fwhm()  get psf_fwhm from the sweeps for the epochs
+            collate_psf_fwhm()  collate the psf_fwhm into the epochs
+
         """
         self.nrunmin=nrunmin
         self.rlim=rlim
@@ -57,6 +63,67 @@ class Stripe82Epochs:
         d=self.dir()
         d = path_join(d, type+'.cols')
         return d
+    def open_columns(self, type):
+        d=self.coldir(type)
+        return columns.Columns(d)
+
+    def extract_psf_fwhm(self):
+        """
+        This could have been avoided had I added psf_fwhm to the epochs
+        Not all will match the sweeps, we will have to collate the results
+        """
+        import es_sdsspy
+        sgdir = self.dir()
+        extract_file = path_join(sgdir, 'epochs82-psf-fwhm.rec')
+
+        cols = self.open_columns('epochs82')
+
+        extract_cols = ['run','rerun','camcol','field','id','psf_fwhm']
+
+        pid = cols['photoid'][:]
+        se=es_sdsspy.sweeps.SweepExtractor(pid, allow_nomatch=True)
+        se.extract(extract_cols, extract_file)
+
+    def collate_psf_fwhm(self):
+        """
+        Collate the results from matching epochs to sweeps to get psf_fwhm.
+        """
+        print("opening columns")
+        cols = self.open_columns('epochs82')
+        print("getting photoid")
+        pid = cols['photoid'][:]
+
+        sgdir = self.dir()
+        extract_file = path_join(sgdir, 'epochs82-psf-fwhm.rec')
+        print("reading psf_fwhm from:",extract_file)
+        fwhm_data = eu.io.read(extract_file)
+
+
+
+        print("matching")
+        fwhm_pid = sdsspy.photoid(fwhm_data)
+        m,ms = eu.numpy_util.match(pid, fwhm_pid)
+
+        print("  matched %i/%i" % (m.size,pid.size))
+
+        fwhm = numpy.zeros(pid.size, dtype='f4')
+
+        print("writing psf_fwhm_g")
+        fwhm[:] = -9999.
+        fwhm[m] = fwhm_data['psf_fwhm'][ms,1]
+        cols.write_column('psf_fwhm_g', fwhm, create=True)
+
+        print("writing psf_fwhm_r")
+        fwhm[:] = -9999.
+        fwhm[m] = fwhm_data['psf_fwhm'][ms,2]
+        cols.write_column('psf_fwhm_r', fwhm, create=True)
+
+        print("writing psf_fwhm_i")
+        fwhm[:] = -9999.
+        fwhm[m] = fwhm_data['psf_fwhm'][ms,3]
+        cols.write_column('psf_fwhm_i', fwhm, create=True)
+
+
 
     def collate(self):
         """
@@ -93,7 +160,7 @@ class Stripe82Epochs:
                     # selection and such
                     print("  selecting r-band nrunmin >",self.nrunmin)
 
-                    model_nuse = data['model_nuse'][:,2]
+                    model_nuse = data['cmodel_nuse'][:,2]
                     psf_nuse   = data['psf_nuse'][:,2]
                     w=where1( (psf_nuse >= self.nrunmin) & (model_nuse >= self.nrunmin) )
 
@@ -123,7 +190,11 @@ class Stripe82Epochs:
 
                                 nexpected = self.calc_expected_nepoch(data)
                                 if epochs.size != nexpected:
-                                    raise ValueError("Expected",nexpected,"epochs, but found",epochs.size)
+                                    #if nexpected-epochs.size == 1:
+                                    #print("FOUND ERROR nexpected greater than epochs by 1. primary bug?")
+                                    #else:
+                                    #    raise ValueError("Expected",nexpected,"epochs, but found",epochs.size)
+                                    print("ERROR: Expected",nexpected,"epochs, but found",epochs.size)
 
                                 print("      found:",epochs.size)
                                 print("    making epochs output")
@@ -147,7 +218,9 @@ class Stripe82Epochs:
         sphotoid = sdsspy.photoid(star)
 
         mdata_g, mg = eu.numpy_util.match(photoid, gphotoid)
+        print("      gal matches:",mg.size)
         mdata_s, ms = eu.numpy_util.match(photoid, sphotoid)
+        print("      star matches:",ms.size)
 
         nmatch = mdata_g.size + mdata_s.size
         if nmatch == 0:
@@ -158,8 +231,8 @@ class Stripe82Epochs:
                  ('flags','i4',5),
                  ('flags2','i4',5),
                  ('calib_status','i4',5),
-                 ('modelflux','f4',5),
-                 ('modelflux_ivar','f4',5),
+                 ('cmodelflux','f4',5),
+                 ('cmodelflux_ivar','f4',5),
                  ('psfflux','f4',5),
                  ('psfflux_ivar','f4',5)]
 
@@ -168,30 +241,35 @@ class Stripe82Epochs:
 
         #data_keep = numpy.zeros(nmatch, dtype=data.dtype)
         if mg.size > 0:
+            gal = gal[mg]
             out['photoid'][0:mg.size] = gphotoid[mg]
-            out['flags'][0:mg.size] = gal['flags'][mg]
-            out['flags2'][0:mg.size] = gal['flags2'][mg]
-            out['objc_flags'][0:mg.size] = gal['objc_flags'][mg]
-            out['calib_status'][0:mg.size] = gal['calib_status'][mg]
+            out['flags'][0:mg.size] = gal['flags']
+            out['flags2'][0:mg.size] = gal['flags2']
+            out['objc_flags'][0:mg.size] = gal['objc_flags']
+            out['calib_status'][0:mg.size] = gal['calib_status']
 
-            out['modelflux'][0:mg.size] = gal['modelflux'][mg]
-            out['modelflux_ivar'][0:mg.size] = gal['modelflux_ivar'][mg]
-            out['psfflux'][0:mg.size] = gal['psfflux'][mg]
-            out['psfflux_ivar'][0:mg.size] = gal['psfflux_ivar'][mg]
+            flux,ivar = sdsspy.make_cmodelflux(gal)
+            out['cmodelflux'][0:mg.size] = flux
+            out['cmodelflux_ivar'][0:mg.size] = ivar
+            out['psfflux'][0:mg.size] = gal['psfflux']
+            out['psfflux_ivar'][0:mg.size] = gal['psfflux_ivar']
 
             for n in data.dtype.names:
                 out[n][0:mg.size] = data[n][mdata_g]
 
         if ms.size > 0:
+            star=star[ms]
             out['photoid'][mg.size:] = sphotoid[ms]
-            out['flags'][mg.size:] = star['flags'][ms]
-            out['flags2'][mg.size:] = star['flags2'][ms]
-            out['objc_flags'][mg.size:] = star['objc_flags'][ms]
+            out['flags'][mg.size:] = star['flags']
+            out['flags2'][mg.size:] = star['flags2']
+            out['objc_flags'][mg.size:] = star['objc_flags']
+            out['calib_status'][mg.size:] = star['calib_status']
 
-            out['modelflux'][mg.size:] = star['modelflux'][ms]
-            out['modelflux_ivar'][mg.size:] = star['modelflux_ivar'][ms]
-            out['psfflux'][mg.size:] = star['psfflux'][ms]
-            out['psfflux_ivar'][mg.size:] = star['psfflux_ivar'][ms]
+            flux,ivar = sdsspy.make_cmodelflux(star)
+            out['cmodelflux'][mg.size:] = flux
+            out['cmodelflux_ivar'][mg.size:] = ivar
+            out['psfflux'][mg.size:] = star['psfflux']
+            out['psfflux_ivar'][mg.size:] = star['psfflux_ivar']
 
             for n in data.dtype.names:
                 out[n][mg.size:] = data[n][mdata_s]
@@ -199,7 +277,7 @@ class Stripe82Epochs:
         return out
 
     def calc_expected_nepoch(self,data):
-        model_nuse = data['model_nuse'][:,2]
+        model_nuse = data['cmodel_nuse'][:,2]
         psf_nuse = data['psf_nuse'][:,2]
         nuse = numpy.where(model_nuse > psf_nuse, model_nuse, psf_nuse)
         return nuse.sum()
@@ -228,7 +306,7 @@ class Stripe82Epochs:
 
                 # first extract those that were actually used according
                 # to the criteria for selecting the primaries above
-                w=where1(epochs['model_used'][:,2] == 1)
+                w=where1(epochs['cmodel_used'][:,2] == 1)
                 if w.size == 0:
                     raise ValueError("found none that were used!")
 
@@ -240,7 +318,6 @@ class Stripe82Epochs:
                     w=where1(epochs['primary_photoid'] == pid)
                     if w.size == 0:
                         raise ValueError("no matches for pid",pid)
-                    #keep[w] = 1
 
                     epochs_indices[wfield[j]] = epochs_index
                     epochs_count[wfield[j]] = w.size
@@ -264,8 +341,9 @@ class Stripe82Epochs:
         out = numpy.zeros(data.size, dtype=dtype)
 
         out['photoid'] = sdsspy.photoid(data)
+        out['objc_type'] = data['objc_type']
 
-        for ftype in ['psf','model']:
+        for ftype in ['psf','cmodel']:
             for filter in ['g','r','i']:
                 fnum=sdsspy.FILTERNUM[filter]
                 out[ftype+'flux_'+filter] = data[ftype+'flux'][:,fnum]
@@ -285,11 +363,9 @@ class Stripe82Epochs:
         out['primary_photoid'] = data['primary_photoid']
 
         out['photoid'] = sdsspy.photoid(data)
-        #out['psf_fwhm_g'] = data['psf_fwhm'][:,1]
-        #out['psf_fwhm_r'] = data['psf_fwhm'][:,2]
-        #out['psf_fwhm_i'] = data['psf_fwhm'][:,3]
+        out['objc_type'] = data['objc_type']
 
-        for ftype in ['psf','model']:
+        for ftype in ['psf','cmodel']:
             for filter in ['g','r','i']:
                 fnum=sdsspy.FILTERNUM[filter]
                 out[ftype+'flux_'+filter] = data[ftype+'flux'][:,fnum]
@@ -303,21 +379,19 @@ class Stripe82Epochs:
         dtype = [('photoid','i8'),
                  ('primary_photoid','i8'),
 
-                 #('psf_fwhm_g','f4'),
-                 #('psf_fwhm_r','f4'),
-                 #('psf_fwhm_i','f4'),
+                 ('objc_type','i1'),
 
-                 ('model_used_g','i1'),
-                 ('modelflux_g','f4'),
-                 ('modelflux_ivar_g','f4'),
+                 ('cmodel_used_g','i1'),
+                 ('cmodelflux_g','f4'),
+                 ('cmodelflux_ivar_g','f4'),
 
-                 ('model_used_r','i1'),
-                 ('modelflux_r','f4'),
-                 ('modelflux_ivar_r','f4'),
+                 ('cmodel_used_r','i1'),
+                 ('cmodelflux_r','f4'),
+                 ('cmodelflux_ivar_r','f4'),
 
-                 ('model_used_i','i1'),
-                 ('modelflux_i','f4'),
-                 ('modelflux_ivar_i','f4'),
+                 ('cmodel_used_i','i1'),
+                 ('cmodelflux_i','f4'),
+                 ('cmodelflux_ivar_i','f4'),
 
                  ('psf_used_g','i1'),
                  ('psfflux_g','f4'),
@@ -337,12 +411,14 @@ class Stripe82Epochs:
                  ('epochs_index','i4'), # index into the epochs
                  ('epochs_count','i4'), # number of objects in the epochs
 
-                 ('modelflux_g','f4'),
-                 ('modelflux_ivar_g','f4'),
-                 ('modelflux_r','f4'),
-                 ('modelflux_ivar_r','f4'),
-                 ('modelflux_i','f4'),
-                 ('modelflux_ivar_i','f4'),
+                 ('objc_type','i1'),
+
+                 ('cmodelflux_g','f4'),
+                 ('cmodelflux_ivar_g','f4'),
+                 ('cmodelflux_r','f4'),
+                 ('cmodelflux_ivar_r','f4'),
+                 ('cmodelflux_i','f4'),
+                 ('cmodelflux_ivar_i','f4'),
 
                  ('psfflux_g','f4'),
                  ('psfflux_ivar_g','f4'),
@@ -351,16 +427,16 @@ class Stripe82Epochs:
                  ('psfflux_i','f4'),
                  ('psfflux_ivar_i','f4'),
 
-                 ('model_nuse_g','i2'),
-                 ('model_nuse_r','i2'),
-                 ('model_nuse_i','i2'),
+                 ('cmodel_nuse_g','i2'),
+                 ('cmodel_nuse_r','i2'),
+                 ('cmodel_nuse_i','i2'),
 
-                 ('modelflux_mean_g','f4'),
-                 ('modelflux_mean_ivar_g','f4'),
-                 ('modelflux_mean_r','f4'),
-                 ('modelflux_mean_ivar_r','f4'),
-                 ('modelflux_mean_i','f4'),
-                 ('modelflux_mean_ivar_i','f4'),
+                 ('cmodelflux_mean_g','f4'),
+                 ('cmodelflux_mean_ivar_g','f4'),
+                 ('cmodelflux_mean_r','f4'),
+                 ('cmodelflux_mean_ivar_r','f4'),
+                 ('cmodelflux_mean_i','f4'),
+                 ('cmodelflux_mean_ivar_i','f4'),
 
                  ('psf_nuse_g','i2'),
                  ('psf_nuse_r','i2'),
@@ -373,6 +449,126 @@ class Stripe82Epochs:
                  ('psfflux_mean_i','f4'),
                  ('psfflux_mean_ivar_i','f4')]
         return dtype
+
+    def load_primary_avg_gri(self, indices=None):
+        cols = self.open_columns('primary82')
+
+        cmodel_mean_g = cols['cmodelflux_mean_g'][:]
+        cmodel_mean_ivar_g = cols['cmodelflux_mean_ivar_g'][:]
+
+        psf_mean_g = cols['psfflux_mean_g'][:]
+        psf_mean_ivar_g = cols['psfflux_mean_ivar_g'][:]
+
+        cmodel_mean_r = cols['cmodelflux_mean_r'][:]
+        cmodel_mean_ivar_r = cols['cmodelflux_mean_ivar_r'][:]
+
+        psf_mean_r = cols['psfflux_mean_r'][:]
+        psf_mean_ivar_r = cols['psfflux_mean_ivar_r'][:]
+
+        cmodel_mean_i = cols['cmodelflux_mean_i'][:]
+        cmodel_mean_ivar_i = cols['cmodelflux_mean_ivar_i'][:]
+
+        psf_mean_i = cols['psfflux_mean_i'][:]
+        psf_mean_ivar_i = cols['psfflux_mean_ivar_i'][:]
+
+        cmodelflux, cmodelflux_ivar = avg_gri(cmodel_mean_g, cmodel_mean_ivar_g,
+                                            cmodel_mean_r, cmodel_mean_ivar_r,
+                                            cmodel_mean_i, cmodel_mean_ivar_i)
+        psfflux, psfflux_ivar = avg_gri(psf_mean_g, psf_mean_ivar_g,
+                                        psf_mean_r, psf_mean_ivar_r,
+                                        psf_mean_i, psf_mean_ivar_i)
+
+        if indices is not None:
+            cmodelflux=cmodelflux[indices]
+            cmodelflux_ivar=cmodelflux_ivar[indices]
+            psfflux=psfflux[indices]
+            psfflux_ivar=psfflux_ivar[indices]
+        return cmodelflux, cmodelflux_ivar, psfflux, psfflux_ivar
+
+
+    def primary_sg(self, nrunmin=10, combine_gri=True):
+        """
+        Do s/g separation on the primary, coadd fluxes
+
+        flux to mags of 1.6 is about 22
+        flux log10(flux) mags
+        1    0.0         22.5
+        1.6  0.2         22.0
+        3    0.48        21.3
+        4    0.6         21.0
+        """
+        import biggles
+        cols = self.open_columns('primary82')
+
+        cmodel_nuse = cols['cmodel_nuse_r'][:]
+        psf_nuse = cols['psf_nuse_r'][:]
+        w=where1((cmodel_nuse >= nrunmin) & (psf_nuse >= nrunmin))
+
+        if combine_gri:
+            print("getting combined gri for mean flux")
+            fname='mean flux gri'
+            cmodel_mean_r, cmodel_mean_ivar_r, psf_mean_r, psf_mean_ivar_r = \
+                self.load_primary_avg_gri(indices=w)
+        else:
+            fname='mean flux r'
+            print("getting r-band for mean flux")
+            cmodel_mean_r = cols['cmodelflux_mean_r'][w]
+            psf_mean_r = cols['psfflux_mean_r'][w]
+
+        cmodel_r = cols['cmodelflux_r'][w]
+        psf_r = cols['psfflux_r'][w]
+
+        logcmodel_mean_r = log10( cmodel_mean_r.clip(0.001,cmodel_mean_r.max()) )
+
+        # 1.9 is about 21.8
+        minc=-.1
+        maxc=1.
+        cbinsize=0.01
+        cmean = 1.0-psf_mean_r/cmodel_mean_r
+        c = 1.0-psf_r/cmodel_r
+
+        w=where1((cmean > minc) & (cmean < maxc) )
+
+        nperbin=100000
+        hdict = eu.stat.histogram(logcmodel_mean_r[w], 
+                                  min=0.2, 
+                                  nperbin=nperbin, 
+                                  more=True)
+        h=hdict['hist']
+        rev=hdict['rev']
+        for i in xrange(hdict['hist'].size):
+            if rev[i] != rev[i+1]:
+                wbin=rev[ rev[i]:rev[i+1] ]
+                wbin = w[wbin]
+
+                min_logr = hdict['low'][i]
+                max_logr = hdict['high'][i]
+                print(wbin.size,min_logr,max_logr)
+
+                cmean_h=eu.stat.histogram(cmean[wbin], min=minc, max=maxc, binsize=cbinsize)
+                c_h=eu.stat.histogram(c[wbin], min=minc, max=maxc, binsize=cbinsize)
+
+                p_cmean_h=biggles.Histogram(cmean_h, x0=minc, binsize=cbinsize)
+                p_cmean_h.label = fname
+
+                p_c_h=biggles.Histogram(c_h, x0=minc, binsize=cbinsize, color='grey')
+                p_c_h.label = 'SE flux'
+                
+                key = biggles.PlotKey(0.9,0.5,[p_cmean_h,p_c_h], halign='right')
+
+                plt=biggles.FramedPlot()
+                plt.add(p_cmean_h, p_c_h, key)
+                plt.xtitle='1-psf/cmodel'
+                ftext=biggles.PlotLabel(0.9,0.9,r'$%0.2f < log_{10}(f) < %0.2f$' % (min_logr,max_logr),
+                                        halign='right')
+                mtext=biggles.PlotLabel(0.9,0.8,r'$%0.2f < mag < %0.2f$' % (22.5-2.5*min_logr,22.5-2.5*max_logr),
+                                        halign='right')
+                plt.add(ftext)
+                plt.add(mtext)
+                plt.show()
+                k=raw_input('hit a key (q to quit): ')
+                if k == 'q':
+                    return
 
 def stripe82_run_list():
     """
@@ -430,11 +626,11 @@ def avg_gri(flux_g, ivar_g,
     return flux, ivarsum
 
 
-def calc_c(modelflux, psfflux, log=False):
+def calc_c(cmodelflux, psfflux, log=False):
     if log:
-        return -log10(psfflux/modelflux)
+        return -log10(psfflux/cmodelflux)
     else:
-        return 1.0-psfflux/modelflux
+        return 1.0-psfflux/cmodelflux
 
 
 def get_select_logic(objs, rflux_lim):
@@ -448,19 +644,12 @@ def get_select_logic(objs, rflux_lim):
 
     sel = select.Selector(objs)
     fl = sel.flag_logic()
-    ol = sel.object1_logic()
-    bl = sel.binned_logic()
 
 
-    #rflux = sdsspy.dered_fluxes(objs['extinction'][:,2],objs['modelflux'][:,2])
-    if 'modelflux' in objs.dtype.names:
-        flux_logic = objs['modelflux'][:,2] > rflux_lim
-    elif 'modelflux_r' in objs.dtype.names:
-        flux_logic = objs['modelflux_r'] > rflux_lim
-    else:
-        raise ValueError("need modelflux or modelflux_r in struct")
+    flux = sdsspy.make_cmodelflux(objs, doivar=False)
+    flux_logic = flux[:,2] > rflux_lim
 
-    return flux_logic & fl & ol & bl
+    return flux_logic & fl
 
 
 def read_test_data():
