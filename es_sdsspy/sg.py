@@ -21,7 +21,7 @@ from __future__ import print_function
 
 import os
 import numpy
-from numpy import log10, unique
+from numpy import log10, unique, sqrt, exp
 import esutil as eu
 from esutil.numpy_util import where1
 from esutil.ostools import path_join
@@ -622,10 +622,46 @@ class Stripe82Epochs:
                 plt.add(mtext)
                 plt.add(nruntext)
                 plt.add(zerocurve)
+
+
                 plt.show()
                 k=raw_input('hit a key (q to quit): ')
                 if k == 'q':
                     return
+
+class TwoGaussClass:
+    def __init__(self, x, y, yerr):
+        self.x = x
+        self.y = y
+        self.yerr=yerr
+        self.ivar = 1.0/yerr**2
+
+    def chi2(self, pars):
+        if pars[0] <= 1.e-6 or pars[2] <= 1.e-6 or pars[3] <= 1.e-6 or pars[5] <= 1.e-6:
+            return -1.e15
+
+        yfunc = self.twogauss(pars)
+        chi2 = self.ivar*(self.y-yfunc)**2
+        return chi2.sum()
+
+
+    def twogauss(self, pars):
+        g1 = self.gauss(pars[0:3] )
+        g2 = self.gauss(pars[3:] )
+
+        return g1+g2
+
+    def gauss(self, pars):
+        siginv2 = 1./pars[2]**2
+
+        g = exp(-0.5*(self.x-pars[1])**2*siginv2)
+
+        norm = pars[0]*sqrt(siginv2/2./numpy.pi)
+        #norm = A
+
+        g *= norm
+        return g
+
 
 def stripe82_run_list():
     """
@@ -847,5 +883,88 @@ def test(data=None, logc=False):
     tab.show()
 
 
-#class MCMC2Gauss:
-#    pass
+def fit2gauss(x, y, nrunmin=20):
+    data=eu.io.read('~/tmp/cmodel-psf-nuse.rec')
+
+    w=where1((data['cmodel_nuse_r'] > nrunmin) & (data['psf_nuse_r'] > nrunmin))
+    data = data[w]
+
+def test_mcmc2gauss():
+    import biggles
+    import mcmc
+    import scipy.optimize
+
+    N1 = 10000
+    N2 = 10000
+
+    m1 = 0.0
+    sig1 = 0.05
+    m2 = 0.7
+    sig2 = 0.6
+
+    data1 = numpy.random.standard_normal(N1)*sig1 + m1
+    data2 = numpy.random.standard_normal(N2)*sig2 + m2
+    data = numpy.zeros(N1+N2, dtype='f8')
+    data[0:N1] = data1
+    data[N1:] = data2
+
+    binsize=sig1*0.2
+    hdict = eu.stat.histogram(data, binsize=binsize, more=True)
+    hdict1 = eu.stat.histogram(data1, binsize=binsize, more=True)
+    hdict2 = eu.stat.histogram(data2, binsize=binsize, more=True)
+
+    hp = biggles.Histogram(hdict['hist'], x0=hdict['low'][0], binsize=binsize)
+    hp1 = biggles.Histogram(hdict1['hist'], x0=hdict1['low'][0], binsize=binsize,color='blue')
+    hp2 = biggles.Histogram(hdict2['hist'], x0=hdict2['low'][0], binsize=binsize,color='red')
+
+    data_hplt=biggles.FramedPlot()
+    data_hplt.add(hp, hp1, hp2)
+
+    x = numpy.array(hdict['center'], dtype='f8')
+    y = numpy.array(hdict['hist'], dtype='f8')
+    yerr = sqrt(hdict['hist'])
+    #yerr = yerr.clip(1., yerr.max())
+    yerr=numpy.ones(x.size,dtype='f8')
+
+    # normalization needs the delta x in it!
+    dx = x[1]-x[0]
+    parguess = [N1*dx, m1, sig1, N2*dx, m2, sig2]
+
+    gf = TwoGaussClass(x, y, yerr)
+    parguess=tuple(parguess)
+
+    res = scipy.optimize.fmin(gf.chi2, parguess)
+
+    best_N1 = res[0]
+    best_m1 = res[1]
+    best_sig1 = res[2]
+    best_N2 = res[3]
+    best_m2 = res[4]
+    best_sig2 = res[5]
+
+    print("parguess:",parguess)
+    print("best N1:",best_N1)
+    print("best m1:",best_m1)
+    print("best sig1:",best_sig1)
+    print("best N2:",best_N2)
+    print("best m2:",best_m2)
+    print("best sig2:",best_sig2)
+
+    yfit = gf.twogauss(res)
+    if res[1] > res[4]:
+        yfit1 = gf.gauss(res[3:])
+        yfit2 = gf.gauss(res[0:3])
+    else:
+        yfit1 = gf.gauss(res[0:3])
+        yfit2 = gf.gauss(res[3:])
+    data_hplt.add(biggles.Curve(x, yfit))
+    data_hplt.add(biggles.Curve(x, yfit1,color='blue'))
+    data_hplt.add(biggles.Curve(x, yfit2, color='red'))
+    data_hplt.show()
+
+
+    return res
+
+
+
+

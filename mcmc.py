@@ -85,15 +85,18 @@ def read_results(filename):
 def result_dtype(npar):
     return [('pars',('f8',npar)), ('like','f8')]
 
-def extract_stats(data, burnin):
+def extract_stats(data, burnin, sigma_clip=True):
     npar = data['pars'].shape[1]
 
     means = numpy.zeros(npar,dtype='f8')
     errs  = numpy.zeros(npar,dtype='f8')
 
     for i in xrange(npar):
-        means[i] = data['pars'][burnin:, i].mean()
-        errs[i] = data['pars'][burnin:, i].std()
+        if not sigma_clip:
+            means[i] = data['pars'][burnin:, i].mean()
+            errs[i] = data['pars'][burnin:, i].std()
+        else:
+            means[i], errs[i] = esutil.stat.sigma_clip(data['pars'][burnin:, i])
 
     return means, errs
 
@@ -211,8 +214,8 @@ class MCMC():
         # If seed sent use it, else just generate one
         numpy.random.seed(seed)
 
-        if isinstance(parguess, (numpy.ndarray, tuple, list)):
-            self.parguess = numpy.array(parguess, ndmin=1, copy=False)
+        if not numpy.isscalar(parguess):
+            self.parguess = numpy.array(parguess, dtype='f8')
             self.npar = self.parguess.size
         else:
             self.parguess = parguess
@@ -225,7 +228,7 @@ class MCMC():
         else:
             output = self.result_struct(nstep)
 
-        self.oldpars = self.parguess
+        self.oldpars = self.parguess.copy()
         self.oldlike = self.obj.likelihood(self.oldpars)
 
         for i in xrange(nstep):
@@ -557,6 +560,32 @@ class MCMCTester:
 
     def get_results(self):
         return self.trials, self.like
+
+
+def plot_results6(res, burnin, sigma_clip=True):
+    import biggles
+    tab = biggles.Table(2,3)
+    means,errs = extract_stats(res, burnin, sigma_clip=sigma_clip)
+    
+    for i in xrange(6):
+        irow = i//3
+        icol = i % 3
+        binsize=errs[i]*0.2
+        min = means[i]-4.0*errs[i]
+        max = means[i]+4.0*errs[i]
+        hdict = esutil.stat.histogram(res['pars'][burnin:, i], 
+                                      binsize=binsize, 
+                                      min=min,max=max,
+                                      more=True)
+
+        hplot = biggles.Histogram(hdict['hist'], x0=hdict['low'][0], binsize=binsize)
+        plt=biggles.FramedPlot()
+        plt.add(hplot)
+        plt.xlabel = 'parameter %i' % i
+
+        tab[irow,icol] = plt
+
+    tab.show()
 
 
 def test(nstep=10000, doplot=False, hardcopy=False):
