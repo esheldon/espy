@@ -67,6 +67,43 @@ class Stripe82Epochs:
         d=self.coldir(type)
         return columns.Columns(d)
 
+    def match_rg(self, rgrun):
+        import lensing
+        cols=self.open_columns('primary82')
+        rgcols=lensing.regauss.open_columns(rgrun)
+        print("reading photoid")
+        photoid = cols['photoid'][:]
+        print("  read",photoid.size)
+
+        print("reading rg photoid")
+        rg_photoid = rgcols['photoid'][:]
+        print("  read",rg_photoid.size)
+
+        print("doing match")
+        #mrg,mc = eu.numpy_util.match(rg_photoid, photoid)
+        mc,mrg = eu.numpy_util.match(photoid, rg_photoid)
+        mc.tofile('/home/users/esheldon/tmp/mc.dat')
+        mrg.tofile('/home/users/esheldon/tmp/mrg.dat')
+        print("  matched",mrg.size)
+
+        rgindex = numpy.zeros(photoid.size, dtype='i4') - 9999
+        rgindex[mc] = numpy.array(mrg, dtype='i4')
+
+        colname = 'rgmatch%s' % rgrun
+
+        cols.write_column(colname, rgindex, create=True)
+
+        """
+        print("    cutting R > 1/3")
+        R = rgcols['R_rg_r'][mrg]
+        wkeep=where1(R > 0.3333)
+        print("    kept",wkeep.size)
+        mrg=mrg[wkeep]
+        mc=mc[wkeep]
+
+        return mc
+        """
+
     def extract_psf_fwhm(self):
         """
         This could have been avoided had I added psf_fwhm to the epochs
@@ -510,7 +547,8 @@ class Stripe82Epochs:
         plt.xlabel = 'number of exposures'
         plt.show()
 
-    def primary_sg(self, nrunmin=10, combine_gri=True, nperbin=100000, linear=True):
+
+    def primary_sg(self, nrunmin=10, combine_gri=True, nperbin=50000, linear=True, rg=None):
         """
         Do s/g separation on the primary, coadd fluxes
 
@@ -522,22 +560,45 @@ class Stripe82Epochs:
         4    0.6         21.0
         """
         import biggles
+        import scipy.optimize
+        import lensing
+
         cols = self.open_columns('primary82')
 
         cmodel_nuse = cols['cmodel_nuse_r'][:]
         psf_nuse = cols['psf_nuse_r'][:]
 
         # make plot *before* cut
-        self.plot_nuse(cmodel_nuse, psf_nuse)
+        #self.plot_nuse(cmodel_nuse, psf_nuse)
 
         w=where1((cmodel_nuse >= nrunmin) & (psf_nuse >= nrunmin))
         if w.size == 0:
             raise ValueError("none passed nrunmim of",nrunmin)
 
+        if rg is not None:
+            print("matching rg")
+            rgmcol = 'rgmatch%s' % rg
+            rgm = cols[rgmcol][w]
+            wrg = where1(rgm >= 0)
+            w=w[wrg]
+            rgm=rgm[wrg]
+
+            print("    with matches:",w.size)
+
+            rgcols=lensing.regauss.open_columns(rg)
+            print("    cutting R > 1/3")
+            R = rgcols['R_rg_r'][rgm]
+            wkeep=where1(R > 0.3333)
+            print("      kept",wkeep.size)
+
+            w=w[wkeep]
+
+
         cmodel_nuse=cmodel_nuse[w]
         psf_nuse=psf_nuse[w]
 
 
+        objc_type = cols['objc_type'][w]
         if combine_gri:
             print("getting combined gri for mean flux")
             fname='mean flux gri'
@@ -552,6 +613,7 @@ class Stripe82Epochs:
         model_r = cols['modelflux_r'][w]
         psf_r = cols['psfflux_r'][w]
 
+
         logcmodel_mean_r = log10( cmodel_mean_r.clip(0.001,cmodel_mean_r.max()) )
 
         # 1.9 is about 21.8
@@ -564,19 +626,20 @@ class Stripe82Epochs:
             xtitle='1-psf/cmodel'
         else:
             minc=-0.05
-            maxc=0.6
+            maxc=0.4
             cbinsize=0.005
             cmean = -log10(psf_mean_r/cmodel_mean_r)
             c     = -log10(psf_r/model_r)
 
             #cmean -= 0.03
             #c -= 0.03
-            off=0.2
+            off=0.1
             power=0.4
             cmean = (cmean+off)**power - off**power
             c = (c+off)**power - off**power
+            cbinsize = 0.002
             minc = -0.1
-            maxc=0.4
+            maxc=0.6
             xtitle=r'$log_{10}(cmodel/psf)$'
 
         w=where1((cmean > minc) & (cmean < maxc) )
@@ -591,54 +654,112 @@ class Stripe82Epochs:
         nruntext = biggles.PlotLabel(0.9,0.9,'nexp >= %d' % nrunmin, halign='right')
         for i in xrange(hdict['hist'].size):
             if rev[i] != rev[i+1]:
+
+                plt=biggles.FramedPlot()
+
                 wbin=rev[ rev[i]:rev[i+1] ]
                 wbin = w[wbin]
 
+
                 min_logr = hdict['low'][i]
                 max_logr = hdict['high'][i]
-                print(wbin.size,min_logr,max_logr)
 
-                cmean_h=eu.stat.histogram(cmean[wbin], min=minc, max=maxc, binsize=cbinsize)
-                c_h=eu.stat.histogram(c[wbin], min=minc, max=maxc, binsize=cbinsize)
+                cmean_h=eu.stat.histogram(cmean[wbin], min=minc, max=maxc, binsize=cbinsize, more=True)
 
-                p_cmean_h=biggles.Histogram(cmean_h, x0=minc, binsize=cbinsize)
+
+                p_cmean_h=biggles.Histogram(cmean_h['hist'], x0=minc, binsize=cbinsize)
                 p_cmean_h.label = fname
 
-                p_c_h=biggles.Histogram(c_h, x0=minc, binsize=cbinsize, color='grey')
+                c_h=eu.stat.histogram(c[wbin], min=minc, max=maxc, binsize=cbinsize, more=True)
+                p_c_h=biggles.Histogram(c_h['hist'], x0=minc, binsize=cbinsize, color='grey')
                 p_c_h.label = 'SE flux'
-                
-                key = biggles.PlotKey(0.9,0.5,[p_cmean_h,p_c_h], halign='right')
 
-                plt=biggles.FramedPlot()
-                plt.add(p_cmean_h, p_c_h, key)
+                key = biggles.PlotKey(0.9,0.5,[p_cmean_h,p_c_h], halign='right')
+                plt.add(p_c_h, p_cmean_h)
+
+                wstar=where1(objc_type[wbin] == 6); 
+                if wstar.size > 0:
+                    wstar=wbin[wstar]
+                    cstar_h=eu.stat.histogram(cmean[wstar], min=minc, max=maxc, binsize=cbinsize, more=True)
+                    p_cstar_h=biggles.Histogram(cstar_h['hist'], x0=minc, binsize=cbinsize, color='blue')
+                    plt.add(p_cstar_h)
+
+
+                wgal=where1(objc_type[wbin] == 3); 
+                if wgal.size > 0:
+                    wgal=wbin[wgal]
+                    cgal_h=eu.stat.histogram(cmean[wgal], min=minc, max=maxc, binsize=cbinsize, more=True)
+                    p_cgal_h=biggles.Histogram(cgal_h['hist'], x0=minc, binsize=cbinsize, color='red')
+                    plt.add(p_cgal_h)
+
+
+                plt.add(key)
+                
+
                 plt.xtitle=xtitle
 
                 ftext=biggles.PlotLabel(0.9,0.85,r'$%0.2f < log_{10}(f) < %0.2f$' % (min_logr,max_logr),
                                         halign='right')
                 mtext=biggles.PlotLabel(0.9,0.8,r'$%0.2f > mag > %0.2f$' % (22.5-2.5*min_logr,22.5-2.5*max_logr),
                                         halign='right')
-                zerocurve =biggles.Curve([0.0,0.0],[0.0,cmean_h.max()*1.1], color='blue')
                 plt.add(ftext)
                 plt.add(mtext)
                 plt.add(nruntext)
-                plt.add(zerocurve)
 
+
+                """
+
+                yerr=numpy.sqrt(cmean_h['hist'])
+                yerr=yerr.clip(1.0, yerr.max())
+                gf = TwoGaussClass(cmean_h['center'], cmean_h['hist'], yerr)
+                parguess=(0.5*wbin.size*cbinsize, 0.025, 0.01, 
+                          0.5*wbin.size*cbinsize, 0.125, 0.05)
+                res = scipy.optimize.fmin(gf.chi2, parguess)
+                #res = scipy.optimize.fmin_powell(gf.chi2, parguess)
+                print(res)
+
+                yfit = gf.twogauss(res)
+                yfit1 = gf.gauss(res[0:3])
+                yfit2 = gf.gauss(res[3:])
+
+                plt.add(biggles.Curve(cmean_h['center'], yfit))
+                if res[1] < res[4]:
+                    plt.add(biggles.Curve(cmean_h['center'], yfit1, color='blue'))
+                    plt.add(biggles.Curve(cmean_h['center'], yfit2, color='red'))
+                else:
+                    plt.add(biggles.Curve(cmean_h['center'], yfit2, color='blue'))
+                    plt.add(biggles.Curve(cmean_h['center'], yfit1, color='red'))
+ 
+                """
+               
+                
 
                 plt.show()
                 k=raw_input('hit a key (q to quit): ')
                 if k == 'q':
                     return
+def fit2gauss(x, y, yerr, parguess):
+    """
+    """
+    data=eu.io.read('~/tmp/cmodel-psf-nuse.rec')
+
+    w=where1((data['cmodel_nuse_r'] > nrunmin) & (data['psf_nuse_r'] > nrunmin))
+    data = data[w]
 
 class TwoGaussClass:
-    def __init__(self, x, y, yerr):
-        self.x = x
-        self.y = y
-        self.yerr=yerr
-        self.ivar = 1.0/yerr**2
+    def __init__(self, x, y, yerr=None):
+        self.x = numpy.array(x, dtype='f8', copy=False)
+        self.y = numpy.array(y, dtype='f8', copy=False)
+
+        if yerr is None:
+            self.yerr = numpy.ones(x.size, dtype='f8')
+        else:
+            self.yerr=numpy.array(yerr, dtype='f8', copy=False)
+        self.ivar = 1.0/self.yerr**2
 
     def chi2(self, pars):
         if pars[0] <= 1.e-6 or pars[2] <= 1.e-6 or pars[3] <= 1.e-6 or pars[5] <= 1.e-6:
-            return -1.e15
+            return 1.e15
 
         yfunc = self.twogauss(pars)
         chi2 = self.ivar*(self.y-yfunc)**2
@@ -883,13 +1004,8 @@ def test(data=None, logc=False):
     tab.show()
 
 
-def fit2gauss(x, y, nrunmin=20):
-    data=eu.io.read('~/tmp/cmodel-psf-nuse.rec')
 
-    w=where1((data['cmodel_nuse_r'] > nrunmin) & (data['psf_nuse_r'] > nrunmin))
-    data = data[w]
-
-def test_mcmc2gauss():
+def test_fit2gauss():
     import biggles
     import mcmc
     import scipy.optimize
