@@ -504,11 +504,20 @@ class WeightedTraining:
             newt['catid'] = catid
 
             newt['weight'] = 1.0
+
+            '''
             newt['cmodelmag_dered_r'] = t['cmodelmag_dered'][:,2]
             newt['model_umg'] = t['modelmag_dered'][:,0]-t['modelmag_dered'][:,1]
             newt['model_gmr'] = t['modelmag_dered'][:,1]-t['modelmag_dered'][:,2]
             newt['model_rmi'] = t['modelmag_dered'][:,2]-t['modelmag_dered'][:,3]
             newt['model_imz'] = t['modelmag_dered'][:,3]-t['modelmag_dered'][:,4]
+            '''
+            newt['cmodelmag_dered_r'] = t['cmodelmag_dered_r']
+            newt['model_umg'] = t['modelmag_dered_u']-t['modelmag_dered_g']
+            newt['model_gmr'] = t['modelmag_dered_g']-t['modelmag_dered_r']
+            newt['model_rmi'] = t['modelmag_dered_r']-t['modelmag_dered_i']
+            newt['model_imz'] = t['modelmag_dered_i']-t['modelmag_dered_z']
+
 
             newt['z'] = t['z']
 

@@ -6,6 +6,12 @@ import es_sdsspy
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
+parser.add_option("-p","--primary",
+                  default=False,
+                  action="store_true",
+                  help="Restrict to primary objects")
+
+
 
 options, args = parser.parse_args(sys.argv[1:])
 if len(args) < 1:
@@ -13,12 +19,8 @@ if len(args) < 1:
     sys.exit(45)
 
 type = args[0]
-#primary = options.primary
+primary = options.primary
 
-#make_indices = options.make_indices
-#sel = sdsspy.sweeps.ColumnSelector(type,primary=primary)
-#sel.process_all()
-
-collator = es_sdsspy.sweeps_collate.Collator(type)
+collator = es_sdsspy.sweeps_collate.Collator(type, primary=primary)
 collator.run()
 

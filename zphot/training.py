@@ -8,11 +8,13 @@ import pprint
 import copy
 
 import numpy
-from numpy import where
+from numpy import where, sqrt, linspace, exp, pi as PI
 
 import esutil as eu
 from esutil.ostools import path_join
 from esutil.numpy_util import where1
+
+import sdsspy
 
 import biggles
 
@@ -130,11 +132,32 @@ Carlos
 
         dt = copy.deepcopy(dtype.descr)
         dt.append( ('photoid','i8') )
-        dt.append( ('modelmag_dered','f4',5) )
-        dt.append( ('modelmag_dered_err','f4',5) )
-        dt.append( ('cmodelmag_dered','f4',5) )
-        dt.append( ('cmodelmag_dered_err','f4',5) )
-        dt.append( ('psf_fwhm','f4',5) )
+
+        dt.append( ('mspec','i4') )
+        dt.append( ('mphot','i4') )
+
+        dt.append( ('modelmag_dered_u', 'f4') )
+        dt.append( ('modelmag_dered_g', 'f4') )
+        dt.append( ('modelmag_dered_r', 'f4') )
+        dt.append( ('modelmag_dered_i', 'f4') )
+        dt.append( ('modelmag_dered_z', 'f4') )
+
+        dt.append( ('cmodelmag_dered_r','f4') )
+
+        '''
+        dt.append( ('modelmag_dered_err_u', 'f4') )
+        dt.append( ('modelmag_dered_err_g', 'f4') )
+        dt.append( ('modelmag_dered_err_r', 'f4') )
+        dt.append( ('modelmag_dered_err_i', 'f4') )
+        dt.append( ('modelmag_dered_err_z', 'f4') )
+        '''
+
+        dt.append( ('survey_primary','i1') )
+        dt.append( ('cmodelmag_dered_err_r','f4') )
+
+
+
+        dt.append( ('psf_fwhm_r','f4') )
 
         if 'primus' in type:
             dt.append( ('z','f4') )
@@ -152,151 +175,312 @@ Carlos
         # the mask or rmax cuts here, that should come
         # out in the weighting
 
-        if self.no_photo_cuts:
-            procrun=self.photo_conf['procrun']
-            import sdssgal
-            cols = sdssgal.open_columns(procrun)
+        photo_sample = self.conf["photo_sample"]
+        zcs = zphot.select.ColumnSelector(photo_sample)
 
-            stdout.write("\nReading ALL photoid,mag,cmag\n")
-            photoid = cols['photoid'][:]
-            mag = cols['modelmag_dered'][:]
-            magerr = cols['modelmag_dered_err'][:]
-            cmag = cols['cmodelmag_dered'][:]
-            cmagerr = cols['cmodelmag_dered_err'][:]
+        # select with multi-epoch data
+        zcs.select(primary=False)
 
-            stdout.write('Reading ALL ra/dec/htmid\n')
-            ra = cols['ra'][:]
-            dec = cols['dec'][:]
-            htmid = cols['htmid10'][:]
-        else:
-            photo_sample = self.conf["photo_sample"]
-            zcs = zphot.select.ColumnSelector(photo_sample)
+        indices = zcs.keep_indices.copy()
 
-            zcs.select()
+        print("\nReading photoid,mag,cmag")
+        photoid = zcs.cols['photoid'][indices]
 
-            indices = zcs.keep_indices.copy()
+        mag_u    = zcs.cols['modelmag_dered_u'][indices]
+        mag_g    = zcs.cols['modelmag_dered_g'][indices]
+        mag_r    = zcs.cols['modelmag_dered_r'][indices]
+        mag_i    = zcs.cols['modelmag_dered_i'][indices]
+        mag_z    = zcs.cols['modelmag_dered_z'][indices]
 
-            stdout.write("\nReading photoid,mag,cmag\n")
-            photoid = zcs.cols['photoid'][indices]
-            mag = zcs.cols['modelmag_dered'][indices]
-            magerr = zcs.cols['modelmag_dered_err'][indices]
-            cmag = zcs.cols['cmodelmag_dered'][indices]
-            cmagerr = zcs.cols['cmodelmag_dered_err'][indices]
 
-            psf_fwhm = zcs.cols['psf_fwhm'][indices]
+        cmag_r = zcs.cols['cmodelmag_dered_r'][indices]
+        cmag_err_r = zcs.cols['cmodelmag_dered_err_r'][indices]
 
-            rmin = zcs.conf['cmodel_rmin']
-            rmax = zcs.conf['cmodel_rmax']
+        print("Reading survey_primary, psf_fwhm_r")
+        survey_primary = zcs.cols['survey_primary'][indices]
+        psf_fwhm_r = zcs.cols['psf_fwhm_r'][indices]
 
-            if (cmag[:,2].min() < rmin) or (cmag[:,2].max() > rmax):
-                raise ValueError("Expected max rmag within [%s,%s]\n" % (rmin,rmax))
 
-            # get all ra/dec for matching
-            stdout.write('Reading ra/dec/htmid\n')
-            ra = zcs.cols['ra'][indices]
-            dec = zcs.cols['dec'][indices]
-            htmid = zcs.cols['htmid10'][indices]
+        rmin = zcs.conf['cmodel_rmin']
+        rmax = zcs.conf['cmodel_rmax']
+
+        if (cmag_r.min() < rmin) or (cmag_r.max() > rmax):
+            raise ValueError("Expected max rmag within [%s,%s]\n" % (rmin,rmax))
+
+        # get all ra/dec for matching
+        print('Reading ra/dec')
+        ra = zcs.cols['ra'][indices]
+        dec = zcs.cols['dec'][indices]
 
         h = eu.htm.HTM(10)
-
+        htmid = h.lookup_id(ra,dec)
         minid = htmid.min()
         maxid = htmid.max()
-        stdout.write("Getting htmrev\n")
+        print("Getting htmrev")
         hist,htmrev = eu.stat.histogram(htmid-minid, rev=True)
 
+        htminfo={'htmid':htmid,
+                 'minid':minid,
+                 'maxid':maxid,
+                 'htmrev':htmrev}
+
         # match within 2 arcsec
-        matchrad = 2.0/3600.0
+        #matchrad_arcsec = 2.0
+        #matchrad_arcsec = 1.0
+        #matchrad = matchrad_arcsec/3600.0
         
         for type in self.types:
-            stdout.write('\n' + '-'*70+'\n')
+            print('\n' + '-'*70)
             spec = self.read_original(type)
 
             w = self.make_specific_cuts(spec, type)
             spec = spec[w]
 
-            stdout.write("Matching\n")
-            mspec,mphot,d12 = h.match(spec['ra'],spec['dec'], ra,dec,
-                                      matchrad,
-                                      htmid2 = htmid, 
-                                      minid=minid,
-                                      maxid=maxid,
-                                      htmrev2=htmrev)
+            mspec, mphot = self.extract_good_matches(ra, dec, cmag_r, cmag_err_r, survey_primary, htminfo,
+                                                     spec['ra'], spec['dec'])
 
-            mphot_u = numpy.unique1d(mphot)
-            print('%s/%s are unique' % (mphot_u.size,mphot.size))
-            stdout.write("Matched: %s/%s\n" % (mspec.size,spec.size))
+            mspec_u = numpy.unique(mspec)
+            print('%s/%s of spec matches are unique' % (mspec_u.size,mspec.size))
+            mphot_u = numpy.unique(mphot)
+            print('%s/%s of photo matches are unique' % (mphot_u.size,mphot.size))
+
             dt = self.matched_dtype(spec.dtype.descr, type)
             output = numpy.zeros(mspec.size,dtype=dt)
             eu.numpy_util.copy_fields(spec[mspec],output)
 
+            output['mspec'] = mspec
+            output['mphot'] = mphot
+
             if 'primus' in type:
                 output['z'] = output['zprimus']
             
-            stdout.write("copying photoid\n")
+            print("copying photoid")
             output['photoid'] = photoid[mphot]
 
-            stdout.write("copying mags\n")
+            print("copying mags/fwhm")
 
             # note we don't want to read the matches directly from the columns
             # database this way because there are duplicates in mphot.  We must
             # keep in memory to do duplicate subscripting
 
-            output['modelmag_dered']      = mag[mphot]
-            output['modelmag_dered_err']  = magerr[mphot]
-            output['cmodelmag_dered']     = cmag[mphot]
-            output['cmodelmag_dered_err'] = cmagerr[mphot]
-            output['psf_fwhm'] = psf_fwhm[mphot]
+            output['modelmag_dered_u']  = mag_u[mphot]
+            output['modelmag_dered_g']  = mag_g[mphot]
+            output['modelmag_dered_r']  = mag_r[mphot]
+            output['modelmag_dered_i']  = mag_i[mphot]
+            output['modelmag_dered_z']  = mag_z[mphot]
+
+            output['cmodelmag_dered_r'] = cmag_r[mphot]
+            output['cmodelmag_dered_err_r'] = cmag_err_r[mphot]
+
+            output['psf_fwhm_r'] = psf_fwhm_r[mphot]
+
+            output['survey_primary'] = survey_primary[mphot]
 
             # sanity check
             if not self.no_photo_cuts:
-                if ((output['cmodelmag_dered'][:,2].max() > rmax) or
-                    (output['cmodelmag_dered'][:,2].min() < rmin) ):
+                if ((output['cmodelmag_dered_r'].max() > rmax) or
+                    (output['cmodelmag_dered_r'].min() < rmin) ):
                     raise ValueError("Expected output rmag in [%s,%s]\n" % (rmin,rmax))
 
             # during matching we might end up with some too-faint mags for
             # the sdss
             if type == 'sdssobjids':
-                stdout.write("    limiting SDSS training set to r < %s\n" \
+                print("    limiting SDSS training set to r < %s" \
                              % self.conf['sdss_rmax'])
-                w,=where( output['cmodelmag_dered'][:,2] < self.conf['sdss_rmax'])
-                stdout.write("        keeping %s/%s\n" % (w.size,mphot.size))
+                w,=where( output['cmodelmag_dered_r'] < self.conf['sdss_rmax'])
+                print("        keeping %s/%s" % (w.size,mphot.size))
                 output = output[w]
             
 
             # this may be sample dependant.
             zmin = self.conf['zmin']
             zmax = self.conf['zmax']
-            stdout.write("Selecting spec to be in redshift "
-                         "range: [%s,%s]\n" % (zmin,zmax))
+            print("Selecting spec to be in redshift "
+                  "range: [%s,%s]" % (zmin,zmax))
             z = output['z']
             w,=where((z > zmin) & (z < zmax))
-            stdout.write("Keeping %s/%s\n" % (w.size,mphot.size))
+            print("Keeping %s/%s" % (w.size,mphot.size))
             output = output[w]
 
 
 
             outname=self.fname_matched(type)
-            stdout.write("Writing to match file: %s\n" % outname)
+            print("Writing to match file:",outname)
             hdr = copy.deepcopy(self.conf)
 
             origfile=self.fname_original(type)
             hdr['original_file'] = os.path.basename(origfile)
             eu.io.write(outname, output, delim=' ', header=hdr)
 
+    def extract_good_matches(self, ra, dec, cmag_r, cmag_err_r, survey_primary, htminfo,
+                             spec_ra, spec_dec, 
+                             nsigma=2.5, matchrad=1./3600.):
+        """
+        Match by ra/dec.
+
+        Demand one of the matches is survey_primary, and use it as a reference
+        point to remove outliers at nsigma in flux.
+
+        Choosing nsigma=2.5 and 1'' match radius to make sure we get good matches
+
+        """
+
+        maxmatch=100
+        print("Matching to %0.2f arcsec" % (matchrad*3600.,))
+        h=eu.htm.HTM(10)
+
+        mspec,mphot,d12 = h.match(spec_ra,spec_dec, ra, dec,
+                                  matchrad,
+                                  htmid2=htminfo['htmid'], 
+                                  minid=htminfo['minid'],
+                                  maxid=htminfo['maxid'],
+                                  htmrev2=htminfo['htmrev'],
+                                  maxmatch=maxmatch)
+
+        print("Matched: %s/%s" % (mspec.size,spec_ra.size))
+        if mspec.size == 0:
+            return mspec, mphot
+        print("  unique:",numpy.unique(mspec).size)
+
+        print("  getting good flux matches")
+
+        h,rev = eu.stat.histogram(mspec, binsize=1, rev=True)
+        keep = numpy.zeros(mspec.size, dtype='i1')
+
+        for i in xrange(h.size):
+            if rev[i] != rev[i+1]:
+
+                # indices of mspec/mphot that have a particular index into
+                # mspec
+                w=rev[ rev[i]:rev[i+1] ]
+
+
+                # make sure this makes sense
+                wbad=where1(mspec[w] != mspec[w[0]])
+                if wbad != 0:
+                    raise ValueError("expected all indices to have same mspec")
+                
+                # indices into the photometric sample
+                wphot=mphot[w]
+                flux, ivar = sdsspy.mag2nmgy(cmag_r[wphot], cmag_err_r[wphot])
+
+                werr=where1(ivar > 0.)
+                if werr.size > 0:
+                    # reduce the indices into mspec/mphot
+                    w=w[werr]
+
+                    # trim photometric data
+                    flux=flux[werr]
+                    ivar=ivar[werr]
+                    wphot=wphot[werr]
+
+
+                    # demand a survey primary match
+                    wp = where1(survey_primary[wphot] == 1)
+                    if wp.size > 0:
+                        # always keep the primary
+                        keep[w[wp]] = 1
+
+                        wphot_primary = wphot[wp[0]]
+
+
+                        # flux in primary will be reference
+                        pflux, pivar = sdsspy.mag2nmgy(cmag_r[wphot_primary], 
+                                                       cmag_err_r[wphot_primary])
+
+                        # nsigma in the combined error
+                        err = sqrt(1./ivar)
+                        perr = sqrt(1./pivar)
+
+                        comb_err = sqrt(err**2 + perr**2)
+
+                        wgood = where1( abs(flux-pflux) < nsigma*comb_err)
+                        if wgood.size > 0:
+                            w=w[wgood]
+                            keep[w] = 1
+
+        wkeep = where1(keep == 1)
+        print("  kept: %s/%s" % (wkeep.size, keep.size))
+        if wkeep.size > 0:
+            mspec = mspec[wkeep]
+            mphot = mphot[wkeep]
+        else:
+            mspec = numpy.array([],dtype='i4')
+            mphot = numpy.array([],dtype='i4')
+
+        return mspec, mphot
+
+    def plot_matches(self, type, index=None, data=None, nmatchmin=5):
+        if data is None:
+            data=self.read_matched(type)
+
+        if index is None:
+            index=numpy.arange(data.size, dtype='i4')
+        else:
+            index=numpy.array(index, ndmin=1, dtype='i4')
+
+        mspec = data['mspec'][index]
+        h,rev = eu.stat.histogram(mspec, binsize=1, rev=True)
+
+        for i in xrange(h.size):
+            if rev[i] != rev[i+1]:
+                w=rev[ rev[i]:rev[i+1] ]
+
+                if w.size >= nmatchmin:
+                    cmag = data['cmodelmag_dered_r'][w]
+                    cmagerr = data['cmodelmag_dered_err_r'][w]
+                    flux, ivar = sdsspy.mag2nmgy(cmag, cmagerr)
+                    err=sqrt(1./ivar)
+
+                    minf = (flux-3.5*err).min()
+                    maxf = (flux+3.5*err).max()
+                    fvals = linspace(minf, maxf, 100)
+
+                    plt=biggles.FramedPlot()
+
+                    for wi in xrange(w.size):
+                        if data['survey_primary'][w[wi]] == 1:
+                            color='red'
+                            pmag = cmag[wi]
+                        else:
+                            color='black'
+                        g = exp(-0.5*( (fvals-flux[wi])/err[wi])**2)/sqrt(2.*PI)/err[wi]
+                        gcurve = biggles.Curve(fvals, g, color=color)
+                        plt.add(gcurve)
+
+                    #std = cmag.std()
+                    #binsize=std*0.4
+                    #plt=eu.plotting.bhist(cmag, binsize=binsize, show=False)
+
+                    nlab=biggles.PlotLabel(0.05,0.95,'nmatch: %s' % w.size, halign='left')
+                    maglab = biggles.PlotLabel(0.05,0.9,'primary mag: %0.2f' % pmag, halign='left')
+                    plt.add(nlab, maglab)
+                    plt.title=type
+                    plt.xlabel = 'flux'
+                    plt.show()
+
+                    k=raw_input('hit a key (q to quit): ')
+                    if k.lower() == 'q':
+                        return
+                else:
+                    print("less than %s matches" % nmatchmin)
+            
+
+
     def make_specific_cuts(self, data, type):
         if type == 'deep2.form.fix':
             w,=where(data['zqual'] >= 3)
-            stdout.write("deep2: keeping %s/%s\n" % (w.size, data.size))
+            print("deep2: keeping %s/%s" % (w.size, data.size))
             return w
         elif type == 'zcosmos':
             cc = data['cc']
             w,=where((cc==3.4) | (cc==3.5) | (cc==4.4) | (cc==4.5) | (cc==9.5))
-            stdout.write("zcosmos: keeping %s/%s\n" % (w.size, data.size))
+            print("zcosmos: keeping %s/%s" % (w.size, data.size))
             return w
         elif type == 'vvds':
             zflag = data['zflag']
             w,=where((zflag==3) | (zflag==4))
-            stdout.write("vvds: keeping %s/%s\n" % (w.size, data.size))
+            print("vvds: keeping %s/%s" % (w.size, data.size))
             return w
         else:
             return numpy.arange(data.size,dtype='i4')
@@ -305,12 +489,12 @@ Carlos
 
     def read_original(self, type):
         fname = self.fname_original(type)
-        stdout.write('Reading original spec file: %s\n' % fname)
+        print('Reading original spec file:', fname)
         return eu.io.read(fname)
 
     def read_matched(self, type):
         fname = self.fname_matched(type)
-        stdout.write('Reading matched spec file: %s\n' % fname)
+        print('Reading matched spec file:', fname)
         return eu.io.read(fname)
 
 
@@ -351,7 +535,7 @@ Carlos
         import converter
         from biggles import FramedPlot,Points
 
-        stdout.write('\n')
+        print()
         dir=self.plotdir()
         if not os.path.exists(dir):
             os.makedirs(dir)
@@ -373,7 +557,7 @@ Carlos
                         color='red', size=symsize) )
         plt.xlabel = 'RA'
         plt.ylabel = 'DEC'
-        stdout.write("Writing eps file: %s\n" % psfile)
+        print("Writing eps file:", psfile)
         plt.write_eps(psfile)
         converter.convert(psfile, dpi=120, verbose=True)
 

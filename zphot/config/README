@@ -55,6 +55,13 @@ sample/run tree:
             |-> wrun: 10
                 |-> pzrun 12 # MAKE THIS
 
+    # using new columns, with multi-epoch option.
+    photo_sample: 04
+        |-> train_sample: 11  # did multi-epoch matching
+            |-> wrun: 11
+
+
+
 
 zinput-{photo_sample}.json
     photo_sample: The photometric smaple, e.g. "01"

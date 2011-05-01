@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 from sys import stdout,stderr
 import pprint
@@ -9,7 +10,7 @@ import esutil as eu
 from esutil.ostools import path_join, expand_path
 
 import columns
-import sdssgal
+import es_sdsspy
 
 import zphot
 
@@ -25,7 +26,7 @@ class ColumnSelector:
     zcs.write()
 
     """
-    def __init__(self, photo_sample=None, nchunk=None):
+    def __init__(self, photo_sample, nchunk=None):
         """
         E.g.  procrun='prim04'
         """
@@ -35,20 +36,271 @@ class ColumnSelector:
         self.nchunk = nchunk
 
         self.data = None
-        self.dir = None
         self.keep_indices=None
-
-        self.conf = None
-
-        if self.photo_sample is not None:
-            self.init(photo_sample)
-
-    def init(self, photo_sample):
-        self.photo_sample = photo_sample
 
         pzdir = zphot.photoz_dir()
         self.dir = path_join(pzdir,'inputs',self.photo_sample)
-        stdout.write("photo dir: %s\n" % self.dir)
+        print("photo dir: ",self.dir)
+
+        self.conf = zphot.read_config('zinput',photo_sample)
+        if self.conf['photo_sample'] != photo_sample:
+            raise ValueError("photo_sample in config is not '%s'" \
+                             % photo_sample)
+        pprint.pprint(self.conf)
+
+        if self.conf['weighting']:
+            self.conf['filetype'] = 'dat'
+
+    def load_cols(self, primary=True):
+        self.cols = es_sdsspy.sweeps_collate.open_columns('gal', primary=primary)
+
+    def write(self, chunk=None):
+        if self.keep_indices is None:
+            raise ValueError("run select() first")
+
+        if chunk is None and self.nchunk is not None:
+            # loop and write the chunks
+            for chunk in xrange(self.nchunk):
+                self.write(chunk)
+            return
+
+        if not os.path.exists(self.dir):
+            os.makedirs(self.dir)
+
+        outfile=self.filename(chunk=chunk)
+        print("\nWill write to file:", outfile)
+
+        self.load_input_columns(chunk=chunk)
+
+        if self.conf['filetype'] == 'fits':
+            print("Ensuring to big endian in place")
+            eu.numpy_util.to_big_endian(self.data, inplace=True)
+        else:
+            print("Ensuring native in place")
+            eu.numpy_util.to_native(self.data, inplace=True)
+
+        print("Writing to file:",outfile)
+        stdout.flush()
+
+
+        if self.conf['filetype'] == 'dat':
+            r = eu.recfile.Open(outfile, "w", delim=' ')
+            r.write(self.data)
+            r.close()
+        else:
+            eu.io.write(outfile, self.data, clobber=True)
+ 
+    def get_chunk_indices(self, chunk):
+        ntot = len(self.keep_indices)
+        nperchunk = ntot/self.nchunk
+        beg = chunk*nperchunk
+        if chunk == (self.nchunk-1):
+            end = ntot
+        else:
+            end = beg + nperchunk
+        ind = self.keep_indices[beg:end]
+        return ind
+
+
+    def select(self, primary=True):
+        if self.conf is None:
+            raise ValueError("run init with a photo_sample name")
+
+        # for shorthand notation
+        self.load_cols(primary=primary)
+        c = self.cols
+
+
+
+        print("\nReading flags,objc_flags,calib_status")
+        data = c.read_columns(['objc_flags',
+                               'flags_r','flags_i',
+                               'calib_status_u',
+                               'calib_status_g',
+                               'calib_status_r',
+                               'calib_status_i',
+                               'calib_status_z'])
+        ntot = data.size
+                               
+        selector = es_sdsspy.select.Selector(data)
+        # this combines binned, calib, object1
+        print("Getting binned,calib,object1 logic")
+        logic = selector.flag_logic()
+
+        w,=where(logic)
+        print("    %s/%s passed" % (w.size,ntot))
+        del data
+
+
+        # always do model mag logic
+        mmin = self.conf['modelmag_min']
+        mmax = self.conf['modelmag_max']
+
+        print("Cutting to reasonable model mags: [%s,%s]" \
+                     % (mmin,mmax))
+        print("Reading modelmag_dered")
+        mag_u = c['modelmag_dered_u'][:]
+        mag_g = c['modelmag_dered_g'][:]
+        mag_r = c['modelmag_dered_r'][:]
+        mag_i = c['modelmag_dered_i'][:]
+        mag_z = c['modelmag_dered_z'][:]
+        print('Getting mag logic')
+        mag_logic = \
+                  (mag_u > mmin) & (mag_u < mmax) \
+                & (mag_g > mmin) & (mag_g < mmax) \
+                & (mag_r > mmin) & (mag_r < mmax) \
+                & (mag_i > mmin) & (mag_i < mmax) \
+                & (mag_z > mmin) & (mag_z < mmax)
+        w,=where(mag_logic)
+        print("    %s/%s passed" % (w.size,ntot))
+
+        logic = logic & mag_logic
+
+        rmin = self.conf['cmodel_rmin']
+        rmax = self.conf['cmodel_rmax']
+
+        print("Cutting to cmodel_r: [%s,%s]" % (rmin,rmax))
+        print("Reading cmodelmag_dered")
+        cmag = c['cmodelmag_dered_r'][:]
+        print('Getting cmag logic:',rmax)
+        cmag_logic = (cmag > rmin) & (cmag < rmax)
+        w,=where(cmag_logic)
+        print("    %s/%s passed" % (w.size,ntot))
+
+        logic = logic & cmag_logic
+
+        print("Cutting thing_id >= 0")
+        thing_id = c['thing_id'][:]
+        thing_id_logic = (thing_id >= 0)
+        w,=where(thing_id_logic)
+        print("    %s/%s passed" % (w.size,ntot))
+
+
+
+        logic = logic & thing_id_logic
+
+        masktype = self.conf['masktype']
+        if masktype is not None:
+            mask_colname = 'in'+masktype
+            print("Reading %s (and good)" % mask_colname)
+            inmask = c[mask_colname][:]
+            print("Getting %s mask logic" % masktype)
+            mask_logic = (inmask == 1)
+            w,=where(mask_logic)
+            print("    %s/%s passed" % (w.size,ntot))
+            del inmask
+
+            logic = logic & mask_logic
+
+        
+        w,=where(logic)
+        print("A total of %s/%s passed" % (w.size,ntot))
+
+        self.keep_indices = w
+
+
+    def filename(self, chunk=None):
+
+        outdir = self.dir
+
+        format='%s-%s'
+        fpars=[self.prefix,
+               self.photo_sample]
+
+        if chunk is not None:
+            format += '-chunk%03i'
+            fpars.append(chunk)
+
+        format += '.%s'
+        fpars.append(self.conf['filetype'])
+
+        outfile = format % tuple(fpars)
+
+        outfile = path_join(outdir,outfile) 
+        return outfile
+
+    def load_input_columns(self, chunk=None):
+
+        if self.keep_indices is None:
+            raise ValueError("run select() first")
+
+        if self.nchunk is not None:
+            if chunk is None:
+                raise ValueError("please send chunk")
+            indices = self.get_chunk_indices(chunk)
+        else:
+            indices = self.keep_indices
+
+        del self.data
+        if self.conf['weighting']:
+            colnames = ['photoid',
+                        'cmodelmag_dered_r',
+                        'modelmag_dered_u',
+                        'modelmag_dered_g',
+                        'modelmag_dered_r',
+                        'modelmag_dered_i',
+                        'modelmag_dered_z']
+
+            print("Reading columns: ", colnames)
+            tmp = self.cols.read_columns(colnames, 
+                                         rows=indices, 
+                                         verbose=True)
+
+            # we want the r-band cmodelmag and the model colors
+            dt = zphot.weighting.photo_dtype()
+            data = numpy.zeros(tmp.size, dtype=dt)
+
+            data['photoid'] = tmp['photoid']
+            data['cmodelmag_dered_r'] = tmp['cmodelmag_dered_r']
+            data['model_umg'] = \
+                tmp['modelmag_dered_u'] - tmp['modelmag_dered_g']
+            data['model_gmr'] = \
+                tmp['modelmag_dered_g'] - tmp['modelmag_dered_r']
+            data['model_rmi'] = \
+                tmp['modelmag_dered_r'] - tmp['modelmag_dered_i']
+            data['model_imz'] = \
+                tmp['modelmag_dered_i'] - tmp['modelmag_dered_z']
+            del tmp
+            self.data = data
+        else:
+
+            raise ValueError("fix the non-weighting version")
+            colnames = ['photoid',
+                        'modelmag_dered',
+                        'modelmag_dered_err']
+
+            print("Reading columns: ", colnames)
+            self.data = self.cols.read_columns(colnames, 
+                                               rows=indices,
+                                               verbose=True)
+
+
+class ColumnSelectorOld:
+    """
+
+    zcs = ColumnSelector(sample, nchunk=None)
+
+    sample is any string, e.g. '01'
+
+    zcs.select()
+    zcs.write()
+
+    """
+    def __init__(self, photo_sample, nchunk=None):
+        """
+        E.g.  procrun='prim04'
+        """
+
+        self.prefix='zinput'
+        self.photo_sample = photo_sample
+        self.nchunk = nchunk
+
+        self.data = None
+        self.keep_indices=None
+
+        pzdir = zphot.photoz_dir()
+        self.dir = path_join(pzdir,'inputs',self.photo_sample)
+        print("photo dir: ",self.dir)
 
         self.conf = zphot.read_config('zinput',photo_sample)
         if self.conf['photo_sample'] != photo_sample:
@@ -60,6 +312,7 @@ class ColumnSelector:
             self.conf['filetype'] = 'dat'
 
     def load_cols(self, procrun):
+        import sdssgal
         self.cols = sdssgal.open_columns(procrun)
 
     def write(self, chunk=None):
@@ -111,6 +364,7 @@ class ColumnSelector:
 
 
     def select(self):
+        import sdssgal
         if self.conf is None:
             raise ValueError("run init with a photo_sample name")
 

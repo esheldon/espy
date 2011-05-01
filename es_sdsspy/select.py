@@ -100,6 +100,10 @@ class Selector:
         return logic
 
     def object1_logic(self):
+        if 'objc_flags' not in self.objs.dtype.names:
+            raise ValueError("need objc_flags in struct")
+
+
         satur = self.flags.val('object1','satur')
         bright = self.flags.val('object1','bright')
         too_many_peaks = self.flags.val('object1','deblend_too_many_peaks')
@@ -135,8 +139,15 @@ class Selector:
         binned2 = self.flags.val('object1','binned2')
         binned4 = self.flags.val('object1','binned4')
 
-        rflags = self.objs['flags'][:,2]
-        iflags = self.objs['flags'][:,3]
+        if 'flags' in self.objs.dtype.names:
+            rflags = self.objs['flags'][:,2]
+            iflags = self.objs['flags'][:,3]
+        elif 'flags_r' in self.objs.dtype.names:
+            rflags = self.objs['flags_r']
+            iflags = self.objs['flags_i']
+        else:
+            raise ValueError("need flags or flags_{band} in struct")
+
 
         r_binned_logic = \
             ((rflags & binned1) != 0 )  \
@@ -153,17 +164,32 @@ class Selector:
 
 
 
-    def calib_logic(self, objs=None):
-        if objs is None:
-            objs = self.objs
-        calib_status = objs['calib_status']
+    def calib_logic(self):
+        objs = self.objs
+
+        if 'calib_status' in objs.dtype.names:
+            calib_status_u = objs['calib_status'][:,0]
+            calib_status_g = objs['calib_status'][:,1]
+            calib_status_r = objs['calib_status'][:,2]
+            calib_status_i = objs['calib_status'][:,3]
+            calib_status_z = objs['calib_status'][:,4]
+        elif 'calib_status_r' in objs.dtype.names:
+            calib_status_u = objs['calib_status_u']
+            calib_status_g = objs['calib_status_g']
+            calib_status_r = objs['calib_status_r']
+            calib_status_i = objs['calib_status_i']
+            calib_status_z = objs['calib_status_z']
+        else:
+            raise ValueError("need calib_status or calib_status_{band} in struct")
+
+
         flagval = self.flags.val('calib_status', 'photometric')
         logic = \
-            ((calib_status[:,0] & flagval) != 0)   \
-            & ((calib_status[:,1] & flagval) != 0) \
-            & ((calib_status[:,2] & flagval) != 0) \
-            & ((calib_status[:,3] & flagval) != 0) \
-            & ((calib_status[:,4] & flagval) != 0)
+            ((calib_status_u & flagval) != 0)   \
+            & ((calib_status_g & flagval) != 0) \
+            & ((calib_status_r & flagval) != 0) \
+            & ((calib_status_i & flagval) != 0) \
+            & ((calib_status_z & flagval) != 0)
 
 
         return logic

@@ -10,6 +10,12 @@ import datetime
 
 from . import stomp_maps
 
+def open_columns(type, primary=False):
+    collator = Collator(type, primary=primary)
+    print("opening columns:",collator.columns_dir())
+    return collator.open_columns()
+
+
 class Collator:
     """
 
@@ -20,11 +26,12 @@ class Collator:
 
     """
     
-    def __init__(self, type='gal'):
+    def __init__(self, type='gal', primary=False):
         if type != 'gal':
             raise ValueError("add support for 'star' type")
 
         self.type=type
+        self.primary=primary
         self.minscore=0.1
         self.flags = sdsspy.flags.Flags()
         self.masktypes = ['basic','good','tycho']
@@ -38,7 +45,7 @@ class Collator:
         c = self.open_columns()
         print("Will write in coldir:", c.dir)
         if c.dir_exists():
-            raise ValueError("Columns already exist, start from scratch")
+            raise ValueError("coldir already exist, start from scratch")
         c.create()
 
 
@@ -64,26 +71,72 @@ class Collator:
 
                 if len(tmp) == 0:
                     raise ValueError("sweep is empty")
+
+                print("    Found",tmp.size)
+                if self.primary:
+                    print("    Selecting survey_primary")
+                    w=self.get_primary_indices(tmp)
                 else:
-                    print("    Found",tmp.size)
-                    print("    Getting primary")
-                    w=self.get_primary(tmp)
-                    print("    Found",w.size)
-                    if w.size > 0:
-                        tmp = tmp[w]
-                        print("      Getting output")
-                        out_dict = self.create_output(tmp)
-                        print("      Writing columns")
-                        for name in out_dict:
-                            c.write_column(name, out_dict[name])
+                    print("    Selecting run_primary")
+                    w=self.get_primary_indices(tmp, run_primary=True)
+
+                print("    Found",w.size)
+                if w.size > 0:
+                    tmp = tmp[w]
+
+                    print("      Getting output")
+                    out_dict = self.create_output(tmp)
+                    print("      Writing columns")
+                    for name in out_dict:
+                        c.write_column(name, out_dict[name])
         print("Done")
 
-    def get_primary(self, objs):
-        primary = self.flags.val('resolve_status','survey_primary')
+    def get_primary_indices(self, objs, run_primary=False):
+        if run_primary:
+            primary = self.flags.val('resolve_status','run_primary')
+        else:
+            primary = self.flags.val('resolve_status','survey_primary')
 
         w=where1((objs['resolve_status'] & primary) != 0)
         return w
 
+    def add_dered_err_to_columns(self):
+        """
+        I forgot to add errors...
+        """
+        c = self.open_columns()
+
+        for filt in ['u','g','r','i','z']:
+            print("reading extinction for",filt)
+            ext = c['extinction_'+filt][:]
+            for type in ['cmodelmag','modelmag']:
+                outtag = '%s_dered_err_%s' % (type,filt)
+                print("making:",outtag)
+
+                print("  reading fluxes")
+                if type == 'cmodelmag':
+                    fdev         = c['fracpsf_'+filt][:]
+                    devflux      = c['devflux_'+filt][:]
+                    devflux_ivar = c['devflux_ivar_'+filt][:]
+                    expflux      = c['expflux_'+filt][:]
+                    expflux_ivar = c['expflux_ivar_'+filt][:]
+                    print("    making cmodelmag")
+                    flux, ivar   = sdsspy.util._make_cmodelflux_1band(fdev,
+                                                                      devflux, devflux_ivar,
+                                                                      expflux, expflux_ivar)
+                else:
+                    flux = c['modelflux_'+filt][:]
+                    ivar = c['modelflux_ivar_'+filt][:]
+
+                print("  dereddening")
+                flux, ivar = sdsspy.dered_fluxes(ext, flux, ivar)
+                print("  making mags")
+                mag, magerr = sdsspy.nmgy2mag(flux, ivar)
+
+                print("  writing data to",outtag)
+                c.write_column(outtag, magerr, create=True)
+
+            
 
     def create_output(self, st):
         bands = ['u','g','r','i','z']
@@ -101,18 +154,33 @@ class Collator:
             else:
                 out_dict[name] = st[name]
 
-        cmodelmag_dered = sdsspy.make_cmodelmag(st, doerr=False, dered=True)
-        modelmag = sdsspy.nmgy2mag(st['modelflux'])
-        modelmag_dered = modelmag - st['extinction']
+        cmodelmag_dered, cmodelmag_dered_err = sdsspy.make_cmodelmag(st, dered=True)
+
+        modelflux, modelflux_ivar = sdsspy.dered_fluxes(st['extinction'], 
+                                                        st['modelflux'], 
+                                                        st['modelflux_ivar'])
+        modelmag_dered, modelmag_dered_err = sdsspy.nmgy2mag(modelflux, modelflux_ivar)
 
         for f in sdsspy.FILTERCHARS:
             fnum = sdsspy.FILTERNUM[f]
             out_dict['cmodelmag_dered_'+f] = cmodelmag_dered[:,fnum]
+            out_dict['cmodelmag_dered_err_'+f] = cmodelmag_dered_err[:,fnum]
             out_dict['modelmag_dered_'+f] = modelmag_dered[:,fnum]
+            out_dict['modelmag_dered_err_'+f] = modelmag_dered_err[:,fnum]
 
         out_dict['photoid'] = sdsspy.photoid(st)
 
         self.set_maskflags(out_dict)
+
+        # we will add an "survey_primary" column if we are not explicitly 
+        # selecting survey_primary
+        if not self.primary:
+            survey_primary = numpy.zeros(st.size, dtype='i1')
+            w=self.get_primary_indices(st)
+            if w.size > 0:
+                survey_primary[w] = 1
+            out_dict['survey_primary'] = survey_primary
+
         return out_dict
 
     def create_indices(self):
@@ -121,6 +189,8 @@ class Collator:
         cnames = ['cmodelmag_dered_r','modelmag_dered_r',
                   'run','camcol','ra','dec','thing_id','photoid',
                   'inbasic','ingood','intycho']
+        if not self.primary:
+            cnames += ['survey_primary']
 
         for n in cnames:
             print("Creating index for:",n)
@@ -143,13 +213,16 @@ class Collator:
     def columns_dir(self):
         self.photo_sweep=os.environ['PHOTO_SWEEP']
         dirname=os.path.basename(self.photo_sweep)
-        dirname += '_new'
+        #dirname += '_new'
         dir=os.environ['SWEEP_REDUCE']
         dir = path_join(dir,dirname)
         if not os.path.exists(dir):
             os.makedirs(dir)
                         
-        dir=path_join(dir ,'prim'+self.type+'.cols')
+        if self.primary:
+            dir=path_join(dir ,'prim'+self.type+'.cols')
+        else:
+            dir=path_join(dir ,self.type+'.cols')
         return dir
 
 
