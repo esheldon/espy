@@ -162,17 +162,24 @@ def read_z(filename):
     r.close()
     return data
 
-def photo_dtype():
+def photo_dtype(photo_sample):
     dtype = [('photoid','i8'),
              ('cmodelmag_dered_r','f4'),
              ('model_umg','f4'),
              ('model_gmr','f4'),
              ('model_rmi','f4'),
              ('model_imz','f4')]
+    conf = zphot.read_config('zinput',photo_sample)
+    if 'extra_columns' in conf:
+        for cdict in conf['extra_columns']:
+            dtype += [(cdict['name'], cdict['dtype'])]
+
     return dtype
 
-def read_photo(filename,rows=None):
-    dt=photo_dtype()
+def read_photo(photo_sample,rows=None):
+    dt=photo_dtype(photo_sample)
+    zs = zphot.select.ColumnSelector(photo_sample)
+    filename = zs.filename()
     stdout.write("Reading weighting photo file: '%s'\n" % filename)
     r=eu.recfile.Open(filename,dtype=dt,delim=' ')
     data = r.read(rows=rows)
@@ -181,7 +188,7 @@ def read_photo(filename,rows=None):
 
 
 
-def training_dtype():
+def training_dtype(train_sample):
     out_dtype = [('z','f4'),
                  ('catid','i4'),
                  ('weight','f4'),
@@ -190,11 +197,21 @@ def training_dtype():
                  ('model_gmr','f4'),
                  ('model_rmi','f4'),
                  ('model_imz','f4')]
+
+    conf = zphot.read_config('train',train_sample)
+    pconf = zphot.read_config('zinput',conf['photo_sample'])
+    if 'extra_columns' in pconf:
+        for cdict in pconf['extra_columns']:
+            out_dtype += [(cdict['name'], cdict['dtype'])]
+
     return out_dtype
  
-def read_training(filename):
+def read_training(train_sample, type):
+    
+    train = zphot.training.Training(train_sample)
+    filename = train.fname_matched(type)
     stdout.write("Reading training file: '%s'\n" % filename)
-    dt = training_dtype()
+    dt = training_dtype(train_sample)
     r = eu.recfile.Open(filename, dtype=dt, delim=' ')
     data = r.read()
     r.close()
@@ -268,6 +285,10 @@ def create_weights_pbs(wrun):
     # get the photo input file
     zs = zphot.select.ColumnSelector(photo_sample)
 
+    ndim = 5
+    if 'extra_columns' in zs.conf:
+        ndim += len(zs.conf['extra_columns'])
+
     photo_file = zs.filename()
 
 
@@ -297,7 +318,7 @@ Running calcweights
 First run with n_near=$n_near1
 " > "$logf"
 
-calcweights5         \\
+calcweights{ndim}         \\
     "$train_file"    \\
     "$photo_file"    \\
     "$n_near1"       \\
@@ -328,7 +349,7 @@ echo "
 Second run with n_near=$n_near2
 " >> "$logf"
 
-calcweights5                \\
+calcweights{ndim}                \\
     "$weights_file_nozero1" \\
     "$photo_file"           \\
     "$n_near2"              \\
@@ -339,7 +360,8 @@ if [ "$?" != "0" ]; then
     echo Halting >> "$logf"
     exit 45
 fi
-    """.format(train_file          = train_file,
+    """.format(ndim=ndim,
+               train_file          = train_file,
                photo_file          = photo_file,
                n_near1             = conf['n_near1'],
                n_near2             = conf['n_near2'],
@@ -401,6 +423,11 @@ def create_pofz_pbs(pzrun, nchunk):
     subfile = open(submit_file('pofz',pzrun), 'w')
     stdout.write("Writing to submit file: '%s'\n" % subfile.name)
 
+    ndim = 5
+    if 'extra_columns' in zs.conf:
+        ndim += len(zs.conf['extra_columns'])
+
+ 
     script_template="""
 weights_file="{weights_file}"
 photo_file="{photo_file}"
@@ -416,7 +443,7 @@ echo "
 Running calcpofz
 " > "$logf"
 
-calcpofz5           \\
+calcpofz{ndim}           \\
     "$weights_file" \\
     "$photo_file"   \\
     "$n_near"       \\
@@ -436,7 +463,8 @@ fi
     for chunk in xrange(nchunk):
 
 
-        script=script_template.format(weights_file=weights_file,
+        script=script_template.format(ndim=ndim,
+                                      weights_file=weights_file,
                                       photo_file=zs.filename(chunk),
                                       n_near=wconf['n_near2'],
                                       nz=conf['nz'],
@@ -479,6 +507,7 @@ class WeightedTraining:
         self.zt = zphot.training.Training(train_sample)
         self.types = self.zt.types
         self.conf = self.zt.conf
+        self.photo_conf = zphot.read_config('zinput', self.conf['photo_sample'])
 
     def convert_training(self):
         """
@@ -501,25 +530,21 @@ class WeightedTraining:
 
             newt = numpy.zeros(t.size, dtype=dt)
 
+            newt['z'] = t['z']
             newt['catid'] = catid
-
             newt['weight'] = 1.0
 
-            '''
-            newt['cmodelmag_dered_r'] = t['cmodelmag_dered'][:,2]
-            newt['model_umg'] = t['modelmag_dered'][:,0]-t['modelmag_dered'][:,1]
-            newt['model_gmr'] = t['modelmag_dered'][:,1]-t['modelmag_dered'][:,2]
-            newt['model_rmi'] = t['modelmag_dered'][:,2]-t['modelmag_dered'][:,3]
-            newt['model_imz'] = t['modelmag_dered'][:,3]-t['modelmag_dered'][:,4]
-            '''
             newt['cmodelmag_dered_r'] = t['cmodelmag_dered_r']
             newt['model_umg'] = t['modelmag_dered_u']-t['modelmag_dered_g']
             newt['model_gmr'] = t['modelmag_dered_g']-t['modelmag_dered_r']
             newt['model_rmi'] = t['modelmag_dered_r']-t['modelmag_dered_i']
             newt['model_imz'] = t['modelmag_dered_i']-t['modelmag_dered_z']
 
+            if 'extra_columns' in self.photo_conf:
+                for cdict in self.photo_conf['extra_columns']:
+                    n=cdict['name']
+                    newt[n] = t[n]
 
-            newt['z'] = t['z']
 
             newf = self.filename(type)
             print('Writing weighting input:',newf)
@@ -549,7 +574,7 @@ class WeightedTraining:
         return fname
 
     def get_dtype(self):
-        return training_dtype()
+        return training_dtype(self.train_sample)
 
 
 
@@ -1148,7 +1173,7 @@ class CompareWeighting:
         photo_sample = tconf['photo_sample']
         zs = zphot.select.ColumnSelector(photo_sample)
         photo_file = zs.filename()
-        photo = read_photo(photo_file,rows=subphoto) 
+        photo = read_photo(photo_sample,rows=subphoto) 
         self.photo = photo[w]
 
         self.photo_data_loaded=True
@@ -1306,7 +1331,7 @@ def reconstruct_from_superset():
     
     zs = zphot.select.ColumnSelector(photo_sample220)
     f = zs.filename()
-    photo220 = read_photo(f)
+    photo220 = read_photo(photo_sample220)
     ahelp(photo220)
 
 

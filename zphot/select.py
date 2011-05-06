@@ -52,7 +52,10 @@ class ColumnSelector:
             self.conf['filetype'] = 'dat'
 
     def load_cols(self, primary=True):
-        self.cols = es_sdsspy.sweeps_collate.open_columns('gal', primary=primary)
+        if primary:
+            self.cols = es_sdsspy.sweeps_collate.open_columns('primgal')
+        else:
+            self.cols = es_sdsspy.sweeps_collate.open_columns('gal')
 
     def write(self, chunk=None):
         if self.keep_indices is None:
@@ -102,7 +105,14 @@ class ColumnSelector:
         return ind
 
 
-    def select(self, primary=True):
+    def select(self, primary=True, for_training=False):
+        """
+
+        If for_training=True, a looser cut on the r magnitude is applied so we
+        don't have a sharp edge in the histogram at the same spot as the photometric
+        sample. might not help, we'll see.
+
+        """
         if self.conf is None:
             raise ValueError("run init with a photo_sample name")
 
@@ -157,7 +167,11 @@ class ColumnSelector:
         logic = logic & mag_logic
 
         rmin = self.conf['cmodel_rmin']
+
+        if for_training:
+            self.conf['cmodel_rmax'] = 22.1
         rmax = self.conf['cmodel_rmax']
+
 
         print("Cutting to cmodel_r: [%s,%s]" % (rmin,rmax))
         print("Reading cmodelmag_dered")
@@ -241,13 +255,20 @@ class ColumnSelector:
                         'modelmag_dered_i',
                         'modelmag_dered_z']
 
-            print("Reading columns: ", colnames)
+            if 'extra_columns' in self.conf:
+                for cdict in self.conf['extra_columns']:
+                    colnames.append(cdict['name'])
+
+
+
+            print("Reading columns:")
+            pprint.pprint(colnames)
             tmp = self.cols.read_columns(colnames, 
                                          rows=indices, 
                                          verbose=True)
 
             # we want the r-band cmodelmag and the model colors
-            dt = zphot.weighting.photo_dtype()
+            dt = zphot.weighting.photo_dtype(self.photo_sample)
             data = numpy.zeros(tmp.size, dtype=dt)
 
             data['photoid'] = tmp['photoid']
@@ -260,7 +281,12 @@ class ColumnSelector:
                 tmp['modelmag_dered_r'] - tmp['modelmag_dered_i']
             data['model_imz'] = \
                 tmp['modelmag_dered_i'] - tmp['modelmag_dered_z']
+
+            for cdict in self.conf['extra_columns']:
+                name=cdict['name']
+                data[name] = tmp[name]
             del tmp
+
             self.data = data
         else:
 
@@ -494,7 +520,7 @@ class ColumnSelectorOld:
                                          verbose=True)
 
             # we want the r-band cmodelmag and the model colors
-            dt = zphot.weighting.photo_dtype()
+            dt = zphot.weighting.photo_dtype(self.photo_sample)
             data = numpy.zeros(tmp.size, dtype=dt)
 
             data['photoid'] = tmp['photoid']

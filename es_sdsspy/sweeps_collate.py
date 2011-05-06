@@ -10,8 +10,8 @@ import datetime
 
 from . import stomp_maps
 
-def open_columns(type, primary=False):
-    collator = Collator(type, primary=primary)
+def open_columns(type):
+    collator = Collator(type)
     print("opening columns:",collator.columns_dir())
     return collator.open_columns()
 
@@ -26,12 +26,11 @@ class Collator:
 
     """
     
-    def __init__(self, type='gal', primary=False):
-        if type != 'gal':
+    def __init__(self, type='gal'):
+        if type not in ['gal','primgal']:
             raise ValueError("add support for 'star' type")
 
         self.type=type
-        self.primary=primary
         self.minscore=0.1
         self.flags = sdsspy.flags.Flags()
         self.masktypes = ['basic','good','tycho']
@@ -73,7 +72,7 @@ class Collator:
                     raise ValueError("sweep is empty")
 
                 print("    Found",tmp.size)
-                if self.primary:
+                if self.type in ['primgal','primstar']:
                     print("    Selecting survey_primary")
                     w=self.get_primary_indices(tmp)
                 else:
@@ -99,6 +98,25 @@ class Collator:
 
         w=where1((objs['resolve_status'] & primary) != 0)
         return w
+
+    def add_cmodelflux(self):
+        """
+        I forgot to add errors...
+        """
+        c = self.open_columns()
+        for filt in ['u','g','r','i','z']:
+            print("filter:",filt)
+            fdev         = c['fracpsf_'+filt][:]
+            devflux      = c['devflux_'+filt][:]
+            devflux_ivar = c['devflux_ivar_'+filt][:]
+            expflux      = c['expflux_'+filt][:]
+            expflux_ivar = c['expflux_ivar_'+filt][:]
+            flux, ivar   = sdsspy.util._make_cmodelflux_1band(fdev,
+                                                              devflux, devflux_ivar,
+                                                              expflux, expflux_ivar)
+            c.write_column('cmodelflux_'+filt, flux, create=True)
+            c.write_column('cmodelflux_ivar_'+filt, ivar, create=True)
+
 
     def add_dered_err_to_columns(self):
         """
@@ -154,6 +172,8 @@ class Collator:
             else:
                 out_dict[name] = st[name]
 
+        cmodelflux, cmodelflux_ivar = sdsspy.make_cmodelflux(st, doivar=True)
+
         cmodelmag_dered, cmodelmag_dered_err = sdsspy.make_cmodelmag(st, dered=True)
 
         modelflux, modelflux_ivar = sdsspy.dered_fluxes(st['extinction'], 
@@ -163,6 +183,8 @@ class Collator:
 
         for f in sdsspy.FILTERCHARS:
             fnum = sdsspy.FILTERNUM[f]
+            out_dict['cmodelflux_'+f] = cmodelmag_dered[:,fnum]
+            out_dict['cmodelflux_ivar_'+f] = cmodelmag_dered_err[:,fnum]
             out_dict['cmodelmag_dered_'+f] = cmodelmag_dered[:,fnum]
             out_dict['cmodelmag_dered_err_'+f] = cmodelmag_dered_err[:,fnum]
             out_dict['modelmag_dered_'+f] = modelmag_dered[:,fnum]
@@ -174,7 +196,7 @@ class Collator:
 
         # we will add an "survey_primary" column if we are not explicitly 
         # selecting survey_primary
-        if not self.primary:
+        if self.type not in ['primgal','primstar']:
             survey_primary = numpy.zeros(st.size, dtype='i1')
             w=self.get_primary_indices(st)
             if w.size > 0:
@@ -189,7 +211,7 @@ class Collator:
         cnames = ['cmodelmag_dered_r','modelmag_dered_r',
                   'run','camcol','ra','dec','thing_id','photoid',
                   'inbasic','ingood','intycho']
-        if not self.primary:
+        if self.type not in ['primgal','primstar']:
             cnames += ['survey_primary']
 
         for n in cnames:
@@ -219,10 +241,7 @@ class Collator:
         if not os.path.exists(dir):
             os.makedirs(dir)
                         
-        if self.primary:
-            dir=path_join(dir ,'prim'+self.type+'.cols')
-        else:
-            dir=path_join(dir ,self.type+'.cols')
+        dir=path_join(dir ,self.type+'.cols')
         return dir
 
 

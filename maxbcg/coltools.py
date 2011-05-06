@@ -1,15 +1,18 @@
+from __future__ import print_function
 import os
 import sys
-from sys import stdout
 
 import columns
 import numpy
-from numpy import where
+from numpy import where, zeros
 import esutil
 from esutil.ostools import path_join, expand_path, getenv_check
+from esutil.numpy_util import where1, to_big_endian
 
-import sdsspy
+import es_sdsspy
 import sdssgal
+
+from columns import Columns
 
 # select the maxbcg input data from a columns database
 class MaxbcgColumnSelector:
@@ -21,43 +24,98 @@ class MaxbcgColumnSelector:
     mcs.write('rec')
 
     """
-    def __init__(self, procrun, rmax=22.0, imax=21.0):
+    def __init__(self, rmax=22.0):
         """
         E.g.  procrun='prim03'
         """
 
-        self.basedir = expand_path('~/lensinputs/maxbcg_input')
-        self.prefix='maxbcg'
-        self.proctype='sdssgal'
-        self.procrun=procrun
+        self.basedir = expand_path('~/oh/maxbcg-input')
         self.rmax=rmax
-        self.imax=imax
 
         self.masktype = 'tycho'
 
-        self.cols = sdssgal.open_columns(procrun)
+        self.cols = es_sdsspy.sweeps_collate.open_columns('primgal')
 
-        self.keep_indices=None
+        self.logic = None
+        self.mag_and_mask_logic = None
 
+    def write_columns(self):
+
+        outcols = Columns( self.coldir() )
+        if os.path.exists(outcols.dir):
+            raise ValueError("coldir exists, start fresh: '%s'" % outcols.dir)
+        outcols.create()
+
+        if self.logic is None:
+            self.select()
+
+        w=where1(self.mag_and_mask_logic)
+        print("\nkeeping those that pass mag and tycho logic: %s/%s" % (w.size, self.logic.size))
+
+
+        colnames = ['photoid',
+                    'ra',
+                    'dec',
+                    'objc_flags',
+                    'objc_flags2']
+
+        for col in colnames:
+            print('Creating:',col)
+            data = self.cols[col][:]
+            data = data[w]
+            outcols.write_column(col, data)
+
+            del data
+
+
+        combcols = ['flags','flags2',
+                    'modelflux','modelflux_ivar',
+                    'cmodelflux','cmodelflux_ivar',
+                    'extinction']
+
+        for ccol in combcols:
+            print('Creating:',ccol)
+            colnames = [ccol+'_'+f for f in ['u','g','r','i','z'] ]
+            data = self.cols.read_columns(colnames, rows=w, verbose=True)
+
+            dts = data[ccol+'_'+f].dtype.descr[0][1]
+            dt = [(ccol, dts, 5)]
+            data = data.view(dt)
+
+            # don't want it to show up as a .rec
+            rawdata = data[ccol]
+            outcols.write_column(ccol, rawdata)
+
+            del data
+
+
+        print('Adding more restrictive flags to "keep"')
+        keep = zeros(w.size, dtype='u1')
+        wrest = where1( self.logic[w] )
+        keep[wrest] = 1
+
+        outcols.write_column('keep', keep)
+
+
+ 
     def write(self, filetype):
-        if self.keep_indices is None:
-            raise ValueError("run select() first")
+        if self.logic is None:
+            self.select()
 
         dir = self.dir()
         if not os.path.exists(dir):
             os.makedirs(dir)
 
         outfile=self.filename(filetype)
-        stdout.write("Will write to file: %s\n" % outfile)
+        print("Will write to file:",outfile)
 
         data = self.read_input_columns()
 
         if filetype == 'fits':
-            stdout.write("Converting to big endian in place\n")
-            esutil.numpy_util.to_big_endian(data, inplace=True)
+            print("Converting to big endian in place")
+            to_big_endian(data, inplace=True)
 
-        stdout.write("Writing to file: %s\n" % outfile)
-        stdout.flush()
+        print("Writing to file:",outfile)
 
         # clobber is actually the default for sfile, so
         # the keyword will be ignored
@@ -71,49 +129,69 @@ class MaxbcgColumnSelector:
         # for shorthand notation
         c = self.cols
 
-        stdout.write("Reading flags\n")
-        flags = c['flags'][:]
-        stdout.write('Getting binned logic\n')
-        binned_logic = sdssgal.binned_logic_ri(flags)
-        w,=where(binned_logic)
-        stdout.write("    %s/%s passed\n" % (w.size,c['flags'].size))
-        del flags
-        
-        stdout.write("Reading objc_flags\n")
-        objc_flags = c['objc_flags'][:]
-        stdout.write('Getting objc_flags1 logic\n')
-        objc_flags1_logic = sdssgal.object1_logic(objc_flags)
-        w,=where(objc_flags1_logic)
-        stdout.write("    %s/%s passed\n" % (w.size,c['flags'].size))
-        del objc_flags
-
-        stdout.write("Reading cmodelmag_dered\n")
-        mag = c['cmodelmag_dered'][:]
-        stdout.write('Getting mag logic\n')
-        mag_logic = (mag[:,2] < self.rmax) & (mag[:,3] < self.imax)
-        w,=where(mag_logic)
-        stdout.write("    %s/%s passed\n" % (w.size,c['flags'].size))
-        del mag
-
-
         mask_colname = 'in'+self.masktype
-        stdout.write("Reading %s (and good)\n" % mask_colname)
+        print("Reading",mask_colname)
         inmask = c[mask_colname][:]
-        stdout.write("Getting %s mask logic\n" % self.masktype)
+        print("Getting mask logic")
         mask_logic = (inmask == 1)
-        w,=where(mask_logic)
-        stdout.write("    %s/%s passed\n" % (w.size,c['flags'].size))
-        del inmask
+        w=where1(mask_logic)
+        print("    %s/%s passed" % (w.size,c[mask_colname].size))
 
-        logic = binned_logic & objc_flags1_logic & mag_logic & mask_logic
+
+        # now read columns needed for binned_logic, object1_logic
+        print("Reading flags, objc_flags")
+        colnames=['objc_flags']
+        colnames += ['flags_'+f  for f in ['u','g','r','i','z'] ]
+        data = c.read_columns(colnames)
+
+        selector = es_sdsspy.select.Selector(data)
+
+        print("binned logic")
+        binned_logic = selector.binned_logic()
+
+        w=where1(binned_logic)
+        print("    %s/%s passed" % (w.size,c[mask_colname].size))
+
+        print("object1 logic")
+        object1_logic = selector.object1_logic()
         
-        w,=where(logic)
-        stdout.write("A total of %s/%s passed\n" % (w.size,c['flags'].size))
+        w=where1(object1_logic)
 
-        self.keep_indices = w
+
+        print("Reading cmodelmag_dered_r")
+        cmag_r = c['cmodelmag_dered_r'][:]
+        print('mag logic')
+        cmag_r_logic = (cmag_r < self.rmax)
+        w=where1(cmag_r_logic)
+        print("    %s/%s passed" % (w.size,c[mask_colname].size))
+
+
+        logic = binned_logic & object1_logic & cmag_r_logic & mask_logic
+        
+        w=where1(logic)
+        print("A total of %s/%s passed" % (w.size,c[mask_colname].size))
+
+        self.logic = logic
+        self.mag_and_mask_logic = cmag_r_logic & mask_logic
+
+    def prefix(self):
+        prefix = self.cols.dir.split('/')[-2].replace('_','-')
+        if prefix.find('dr8') != -1:
+            prefix='dr8'
+        else:
+            raise ValueError("only support dr8 sweeps for now")
+        return prefix
+
+
+    def coldir(self):
+        prefix=self.prefix()
+        coldir='maxbcg-input-%s.cols' % prefix
+        coldir = path_join(self.basedir, coldir)
+        return coldir
+
 
     def dir(self):
-        outdir=path_join(self.basedir, self.proctype+'-'+self.procrun)
+        outdir=path_join(self.basedir, self.prefix())
         return outdir
 
     def filename(self, filetype):
@@ -126,136 +204,58 @@ class MaxbcgColumnSelector:
 
         outdir = self.dir()
 
-        printpars=(self.proctype,
-                   self.procrun,
-                   self.masktype,
-                   self.rmax,
-                   self.imax,
-                   ext)
-        outfile=self.prefix+'-%s-%s-%s-r%0.1f-i%0.1f.%s' % printpars
+        prefix = self.prefix()
+        outfile='maxbcg-input-%s-%s-r%0.1f.%s' % (prefix,self.masktype,self.rmax,ext)
         outfile = path_join(outdir,outfile) 
         return outfile
 
     def read_input_columns(self):
 
-        if self.keep_indices is None:
-            raise ValueError("run select() first")
+        if self.logic is None:
+            self.select()
 
-        colnames = ['photoid',
+        # column here is actually a dummy 'i2' which we'lll place the
+        # "keep" flag
+        colnames = ['thing_id',
+                    'column',
                     'ra',
                     'dec',
-                    'modelmag_dered',
-                    'modelmag_dered_err',
-                    'cmodelmag_dered',
-                    'cmodelmag_dered_err']
+                    'objc_flags']
+        colnames += ['flags_'+f           for f in ['u','g','r','i','z'] ]
+        colnames += ['modelflux_'+f       for f in ['u','g','r','i','z'] ]
+        colnames += ['modelflux_ivar_'+f  for f in ['u','g','r','i','z'] ]
+        colnames += ['cmodelflux_'+f      for f in ['u','g','r','i','z'] ]
+        colnames += ['cmodelflux_ivar_'+f for f in ['u','g','r','i','z'] ]
+        colnames += ['extinction_'+f      for f in ['u','g','r','i','z'] ]
 
-        stdout.write("Reading columns: %s\n" % colnames)
-        data = self.cols.read_columns(colnames, 
-                                      rows=self.keep_indices, 
-                                      verbose=True)
 
+        print("Reading columns:", colnames)
+        w=where1(self.mag_and_mask_logic)
+
+        d = self.cols.read_columns(colnames, 
+                                   rows=w, 
+                                   verbose=True)
+
+        # re-interpret the modelflux, etc. as 5 element arrays
+        dtype = [('thing_id',       'i4'),
+                 ('keep',           'i2'),
+                 ('ra',             'f8'),
+                 ('dec',            'f8'),
+                 ('objc_flags',     'i4'),
+                 ('flags',          'i4', 5),
+                 ('modelflux',      'f4', 5),
+                 ('modelflux_ivar', 'f4', 5),
+                 ('cmodelflux',     'f4', 5),
+                 ('cmodelflux_ivar','f4', 5),
+                 ('extinction',     'f4', 5)]
+
+        data = d.view(dtype)
+
+        data['keep'] = 0
+
+        wrest = where1( self.logic[w] )
+        data['keep'][wrest] = 1
+                 
         return data
 
-
-
-def create_input_old(imax=21.0, rec=False):
-    rmax=22.0
-    proctype='sdssgal'
-    procrun='03'
-    masktype='tycho'
-
-    if rec:
-        ext='rec'
-    else:
-        ext='fits'
-
-    outdir=expand_path('~/lensinputs/maxbcg_input')
-    outdir=path_join(outdir, proctype+'-'+procrun)
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
-
-    outfile='maxbcg-%s-%s-%s-r%0.1f-i%0.1f.%s' % \
-            (proctype,procrun,masktype,rmax,imax,ext)
-    outfile = path_join(outdir,outfile) 
-
-    stdout.write("Will write to file: %s\n" % outfile)
-
-    c=sdssgal.open_columns(procrun)
-
-    # get good galaxies
-
-
-    stdout.write("Reading intycho, cmodelmag, extinction\n")
-    intycho = c['intycho'][:]
-    cmodelmag = c['cmodelmag'][:]
-    ext = c['extinction'][:]
-    imag = cmodelmag[:,3] - ext[:,3]
-    del cmodelmag
-    del ext
-
-
-    # select things that pass the bound mask
-    stdout.write("Getting unmasked objects\n")
-    w, = where(intycho == 1)
-
-    stdout.write("Found %s/%s passed mask\n" % (w.size,intycho.size))
-
-    stdout.write("Getting dereddened i mag < %s\n" % imax)
-    w, = where( (intycho == 1) & (imag < imax) )
-
-    stdout.write("Found %s/%s passed mask and flux cut\n" % (w.size,intycho.size))
-
-    del intycho
-    del imag
-
-
-
-    # now read in all objects passing the mask
-
-    colnames = ['photoid',
-                'ra',
-                'dec',
-                'modelmag',
-                'modelmag_err',
-                'cmodelmag',
-                'cmodelmag_err']
-
-    newnames= ['photoid',
-               'ra',
-               'dec',
-               'modelmag_dered',
-               'modelmag_dered_err',
-               'cmodelmag_dered',
-               'cmodelmag_dered_err']
-
-
-    stdout.write("Reading columns: %s\n" % colnames)
-    data = c.read_columns(colnames, rows=w, verbose=True)
-
-    # get extinction separately
-    stdout.write("Reading extinction\n")
-    ext = c['extinction'].read(rows=w)
-    stdout.write("Applying extinction correction\n")
-    data['modelmag'] -= ext
-    data['cmodelmag'] -= ext
-
-    del ext
-    del w
-
-    # use the _dered name
-    stdout.write("Renaming columns: %s\n" % newnames)
-    data.dtype.names = newnames
-
-    if not rec:
-        stdout.write("Converting to big endian in place\n")
-        esutil.numpy_util.to_big_endian(data, inplace=True)
-
-    stdout.write("Writing to file: %s\n" % outfile)
-    stdout.flush()
-    if rec:
-        esutil.sfile.write(data, outfile)
-    else:
-        esutil.io.write(outfile, data, clobber=True)
-
-    del data
 

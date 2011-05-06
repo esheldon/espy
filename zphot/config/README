@@ -55,10 +55,18 @@ sample/run tree:
             |-> wrun: 10
                 |-> pzrun 12 # MAKE THIS
 
+
     # using new columns, with multi-epoch option.
     photo_sample: 04
         |-> train_sample: 11  # did multi-epoch matching
             |-> wrun: 11
+                |-> pzrun 13
+
+    # same as 04 but with psf_fwhm_r as dimension
+    photo_sample: 05
+        |-> train_sample: 12  # did multi-epoch matching
+            |-> wrun: 12 CREATE THIS
+                |-> pzrun 14 CREATE THIS
 
 
 

@@ -25,6 +25,8 @@ class Validation:
         type='all' by default, meaning the combined file
         """
 
+        raise ValueError("fix to work with new photo_dtype")
+
         self.wrun=wrun
         self.conf = zphot.read_config('weights',self.wrun)
 

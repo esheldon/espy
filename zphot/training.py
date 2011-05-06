@@ -155,12 +155,22 @@ Carlos
         dt.append( ('survey_primary','i1') )
         dt.append( ('cmodelmag_dered_err_r','f4') )
 
-
-
         dt.append( ('psf_fwhm_r','f4') )
 
         if 'primus' in type:
             dt.append( ('z','f4') )
+
+        names = [d[0] for d in dt]
+
+        self.extra_colnames = []
+        if 'extra_columns' in self.photo_conf:
+            for cdict in self.photo_conf['extra_columns']:
+                if cdict['name'] not in names:
+                    dt.append( (cdict['name'], cdict['dtype']) )
+                    self.extra_colnames.append(cdict['name'])
+                else:
+                    print("extra columns '%s' already in data" % cdict['name'])
+
         return dt
 
     def match(self):
@@ -179,7 +189,10 @@ Carlos
         zcs = zphot.select.ColumnSelector(photo_sample)
 
         # select with multi-epoch data
-        zcs.select(primary=False)
+        #
+        # for training means a higher cut in mag to give a smoother transition
+        #
+        zcs.select(primary=False, for_training=True)
 
         indices = zcs.keep_indices.copy()
 
@@ -200,6 +213,7 @@ Carlos
         survey_primary = zcs.cols['survey_primary'][indices]
         psf_fwhm_r = zcs.cols['psf_fwhm_r'][indices]
 
+        extra_columns = None
 
         rmin = zcs.conf['cmodel_rmin']
         rmax = zcs.conf['cmodel_rmax']
@@ -245,6 +259,16 @@ Carlos
             print('%s/%s of photo matches are unique' % (mphot_u.size,mphot.size))
 
             dt = self.matched_dtype(spec.dtype.descr, type)
+
+            # need call to matched_dtype to establish extra columns
+            if extra_columns is None:
+                extra_columns={}
+                if len(self.extra_colnames) > 0:
+                    for n in self.extra_colnames:
+                        print("Reading extra:",n)
+                        extra_columns[n] = zcs.cols[n][indices]
+
+
             output = numpy.zeros(mspec.size,dtype=dt)
             eu.numpy_util.copy_fields(spec[mspec],output)
 
@@ -275,6 +299,10 @@ Carlos
             output['psf_fwhm_r'] = psf_fwhm_r[mphot]
 
             output['survey_primary'] = survey_primary[mphot]
+
+            for n in extra_columns:
+                output[n] = extra_columns[n][mphot]
+
 
             # sanity check
             if not self.no_photo_cuts:
@@ -625,7 +653,7 @@ Carlos
             type = types[i]
             t= self.read_matched(type)
 
-            b=eu.stat.Binner(t['psf_fwhm'][:,2])
+            b=eu.stat.Binner(t['psf_fwhm_r'])
             b.dohist(binsize=binsize, min=xmin, max=xmax)
             b.calc_stats()
             h = b['hist']/float(b['hist'].sum())
