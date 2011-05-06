@@ -15,13 +15,13 @@ import sdssgal
 from columns import Columns
 
 # select the maxbcg input data from a columns database
-class MaxbcgColumnSelector:
+# and into a columns database
+class Selector:
     """
 
-    mcs = MaxbcgColumnSelector('prim03')
+    mcs = Selector()
     mcs.select()
-    mcs.write('fits')
-    mcs.write('rec')
+    mcs.write_columns()
 
     """
     def __init__(self, rmax=22.0):

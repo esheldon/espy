@@ -10,7 +10,7 @@ if len(sys.argv) < 2:
 
 procrun = sys.argv[1]
 
-mcs = maxbcg.coltools.MaxbcgColumnSelector(procrun)
+mcs = maxbcg.select.Selector(procrun)
 
 mcs.select()
 if len(sys.argv) > 2:
