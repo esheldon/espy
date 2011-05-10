@@ -139,20 +139,18 @@ _sample='dr8'
 _basedir = '~esheldon/photoz/weighting/%s' % _sample
 _basedir = os.path.expanduser(_basedir)
 
+
+def pofz_columns_dir(pzrun):
+    dir = pofz_dir(pzrun)
+    return path_join(dir,'pofz-%s.cols' % pzrun)
+
 def open_pofz_columns(pzrun):
-    wo=WeightedOutputs()
-    return wo.open_pofz_columns(pzrun)
+    d=pofz_columns_dir(pzrun)
+    return columns.Columns(d)
 
-def num_dtype():
-    return [('photoid','i8'),('num','i4')]
 
-def read_num(filename, rows=None):
-    dt = num_dtype()
-    stdout.write("Reading photo num file: '%s'\n" % filename)
-    r=eu.recfile.Open(filename,dtype=dt,delim=' ')
-    data = r.read(rows=rows)
-    r.close()
-    return data
+
+
 
 def read_z(filename):
     stdout.write("Reading z file: '%s'\n" % filename)
@@ -210,18 +208,152 @@ def read_training(train_sample, type):
     
     train = zphot.training.Training(train_sample)
     filename = train.fname_matched(type)
-    stdout.write("Reading training file: '%s'\n" % filename)
+    print("Reading training file:", filename)
     dt = training_dtype(train_sample)
+    return _read_training(filename, dt)
+    '''
     r = eu.recfile.Open(filename, dtype=dt, delim=' ')
+    data = r.read()
+    r.close()
+    return data
+    '''
+
+def _read_training(filename, dtype):
+    r = eu.recfile.Open(filename, dtype=dtype, delim=' ')
     data = r.read()
     r.close()
     return data
 
 
+
+def pofz_dir(pzrun):
+    dir = weights_basedir()
+    return path_join(dir, 'weighting', 'pofz-%s' % pzrun)
+
+def pofz_file(pzrun, chunk=None):
+    dir = pofz_dir(pzrun)
+    f = 'pofz-%s' % pzrun
+    if chunk is not None:
+        f = f + '-chunk%03i' % chunk
+    f = f+'.dat'
+    return path_join(dir, f)
+
+def zhist_file(pzrun):
+    """
+    Summed zhist
+    """
+    dir = pofz_dir(pzrun)
+    f = 'zhist-%s.rec' % pzrun
+    return path_join(dir, f)
+
+def z_file(pzrun, chunk=None):
+    dir = pofz_dir(pzrun)
+    f = 'z-%s' % pzrun
+    if chunk is not None:
+        f = f + '-chunk%03i' % chunk
+    f = f+'.dat'
+    return path_join(dir, f)
+
+
+def read_weights(wrun, iteration, nozero=False):
+    """
+    Read weights output of calcweights code
+    """
+    f = weights_file(wrun, iteration, nozero=nozero)
+
+    conf = zphot.read_config('weights', wrun)
+    dt = training_dtype(conf['train_sample'])
+
+    print("reading weights output:",f)
+    r = eu.recfile.Open(f, dtype=dt, delim=' ')
+    data = r.read()
+    r.close()
+    return data
+
+
+def weights_basedir():
+    pzdir = zphot.photoz_dir()
+    dir = path_join(pzdir, 'weighting', _sample)
+    return dir
+
+def weights_dir(wrun):
+    """
+    loation of the output file
+    """
+    dir = weights_basedir()
+    return path_join(dir, 'weights-%s' % wrun)
+
+def weights_file(wrun, iteration, nozero=False):
+    """
+    Output of the calcweights code
+    """
+    conf = zphot.read_config('weights',wrun)
+    dir = weights_dir(wrun)
+    
+    f = 'weights'
+    if iteration == 1:
+        if nozero:
+            f += '-nozero'
+        f += '-%s-%s.dat' % (wrun,conf['n_near1'])
+    elif iteration == 2:
+        f += '-%s-%s.dat' % (wrun,conf['n_near2'])
+    else:
+        raise ValueError("only support iteration 1 or 2")
+
+    return path_join(dir, f)
+
+def read_num(wrun, iteration, rows=None):
+    """
+    Read Output of the calcweights code.  You can
+    call _read_num to read a known file name
+    """
+    f = num_file(wrun, iteration)
+    return _read_num(f, rows=rows)
+
+def num_dtype():
+    return [('photoid','i8'),('num','i4')]
+
+def _read_num(filename, rows=None):
+    dt = num_dtype()
+    stdout.write("Reading photo num file: '%s'\n" % filename)
+    r=eu.recfile.Open(filename,dtype=dt,delim=' ')
+    data = r.read(rows=rows)
+    r.close()
+    return data
+
+
+
+def num_file(wrun, iteration):
+    """
+    num output file of calcweights code
+    """
+    dir = weights_dir(wrun)
+    
+    conf = zphot.read_config('weights',wrun)
+    if iteration == 1:
+        n_near = conf['n_near1']
+    elif iteration == 2:
+        n_near = conf['n_near2']
+    else:
+        raise ValueError("only support iteration 1 or 2")
+
+    f = 'num-%s-%s.dat' % (wrun,n_near)
+    return path_join(dir, f)
+
+
+
 def pofz_dtype(nz):
     dtype=[('photoid','i8'),('pofz','f4',nz)]
     return dtype
-def read_pofz(filename, nz):
+
+
+def read_pofz(pzrun, chunk):
+    conf = zphot.read_config('pofz',pzrun)
+    nz = conf['nz']
+    filename = pofz_file(pzrun, chunk)
+    return _read_pofz(filename, nz)
+
+def _read_pofz(filename, nz):
     dt = pofz_dtype(nz)
 
     stdout.write("Reading pofz file: '%s' with dtype:\n" % filename)
@@ -231,13 +363,6 @@ def read_pofz(filename, nz):
     r.close()
     stdout.write("    read %s\n" % data.size)
     return data
-
-def read_pofz_byrun(pzrun, chunk):
-    conf = zphot.read_config('pofz',pzrun)
-    nz = conf['nz']
-    wo = WeightedOutputs()
-    filename = wo.pofz_file(pzrun, chunk)
-    return read_pofz(filename, nz)
 
    
 def pbs_dir(type, runid, create=False):
@@ -365,13 +490,13 @@ fi
                photo_file          = photo_file,
                n_near1             = conf['n_near1'],
                n_near2             = conf['n_near2'],
-               weights_file1        = wo.weights_file(wrun,1),
+               weights_file1        = weights_file(wrun,1),
                num_file1           = wo.num_file(wrun,1),
-               weights_file_nozero1 = wo.weights_file(wrun,1,nozero=True),
-               weights_file2        = wo.weights_file(wrun,2),
+               weights_file_nozero1 = weights_file(wrun,1,nozero=True),
+               weights_file2        = weights_file(wrun,2),
                num_file2           = wo.num_file(wrun,2))
 
-    wdir = wo.weights_dir(wrun)
+    wdir = weights_dir(wrun)
     if not os.path.exists(wdir):
         os.makedirs(wdir)
     
@@ -399,7 +524,7 @@ def create_pofz_pbs(pzrun, nchunk):
     """
 
     wo = WeightedOutputs()
-    pofz_dir = wo.pofz_dir(pzrun)
+    pofz_dir = pofz_dir(pzrun)
     if not os.path.exists(pofz_dir):
         os.makedirs(pofz_dir)
 
@@ -411,7 +536,7 @@ def create_pofz_pbs(pzrun, nchunk):
     # get output weights file from last round.
     wrun = conf['wrun']
     iteration = 2
-    weights_file = wo.weights_file(wrun,iteration)
+    weights_file = weights_file(wrun,iteration)
 
     # to get the photo input file
     wconf = zphot.read_config('weights',wrun)
@@ -470,8 +595,8 @@ fi
                                       nz=conf['nz'],
                                       zmin=conf['zmin'],
                                       zmax=conf['zmax'],
-                                      pofz_file=wo.pofz_file(pzrun,chunk),
-                                      z_file=wo.z_file(pzrun,chunk))
+                                      pofz_file=pofz_file(pzrun,chunk),
+                                      z_file=z_file(pzrun,chunk))
 
 
 
@@ -581,92 +706,13 @@ class WeightedTraining:
 
 class WeightedOutputs:
     """
-    Just a simple class to get info about outputs
+    Just a simple class to work with the outputs
     """
     def __init__(self):
         self.overall_sample = 'dr8'
 
         pzdir = zphot.photoz_dir()
         self.basedir = path_join(pzdir, 'weighting', self.overall_sample)
-
-
-    def read_weights(self, wrun, iteration, nozero=False):
-        f = self.weights_file(wrun, iteration, nozero=nozero)
-        return read_training(f)
-
-    def weights_dir(self, wrun):
-        return path_join(self.basedir,'weights-%s' % wrun)
-
-    def weights_file(self, wrun, iteration, nozero=False):
-        conf = zphot.read_config('weights',wrun)
-        dir = self.weights_dir(wrun)
-        
-        f = 'weights'
-        if iteration == 1:
-            if nozero:
-                f += '-nozero'
-            f += '-%s-%s.dat' % (wrun,conf['n_near1'])
-        elif iteration == 2:
-            f += '-%s-%s.dat' % (wrun,conf['n_near2'])
-        else:
-            raise ValueError("only support iteration 1 or 2")
-
-        return path_join(dir, f)
-
-
-    def read_num(self, wrun, iteration, rows=None):
-        f = self.num_file(wrun, iteration)
-        return read_num(f, rows=rows)
-
-    def num_file(self, wrun, iteration):
-        dir = self.weights_dir(wrun)
-        
-        conf = zphot.read_config('weights',wrun)
-        if iteration == 1:
-            n_near = conf['n_near1']
-        elif iteration == 2:
-            n_near = conf['n_near2']
-        else:
-            raise ValueError("only support iteration 1 or 2")
-
-        f = 'num-%s-%s.dat' % (wrun,n_near)
-        return path_join(dir, f)
- 
-    def open_pofz_columns(self, pzrun):
-        d=self.pofz_columns_dir(pzrun)
-        return columns.Columns(d)
-
-    def pofz_columns_dir(self, pzrun):
-        return path_join(self.basedir,'pofz-%s.cols' % pzrun)
-
-    def pofz_dir(self, pzrun):
-        return path_join(self.basedir,'pofz-%s' % pzrun)
-
-    def pofz_file(self, pzrun, chunk=None):
-        dir = self.pofz_dir(pzrun)
-        f = 'pofz-%s' % pzrun
-        if chunk is not None:
-            f = f + '-chunk%03i' % chunk
-        f = f+'.dat'
-        return path_join(dir, f)
-
-    def zhist_file(self, pzrun):
-        """
-        Summed zhist
-        """
-        dir = self.pofz_dir(pzrun)
-        f = 'zhist-%s.rec' % pzrun
-        return path_join(dir, f)
-
-
-
-    def z_file(self, pzrun, chunk=None):
-        dir = self.pofz_dir(pzrun)
-        f = 'z-%s' % pzrun
-        if chunk is not None:
-            f = f + '-chunk%03i' % chunk
-        f = f+'.dat'
-        return path_join(dir, f)
 
     def make_columns(self, pzrun):
         """
@@ -683,7 +729,7 @@ class WeightedOutputs:
 
         pprint.pprint(conf)
 
-        coldir = self.pofz_columns_dir(pzrun)
+        coldir = pofz_columns_dir(pzrun)
         if os.path.exists(coldir):
             raise ValueError("coldir exists, start fresh: " + coldir)
         cols = columns.Columns(coldir)
@@ -702,8 +748,8 @@ class WeightedOutputs:
         # the z values of the histogram
         #
 
-        z_file = self.z_file(pzrun,chunk=0)
-        zdata = read_z(z_file)
+        zf = z_file(pzrun,chunk=0)
+        zdata = read_z(zf)
 
         print("Writing zbins column")
         cols.write_column('zbins', zdata)
@@ -712,12 +758,11 @@ class WeightedOutputs:
 
         # the num file, to determine of an object is "recoverable"
         iteration=2
-        num_file = self.num_file(conf['pofz']['wrun'],iteration)
-        numdata = read_num(num_file)
+        numdata = read_num( conf['pofz']['wrun'],iteration )
         
 
-        pofz_dir=self.pofz_dir(pzrun)
-        pattern=path_join(pofz_dir,'pofz-%s-chunk*.dat' % pzrun)
+        pzdir=pofz_dir(pzrun)
+        pattern=path_join(pzdir,'pofz-%s-chunk*.dat' % pzrun)
         flist = glob.glob(pattern)
         ntot = len(flist)
         if ntot == 0:
@@ -755,7 +800,7 @@ class WeightedOutputs:
 
     def make_pofz_hist(self, pzrun, num=None, numdata=None, keepflags=None):
         output = self.calculate_pofz_hist(pzrun,num,numdata,keepflags)
-        outfile = self.zhist_file(pzrun)
+        outfile = zhist_file(pzrun)
         stdout.write("Writing summed p(z) hist: '%s'\n" % outfile)
         eu.io.write(outfile, output, delim=' ')
 
@@ -777,7 +822,7 @@ class WeightedOutputs:
 
         wrun = conf['wrun']
 
-        outfile = self.zhist_file(pzrun)
+        outfile = zhist_file(pzrun)
         out_dt = [('zmin','f8'),('zmax','f8'),('pofz','f8')]
 
         # get the config
@@ -786,13 +831,12 @@ class WeightedOutputs:
 
         # first the num file
         iteration=2
-        num_file = self.num_file(wrun,iteration)
         if numdata is None and keepflags is None:
-            numdata = read_num(num_file)
+            numdata = read_num(wrun, iteration)
 
         # the z values for the histogram
-        z_file = self.z_file(pzrun,chunk=0)
-        zdata = read_z(z_file)
+        zf = z_file(pzrun,chunk=0)
+        zdata = read_z(zf)
 
         output = numpy.zeros(zdata.size, dtype=out_dt)
         output['zmin'] = zdata['zmin']
@@ -801,7 +845,7 @@ class WeightedOutputs:
         print('n(zmin):',output['zmin'].size)
         print('n(pofz):',output['pofz'].size)
 
-        dir=self.pofz_dir(pzrun)
+        dir=pofz_dir(pzrun)
 
         pattern=path_join(dir,'pofz-%s-chunk*.dat' % pzrun)
         flist = glob.glob(pattern)
@@ -858,7 +902,7 @@ class WeightedOutputs:
 
     def plot_pofz_hist(self, pzrun):
 
-        outfile = self.zhist_file(pzrun)
+        outfile = zhist_file(pzrun)
         if not os.path.exists(outfile):
             raise ValueError("Run make_pofz_hist first")
         stdout.write("Reading zhist file: '%s'\n" % outfile)
@@ -893,8 +937,9 @@ class CompareWeighting:
         self.wrun=wrun
         self.pzrun=pzrun
 
-        self.wo = WeightedOutputs()
         self.conf = zphot.read_config('weights',wrun)
+        self.train_conf = zphot.read_config('train',self.conf['train_sample'])
+        self.photo_conf = zphot.read_config('zinput', self.train_conf['photo_sample'])
 
         # ranges for plotting
         self.magmin = 15.0
@@ -1039,7 +1084,7 @@ class CompareWeighting:
             z_plt.xlabel = 'z'
             z_plt.aspect_ratio = 1
 
-            pzfile = self.wo.zhist_file(self.pzrun)
+            pzfile = zhist_file(self.pzrun)
             stdout.write("Reading summed zhist file: '%s'\n" % pzfile)
             pzdata = eu.io.read(pzfile)
             binsize = pzdata['zmax'][1]-pzdata['zmin'][1]
@@ -1076,6 +1121,13 @@ class CompareWeighting:
         if not self.photo_data_loaded:
             self.load_photo_data(subphoto=subphoto)
 
+        extra_colname=None
+        if 'extra_columns' in self.photo_conf:
+            extra_columns = self.photo_conf['extra_columns']
+            if len(extra_columns) > 1:
+                raise ValueError('can only support 1 extra column for now')
+            extra_colname = extra_columns[0]['name']
+
         a=biggles.Table(3,2)
         a[0,0] = self.varhist1('cmodelmag_dered_r',
                                'r',self.magmin,self.magmax,self.magbin)
@@ -1087,7 +1139,16 @@ class CompareWeighting:
         a[2,0] = self.varhist1('model_imz','i-z',-0.8,1.1,0.025,
                                dokey=True)
 
-        a[2,1] = self.whist()
+        if extra_colname is None:
+            a[2,1] = self.whist()
+        else:
+            if extra_colname == 'psf_fwhm_r':
+                xmin=0.7
+                xmax=2.5
+                binsize=0.02
+                a[2,1] = self.varhist1(extra_colname,r'$seeing_{r}$',xmin,xmax,binsize)
+            else:
+                raise ValueError("only support psf_fwhm_r for extra column for now")
 
         psfile = self.psfile('varhist')
         stdout.write("Writing var compare eps file: %s\n" % psfile)
@@ -1152,7 +1213,7 @@ class CompareWeighting:
         stdout.write('\n')
 
         iteration=2
-        self.wtrain = self.wo.read_weights(self.wrun,iteration)
+        self.wtrain = read_weights(self.wrun,iteration)
         self.weights_data_loaded=True
  
 
@@ -1161,7 +1222,7 @@ class CompareWeighting:
         iteration=1
         if subphoto is not None:
             stdout.write("    Reading subset of size: %s\n" % len(subphoto))
-        num = self.wo.read_num(self.wrun,iteration, rows=subphoto)
+        num = read_num(self.wrun,iteration, rows=subphoto)
 
         stdout.write("Selecting photo with num > 0\n")
         w,=where(num['num'] > 0)
@@ -1171,8 +1232,6 @@ class CompareWeighting:
         train_sample = self.conf['train_sample']
         tconf = zphot.read_config('train',train_sample)
         photo_sample = tconf['photo_sample']
-        zs = zphot.select.ColumnSelector(photo_sample)
-        photo_file = zs.filename()
         photo = read_photo(photo_sample,rows=subphoto) 
         self.photo = photo[w]
 
@@ -1180,15 +1239,15 @@ class CompareWeighting:
     
     def psfile(self, type):
         psfile = 'zweight-%s-%s.eps' % (self.wrun, type)
-        psfile = path_join(self.wo.weights_dir(self.wrun),psfile)
+        psfile = path_join(weights_dir(self.wrun),psfile)
         return psfile
 
 
 def compare_two_zhist(wrun1, label1, wrun2, label2):
     wo=WeightedOutputs()
     iteration=2
-    wtrain1 = wo.read_weights(wrun1,iteration)
-    wtrain2 = wo.read_weights(wrun2,iteration)
+    wtrain1 = read_weights(wrun1,iteration)
+    wtrain2 = read_weights(wrun2,iteration)
     zmin = 0.0
     zmax = 1.1
     nz = 35
@@ -1304,7 +1363,7 @@ def reconstruct_from_superset():
 
     maglim215 = 21.5
     pzrun215 = '03'
-    zhist215_file = wo.zhist_file(pzrun215)
+    zhist215_file = zhist_file(pzrun215)
     zhist215 = eu.io.read(zhist215_file)
 
     #
@@ -1325,8 +1384,7 @@ def reconstruct_from_superset():
     # and limit to those with n > 0 and r < 21.5
 
     iteration=1
-    numfile220 = wo.num_file(wrun220,iteration)
-    num220 = read_num(numfile220)
+    num220 = read_num(wrun220,iteration)
     ahelp(num220)
     
     zs = zphot.select.ColumnSelector(photo_sample220)
@@ -1383,7 +1441,7 @@ def get_frac_lowz(wrun):
     
     wo = WeightedOutputs()
     iter=2
-    data = wo.read_weights(wrun,iter)
+    data = read_weights(wrun,iter)
 
     zmin = -0.001
     zmax = 1.1
@@ -1418,18 +1476,18 @@ def pofz_correction(pzrun):
 
     wo = zphot.weighting.WeightedOutputs()
 
-    pofz_file = wo.zhist_file(pzrun)
-    if not os.path.exists(pofz_file):
+    zhfile = zhist_file(pzrun)
+    if not os.path.exists(zhfile):
         print("generating overall pofz summed hist")
         wo.make_pofz_hist(pzrun)
-    sumpofz_struct = eu.io.read(pofz_file)
+    sumpofz_struct = eu.io.read(zhfile)
 
     minz = sumpofz_struct['zmin'][0]
     maxz = sumpofz_struct['zmax'][-1]
     nbin = sumpofz_struct['zmin'].size
 
     iteration=2
-    wtrain = wo.read_weights(pzconf['weights']['wrun'], iteration)
+    wtrain = read_weights(pzconf['weights']['wrun'], iteration)
 
     bs = eu.stat.Binner(wtrain['z'], weights=wtrain['weight'])
 
@@ -1485,7 +1543,7 @@ def pofz_correction(pzrun):
     tab.show()
 
     wo=WeightedOutputs()
-    dir=wo.pofz_dir(pzrun)
+    dir=pofz_dir(pzrun)
     epsfile=path_join(dir,'pofz-correct-%s.eps' % pzrun)
     print("Writing eps file:",epsfile)
     tab.write_eps(epsfile)

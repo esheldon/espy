@@ -3,6 +3,7 @@ from sys import stdout
 import os
 import sdsspy
 import numpy
+from numpy import where
 
 try:
     import stomp
@@ -14,23 +15,33 @@ try:
 except:
     pass
 
-def quad_check(maskflags):
+def quad_check(maskflags, strict=False):
     """
-    We will keep anything that has two adjacent quadrants contained
+    if strict=False
+        We will keep anything that has two adjacent quadrants contained
+    if strict=True
+        We demand *all* quandrants are unmasked
     """
-    check1 = \
-        ( (maskflags & FIRST_QUADRANT_OK) != 0 ) & \
-        ( (maskflags & SECOND_QUADRANT_OK) != 0 )
-    check2 = \
-        ( (maskflags & SECOND_QUADRANT_OK) != 0 ) & \
-        ( (maskflags & THIRD_QUADRANT_OK) != 0 )
-    check3 = \
-        ( (maskflags & THIRD_QUADRANT_OK) != 0 ) & \
-        ( (maskflags & FOURTH_QUADRANT_OK) != 0 )
-    check4 = \
-        ( (maskflags & FOURTH_QUADRANT_OK) != 0 ) & \
-        ( (maskflags & FIRST_QUADRANT_OK) != 0 )
-    w, = where( check1 | check2 | check3 | check4  )
+
+    if not strict:
+        check1 = \
+            ( (maskflags & FIRST_QUADRANT_OK) != 0 ) & \
+            ( (maskflags & SECOND_QUADRANT_OK) != 0 )
+        check2 = \
+            ( (maskflags & SECOND_QUADRANT_OK) != 0 ) & \
+            ( (maskflags & THIRD_QUADRANT_OK) != 0 )
+        check3 = \
+            ( (maskflags & THIRD_QUADRANT_OK) != 0 ) & \
+            ( (maskflags & FOURTH_QUADRANT_OK) != 0 )
+        check4 = \
+            ( (maskflags & FOURTH_QUADRANT_OK) != 0 ) & \
+            ( (maskflags & FIRST_QUADRANT_OK) != 0 )
+        w, = where( check1 | check2 | check3 | check4  )
+    else:
+        w, = where(  ( (maskflags & FIRST_QUADRANT_OK) != 0 )
+                   & ( (maskflags & SECOND_QUADRANT_OK) != 0 )
+                   & ( (maskflags & THIRD_QUADRANT_OK) != 0 )
+                   & ( (maskflags & FOURTH_QUADRANT_OK) != 0 ) )
 
     return w
 

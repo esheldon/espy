@@ -108,6 +108,7 @@ class ColumnSelector:
     def select(self, primary=True, for_training=False):
         """
 
+        DONT USE for_training
         If for_training=True, a looser cut on the r magnitude is applied so we
         don't have a sharp edge in the histogram at the same spot as the photometric
         sample. might not help, we'll see.

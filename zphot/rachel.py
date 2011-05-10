@@ -133,7 +133,7 @@ class RachelQA:
         for chunk in xrange(self.nchunk):
         #for chunk in [0]:
             stdout.write('-'*70 + '\n')
-            pzdata = zphot.weighting.read_pofz_byrun(self.pzrun,chunk)
+            pzdata = zphot.weighting.read_pofz(self.pzrun,chunk)
 
             num_end = num_beg+pzdata.size
             tid = num['photoid'][num_beg:num_end]

@@ -10,6 +10,9 @@ import datetime
 
 from . import stomp_maps
 
+def columns_dir(type):
+    collator = Collator(type)
+    return collator.columns_dir()
 def open_columns(type):
     collator = Collator(type)
     print("opening columns:",collator.columns_dir())

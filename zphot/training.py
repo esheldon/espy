@@ -192,7 +192,8 @@ Carlos
         #
         # for training means a higher cut in mag to give a smoother transition
         #
-        zcs.select(primary=False, for_training=True)
+        #zcs.select(primary=False, for_training=True)
+        zcs.select(primary=False)
 
         indices = zcs.keep_indices.copy()
 
@@ -632,8 +633,9 @@ Carlos
         b.dohist(binsize=binsize, min=xmin, max=xmax)
         b.calc_stats()
         h = b['hist']/float(b['hist'].sum())
-        htot = h.copy()
         x = b['center']
+        htot = h.copy()
+        htot[:] = 0
 
         print("  histogramming")
         # regular histogram just for the key
@@ -648,6 +650,13 @@ Carlos
         plt.add(fill)
         allhist.append(fill)
 
+        """
+        allmatches = self.read_matched('all')
+        btot=eu.stat.Binner(allmatches['psf_fwhm_r'])
+        btot.dohist(binsize=binsize, min=xmin, max=xmax)
+        btot.calc_stats()
+        htot = b['hist']/float(b['hist'].sum())
+        """
 
         for i in xrange(ntype):
             type = types[i]
@@ -656,10 +665,10 @@ Carlos
             b=eu.stat.Binner(t['psf_fwhm_r'])
             b.dohist(binsize=binsize, min=xmin, max=xmax)
             b.calc_stats()
-            h = b['hist']/float(b['hist'].sum())
-            x = b['center']
+            htot += b['hist']
 
-            htot += h
+            h = b['hist']/float(b['hist'].sum())
+
 
             if type.find('primus') != -1:
                 width=2
@@ -677,6 +686,13 @@ Carlos
 
         allhist.append(ph)
         plt.add(ph)
+
+        """
+        ph = biggles.Histogram(htot, x0=btot['low'][0], binsize=binsize, width=3, color='magenta')
+        ph.label = 'All Matches'
+        allhist.append(ph)
+        plt.add(ph)
+        """
 
 
 
