@@ -1,6 +1,11 @@
+For the paper, I think will primarily be using 
+    photo sample 01 wrun 09 pzrun 11
+    photo sample 03 wrun 10 pzrun 12
+And 
+
 sample/run tree:
     
-    photo_sample:01 # r < 21.5
+    photo_sample:01  # r < 21.5
         |-> train_sample: 01
             |-> wrun: 01
                 |-> pzrun: 01
@@ -29,7 +34,7 @@ sample/run tree:
             |-> wrun: 09
                 |-> pzrun: 11
 
-    photo_sample:02 # r < 22.0
+    photo_sample:02  # r < 22.0
         |-> train_sample: 02
             |-> wrun: 02
                 |-> pzrun: 04
@@ -49,11 +54,12 @@ sample/run tree:
             |-> wrun: 08
                 |-> pzrun: 10 (never ran)
 
-    photo_sample: 03
+    photo_sample: 03  # r < 21.8
         # same as 09 (with primus) but photo sample 03, r < 21.8
         |-> train_sample: 10
             |-> wrun: 10
-                |-> pzrun 12 # MAKE THIS
+                |-> pzrun 12
+
 
 
     # using new columns, with multi-epoch option.
