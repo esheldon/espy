@@ -124,6 +124,9 @@ class ColumnCollator:
 
         cols=self.cols
 
+        # make copies of the data before writing to the columns.  This is
+        # to force the data type, including native endianness
+
         id = numpy.array(data['stars']['id'], dtype='i2')
         cols.write_column('id',id)
         del id
@@ -157,6 +160,11 @@ class ColumnCollator:
         star_flag=numpy.array(data['stars']['star_flag'], dtype='i1')
         cols.write_column('star_flag',star_flag)
         del star_flag
+
+        if 'sg' in data['stars'].dtype.names:
+            sg = numpy.array(data['stars']['sg'],dtype='f4')
+            cols.write_column('sg',sg)
+            del sg
 
 
     def write_from_shear(self, data):
