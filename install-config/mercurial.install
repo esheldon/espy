@@ -2,7 +2,8 @@
 import distutils.sysconfig
 import os
 
-default_version='1.5.4'
+#default_version='1.5.4'
+default_version='1.8.3'
 url="""
 'http://mercurial.selenic.com/release/mercurial-%s.tar.gz' % self.version"""
 source_type = 'tar'

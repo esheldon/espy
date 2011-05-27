@@ -8,6 +8,7 @@ source_type = 'tar'
 
 # this will use the install_dir as prefix in configure
 install_method = 'python-setup'
+build_command='python setup.py config_fc --fcompiler=gnu95 build'
 
 # on rhel 5.3 lapack and blas are linked against gfortran
 # but tests claim linked also against g77, don't get it
@@ -18,6 +19,6 @@ pylib_install_subdir = main_libdir.replace(distutils.sysconfig.PREFIX+os.sep,'')
 pylib_install_subdir = pylib_install_subdir.replace('dist-packages','site-packages')
 
 create_ups="""
-setupOptional("python")
+setupOptional("numpy")
 envPrepend(PYTHONPATH,${PRODUCT_DIR}/%s)
 """ % pylib_install_subdir 
