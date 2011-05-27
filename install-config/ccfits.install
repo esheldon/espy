@@ -1,10 +1,12 @@
 # vim: set filetype=python :
-default_version='2.2'
+default_version='2.3'
 
 #url="""
 #'http://heasarc.gsfc.nasa.gov/docs/software/fitsio/ccfits/CCfits-%s.tar.gz' % self.version"""
 url="""
-'http://www.cosmo.bnl.gov/www/esheldon/code/astro/CCfits-%s.tar.gz' % self.version"""
+'http://heasarc.nasa.gov/fitsio/CCfits/CCfits-%s.tar.gz' % self.version"""
+#url="""
+#'http://www.cosmo.bnl.gov/www/esheldon/code/astro/CCfits-%s.tar.gz' % self.version"""
 source_type = 'tar'
 
 # this will use the install_dir as prefix in configure

@@ -1,16 +1,18 @@
 # vim: set filetype=python :
-default_version='3.200'
+#default_version='3.200'
 #default_version='3250'
+default_version='3280'
+
 
 # Note I had problems downloading from the ftp site, although it seemed sporadic
-#url="""
-#'http://heasarc.gsfc.nasa.gov/FTP/software/fitsio/c/cfitsio%s.tar.gz' % (self.version).replace('.','')"""
-
 url="""
-'http://www.cosmo.bnl.gov/www/esheldon/code/astro/cfitsio%s.tar.gz' % (self.version).replace('.','')"""
+'http://heasarc.gsfc.nasa.gov/FTP/software/fitsio/c/cfitsio%s.tar.gz' % self.version"""
+# http://heasarc.gsfc.nasa.gov/FTP/fits_info/software/fitsio/c/cfitsio3280.tar.gz
+
 
 #url="""
-#'ftp://heasarc.gsfc.nasa.gov/software/fitsio/c/cfitsio%s.tar.gz' % self.version"""
+#'http://www.cosmo.bnl.gov/www/esheldon/code/astro/cfitsio%s.tar.gz' % (self.version).replace('.','')"""
+
 
 
 source_type = 'tar'
