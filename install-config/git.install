@@ -3,7 +3,7 @@
 # FOR SOME REASON THIS DOESN'T work properly,
 # I always get "not a get repo" in every directory.
 # regular install worked
-default_version='1.7.4.1'
+default_version='1.7.5.2'
 
 url="""
 'http://kernel.org/pub/software/scm/git/git-%s.tar.gz' % (self.version,)"""
