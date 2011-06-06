@@ -5,9 +5,11 @@
 import distutils.sysconfig
 import os
 
-default_version='0.99.0'
-url="""
-'http://www.cosmo.bnl.gov/www/esheldon/code/python/matplotlib-%s.tar.gz' % (self.version)"""
+#default_version='0.99.0'
+#url="""
+#'http://www.cosmo.bnl.gov/www/esheldon/code/python/matplotlib-%s.tar.gz' % (self.version)"""
+default_version='1.0.1'
+url="""'http://downloads.sourceforge.net/project/matplotlib/matplotlib/matplotlib-%s/matplotlib-%s.tar.gz' % (self.version,self.version)"""
 source_type = 'tar'
 
 # this will use the install_dir as prefix in configure
