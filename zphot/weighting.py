@@ -228,7 +228,8 @@ def _read_training(filename, dtype):
 
 def pofz_dir(pzrun):
     dir = weights_basedir()
-    return path_join(dir, 'weighting', 'pofz-%s' % pzrun)
+    #return path_join(dir, 'weighting', 'pofz-%s' % pzrun)
+    return path_join(dir, 'pofz-%s' % pzrun)
 
 def pofz_file(pzrun, chunk=None):
     dir = pofz_dir(pzrun)
@@ -965,7 +966,7 @@ class CompareWeighting:
 
         self.line_width=2
 
-    def zhist(self):
+    def zhist(self, dopng=True):
 
         if not self.weights_data_loaded:
             self.load_weights_data()
@@ -976,6 +977,7 @@ class CompareWeighting:
 
         wh_plt = FramedPlot()
 
+        biggles.configure('fontsize_min',1.5)
 
         whist = eu.stat.histogram(self.wtrain['weight'], 
                                   min=self.wmin, 
@@ -991,8 +993,10 @@ class CompareWeighting:
         wh_plt.aspect_ratio=1
 
         psfile = self.psfile('whist')
+        print("writing epsfile:",psfile)
         wh_plt.write_eps(psfile)
-        converter.convert(psfile,dpi=90,verbose=True)
+        if dopng:
+            converter.convert(psfile,dpi=90,verbose=True)
 
 
         z_plt = FramedPlot()
@@ -1061,8 +1065,10 @@ class CompareWeighting:
 
 
         psfile = self.psfile('zhist')
+        print("writing epsfile:",psfile)
         z_plt.write_eps(psfile)
-        converter.convert(psfile,dpi=90,verbose=True)
+        if dopng:
+            converter.convert(psfile,dpi=90,verbose=True)
 
 
         # also make one with the original included
@@ -1072,8 +1078,10 @@ class CompareWeighting:
         z_plt.add( p_htrain )
         z_plt.add( pk )
         psfile = self.psfile('zhist-withorig')
+        print("writing epsfile:",psfile)
         z_plt.write_eps(psfile)
-        converter.convert(psfile,dpi=90,verbose=True)
+        if dopng:
+            converter.convert(psfile,dpi=90,verbose=True)
 
     
         # this version includes the summed p(z) from
@@ -1101,8 +1109,10 @@ class CompareWeighting:
             z_plt.add( biggles.Inset(inset_lowleft, inset_upright, z_plt_inset) )
             z_plt.add(p_htrain, p_whtrain, p_hsum, pk)
             psfile = self.psfile('zhist-withorig-withsum-%s' % self.pzrun)
+            print("writing epsfile:",psfile)
             z_plt.write_eps(psfile)
-            converter.convert(psfile,dpi=90,verbose=True)
+            if dopng:
+                converter.convert(psfile,dpi=90,verbose=True)
 
 
 
@@ -1112,9 +1122,11 @@ class CompareWeighting:
         #stdout.write("Writing zhist eps file: %s\n" % psfile)
         #tab.write_eps(psfile)
 
+        biggles.configure('fontsize_min',0.1)
 
     def varhist(self, subphoto=None):
 
+        biggles.configure('fontsize_min',1.5)
         if not self.weights_data_loaded:
             self.load_weights_data()
 
@@ -1154,6 +1166,7 @@ class CompareWeighting:
         stdout.write("Writing var compare eps file: %s\n" % psfile)
         a.write_eps(psfile)
         converter.convert(psfile,dpi=120,verbose=True)
+        biggles.configure('fontsize_min',0.1)
 
     def whist(self):
         whist = eu.stat.histogram(self.wtrain['weight'], 
@@ -1163,8 +1176,8 @@ class CompareWeighting:
         whist = whist/float( whist.sum() )
 
         pwhist = biggles.Histogram(whist, 
-                                   x0=self.wmin, 
-                                   binsize=self.wbin, 
+                                   x0=self.wmin/self.wmax, 
+                                   binsize=self.wbin/self.wmax, 
                                    width=self.line_width)
         plt = FramedPlot()
         plt.add(pwhist)

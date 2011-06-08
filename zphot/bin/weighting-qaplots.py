@@ -44,7 +44,7 @@ if do_zhist is None and do_varhist is None:
 cw = zphot.weighting.CompareWeighting(wrun, pzrun=pzrun)
 
 if do_zhist:
-    cw.zhist()
+    cw.zhist(dopng=True)
 
 if do_varhist:
     cw.varhist(subphoto=subind)
