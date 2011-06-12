@@ -117,13 +117,13 @@ import numpy
 from numpy import where
 
 import esutil as eu
-from esutil.ostools import path_join
+from esutil.ostools import path_join, expand_path
 from esutil.numpy_util import ahelp
 from esutil.numpy_util import where1
 from esutil.stat import histogram
 
 import biggles
-from biggles import FramedPlot, PlotKey
+from biggles import FramedPlot, PlotKey, Histogram
 import converter
 
 import copy
@@ -343,19 +343,22 @@ def num_file(wrun, iteration):
 
 
 
-def pofz_dtype(nz):
-    dtype=[('photoid','i8'),('pofz','f4',nz)]
+def pofz_dtype(nz, with_rmag=False):
+    if with_rmag:
+        dtype=[('photoid','i8'),('rmag','f4'),('pofz','f4',nz)]
+    else:
+        dtype=[('photoid','i8'),('pofz','f4',nz)]
     return dtype
 
 
-def read_pofz(pzrun, chunk):
+def read_pofz(pzrun, chunk, with_rmag=False):
     conf = zphot.read_config('pofz',pzrun)
     nz = conf['nz']
     filename = pofz_file(pzrun, chunk)
-    return _read_pofz(filename, nz)
+    return read_pofz_file(filename, nz, with_rmag=with_rmag)
 
-def _read_pofz(filename, nz):
-    dt = pofz_dtype(nz)
+def read_pofz_file(filename, nz, with_rmag=False):
+    dt = pofz_dtype(nz, with_rmag=with_rmag)
 
     stdout.write("Reading pofz file: '%s' with dtype:\n" % filename)
     pprint.pprint(dt)
@@ -703,7 +706,133 @@ class WeightedTraining:
         return training_dtype(self.train_sample)
 
 
+def plot_6rand_pofz(pzstruct, zmin, binsize):
+    """
 
+    plot 6 random p(z) from the input struct.  Note typically
+    zmin=0.0 and binsize=0.031429
+
+    after each plot is made, raw_input is read.  If the input is 'q' return, if
+    the input is 'p' a plot is written to disk in ~/tmp/id-pofz.eps where i
+    is the index.
+
+    The input struct must have photoid, p(z) and rmag.  I've been using the
+    random sample in pofz-12, which I created by running
+
+        pv pofz-12-chunk0*.dat 0.034 > pofz-12-rand.dat
+
+    then matched to sweep columns to get rmag using
+
+        es_sdsspy.sweeps_collate.match_column(photoid, 'cmodelmag_dered_r')
+        esutil.numpy_util.add_fields(struct, ...)
+        copy_fields
+        recfile write file
+
+    """
+    
+    biggles.configure('fontsize_min', 1.5)
+    dormag=False
+    if 'rmag' in pzstruct.dtype.names:
+        dormag=True
+
+    w1=where1(pzstruct['rmag'] < 18.)
+    w2=where1((pzstruct['rmag'] > 18.) & (pzstruct['rmag'] < 19) )
+    w3=where1((pzstruct['rmag'] > 19.) & (pzstruct['rmag'] < 20) )
+    w4=where1((pzstruct['rmag'] > 20.) & (pzstruct['rmag'] < 21) )
+    w5=where1((pzstruct['rmag'] > 21.) & (pzstruct['rmag'] < 21.5) )
+    w6=where1((pzstruct['rmag'] > 21.5) )
+
+    labf = 'r: %0.2f'
+    iloop=0
+    while True:
+        iloop +=1
+        # grab 6 random
+        i1=w1[numpy.random.randint(0,w1.size)]
+        i2=w2[numpy.random.randint(0,w2.size)]
+        i3=w3[numpy.random.randint(0,w3.size)]
+        i4=w4[numpy.random.randint(0,w4.size)]
+        i5=w5[numpy.random.randint(0,w5.size)]
+        i6=w6[numpy.random.randint(0,w6.size)]
+        
+        tab=biggles.FramedArray(3,2)
+        tab.aspect_ratio=1.4
+        tab.xlabel='z'
+        tab.ylabel='p(z)'
+        tab.label_offset=2
+
+        h=Histogram(pzstruct['pofz'][i1], x0=zmin, binsize=binsize)
+        k=biggles.PlotLabel(0.9,0.9,
+                            labf % pzstruct['rmag'][i1], 
+                            halign='right')
+        tab[0,0].add(h)
+        tab[0,0].add(k)
+
+        h=Histogram(pzstruct['pofz'][i2], x0=zmin, binsize=binsize)
+        k=biggles.PlotLabel(0.9,0.9,
+                            labf % pzstruct['rmag'][i2], 
+                            halign='right')
+        tab[0,1].add(h)
+        tab[0,1].add(k)
+
+
+        h=Histogram(pzstruct['pofz'][i3], x0=zmin, binsize=binsize)
+        k=biggles.PlotLabel(0.9,0.9,
+                            labf % pzstruct['rmag'][i3], 
+                            halign='right')
+        tab[1,0].add(h)
+        tab[1,0].add(k)
+
+        h=Histogram(pzstruct['pofz'][i4], x0=zmin, binsize=binsize)
+        k=biggles.PlotLabel(0.9,0.9,
+                            labf % pzstruct['rmag'][i4], 
+                            halign='right')
+        tab[1,1].add(h)
+        tab[1,1].add(k)
+
+        h=Histogram(pzstruct['pofz'][i5], x0=zmin, binsize=binsize)
+        k=biggles.PlotLabel(0.9,0.9,
+                            labf % pzstruct['rmag'][i5], 
+                            halign='right')
+        tab[2,0].add(h)
+        tab[2,0].add(k)
+
+        h=Histogram(pzstruct['pofz'][i6], x0=zmin, binsize=binsize)
+        k=biggles.PlotLabel(0.9,0.9,
+                            labf % pzstruct['rmag'][i6], 
+                            halign='right')
+        tab[2,1].add(h)
+        tab[2,1].add(k)
+
+
+
+        tab.show()
+
+
+        key=raw_input('hit a key (q quit, p plot): ')
+        if key == 'q':
+            biggles.configure('fontsize_min',0.1)
+            return
+        if key == 'p':
+            outdir=expand_path('~/tmp/pofz-plots')
+            if not os.path.exists(outdir):
+                os.makedirs(outdir)
+            epsfile=path_join(outdir, '%d-6pofz.eps' % iloop)
+
+            """
+            epsfile=path_join(outdir, '%d' % pzstruct['photoid'][i])
+            if dormag:
+                epsfile += '-%0.2f' % pzstruct['rmag'][i]
+            epsfile += '.eps'
+            """
+            print("plotting to:",epsfile)
+            tab.write_eps(epsfile)
+
+            key=raw_input('hit a key again (q quit): ')
+            if key == 'q':
+                biggles.configure('fontsize_min',0.1)
+                return
+
+    biggles.configure('fontsize_min',0.1)
 
 class WeightedOutputs:
     """
@@ -925,6 +1054,16 @@ class WeightedOutputs:
         converter.convert(epsfile,dpi=90,verbose=True)
 
 
+    def correct_pofz(self, pzrun):
+        """
+        Correct all the p(z) by multiplying by 
+
+               N(z)
+            -----------
+            <sum(p(z))>
+
+        """
+        pass
 
 
 
