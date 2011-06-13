@@ -56,6 +56,5 @@ def main():
         fobj=eu.recfile.Recfile(outfile, 'w', delim=' ')
         fobj.write(data)
         fobj.close()
-        return
 
 main()
