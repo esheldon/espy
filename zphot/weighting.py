@@ -235,17 +235,39 @@ def pofz_file(pzrun, chunk=None):
     dir = pofz_dir(pzrun)
     f = 'pofz-%s' % pzrun
     if chunk is not None:
-        f = f + '-chunk%03i' % chunk
+        if chunk == '*':
+            f = f+'-chunk*'
+        else:
+            f = f + '-chunk%03i' % chunk
     f = f+'.dat'
     return path_join(dir, f)
 
-def zhist_file(pzrun):
+def corrected_pofz_file(pzrun, chunk=None):
+    """
+    Files corrected so mean is same as overall
+    N(z)
+    """
+    f=pofz_file(pzrun, chunk)
+    front='pofz-%s' % pzrun
+    f = f.replace(front, front+'-corr')
+    return f
+
+def pofz_correction_file(pzrun):
+    """
+    This holds the correction factor for p(z)s.
+    """
+    dir = pofz_dir(pzrun)
+    f = 'pofz-correction-%s.rec' % pzrun
+    return path_join(dir, f)
+
+def pofz_hist_file(pzrun):
     """
     Summed zhist
     """
     dir = pofz_dir(pzrun)
     f = 'zhist-%s.rec' % pzrun
     return path_join(dir, f)
+
 
 def z_file(pzrun, chunk=None):
     dir = pofz_dir(pzrun)
@@ -356,6 +378,14 @@ def read_pofz(pzrun, chunk, with_rmag=False):
     nz = conf['nz']
     filename = pofz_file(pzrun, chunk)
     return read_pofz_file(filename, nz, with_rmag=with_rmag)
+
+def read_corrected_pofz(pzrun, chunk, with_rmag=False):
+    conf = zphot.read_config('pofz',pzrun)
+    nz = conf['nz']
+    filename = corrected_pofz_file(pzrun, chunk)
+    return read_pofz_file(filename, nz, with_rmag=with_rmag)
+
+
 
 def read_pofz_file(filename, nz, with_rmag=False):
     dt = pofz_dtype(nz, with_rmag=with_rmag)
@@ -754,8 +784,8 @@ def plot_6rand_pofz(pzstruct, zmin, binsize):
         i5=w5[numpy.random.randint(0,w5.size)]
         i6=w6[numpy.random.randint(0,w6.size)]
         
-        tab=biggles.FramedArray(3,2)
-        tab.aspect_ratio=1.4
+        tab=biggles.FramedArray(2,3)
+        tab.aspect_ratio=0.65
         tab.xlabel='z'
         tab.ylabel='p(z)'
         tab.label_offset=2
@@ -779,29 +809,29 @@ def plot_6rand_pofz(pzstruct, zmin, binsize):
         k=biggles.PlotLabel(0.9,0.9,
                             labf % pzstruct['rmag'][i3], 
                             halign='right')
-        tab[1,0].add(h)
-        tab[1,0].add(k)
+        tab[0,2].add(h)
+        tab[0,2].add(k)
 
         h=Histogram(pzstruct['pofz'][i4], x0=zmin, binsize=binsize)
         k=biggles.PlotLabel(0.9,0.9,
                             labf % pzstruct['rmag'][i4], 
                             halign='right')
-        tab[1,1].add(h)
-        tab[1,1].add(k)
+        tab[1,0].add(h)
+        tab[1,0].add(k)
 
         h=Histogram(pzstruct['pofz'][i5], x0=zmin, binsize=binsize)
         k=biggles.PlotLabel(0.9,0.9,
                             labf % pzstruct['rmag'][i5], 
                             halign='right')
-        tab[2,0].add(h)
-        tab[2,0].add(k)
+        tab[1,1].add(h)
+        tab[1,1].add(k)
 
         h=Histogram(pzstruct['pofz'][i6], x0=zmin, binsize=binsize)
         k=biggles.PlotLabel(0.9,0.9,
                             labf % pzstruct['rmag'][i6], 
                             halign='right')
-        tab[2,1].add(h)
-        tab[2,1].add(k)
+        tab[1,2].add(h)
+        tab[1,2].add(k)
 
 
 
@@ -930,7 +960,7 @@ class WeightedOutputs:
 
     def make_pofz_hist(self, pzrun, num=None, numdata=None, keepflags=None):
         output = self.calculate_pofz_hist(pzrun,num,numdata,keepflags)
-        outfile = zhist_file(pzrun)
+        outfile = pofz_hist_file(pzrun)
         stdout.write("Writing summed p(z) hist: '%s'\n" % outfile)
         eu.io.write(outfile, output, delim=' ')
 
@@ -952,7 +982,7 @@ class WeightedOutputs:
 
         wrun = conf['wrun']
 
-        outfile = zhist_file(pzrun)
+        outfile = pofz_hist_file(pzrun)
         out_dt = [('zmin','f8'),('zmax','f8'),('pofz','f8')]
 
         # get the config
@@ -1032,7 +1062,7 @@ class WeightedOutputs:
 
     def plot_pofz_hist(self, pzrun):
 
-        outfile = zhist_file(pzrun)
+        outfile = pofz_hist_file(pzrun)
         if not os.path.exists(outfile):
             raise ValueError("Run make_pofz_hist first")
         stdout.write("Reading zhist file: '%s'\n" % outfile)
@@ -1052,19 +1082,6 @@ class WeightedOutputs:
         plt.aspect_ratio=1
         plt.write_eps(epsfile)
         converter.convert(epsfile,dpi=90,verbose=True)
-
-
-    def correct_pofz(self, pzrun):
-        """
-        Correct all the p(z) by multiplying by 
-
-               N(z)
-            -----------
-            <sum(p(z))>
-
-        """
-        pass
-
 
 
 class CompareWeighting:
@@ -1231,7 +1248,7 @@ class CompareWeighting:
             z_plt.xlabel = 'z'
             z_plt.aspect_ratio = 1
 
-            pzfile = zhist_file(self.pzrun)
+            pzfile = pofz_hist_file(self.pzrun)
             stdout.write("Reading summed zhist file: '%s'\n" % pzfile)
             pzdata = eu.io.read(pzfile)
             binsize = pzdata['zmax'][1]-pzdata['zmin'][1]
@@ -1515,7 +1532,7 @@ def reconstruct_from_superset():
 
     maglim215 = 21.5
     pzrun215 = '03'
-    zhist215_file = zhist_file(pzrun215)
+    zhist215_file = pofz_hist_file(pzrun215)
     zhist215 = eu.io.read(zhist215_file)
 
     #
@@ -1617,10 +1634,15 @@ def get_frac_lowz(wrun):
         stdout.write("Fraction with z < %s: %s\n" % (zlow, fraclow))
 
 
-def pofz_correction(pzrun):
+def make_pofz_correction(pzrun):
     """
     Get the "correction", the ratio of recovered weighted
     N(z) to the summed p(z)
+
+               N(z)
+            -----------
+            <sum(p(z))>
+
     """
     import converter
     from biggles import FramedPlot, Histogram, PlotKey, Table, Points, Curve
@@ -1628,7 +1650,7 @@ def pofz_correction(pzrun):
 
     wo = zphot.weighting.WeightedOutputs()
 
-    zhfile = zhist_file(pzrun)
+    zhfile = pofz_hist_file(pzrun)
     if not os.path.exists(zhfile):
         print("generating overall pofz summed hist")
         wo.make_pofz_hist(pzrun)
@@ -1701,5 +1723,13 @@ def pofz_correction(pzrun):
     tab.write_eps(epsfile)
     converter.convert(epsfile, dpi=120, verbose=True)
 
-    return corr
+    out_dt = [('zmin','f8'),('zmax','f8'),('corr','f8')]
+    output = numpy.zeros(corr.size, dtype=out_dt)
+    output['zmin'] = sumpofz_struct['zmin']
+    output['zmax'] = sumpofz_struct['zmax']
+    output['corr'] = corr
+
+    outfile = pofz_correction_file(pzrun)
+    print("writing correction to:",outfile)
+    eu.io.write(outfile, output, delim=' ')
 

@@ -18,6 +18,41 @@ def open_columns(type):
     print("opening columns:",collator.columns_dir())
     return collator.open_columns()
 
+def match_columns(photoid, tags, type='primgal'):
+    """
+
+    Take the input photoids and match it to the input photo columns.  Extract
+    the requested columns.
+
+    """
+    if isinstance(tags, str):
+        tags=[tags]
+    cols = open_columns(type)
+    add_descr = []
+    for tag in tags:
+        if tag not in cols:
+            raise ValueError("Requested tag not in database:",tag)
+
+        print("will extract:",cols[tag].dtype.descr[0])
+        add_descr.append(cols[tag].dtype.descr[0])
+
+    print("reading photoid from columns")
+    pid = cols['photoid'][:]
+    
+    print("matching")
+    minput, mcols = eu.numpy_util.match(photoid, pid)
+
+    if minput.size != photoid.size:
+        raise ValueError("Not all objects matched: %d/%d" % (minput.size, photoid.size))
+
+    print("verifying")
+    tpid = cols['photoid'][mcols]
+    wbad=where1(tpid != photoid[minput])
+    if wbad.size != 0:
+        raise ValueError("extracted photoid did not match up")
+
+    struct = cols.read_columns(tags, rows=mcols)
+    return struct
 
 class Collator:
     """
