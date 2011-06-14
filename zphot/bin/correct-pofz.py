@@ -36,7 +36,7 @@ def main():
 
     pattern = zphot.weighting.pofz_file(pzrun, chunk='*')
 
-# this is just to get the chunk count
+    # this is just to get the chunk count
     files=glob(pattern)
     nchunk = len(files)
     for chunk in xrange(nchunk):
