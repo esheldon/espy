@@ -27,8 +27,6 @@ import numpy
 from sys import stdout
 import os
 
-import esutil
-
 def read_results(filename):
     """
     Name:
@@ -86,6 +84,7 @@ def result_dtype(npar):
     return [('pars',('f8',npar)), ('like','f8')]
 
 def extract_stats(data, burnin, sigma_clip=True):
+    import esutil
     npar = data['pars'].shape[1]
 
     means = numpy.zeros(npar,dtype='f8')
@@ -110,7 +109,6 @@ class MCMC():
         the chain
 
     Calling Sequence:
-        from esutil.stat import mcmc
         m=mcmc.MCMC(obj, log=True)
         result = m.run(nstep, par_guess, seed=None)
 
@@ -171,7 +169,6 @@ class MCMC():
         Purpose:
             Run the MCMC chain.
         Calling Sequence:
-            from esutil.stat import mcmc
             m=mcmc.MCMC(obj, log=True)
 
             # run the chain
@@ -270,8 +267,7 @@ class MCMC():
         Purpose:
             return the parameters and likelihood for each trial
         Calling Sequence:
-            import esutil
-            mcmc=esutil.stat.mcmc.MCMC(obj, log=True)
+            mcmc=mcmc.MCMC(obj, log=True)
             mcmc.run(nstep, par_guess, seed=None)
             trials, liklihoods = mcmc.get_results()
         Outputs:
@@ -564,6 +560,7 @@ class MCMCTester:
 
 def plot_results6(res, burnin, sigma_clip=True):
     import biggles
+    import esutil
     tab = biggles.Table(2,3)
     means,errs = extract_stats(res, burnin, sigma_clip=sigma_clip)
     
@@ -609,6 +606,7 @@ def testmany(ntrial):
     tc.PlotMultipleResults()
 
 def test_line(nstep=10000, doplot=False):
+    import esutil
     pars = [1.0,1.0]
     xmin = -1.0
     xmax =  1.0

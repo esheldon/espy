@@ -123,7 +123,7 @@ from esutil.numpy_util import where1
 from esutil.stat import histogram
 
 import biggles
-from biggles import FramedPlot, PlotKey, Histogram
+from biggles import FramedPlot, PlotKey, Histogram, SymmetricErrorBarsY
 import converter
 
 import copy
@@ -735,6 +735,46 @@ class WeightedTraining:
     def get_dtype(self):
         return training_dtype(self.train_sample)
 
+def plot_simulated(pzrun, errcolor='black'):
+    """
+
+    Plot carlos' simulated cosmic variance errors for the given sample.
+
+    """
+
+    d=pofz_dir(pzrun)
+    d=path_join(d, 'simulated')
+
+    f='nzsigf-edges-%s.rec' % pzrun
+    f = path_join(d,f)
+    data = eu.io.read(f, verbose=True)
+
+    plt=FramedPlot()
+    plt.aspect_ratio=0.7
+    plt.xlabel = 'z'
+    plt.ylabel = 'Simulated N(z)'
+
+    epsfile='nzsigf-edges'
+    if errcolor != 'black':
+        epsfile += '-err'+errcolor
+    epsfile += '.eps'
+    epsfile=path_join(d, epsfile)
+
+    width=3
+    h = Histogram(data['pofz'], x0=data['zmin'][0],
+                  binsize=data['zmax'][0]-data['zmin'][0],
+                  width=width,
+                  line='solid')
+
+    zmean = (data['zmax']+data['zmin'])/2.
+    err = SymmetricErrorBarsY(zmean, data['pofz'], data['sample_variance'], 
+                              width=width,color=errcolor)
+    plt.add(h)
+    plt.add(err)
+    plt.show()
+
+    print("Writing to file:",epsfile)
+    plt.write_eps(epsfile)
 
 def plot_6rand_pofz(pzstruct, zmin, binsize):
     """

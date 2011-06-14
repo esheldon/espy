@@ -106,16 +106,16 @@ Carlos
             self.init(self.train_sample)
 
     def init(self, train_sample):
-        #self.types = ['deep2','other','sdssobjids','vvds','zcosmos']
-        self.types = ['primus.zerod.10oct29.zconf4',
-                      '2slaq',
-                      'cfrs',
-                      'cnoc2.cut',
-                      'deep2.form.fix',
-                      'sdssobjids',
-                      'tkrs-fix',
-                      'vvds',
-                      'zcosmos']
+        self.types = {'primus':'primus.zerod.10oct29.zconf4',
+                      '2slaq':'2slaq',
+                      'cfrs':'cfrs',
+                      'cnoc2':'cnoc2.cut',
+                      'deep2':'deep2.form.fix',
+                      'sdss':'sdssobjids',
+                      'tkrs':'tkrs-fix',
+                      'vvds':'vvds',
+                      'zcosmos':'zcosmos'}
+
         self.dir_matched = path_join(self.basedir, 
                                      'matched', 
                                      train_sample)
@@ -157,7 +157,7 @@ Carlos
 
         dt.append( ('psf_fwhm_r','f4') )
 
-        if 'primus' in type:
+        if type == 'primus':
             dt.append( ('z','f4') )
 
         names = [d[0] for d in dt]
@@ -497,7 +497,7 @@ Carlos
 
 
     def make_specific_cuts(self, data, type):
-        if type == 'deep2.form.fix':
+        if type == 'deep2':
             w,=where(data['zqual'] >= 3)
             print("deep2: keeping %s/%s" % (w.size, data.size))
             return w
@@ -530,17 +530,25 @@ Carlos
     def fname_original(self, type):
         ext='.rec'
         dir = path_join(self.basedir, 'original-2010-09-19')
-        return os.path.join(dir, type+ext)
+        long_type = self.types[type]
+        return os.path.join(dir, long_type+ext)
 
     def fname_matched(self, type):
         dir = self.dir_matched
-        fname = type+'-match-'+self.train_sample+'.rec'
+        long_type = self.types[type]
+        fname = long_type+'-match-'+self.train_sample+'.rec'
         fname = os.path.join(dir, fname)
         return fname
 
     def plotdir(self):
         dir = self.dir_matched
         return path_join(dir, 'plots')
+
+    def seeing_plotfile(self, name):
+        dir = self.plotdir()
+        fname = '%s-match-seeing-%s.eps' % (name,self.train_sample)
+        fname=path_join(dir, fname)
+        return fname
 
     def plotfile(self, type, extra=None):
         dir = self.plotdir()
@@ -577,7 +585,7 @@ Carlos
         plt=FramedPlot() 
 
         symsize = 2
-        if type == 'sdssobjids' or type == 'other':
+        if type == 'sdss' or type == 'other':
             symsize = 0.25
 
         plt.add( Points(orig['ra'],orig['dec'],type='dot', size=symsize) )
@@ -592,6 +600,15 @@ Carlos
 
 
     def plot_seeing(self, types=None, yrange=None):
+        """
+
+        The BOSS all is normalized to one
+        The summed is normalized to one
+
+        Others are normalized relative to the
+        summed
+
+        """
         import pcolors
         import es_sdsspy
         import converter
@@ -600,21 +617,20 @@ Carlos
 
         if types is None:
             name='all'
-            types=self.types
+            # convert keys to a list
+            types=list(self.types)
         else:
             name='-'.join(types)
 
 
         plt=biggles.FramedPlot()
         ntype=len(types)
-        colors=pcolors.rainbow(ntype, 'hex')
+        #colors=pcolors.rainbow(ntype, 'hex')
+        colors=pcolors.rainbow(ntype+1, 'hex')
 
         allhist=[]
         
-        print("Opening columns:")
-        collator = es_sdsspy.sweeps_collate.Collator()
-        c = collator.open_columns()
-        print("  dir:",c.dir)
+        c = es_sdsspy.sweeps_collate.open_columns('primgal')
         print("Reading all psf_fwhm")
         print("  checking window")
         inbasic = c['inbasic'][:]
@@ -633,6 +649,7 @@ Carlos
         b.dohist(binsize=binsize, min=xmin, max=xmax)
         b.calc_stats()
         h = b['hist']/float(b['hist'].sum())
+        #h = 0.3*b['hist']/float(b['hist'].max())
         x = b['center']
         htot = h.copy()
         htot[:] = 0
@@ -658,31 +675,50 @@ Carlos
         htot = b['hist']/float(b['hist'].sum())
         """
 
+        # first get the normalizations
+        counts=0
         for i in xrange(ntype):
             type = types[i]
             t= self.read_matched(type)
+            counts += t.size
+            del t
 
-            b=eu.stat.Binner(t['psf_fwhm_r'])
+        for i in xrange(ntype):
+            type = types[i]
+
+            t= self.read_matched(type)
+
+            if 'psf_fwhm' in t.dtype.names:
+                b=eu.stat.Binner(t['psf_fwhm'][:,2])
+            else:
+                b=eu.stat.Binner(t['psf_fwhm_r'])
+
             b.dohist(binsize=binsize, min=xmin, max=xmax)
             b.calc_stats()
             htot += b['hist']
 
-            h = b['hist']/float(b['hist'].sum())
+            h = float(t.size)/counts*b['hist']/float(b['hist'].sum())
+            #fracheight = float(t.size)/counts
+            #h = fracheight*b['hist']/float(b['hist'].max())
 
 
-            if type.find('primus') != -1:
-                width=2
+            if name == 'all':
+                if type == 'primus':
+                    width=2
+                else:
+                    width=1
             else:
-                width=1
+                width=2
             ph = biggles.Histogram(h, x0=b['low'][0], binsize=binsize, color=colors[i], width=width)
             ph.label = type
 
             allhist.append(ph)
             plt.add(ph)
 
+        #htot = 0.8*htot/float(htot.max())
         htot = htot/float(htot.sum())
-        ph = biggles.Histogram(htot, x0=b['low'][0], binsize=binsize, width=3, color='magenta')
-        ph.label = 'All Matches'
+        ph = biggles.Histogram(htot, x0=b['low'][0], binsize=binsize, width=3, color=colors[-1])
+        ph.label = 'Total'
 
         allhist.append(ph)
         plt.add(ph)
@@ -701,14 +737,16 @@ Carlos
 
         plt.add(key)
 
-        plt.xrange = [0.6, 1.8]
-        if yrange is None:
-            yrange = [0.0, 0.45]
-        plt.yrange = yrange
+        #plt.xrange = [0.4, 1.8]
+        #if yrange is None:
+        #    yrange = [0.0, 0.45]
+        #yrange = [0.0, 1]
+        #plt.yrange = yrange
         plt.xlabel = 'seeing'
+        plt.aspect_ratio=0.7
         plt.show()
 
-        epsfile=self.plotfile(name, extra='seeing')
+        epsfile=self.seeing_plotfile(name)
         print("Writing eps file:",epsfile)
         plt.write_eps(epsfile)
         converter.convert(epsfile, dpi=120, verbose=True)
