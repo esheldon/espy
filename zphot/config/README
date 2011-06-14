@@ -63,7 +63,7 @@ sample/run tree:
 
 
     # using new columns, with multi-epoch option.
-    photo_sample: 04
+    photo_sample: 04  # r < 21.5
         |-> train_sample: 11  # did multi-epoch matching
             |-> wrun: 11
                 |-> pzrun 13

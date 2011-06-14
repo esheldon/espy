@@ -1646,6 +1646,9 @@ def make_pofz_correction(pzrun):
     """
     import converter
     from biggles import FramedPlot, Histogram, PlotKey, Table, Points, Curve
+
+    biggles.configure('fontsize_min', 2.0)
+
     pzconf = zphot.cascade_config(pzrun)
 
     wo = zphot.weighting.WeightedOutputs()
@@ -1680,9 +1683,9 @@ def make_pofz_correction(pzrun):
     sumpofz = sumpofz_struct['pofz']
     wnofz = bs['whist']
 
-    sumpofz_h = Histogram(sumpofz/sumpofz.sum(), x0=zmin, binsize=binsize, color='red')
+    sumpofz_h = Histogram(sumpofz/sumpofz.sum(), x0=zmin, binsize=binsize, width=2, color='red')
     sumpofz_h.label = 'summed p(z)'
-    wnofz_h = Histogram(wnofz/wnofz.sum(), x0=zmin, binsize=binsize, color='blue')
+    wnofz_h = Histogram(wnofz/wnofz.sum(), x0=zmin, binsize=binsize, width=2, color='blue')
     wnofz_h.label = 'Weighted N(z)'
 
 
