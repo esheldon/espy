@@ -793,7 +793,7 @@ def plot_6rand_pofz(pzstruct, zmin, binsize, seed=25):
 
     then matched to sweep columns to get rmag using
 
-        es_sdsspy.sweeps_collate.match_column(photoid, 'cmodelmag_dered_r')
+        es_sdsspy.sweeps_collate.match_columns(photoid, 'cmodelmag_dered_r')
         esutil.numpy_util.add_fields(struct, ...)
         copy_fields
         recfile write file

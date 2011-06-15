@@ -1,10 +1,12 @@
 # vim: set filetype=python :
 default_version='5.2'
+#default_version='6.2'
+
 
 #url="""
 #'http://heasarc.gsfc.nasa.gov/docs/software/fitsio/ccfits/CCfits-%s.tar.gz' % self.version"""
 url="""
-'ftp://ftp.cwru.edu/pub/bash/readline-%s.tar.gz' % (self.version,)"""
+'http://mirrors.kernel.org/gnu/readline/readline-%s.tar.gz' % (self.version,)"""
 
 source_type = 'tar'
 
