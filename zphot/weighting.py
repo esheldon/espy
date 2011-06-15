@@ -776,7 +776,7 @@ def plot_simulated(pzrun, errcolor='black'):
     print("Writing to file:",epsfile)
     plt.write_eps(epsfile)
 
-def plot_6rand_pofz(pzstruct, zmin, binsize):
+def plot_6rand_pofz(pzstruct, zmin, binsize, seed=25):
     """
 
     plot 6 random p(z) from the input struct.  Note typically
@@ -805,6 +805,7 @@ def plot_6rand_pofz(pzstruct, zmin, binsize):
     if 'rmag' in pzstruct.dtype.names:
         dormag=True
 
+    width=3
     w1=where1(pzstruct['rmag'] < 18.)
     w2=where1((pzstruct['rmag'] > 18.) & (pzstruct['rmag'] < 19) )
     w3=where1((pzstruct['rmag'] > 19.) & (pzstruct['rmag'] < 20) )
@@ -817,6 +818,8 @@ def plot_6rand_pofz(pzstruct, zmin, binsize):
     while True:
         iloop +=1
         # grab 6 random
+        if iloop == 1:
+            numpy.random.seed(seed)
         i1=w1[numpy.random.randint(0,w1.size)]
         i2=w2[numpy.random.randint(0,w2.size)]
         i3=w3[numpy.random.randint(0,w3.size)]
@@ -825,19 +828,22 @@ def plot_6rand_pofz(pzstruct, zmin, binsize):
         i6=w6[numpy.random.randint(0,w6.size)]
         
         tab=biggles.FramedArray(2,3)
+        tab.uniform_limits=1
         tab.aspect_ratio=0.65
         tab.xlabel='z'
-        tab.ylabel='p(z)'
+        tab.ylabel='P(z)'
         tab.label_offset=2
 
-        h=Histogram(pzstruct['pofz'][i1], x0=zmin, binsize=binsize)
+        hist = pzstruct['pofz'][i1]/pzstruct['pofz'][i1].max()
+        h=Histogram(hist, x0=zmin, binsize=binsize, width=width)
         k=biggles.PlotLabel(0.9,0.9,
                             labf % pzstruct['rmag'][i1], 
                             halign='right')
         tab[0,0].add(h)
         tab[0,0].add(k)
 
-        h=Histogram(pzstruct['pofz'][i2], x0=zmin, binsize=binsize)
+        hist = pzstruct['pofz'][i2]/pzstruct['pofz'][i2].max()
+        h=Histogram(hist, x0=zmin, binsize=binsize, width=width)
         k=biggles.PlotLabel(0.9,0.9,
                             labf % pzstruct['rmag'][i2], 
                             halign='right')
@@ -845,28 +851,32 @@ def plot_6rand_pofz(pzstruct, zmin, binsize):
         tab[0,1].add(k)
 
 
-        h=Histogram(pzstruct['pofz'][i3], x0=zmin, binsize=binsize)
+        hist = pzstruct['pofz'][i3]/pzstruct['pofz'][i3].max()
+        h=Histogram(hist, x0=zmin, binsize=binsize, width=width)
         k=biggles.PlotLabel(0.9,0.9,
                             labf % pzstruct['rmag'][i3], 
                             halign='right')
         tab[0,2].add(h)
         tab[0,2].add(k)
 
-        h=Histogram(pzstruct['pofz'][i4], x0=zmin, binsize=binsize)
+        hist = pzstruct['pofz'][i4]/pzstruct['pofz'][i4].max()
+        h=Histogram(hist, x0=zmin, binsize=binsize, width=width)
         k=biggles.PlotLabel(0.9,0.9,
                             labf % pzstruct['rmag'][i4], 
                             halign='right')
         tab[1,0].add(h)
         tab[1,0].add(k)
 
-        h=Histogram(pzstruct['pofz'][i5], x0=zmin, binsize=binsize)
+        hist = pzstruct['pofz'][i5]/pzstruct['pofz'][i5].max()
+        h=Histogram(hist, x0=zmin, binsize=binsize, width=width)
         k=biggles.PlotLabel(0.9,0.9,
                             labf % pzstruct['rmag'][i5], 
                             halign='right')
         tab[1,1].add(h)
         tab[1,1].add(k)
 
-        h=Histogram(pzstruct['pofz'][i6], x0=zmin, binsize=binsize)
+        hist = pzstruct['pofz'][i6]/pzstruct['pofz'][i6].max()
+        h=Histogram(hist, x0=zmin, binsize=binsize, width=width)
         k=biggles.PlotLabel(0.9,0.9,
                             labf % pzstruct['rmag'][i6], 
                             halign='right')
@@ -886,7 +896,7 @@ def plot_6rand_pofz(pzstruct, zmin, binsize):
             outdir=expand_path('~/tmp/pofz-plots')
             if not os.path.exists(outdir):
                 os.makedirs(outdir)
-            epsfile=path_join(outdir, '%d-6pofz.eps' % iloop)
+            epsfile=path_join(outdir, 'seed%d-%d-6pofz.eps' % (seed,iloop))
 
             """
             epsfile=path_join(outdir, '%d' % pzstruct['photoid'][i])
