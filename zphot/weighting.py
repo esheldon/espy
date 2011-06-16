@@ -735,6 +735,121 @@ class WeightedTraining:
     def get_dtype(self):
         return training_dtype(self.train_sample)
 
+
+def simulated_dir(pzrun):
+    d=pofz_dir(pzrun)
+    d=path_join(d, 'simulated')
+    return d
+
+def simulated_nofz_file(pzrun):
+    d=simulated_dir(pzrun)
+    f='nzsigf-edges-%s.rec' % pzrun
+    f = path_join(d,f)
+    return f
+
+def read_simulated_nofz(pzrun):
+    f=simulated_nofz_file(pzrun)
+    data = eu.io.read(f, verbose=True)
+    return data
+
+
+def combine_nofz_and_simulated(pzrun):
+    """
+
+    Combine the simulated sample variance errors with our estimate of N(z).
+    Only currently have this for pzrun 12
+
+    """
+    # first read the weights data
+    conf = zphot.read_config('pofz',pzrun)
+    iteration=2
+    wtrain = read_weights(conf['wrun'],iteration)
+
+    # now get the simulated data
+    simdata = read_simulated_nofz(pzrun)
+    simnorm = simdata['pofz'].sum()
+    simhist = simdata['pofz']/simnorm
+    sample_variance = simdata['sample_variance']/simnorm
+
+    # normalize the result
+
+    # perform the weighted histogram on using the bins
+    # from the simulated data
+
+    zmin = simdata['zmin'][0]
+    zmax = simdata['zmax'][-1]
+    binsize = simdata['zmax'][0] - simdata['zmin'][0]
+    wdict = eu.stat.histogram(wtrain['z'], 
+                              weights=wtrain['weight'],
+                              min=zmin, 
+                              max=zmax,
+                              binsize=binsize)
+    """
+    eu.misc.colprint(wdict['low'], wdict['high'], wdict['whist'])
+    if wdict['whist'].size != simdata['zmin'].size:
+        raise ValueError("Expected %d bins but "
+                         "got %d" % (simdata['zmin'].size,wdict['whist'].size))
+    """
+
+    # we always get an extra bin
+    wnorm = wdict['whist'][0:-1].sum()
+    whist = wdict['whist'][0:-1]/wnorm
+    
+    out = numpy.zeros(simdata['zmin'].size,
+                      dtype=[('zmin','f8'),('zmax','f8'),
+                             ('nofz','f8'),('sample_variance','f8')])
+    out['zmin'] = simdata['zmin']
+    out['zmax'] = simdata['zmax']
+    out['nofz'] = whist
+    out['sample_variance'] = sample_variance
+    simf = simulated_nofz_file(pzrun)
+    outf = simf.replace('.rec','-with-nofz.rec')
+    print("Writing output file:",outf)
+    eu.io.write(outf, out)
+
+    # plot with N(z) and sample variance errors
+    width=2
+    aspect_ratio=0.7
+
+    epsfile=simf.replace('.rec', '-nofz-errors.eps')
+    plt=FramedPlot()
+    plt.xlabel = 'z'
+    plt.aspect_ratio=aspect_ratio
+
+    wH = Histogram(whist, x0=out['zmin'][0], binsize=out['zmax'][0]-out['zmin'][0],
+                   width=width)
+    wHerr = SymmetricErrorBarsY((out['zmin']+out['zmax'])/2., 
+                                out['nofz'], 
+                                out['sample_variance'], width=width)
+    wH.label = 'N(z)'
+
+    plt.add(wH,wHerr)
+    plt.show()
+    print("Writing plot file:",epsfile)
+    plt.write_eps(epsfile)
+
+    # now add simulation
+    epsfile=simf.replace('.rec', '-nofz-sim-errors.eps')
+    plt=FramedPlot()
+    plt.xlabel = 'z'
+    plt.aspect_ratio=aspect_ratio
+
+    simH = Histogram(simhist, x0=out['zmin'][0], 
+                     binsize=out['zmax'][0]-out['zmin'][0],
+                     color='blue', width=width)
+    simHerr = SymmetricErrorBarsY((out['zmin']+out['zmax'])/2., 
+                                  simhist,
+                                  out['sample_variance'], 
+                                  color='blue', width=width)
+    simH.label = 'sim'
+    key = PlotKey(0.9,0.9,[wH,simH], halign='right')
+    plt.add(wH, simH, simHerr, key)
+    plt.show()
+    print("Writing plot file:",epsfile)
+    plt.write_eps(epsfile)
+
+
+
 def plot_simulated(pzrun, errcolor='black'):
     """
 
@@ -742,23 +857,16 @@ def plot_simulated(pzrun, errcolor='black'):
 
     """
 
-    d=pofz_dir(pzrun)
-    d=path_join(d, 'simulated')
-
-    f='nzsigf-edges-%s.rec' % pzrun
-    f = path_join(d,f)
-    data = eu.io.read(f, verbose=True)
+    data = read_simulated_nofz(pzrun)
 
     plt=FramedPlot()
     plt.aspect_ratio=0.7
     plt.xlabel = 'z'
     plt.ylabel = 'Simulated N(z)'
 
-    epsfile='nzsigf-edges'
+    epsfile = simulated_nofz_file(pzrun).replace('.rec','.eps')
     if errcolor != 'black':
-        epsfile += '-err'+errcolor
-    epsfile += '.eps'
-    epsfile=path_join(d, epsfile)
+        epsfile = epsfile.replace('.eps', '-err'+errcolor+'.eps')
 
     width=3
     h = Histogram(data['pofz'], x0=data['zmin'][0],
