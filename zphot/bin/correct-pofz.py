@@ -2,7 +2,7 @@
     %prog pzrun
 
 Description:
-    Correct the p(z) using the ration N(z)/sum(p(z))
+    Correct the p(z) using the ratio N(z)/sum(p(z))
 
 """
 from __future__ import print_function

@@ -122,6 +122,9 @@ from esutil.numpy_util import ahelp
 from esutil.numpy_util import where1
 from esutil.stat import histogram
 
+import es_sdsspy
+import sdsspy
+
 import biggles
 from biggles import FramedPlot, FramedArray, PlotKey, Histogram, SymmetricErrorBarsY, PlotLabel
 import converter
@@ -142,10 +145,13 @@ _basedir = os.path.expanduser(_basedir)
 
 def pofz_columns_dir(pzrun):
     dir = pofz_dir(pzrun)
-    return path_join(dir,'pofz-%s.cols' % pzrun)
+    dir += '.cols'
+    #return path_join(dir,'pofz-%s.cols' % pzrun)
+    return dir
 
 def open_pofz_columns(pzrun):
     d=pofz_columns_dir(pzrun)
+    print("Opening poz columns:",d)
     return columns.Columns(d)
 
 
@@ -154,7 +160,7 @@ def open_pofz_columns(pzrun):
 
 def read_z(filename):
     stdout.write("Reading z file: '%s'\n" % filename)
-    dt=[('zmin','f8'),('zmax','f8')]
+    dt=[('zmin','f4'),('zmax','f4')]
     r = eu.recfile.Open(filename,'r',dtype=dt,delim=' ')
     data = r.read()
     r.close()
@@ -228,7 +234,6 @@ def _read_training(filename, dtype):
 
 def pofz_dir(pzrun):
     dir = weights_basedir()
-    #return path_join(dir, 'weighting', 'pofz-%s' % pzrun)
     return path_join(dir, 'pofz-%s' % pzrun)
 
 def pofz_file(pzrun, chunk=None):
@@ -242,14 +247,28 @@ def pofz_file(pzrun, chunk=None):
     f = f+'.dat'
     return path_join(dir, f)
 
-def corrected_pofz_file(pzrun, chunk=None):
+def pofz_release_dir(pzrun):
+    dir = weights_basedir()
+    return path_join(dir, 'pofz-%s-release' % pzrun)
+
+def zbins_release_file(pzrun):
+    dir = pofz_release_dir(pzrun)
+    f = 'zbins-%s.fits' % pzrun
+    return path_join(dir, f)
+
+def pofz_release_file(pzrun, run):
+    dir = pofz_release_dir(pzrun)
+    f = 'pofz-%s.fits' % pzrun
+    return path_join(dir, f)
+
+
+def corrected_pofz_file(pzrun, chunk):
     """
     Files corrected so mean is same as overall
     N(z)
     """
     f=pofz_file(pzrun, chunk)
-    front='pofz-%s' % pzrun
-    f = f.replace(front, front+'-corr')
+    f = f.replace('.dat','-corr.dat')
     return f
 
 def pofz_correction_file(pzrun):
@@ -1055,15 +1074,9 @@ class WeightedOutputs:
     def make_columns(self, pzrun):
         """
         Collate the outputs into a columns database
+        Note we use the corrected p(z) here
         """
         conf = zphot.cascade_config(pzrun)
-        #pzconf = zphot.read_config('pofz',pzrun)
-        #wrun = pzconf['wrun']
-        #wconf = zphot.read_config('weights',wrun)
-        #train_sample = wconf['train_sample']
-        #tconf = zphot.read_config('train',train_sample)
-        #photo_sample = tconf['photo_sample']
-        #pconf = zphot.read_config('zinput', photo_sample)
 
         pprint.pprint(conf)
 
@@ -1092,7 +1105,7 @@ class WeightedOutputs:
         print("Writing zbins column")
         cols.write_column('zbins', zdata)
 
-        pofz_dt = [('photoid','i8'),('pofz','f8',nz)]
+        pofz_dt = [('photoid','i8'),('pofz','f4',nz)]
 
         # the num file, to determine of an object is "recoverable"
         iteration=2
@@ -1100,7 +1113,7 @@ class WeightedOutputs:
         
 
         pzdir=pofz_dir(pzrun)
-        pattern=path_join(pzdir,'pofz-%s-chunk*.dat' % pzrun)
+        pattern=path_join(pzdir,'pofz-%s-chunk*-corr.dat' % pzrun)
         flist = glob.glob(pattern)
         ntot = len(flist)
         if ntot == 0:
@@ -1132,8 +1145,109 @@ class WeightedOutputs:
 
             ii += n
 
-        cols['photoid'].create_index()
-        cols['num'].create_index()
+        #cols['photoid'].create_index(verbose=True)
+        #cols['num'].create_index(verbose=True)
+
+    def add_columns(self, pzrun):
+        """
+        Add columns to the collated photoz table
+        """
+
+        newcols = ['run','rerun','camcol','field','id',
+                   'cmodelmag_dered_r','ra','dec']
+
+        cols = open_pofz_columns(pzrun)
+        print("reading pofz photoid")
+        photoid = cols['photoid'][:]
+
+        print("reading sweeps photoid")
+        scols = es_sdsspy.sweeps_collate.open_columns('primgal')
+        sphotoid = scols['photoid'][:]
+
+        print("matching")
+        mcols, mscols = eu.numpy_util.match(photoid, sphotoid)
+        if mcols.size != photoid.size:
+            raise ValueError("Some did not match: %d/%d" % (mcols.size,photoid.size))
+
+        for col in newcols:
+            print("Reading data for: ",col)
+            data = scols[col][mscols]
+            print("    Writing data")
+            if col == 'cmodelmag_dered_r':
+                col = 'cmodelmag_r'
+            cols.write_column(col, data, create=True)
+
+        print("creating umg")
+        u=scols['modelmag_dered_u'][mscols]
+        g=scols['modelmag_dered_g'][mscols]
+        umg = u-g
+        cols.write_column('modelmag_umg',umg,create=True)
+        del u
+
+        print("creating gmr")
+        r=scols['modelmag_dered_r'][mscols]
+        gmr = g-r
+        cols.write_column('modelmag_gmr',gmr,create=True)
+        del g
+
+        print("creating rmi")
+        i=scols['modelmag_dered_i'][mscols]
+        rmi = r-i
+        cols.write_column('modelmag_rmi',rmi,create=True)
+        del r
+
+        print("creating imz")
+        z=scols['modelmag_dered_z'][mscols]
+        imz = i-z
+        cols.write_column('modelmag_imz',imz,create=True)
+        del i
+        del z
+
+        # don't forget objid
+        print("creating objid")
+        run=cols['run'][:]
+        rerun=cols['rerun'][:]
+        camcol=cols['camcol'][:]
+        field=cols['field'][:]
+        id=cols['id'][:]
+        objid = sdsspy.objid(run,rerun,camcol,field,id)
+        cols.write_column('objid', objid, create=True)
+
+
+    def make_release(self, pzrun):
+        cols = open_pofz_columns(pzrun)
+        print("getting zbins")
+        zbindata = cols['zbins'][:]
+        outf=zbins_release_file(pzrun)
+        print("writing zbins file:",outf)
+        eu.io.write(outf, zbindata)
+        return
+
+        print("reading runs")
+        runs = cols['run'][:]
+        urun = numpy.unique(runs)
+
+        columns=['objid',
+                 'run','rerun','camcol','field','id',
+                 'cmodelmag_r',
+                 'modelmag_umg',
+                 'modelmag_gmr',
+                 'modelmag_rmi',
+                 'modelmag_imz',
+                 'pofz']
+        i=1
+        for run in urun:
+            printf("run: %d  (%d/%d)" % (run,i,urun.size))
+            w,=where(run == urun)
+
+            data = cols.read_columns(columns=columns, rows=w)
+            
+            outfile=pofz_release_file(pzrun, run)
+            printf("writing output file:",outfile)
+            eu.io.write(outfile, data)
+            del data
+
+            i+=1
 
 
     def make_pofz_hist(self, pzrun, num=None, numdata=None, keepflags=None):
