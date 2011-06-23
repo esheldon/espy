@@ -123,7 +123,7 @@ from esutil.numpy_util import where1
 from esutil.stat import histogram
 
 import biggles
-from biggles import FramedPlot, PlotKey, Histogram, SymmetricErrorBarsY
+from biggles import FramedPlot, FramedArray, PlotKey, Histogram, SymmetricErrorBarsY, PlotLabel
 import converter
 
 import copy
@@ -841,12 +841,32 @@ def combine_nofz_and_simulated(pzrun):
                                   simhist,
                                   out['sample_variance'], 
                                   color='blue', width=width)
-    simH.label = 'sim'
+    simH.label = 'simulation'
     key = PlotKey(0.9,0.9,[wH,simH], halign='right')
     plt.add(wH, simH, simHerr, key)
     plt.show()
     print("Writing plot file:",epsfile)
     plt.write_eps(epsfile)
+
+
+    # two-panel plot with both N(z) and simulated
+    epsfile=simf.replace('.rec', '-nofz-sim-errors-2panel.eps')
+    biggles.configure('fontsize_min', 2.5)
+    arr = FramedArray(2,1)
+    arr.aspect_ratio=1
+    arr.uniform_limits=1
+    arr.xlabel = 'z'
+    arr[0,0].add(simH, simHerr, wH)
+    arr[0,0].add(key)
+    #arr[0,0].add(PlotLabel(0.9,0.9,"simulated",halign='right'))
+    arr[1,0].add(wH,wHerr)
+    arr[1,0].add(PlotLabel(0.9,0.9,"N(z)+simulated error",halign='right'))
+
+    arr.show()
+    print("Writing plot file:",epsfile)
+    arr.write_eps(epsfile)
+
+    biggles.configure('fontsize_min', 0.1)
 
 
 

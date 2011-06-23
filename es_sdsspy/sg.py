@@ -520,6 +520,15 @@ class Stripe82Epochs:
                                         psf_mean_r, psf_mean_ivar_r,
                                         psf_mean_i, psf_mean_ivar_i)
 
+        cbad=where1(numpy.isnan(cmodelflux))
+        if cbad.size != 0:
+            raise ValueError("nan found in cmodelflux")
+        pbad=where1(numpy.isnan(psfflux))
+        if pbad.size != 0:
+            raise ValueError("nan found in psfflux")
+
+
+
         if indices is not None:
             cmodelflux=cmodelflux[indices]
             cmodelflux_ivar=cmodelflux_ivar[indices]
@@ -547,10 +556,216 @@ class Stripe82Epochs:
         plt.xlabel = 'number of exposures'
         plt.show()
 
-
-    def primary_sg(self, nrunmin=10, combine_gri=True, nperbin=50000, linear=True, rg=None):
+    def primary_gaussmix(self, prompt=True, show=True, ngauss=4, 
+                         nrunmin=10, combine_gri=True, nperbin=50000, rg=None):
         """
-        Do s/g separation on the primary, coadd fluxes
+        Use em algorithm to get a gaussian mixture model.  Default 4 gaussians
+
+        flux to mags of 1.6 is about 22
+        flux log10(flux) mags
+        1    0.0         22.5
+        1.6  0.2         22.0
+        3    0.48        21.3
+        4    0.6         21.0
+        """
+        import biggles
+        import scipy.optimize
+        import lensing
+
+        from scikits.learn import mixture
+
+        cols = self.open_columns('primary82')
+
+        cmodel_nuse = cols['cmodel_nuse_r'][:]
+        psf_nuse = cols['psf_nuse_r'][:]
+
+        # make plot *before* cut
+        #self.plot_nuse(cmodel_nuse, psf_nuse)
+
+        w=where1((cmodel_nuse >= nrunmin) & (psf_nuse >= nrunmin))
+        if w.size == 0:
+            raise ValueError("none passed nrunmim of",nrunmin)
+
+        if rg is not None:
+            print("matching rg")
+            rgmcol = 'rgmatch%s' % rg
+            rgm = cols[rgmcol][w]
+            wrg = where1(rgm >= 0)
+            w=w[wrg]
+            rgm=rgm[wrg]
+
+            print("    with matches:",w.size)
+
+            rgcols=lensing.regauss.open_columns(rg)
+            print("    cutting R > 1/3")
+            R = rgcols['R_rg_r'][rgm]
+            wkeep=where1(R > 0.3333)
+            print("      kept",wkeep.size)
+
+            w=w[wkeep]
+
+
+        cmodel_nuse=cmodel_nuse[w]
+        psf_nuse=psf_nuse[w]
+
+
+        if combine_gri:
+            print("getting combined gri for mean flux")
+            fname='mean flux gri'
+            cmodel_mean_r, cmodel_mean_ivar_r, psf_mean_r, psf_mean_ivar_r = \
+                self.load_primary_avg_gri(indices=w)
+        else:
+            fname='mean flux r'
+            print("getting r-band for mean flux")
+            cmodel_mean_r = cols['cmodelflux_mean_r'][w]
+            psf_mean_r = cols['psfflux_mean_r'][w]
+
+        model_r = cols['modelflux_r'][w]
+        psf_r = cols['psfflux_r'][w]
+
+
+        logcmodel_mean_r = log10( cmodel_mean_r.clip(0.001,cmodel_mean_r.max()) )
+
+        # 1.9 is about 21.8
+        minc=-.2
+        maxc=1.
+        cbinsize=0.005
+        cmean = 1.0-psf_mean_r/cmodel_mean_r
+        c = 1.0-psf_r/model_r
+        xtitle='1-psf/cmodel'
+
+        w=where1((cmean > minc) & (cmean < maxc) )
+
+        hdict = eu.stat.histogram(logcmodel_mean_r[w], 
+                                  min=0.2, 
+                                  nperbin=nperbin, 
+                                  more=True)
+        h=hdict['hist']
+        rev=hdict['rev']
+
+        nruntext = biggles.PlotLabel(0.9,0.9,'nexp >= %d' % nrunmin, halign='right')
+        nbin = hdict['hist'].size
+        output=None
+        for i in xrange(hdict['hist'].size):
+            if rev[i] != rev[i+1]:
+
+
+                plt=biggles.FramedPlot()
+
+                wbin=rev[ rev[i]:rev[i+1] ]
+                wbin = w[wbin]
+
+
+                min_logr = hdict['low'][i]
+                max_logr = hdict['high'][i]
+                max_magr = 22.5-2.5*min_logr
+                min_magr = 22.5-2.5*max_logr
+
+                cmean_h=eu.stat.histogram(cmean[wbin], min=minc, max=maxc, binsize=cbinsize, more=True)
+
+                p_cmean_h=biggles.Histogram(cmean_h['hist'], x0=minc, binsize=cbinsize)
+                p_cmean_h.label = fname
+
+                c_h=eu.stat.histogram(c[wbin], min=minc, max=maxc, binsize=cbinsize, more=True)
+                p_c_h=biggles.Histogram(c_h['hist'], x0=minc, binsize=cbinsize, color='grey')
+                p_c_h.label = 'SE flux'
+
+
+
+
+                key = biggles.PlotKey(0.9,0.5,[p_cmean_h,p_c_h], halign='right')
+                plt.add(p_c_h, p_cmean_h)
+
+                plt.add(key)
+                
+
+                plt.xtitle=xtitle
+
+                ftext=biggles.PlotLabel(0.9,0.85,r'$%0.2f < log_{10}(f) < %0.2f$' % (min_logr,max_logr),
+                                        halign='right')
+                mtext=biggles.PlotLabel(0.9,0.8,r'$%0.2f > mag > %0.2f$' % (22.5-2.5*min_logr,22.5-2.5*max_logr),
+                                        halign='right')
+                plt.add(ftext)
+                plt.add(mtext)
+                plt.add(nruntext)
+
+
+                gmm = mixture.GMM(n_states=ngauss)
+                data = cmean[wbin]
+                data.shape = (data.size,1)
+                gmm.fit(data, n_iter=10, min_covar=1.e-6)
+
+                mg = MultiGauss(gmm)
+
+
+                yfit = mg.eval(cmean_h['center'])
+                renorm = wbin.size/float(yfit.sum())
+                yfit *= renorm
+                plt.add(biggles.Curve(cmean_h['center'], yfit))
+
+                if ngauss <= 5:
+                    colors = ['red','magenta','blue','purple','orange']
+                else:
+                    import pcolors
+                    colors = pcolors.rainbow(ngauss,'hex')
+                for i in xrange(ngauss):
+                    yfit = mg.evalone(cmean_h['center'],i)
+                    yfit *= renorm
+                    plt.add(biggles.Curve(cmean_h['center'], yfit, color=colors[i]))
+
+                if show:
+                    plt.show()
+
+                pfile=gaussmix_plotfile(ngauss,min_logr, max_logr, ext='png')
+                print("writing plot file:",pfile)
+                plt.write_img(800,800,pfile)
+
+                if prompt and show is not False:
+                    k=raw_input('hit a key (q to quit): ')
+                    if k == 'q':
+                        return
+
+                weights = gmm.weights
+                means = gmm.means[:,0]
+                sigmas = [sqrt(gmm.covars[i][0][0]) for i in xrange(ngauss)]
+
+                if output is None:
+                    output = numpy.zeros(nbin, dtype=[('min_logr','f8'),
+                                                      ('max_logr','f8'),
+                                                      ('min_magr','f8'),
+                                                      ('max_magr','f8'),
+                                                      ('clow','f8',cmean_h['hist'].size),
+                                                      ('chigh','f8',cmean_h['hist'].size),
+                                                      ('chist_mean','i8',cmean_h['hist'].size),
+                                                      ('chist_se','i8',cmean_h['hist'].size),
+                                                      ('weights','f8',ngauss),
+                                                      ('means','f8',ngauss),
+                                                      ('sigmas','f8',ngauss)])
+
+
+                output['min_logr'][i] = min_logr
+                output['max_logr'][i] = max_logr
+                output['min_magr'][i] = min_magr
+                output['max_magr'][i] = max_magr
+
+                output['clow'][i] = c_h['low']
+                output['chigh'][i] = c_h['high']
+                output['chist_se'][i] = c_h['hist']
+                output['chist_mean'][i] = cmean_h['hist']
+
+                output['weights'][i] = weights
+                output['means'][i] = means
+                output['sigmas'][i] = sigmas
+
+        outfile=gaussmix_file(ngauss)
+        eu.io.write(outfile, output, verbose=True)
+
+
+
+    def primary_twogauss(self, prompt=True, show=True, 
+                         nrunmin=10, combine_gri=True, nperbin=50000, linear=True, rg=None):
+        """
+        fit a double gaussian to the stacked fluxes for primary objects
 
         flux to mags of 1.6 is about 22
         flux log10(flux) mags
@@ -652,8 +867,11 @@ class Stripe82Epochs:
         rev=hdict['rev']
 
         nruntext = biggles.PlotLabel(0.9,0.9,'nexp >= %d' % nrunmin, halign='right')
+        nbin = hdict['hist'].size
+        output=None
         for i in xrange(hdict['hist'].size):
             if rev[i] != rev[i+1]:
+
 
                 plt=biggles.FramedPlot()
 
@@ -663,9 +881,10 @@ class Stripe82Epochs:
 
                 min_logr = hdict['low'][i]
                 max_logr = hdict['high'][i]
+                max_magr = 22.5-2.5*min_logr
+                min_magr = 22.5-2.5*max_logr
 
                 cmean_h=eu.stat.histogram(cmean[wbin], min=minc, max=maxc, binsize=cbinsize, more=True)
-
 
                 p_cmean_h=biggles.Histogram(cmean_h['hist'], x0=minc, binsize=cbinsize)
                 p_cmean_h.label = fname
@@ -673,6 +892,20 @@ class Stripe82Epochs:
                 c_h=eu.stat.histogram(c[wbin], min=minc, max=maxc, binsize=cbinsize, more=True)
                 p_c_h=biggles.Histogram(c_h['hist'], x0=minc, binsize=cbinsize, color='grey')
                 p_c_h.label = 'SE flux'
+
+
+                if output is None:
+                    output = numpy.zeros(nbin, dtype=[('min_logr','f8'),
+                                                      ('max_logr','f8'),
+                                                      ('min_magr','f8'),
+                                                      ('max_magr','f8'),
+                                                      ('clow','f8',cmean_h['hist'].size),
+                                                      ('chigh','f8',cmean_h['hist'].size),
+                                                      ('chist_mean','i8',cmean_h['hist'].size),
+                                                      ('chist_se','i8',cmean_h['hist'].size),
+                                                      ('pars','f8',6)])
+
+
 
                 key = biggles.PlotKey(0.9,0.5,[p_cmean_h,p_c_h], halign='right')
                 plt.add(p_c_h, p_cmean_h)
@@ -707,15 +940,14 @@ class Stripe82Epochs:
                 plt.add(nruntext)
 
 
-                """
 
                 yerr=numpy.sqrt(cmean_h['hist'])
                 yerr=yerr.clip(1.0, yerr.max())
                 gf = TwoGaussClass(cmean_h['center'], cmean_h['hist'], yerr)
                 parguess=(0.5*wbin.size*cbinsize, 0.025, 0.01, 
                           0.5*wbin.size*cbinsize, 0.125, 0.05)
-                res = scipy.optimize.fmin(gf.chi2, parguess)
-                #res = scipy.optimize.fmin_powell(gf.chi2, parguess)
+                #res = scipy.optimize.fmin(gf.chi2, parguess)
+                res = scipy.optimize.fmin_powell(gf.chi2, parguess)
                 print(res)
 
                 yfit = gf.twogauss(res)
@@ -730,21 +962,109 @@ class Stripe82Epochs:
                     plt.add(biggles.Curve(cmean_h['center'], yfit2, color='blue'))
                     plt.add(biggles.Curve(cmean_h['center'], yfit1, color='red'))
  
-                """
                
                 
 
-                plt.show()
-                k=raw_input('hit a key (q to quit): ')
-                if k == 'q':
-                    return
-def fit2gauss(x, y, yerr, parguess):
-    """
-    """
-    data=eu.io.read('~/tmp/cmodel-psf-nuse.rec')
+                if show:
+                    plt.show()
 
-    w=where1((data['cmodel_nuse_r'] > nrunmin) & (data['psf_nuse_r'] > nrunmin))
-    data = data[w]
+                pfile=twogauss_plotfile(min_logr, max_logr, ext='png')
+                print("writing plot file:",pfile)
+                plt.write_img(800,800,pfile)
+
+                if prompt:
+                    k=raw_input('hit a key (q to quit): ')
+                    if k == 'q':
+                        return
+
+                output['min_logr'][i] = min_logr
+                output['max_logr'][i] = max_logr
+                output['min_magr'][i] = min_magr
+                output['max_magr'][i] = max_magr
+
+                output['clow'][i] = c_h['low']
+                output['chigh'][i] = c_h['high']
+                output['chist_se'][i] = c_h['hist']
+                output['chist_mean'][i] = cmean_h['hist']
+
+                output['pars'][i] = res
+
+        outfile='~/oh/star-galaxy-separation/twogauss-fits/twogauss-fits.rec'
+        eu.io.write(outfile, output, verbose=True)
+
+
+def gaussmix_dir():
+    dir=os.path.expanduser('~/oh/star-galaxy-separation/gaussmix')
+    return dir
+def gaussmix_file(ngauss):
+    dir=gaussmix_dir()
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+    f=os.path.join(dir, 'gaussmix-%d.rec' % (ngauss,))
+    return f
+def gaussmix_plotfile(ngauss, fmin, fmax, ext='png'):
+    dir=gaussmix_dir()
+    dir=os.path.join(dir, "plots")
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+    f=os.path.join(dir, 'gaussmix-%d-%0.2f-%0.2f.%s' % (ngauss,fmin,fmax,ext))
+    return f
+
+
+
+def twogauss_dir():
+    dir=os.path.expanduser('~/oh/star-galaxy-separation/twogauss-fits')
+    return dir
+def twogauss_plotfile(fmin, fmax, ext='png'):
+    dir=twogauss_dir()
+    f=os.path.join(dir, "plots", 'twogauss-%0.2f-%0.2f.%s' % (fmin,fmax,ext))
+    return f
+
+class MultiGauss:
+    def __init__(self, gmm):
+        """
+        Takes a gmm object
+
+        eval(x) returns normalized evaluation of gaussians
+        """
+        self.gmm = gmm
+
+    def eval(self, x):
+        model = numpy.zeros(x.size, dtype='f8')
+
+        gmm = self.gmm
+        for i in xrange(gmm.n_states):
+            mean = gmm.means[i,0]
+            var = gmm.covars[i][0][0]
+            weight = gmm.weights[i]
+            g = self.gauss(x, mean, var)
+            model[:] += weight*g
+
+
+        return model
+
+    def evalone(self, x, i):
+        """
+        Just evaluate one of the gaussians
+        """
+
+        gmm = self.gmm
+        mean = gmm.means[i,0]
+        var = gmm.covars[i][0][0]
+        weight = gmm.weights[i]
+        return weight*self.gauss(x, mean, var)
+
+
+    def gauss(self, x, mean, var):
+        siginv2 = 1./var
+
+        g = exp(-0.5*(x-mean)**2*siginv2)
+        norm = sqrt(siginv2/2./numpy.pi)
+
+        g *= norm
+        return g
+
+
 
 class TwoGaussClass:
     def __init__(self, x, y, yerr=None):

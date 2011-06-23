@@ -870,6 +870,17 @@ def write_se_collate_html(serun, showsplit=False):
     if not os.path.exists(html_dir):
         os.makedirs(html_dir)
 
+    fitsdir=path_join(dir,serun+'-fits')
+    coldir=path_join(dir,serun+'.cols')
+    if os.path.exists(fitsdir):
+        fits_comment=''
+    else:
+        fits_comment='<b>(Not Yet Available)</b>'
+    if os.path.exists(coldir):
+        col_comment=''
+    else:
+        col_comment='<b>(Not Yet Available)</b>'
+
     if showsplit:
         splitinfo="NOTE: <b>Validation splits 1/2 are in the %s-fits/split* and %s.cols/split* subdirectories</b>" % (serun,serun)
     else:
@@ -913,13 +924,17 @@ Region RA          Dec        gamma1     gamma2   gamma1     gamma2    posangle
 
 <body bgcolor=white>
 
-<h1>{dataset} Single Epoch Catalogs</h1>
+<h1>{dataset} Single Epoch Catalogs: Run {serun}</h1>
 
 <table width="500px">
 	<tr>
 		<td>
 
-			<h2>WL outputs for {serun}</h2>
+            <h2>Raw WL outputs</h2>
+            Raw outputs can be found <a href="..">Here</a>.   If you plan to download
+            <i><b>all the data</b></i>, please contact Erin Sheldon.
+
+			<h2>Collated WL outputs</h2>
             The data are broken up into two "tables": A main table for every object and a sub-table for
             PSF stars.
             <ul>
@@ -937,7 +952,7 @@ Region RA          Dec        gamma1     gamma2   gamma1     gamma2    posangle
                 <tr><th width=50%>FITS</th><th width=50%>Column Database</th></tr>
                 <tr>
                     <td>
-                        Files for each column in FITS format
+                        Files for each column in FITS format{fits_comment}
                         <ul>
 				            <li><a href="{serun}-fits">{serun}-fits</a> 
 				            <li><a href="{serun}-fits/psfstars-fits">{serun}-fits/psfstars-fits</a>
@@ -946,6 +961,7 @@ Region RA          Dec        gamma1     gamma2   gamma1     gamma2    posangle
                     <td>
                         Files for each column in "recfile" format.  This is a 
                         <a href="http://code.google.com/p/pycolumns/">columns database</a>.
+                        {col_comment}
                         <ul>
                             <li><a href="{serun}.cols">{serun}.cols</a>
                             <li><a href="{serun}.cols/psfstars.cols">{serun}.cols/psfstars.cols</a>
@@ -975,7 +991,12 @@ Region RA          Dec        gamma1     gamma2   gamma1     gamma2    posangle
 
 </body>
 </html>
-    """.format(serun=serun, splitinfo=splitinfo, shear_desc=shear_desc, dataset=rc['dataset'])
+    """.format(serun=serun, 
+               splitinfo=splitinfo, 
+               shear_desc=shear_desc, 
+               dataset=rc['dataset'],
+               fits_comment=fits_comment,
+               col_comment=col_comment)
 
     download_file=path_join(dir,'download.html')
     stdout.write("Writing download file: %s\n" % download_file)
