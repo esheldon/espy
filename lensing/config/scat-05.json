@@ -1,0 +1,12 @@
+{
+    "sample":"05",
+    "catalog":"desmocks-2.13o-f8",
+    "sigmacrit_style":2,
+    "pzrun":12,
+    "zlmin":0.02,
+    "zlmax":0.6,
+    "dzl":0.015,
+    "cosmo_sample":"01",
+    "nsplit":100,
+    "comment":"New scat type: no placeholders and splitting files. This version has mean scinv.  delta zl = 0.015 gives nzl=39. Note pzrun is just token here since we have real z"
+}

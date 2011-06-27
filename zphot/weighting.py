@@ -117,6 +117,7 @@ import numpy
 from numpy import where
 
 import esutil as eu
+from esutil.recfile import Recfile
 from esutil.ostools import path_join, expand_path
 from esutil.numpy_util import ahelp
 from esutil.numpy_util import where1
@@ -251,14 +252,14 @@ def pofz_release_dir(pzrun):
     dir = weights_basedir()
     return path_join(dir, 'pofz-%s-release' % pzrun)
 
-def zbins_release_file(pzrun):
+def zbins_release_file(pzrun, ext='fits'):
     dir = pofz_release_dir(pzrun)
-    f = 'zbins-%s.fits' % pzrun
+    f = 'zbins-%s.%s' % (pzrun,ext)
     return path_join(dir, f)
 
-def pofz_release_file(pzrun, run):
+def pofz_release_file(pzrun, run, ext='fits'):
     dir = pofz_release_dir(pzrun)
-    f = 'pofz-%s.fits' % pzrun
+    f = 'pofz-%s-%06d.%s' % (pzrun,run,ext)
     return path_join(dir, f)
 
 
@@ -1215,13 +1216,23 @@ class WeightedOutputs:
 
 
     def make_release(self, pzrun):
+        d = pofz_release_dir(pzrun)
+        if not os.path.exists(d):
+            print("making release dir:",d)
+            os.makedirs(d)
+
         cols = open_pofz_columns(pzrun)
         print("getting zbins")
         zbindata = cols['zbins'][:]
+
         outf=zbins_release_file(pzrun)
         print("writing zbins file:",outf)
-        eu.io.write(outf, zbindata)
-        return
+        eu.io.write(outf, zbindata, clobber=True)
+
+        outf=zbins_release_file(pzrun, ext='dat')
+        with Recfile(outf,'w',delim=' ') as fobj:
+            print("writing zbins file:",outf)
+            fobj.write(zbindata)
 
         print("reading runs")
         runs = cols['run'][:]
@@ -1237,14 +1248,19 @@ class WeightedOutputs:
                  'pofz']
         i=1
         for run in urun:
-            printf("run: %d  (%d/%d)" % (run,i,urun.size))
-            w,=where(run == urun)
+            print("run: %d  (%d/%d)" % (run,i,urun.size))
+            w,=where(runs == run)
 
-            data = cols.read_columns(columns=columns, rows=w)
+            data = cols.read_columns(columns, rows=w)
             
-            outfile=pofz_release_file(pzrun, run)
-            printf("writing output file:",outfile)
-            eu.io.write(outfile, data)
+            fitsfile=pofz_release_file(pzrun, run)
+            print("writing fits file:",fitsfile)
+            eu.io.write(fitsfile, data, clobber=True)
+
+            datfile=pofz_release_file(pzrun, run, ext='dat')
+            with Recfile(datfile,'w',delim=' ') as fobj:
+                print("writing dat file:",datfile)
+                fobj.write(data)
             del data
 
             i+=1

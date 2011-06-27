@@ -22,7 +22,6 @@ def create_input(sample):
 
     c = DESMockLensCatalog(sample)
     c.create_objshear_input()
-    c.split_cat()
 
 
 class DESMockLensCatalog(dict):
@@ -61,39 +60,9 @@ class DESMockLensCatalog(dict):
         output['ra'] = data['ra']
         output['dec'] = data['dec']
         output['z'] = data['z']
-        output['dc'] = -9999.0
+        #output['dc'] = -9999.0
 
         lensing.files.lcat_write(output, file=fname)
-
-
-    def split_cat(self):
-        """
-        Split the lens file into nsplit parts
-        """
-
-        data = self.read()
-        fname=self.file()
-        nsplit = self['nsplit']
-        if nsplit == 0:
-            return
-
-        ntot = data.size
-        nper = ntot/nsplit
-        nleft = ntot % nsplit
-
-
-        for i in xrange(nsplit):
-            sstr = '%03d' % i
-            beg = i*nper
-            end = (i+1)*nper
-            if i == (nsplit-1):
-                end += nleft
-            sdata = data[beg:end]
-            sfile = fname.replace('.bin','-'+sstr+'.bin') 
-
-            lensing.files.lcat_write(sdata, file=sfile)
-
-
 
 
     def original_dir(self):

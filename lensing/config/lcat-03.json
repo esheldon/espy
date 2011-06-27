@@ -1,0 +1,6 @@
+{
+    "sample": "03",
+    "catalog": "desmocks-2.13",
+    "cosmo_sample":"01",
+    "comment":"same as 02 but no splits and without placeholders"
+}

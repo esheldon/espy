@@ -5,7 +5,7 @@ import lensing
 import numpy
 
 import esutil as eu
-from esutil.ostools import path_join
+from esutil.ostools import path_join, expand_path
 
 finfo={}
 finfo['config']={'ext':'.dat'}
@@ -154,7 +154,7 @@ def lensout_collate(run):
     return data
 
 
-def lensout_read(file=None, run=None, split=None, silent=False):
+def lensout_read(file=None, run=None, split=None, silent=False, old=False):
     if file is None and run is None:
         raise ValueError("usage: lensout_read(file=, run=)")
     if file is None:
@@ -162,16 +162,21 @@ def lensout_read(file=None, run=None, split=None, silent=False):
 
     if not silent:
         stdout.write('Opening lensout file: %s\n' % file)
+    file=expand_path(file)
     fobj = open(file,'r')
 
-    nlens = numpy.fromfile(fobj,dtype='i8',count=1)
+    if old:
+        idt='i4'
+    else:
+        idt='i8'
+    nlens = numpy.fromfile(fobj,dtype=idt,count=1)
     if not silent:
         stdout.write('  nlens: %s\n' % nlens[0])
-    nbin  = numpy.fromfile(fobj,dtype='i8',count=1)
+    nbin  = numpy.fromfile(fobj,dtype=idt,count=1)
     if not silent:
         stdout.write('  nbin: %s\n' % nbin[0])
 
-    dt = lensout_dtype(nbin[0])
+    dt = lensout_dtype(nbin[0], old=old)
     if not silent:
         stdout.write('Reading with dtype: %s\n' % str(dt))
     data = numpy.fromfile(fobj,dtype=dt,count=nlens[0])
@@ -217,10 +222,14 @@ def lensout_read_byrun(run):
     return data
 
 
-def lensout_dtype(nbin):
+def lensout_dtype(nbin, old=False):
 
+    if old:
+        zidt='i4'
+    else:
+        zidt='i8'
     nbin = int(nbin)
-    dt=[('zindex','i8'),
+    dt=[('zindex',zidt),
         ('weight','f8'),
         ('npair','i8',nbin),
         ('rsum','f8',nbin),
@@ -234,11 +243,11 @@ def lensout_dtype(nbin):
 #
 
 
-def lcat_write(data, file=None, sample=None, split=None):
+def lcat_write(data, file=None, sample=None):
     if file is None and sample is None:
         raise ValueError("usage: lcat_write(data, file=, sample=)")
     if file is None:
-        file = sample_file('lcat',sample, split=split)
+        file = sample_file('lcat',sample)
 
     stdout.write("Writing %d to lens cat: '%s'\n" % (data.size, file))
 
@@ -256,19 +265,18 @@ def lcat_write(data, file=None, sample=None, split=None):
 
     fobj.close()
 
-def lcat_read(sample=None, file=None, split=None):
+def lcat_read(sample=None, file=None):
     """
     import lensing
     d = lcat_read(file='somefile')
     d = lcat_read(sample='03')
-    d = lcat_read(sample='03', split=27)
     """
 
     if file is None and sample is None:
-        raise ValueError("usage: lcat_write(data, file=, sample=)")
+        raise ValueError("usage: lcat_read(data, file=, sample=)")
 
     if file is None:
-        file = sample_file('lcat', sample, split=split)
+        file = sample_file('lcat', sample)
 
     stdout.write('Reading lens cat: %s\n' % file)
     fobj = open(file,'r')
@@ -284,11 +292,10 @@ def lcat_read(sample=None, file=None, split=None):
     return data
 
 def lcat_dtype():
-    dt=[('ra','f8'),
+    dt=[('zindex','i8'),
+        ('ra','f8'),
         ('dec','f8'),
-        ('z','f8'),
-        ('dc','f8'),
-        ('zindex','i8')]
+        ('z','f8')]
     return dt
 
 
@@ -297,9 +304,9 @@ def lcat_dtype():
 #
 
 
-def scat_write(sample, data):
+def scat_write(sample, data,split=None):
     from . import sigmacrit
-    file = sample_file('scat',sample)
+    file = sample_file('scat',sample, split=split)
     conf = json_read('scat', sample)
     style=conf['sigmacrit_style']
     if style not in [1,2]:
@@ -346,13 +353,13 @@ def scat_write(sample, data):
 
     fobj.close()
 
-def scat_read(sample=None, file=None):
+def scat_read(sample=None, file=None, split=None):
 
     if file is None and sample is None:
         raise ValueError("usage: scat_write(data, file=, sample=)")
     
     if file is None:
-        file = sample_file('scat',sample)
+        file = sample_file('scat',sample, split=split)
 
 
     stdout.write('Reading sources: %s\n' % file)
@@ -389,11 +396,12 @@ def scat_dtype(sigmacrit_style, nzl=None):
         ('dec','f8'),
         ('g1','f8'),
         ('g2','f8'),
-        ('err','f8'),
-        ('hpixid','i8')]
+        ('err','f8')]
+        #('hpixid','i8')]
 
     if sigmacrit_style == 1:
-        dt += [('z','f8'), ('dc','f8')]
+        #dt += [('z','f8'), ('dc','f8')]
+        dt += [('z','f8')]
     elif sigmacrit_style == 2:
         if nzl == None:
             raise ValueError('you must send nzl for sigmacrit_style of 2')

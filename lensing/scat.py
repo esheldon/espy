@@ -29,6 +29,8 @@ def create_input(sample):
     else:
         c = DESMockSrcCatalog(sample)
     c.create_objshear_input()
+    c.split()
+
 
 class DR8Catalog(dict):
     """
@@ -269,11 +271,11 @@ class DESMockSrcCatalog(dict):
 
         self['cosmo'] = lensing.files.json_read('cosmo',self['cosmo_sample'])
 
-    def file(self):
-        fname = lensing.files.sample_file('scat',self['sample'])
+    def file(self, split=None):
+        fname = lensing.files.sample_file('scat',self['sample'], split=split)
         return fname
-    def read(self):
-        return lensing.files.scat_read(self['sample'])
+    def read(self, split=None):
+        return lensing.files.scat_read(self['sample'], split=split)
 
     def add_scinv(self):
         from . import sigmacrit
@@ -357,15 +359,47 @@ class DESMockSrcCatalog(dict):
 
         output['g2'] = data['gamma2']
         output['err'] = 0.0
-        output['hpixid'] = -9999
+        #output['hpixid'] = -9999
 
         if self['sigmacrit_style'] == 1:
             output['z'] = data['z']
-            output['dc'] = -9999
+            #output['dc'] = -9999
         else:
             output['scinv'] = data['scinv']
 
         lensing.files.scat_write(self['sample'], output)
+
+
+    def split(self):
+        """
+        Split the source file into nsplit parts
+        """
+        
+
+        data = self.read()
+        if self['sigmacrit_style'] == 2:
+            data, zl = data
+
+        fname=self.file()
+        nsplit = self['nsplit']
+        if nsplit == 0:
+            return
+
+        ntot = data.size
+        nper = ntot/nsplit
+        nleft = ntot % nsplit
+
+        for i in xrange(nsplit):
+
+            beg = i*nper
+            end = (i+1)*nper
+            if i == (nsplit-1):
+                end += nleft
+            sdata = data[beg:end]
+
+            lensing.files.scat_write(self['sample'], sdata, split=i)
+
+
 
 
     def original_dir(self):
