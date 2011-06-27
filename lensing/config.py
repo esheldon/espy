@@ -45,17 +45,17 @@ class RunConfig(dict):
         cosmo = lensing.files.json_read('cosmo',csample)
         for key in cosmo:
             self[key] = cosmo[key]
-        self['nsplit'] = l['nsplit']
+        self['nsplit'] = s['nsplit']
         self['sigmacrit_style'] = s['sigmacrit_style']
         
     # inputs to objshear
     def write_config(self):
 
-        sf = lensing.files.sample_file('scat',self['src_sample'])
+        lf = lensing.files.sample_file('lcat',self['lens_sample'])
         if self['nsplit'] == 0:
             cf = lensing.files.sample_file('config',self['run'])
 
-            lf = lensing.files.sample_file('lcat',self['lens_sample'])
+            sf = lensing.files.sample_file('lcat',self['src_sample'])
             of = lensing.files.sample_file('lensout',self['run'])
 
             self._write_config(cf,lf,sf,of)
@@ -63,7 +63,7 @@ class RunConfig(dict):
             for i in xrange(self['nsplit']):
                 cf = lensing.files.sample_file('config',self['run'],
                                                split=i)
-                lf = lensing.files.sample_file('lcat',self['lens_sample'],
+                sf = lensing.files.sample_file('scat',self['src_sample'],
                                                split=i)
                 of = lensing.files.sample_file('lensout',self['run'],
                                                split=i)
