@@ -40,6 +40,7 @@ class Scripts(dict):
             print("writing script:",sfile)
             with open(sfile,'w') as f:
                 f.write(text)
+            os.popen('chmod 755 '+sfile)
 
     def script_text(self, split):
         config_file=files.sample_file('config',self['run'],split=split)

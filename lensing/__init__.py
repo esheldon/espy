@@ -9,6 +9,10 @@ Then add an entry in the if statement for these functions and run them:
     lensing.lcat.create_input(catalog, version, sample, nsplit=)
     lensing.scat.create_input(catalog, version, sample)
 
+You can run those with the script
+
+    /bin/make-objshear-input.py
+
 Then create a lensing run json in $ESPY_DIR/lensing/config/ and run
 the config, script, and condor file creators using 
 
@@ -20,6 +24,12 @@ Make sure to install objshear under ~/exports/objshear-work
     python build.py --prefix=~/exports/objshear-work install
 
 
+Then submit the scripts
+
+    condor_submit run-04-035.condor
+
+
+UPDATE THIS FOR NEW SOURCE SPLITS
 
 You should then bin up the results. e.g.
 

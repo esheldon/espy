@@ -15,7 +15,7 @@ Executable      = {script_base}.sh
 Output          = {script_base}.out
 Error           = {script_base}.err
 Log             = {script_base}.log
-GetEnv          = False
+GetEnv          = True
 Notify_user     = esheldon@bnl.gov
 +Experiment     = "astro"
 
