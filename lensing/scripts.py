@@ -12,7 +12,7 @@ _script_text="""#!/bin/bash
 source /astro/u/astrodat/products/eups/bin/setups.sh
 setup objshear -r /astro/u/esheldon/exports/objshear-work
 
-/usr/bin/time objshear {config_file}\n"""
+/usr/bin/time -p objshear {config_file} 2>&1\n"""
 
 
 
