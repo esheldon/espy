@@ -10,16 +10,15 @@ Then add an entry in the if statement for these functions and run them:
     lensing.scat.create_input(catalog, version, sample)
 
 Then create a lensing run json in $ESPY_DIR/lensing/config/ and run
-the config file and pbs file creators
+the config, script, and condor file creators using 
 
-    lensing.config.write_config(run)
-    lensing.pbslens.write_pbs(run)
+    /bin/make-objshear-proc.py
+
+The files go under ~/lensing/proc/run
 
 Make sure to install objshear under ~/exports/objshear-work
-    scons install prefix=~/exports/objshear-work
+    python build.py --prefix=~/exports/objshear-work install
 
-Then you can submit the pbs files which are under
-    ${LENSDIR}/pbslens/{run}/
 
 
 You should then bin up the results. e.g.
@@ -48,6 +47,8 @@ from . import lcat
 from . import scat
 from . import convert
 from . import config
+from . import scripts
+from . import condor
 
 
 from . import regauss

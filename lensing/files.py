@@ -8,11 +8,14 @@ import esutil as eu
 from esutil.ostools import path_join, expand_path
 
 finfo={}
-finfo['config']={'ext':'.dat'}
-finfo['lcat']={'ext':'.bin'}
-finfo['scat']={'ext':'.bin'}
-finfo['lensout']={'ext':'.bin'}
-finfo['pbslens']={'ext':'.pbs'}
+finfo['lcat']    = {'subdir':'lcat',    'front':'lcat',    'ext':'.bin'}
+finfo['scat']    = {'subdir':'scat',    'front':'scat',    'ext':'.bin'}
+finfo['lensout'] = {'subdir':'lensout', 'front':'lensout', 'ext':'.bin'}
+finfo['config']  = {'subdir':'proc',    'front':'run',     'ext':'.config'}
+finfo['condor']  = {'subdir':'proc',    'front':'run',     'ext':'.condor'}
+finfo['script']  = {'subdir':'proc',    'front':'run',     'ext':'.sh'}
+
+finfo['pbslens'] = {'subdir':'pbslens','ext':'.pbs'}
 
 
 def lensdir():
@@ -35,12 +38,14 @@ def sample_dir(type,sample):
     if type not in finfo:
         raise ValueError("Unknown file type: '%s'" % type)
     d = lensdir()
-    d = path_join(d,type,sample)
+    dsub = finfo[type]['subdir']
+    d = path_join(d,dsub,sample)
     return d
 
 def sample_file(type,sample,split=None, extra=None):
     d = sample_dir(type,sample)
-    fname=path_join(d, '%s-%s' % (type,sample))
+    front = finfo[type]['front']
+    fname=path_join(d, '%s-%s' % (front,sample))
     if split is not None:
         fname += '-%03d' % split
     if extra is not None:
@@ -417,6 +422,20 @@ def scat_dtype(sigmacrit_style, nzl=None):
 #
 # hand written json run config files
 #
+
+def cascade_config(run):
+    conf=json_read('run',run)
+
+    ls = conf['lens_sample']
+    conf['lens_config'] = json_read('lcat',ls)
+    ss = conf['src_sample']
+    conf['src_config'] = json_read('scat',ss)
+    cs=conf['cosmo_sample']
+    conf['cosmo_config'] = json_read('cosmo',cs)
+
+    return conf
+
+
 
 def json_read(type,id):
     """

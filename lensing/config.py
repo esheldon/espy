@@ -3,7 +3,7 @@ import os
 import esutil as eu
 from esutil.ostools import path_join
 
-def write_config(run):
+def write_configs(run):
     rc = RunConfig(run)
     rc.write_config()
 
@@ -33,7 +33,7 @@ class RunConfig(dict):
         csample = self['cosmo_sample']
         if (csample != l['cosmo_sample'] or csample != s['cosmo_sample']):
             err= """
-            cosmo sample ismatch:
+            cosmo sample mismatch:
                 run config:  %s
                 lcat config: %s
                 scat config: %s
@@ -83,13 +83,14 @@ class RunConfig(dict):
         print 'Writing config file:',config_file
         fobj = open(config_file,'w')
 
-        fobj.write('lens_file %s\n' % lfile)
-        fobj.write('source_file %s\n' % sfile)
-        fobj.write('output_file %s\n' % ofile)
+        fmt='%-17s %s\n'
+        fobj.write(fmt % ("lens_file",lfile))
+        fobj.write(fmt % ("source_file",sfile))
+        fobj.write(fmt % ("output_file",ofile))
 
         for key in ['H0','omega_m','npts','nside',
                     'sigmacrit_style','nbin','rmin','rmax']:
-            fobj.write('%s %s\n' % (key,self[key]))
+            fobj.write(fmt % (key,self[key]))
 
         fobj.close()
 
