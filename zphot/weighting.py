@@ -1240,6 +1240,7 @@ class WeightedOutputs:
 
         columns=['objid',
                  'run','rerun','camcol','field','id',
+                 'ra','dec',
                  'cmodelmag_r',
                  'modelmag_umg',
                  'modelmag_gmr',
