@@ -6,16 +6,18 @@ import numpy
 
 import esutil as eu
 from esutil.ostools import path_join, expand_path
+from esutil.numpy_util import where1
 
 finfo={}
-finfo['lcat']    = {'subdir':'lcat',    'front':'lcat',    'ext':'.bin'}
-finfo['scat']    = {'subdir':'scat',    'front':'scat',    'ext':'.bin'}
-finfo['lensout'] = {'subdir':'lensout', 'front':'lensout', 'ext':'.bin'}
-finfo['config']  = {'subdir':'proc',    'front':'run',     'ext':'.config'}
-finfo['condor']  = {'subdir':'proc',    'front':'run',     'ext':'.condor'}
-finfo['script']  = {'subdir':'proc',    'front':'run',     'ext':'.sh'}
+finfo['lcat']     = {'subdir':'lcat',    'front':'lcat',    'ext':'.bin'}
+finfo['scat']     = {'subdir':'scat',    'front':'scat',    'ext':'.bin'}
+finfo['lensout']  = {'subdir':'lensout', 'front':'lensout', 'ext':'.rec'}
+finfo['lenscomb'] = {'subdir':'lensout', 'front':'lensout', 'ext':'.rec'}
+finfo['config']   = {'subdir':'proc',    'front':'run',     'ext':'.config'}
+finfo['condor']   = {'subdir':'proc',    'front':'run',     'ext':'.condor'}
+finfo['script']   = {'subdir':'proc',    'front':'run',     'ext':'.sh'}
 
-finfo['pbslens'] = {'subdir':'pbslens','ext':'.pbs'}
+finfo['pbslens']  = {'subdir':'pbslens','ext':'.pbs'}
 
 
 def lensdir():
@@ -42,7 +44,7 @@ def sample_dir(type,sample):
     d = path_join(d,dsub,sample)
     return d
 
-def sample_file(type,sample,split=None, extra=None):
+def sample_file(type, sample, split=None, extra=None):
     d = sample_dir(type,sample)
     front = finfo[type]['front']
     fname=path_join(d, '%s-%s' % (front,sample))
@@ -139,12 +141,12 @@ def lensbin_plot_dir(run,name):
 
 def lensout_collate(run):
     """
-    Collate the lensing output with the original catalog
+    Collate the combined lensum output with the original catalog
     """
 
     conf = json_read(run)
     cat = lensing.lcat.read_catalog(conf['lens_catalog'],conf['lens_version'])
-    lout = lensout_read(run=run)
+    lout = combined_lensout_read(run)
 
     if cat.size != lout.size:
         raise ValueError("catalog and lensout are not the same size")
@@ -158,11 +160,51 @@ def lensout_collate(run):
 
     return data
 
+def combined_lensout_read(run):
+    file = sample_file('combined lensout', run)
+    return eu.io.read(file)
 
+def combine_lensout(run):
+    """
+    combine the lensout splits into a single, summed lensum (lensout) file.
+    """
+    file = sample_file('lenscomb', run)
+    print("Will combine into file:",file)
+    print("Reading data\n")
+    data = lensout_read(run=run)
+
+    eu.io.write(file, data, verbose=True)
+    
 def lensout_read(file=None, run=None, split=None, silent=False, old=False):
+    if old:
+        return lensout_read_old(file=file,run=run,split=split,silent=silent)
+
+    if file is None and run is None:
+        raise ValueError("usage: lensout_read(file=, run=, split=, silent=False)")
+    if file is None:
+        if split is not None:
+            file=sample_file('lensout', run, split=split)
+            return lensout_read(file=file)
+
+        return lensout_read_byrun(run)
+
+    if not silent:
+        stdout.write('Reading lensout file: %s\n' % file)
+    file=expand_path(file)
+
+    return eu.io.read(file)
+
+def lensout_read_old(file=None, run=None, split=None, silent=False, old=False):
+    '''
+    Note old means something different here
+    '''
     if file is None and run is None:
         raise ValueError("usage: lensout_read(file=, run=)")
     if file is None:
+        if split is not None:
+            file=sample_file('lensout', run, split=split)
+            return lensout_read(file=file)
+
         return lensout_read_byrun(run)
 
     if not silent:
@@ -190,7 +232,38 @@ def lensout_read(file=None, run=None, split=None, silent=False, old=False):
 
     return data
 
-def lensout_read_byrun(run):
+def lensout_read_byrun(run, old=False):
+    conf = cascade_config(run)
+    nsplit = conf['src_config']['nsplit']
+
+    stdout.write("Combining %s splits from run %s\n" % (nsplit,run))
+
+    for i in xrange(nsplit):
+        tdata = lensout_read(run=run, split=i, old=old)
+        if i == 0:
+            data = tdata
+        else:
+            add_lensums(data, tdata)
+
+    return data
+
+def add_lensums(l1, l2):
+    """
+    Add the sums from l2 to l1
+
+    The rows of l1 must correspond to those of l2
+    """
+
+    w=where1(l1['zindex'] != l2['zindex'])
+    if w.size > 0:
+        raise ValueError("zindex do not line up")
+    for n in ['weight','npair','rsum','wsum','dsum','osum']:
+        l1[n] += l2[n]
+
+
+
+# the old split of the lenses: we now split the sources
+def lensout_read_byrun_lensplit(run):
     runconf = json_read('run',run)
     conf = json_read('lcat', runconf['lens_sample'])
     nsplit = conf['nsplit']
