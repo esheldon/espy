@@ -473,13 +473,16 @@ def cascade_config(run):
 def read_config(type,id):
     return eu.io.read(config_file(type,id))
 
-def config_file(type, id):
-    dir = json_dir()
-    fname = '%s-%s.json' % (type,id)
+def config_file(type, id, ext='json'):
+    """
+    Want to move over to yaml files
+    """
+    dir = config_dir()
+    fname = '%s-%s.%s' % (type,id,ext)
     fname = path_join(dir,fname)
     return fname
 
-def json_dir():
+def config_dir():
     if 'ESPY_DIR' not in os.environ:
         raise ValueError("ESPY_DIR is not set")
     dir = os.environ['ESPY_DIR']
