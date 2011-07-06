@@ -12,8 +12,7 @@ def write_pbs(run, nthreads=2):
 class RunPbs:
     def __init__(self, run, nthreads=2):
         self.nthreads=nthreads
-        #self.conf = lensing.files.json_read(run)
-        self.conf = lensing.config.RunConfig(run)
+        self.conf = lensing.objshear_config.ObjshearRunConfig(run)
 
     def write_pbs(self):
         if self.conf['nsplit'] == 0:

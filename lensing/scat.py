@@ -23,7 +23,7 @@ def create_input(sample):
         create_input('01')
     """
 
-    conf = lensing.files.json_read('scat', sample)
+    conf = lensing.files.read_config('scat', sample)
     if 'dr8regauss' in conf['catalog']:
         c = DR8Catalog(sample)
     else:
@@ -42,7 +42,7 @@ class DR8Catalog(dict):
 
     """
     def __init__(self, sample):
-        conf = lensing.files.json_read('scat', sample)
+        conf = lensing.files.read_config('scat', sample)
         for k in conf:
             self[k] = conf[k]
 
@@ -181,7 +181,7 @@ class DR8Catalog(dict):
 
         # get the source z vals
         pzconf = zphot.cascade_config(self['pzrun'])
-        cosmo = files.json_read('cosmo', self['cosmo_sample'])
+        cosmo = files.read_config('cosmo', self['cosmo_sample'])
 
         wo = zphot.weighting.WeightedOutputs()
         pofz_file = wo.zhist_file(self['pzrun'])
@@ -259,7 +259,7 @@ class DESMockSrcCatalog(dict):
     """
 
     def __init__(self, sample):
-        conf = lensing.files.json_read('scat',sample)
+        conf = lensing.files.read_config('scat',sample)
         for k in conf:
             self[k] = conf[k]
 
@@ -269,7 +269,7 @@ class DESMockSrcCatalog(dict):
         if self['sample'] != sample:
             raise ValueError("The config sample '%s' doesn't match input '%s'" % (self['sample'],sample))
 
-        self['cosmo'] = lensing.files.json_read('cosmo',self['cosmo_sample'])
+        self['cosmo'] = lensing.files.read_config('cosmo',self['cosmo_sample'])
 
     def file(self, split=None):
         fname = lensing.files.sample_file('scat',self['sample'], split=split)

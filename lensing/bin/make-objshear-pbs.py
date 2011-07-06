@@ -23,5 +23,5 @@ if len(args) < 1:
 run = args[0]
 nthreads = int(options.nthreads)
 
-lensing.config.write_config(run)
+lensing.objshear_config.write_config(run)
 lensing.pbslens.write_pbs(run, nthreads=nthreads)

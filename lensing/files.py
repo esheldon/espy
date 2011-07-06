@@ -12,7 +12,8 @@ finfo={}
 finfo['lcat']     = {'subdir':'lcat',    'front':'lcat',    'ext':'.bin'}
 finfo['scat']     = {'subdir':'scat',    'front':'scat',    'ext':'.bin'}
 finfo['lensout']  = {'subdir':'lensout', 'front':'lensout', 'ext':'.rec'}
-finfo['lenscomb'] = {'subdir':'lensout', 'front':'lensout', 'ext':'.rec'}
+finfo['lensred']  = {'subdir':'lensout', 'front':'lensred', 'ext':'.rec'}
+finfo['lensred-collate'] = {'subdir':'lensout', 'front':'lensred-collate', 'ext':'.rec'}
 finfo['config']   = {'subdir':'proc',    'front':'run',     'ext':'.config'}
 finfo['condor']   = {'subdir':'proc',    'front':'run',     'ext':'.condor'}
 finfo['script']   = {'subdir':'proc',    'front':'run',     'ext':'.sh'}
@@ -139,41 +140,13 @@ def lensbin_plot_dir(run,name):
 # read objshear outputs
 #
 
-def lensout_collate(run):
-    """
-    Collate the combined lensum output with the original catalog
-    """
+def reduced_collated_lensout_read(run):
+    f = sample_file('lensred-collate',run)
+    return eu.io.read(f)
 
-    conf = json_read(run)
-    cat = lensing.lcat.read_catalog(conf['lens_catalog'],conf['lens_version'])
-    lout = combined_lensout_read(run)
-
-    if cat.size != lout.size:
-        raise ValueError("catalog and lensout are not the same size")
-
-
-    # create a new struct with out outputs at the end
-    stdout.write('collating...')
-    data = eu.numpy_util.add_fields(cat, lout.dtype)
-    eu.numpy_util.copy_fields(lout, data)
-    stdout.write('done\n')
-
-    return data
-
-def combined_lensout_read(run):
-    file = sample_file('combined lensout', run)
+def reduced_lensout_read(run):
+    file = sample_file('lensred', run)
     return eu.io.read(file)
-
-def combine_lensout(run):
-    """
-    combine the lensout splits into a single, summed lensum (lensout) file.
-    """
-    file = sample_file('lenscomb', run)
-    print("Will combine into file:",file)
-    print("Reading data\n")
-    data = lensout_read(run=run)
-
-    eu.io.write(file, data, verbose=True)
     
 def lensout_read(file=None, run=None, split=None, silent=False, old=False):
     if old:
@@ -243,29 +216,16 @@ def lensout_read_byrun(run, old=False):
         if i == 0:
             data = tdata
         else:
-            add_lensums(data, tdata)
+            # note zindex match occurs in add_lensums
+            lensing.outputs.add_lensums(data, tdata)
 
     return data
-
-def add_lensums(l1, l2):
-    """
-    Add the sums from l2 to l1
-
-    The rows of l1 must correspond to those of l2
-    """
-
-    w=where1(l1['zindex'] != l2['zindex'])
-    if w.size > 0:
-        raise ValueError("zindex do not line up")
-    for n in ['weight','npair','rsum','wsum','dsum','osum']:
-        l1[n] += l2[n]
-
 
 
 # the old split of the lenses: we now split the sources
 def lensout_read_byrun_lensplit(run):
-    runconf = json_read('run',run)
-    conf = json_read('lcat', runconf['lens_sample'])
+    runconf = read_config('run',run)
+    conf = read_config('lcat', runconf['lens_sample'])
     nsplit = conf['nsplit']
     if nsplit == 0:
         file = sample_file('lensout', run)
@@ -385,7 +345,7 @@ def lcat_dtype():
 def scat_write(sample, data,split=None):
     from . import sigmacrit
     file = sample_file('scat',sample, split=split)
-    conf = json_read('scat', sample)
+    conf = read_config('scat', sample)
     style=conf['sigmacrit_style']
     if style not in [1,2]:
         raise ValueError("sigmacrit_style should be in [1,2]")
@@ -497,28 +457,23 @@ def scat_dtype(sigmacrit_style, nzl=None):
 #
 
 def cascade_config(run):
-    conf=json_read('run',run)
+    conf=read_config('run',run)
 
     ls = conf['lens_sample']
-    conf['lens_config'] = json_read('lcat',ls)
+    conf['lens_config'] = read_config('lcat',ls)
     ss = conf['src_sample']
-    conf['src_config'] = json_read('scat',ss)
+    conf['src_config'] = read_config('scat',ss)
     cs=conf['cosmo_sample']
-    conf['cosmo_config'] = json_read('cosmo',cs)
+    conf['cosmo_config'] = read_config('cosmo',cs)
 
     return conf
 
 
 
-def json_read(type,id):
-    """
-    You can also do:
-        rc = lensing.config.RunConfig(run)
-    and rc is inherited from a dict
-    """
-    return eu.io.read(json_file(type,id))
+def read_config(type,id):
+    return eu.io.read(config_file(type,id))
 
-def json_file(type, id):
+def config_file(type, id):
     dir = json_dir()
     fname = '%s-%s.json' % (type,id)
     fname = path_join(dir,fname)

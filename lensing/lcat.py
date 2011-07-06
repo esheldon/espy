@@ -30,7 +30,7 @@ class DESMockLensCatalog(dict):
     """
 
     def __init__(self, sample, **keys):
-        conf = lensing.files.json_read('lcat',sample)
+        conf = lensing.files.read_config('lcat',sample)
         for k in conf:
             self[k] = conf[k]
 

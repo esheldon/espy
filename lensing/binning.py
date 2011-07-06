@@ -4,7 +4,7 @@ Need to convert these to binner classes
 Binner classes
     MZBinner: bin by true mass and redshift
 """
-
+from __future__ import print_function
 import os
 import sys
 from sys import stdout
@@ -109,10 +109,10 @@ def mzbin(data, nmass, nz):
         mrange = [ml,mh]
 
         ll = (log10(mrange[0]),log10(mrange[1]))
-        print '%0.2f < log M200 < %0.2f' % ll
+        print('%0.2f < log M200 < %0.2f' % ll)
         for zl,zh in zip(zlow,zhigh):
             zrange = (zl,zh)
-            print '    %0.2f < z < %0.2f' % zrange
+            print('    %0.2f < z < %0.2f' % zrange)
             comb,w = combine_lensum_from_ranges(data,'m200',mrange,zrange=zrange,
                                                 getind=True)
     
@@ -234,7 +234,7 @@ def plot_mzbin_invmass_byrun(run, nmass, nz, type='',
     Inverted M200 vs M200 true, in z bins
     """
     name=mzbin_name(nmass,nz)
-    conf = lensing.files.json_read(run)
+    conf = lensing.files.read_config(run)
     d = lensing.files.lensinv_read(run,name)
 
     plt = FramedPlot()
@@ -331,7 +331,7 @@ def plot_mzbin_mass_byrun(run, nmass, nz,
         ex=None
 
     name=mzbin_name(nmass,nz)
-    conf = lensing.files.json_read(run)
+    conf = lensing.files.read_config(run)
     d = lensing.files.lensfit_read(run,name,extra=ex)
 
     plt = FramedPlot()
@@ -457,8 +457,8 @@ def test_logbin(data, nbin, tag, nzbin=0):
     for i in xrange(nbin):
         stdout.write(fmt % (i+1,h[i],low[i],high[i],mean_data[i]))
 
-    print eu.numpy_util.arr2str(low)
-    print eu.numpy_util.arr2str(high)
+    print(eu.numpy_util.arr2str(low))
+    print(eu.numpy_util.arr2str(high))
     
 def lensave(data, tag, ind=None, sdev=False):
     if ind is None:

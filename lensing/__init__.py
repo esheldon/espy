@@ -56,7 +56,7 @@ from . import test_estimators
 from . import lcat
 from . import scat
 from . import convert
-from . import config
+from . import objshear_config
 from . import scripts
 from . import condor
 
@@ -69,6 +69,7 @@ from . import princeton
 from . import files
 from . import pbslens
 
+from . import binning
 from . import outputs
 
 

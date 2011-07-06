@@ -240,6 +240,302 @@ def fit_nfw_dsig(omega_m, z, r, ds, dserr, guess,rhofac=180):
          mtag+'_err':mm_err}
     return res
 
+
+
+
+#
+# fits byrun: these call the above functions
+#
+
+def fit_nfw_dsig_byrun(run, name, rrange=None, rhofac=180):
+    """
+    Fit an nfw profile to all bins
+    """
+
+    conf = lensing.files.read_config(run)
+    din = lensing.files.lensbin_read(run,name)
+    omega_m = conf['omega_m']
+
+    rtag='r%01im' % rhofac
+    mtag='m%01im' % rhofac
+    newdt = [('rrange','f8',2),
+             ('r200_fit','f8'),
+             ('r200_fit_err','f8'),
+             ('m200_fit','f8'),
+             ('m200_fit_err','f8'),
+             ('c_fit','f8'),
+             ('c_fit_err','f8'),
+             ('rc_fit_cov','f8',(2,2)),
+             (rtag+'_fit','f8'),
+             (rtag+'_fit_err','f8'),
+             (mtag+'_fit','f8'),
+             (mtag+'_fit_err','f8')]
+    d = eu.numpy_util.add_fields(din, newdt)
+
+    if rrange is None:
+        rrange = [0,1.e6]
+
+    r200guess = 1.0 # Mpc
+    cguess = 5.0
+    guess = numpy.array([r200guess,cguess],dtype='f8')
+    for i in xrange(d.size):
+        z = d['z_mean'][i]
+        print 'omega_m:',omega_m
+        print '      z:',z
+
+        d['rrange'][i] = rrange
+        r = d['r'][i]
+        w=where1( (r > rrange[0]) & (r < rrange[1]) )
+
+        r=r[w]
+        ds = d['dsig'][i][w]
+        dserr = d['dsigerr'][i][w]
+
+        res = lensing.nfw.fit_nfw_dsig(omega_m, z, r, ds, dserr, guess,
+                                       rhofac=rhofac)
+
+        d['r200_fit'][i] = res['r200']
+        d['r200_fit_err'][i] = res['r200_err']
+        d['m200_fit'][i] = res['m200']
+        d['m200_fit_err'][i] = res['m200_err']
+        d['c_fit'][i] = res['c']
+        d['c_fit_err'][i] = res['c_err']
+        d['rc_fit_cov'][i] = res['cov']
+
+        d[rtag+'_fit'][i] = res[rtag]
+        d[rtag+'_fit_err'][i] = res[rtag+'_err']
+        d[mtag+'_fit'][i] = res[mtag]
+        d[mtag+'_fit_err'][i] = res[mtag+'_err']
+
+
+        print '       c: %f +/- %f' % (d['c_fit'][i],d['c_fit_err'][i])
+        print '    r200: %f +/- %f' % (d['r200_fit'][i],d['r200_fit_err'][i])
+        print '    m200: %e +/- %e' % (d['m200_fit'][i],d['m200_fit_err'][i])
+        print '   '+mtag+': %e +/- %e' % (d[mtag+'_fit'][i],d[mtag+'_fit_err'][i])
+        if 'm200_mean' in d.dtype.names:
+            m=d['m200_mean'][i]
+            e=d['m200_err'][i]
+            print '    m200 true: %e +/- %e' % (m,e)
+        
+    lensing.files.lensfit_write(d, run, name)
+
+
+
+def fit_nfw_lin_dsig_byrun(run, name, withlin=True, rmax_from_true=False,
+                           rmin=None, rmax=None):
+    """
+    Fit an nfw profile to all bins
+    """
+
+    conf = lensing.files.read_config(run)
+    din = lensing.files.lensbin_read(run,name)
+    omega_m = conf['omega_m']
+
+    if withlin:
+        npar = 3
+        ex='lin'
+    else:
+        npar = 2
+        ex=None
+    newdt = [('rrange','f8',2),
+             ('r200_fit','f8'),
+             ('r200_fit_err','f8'),
+             ('m200_fit','f8'),
+             ('m200_fit_err','f8'),
+             ('c_fit','f8'),
+             ('c_fit_err','f8'),
+             ('B_fit','f8'),
+             ('B_fit_err','f8'),
+             ('fit_cov','f8',(npar,npar))]
+    d = eu.numpy_util.add_fields(din, newdt)
+
+    rall = d['r'].ravel()
+    if rmin is None:
+        rmin = rall.min()
+    if rmax is None:
+        rmax = rall.max()
+    rrange = [rmin,rmax]
+
+    r200guess = 1.0 # Mpc
+    cguess = 5.0
+    Bguess = 5.0
+    if withlin:
+        guess = numpy.array([r200guess,cguess,Bguess],dtype='f8')
+    else:
+        guess = numpy.array([r200guess,cguess],dtype='f8')
+    for i in xrange(d.size):
+        z = d['z_mean'][i]
+        print 'omega_m:',omega_m
+        print '      z:',z
+
+        r = d['r'][i]
+
+        if rmax_from_true:
+            # determine the rmax r200
+            rrange = [rmin, 2*d['r200_mean'][i]]
+            print '    using rrange:',rrange
+        d['rrange'][i] = rrange
+        w=where1( (r > rrange[0]) & (r < rrange[1]) )
+
+        r=r[w]
+        ds = d['dsig'][i][w]
+        dserr = d['dsigerr'][i][w]
+
+        res = lensing.fit.fit_nfw_lin_dsig(omega_m, z, r, ds, dserr, guess,
+                                           withlin=withlin, more=True)
+
+        d['r200_fit'][i] = res['r200']
+        d['r200_fit_err'][i] = res['r200_err']
+        d['m200_fit'][i] = res['m200']
+        d['m200_fit_err'][i] = res['m200_err']
+        d['c_fit'][i] = res['c']
+        d['c_fit_err'][i] = res['c_err']
+        d['B_fit'][i] = res['B']
+        d['B_fit_err'][i] = res['B_err']
+        d['fit_cov'][i] = res['cov']
+
+        print '       c: %f +/- %f' % (d['c_fit'][i],d['c_fit_err'][i])
+        print '       B: %f +/- %f' % (d['B_fit'][i],d['B_fit_err'][i])
+        print '    r200: %f +/- %f' % (d['r200_fit'][i],d['r200_fit_err'][i])
+        print '    m200: %e +/- %e' % (d['m200_fit'][i],d['m200_fit_err'][i])
+        if 'm200_mean' in d.dtype.names:
+            m=d['m200_mean'][i]
+            e=d['m200_err'][i]
+            print '    m200 true: %e +/- %e' % (m,e)
+        
+    lensing.files.lensfit_write(d, run, name, extra=ex)
+
+
+
+
+def plot_nfw_lin_fits_byrun(run, name, npts=100, prompt=False, 
+                            withlin=True,
+                            ymin=0.01, ymax=2000.0):
+    conf = lensing.files.read_config(run)
+    if withlin:
+        ex='lin'
+        nex='lin'
+    else:
+        nex=''
+        ex=None
+    d = lensing.files.lensfit_read(run,name,extra=ex)
+    omega_m = conf['omega_m']
+
+    rravel = d['r'].ravel()
+    xrange = [0.5*rravel.min(), 1.5*rravel.max()]
+
+    #for i in xrange(d.size):
+    i=0
+    for dd in d:
+
+        zrange = dd['z_range']
+        mrange = dd['m200_range']
+
+        if dd['rrange'][0] > 0:
+            log_rmin = log10(dd['rrange'][0])
+            log_rmax = log10(dd['rrange'][1])
+        else:
+            log_rmin = log10(dd['r'][0])
+            log_rmax = log10(dd['r'][-1])
+        rvals = 10.0**linspace(log_rmin,log_rmax,npts)
+
+        plt = FramedPlot()  
+        lensing.plotting.add_to_log_plot(plt, dd['r'],dd['dsig'],dd['dsigerr'])
+
+        z = dd['z_mean']
+        fitter = lensing.fit.NFWBiasFitter(omega_m,z,rvals,withlin=withlin)
+
+        if withlin:
+            yfit = fitter.nfw_lin_dsig(rvals, dd['r200_fit'],dd['c_fit'],dd['B_fit'])
+            yfit_nfw = fitter.nfw.dsig(rvals,dd['r200_fit'],dd['c_fit'])
+            yfit_lin = fitter.lin_dsig(rvals,dd['B_fit'])
+
+            yfit = where(yfit < 1.e-5, 1.e-5, yfit)
+            yfit_lin = where(yfit_lin < 1.e-5, 1.e-5, yfit_lin)
+
+            cyfit = Curve(rvals,yfit,color='blue')
+            cyfit_nfw = Curve(rvals,yfit_nfw,color='red')
+            cyfit_lin = Curve(rvals,yfit_lin,color='orange')
+
+            cyfit.label = 'Best Fit'
+            cyfit_nfw.label = 'NFW'
+            cyfit_lin.label = 'linear'
+
+            key=PlotKey(0.1,0.3,[cyfit,cyfit_nfw,cyfit_lin])
+            plt.add(cyfit,cyfit_nfw,cyfit_lin,key)
+        else:
+            yfit_nfw = fitter.nfw.dsig(rvals,dd['r200_fit'],dd['c_fit'])
+            cyfit_nfw = Curve(rvals,yfit_nfw,color='blue')
+            plt.add(cyfit_nfw)
+
+        zlab='%0.2f < z < %0.2f' % (zrange[0],zrange[1])
+        plt.add(PlotLabel(0.7,0.8,zlab))
+        ll = (log10(mrange[0]),log10(mrange[1]))
+        mlab = r'$%0.2f < logM_{200} < %0.2f$' % ll
+        plt.add(PlotLabel(0.7,0.9,mlab))
+
+        #yrange = [ymin,(dd['dsig']+dd['dsigerr']).max()*1.5]
+        yrange = [ymin,ymax]
+        plt.xrange = xrange
+        plt.yrange = yrange
+        plt.xlog=True
+        plt.ylog=True
+        plt.xlabel = r'$r$ [$h^{-1}$ Mpc]'
+        plt.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+        plt.aspect_ratio=1
+        if prompt:
+            plt.show()
+            rinput = raw_input('hit a key: ')
+            if rinput == 'q':
+                return
+        else:
+            d = lensing.files.lensbin_plot_dir(run,name)
+            if not os.path.exists(d):
+                os.makedirs(d)
+            epsfile=path_join(d,'desmocks-nfw%s-fit-%02i.eps' % (nex,i))
+            print 'Writing epsfile:',epsfile
+            plt.write_eps(epsfile)
+        i += 1
+
+
+    
+
+def plot_nfwfits_byrun(run, name, prompt=False):
+    conf = lensing.files.read_config(run)
+    d = lensing.files.lensfit_read(run,name)
+    omega_m = conf['omega_m']
+
+
+    rvals = numpy.linspace(d['r'].min(), d['r'].max(),1000)
+    for i in xrange(d.size):
+        plt = FramedPlot()  
+        lensing.plotting.add_to_log_plot(plt, 
+                                          d['r'][i],
+                                          d['dsig'][i],
+                                          d['dsigerr'][i])
+
+        z = d['z_mean'][i]
+        n = lensing.nfw.NFW(omega_m, z)
+        yfit = n.dsig(rvals, d['r200_fit'][i],d['c_fit'][i])
+        plt.add(Curve(rvals,yfit,color='blue'))
+        plt.xlog=True
+        plt.ylog=True
+        plt.xlabel = r'$r$ [$h^{-1}$ Mpc]'
+        plt.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+        if prompt:
+            plt.show()
+            raw_input('hit a key: ')
+        else:
+            epsfile='/home/esheldon/tmp/plots/desmocks-nfwfit-%02i.eps' % i
+            print 'Writing epsfile:',epsfile
+            plt.write_eps(epsfile)
+
+
+
+
+
+
+
 def test_fit_nfw_lin_dsig(rmin=0.01):
 
     from biggles import FramedPlot,Points,SymmetricErrorBarsY,Curve,PlotKey
