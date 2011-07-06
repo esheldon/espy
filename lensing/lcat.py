@@ -14,14 +14,25 @@ import lensing
 import esutil
 from esutil.ostools import path_join
 
+def instantiate_sample(sample):
+    c = DESMockLensCatalog(sample)
+    return c
 
 def create_input(sample):
     """
     e.g.  create_input('01')
     """
 
-    c = DESMockLensCatalog(sample)
+    c = instantiate_sample(sample)
     c.create_objshear_input()
+
+def original_file(sample):
+    c = instantiate_sample(sample)
+    return c.original_file()
+
+def read_original(sample):
+    c = instantiate_sample(sample)
+    return c.read_original()
 
 
 class DESMockLensCatalog(dict):

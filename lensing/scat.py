@@ -18,18 +18,31 @@ import copy
 
 import zphot
 
-def create_input(sample):
-    """
-        create_input('01')
-    """
-
+def instantiate_sample(sample):
     conf = lensing.files.read_config('scat', sample)
     if 'dr8regauss' in conf['catalog']:
         c = DR8Catalog(sample)
     else:
         c = DESMockSrcCatalog(sample)
+    return c
+
+def create_input(sample):
+    """
+        create_input('01')
+    """
+    c = instantiate_sample(sample)
     c.create_objshear_input()
     c.split()
+
+
+def original_file(sample):
+    c = instantiate_sample(sample)
+    return c.original_file()
+
+def read_original(sample):
+    c = instantiate_sample(sample)
+    return c.read_original()
+
 
 
 class DR8Catalog(dict):

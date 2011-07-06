@@ -11,7 +11,7 @@ from esutil.numpy_util import where1
 # collated outputs
 #
 
-def make_collated_lensout(run):
+def make_collated_lensred(run):
     """
     
     run
@@ -20,11 +20,12 @@ def make_collated_lensout(run):
     end write out the file
 
     """
-    data = collate_lensout_and_catalog(run)
+    data = collate_lensred_and_catalog(run)
     f = lensing.files.sample_file('lensred-collate', run)
+    print(f)
     eu.io.write(f, data, verbose=True)
 
-def collate_lensout_and_catalog(run):
+def collate_lensred_and_catalog(run):
     """
 
     Collate the reduced lensout (lens-by-lens) file created with
@@ -35,19 +36,19 @@ def collate_lensout_and_catalog(run):
 
     """
 
-    conf = lensing.files.read_config(run)
-    cat = lensing.lcat.read_catalog(conf['lens_catalog'],conf['lens_version'])
-    lout = combined_lensout_read(run)
+    conf = lensing.files.cascade_config(run)
+    lsample = conf['lens_config']['sample']
+    cat = lensing.files.read_original_catalog('lens',lsample)
+    lout = lensing.files.lensred_read(run)
 
-    if cat.size != lout.size:
-        raise ValueError("catalog and lensout are not the same size")
-
+    # trim down to the ones we used
+    print("Extracting by zindex")
+    cat = cat[ lout['zindex'] ]
 
     # create a new struct with the lensing outputs at the end
-    stdout.write('collating...')
+    print('collating')
     data = eu.numpy_util.add_fields(cat, lout.dtype)
     eu.numpy_util.copy_fields(lout, data)
-    stdout.write('done\n')
 
     return data
 

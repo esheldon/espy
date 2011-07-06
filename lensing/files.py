@@ -21,6 +21,7 @@ finfo['script']   = {'subdir':'proc',    'front':'run',     'ext':'.sh'}
 finfo['pbslens']  = {'subdir':'pbslens','ext':'.pbs'}
 
 
+
 def lensdir():
     if 'LENSDIR' not in os.environ:
         raise ValueError("LENSDIR is not set")
@@ -33,6 +34,18 @@ def catalog_dir():
     catdir = path_join(lensdir(), 'catalogs')
     return catdir
 
+def original_catalog_file(type, sample):
+    if type == 'lens':
+        return lensing.lcat.original_file(sample)
+    elif type == 'source':
+        return lensing.scat.original_file(sample)
+
+def read_original_catalog(type, sample):
+    if type == 'lens':
+        return lensing.lcat.read_original(sample)
+    elif type == 'source':
+        return lensing.scat.read_original(sample)
+    
 
 #
 # generic for lcat,scat,config,pbs
@@ -140,13 +153,13 @@ def lensbin_plot_dir(run,name):
 # read objshear outputs
 #
 
-def reduced_collated_lensout_read(run):
+def lensred_collated_read(run):
     f = sample_file('lensred-collate',run)
-    return eu.io.read(f)
+    return eu.io.read(f, verbose=True)
 
-def reduced_lensout_read(run):
+def lensred_read(run):
     file = sample_file('lensred', run)
-    return eu.io.read(file)
+    return eu.io.read(file, verbose=True)
     
 def lensout_read(file=None, run=None, split=None, silent=False, old=False):
     if old:
@@ -165,7 +178,7 @@ def lensout_read(file=None, run=None, split=None, silent=False, old=False):
         stdout.write('Reading lensout file: %s\n' % file)
     file=expand_path(file)
 
-    return eu.io.read(file)
+    return eu.io.read(file, verbose=True)
 
 def lensout_read_old(file=None, run=None, split=None, silent=False, old=False):
     '''

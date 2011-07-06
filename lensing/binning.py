@@ -17,6 +17,8 @@ from esutil.numpy_util import where1
 
 import lensing
 
+from .util import lens_wmom
+
 try:
     import biggles
     from biggles import FramedArray, FramedPlot, Points, \
@@ -113,8 +115,8 @@ def mzbin(data, nmass, nz):
         for zl,zh in zip(zlow,zhigh):
             zrange = (zl,zh)
             print('    %0.2f < z < %0.2f' % zrange)
-            comb,w = combine_lensum_from_ranges(data,'m200',mrange,zrange=zrange,
-                                                getind=True)
+            comb,w = combine_mzbin_lensum_from_ranges(data,'m200',mrange,zrange=zrange,
+                                                      getind=True)
     
             bs['r'][i] = comb['r']
             bs['dsig'][i] = comb['dsig']
@@ -122,19 +124,19 @@ def mzbin(data, nmass, nz):
             bs['osig'][i] = comb['osig']
             bs['npair'][i] = comb['npair']
 
-            mn,err,sdev = lensave(data,'z',ind=w, sdev=True)
+            mn,err,sdev = lens_wmom(data,'z',ind=w, sdev=True)
             bs['z_mean'][i] = mn
             bs['z_err'][i] = err
             bs['z_sdev'][i] = sdev
             bs['z_range'][i] = zrange
 
-            mn,err,sdev = lensave(data,'m200',ind=w, sdev=True)
+            mn,err,sdev = lens_wmom(data,'m200',ind=w, sdev=True)
             bs['m200_mean'][i] = mn
             bs['m200_err'][i] = err
             bs['m200_sdev'][i] = sdev
             bs['m200_range'][i] = mrange
 
-            mn,err,sdev = lensave(data,'r200',ind=w, sdev=True)
+            mn,err,sdev = lens_wmom(data,'r200',ind=w, sdev=True)
             bs['r200_mean'][i] = mn
             bs['r200_err'][i] = err
             bs['r200_sdev'][i] = sdev
@@ -414,7 +416,7 @@ def plot_mzbin_mass_byrun(run, nmass, nz,
     else:
         plt.show()
 
-def combine_lensum_from_ranges(data, tag, trange, zrange=None,getind=False):
+def combine_mzbin_lensum_from_ranges(data, tag, trange, zrange=None,getind=False):
     logic = (data[tag] >= trange[0]) & (data[tag] < trange[1])
     if zrange is not None:
         logic = logic & \
@@ -429,11 +431,12 @@ def combine_lensum_from_ranges(data, tag, trange, zrange=None,getind=False):
         return comb
  
 
-def test_logbin(data, nbin, tag, nzbin=0):
+def test_logbin(data, nbin, tag):
     """
-    Do a log binning.  For binning by mass estimators, 
-    probably want to combine the last 2 or 3 bins because
-    of the exponential cutoff
+
+    Do a log binning.  For binning by mass estimators, probably want to combine
+    the last 2 or 3 bins because of the exponential cutoff
+    
     """
 
     log_data = numpy.log10(data[tag])
@@ -448,7 +451,7 @@ def test_logbin(data, nbin, tag, nzbin=0):
     for i in xrange(nbin):
         if rev[i] != rev[i+1]:
             w=rev[ rev[i]:rev[i+1] ]
-            mean_data[i],err = lensave(data, tag, ind=w)
+            mean_data[i],err = lens_wmom(data, tag, ind=w)
 
     h = hdict['hist']
     low=10.0**hdict['low']
@@ -460,13 +463,4 @@ def test_logbin(data, nbin, tag, nzbin=0):
     print(eu.numpy_util.arr2str(low))
     print(eu.numpy_util.arr2str(high))
     
-def lensave(data, tag, ind=None, sdev=False):
-    if ind is None:
-        wts = data['weight']
-        tdata = data[tag]
-    else:
-        wts = data['weight'][ind]
-        tdata = data[tag][ind]
-
-    return eu.stat.wmom(tdata, wts, calcerr=True, sdev=sdev)
 

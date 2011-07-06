@@ -49,6 +49,8 @@ Then fits and plots:
 
 """
 
+from . import util
+
 from . import rotation
 
 from . import sigmacrit
