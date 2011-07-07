@@ -29,23 +29,48 @@ Then submit the scripts
     condor_submit run-04-035.condor
 
 
-UPDATE THIS FOR NEW SOURCE SPLITS
-
 You should then bin up the results. e.g.
-
-An example is:
-    lensing.outputs.mzbin_byrun
+    mzbin = lensing.binning.MZBinner(nmass, nz)
+    mzbin.bin_byrun(run)
+which calls this under the hood
+    mzbin.bin(data)
 
 Should make a more general binner like we had in IDL.
 
-Then fits and plots:
-    
-    lensing.outputs.plot_mzbin(run, nmass, nz)
+You can then fit NFW or NFW+lin masses
 
-    lensing.outputs.nfw_lin_fits_byrun(run, name, rrange=None)
+    # with linear term
+    fitter = lensing.fit.NFWBiasFitter(omega_m, z, r, **linkeywords)
+    p,cov = fitter.fit(dsig, dsigerr, guess, more=False)
+
+    # without linear term
+    fitter = lensing.fit.NFWBiasFitter(omega_m, z, r, withlin=False)
+    p,cov = fitter.fit(dsig, dsigerr, guess, more=False)
+
+To fit a run/binning and write out a file with the fits:
+
+    fit_nfw_lin_dsig_byrun(run, name, withlin=True, rmax_from_true=False,
+                           rmin=None, rmax=None):
+
+Some plots that are on a grid are done currently from the binner:
+    
+
+    mzbin.plot_dsig_byrun(run, dops=False)
+    mzbin.plot_invmass_byrun(run, type='',
+                             residual=False,
+                             yrange=None,
+                             dops=False)
+    mzbin.plot_nfwmass_byrun(run, 
+                             withlin=True,
+                             residual=False,
+                             noerr=False,
+                             fudge=None,tag='m200',
+                             yrange=None,
+                             dops=False)
+ 
+Others done one-by-one are done in fit.py
+
     lensing.outputs.plot_nfw_lin_fits_byrun(run, name, prompt=False)
-    lensing.outputs.plot_mzbin_mass_byrun(run, nmass, nz, fudge=1.0,tag='m200',
-                                          epsfile=None)
 
 """
 

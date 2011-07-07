@@ -76,7 +76,7 @@ def make_reduced_lensout(run):
 def add_lensums(l1, l2):
     """
 
-    Add the sums from l2 to l1.  Note this is different than reduce_lensout,
+    Add the sums from l2 to l1.  Note this is different than reduce_lensums,
     which produces averages
 
     The rows of l1 must correspond to those of l2; zindex must match
@@ -148,29 +148,6 @@ def lensred_dtype():
         ('wsum','f8'),
         ('dsum','f8'),
         ('osum','f8')]
-    return numpy.dtype(dt)
-
-def lensbin_dtype(nrbin, bintags):
-    if not isinstance(bintags,list):
-        bintags = [bintags]
-
-    dt = []
-    for bt in bintags:
-        tn = bt+'_range'
-        dt.append( (tn,'f8',2) )
-        tn = bt+'_mean'
-        dt.append( (tn,'f8') )
-        tn = bt+'_err'
-        dt.append( (tn,'f8') )
-        tn = bt+'_sdev'
-        dt.append( (tn,'f8') )
-
-    nrbin = int(nrbin)
-    dt += [('r','f8',nrbin),
-           ('dsig','f8',nrbin),
-           ('dsigerr','f8',nrbin),
-           ('osig','f8',nrbin),
-           ('npair','i8',nrbin)]
     return numpy.dtype(dt)
 
 

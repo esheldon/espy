@@ -1,6 +1,20 @@
+import os
 import numpy
-from  numpy import sqrt, log10, linspace, interp
+from  numpy import sqrt, log10, linspace, interp, where
+import esutil as eu
+from esutil.numpy_util import where1
+from esutil.ostools import path_join
 import lensing
+
+try:
+    import biggles
+    from biggles import FramedArray, FramedPlot, Points, \
+            ErrorBarsY, ErrorBarsX, \
+            SymmetricErrorBarsY, SymmetricErrorBarsX, \
+            PlotKey, PlotLabel, Table, Curve
+except:
+    pass
+
 
 
 class NFWBiasFitter:
@@ -29,7 +43,7 @@ class NFWBiasFitter:
 
         """
 
-        self.r_       = r.copy()
+        self.r_ = r.copy()
 
         self.z = z
 
@@ -109,12 +123,6 @@ class NFWBiasFitter:
         r200_err = sqrt(cov[0,0])
         c = p[1]
         c_err = sqrt(cov[1,1])
-        if self.withlin:
-            B = p[2]
-            B_err = sqrt(cov[2,2])
-        else:
-            B = -9999.0
-            B_err = 9999.0
 
         m200 = self.nfw.m200(r200)
         m200_err = 3*m200*r200_err/r200
@@ -125,10 +133,13 @@ class NFWBiasFitter:
              'r200_err':r200_err,
              'c':c,
              'c_err':c_err,
-             'B':B,
-             'B_err':B_err,
              'm200':m200,
              'm200_err':m200_err}
+
+        if self.withlin:
+            res['B'] = p[2]
+            res['B_err'] = sqrt(cov[2,2])
+
         return res
 
 
@@ -327,9 +338,9 @@ def fit_nfw_lin_dsig_byrun(run, name, withlin=True, rmax_from_true=False,
     Fit an nfw profile to all bins
     """
 
-    conf = lensing.files.read_config(run)
+    conf = lensing.files.cascade_config(run)
     din = lensing.files.lensbin_read(run,name)
-    omega_m = conf['omega_m']
+    omega_m = conf['cosmo_config']['omega_m']
 
     if withlin:
         npar = 3
@@ -411,7 +422,7 @@ def fit_nfw_lin_dsig_byrun(run, name, withlin=True, rmax_from_true=False,
 def plot_nfw_lin_fits_byrun(run, name, npts=100, prompt=False, 
                             withlin=True,
                             ymin=0.01, ymax=2000.0):
-    conf = lensing.files.read_config(run)
+    conf = lensing.files.cascade_config(run)
     if withlin:
         ex='lin'
         nex='lin'
@@ -419,7 +430,7 @@ def plot_nfw_lin_fits_byrun(run, name, npts=100, prompt=False,
         nex=''
         ex=None
     d = lensing.files.lensfit_read(run,name,extra=ex)
-    omega_m = conf['omega_m']
+    omega_m = conf['cosmo_config']['omega_m']
 
     rravel = d['r'].ravel()
     xrange = [0.5*rravel.min(), 1.5*rravel.max()]
