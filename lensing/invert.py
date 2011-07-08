@@ -4,6 +4,9 @@ Routines to deproject \Delta\Sigma to the 3-d \delta \rho and mass.
 Ported from Dave Johnston's IDL code.
 """
 
+import os
+import sys
+from sys import stdout
 import lensing
 import numpy
 from numpy import log, log10, exp, sqrt, linspace, logspace, where, \
@@ -14,7 +17,7 @@ from numpy import log, log10, exp, sqrt, linspace, logspace, where, \
 import esutil as eu
 from esutil.numpy_util import where1
 from esutil.misc import colprint
-from sys import stdout
+from esutil.ostools import path_join
 
 
 try:
@@ -33,16 +36,19 @@ except:
     pass
 
 
-def invert_byrun(run, name, show=False, rmax=None, massin=False, massout=False):
+def invert_byrun(run, name, show=False, rmax=None):
     """
     Invert for drho and mass
 
-    For desmocks we want massin=True
+    For desmocks we want to try the massin since there are problems at large
+    scales.  the shape of the mass profile is wrong on small scales, but total
+    mass might be OK.
+
     """
 
-    conf = lensing.files.read_config(run)
+    conf = lensing.files.cascade_config(run)
     din = lensing.files.lensbin_read(run,name)
-    omega_m = conf['omega_m']
+    omega_m = conf['cosmo_config']['omega_m']
 
     nr = din['r'][0].size
     ndrho = nr-1

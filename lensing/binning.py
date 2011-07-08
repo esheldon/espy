@@ -375,9 +375,23 @@ class MZBinner(dict):
                            dops=False):
 
         """
-        Inverted M200 vs M200 true, in z bins
 
-        You must create the inverted files first of course
+        Inverted M200 vs M200 true, in z bins. You must create the inverted
+        files first of course
+
+        Inputs
+        ------
+        run: string
+            run identifier
+        type: string, optional
+            The type of mass to use, either 
+                ''    for mean of in and out
+                'in'  for mass determined from points inside radius
+                'out' for mass determined from points outside radius
+        residual: boolean, optional
+            Plot the residual from true value.
+        dops: boolean, optional
+            Make the eps file
         """
         name=self.name()
         d = lensing.files.lensinv_read(run,name)

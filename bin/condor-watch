@@ -1,0 +1,346 @@
+#!/usr/bin/env python
+"""
+    %prog [options username] 
+
+    This program runs 
+        qstat -n -1    
+    or if the username is sent:
+        qstat -n -1 -u username 
+        
+    and gathers some stats about the jobs, which it displays along with as much
+    of the full job listing as can be fit in the display.  The job listing is
+    refreshed regularly, by default every 30 seconds.  Hit any key to update
+    immediately, or 'q' to quit.  The terminal must be able to display ANSII
+    colors."""
+
+modification_history="""
+    Created: 2009-07 Erin Sheldon, BNL, erin dot sheldon at gmail dot com
+"""
+
+import os
+import sys
+import subprocess
+from optparse import OptionParser
+
+import curses
+try:
+    # newer version 
+    import curses.wrapper.wrapper as curses_wrapper
+except:
+    import curses.wrapper as curses_wrapper
+
+parser=OptionParser(__doc__)
+parser.add_option("-r","--refresh",default=30, 
+    help="refresh rate in seconds.  default is %default")
+parser.add_option("-d","--dark",action="store_true", 
+    help="Use a color scheme appropriate for dark backgrounds")
+parser.add_option("-l","--light",action="store_true", 
+    help="Use a color scheme appropriate for light backgrounds")
+
+default=1
+black=0+2
+red=1+2
+green=2+2
+yellow=3+2
+blue=4+2
+magenta=5+2
+cyan=6+2
+white=7+2
+
+class CondorWatcher:
+    colors={}
+    def __init__(self, user=None, refresh_rate=30, background=None):
+        self.user=user
+        self.refresh_rate=refresh_rate
+        self.background=background
+        
+        curses_wrapper(self.condor_watch)
+
+    def condor_watch(self, stdscr):
+        self.make_color_pairs()
+        self.set_colors()
+
+        maxy, maxx = stdscr.getmaxyx()
+
+        y1 = 0
+        x1 = 0
+        sizey1 = 2
+        win1 = curses.newwin(sizey1, maxx, y1, x1)
+
+        win3 = curses.newwin(maxy-sizey1, maxx, sizey1, 0)
+        maxy3, maxx3 = win3.getmaxyx()
+
+
+        # wait for refresh seconds for user input before refreshing.  If the user
+        # input is anything but 'q' then refresh again
+        tout_ms = self.refresh_rate*1000
+        win1.timeout(tout_ms)
+        while 1:
+            win3.erase()
+
+            win1.erase()
+            win1.addstr("asdfadsfadsfadsfasdfasdf")
+            win1.refresh()
+            #sout=GetPs()
+            """
+            sout=GetQstat(username)
+            sout = sout.split('\n')
+
+            stats = GetQstatStats(sout, username)
+            PrintStats(curses, win1, stats, username)
+            ii=0
+            for line in sout:
+                if ii < maxy3 and ii > 1:
+                    win3.addstr(ii-2, 0, line[0:maxx3])
+                ii+=1
+            win3.refresh()
+
+            c = win1.getch()
+            if c == ord('q'): 
+                break
+            """
+
+
+
+
+
+    def make_color_pairs(self):
+        curses.use_default_colors()
+        curses.init_pair(default, -1, -1)
+        bkgd_color=-1
+
+        curses.init_pair(black, curses.COLOR_BLACK, bkgd_color)
+        curses.init_pair(red, curses.COLOR_RED, bkgd_color)
+        curses.init_pair(green, curses.COLOR_GREEN, bkgd_color)
+        curses.init_pair(yellow, curses.COLOR_YELLOW, bkgd_color)
+        curses.init_pair(blue, curses.COLOR_BLUE, bkgd_color)
+        curses.init_pair(magenta, curses.COLOR_MAGENTA, bkgd_color)
+        curses.init_pair(cyan, curses.COLOR_CYAN, bkgd_color)
+        curses.init_pair(white, curses.COLOR_WHITE, bkgd_color)
+
+    def set_colors(self):
+        if self.background=='light':
+            self.colors['njobs'] = curses.color_pair(blue)
+            self.colors['nrun'] = curses.color_pair(green)
+            self.colors['nq'] = curses.color_pair(magenta)
+            self.colors['nsusp'] = curses.color_pair(red)
+            self.colors['nexiting'] = curses.color_pair(red)
+            self.colors['ncompleted'] = curses.color_pair(green)
+        elif self.background=='dark':
+            self.colors['njobs'] = curses.color_pair(cyan)
+            self.colors['nrun'] = curses.color_pair(green)
+            self.colors['nq'] = curses.color_pair(yellow)
+            self.colors['nsusp'] = curses.color_pair(red)
+            self.colors['nexiting'] = curses.color_pair(red)
+            self.colors['ncompleted'] = curses.color_pair(green)
+        else:
+            # this should show up on white and black backgrounds pretty well
+            self.colors['njobs'] = curses.color_pair(magenta)
+            self.colors['nrun'] = curses.color_pair(green)
+            self.colors['nq'] = curses.color_pair(red)
+            self.colors['nsusp'] = curses.color_pair(red)
+            self.colors['nexiting'] = curses.color_pair(red)
+            self.colors['ncompleted'] = curses.color_pair(green)
+
+
+
+def MakeColorPairs():
+    curses.use_default_colors()
+    curses.init_pair(default, -1, -1)
+    background=-1
+
+    curses.init_pair(black, curses.COLOR_BLACK, background)
+    curses.init_pair(red, curses.COLOR_RED, background)
+    curses.init_pair(green, curses.COLOR_GREEN, background)
+    curses.init_pair(yellow, curses.COLOR_YELLOW, background)
+    curses.init_pair(blue, curses.COLOR_BLUE, background)
+    curses.init_pair(magenta, curses.COLOR_MAGENTA, background)
+    curses.init_pair(cyan, curses.COLOR_CYAN, background)
+    curses.init_pair(white, curses.COLOR_WHITE, background)
+
+colors={}
+def SetColors(dark,light):
+    if light:
+        colors['njobs'] = curses.color_pair(blue)
+        colors['nrun'] = curses.color_pair(green)
+        colors['nq'] = curses.color_pair(magenta)
+        colors['nsusp'] = curses.color_pair(red)
+        colors['nexiting'] = curses.color_pair(red)
+        colors['ncompleted'] = curses.color_pair(green)
+    elif dark:
+        colors['njobs'] = curses.color_pair(cyan)
+        colors['nrun'] = curses.color_pair(green)
+        colors['nq'] = curses.color_pair(yellow)
+        colors['nsusp'] = curses.color_pair(red)
+        colors['nexiting'] = curses.color_pair(red)
+        colors['ncompleted'] = curses.color_pair(green)
+    else:
+        # this should show up on white and black backgrounds pretty well
+        colors['njobs'] = curses.color_pair(magenta)
+        colors['nrun'] = curses.color_pair(green)
+        colors['nq'] = curses.color_pair(red)
+        colors['nsusp'] = curses.color_pair(red)
+        colors['nexiting'] = curses.color_pair(red)
+        colors['ncompleted'] = curses.color_pair(green)
+
+def qstat(stdscr, username, refresh_rate, dark, light):
+
+    MakeColorPairs()
+    SetColors(dark,light)
+    # curses always sets the background to black unless you run this 
+    # function.  Default color is -1
+    maxy, maxx = stdscr.getmaxyx()
+    
+    y1 = 0
+    x1 = 0
+    sizey1 = 2
+    win1 = curses.newwin(sizey1, maxx, y1, x1)
+
+
+    win3 = curses.newwin(maxy-sizey1, maxx, sizey1, 0)
+    maxy3, maxx3 = win3.getmaxyx()
+
+
+    # wait for 30 seconds for user input before refreshing.  If the user
+    # input is anything but 'q' then refresh again
+    tout_ms = refresh_rate*1000
+    win1.timeout(tout_ms)
+    while 1:
+        win3.erase()
+        #sout=GetPs()
+        sout=GetQstat(username)
+        sout = sout.split('\n')
+
+        stats = GetQstatStats(sout, username)
+        PrintStats(curses, win1, stats, username)
+        ii=0
+        for line in sout:
+            if ii < maxy3 and ii > 1:
+                win3.addstr(ii-2, 0, line[0:maxx3])
+            ii+=1
+        win3.refresh()
+
+        c = win1.getch()
+        if c == ord('q'): 
+            break
+
+
+
+def GetQstat(username):
+    if username != 'any':
+        command = 'qstat -n -1 -u %s' % username
+    else:
+        command = 'qstat -n -1'
+    pobj=subprocess.Popen(command, 
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          shell=True)
+    stdout_ret, stderr_ret = pobj.communicate()
+    return stdout_ret
+
+
+
+def GetQstatStats(sout, username):
+    # gather some statistics
+
+    sd={'njobs':0, 
+        'nrun': 0, 
+        'nq':0,
+        'nsusp':0,
+        'nexiting':0,
+        'nheld':0,
+        'nmoving':0,
+        'nwait':0,
+        'ncompleted':0}
+    for line in sout:
+        ls=line.split()
+
+        #if len(ls) >= 11:
+        if len(ls) >= 12:
+            if ls[0] != 'Job' and (ls[1] == username or username == 'any'):
+                sd['njobs'] += 1
+                jobstat = ls[9]
+                if jobstat == "R":
+                    sd['nrun'] += 1
+                elif jobstat == "Q":
+                    sd['nq'] += 1
+                elif jobstat == "S":
+                    sd['nsusp'] += 1
+                elif jobstat == "E":
+                    sd['nexiting'] += 1
+                elif jobstat == "H":
+                    sd['nheld'] += 1
+                elif jobstat == "T":
+                    sd['nmoving'] += 1
+                elif jobstat == "W":
+                    sd['nwait'] += 1
+                elif jobstat == "C":
+                    sd['ncompleted'] += 1
+
+    return sd
+
+def PrintStats(curses, win, stats, username):
+    win.erase()
+    # begin at second line, far left
+    if username != 'any':
+        win.addstr(1, 0, 'Jobs for %s:' % (username,), colors['njobs'] )
+    else:
+        win.addstr(1, 0, 'Jobs:', colors['njobs'] )
+    win.addstr(' %s' % stats['njobs'])
+
+    win.addstr('  Running:', colors['nrun'])
+    win.addstr(' %s' % stats['nrun'])
+
+    win.addstr('  Queued:', colors['nq'])
+    win.addstr(' %s' % stats['nq'])
+
+    if stats['nsusp'] > 0:
+        win.addstr('  Suspended:', colors['nsusp'])
+        win.addstr(' %s' % stats['nsusp'])
+    if stats['nexiting'] > 0:
+        win.addstr('  Exiting:', colors['nexiting'])
+        win.addstr(' %s' % stats['nexiting'])
+    if stats['ncompleted'] > 0:
+        win.addstr('  Completed:', colors['ncompleted'])
+        win.addstr(' %s' % stats['ncompleted'])
+
+
+    win.refresh()
+
+
+# 
+# main program
+#
+
+def main():
+    try:
+        options, args = parser.parse_args(sys.argv[1:])
+        if len(args) > 0:
+            user=args[0]
+        else:
+            user=None
+
+        dark  = options.dark
+        light = options.light
+
+        if dark:
+            background='dark'
+        elif light:
+            background='light'
+        else:
+            background=None
+
+        watcher = CondorWatcher(user=user, 
+                                refresh_rate=int(options.refresh), 
+                                background=background)
+
+        return
+        curses_wrapper(qstat, 
+                       user, 
+                       int(options.refresh), 
+                       options.dark,
+                       options.light)
+    except KeyboardInterrupt:
+        pass
+
+
+main()
