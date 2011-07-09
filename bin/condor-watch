@@ -95,8 +95,8 @@ condor_q \\
 
 
 
-_line_format=' %-8s %-12s %-11s %12s %-2s %-3s %-7s %s %s'
-_header_front=' ID       Owner        Submitted        Run Time   ST Pri Size    Cmd '
+_line_format=' %-9s %-12s %-11s %12s %-2s %-3s %-7s %s %s'
+_header_front=' ID        Owner        Submitted        Run Time   ST Pri Size    Cmd '
 
 class CondorWatcher:
     def __init__(self, **keys):
@@ -176,7 +176,7 @@ class CondorWatcher:
                     if line.find('hedd') == -1:
                         stats['njobs'] += 1
                         line=self.process_line(line,stats)
-                        win3.addstr(ii,0,line[0:self.maxx3])
+                        win3.addstr(ii,0,line[0:self.maxx3-1])
                 ii+=1
             win3.refresh()
 
