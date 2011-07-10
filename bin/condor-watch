@@ -200,40 +200,41 @@ class CondorWatcher:
         colors=self.colors
 
 
+        win.addstr(1, 0, ' ')
         if self.scheduler_name is not None:
-            win.addstr(1, 0, ' Queue:', colors['queue'])
-            win.addstr(' %s' % self.scheduler_name)
+            win.addstr('Queue: ', colors['queue'])
+            win.addstr('%s ' % self.scheduler_name)
 
         if self.user != None:
             #win.addstr(1, 0, ' Jobs for %s:' % (self.user,), colors['njobs'] )
             #win.addstr(1, 0, ' Jobs for', colors['njobs'] )
-            win.addstr(' User:',colors['njobs'])
-            win.addstr(' %s' % self.user)
+            win.addstr('User: ',colors['user'])
+            win.addstr('%s ' % self.user)
 
         #win.addstr(1, 0, ' Jobs:', colors['njobs'] )
         #win.addstr(1, 0, ' Jobs', colors['njobs'] )
-        win.addstr(' Jobs:', colors['njobs'] )
+        win.addstr('Jobs: ', colors['njobs'] )
 
         #if self.scheduler_name is not None:
         #    win.addstr(' in %s' % self.scheduler_name, colors['queue'])
 
-        win.addstr(' %s' % stats['njobs'])
+        win.addstr('%s ' % stats['njobs'])
 
-        win.addstr(' Running:', colors['R'])
-        win.addstr(' %s' % stats['R'])
+        win.addstr('Running: ', colors['R'])
+        win.addstr('%s ' % stats['R'])
 
-        win.addstr(' Idle:', colors['I'])
-        win.addstr(' %s' % stats['I'])
+        win.addstr('Idle: ', colors['I'])
+        win.addstr('%s ' % stats['I'])
 
         if stats['H'] > 0:
-            win.addstr(' Held:', colors['H'])
-            win.addstr(' %s' % stats['H'])
+            win.addstr('Held: ', colors['H'])
+            win.addstr('%s ' % stats['H'])
         if stats['X'] > 0:
-            win.addstr(' Removed:', colors['X'])
-            win.addstr(' %s' % stats['X'])
+            win.addstr('Removed: ', colors['X'])
+            win.addstr('%s ' % stats['X'])
         if stats['C'] > 0:
-            win.addstr(' Completed:', colors['C'])
-            win.addstr(' %s' % stats['C'])
+            win.addstr('Completed: ', colors['C'])
+            win.addstr('%s ' % stats['C'])
 
         win.refresh()
 
@@ -318,6 +319,8 @@ class CondorWatcher:
         self.colors={}
         if self.background=='light':
             self.colors['njobs'] = curses.color_pair(blue)
+            self.colors['queue'] = curses.color_pair(blue)
+            self.colors['user'] = curses.color_pair(blue)
             self.colors['R'] = curses.color_pair(green)
             self.colors['I'] = curses.color_pair(magenta)
             self.colors['H'] = curses.color_pair(red)
@@ -325,6 +328,8 @@ class CondorWatcher:
             self.colors['C'] = curses.color_pair(green)
         elif self.background=='dark':
             self.colors['njobs'] = curses.color_pair(cyan)
+            self.colors['queue'] = curses.color_pair(green)
+            self.colors['user'] = curses.color_pair(green)
             self.colors['R'] = curses.color_pair(green)
             self.colors['I'] = curses.color_pair(yellow)
             self.colors['H'] = curses.color_pair(red)
@@ -334,6 +339,7 @@ class CondorWatcher:
             # this should show up on white and black backgrounds pretty well
             self.colors['njobs'] = curses.color_pair(magenta)
             self.colors['queue'] = curses.color_pair(green)
+            self.colors['user'] = curses.color_pair(green)
             self.colors['R'] = curses.color_pair(green)
             self.colors['I'] = curses.color_pair(red)
             self.colors['H'] = curses.color_pair(red)
