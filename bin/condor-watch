@@ -16,9 +16,7 @@ Description
     Send the username to restrict the job listing to the specified user.
     
     The job listing is refreshed regularly, by default every 30 seconds.   Hit
-    any key to update immediately.  Hit 'q' or control-c to quit.  
-    
-    For best results, the terminal should be able to display ANSII colors."""
+    any key to update immediately.  Hit 'q' or control-c to quit."""
 
 modification_history="""
     Created: 2009-07 Erin Sheldon, BNL, erin dot sheldon at gmail dot com
@@ -200,26 +198,41 @@ class CondorWatcher:
     def write_statline(self, win, stats):
         win.erase()
         colors=self.colors
+
+
+        if self.scheduler_name is not None:
+            win.addstr(1, 0, ' Queue:', colors['queue'])
+            win.addstr(' %s' % self.scheduler_name)
+
         if self.user != None:
-            win.addstr(1, 0, ' Jobs for %s:' % (self.user,), colors['njobs'] )
-        else:
-            win.addstr(1, 0, ' Jobs:', colors['njobs'] )
+            #win.addstr(1, 0, ' Jobs for %s:' % (self.user,), colors['njobs'] )
+            #win.addstr(1, 0, ' Jobs for', colors['njobs'] )
+            win.addstr(' User:',colors['njobs'])
+            win.addstr(' %s' % self.user)
+
+        #win.addstr(1, 0, ' Jobs:', colors['njobs'] )
+        #win.addstr(1, 0, ' Jobs', colors['njobs'] )
+        win.addstr(' Jobs:', colors['njobs'] )
+
+        #if self.scheduler_name is not None:
+        #    win.addstr(' in %s' % self.scheduler_name, colors['queue'])
+
         win.addstr(' %s' % stats['njobs'])
 
-        win.addstr('  Running:', colors['R'])
+        win.addstr(' Running:', colors['R'])
         win.addstr(' %s' % stats['R'])
 
-        win.addstr('  Idle:', colors['I'])
+        win.addstr(' Idle:', colors['I'])
         win.addstr(' %s' % stats['I'])
 
         if stats['H'] > 0:
-            win.addstr('  Held:', colors['H'])
+            win.addstr(' Held:', colors['H'])
             win.addstr(' %s' % stats['H'])
         if stats['X'] > 0:
-            win.addstr('  Removed:', colors['X'])
+            win.addstr(' Removed:', colors['X'])
             win.addstr(' %s' % stats['X'])
         if stats['C'] > 0:
-            win.addstr('  Completed:', colors['C'])
+            win.addstr(' Completed:', colors['C'])
             win.addstr(' %s' % stats['C'])
 
         win.refresh()
@@ -320,6 +333,7 @@ class CondorWatcher:
         else:
             # this should show up on white and black backgrounds pretty well
             self.colors['njobs'] = curses.color_pair(magenta)
+            self.colors['queue'] = curses.color_pair(green)
             self.colors['R'] = curses.color_pair(green)
             self.colors['I'] = curses.color_pair(red)
             self.colors['H'] = curses.color_pair(red)
