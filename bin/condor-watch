@@ -16,7 +16,7 @@ Description
     Send the username to restrict the job listing to the specified user.
     
     The job listing is refreshed regularly, by default every 30 seconds.   Hit
-    any key to update immediately, or 'q' to quit.  
+    any key to update immediately.  Hit 'q' or control-c to quit.  
     
     For best results, the terminal should be able to display ANSII colors."""
 
