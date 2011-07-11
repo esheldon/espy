@@ -8,10 +8,11 @@
 Description
 
     This program runs 
+
         condor_q
-    and gathers some stats about the jobs, which it displays above the job
-    listing.  The host machine for the job is displayed in addition to the
-    standard info displayed by condor_q.
+
+    with some customized formatting and displays the jobs along with some
+    statistics.
 
     Send the username to restrict the job listing to the specified user.
     
@@ -33,6 +34,9 @@ try:
     import curses.wrapper.wrapper as curses_wrapper
 except:
     import curses.wrapper as curses_wrapper
+
+# remove this from host names to keep them short
+_domain = '.rcf.bnl.gov'
 
 parser=OptionParser(__doc__)
 parser.add_option("-r","--refresh",default=30, 
@@ -122,6 +126,41 @@ class CondorWatcher:
 
 
     def condor_watch(self, stdscr):
+
+        self.setup_windows(stdscr)
+
+        # wait for refresh seconds for user input before refreshing.  If the
+        # user input is anything but 'q' then refresh again
+
+        tout_ms = self.refresh_rate*1000
+        self.win1.timeout(tout_ms)
+        while 1:
+            self.win1.erase()
+            self.win2.erase()
+            self.win3.erase()
+
+            out = self.get_condor_q_output()
+            out = out.split('\n')
+
+            stats={'njobs':0,'max_cmd_len':0,'R':0,'I':0,'H':0,'C':0,'X':0}
+
+            nprint = min(len(out), self.maxy3)
+            for ii in xrange(nprint):
+                line = out[ii]
+                if len(line) > 0:
+                    stats['njobs'] += 1
+                    line=self.process_line(line,stats)
+                    self.win3.addstr(ii,0,line[0:self.maxx3-1])
+            self.win3.refresh()
+
+            self.write_header(self.win2, stats)
+            self.write_statline(self.win1, stats)
+
+            c = self.win1.getch()
+            if c == ord('q'): 
+                break
+
+    def setup_windows(self, stdscr):
         self.make_color_pairs()
         self.set_colors()
 
@@ -132,58 +171,19 @@ class CondorWatcher:
         # the stats
         y1 = 0
         sizey1 = 3
-        win1 = curses.newwin(sizey1, self.maxx, y1, x0)
+        self.win1 = curses.newwin(sizey1, self.maxx, y1, x0)
 
         # the header line
         sizey2 = 1
         y2 = sizey1
-        win2 = curses.newwin(sizey2, self.maxx, y2, x0)
+        self.win2 = curses.newwin(sizey2, self.maxx, y2, x0)
 
-        win3 = curses.newwin(self.maxy-sizey1-sizey2, 
-                             self.maxx, 
-                             sizey1+sizey2, 
-                             x0)
-        self.maxy2, self.maxx2 = win2.getmaxyx()
-        self.maxy3, self.maxx3 = win3.getmaxyx()
-
-
-        # wait for refresh seconds for user input before refreshing.  If the
-        # user input is anything but 'q' then refresh again
-
-        tout_ms = self.refresh_rate*1000
-        win1.timeout(tout_ms)
-        while 1:
-            win1.erase()
-            win2.erase()
-            win3.erase()
-
-            out = self.get_condor_q_output()
-            out = out.split('\n')
-
-            stats={'njobs':0, 
-                   'max_cmd_len':0,
-                   'R': 0, 
-                   'I':0,
-                   'H':0,
-                   'C':0,
-                   'X':0}
-
-            ii=0
-            for line in out:
-                if ii < self.maxy3 and len(line) > 0:
-                    if line.find('hedd') == -1:
-                        stats['njobs'] += 1
-                        line=self.process_line(line,stats)
-                        win3.addstr(ii,0,line[0:self.maxx3-1])
-                ii+=1
-            win3.refresh()
-
-            self.write_header(win2, stats)
-            self.write_statline(win1, stats)
-
-            c = win1.getch()
-            if c == ord('q'): 
-                break
+        self.win3 = curses.newwin(self.maxy-sizey1-sizey2, 
+                                  self.maxx, 
+                                  sizey1+sizey2, 
+                                  x0)
+        self.maxy2, self.maxx2 = self.win2.getmaxyx()
+        self.maxy3, self.maxx3 = self.win3.getmaxyx()
 
     def write_header(self, win, stats):
         h = _header_front
@@ -191,7 +191,7 @@ class CondorWatcher:
         if clen > 4:
             h += ' '*(clen-4)
         h += ' Host'
-        # for some reason we need to do maxx2-1 here
+
         win.addstr(0,0,h[0:self.maxx2-1])
         win.refresh()
 
@@ -206,17 +206,10 @@ class CondorWatcher:
             win.addstr('%s ' % self.scheduler_name)
 
         if self.user != None:
-            #win.addstr(1, 0, ' Jobs for %s:' % (self.user,), colors['njobs'] )
-            #win.addstr(1, 0, ' Jobs for', colors['njobs'] )
             win.addstr('User: ',colors['user'])
             win.addstr('%s ' % self.user)
 
-        #win.addstr(1, 0, ' Jobs:', colors['njobs'] )
-        #win.addstr(1, 0, ' Jobs', colors['njobs'] )
         win.addstr('Jobs: ', colors['njobs'] )
-
-        #if self.scheduler_name is not None:
-        #    win.addstr(' in %s' % self.scheduler_name, colors['queue'])
 
         win.addstr('%s ' % stats['njobs'])
 
@@ -249,16 +242,11 @@ class CondorWatcher:
 
         if len(ls) == 10:
             id,owner,qdate,servertime,shadowbday,status,pri,size,cmd,host = ls
-        #elif len(ls) == 8:
-        #    id,owner,qdate,servertime,status,pri,size,cmd = ls
-        #    host=""
-        #    shadowbday=""
         else:
-            #raise ValueError("Expected 10 or 8 results from condor_q, got %d" % len(ls))
             raise ValueError("Expected 10 results from condor_q, got %d" % len(ls))
 
         cmd = os.path.basename(cmd)
-        host = host.replace('.rcf.bnl.gov','')
+        host = host.replace(_domain,'')
 
         if len(cmd) > stats['max_cmd_len']:
             stats['max_cmd_len'] = len(cmd)
@@ -294,8 +282,6 @@ class CondorWatcher:
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               shell=True)
         stdout_ret, stderr_ret = pobj.communicate()
-        #print stdout_ret
-        #sys.exit(0)
         return stdout_ret
 
 
@@ -378,11 +364,7 @@ def main():
                                 background=background)
 
         return
-        curses_wrapper(qstat, 
-                       user, 
-                       int(options.refresh), 
-                       options.dark,
-                       options.light)
+
     except KeyboardInterrupt:
         pass
 
