@@ -64,6 +64,8 @@ def make_reduced_lensout(run):
     This is still lens-by-lens, but the sums from different source splits are
     added.
 
+    This is different than reduce_lensums below
+
     """
     file = lensing.files.sample_file('lensred', run)
     print("Will combine into file:",file)

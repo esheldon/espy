@@ -23,6 +23,9 @@ finfo['pbslens']  = {'subdir':'pbslens','ext':'.pbs'}
 
 
 def lensdir():
+    """
+    This is the root dir under which all data are stored
+    """
     if 'LENSDIR' not in os.environ:
         raise ValueError("LENSDIR is not set")
     return os.environ['LENSDIR']
@@ -35,22 +38,33 @@ def catalog_dir():
     return catdir
 
 def original_catalog_file(type, sample):
+    """
+    This is the original catalog from which we generate the objshear inputs.
+    Note for dr8 we read from columns, so there is no "original file"
+    """
     if type == 'lens':
         return lensing.lcat.original_file(sample)
     elif type == 'source':
         return lensing.scat.original_file(sample)
 
 def read_original_catalog(type, sample):
+    """
+    This is the original catalog from which we generate the objshear inputs.
+    Note for dr8 we read from columns, so there is no "original file"
+    """
     if type == 'lens':
         return lensing.lcat.read_original(sample)
     elif type == 'source':
         return lensing.scat.read_original(sample)
     
 
-#
-# generic for lcat,scat,config,pbs
-#
 def sample_dir(type,sample):
+    """
+    Generic routine to get the directory for a sample of a given type, e.g.
+    for lcat,scat,proc files etc
+
+    See finfo for a list of types
+    """
     if type not in finfo:
         raise ValueError("Unknown file type: '%s'" % type)
     d = lensdir()
@@ -59,6 +73,13 @@ def sample_dir(type,sample):
     return d
 
 def sample_file(type, sample, split=None, extra=None, ext=None):
+    """
+    Generic routine to get a file name for a sample of a given type, e.g.  for
+    lcat,scat,proc files etc
+
+    See finfo for a list of types
+    """
+
     d = sample_dir(type,sample)
     front = finfo[type]['front']
     fname=path_join(d, '%s-%s' % (front,sample))
@@ -74,7 +95,7 @@ def sample_file(type, sample, split=None, extra=None, ext=None):
 
 
 #
-# fits. Go in same dir as bins
+# model fits. Go in same dir as bins
 #
 
 def lensfit_write(data, run, name, extra=None, verbose=True):
@@ -177,8 +198,6 @@ def lensout_read(file=None, run=None, split=None, silent=False, old=False):
 
         return lensout_read_byrun(run)
 
-    if not silent:
-        stdout.write('Reading lensout file: %s\n' % file)
     file=expand_path(file)
 
     return eu.io.read(file, verbose=True)
