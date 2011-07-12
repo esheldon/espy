@@ -15,8 +15,10 @@ import esutil
 from esutil.ostools import path_join
 
 def instantiate_sample(sample):
-    c = DESMockLensCatalog(sample)
-    return c
+    if sample in ['04']:
+        return MaxBCG(sample)
+    else:
+        return DESMockLensCatalog(sample)
 
 def create_input(sample):
     """
@@ -33,6 +35,72 @@ def original_file(sample):
 def read_original(sample):
     c = instantiate_sample(sample)
     return c.read_original()
+
+
+def output_array(num):
+    dt = lensing.files.lcat_dtype()
+    output = numpy.zeros(num, dtype=dt)
+    return output
+
+
+
+
+class MaxBCG(dict):
+    def __init__(self, sample, **keys):
+        conf = lensing.files.read_config('lcat',sample)
+        for k in conf:
+            self[k] = conf[k]
+
+        if self['catalog'] not in ['maxbcg-full']:
+            raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
+
+        if self['sample'] != sample:
+            raise ValueError("The config sample '%s' doesn't match input '%s'" % (self['sample'],sample))
+
+    def create_objshear_input(self):
+        fname = self.file()
+
+        data = self.read_original()
+
+        print 'creating output array'
+        output = output_array(data.size)
+
+        print 'copying data'
+        output['zindex'] = numpy.arange(data.size,dtype='i8')
+        output['ra'] = data['ra']
+        output['dec'] = data['dec']
+        output['z'] = data['photoz_cts']
+
+        lensing.files.lcat_write(self['sample'], output)
+
+
+
+
+    def file(self):
+        fname = lensing.files.sample_file('lcat',self['sample'])
+        return fname
+
+    def read(self, split=None):
+        return lensing.files.lcat_read(sample=self['sample'], split=split)
+
+
+    def original_dir(self):
+        catdir = lensing.files.catalog_dir()
+        d = path_join(catdir, self['catalog'])
+        return str(d)
+
+    def original_file(self):
+        d = self.original_dir()
+        f='catalog_full_bcgs_orig.fit'
+        infile = path_join(d, f)
+        return infile
+
+    def read_original(self):
+        infile = self.original_file()
+        stdout.write("Reading lens catalog: %s\n" % infile)
+        data = esutil.io.read(infile, lower=True, ensure_native=True)
+        return data
+
 
 
 class DESMockLensCatalog(dict):
@@ -64,7 +132,7 @@ class DESMockLensCatalog(dict):
         data = self.read_original()
 
         print 'creating output array'
-        output = self.output_array(data.size)
+        output = output_array(data.size)
 
         print 'copying data'
         output['zindex'] = numpy.arange(data.size,dtype='i8')
@@ -73,7 +141,7 @@ class DESMockLensCatalog(dict):
         output['z'] = data['z']
         #output['dc'] = -9999.0
 
-        lensing.files.lcat_write(output, file=fname)
+        lensing.files.lcat_write(self['sample'], output)
 
 
     def original_dir(self):
@@ -96,11 +164,5 @@ class DESMockLensCatalog(dict):
         data = esutil.io.read(infile, lower=True, verbose=True, 
                               ensure_native=True)
         return data
-
-    def output_array(self, num):
-        dt = lensing.files.lcat_dtype()
-        output = numpy.zeros(num, dtype=dt)
-        return output
-
 
 

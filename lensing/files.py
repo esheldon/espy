@@ -58,7 +58,7 @@ def sample_dir(type,sample):
     d = path_join(d,dsub,sample)
     return d
 
-def sample_file(type, sample, split=None, extra=None):
+def sample_file(type, sample, split=None, extra=None, ext=None):
     d = sample_dir(type,sample)
     front = finfo[type]['front']
     fname=path_join(d, '%s-%s' % (front,sample))
@@ -66,7 +66,10 @@ def sample_file(type, sample, split=None, extra=None):
         fname += '-%03d' % split
     if extra is not None:
         fname += '-%s' % extra
-    fname += finfo[type]['ext']
+
+    if ext is None:
+        ext = finfo[type]['ext']
+    fname += ext
     return fname
 
 
@@ -294,11 +297,8 @@ def lensout_dtype(nbin, old=False):
 #
 
 
-def lcat_write(data, file=None, sample=None):
-    if file is None and sample is None:
-        raise ValueError("usage: lcat_write(data, file=, sample=)")
-    if file is None:
-        file = sample_file('lcat',sample)
+def lcat_write(sample, data):
+    file = sample_file('lcat',sample)
 
     stdout.write("Writing %d to lens cat: '%s'\n" % (data.size, file))
 
@@ -404,6 +404,70 @@ def scat_write(sample, data,split=None):
 
     fobj.close()
 
+def scat_write_ascii(sample, data,split=None):
+    from esutil import recfile
+    from sys import stdout
+    from . import sigmacrit
+
+    file = sample_file('scat',sample, split=split, ext='.dat')
+
+    conf = read_config('scat', sample)
+    style=conf['sigmacrit_style']
+    if style not in [1,2]:
+        raise ValueError("sigmacrit_style should be in [1,2]")
+
+
+    if style == 2:
+        if 'zlmin' not in conf or 'zlmax' not in conf or 'dzl' not in conf:
+            raise ValueError("You must have zlmin,zlmax,dzl in config")
+
+        zlvals=sigmacrit.make_zlvals(conf['dzl'], conf['zlmin'], conf['zlmax'])
+        nzl = zlvals.size
+
+        data_nzl = data['scinv'].shape[1]
+        if nzl != data_nzl:
+            raise ValueError("Calculated nzl of %d but data has nzl of %d" % (nzl,data_nzl))
+
+    print("Writing ascii source file:",file)
+    d = os.path.dirname(file)
+    if not os.path.exists(d):
+        stdout.write("Making dir: '%s'\n" % d)
+        os.makedirs(d)
+
+    with recfile.Open(file,'w',delim=' ') as robj:
+
+        #robj = recfile.Open(file,'w',delim=' ')
+
+        print("Writing header\n")
+        #print("  Writing size of sources:",data.size)
+        robj.fobj.write('%-15s = %d\n' % ("size",data.size))
+        stdout.write('%-15s = %d\n' % ("size",data.size))
+
+        #print("  Writing style:",style,"to file")
+        robj.fobj.write('%-15s = %d\n' % ("sigmacrit_style",style))
+        stdout.write('%-15s = %d\n' % ("sigmacrit_style",style))
+
+        if style == 2:
+            #print("  Writing nzl:",nzl,"to file")
+            robj.fobj.write('%-15s = %d\n' % ("nzlens",nzl))
+            stdout.write('%-15s = %d\n' % ("nzlens",nzl))
+
+            #print("  Writing zl to file")
+            #robj.fobj.write("%-15s = " % "zlens")
+            stdout.write("%-15s = " % "zlens")
+            zlwrite = numpy.array(zlvals,dtype='f8',copy=False)
+            zlwrite.tofile(robj.fobj, sep=' ')
+            zlwrite.tofile(stdout, sep=' ')
+            robj.fobj.write('\n')
+            stdout.write('\n')
+
+        robj.fobj.write("END\n\n")
+        stdout.write("END\n\n")
+
+        print("Writing data")
+        robj.write(data)
+
+
 def scat_read(sample=None, file=None, split=None):
 
     if file is None and sample is None:
@@ -484,9 +548,15 @@ def cascade_config(run):
 
 
 def read_config(type,id):
-    return eu.io.read(config_file(type,id))
+    f = config_file(type, id, ext='yaml')
+    if not os.path.exists(f):
+        f = config_file(type, id, ext='json')
+        if not os.path.exists(f):
+            raise ValueError("No config file found for type %s id %s\n" % (type,id))
 
-def config_file(type, id, ext='json'):
+    return eu.io.read(f)
+
+def config_file(type, id, ext='yaml'):
     """
     Want to move over to yaml files
     """

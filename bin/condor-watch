@@ -145,12 +145,13 @@ class CondorWatcher:
             stats={'njobs':0,'max_cmd_len':0,'R':0,'I':0,'H':0,'C':0,'X':0}
 
             nprint = min(len(out), self.maxy3)
-            for ii in xrange(nprint):
+            for ii in xrange(len(out)):
                 line = out[ii]
                 if len(line) > 0:
                     stats['njobs'] += 1
                     line=self.process_line(line,stats)
-                    self.win3.addstr(ii,0,line[0:self.maxx3-1])
+                    if ii < nprint:
+                        self.win3.addstr(ii,0,line[0:self.maxx3-1])
             self.win3.refresh()
 
             self.write_header(self.win2, stats)
@@ -266,7 +267,7 @@ class CondorWatcher:
 
     def format_time(self, tot_seconds):
         if tot_seconds == 0:
-            return '    ------  '
+            return '  ----------'
         days = tot_seconds/self.DAY
         tsec = tot_seconds % self.DAY
         hours = tsec/self.HOUR

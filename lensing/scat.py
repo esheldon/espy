@@ -78,21 +78,60 @@ class DR8Catalog(dict):
         dt = lensing.files.scat_dtype(self['sigmacrit_style'], nzl=nzl)
         output = numpy.zeros(keep.size, dtype=dt)
 
-        print("extracting basic columns and copying into output")
-        scinv_colname = 'scinv%s' % self['sample']
+        print("extracting ra,dec,g1,g2,err and copying into output")
+
         print("  reading ra,dec,g1,g2,err")
         output['ra'][:] = self.rgcols['ra'][keep]
         output['dec'][:] = self.rgcols['dec'][keep]
-        output['g1'][:] = self.rgcols['e1_rg_'+filter+'_eq'][keep]
-        output['g2'][:] = self.rgcols['e2_rg_'+filter+'_eq'][keep]
-        #output['g1'][:] = self.rgcols['e1_rg_'+filter][keep]
-        #output['g2'][:] = self.rgcols['e2_rg_'+filter][keep]
-        output['err'][:] = self.rgcols['uncer_rg_'+filter][keep]
+        output['g1'][:] = self.rgcols['e1_rg_eq_'+filter][keep]/2
+        output['g2'][:] = self.rgcols['e2_rg_eq_'+filter][keep]/2
+        output['err'][:] = self.rgcols['uncer_rg_'+filter][keep]/2
+
+        scinv_colname = 'scinv%s' % self['sample']
         print("  reading",scinv_colname)
         output['scinv'][:] = self.rgcols[scinv_colname][keep]
         
-        return output
-        raise ValueError("need to add equatorial rotated shapes")
+        lensing.files.scat_write(self['sample'], output)
+        #return output
+
+    def make_ascii(self):
+        data, zl = lensing.files.scat_read(self['sample'])
+        lensing.files.scat_write_ascii(self['sample'], data)
+
+
+    def split(self):
+        """
+        Split the source file into nsplit parts
+        """
+        
+
+        data = self.read()
+        if self['sigmacrit_style'] == 2:
+            data, zl = data
+
+        nsplit = self['nsplit']
+        if nsplit == 0:
+            return
+
+        ntot = data.size
+        nper = ntot/nsplit
+        nleft = ntot % nsplit
+
+        for i in xrange(nsplit):
+
+            beg = i*nper
+            end = (i+1)*nper
+            if i == (nsplit-1):
+                end += nleft
+            sdata = data[beg:end]
+
+            lensing.files.scat_write(self['sample'], sdata, split=i)
+
+
+    def file(self, split=None):
+        return lensing.files.sample_file('scat', sample=self['sample'], split=split)
+    def read(self, split=None):
+        return lensing.files.scat_read(sample=self['sample'], split=split)
 
     def select(self):
         """
@@ -116,6 +155,7 @@ class DR8Catalog(dict):
         flags = self.rgcols['corrflags_rg_'+filter][:]
 
 
+        # note this is *not* in a where statement!
         match_logic = (m >= 0)
         wmatch=where1(match_logic)
         print("Found %s/%s zphot matches" % (wmatch.size, m.size))
@@ -253,11 +293,11 @@ class DR8Catalog(dict):
             cols.write_column(colname, scinv, meta={'zlvals':zlvals})
 
     def open_all_columns(self):
-        print("opening regauss columns for procrun:",self['procrun'])
-        self.rgcols = lensing.regauss.open_columns(self['procrun'], self['sweeptype'])
+        print("opening regauss columns for procrun:",self['procrun'],"sweeptype:",self['sweeptype'])
+        self.rgcols = lensing.regauss.open_columns(str(self['procrun']), str(self['sweeptype']))
         print("  #rows:",self.rgcols['photoid'].size)
         print("opening zphot columns for pzrun:",self['pzrun'])
-        self.pzcols = zphot.weighting.open_pofz_columns(self['pzrun'])
+        self.pzcols = zphot.weighting.open_pofz_columns(str(self['pzrun']))
         print("  #rows:",self.pzcols['photoid'].size)
 
 

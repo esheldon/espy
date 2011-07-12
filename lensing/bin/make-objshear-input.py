@@ -1,9 +1,9 @@
 """
-    %prog type run
+    %prog type sample
 
 Description:
     Create an input catalog for objshear.  type must be 'scat' or 'lcat'.  The
-    run id implies a config file in ${ESPY_DIR}/lensing/config. 
+    sample id implies a config file in ${ESPY_DIR}/lensing/config. 
 
 """
 import sys
@@ -18,11 +18,11 @@ if len(args) < 2:
     sys.exit(1)
 
 type = args[0]
-run = args[1]
+sample = args[1]
 if type == 'scat':
-    lensing.scat.create_input(run)
+    lensing.scat.create_input(sample)
 elif type == 'lcat':
-    lensing.lcat.create_input(run)
+    lensing.lcat.create_input(sample)
 else:
     raise ValueError("type must be 'scat' or 'lcat'")
 
