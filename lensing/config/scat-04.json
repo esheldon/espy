@@ -11,5 +11,6 @@
     "dzl":0.015,
     "cosmo_sample":"01",
     "Rcut":0.33,
-    "comment":"first try with regauss catalog and mean scinv"
+    "nsplit":100,
+    "comment":"note 04 in this sampel and procrun is a coincidence. first try with regauss catalog and mean scinv"
 }

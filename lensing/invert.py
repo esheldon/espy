@@ -4,6 +4,9 @@ Routines to deproject \Delta\Sigma to the 3-d \delta \rho and mass.
 Ported from Dave Johnston's IDL code.
 """
 
+import os
+import sys
+from sys import stdout
 import lensing
 import numpy
 from numpy import log, log10, exp, sqrt, linspace, logspace, where, \
@@ -14,7 +17,7 @@ from numpy import log, log10, exp, sqrt, linspace, logspace, where, \
 import esutil as eu
 from esutil.numpy_util import where1
 from esutil.misc import colprint
-from sys import stdout
+from esutil.ostools import path_join
 
 
 try:
@@ -31,6 +34,139 @@ try:
     from scipy.integrate import romberg
 except:
     pass
+
+
+def invert_byrun(run, name, show=False, rmax=None):
+    """
+    Invert for drho and mass
+
+    For desmocks we want to try the massin since there are problems at large
+    scales.  the shape of the mass profile is wrong on small scales, but total
+    mass might be OK.
+
+    """
+
+    conf = lensing.files.cascade_config(run)
+    din = lensing.files.lensbin_read(run,name)
+    omega_m = conf['cosmo_config']['omega_m']
+
+    nr = din['r'][0].size
+    ndrho = nr-1
+
+    newdt = [('rdrho','f8',ndrho),
+             ('drho','f8',ndrho),
+             ('drhoerr','f8',ndrho),
+             ('drhocov','f8',(ndrho,ndrho)),
+             ('drho_noendc','f8',ndrho),
+             ('rmass','f8',ndrho),
+             ('mass','f8',ndrho),
+             ('masserr','f8',ndrho),
+             ('masscov','f8',(ndrho,ndrho)),
+             ('massin','f8',ndrho),
+             ('massinerr','f8',ndrho),
+             ('massincov','f8',(ndrho,ndrho)),
+             ('massout','f8',ndrho),
+             ('massouterr','f8',ndrho),
+             ('massoutcov','f8',(ndrho,ndrho)),
+             ('r200_inv','f8'),
+             ('r200_inv_err','f8'),
+             ('m200_inv','f8'),
+             ('m200_inv_err','f8'),
+             ('r200in_inv','f8'),
+             ('r200in_inv_err','f8'),
+             ('m200in_inv','f8'),
+             ('m200in_inv_err','f8'),
+             ('r200out_inv','f8'),
+             ('r200out_inv_err','f8'),
+             ('m200out_inv','f8'),
+             ('m200out_inv_err','f8')]
+    d = eu.numpy_util.add_fields(din, newdt)
+
+    pdir = lensing.files.lensbin_plot_dir(run,name)
+    if not os.path.exists(pdir):
+        os.makedirs(pdir)
+
+    inv = lensing.invert.Inverter()
+    for i in xrange(d.size):
+        z = d['z_mean'][i]
+        print 'omega_m:',omega_m
+        print '      z:',z
+
+        r = d['r'][i]
+        dsig =d['dsig'][i]
+        dsigerr =d['dsigerr'][i]
+
+        #dsig = where(dsig < 1.e-3, 1.e-3, dsig)
+        #w=where1(dsig < 1.e-5)
+        #if w.size > 0:
+        # replace with interpolation
+
+
+        res = inv.invert(r, dsig, dserr=dsigerr)
+        d['rdrho'][i]       = res['rdrho']
+        d['drho'][i]        = res['drho']
+        d['drhoerr'][i]     = res['drhoerr']
+        d['drhocov'][i]     = res['drhocov']
+        d['drho_noendc'][i] = res['drho_noendc']
+
+        d['rmass'][i]       = res['rmass']
+        d['mass'][i]        = res['mass']
+        d['masserr'][i]     = res['masserr']
+        d['masscov'][i]     = res['masscov']
+
+        d['massin'][i]      = res['massin']
+        d['massinerr'][i]      = res['massinerr']
+        d['massincov'][i]   = res['massincov']
+        d['massout'][i]     = res['massout']
+        d['massouterr'][i]     = res['massouterr']
+        d['massoutcov'][i]  = res['massoutcov']
+
+        epsfile=path_join(pdir,'invert-%s-%s-%02i.eps' % (run,name,i))
+        inv.plot(res, epsfile=epsfile, show=show)
+        if show:
+            k = raw_input('hit a key (q to quit): ')
+            if k == 'q':
+                return
+
+        rmass   = d['rmass'][i]
+        for mt in ['','in','out']:
+            print "Getting '%s' virial mass" % mt
+            mass = d['mass'+mt][i]
+            masserr = d['mass'+mt+'err'][i]
+            try:
+                mvf = lensing.invert.MvirFinder(omega_m, z, 200)
+
+
+
+                r200,r200_err,m200,m200_err=mvf.find_mvir(rmass,mass,masserr)
+
+                d['r200'+mt+'_inv'][i] = r200
+                d['r200'+mt+'_inv_err'][i] = r200_err
+                d['m200'+mt+'_inv'][i] = m200
+                d['m200'+mt+'_inv_err'][i] = m200_err
+
+                print '    r200: %f +/- %f' % (r200,r200_err)
+                print '    m200: %e +/- %e' % (m200,m200_err)
+                if 'm200_mean' in d.dtype.names:
+                    m=d['m200_mean'][i]
+                    e=d['m200_err'][i]
+                    print '    m200 true: %e +/- %e' % (m,e)
+            except:
+                d['r200'+mt+'_inv'][i] = -9999
+                d['r200'+mt+'_inv_err'][i] = 9999
+                d['m200'+mt+'_inv'][i] = -9999
+                d['m200'+mt+'_inv_err'][i] = 9999
+
+
+                print "Error getting '%s' virial mass:" % mt
+                print sys.exc_info()
+
+            
+    lensing.files.lensinv_write(d, run, name)
+
+
+
+
 
 def test_invert(relerr=0.2,dowrite=False, epsfile=None):
     inv = Inverter()

@@ -1,0 +1,373 @@
+#!/usr/bin/env python
+"""
+    %prog [options username] 
+
+    Display statistics about the local queue, refreshing at regular
+    intervals.
+
+Description
+
+    This program runs 
+
+        condor_q
+
+    with some customized formatting and displays the jobs along with some
+    statistics.
+
+    Send the username to restrict the job listing to the specified user.
+    
+    The job listing is refreshed regularly, by default every 30 seconds.   Hit
+    any key to update immediately.  Hit 'q' or control-c to quit."""
+
+modification_history="""
+    Created: 2009-07 Erin Sheldon, BNL, erin dot sheldon at gmail dot com
+"""
+
+import os
+import sys
+import subprocess
+from optparse import OptionParser
+
+import curses
+try:
+    # newer version 
+    import curses.wrapper.wrapper as curses_wrapper
+except:
+    import curses.wrapper as curses_wrapper
+
+# remove this from host names to keep them short
+_domain = '.rcf.bnl.gov'
+
+parser=OptionParser(__doc__)
+parser.add_option("-r","--refresh",default=30, 
+    help="refresh rate in seconds.  default is %default")
+parser.add_option("-d","--dark",action="store_true", 
+    help="Use a color scheme appropriate for dark backgrounds")
+parser.add_option("-l","--light",action="store_true", 
+    help="Use a color scheme appropriate for light backgrounds")
+parser.add_option("-n","--name",default=None,
+    help="Name of queue (scheduler) to use, default is local queue")
+parser.add_option("-g","--global",dest='global_queue',action="store_true", 
+    help="query the global job queue")
+
+default=1
+black=0+2
+red=1+2
+green=2+2
+yellow=3+2
+blue=4+2
+magenta=5+2
+cyan=6+2
+white=7+2
+
+# don't have to be too careful about things like widths of fields in the
+# formats since we will process the results anyway
+
+_command="""
+condor_q \\
+    -format '%4d.' ClusterId \\
+    -format '%-3d ' ProcId \\
+    -format '%-14s ' Owner \\
+    -format '%-11s ' 'formatTime(QDate,"%m/%d %H:%M:%S")' \\
+    -format '%s ' ServerTime \\
+    -format '%s ' ShadowBday \\
+    -format '%-2s ' 'ifThenElse(JobStatus==0,"U",ifThenElse(JobStatus==1,"I",ifThenElse(JobStatus==2,"R",ifThenElse(JobStatus==3,"X",ifThenElse(JobStatus==4,"C",ifThenElse(JobStatus==5,"H",ifThenElse(JobStatus==6,"E",string(JobStatus))))))))' \\
+    -format '%-3d ' JobPrio \\
+    -format '%-4.1f ' ImageSize/1024.0 \\
+    -format '%s ' Cmd \\
+    -format '%s\\n' RemoteHost"""
+
+_command="""
+condor_q \\
+    -format '%d.' ClusterId \\
+    -format '%-d,' ProcId \\
+    -format '%-s,' Owner \\
+    -format '%-s,' 'formatTime(QDate,"%m/%d %H:%M:%S")' \\
+    -format '%s,' ServerTime \\
+    -format '%s' ShadowBday \\
+    -format ',' Owner \\
+    -format '%-s,' 'ifThenElse(JobStatus==0,"U",ifThenElse(JobStatus==1,"I",ifThenElse(JobStatus==2,"R",ifThenElse(JobStatus==3,"X",ifThenElse(JobStatus==4,"C",ifThenElse(JobStatus==5,"H",ifThenElse(JobStatus==6,"E",string(JobStatus))))))))' \\
+    -format '%-d,' JobPrio \\
+    -format '%-.1f,' ImageSize/1024.0 \\
+    -format '%s,' Cmd \\
+    -format '%s' RemoteHost \\
+    -format '\\n' Owner"""
+
+
+
+
+
+_line_format=' %-9s %-12s %-11s %12s %-2s %-3s %-7s %s %s'
+_header_front=' ID        Owner        Submitted        Run Time   ST Pri Size    Cmd '
+
+class CondorWatcher:
+    def __init__(self, **keys):
+
+        self.user=keys.get('user',None)
+        self.refresh_rate=keys.get('refresh_rate',30)
+        self.background=keys.get('background',None)
+        self.scheduler_name=keys.get('scheduler_name',None)
+        self.global_queue=keys.get('global_queue',False)
+        
+        self.command=_command
+        if self.global_queue:
+            self.command += ' -global'
+        elif self.scheduler_name is not None:
+            self.command = self.command + ' -name %s' % self.scheduler_name
+
+        if self.user != None:
+            self.command = self.command + ' ' + self.user
+
+        self.MINUTE=60
+        self.HOUR=self.MINUTE*60
+        self.DAY=self.HOUR*24
+
+        curses_wrapper(self.condor_watch)
+
+
+    def condor_watch(self, stdscr):
+
+        self.setup_windows(stdscr)
+
+        # wait for refresh seconds for user input before refreshing.  If the
+        # user input is anything but 'q' then refresh again
+
+        tout_ms = self.refresh_rate*1000
+        self.win1.timeout(tout_ms)
+        while 1:
+            self.win1.erase()
+            self.win2.erase()
+            self.win3.erase()
+
+            out = self.get_condor_q_output()
+            out = out.split('\n')
+
+            stats={'njobs':0,'max_cmd_len':0,'R':0,'I':0,'H':0,'C':0,'X':0}
+
+            nprint = min(len(out), self.maxy3)
+            for ii in xrange(len(out)):
+                line = out[ii]
+                if len(line) > 0:
+                    stats['njobs'] += 1
+                    line=self.process_line(line,stats)
+                    if ii < nprint:
+                        self.win3.addstr(ii,0,line[0:self.maxx3-1])
+            self.win3.refresh()
+
+            self.write_header(self.win2, stats)
+            self.write_statline(self.win1, stats)
+
+            c = self.win1.getch()
+            if c == ord('q'): 
+                break
+
+    def setup_windows(self, stdscr):
+        self.make_color_pairs()
+        self.set_colors()
+
+        self.maxy, self.maxx = stdscr.getmaxyx()
+
+        x0 = 0
+
+        # the stats
+        y1 = 0
+        sizey1 = 3
+        self.win1 = curses.newwin(sizey1, self.maxx, y1, x0)
+
+        # the header line
+        sizey2 = 1
+        y2 = sizey1
+        self.win2 = curses.newwin(sizey2, self.maxx, y2, x0)
+
+        self.win3 = curses.newwin(self.maxy-sizey1-sizey2, 
+                                  self.maxx, 
+                                  sizey1+sizey2, 
+                                  x0)
+        self.maxy2, self.maxx2 = self.win2.getmaxyx()
+        self.maxy3, self.maxx3 = self.win3.getmaxyx()
+
+    def write_header(self, win, stats):
+        h = _header_front
+        clen = stats['max_cmd_len']
+        if clen > 4:
+            h += ' '*(clen-4)
+        h += ' Host'
+
+        win.addstr(0,0,h[0:self.maxx2-1])
+        win.refresh()
+
+    def write_statline(self, win, stats):
+        win.erase()
+        colors=self.colors
+
+
+        win.addstr(1, 0, ' ')
+        if self.scheduler_name is not None:
+            win.addstr('Queue: ', colors['queue'])
+            win.addstr('%s ' % self.scheduler_name)
+
+        if self.user != None:
+            win.addstr('User: ',colors['user'])
+            win.addstr('%s ' % self.user)
+
+        win.addstr('Jobs: ', colors['njobs'] )
+
+        win.addstr('%s ' % stats['njobs'])
+
+        win.addstr('Running: ', colors['R'])
+        win.addstr('%s ' % stats['R'])
+
+        win.addstr('Idle: ', colors['I'])
+        win.addstr('%s ' % stats['I'])
+
+        if stats['H'] > 0:
+            win.addstr('Held: ', colors['H'])
+            win.addstr('%s ' % stats['H'])
+        if stats['X'] > 0:
+            win.addstr('Removed: ', colors['X'])
+            win.addstr('%s ' % stats['X'])
+        if stats['C'] > 0:
+            win.addstr('Completed: ', colors['C'])
+            win.addstr('%s ' % stats['C'])
+
+        win.refresh()
+
+    def process_line(self, line, stats):
+        """
+        process the line and return a new line with
+        the executable represented only as the basname,
+        and rcf.bnl.gov removed from the slot name
+
+        """
+        ls = line.split(',')
+
+        if len(ls) == 10:
+            id,owner,qdate,servertime,shadowbday,status,pri,size,cmd,host = ls
+        else:
+            raise ValueError("Expected 10 results from condor_q, got %d" % len(ls))
+
+        cmd = os.path.basename(cmd)
+        host = host.replace(_domain,'')
+
+        if len(cmd) > stats['max_cmd_len']:
+            stats['max_cmd_len'] = len(cmd)
+            
+
+        total_wall_time = 0
+
+        if status in stats:
+            stats[status] += 1
+
+        if status == 'R' and shadowbday != "":
+            total_wall_time += int(servertime)-int(shadowbday)
+        runtime = self.format_time(total_wall_time)
+
+        line = _line_format % (id,owner,qdate,runtime,status,pri,size,cmd,host)
+        return line
+
+    def format_time(self, tot_seconds):
+        if tot_seconds == 0:
+            return '  ----------'
+        days = tot_seconds/self.DAY
+        tsec = tot_seconds % self.DAY
+        hours = tsec/self.HOUR
+        tsec = tsec % self.HOUR
+        min = tsec/self.MINUTE
+        secs = tsec % self.MINUTE
+
+        return '%3d+%02d:%02d:%02d' % (days, hours, min, secs)
+
+    def get_condor_q_output(self):
+
+        pobj=subprocess.Popen(self.command, 
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              shell=True)
+        stdout_ret, stderr_ret = pobj.communicate()
+        return stdout_ret
+
+
+
+
+    def make_color_pairs(self):
+        curses.use_default_colors()
+        curses.init_pair(default, -1, -1)
+        bkgd_color=-1
+
+        curses.init_pair(black, curses.COLOR_BLACK, bkgd_color)
+        curses.init_pair(red, curses.COLOR_RED, bkgd_color)
+        curses.init_pair(green, curses.COLOR_GREEN, bkgd_color)
+        curses.init_pair(yellow, curses.COLOR_YELLOW, bkgd_color)
+        curses.init_pair(blue, curses.COLOR_BLUE, bkgd_color)
+        curses.init_pair(magenta, curses.COLOR_MAGENTA, bkgd_color)
+        curses.init_pair(cyan, curses.COLOR_CYAN, bkgd_color)
+        curses.init_pair(white, curses.COLOR_WHITE, bkgd_color)
+
+    def set_colors(self):
+        self.colors={}
+        if self.background=='light':
+            self.colors['njobs'] = curses.color_pair(blue)
+            self.colors['queue'] = curses.color_pair(blue)
+            self.colors['user'] = curses.color_pair(blue)
+            self.colors['R'] = curses.color_pair(green)
+            self.colors['I'] = curses.color_pair(magenta)
+            self.colors['H'] = curses.color_pair(red)
+            self.colors['X'] = curses.color_pair(red)
+            self.colors['C'] = curses.color_pair(green)
+        elif self.background=='dark':
+            self.colors['njobs'] = curses.color_pair(cyan)
+            self.colors['queue'] = curses.color_pair(green)
+            self.colors['user'] = curses.color_pair(green)
+            self.colors['R'] = curses.color_pair(green)
+            self.colors['I'] = curses.color_pair(yellow)
+            self.colors['H'] = curses.color_pair(red)
+            self.colors['X'] = curses.color_pair(red)
+            self.colors['C'] = curses.color_pair(green)
+        else:
+            # this should show up on white and black backgrounds pretty well
+            self.colors['njobs'] = curses.color_pair(magenta)
+            self.colors['queue'] = curses.color_pair(green)
+            self.colors['user'] = curses.color_pair(green)
+            self.colors['R'] = curses.color_pair(green)
+            self.colors['I'] = curses.color_pair(red)
+            self.colors['H'] = curses.color_pair(red)
+            self.colors['X'] = curses.color_pair(red)
+            self.colors['C'] = curses.color_pair(green)
+
+
+# 
+# main program
+#
+
+def main():
+    try:
+        options, args = parser.parse_args(sys.argv[1:])
+        if len(args) > 0:
+            user=args[0]
+        else:
+            user=None
+
+        global_queue = options.global_queue
+        scheduler_name=options.name
+        dark  = options.dark
+        light = options.light
+
+        if dark:
+            background='dark'
+        elif light:
+            background='light'
+        else:
+            background=None
+
+        watcher = CondorWatcher(user=user, 
+                                global_queue=global_queue,
+                                scheduler_name=scheduler_name,
+                                refresh_rate=int(options.refresh), 
+                                background=background)
+
+        return
+
+    except KeyboardInterrupt:
+        pass
+
+
+main()

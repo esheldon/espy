@@ -19,7 +19,7 @@ def test_dsig(run, ntest, catdict=None, overwrite=False):
     if catdict is None:
         catdict = load_test_data(run)
 
-    conf = lensing.files.json_read(run)
+    conf = lensing.files.read_config(run)
     c = eu.cosmology.Cosmo(omega_m=conf['omega_m'])
 
     lcat = catdict['l']
@@ -113,7 +113,7 @@ def test_dsig(run, ntest, catdict=None, overwrite=False):
 
 def load_test_data(run):
 
-    conf = lensing.files.json_read(run)
+    conf = lensing.files.read_config(run)
 
     s = lensing.files.scat_read(sample=conf['src_sample'])
     #l = lensing.files.lcat_read(sample=conf['lens_sample'])

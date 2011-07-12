@@ -26,7 +26,7 @@ run = args[0]
 types=options.types.split(',')
 
 if 'config' in types:
-    lensing.config.write_configs(run)
+    lensing.objshear_config.write_configs(run)
 if 'script' in types:
     lensing.scripts.write_scripts(run)
 if 'condor' in types:

@@ -6,16 +6,20 @@ import numpy
 
 import esutil as eu
 from esutil.ostools import path_join, expand_path
+from esutil.numpy_util import where1
 
 finfo={}
-finfo['lcat']    = {'subdir':'lcat',    'front':'lcat',    'ext':'.bin'}
-finfo['scat']    = {'subdir':'scat',    'front':'scat',    'ext':'.bin'}
-finfo['lensout'] = {'subdir':'lensout', 'front':'lensout', 'ext':'.bin'}
-finfo['config']  = {'subdir':'proc',    'front':'run',     'ext':'.config'}
-finfo['condor']  = {'subdir':'proc',    'front':'run',     'ext':'.condor'}
-finfo['script']  = {'subdir':'proc',    'front':'run',     'ext':'.sh'}
+finfo['lcat']     = {'subdir':'lcat',    'front':'lcat',    'ext':'.bin'}
+finfo['scat']     = {'subdir':'scat',    'front':'scat',    'ext':'.bin'}
+finfo['lensout']  = {'subdir':'lensout', 'front':'lensout', 'ext':'.rec'}
+finfo['lensred']  = {'subdir':'lensout', 'front':'lensred', 'ext':'.rec'}
+finfo['lensred-collate'] = {'subdir':'lensout', 'front':'lensred-collate', 'ext':'.rec'}
+finfo['config']   = {'subdir':'proc',    'front':'run',     'ext':'.config'}
+finfo['condor']   = {'subdir':'proc',    'front':'run',     'ext':'.condor'}
+finfo['script']   = {'subdir':'proc',    'front':'run',     'ext':'.sh'}
 
-finfo['pbslens'] = {'subdir':'pbslens','ext':'.pbs'}
+finfo['pbslens']  = {'subdir':'pbslens','ext':'.pbs'}
+
 
 
 def lensdir():
@@ -30,6 +34,18 @@ def catalog_dir():
     catdir = path_join(lensdir(), 'catalogs')
     return catdir
 
+def original_catalog_file(type, sample):
+    if type == 'lens':
+        return lensing.lcat.original_file(sample)
+    elif type == 'source':
+        return lensing.scat.original_file(sample)
+
+def read_original_catalog(type, sample):
+    if type == 'lens':
+        return lensing.lcat.read_original(sample)
+    elif type == 'source':
+        return lensing.scat.read_original(sample)
+    
 
 #
 # generic for lcat,scat,config,pbs
@@ -42,7 +58,7 @@ def sample_dir(type,sample):
     d = path_join(d,dsub,sample)
     return d
 
-def sample_file(type,sample,split=None, extra=None):
+def sample_file(type, sample, split=None, extra=None, ext=None):
     d = sample_dir(type,sample)
     front = finfo[type]['front']
     fname=path_join(d, '%s-%s' % (front,sample))
@@ -50,7 +66,10 @@ def sample_file(type,sample,split=None, extra=None):
         fname += '-%03d' % split
     if extra is not None:
         fname += '-%s' % extra
-    fname += finfo[type]['ext']
+
+    if ext is None:
+        ext = finfo[type]['ext']
+    fname += ext
     return fname
 
 
@@ -137,32 +156,44 @@ def lensbin_plot_dir(run,name):
 # read objshear outputs
 #
 
-def lensout_collate(run):
-    """
-    Collate the lensing output with the original catalog
-    """
+def lensred_collated_read(run):
+    f = sample_file('lensred-collate',run)
+    return eu.io.read(f, verbose=True)
 
-    conf = json_read(run)
-    cat = lensing.lcat.read_catalog(conf['lens_catalog'],conf['lens_version'])
-    lout = lensout_read(run=run)
-
-    if cat.size != lout.size:
-        raise ValueError("catalog and lensout are not the same size")
-
-
-    # create a new struct with out outputs at the end
-    stdout.write('collating...')
-    data = eu.numpy_util.add_fields(cat, lout.dtype)
-    eu.numpy_util.copy_fields(lout, data)
-    stdout.write('done\n')
-
-    return data
-
-
+def lensred_read(run):
+    file = sample_file('lensred', run)
+    return eu.io.read(file, verbose=True)
+    
 def lensout_read(file=None, run=None, split=None, silent=False, old=False):
+    if old:
+        return lensout_read_old(file=file,run=run,split=split,silent=silent)
+
+    if file is None and run is None:
+        raise ValueError("usage: lensout_read(file=, run=, split=, silent=False)")
+    if file is None:
+        if split is not None:
+            file=sample_file('lensout', run, split=split)
+            return lensout_read(file=file)
+
+        return lensout_read_byrun(run)
+
+    if not silent:
+        stdout.write('Reading lensout file: %s\n' % file)
+    file=expand_path(file)
+
+    return eu.io.read(file, verbose=True)
+
+def lensout_read_old(file=None, run=None, split=None, silent=False, old=False):
+    '''
+    Note old means something different here
+    '''
     if file is None and run is None:
         raise ValueError("usage: lensout_read(file=, run=)")
     if file is None:
+        if split is not None:
+            file=sample_file('lensout', run, split=split)
+            return lensout_read(file=file)
+
         return lensout_read_byrun(run)
 
     if not silent:
@@ -190,9 +221,27 @@ def lensout_read(file=None, run=None, split=None, silent=False, old=False):
 
     return data
 
-def lensout_read_byrun(run):
-    runconf = json_read('run',run)
-    conf = json_read('lcat', runconf['lens_sample'])
+def lensout_read_byrun(run, old=False):
+    conf = cascade_config(run)
+    nsplit = conf['src_config']['nsplit']
+
+    stdout.write("Combining %s splits from run %s\n" % (nsplit,run))
+
+    for i in xrange(nsplit):
+        tdata = lensout_read(run=run, split=i, old=old)
+        if i == 0:
+            data = tdata
+        else:
+            # note zindex match occurs in add_lensums
+            lensing.outputs.add_lensums(data, tdata)
+
+    return data
+
+
+# the old split of the lenses: we now split the sources
+def lensout_read_byrun_lensplit(run):
+    runconf = read_config('run',run)
+    conf = read_config('lcat', runconf['lens_sample'])
     nsplit = conf['nsplit']
     if nsplit == 0:
         file = sample_file('lensout', run)
@@ -248,11 +297,8 @@ def lensout_dtype(nbin, old=False):
 #
 
 
-def lcat_write(data, file=None, sample=None):
-    if file is None and sample is None:
-        raise ValueError("usage: lcat_write(data, file=, sample=)")
-    if file is None:
-        file = sample_file('lcat',sample)
+def lcat_write(sample, data):
+    file = sample_file('lcat',sample)
 
     stdout.write("Writing %d to lens cat: '%s'\n" % (data.size, file))
 
@@ -312,7 +358,7 @@ def lcat_dtype():
 def scat_write(sample, data,split=None):
     from . import sigmacrit
     file = sample_file('scat',sample, split=split)
-    conf = json_read('scat', sample)
+    conf = read_config('scat', sample)
     style=conf['sigmacrit_style']
     if style not in [1,2]:
         raise ValueError("sigmacrit_style should be in [1,2]")
@@ -357,6 +403,70 @@ def scat_write(sample, data,split=None):
     data.tofile(fobj)
 
     fobj.close()
+
+def scat_write_ascii(sample, data,split=None):
+    from esutil import recfile
+    from sys import stdout
+    from . import sigmacrit
+
+    file = sample_file('scat',sample, split=split, ext='.dat')
+
+    conf = read_config('scat', sample)
+    style=conf['sigmacrit_style']
+    if style not in [1,2]:
+        raise ValueError("sigmacrit_style should be in [1,2]")
+
+
+    if style == 2:
+        if 'zlmin' not in conf or 'zlmax' not in conf or 'dzl' not in conf:
+            raise ValueError("You must have zlmin,zlmax,dzl in config")
+
+        zlvals=sigmacrit.make_zlvals(conf['dzl'], conf['zlmin'], conf['zlmax'])
+        nzl = zlvals.size
+
+        data_nzl = data['scinv'].shape[1]
+        if nzl != data_nzl:
+            raise ValueError("Calculated nzl of %d but data has nzl of %d" % (nzl,data_nzl))
+
+    print("Writing ascii source file:",file)
+    d = os.path.dirname(file)
+    if not os.path.exists(d):
+        stdout.write("Making dir: '%s'\n" % d)
+        os.makedirs(d)
+
+    with recfile.Open(file,'w',delim=' ') as robj:
+
+        #robj = recfile.Open(file,'w',delim=' ')
+
+        print("Writing header\n")
+        #print("  Writing size of sources:",data.size)
+        robj.fobj.write('%-15s = %d\n' % ("size",data.size))
+        stdout.write('%-15s = %d\n' % ("size",data.size))
+
+        #print("  Writing style:",style,"to file")
+        robj.fobj.write('%-15s = %d\n' % ("sigmacrit_style",style))
+        stdout.write('%-15s = %d\n' % ("sigmacrit_style",style))
+
+        if style == 2:
+            #print("  Writing nzl:",nzl,"to file")
+            robj.fobj.write('%-15s = %d\n' % ("nzlens",nzl))
+            stdout.write('%-15s = %d\n' % ("nzlens",nzl))
+
+            #print("  Writing zl to file")
+            #robj.fobj.write("%-15s = " % "zlens")
+            stdout.write("%-15s = " % "zlens")
+            zlwrite = numpy.array(zlvals,dtype='f8',copy=False)
+            zlwrite.tofile(robj.fobj, sep=' ')
+            zlwrite.tofile(stdout, sep=' ')
+            robj.fobj.write('\n')
+            stdout.write('\n')
+
+        robj.fobj.write("END\n\n")
+        stdout.write("END\n\n")
+
+        print("Writing data")
+        robj.write(data)
+
 
 def scat_read(sample=None, file=None, split=None):
 
@@ -424,34 +534,38 @@ def scat_dtype(sigmacrit_style, nzl=None):
 #
 
 def cascade_config(run):
-    conf=json_read('run',run)
+    conf=read_config('run',run)
 
     ls = conf['lens_sample']
-    conf['lens_config'] = json_read('lcat',ls)
+    conf['lens_config'] = read_config('lcat',ls)
     ss = conf['src_sample']
-    conf['src_config'] = json_read('scat',ss)
+    conf['src_config'] = read_config('scat',ss)
     cs=conf['cosmo_sample']
-    conf['cosmo_config'] = json_read('cosmo',cs)
+    conf['cosmo_config'] = read_config('cosmo',cs)
 
     return conf
 
 
 
-def json_read(type,id):
-    """
-    You can also do:
-        rc = lensing.config.RunConfig(run)
-    and rc is inherited from a dict
-    """
-    return eu.io.read(json_file(type,id))
+def read_config(type,id):
+    f = config_file(type, id, ext='yaml')
+    if not os.path.exists(f):
+        f = config_file(type, id, ext='json')
+        if not os.path.exists(f):
+            raise ValueError("No config file found for type %s id %s\n" % (type,id))
 
-def json_file(type, id):
-    dir = json_dir()
-    fname = '%s-%s.json' % (type,id)
+    return eu.io.read(f)
+
+def config_file(type, id, ext='yaml'):
+    """
+    Want to move over to yaml files
+    """
+    dir = config_dir()
+    fname = '%s-%s.%s' % (type,id,ext)
     fname = path_join(dir,fname)
     return fname
 
-def json_dir():
+def config_dir():
     if 'ESPY_DIR' not in os.environ:
         raise ValueError("ESPY_DIR is not set")
     dir = os.environ['ESPY_DIR']

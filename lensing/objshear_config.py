@@ -4,21 +4,23 @@ import esutil as eu
 from esutil.ostools import path_join
 
 def write_configs(run):
-    rc = RunConfig(run)
+    rc = ObjshearRunConfig(run)
     rc.write_config()
 
-class RunConfig(dict):
+class ObjshearRunConfig(dict):
     """
 
-    This is reads the json config files and writes out the simple config files
-    for input to objshear, as well as the pbs files to run the code.
+    This is reads the lcat, scat, run etc. config files and writes out the
+    simple config files for input to objshear, as well as the pbs files to run
+    the code.
 
-    The "json" routines read the original hand written json files, 
-    the "config" routines write the objshear inputs.
+    The lensing.files config reading routines read the original hand written
+    files, the "config" routines write the objshear inputs.
+
     """
 
     def __init__(self, run):
-        conf = lensing.files.json_read('run',run)
+        conf = lensing.files.read_config('run',run)
         for key in conf:
             self[key] = conf[key]
 
@@ -27,8 +29,8 @@ class RunConfig(dict):
                              % (run,self['run']))
 
         # make sure the cosmology is consistent
-        l = lensing.files.json_read('lcat',self['lens_sample'])
-        s = lensing.files.json_read('scat',self['src_sample'])
+        l = lensing.files.read_config('lcat',self['lens_sample'])
+        s = lensing.files.read_config('scat',self['src_sample'])
 
         csample = self['cosmo_sample']
         if (csample != l['cosmo_sample'] or csample != s['cosmo_sample']):
@@ -42,7 +44,7 @@ class RunConfig(dict):
 
         self['lens_config'] = l
         self['src_config'] = s
-        cosmo = lensing.files.json_read('cosmo',csample)
+        cosmo = lensing.files.read_config('cosmo',csample)
         for key in cosmo:
             self[key] = cosmo[key]
         self['nsplit'] = s['nsplit']
