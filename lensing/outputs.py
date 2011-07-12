@@ -960,6 +960,7 @@ def lensave(data, tag, ind=None, sdev=False):
 
     return eu.stat.wmom(tdata, wts, calcerr=True, sdev=sdev)
 
+
 def combine_lensout(lout):
 
     nlens = lout.size
