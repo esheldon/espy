@@ -61,10 +61,20 @@ class GaussMix(mixture.GMM):
         plt.show()
 
 def test_compare():
-    n=10000
-    data = numpy.random.randn(n)
+    n1=4000
+    n2=6000
+    m1 = 1.0
+    sig1 = 1.0
+    m2 = 2.0
+    sig2 = 0.5
+    data1 = m1 + sig1*numpy.random.randn(n1)
+    data2 = m2 + sig2*numpy.random.randn(n2)
 
-    gm = GaussMix(n_states=1)
+    data = numpy.zeros(n1+n2)
+    data[0:n1] = data1
+    data[n1:n1+n2] = data2
+
+    gm = GaussMix(n_states=2)
     gm.fit1d(data)
 
     gm.compare1d(data, 0.05)
