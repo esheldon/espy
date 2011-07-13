@@ -422,6 +422,12 @@ def fit_nfw_lin_dsig_byrun(run, name, withlin=True, rmax_from_true=False,
 def plot_nfw_lin_fits_byrun(run, name, npts=100, prompt=False, 
                             withlin=True,
                             ymin=0.01, ymax=2000.0):
+    """
+
+    This should be made not specific for the m-z splits we
+    used on the sims
+
+    """
     conf = lensing.files.cascade_config(run)
     if withlin:
         ex='lin'

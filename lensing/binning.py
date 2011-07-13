@@ -1,6 +1,11 @@
 """
 Binner classes
+    N200Binner: bin by ngals_r200
     MZBinner: bin by true mass and redshift
+
+    To use these:
+        nb = N200Binner(12)
+        nb.bin_byrun('05')
 
 Standalone functions:
     reduce_from_ranges
@@ -30,14 +35,19 @@ try:
 except:
     pass
 
-def reduce_from_ranges(data, tag, range1, tag2=None, range2=None, getind=False):
+def reduce_from_ranges(data, 
+                       tag, range1, rangetype = '[)', 
+                       tag2=None, range2=None, range2type = '[)',
+                       getind=False):
     """
     Can add more ranges if needed
     """
     logic = (data[tag] >= range1[0]) & (data[tag] < range1[1])
+
+    logic = get_range_logic(data, tag, range1, rangetype)
+
     if range2 is not None and tag2 is not None:
-        logic = logic & \
-            (data[tag2] >= range2[0]) & (data[tag2] < range2[1])
+        logic = logic & get_range_logic(data, tag2, range2, range2type)
 
     w=where1(logic)
 
@@ -49,7 +59,19 @@ def reduce_from_ranges(data, tag, range1, tag2=None, range2=None, getind=False):
         return comb
  
 
+def get_range_logic(data, tag, brange, type):
+    if type == '[]':
+        logic = (data[tag] >= brange[0]) & (data[tag] <= brange[1])
+    elif type == '[)':
+        logic = (data[tag] >= brange[0]) & (data[tag] < brange[1])
+    elif type == '(]':
+        logic = (data[tag] > brange[0]) & (data[tag] <= brange[1])
+    elif type == '()':
+        logic = (data[tag] > brange[0]) & (data[tag] < brange[1])
+    else:
+        raise ValueError("Bad range type: '%s'" % type)
 
+    return logic
 
 def logbin_linear_edges(data, nbin, tag):
     """
@@ -108,6 +130,150 @@ def lensbin_dtype(nrbin, bintags):
            ('osig','f8',nrbin),
            ('npair','i8',nrbin)]
     return numpy.dtype(dt)
+
+class N200Binner(dict):
+    """
+    ngals_r200 binner for original MaxBCG
+    """
+    def __init__(self, nbin):
+        self['nbin'] = nbin
+    def name(self):
+        return 'n200-%s' % self['nbin']
+
+    def bin_byrun(self, run):
+        """
+        Do the binning and write out a file
+        """
+
+        name=self.name()
+        d = lensing.files.lensred_collated_read(run)
+        res = self.bin(d)
+        lensing.files.lensbin_write(res,run,name) 
+
+    def bin(self, data):
+
+        nlow, nhigh = self.N200_bins()
+
+        nrbin = data['rsum'][0].size
+        dt = lensbin_dtype(nrbin, ['ngals200','z'])
+
+        bs = numpy.zeros(self['nbin'], dtype=dt)
+
+        i=0
+        for Nl,Nh in zip(nlow,nhigh):
+            Nrange = [Nl,Nh]
+
+            print('%d <= N200 <= %d' % tuple(Nrange))
+
+            comb,w = reduce_from_ranges(data,'ngals_r200',Nrange, rangetype='[]',
+                                        getind=True)
+        
+            bs['r'][i] = comb['r']
+            bs['dsig'][i] = comb['dsig']
+            bs['dsigerr'][i] = comb['dsigerr']
+            bs['osig'][i] = comb['osig']
+            bs['npair'][i] = comb['npair']
+
+            mn,err,sdev = lens_wmom(data,'photoz_cts',ind=w, sdev=True)
+            bs['z_mean'][i] = mn
+            bs['z_err'][i] = err
+            bs['z_sdev'][i] = sdev
+            bs['z_range'][i] = data['photoz_cts'][w].min(), data['photoz_cts'][w].max()
+
+            mn,err,sdev = lens_wmom(data,'ngals_r200',ind=w, sdev=True)
+            bs['ngals200_mean'][i] = mn
+            bs['ngals200_err'][i] = err
+            bs['ngals200_sdev'][i] = sdev
+            bs['ngals200_range'][i] = Nrange
+
+            i+=1
+
+        return bs
+
+    def N200_bins(self):
+        if self['nbin'] == 12:
+            lowlim =  numpy.array([3, 4, 5, 6, 7, 8,  9, 12, 18,  26, 41,  71], dtype='i8')
+            highlim = numpy.array([3, 4, 5, 6, 7, 8, 11, 17, 25,  40, 70, 220], dtype='i8')
+        else:
+            raise ValueError("Unsupported nbin: %d\n", self['nbin'])
+
+        return lowlim, highlim
+
+
+    def plot_dsig_byrun(self, run, dops=False):
+        """
+
+        Run is a run of the lensing code.
+        We must generalize this
+        The different z bins are overplotted
+
+        """
+
+        name = self.name()
+        data=lensing.files.lensbin_read(run,name)
+
+        biggles.configure('screen','width', 1140)
+        biggles.configure('screen','height', 1140)
+        biggles.configure('fontsize_min',1.0)
+
+        if self['nbin'] == 12:
+            nrow = 3
+            ncol = 4
+        else:
+            raise ValueError("Unsupported nbin: %s" % self['nmass'])
+
+        pa = FramedArray(nrow, ncol)
+        pa.aspect_ratio = 1.0/1.5
+
+        pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+
+        xrnge = [0.01,60.0]
+        yrnge = [1.e-2,8000]
+        pa.xrange = xrnge
+        pa.yrange = yrnge
+        pa.xlog = True
+        pa.ylog = True
+
+
+        row = -1
+
+        Nlow, Nhigh = self.N200_bins()
+
+        i = 0
+        for i in xrange(self['nbin']):
+            col = i % ncol
+            if col == 0:
+                row += 1
+
+            Nrange = Nlow[i], Nhigh[i]
+
+            eu.plotting.bscatter(data['r'][i],
+                                 data['dsig'][i],
+                                 yerr=data['dsigerr'][i],
+                                 xrange=xrnge,
+                                 yrange=yrnge,
+                                 xlog=True,ylog=True,
+                                 show=False, 
+                                 plt=pa[row,col])
+            if Nrange[0] == Nrange[1]:
+                label = r'$N_{200}$ = %d' % Nrange[0]
+            else:
+                label = r'%d $\le N_{200} \le$ %d' % tuple(Nrange)
+            pl = PlotLabel(.85, .85, label, halign='right')
+
+            pa[row,col].add(pl)
+
+
+        if dops:
+            d = lensing.files.lensbin_plot_dir(run,name)
+            if not os.path.exists(d):
+                os.makedirs(d)
+            epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
+            stdout.write("Plotting to file: %s\n" % epsfile)
+            pa.write_eps(epsfile)
+        else:
+            pa.show()
 
 
 

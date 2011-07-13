@@ -52,7 +52,12 @@ To fit a run/binning and write out a file with the fits:
     fit_nfw_lin_dsig_byrun(run, name, withlin=True, rmax_from_true=False,
                            rmin=None, rmax=None):
 
-Some plots that are on a grid are done currently from the binner:
+Above the name will be something like 'n200-12' or 'm12z3'
+    fit_nfw_lin_dsig_byrun('05', 'n200-12', withlin=True, 
+                           rmin=None, rmax=None):
+
+
+Some plots that are on a grid are done currently from the BINNER:
     
 
     mzbin.plot_dsig_byrun(run, dops=False)
@@ -68,9 +73,10 @@ Some plots that are on a grid are done currently from the binner:
                              yrange=None,
                              dops=False)
  
-Others done one-by-one are done in fit.py
+Others done one-by-one are done in fit.py, but note this
+is actually specific to mz binning right now
 
-    lensing.outputs.plot_nfw_lin_fits_byrun(run, name, prompt=False)
+    lensing.fit.plot_nfw_lin_fits_byrun(run, name, prompt=False)
 
 """
 
