@@ -12,5 +12,6 @@ install_method = 'configure-make-install'
 
 # create the ups directory after installation
 create_ups="""
+setupOptional("pcre")
 envPrepend(PATH,${PRODUCT_DIR}/bin)
 """

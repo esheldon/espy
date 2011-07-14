@@ -559,7 +559,7 @@ def cascade_config(run):
     conf['lens_config'] = read_config('lcat',ls)
     ss = conf['src_sample']
     conf['src_config'] = read_config('scat',ss)
-    cs=conf['cosmo_sample']
+    cs=conf['lens_config']['cosmo_sample']
     conf['cosmo_config'] = read_config('cosmo',cs)
 
     return conf

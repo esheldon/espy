@@ -8,6 +8,9 @@ pzrun:              "11"
 zlmin:              0.02
 zlmax:              0.35
 dzl:                0.015
+
+# this is redundant with the cosmo_sample declaration in the run file
+# we have to demand consistency
 cosmo_sample:       "01"
 Rcut:               0.33
 nsplit:             100
