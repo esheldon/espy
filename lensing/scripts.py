@@ -10,7 +10,7 @@ def write_scripts(run):
 _script_text="""#!/bin/bash
 
 source /astro/u/astrodat/products/eups/bin/setups.sh
-setup objshear -r /astro/u/esheldon/exports/objshear-work
+setup objshear -r /astro/u/esheldon/exports/{objshear_dir}
 
 /usr/bin/time -p objshear {config_file} 2>&1\n"""
 
@@ -45,5 +45,10 @@ class Scripts(dict):
     def script_text(self, split):
         config_file=files.sample_file('config',self['run'],split=split)
 
-        text=_script_text.format(config_file=config_file)
+        masktype=self['lens_config'].get('masktype',None)
+        if masktype == 'sdss':
+            objshear_dir = 'objshear-sdssmask-work'
+        else:
+            objshear_dir = 'objshear-work'
+        text=_script_text.format(config_file=config_file, objshear_dir=objshear_dir)
         return text

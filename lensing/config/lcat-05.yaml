@@ -16,11 +16,14 @@ rmax:          36.567
 # (actually thought 0.1 was the limit?)
 zmin:          0.05
 zmax:          0.3
+ngals_r200_min: 3
+
+masktype: sdss
 
 comment: |
 
     Same as 04 but with 
-        - a hard edge cut on lenses
+        - sdss maskflags  for boss basic
         - zmin,zmax
         - added ngals_r200 min at 3 (in the code)
 

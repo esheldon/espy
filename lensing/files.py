@@ -335,7 +335,7 @@ def lcat_write(sample, data):
 
     fobj.close()
 
-def lcat_read(sample=None, file=None):
+def lcat_read(sample=None, file=None, old=False):
     """
     import lensing
     d = lcat_read(file='somefile')
@@ -354,18 +354,26 @@ def lcat_read(sample=None, file=None):
     narr = numpy.fromfile(fobj, dtype='i8', count=1)
 
     stdout.write('Reading %d lenses\n' % narr[0])
-    dt = lcat_dtype()
+    dt = lcat_dtype(old=old)
 
     data = numpy.fromfile(fobj, dtype=dt, count=narr[0])
     fobj.close()
 
     return data
 
-def lcat_dtype():
-    dt=[('zindex','i8'),
-        ('ra','f8'),
-        ('dec','f8'),
-        ('z','f8')]
+def lcat_dtype(old=False):
+    if not old:
+        dt=[('zindex','i8'),
+            ('ra','f8'),
+            ('dec','f8'),
+            ('z','f8'),
+            ('maskflags','i8')]
+    else:
+        dt=[('zindex','i8'),
+            ('ra','f8'),
+            ('dec','f8'),
+            ('z','f8')]
+
     return dt
 
 
