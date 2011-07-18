@@ -12,7 +12,7 @@ Description
         condor_q
 
     with some customized formatting and displays the jobs along with some
-    statistics.
+    statistics and host machine if available.
 
     Send the username to restrict the job listing to the specified user.
     
