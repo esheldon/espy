@@ -62,20 +62,6 @@ white=7+2
 
 _command="""
 condor_q \\
-    -format '%4d.' ClusterId \\
-    -format '%-3d ' ProcId \\
-    -format '%-14s ' Owner \\
-    -format '%-11s ' 'formatTime(QDate,"%m/%d %H:%M:%S")' \\
-    -format '%s ' ServerTime \\
-    -format '%s ' ShadowBday \\
-    -format '%-2s ' 'ifThenElse(JobStatus==0,"U",ifThenElse(JobStatus==1,"I",ifThenElse(JobStatus==2,"R",ifThenElse(JobStatus==3,"X",ifThenElse(JobStatus==4,"C",ifThenElse(JobStatus==5,"H",ifThenElse(JobStatus==6,"E",string(JobStatus))))))))' \\
-    -format '%-3d ' JobPrio \\
-    -format '%-4.1f ' ImageSize/1024.0 \\
-    -format '%s ' Cmd \\
-    -format '%s\\n' RemoteHost"""
-
-_command="""
-condor_q \\
     -format '%d.' ClusterId \\
     -format '%-d,' ProcId \\
     -format '%-s,' Owner \\
