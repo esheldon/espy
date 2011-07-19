@@ -2,8 +2,7 @@
 """
     %prog [options username] 
 
-    Display statistics about the local queue, refreshing at regular
-    intervals.
+    Display statistics about the condor queue, refreshing at regular intervals.
 
 Description
 
@@ -77,12 +76,6 @@ condor_q \\
     -format '\\n' Owner"""
 
 
-
-
-
-_line_format=' %-9s %-12s %-11s %12s %-2s %-3s %-7s %s %s'
-_header_front=' ID        Owner        Submitted        Run Time   ST Pri Size    Cmd '
-
 class CondorWatcher:
     def __init__(self, **keys):
 
@@ -143,7 +136,6 @@ class CondorWatcher:
                     if ii < nprint:
                         line_splits.append(tuple(lsplit))
 
-            #self.write_header(self.win2, stats)
             self.write_statline(stats)
             self.write_job_listing(line_splits, lengths)
 
@@ -197,16 +189,6 @@ class CondorWatcher:
                                   x0)
         self.maxy2, self.maxx2 = self.win2.getmaxyx()
         self.maxy3, self.maxx3 = self.win3.getmaxyx()
-
-    def write_header(self, win, stats):
-        h = _header_front
-        clen = stats['max_cmd_len']
-        if clen > 4:
-            h += ' '*(clen-4)
-        h += ' Host'
-
-        win.addstr(0,0,h[0:self.maxx2-1])
-        win.refresh()
 
     def write_statline(self, stats):
 
