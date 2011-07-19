@@ -1,0 +1,137 @@
+#!/usr/bin/env python
+"""
+    %prog [options] condor_file1 condor_file2 ...
+
+    Submit the list of condor "submit scripts".
+
+Description
+
+    Optionally keep the total number of jobs less than the specified number
+    using the -n/--maxjobs option.  Also if the -i/--ignore option is sent, job
+    files 'name.condor' with corresponding output files 'name.out' are ignored.
+
+    Note all jobs are counted, even halted jobs.
+
+    The job listing is refreshed regularly, by default every 30 seconds.
+    Hit control-c to quit."""
+
+modification_history="""
+    Created: 2011-07 Erin Sheldon, BNL, erin dot sheldon at gmail dot com
+"""
+
+import os
+import sys
+from sys import stdout
+import time
+import subprocess
+from optparse import OptionParser
+
+parser=OptionParser(__doc__)
+parser.add_option("-n","--maxjobs",default=None, 
+    help="maximum number of allowed jobs .  default is unlimited")
+parser.add_option("-r","--refresh",default=30, 
+    help="refresh rate in seconds.  default is %default")
+parser.add_option("-i","--ignore",default=False, action='store_true',
+    help="Ignore job files 'name.condor' for which there exists a 'name.out'.  default is %default")
+
+class Submitter:
+    def __init__(self, file_list, refresh_rate, maxjobs=None, ignore=False):
+
+        self.file_list = file_list
+        self.maxjobs = maxjobs
+        if self.maxjobs is not None:
+            self.maxjobs = int(self.maxjobs)
+        self.refresh=float(refresh_rate)
+        self.ignore = ignore
+
+        self.user = os.getenv('USER', None)
+        if self.user is None:
+            raise ValueError("USER is not set in the environment")
+
+        if self.maxjobs is not None:
+            stdout.write("Max number of jobs:     %d\n" % self.maxjobs)
+            stdout.write("Current number of jobs: %d\n" % self.get_job_count())
+
+
+
+    def go(self):        
+
+        for filename in self.file_list:
+            if not self.should_ignore(filename):
+                if self.maxjobs is not None:
+                    self.submit_with_maxjobs(filename)
+                else:
+                    self.submit_without_maxjobs(filename)
+
+
+    def should_ignore(self, filename):
+        if self.ignore:
+            ii = filename.find('.condor') 
+            if ii == -1:
+                raise ValueError("submit file does not contain '.condor'")
+            outfile = filename[0:ii]+'.out'
+            if os.path.exists(outfile):
+                return True
+            else:
+                return False
+        else:
+            return False
+
+    def submit_without_maxjobs(self, filename):
+        tm=time.strftime('%H:%M:%S')
+        stdout.write('%s  ' % tm)
+        self.submit_jobfile(filename)
+
+    def submit_with_maxjobs(self, filename):
+        njobs = self.get_job_count()
+        while njobs >= self.maxjobs:
+            time.sleep(self.refresh)
+            njobs = self.get_job_count()
+
+        tm=time.strftime('%H:%M:%S')
+        stdout.write('%s  found %d jobs of %d allowed: ' % (tm,njobs,self.maxjobs))
+        self.submit_jobfile(filename)
+
+
+    def submit_jobfile(self, filename):
+        command = 'condor_submit %s' % filename
+        stdout.write(command)
+        stdout.write('\n')
+        os.popen(command).read()
+
+
+    def get_job_count(self):
+        command="condor_q -format '%s\\n' JobStatus {user}".format(user=self.user)
+        pobj=subprocess.Popen(command, 
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              shell=True)
+        stdout_ret, stderr_ret = pobj.communicate()
+        jobs = stdout_ret.split('\n')
+        jobs = [job for job in jobs if job != '']
+        return len(jobs)
+
+# 
+# main program
+#
+
+def main():
+    try:
+        options, args = parser.parse_args(sys.argv[1:])
+        if len(args) < 1:
+            parser.print_help()
+            sys.exit(45)
+
+        flist = args
+
+        submitter = Submitter(flist, 
+                              options.refresh, 
+                              maxjobs=options.maxjobs, 
+                              ignore=options.ignore) 
+        submitter.go()
+        return
+
+    except KeyboardInterrupt:
+        pass
+
+
+main()
