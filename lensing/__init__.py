@@ -28,14 +28,25 @@ Then submit the scripts
 
     condor_submit run-04-035.condor
 
+Since the results are split by source chunks, you then need
+to "reduce" the lens outputs, and collate with the original
+catalog
 
-You should then bin up the results. e.g.
-    mzbin = lensing.binning.MZBinner(nmass, nz)
-    mzbin.bin_byrun(run)
-which calls this under the hood
-    mzbin.bin(data)
+    lensing.outputs.make_reduced_lensout(run)
+    lensing.outputs.make_collated_lensred(run)
+
+
+You can then bin up the results. e.g.
+    binner = N200Binner(nbin)
+    binner.bin_byrun(run)
+
+    # add clustering/Ssh corrections here
+
+    binner.plot_dsig_byrun(run)
 
 Should make a more general binner like we had in IDL.
+
+Make some plots
 
 You can then fit NFW or NFW+lin masses
 

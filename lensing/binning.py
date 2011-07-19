@@ -131,12 +131,45 @@ def lensbin_dtype(nrbin, bintags):
            ('npair','i8',nrbin)]
     return numpy.dtype(dt)
 
-class N200Binner(dict):
+class BinnerBase(dict):
+    def __init__(self, nbin):
+        self['nbin'] = nbin
+        self.set_bin_ranges()
+
+    def set_bin_ranges(self, binnum=None):
+        raise RuntimeError("override this method")
+    def bin_ranges(self, binnum=None):
+        raise RuntimeError("override this method")
+    def bin_label(binnum):
+        raise RuntimeError("override this method")
+
+    def plot_dsig_osig_byrun_bin(self, run, binnum, **keys):
+        """
+        See lensing.plotting.plot_dsig_osig
+        """
+        name = self.name()
+        data=lensing.files.lensbin_read(run,name)
+
+        max_binnum = self['nbin']-1
+        if (binnum < 0) or (binnum > max_binnum):
+            raise ValueError("binnum is out of range [0,%d]" % max_binnum)
+        data = data[binnum]
+
+        if 'plot_label' not in keys:
+            keys['plot_label'] = self.bin_label(binnum)
+        lensing.plotting.plot_dsig_osig(data, **keys)
+
+    def plot_dsig_osig_byrun(self, run, **keys):
+        for binnum in xrange(self['nbin']):
+            self.plot_dsig_osig_byrun_bin(run, binnum, **keys)
+
+class N200Binner(BinnerBase):
     """
     ngals_r200 binner for original MaxBCG
     """
-    def __init__(self, nbin):
-        self['nbin'] = nbin
+    #def __init__(self, nbin):
+    #    self['nbin'] = nbin
+    #    self.set_bin_ranges()
     def name(self):
         return 'n200-%s' % self['nbin']
 
@@ -152,7 +185,7 @@ class N200Binner(dict):
 
     def bin(self, data):
 
-        nlow, nhigh = self.N200_bins()
+        nlow, nhigh = self.bins_ranges()
 
         nrbin = data['rsum'][0].size
         dt = lensbin_dtype(nrbin, ['ngals200','z'])
@@ -190,14 +223,20 @@ class N200Binner(dict):
 
         return bs
 
-    def N200_bins(self):
+    def set_bin_ranges(self):
         if self['nbin'] == 12:
-            lowlim =  numpy.array([3, 4, 5, 6, 7, 8,  9, 12, 18,  26, 41,  71], dtype='i8')
-            highlim = numpy.array([3, 4, 5, 6, 7, 8, 11, 17, 25,  40, 70, 220], dtype='i8')
+            self.lowlim =  numpy.array([3, 4, 5, 6, 7, 8,  9, 12, 18,  26, 41,  71], dtype='i8')
+            self.highlim = numpy.array([3, 4, 5, 6, 7, 8, 11, 17, 25,  40, 70, 220], dtype='i8')
         else:
             raise ValueError("Unsupported nbin: %d\n", self['nbin'])
 
-        return lowlim, highlim
+    def bin_ranges(self, binnum=None):
+        if binnum is not None:
+            if (binnum < 0) or (binnum > (self['nbin']-1)):
+                raise ValueError("binnum out of bounds: [%d,%d]" % (0,self['nbin']-1))
+            return self.lowlim[binnum], self.highlim[binnum]
+
+        return self.lowlim, self.highlim
 
 
     def plot_dsig_byrun(self, run, dops=False):
@@ -238,7 +277,7 @@ class N200Binner(dict):
 
         row = -1
 
-        Nlow, Nhigh = self.N200_bins()
+        Nlow, Nhigh = self.bin_ranges()
 
         i = 0
         for i in xrange(self['nbin']):
@@ -256,10 +295,7 @@ class N200Binner(dict):
                                  xlog=True,ylog=True,
                                  show=False, 
                                  plt=pa[row,col])
-            if Nrange[0] == Nrange[1]:
-                label = r'$N_{200}$ = %d' % Nrange[0]
-            else:
-                label = r'%d $\le N_{200} \le$ %d' % tuple(Nrange)
+            label = self.bin_label(i)
             pl = PlotLabel(.85, .85, label, halign='right')
 
             pa[row,col].add(pl)
@@ -275,6 +311,14 @@ class N200Binner(dict):
         else:
             pa.show()
 
+
+    def bin_label(self, binnum):
+        Nrange = self.bin_ranges(binnum)
+        if Nrange[0] == Nrange[1]:
+            label = r'$N_{200}$ = %d' % Nrange[0]
+        else:
+            label = r'%d $\le N_{200} \le$ %d' % tuple(Nrange)
+        return label
 
 
 class MZBinner(dict):
@@ -429,6 +473,7 @@ class MZBinner(dict):
             pa.write_eps(epsfile)
         else:
             pa.show()
+
 
     def plot_nfwmass_byrun(self,run, 
                            withlin=True,

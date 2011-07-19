@@ -19,12 +19,109 @@ labels['rproj'] = r'$R$ [$h^{-1}$ Mpc]'
 labels['dsig'] = r'$\Delta\Sigma ~[M_{sun} pc^{-2}]$'
 labels['osig'] = r'$\Delta\Sigma_\times ~ [M_{sun} pc^{-2}]$'
 
-def plot_dsig_osig_tab(comb, show=True, dsigrange=None, osigrange=None, **keywords):
+
+
+def plot_dsig_osig(comb, **keys):
+    """
+    Plot delta sigma and ortho delta sigma in two plots
+
+    Parameters
+    ----------
+    comb: structured array
+        a "scalar" structured array, e.g.
+            data=lensing.files.lensbin_read(run,name)
+            comb = data[3]
+    show: bool, optional
+        Show plot in a window, default True
+    dsigrange: [min,max]
+        The y range of the delta sigma plot
+    osigrange: [min,max]
+        The y range of the ortho-delta sigma plot
+    range2var: [min,max]
+        The x range over which to calculate a osig variance
+        and determine a plot range.  This is overridden by
+        osigrange
+
+
+    """
+
+    show = keys.get('show',True)
+    dsigrange = keys.get('dsigrange',None)
+    osigrange = keys.get('osigrange',None)
+
+    # this over-rides
+    range4var = keys.get('range4var',None)
+    if osigrange is None:
+        if range4var is not None:
+            w=where1( (comb['r'] >= range4var[0]) & (comb['r'] <= range4var[1]))
+            if w.size == 0:
+                raise ValueError("no points in range [%d,%d]" % tuple(range4var))
+            sdev = comb['osig'][w].std()
+        else:
+            sdev = comb['osig'].std()
+
+        osigrange = [-3.5*sdev, 3.5*sdev]
+        print 'osigrange:',osigrange
+
+
+    label=keys.get('plot_label',None)
+
+    # for overplotting
+    dsig_p = Points(comb['r'], comb['dsig'], color='red')
+    dsigerr_p = SymErrY(comb['r'], comb['dsig'], comb['dsigerr'], color='red')
+    dsig_p.label=r'$\Delta\Sigma_+$'
+
+    arr = FramedArray(2,1)
+    arr.aspect_ratio=2
+    arr.xlabel = labels['rproj']
+
+    eu.plotting.bscatter(comb['r'], comb['dsig'], yerr=comb['dsigerr'],
+                         xlog=True, ylog=True, 
+                         ylabel=labels['dsig'],
+                         yrange=dsigrange,
+                         show=False, 
+                         plt=arr[0,0],
+                         **keys)
+
+    if label is not None:
+        arr[0,0].add(PlotLabel(0.9,0.9,label,halign='right'))
+
+
+    pdict=eu.plotting.bscatter(comb['r'], comb['osig'], yerr=comb['dsigerr'],
+                               xlog=True, 
+                               xlabel=labels['rproj'],
+                               ylabel=labels['osig'],
+                               yrange=osigrange,
+                               label=r'$\Delta\Sigma_\times$',
+                               show=False,
+                               dict=True,
+                               plt=arr[1,0],
+                               **keys)
+    c=Curve([1.e-5,1.e5],[0,0], type='solid')
+    arr[1,0].add(c)
+
+    arr[1,0].add(dsig_p,dsigerr_p)
+
+    key = PlotKey(0.9,0.9, [dsig_p,pdict['p']], halign='right')
+    arr[1,0].add(key)
+
+    arr[0,0].ylabel = labels['dsig']
+    arr[1,0].ylabel = labels['osig']
+    arr.ylabel = labels['dsig']
+
+    if show:
+        arr.show()
+    return arr
+
+def plot_dsig_osig_tab(comb, show=True, dsigrange=None, osigrange=None, **keys):
+    '''
+    this one doesn't work as well
+    '''
 
     tab = Table(2,1)
-    tab.aspect_ratio=1.8
-    tab.cellspacing=0
-    tab.cellpadding=0
+    #tab.aspect_ratio=1.8
+    #tab.cellspacing=0
+    #tab.cellpadding=0
 
     # for overplotting
     dsig_p = Points(comb['r'], comb['dsig'], color='red')
@@ -44,7 +141,7 @@ def plot_dsig_osig_tab(comb, show=True, dsigrange=None, osigrange=None, **keywor
                          ylabel=labels['dsig'],
                          yrange=dsigrange,
                          show=False, 
-                         **keywords)
+                         **keys)
     top_plt.x1.draw_ticklabels=0
 
     bot_plt = eu.plotting.bscatter(comb['r'], comb['osig'], yerr=comb['dsigerr'],
@@ -53,7 +150,7 @@ def plot_dsig_osig_tab(comb, show=True, dsigrange=None, osigrange=None, **keywor
                                    ylabel=labels['osig'],
                                    yrange=osigrange,
                                    show=False,
-                                   **keywords)
+                                   **keys)
 
     c=Curve([1.e-5,1.e5],[0,0], type='solid')
     bot_plt.add(c)
@@ -70,54 +167,6 @@ def plot_dsig_osig_tab(comb, show=True, dsigrange=None, osigrange=None, **keywor
         tab.show()
     return tab
 
-
-
-
-def plot_dsig_osig_arr(comb, show=True, dsigrange=None, osigrange=None, **keywords):
-
-    # for overplotting
-    dsig_p = Points(comb['r'], comb['dsig'], color='red')
-    dsigerr_p = SymErrY(comb['r'], comb['dsig'], comb['dsigerr'], color='red')
-    dsig_p.label=r'$\Delta\Sigma_+$'
-
-    arr = FramedArray(2,1)
-    arr.aspect_ratio=2
-    arr.xlabel = labels['rproj']
-
-    eu.plotting.bscatter(comb['r'], comb['dsig'], yerr=comb['dsigerr'],
-                         xlog=True, ylog=True, 
-                         ylabel=labels['dsig'],
-                         yrange=dsigrange,
-                         show=False, 
-                         plt=arr[0,0],
-                         **keywords)
-
-
-    pdict=eu.plotting.bscatter(comb['r'], comb['osig'], yerr=comb['dsigerr'],
-                               xlog=True, 
-                               xlabel=labels['rproj'],
-                               ylabel=labels['osig'],
-                               yrange=osigrange,
-                               label=r'$\Delta\Sigma_\times$',
-                               show=False,
-                               dict=True,
-                               plt=arr[1,0],
-                               **keywords)
-    c=Curve([1.e-5,1.e5],[0,0], type='solid')
-    arr[1,0].add(c)
-
-    arr[1,0].add(dsig_p,dsigerr_p)
-
-    key = PlotKey(0.9,0.9, [dsig_p,pdict['p']], halign='right')
-    arr[1,0].add(key)
-
-    arr[0,0].ylabel = labels['dsig']
-    arr[1,0].ylabel = labels['osig']
-    arr.ylabel = labels['dsig']
-
-    if show:
-        arr.show()
-    return arr
 
 
 
