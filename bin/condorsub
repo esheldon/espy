@@ -121,7 +121,10 @@ def main():
             parser.print_help()
             sys.exit(45)
 
-        flist = args
+        if args[0] == "-":
+            flist = sys.stdin.read().split()
+        else:
+            flist = args
 
         submitter = Submitter(flist, 
                               options.refresh, 

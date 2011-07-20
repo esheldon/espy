@@ -14,6 +14,8 @@ def GetWlVersion():
 
 version=GetWlVersion()
 
+import checksg
+
 import util
 import collate
 import select

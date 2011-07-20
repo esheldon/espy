@@ -1047,7 +1047,7 @@ S=string
 
 	<tr> <td>size_flags</td>        <td> i2</td>    <td>size error flags</td>  </tr>
 	<tr> <td>sigma0</td>            <td> f4</td>    <td>basic size used for <br>star-galaxy separation</td>  </tr>
-	<tr> <td>sg</td>                <td> f4</td>    <td>Auxillary star-galaxy separation <br>parameter(CLASS_STAR)</td>  </tr>
+	<tr> <td>sg</td>                <td> f4</td>    <td>Auxillary star-galaxy separation <br> parameter <b><code>spread_model</code></b></td>  </tr>
 
 	<tr> <td>star_flag</td>         <td> i2</td>    <td>star finder error flags</td>  </tr>
 
