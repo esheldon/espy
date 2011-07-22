@@ -73,12 +73,12 @@ def plot_sg_by_exposure(run, exposurename, **keys):
         if ptype == 'screen':
             tab.show()
         elif ptype == 'eps':
-            outf = deswl.files.wlse_test_path(run, subdir=subdir, ext='eps')
+            outf = deswl.files.wlse_test_path(run, subdir=subdir, extra=exposurename, ext='eps')
             makedirs_fromfile(outf)
             print("writing plot file:",outf)
             tab.write_eps(outf)
         else:
-            outf = deswl.files.wlse_test_path(run, subdir=subdir, ext='png')
+            outf = deswl.files.wlse_test_path(run, subdir=subdir, extra=exposurename, ext='png')
             makedirs_fromfile(outf)
             print("writing plot file:",outf)
             tab.write_img(800,800,outf)
