@@ -70,7 +70,15 @@ def make_reduced_lensout(run):
     file = lensing.files.sample_file('lensred', run)
     print("Will combine into file:",file)
     print("Reading data\n")
+    # this will read all the separate files and "add" them
     data = lensing.files.lensout_read(run=run)
+
+    if 'totpairs' not in data.dtype.names:
+        newdata = eu.numpy_util.add_fields(data, [('totpairs','i8')])
+        print("kludging totpairs")
+        newdata['totpairs'] = newdata['npair'].sum(axis=1)
+        del data
+        data=newdata
 
     eu.io.write(file, data, verbose=True)
 
@@ -88,7 +96,10 @@ def add_lensums(l1, l2):
     w=where1(l1['zindex'] != l2['zindex'])
     if w.size > 0:
         raise ValueError("zindex do not line up")
-    for n in ['weight','npair','rsum','wsum','dsum','osum']:
+    names = ['weight','sshsum','npair','rsum','wsum','dsum','osum']
+    if 'totpairs' in l1.dtype.names:
+        names.append('totpairs')
+    for n in names:
         l1[n] += l2[n]
 
 
@@ -109,11 +120,18 @@ def reduce_lensums(lout):
 
     nlens = lout.size
     nbin = lout['rsum'][0].size
-    dt = lensred_dtype()
 
-    comb=numpy.zeros(nbin,dtype=dt)
+    #dt = lensred_dtype()
+    #comb=numpy.zeros(nbin,dtype=dt)
+    comb = lensred_struct(nbin)
 
-    comb['weight'] = lout['weight'].sum()
+    # weight is the weight for the lens.  Call this weightsum to
+    # indicate a sum over multiple lenses
+    comb['weightsum'][0] = lout['weight'].sum()
+    comb['sshsum'][0] = lout['sshsum'].sum()
+    comb['totpairs'][0] = lout['totpairs'].sum()
+
+    comb['ssh'] = comb['sshsum']/comb['weightsum']
 
     for i in xrange(nbin):
         npair = lout['npair'][:,i].sum()
@@ -124,22 +142,45 @@ def reduce_lensums(lout):
         dsum = lout['dsum'][:,i].sum()
         osum = lout['osum'][:,i].sum()
 
-        comb['npair'][i] = npair
-        comb['rsum'][i] = rsum
-        comb['wsum'][i] = wsum
-        comb['dsum'][i] = dsum
-        comb['osum'][i] = osum
+        comb['npair'][0,i] = npair
+        comb['rsum'][0,i] = rsum
+        comb['wsum'][0,i] = wsum
+        comb['dsum'][0,i] = dsum
+        comb['osum'][0,i] = osum
 
         # averages
-        comb['r'][i] = rsum/npair
-        comb['dsig'][i] = dsum/wsum
-        comb['osig'][i] = osum/wsum
+        comb['r'][0,i] = rsum/npair
+        comb['dsig'][0,i] = dsum/wsum
+        comb['osig'][0,i] = osum/wsum
 
-        comb['dsigerr'][i] = numpy.sqrt(1.0/wsum)
+        comb['dsigerr'][0,i] = numpy.sqrt(1.0/wsum)
 
     return comb
 
-def lensred_dtype():
+
+def lensred_struct(nbin, n=1):
+    dt = lensred_dtype(nbin)
+    return numpy.zeros(n, dtype=dt)
+
+def lensred_dtype(nbin):
+    dt=[('ssh','f8'),          # sshsum/weight
+        ('weightsum','f8'),       # this is total of weight for each lens
+        ('sshsum','f8'),       # this is total of sshsum for each lens
+        ('totpairs','i8'),
+        ('r','f8',nbin),
+        ('dsig','f8',nbin),
+        ('dsigerr','f8',nbin),
+        ('osig','f8',nbin),
+        ('npair','i8',nbin),
+        ('rsum','f8',nbin),
+        ('wsum','f8',nbin),
+        ('dsum','f8',nbin),
+        ('osum','f8',nbin)]
+    return dt
+
+
+
+def lensred_dtype_old():
     dt=[('r','f8'),
         ('dsig','f8'),
         ('dsigerr','f8'),
@@ -151,5 +192,4 @@ def lensred_dtype():
         ('dsum','f8'),
         ('osum','f8')]
     return numpy.dtype(dt)
-
 

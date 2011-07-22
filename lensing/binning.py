@@ -108,27 +108,40 @@ def logbin_linear_edges(data, nbin, tag):
     print(eu.numpy_util.arr2str(low))
     print(eu.numpy_util.arr2str(high))
     
-def lensbin_dtype(nrbin, bintags):
-    if not isinstance(bintags,list):
-        bintags = [bintags]
+def lensbin_struct(nrbin, bintags=None, n=1):
+    dt = lensbin_dtype(nrbin, bintags=bintags)
+    return numpy.zeros(n, dtype=dt)
 
-    dt = []
-    for bt in bintags:
-        tn = bt+'_range'
-        dt.append( (tn,'f8',2) )
-        tn = bt+'_mean'
-        dt.append( (tn,'f8') )
-        tn = bt+'_err'
-        dt.append( (tn,'f8') )
-        tn = bt+'_sdev'
-        dt.append( (tn,'f8') )
+def lensbin_dtype(nrbin, bintags=None):
+    """
+    This is the same as lensing.outputs.lensred_dtype
+    but with the averages added
+    """
+    dt=[]
+    if bintags is not None:
+        if not isinstance(bintags,list):
+            bintags = [bintags]
 
+        for bt in bintags:
+            tn = bt+'_range'
+            dt.append( (tn,'f8',2) )
+            tn = bt+'_mean'
+            dt.append( (tn,'f8') )
+            tn = bt+'_err'
+            dt.append( (tn,'f8') )
+            tn = bt+'_sdev'
+            dt.append( (tn,'f8') )
+
+    dt += lensing.outputs.lensred_dtype(nrbin)
+
+    """
     nrbin = int(nrbin)
     dt += [('r','f8',nrbin),
            ('dsig','f8',nrbin),
            ('dsigerr','f8',nrbin),
            ('osig','f8',nrbin),
            ('npair','i8',nrbin)]
+    """
     return numpy.dtype(dt)
 
 class BinnerBase(dict):
@@ -185,12 +198,12 @@ class N200Binner(BinnerBase):
 
     def bin(self, data):
 
-        nlow, nhigh = self.bins_ranges()
+        nlow, nhigh = self.bin_ranges()
 
         nrbin = data['rsum'][0].size
-        dt = lensbin_dtype(nrbin, ['ngals200','z'])
-
-        bs = numpy.zeros(self['nbin'], dtype=dt)
+        #dt = lensbin_dtype(nrbin, bintags=['ngals200','z'])
+        #bs = numpy.zeros(self['nbin'], dtype=dt)
+        bs = lensbin_struct(nrbin, bintags=['ngals200','z'], n=self['nbin'])
 
         i=0
         for Nl,Nh in zip(nlow,nhigh):
@@ -201,12 +214,19 @@ class N200Binner(BinnerBase):
             comb,w = reduce_from_ranges(data,'ngals_r200',Nrange, rangetype='[]',
                                         getind=True)
         
-            bs['r'][i] = comb['r']
-            bs['dsig'][i] = comb['dsig']
-            bs['dsigerr'][i] = comb['dsigerr']
-            bs['osig'][i] = comb['osig']
-            bs['npair'][i] = comb['npair']
+            # first copy all common tags
+            for n in comb.dtype.names:
+                bs[n][i] = comb[n][0]
 
+            """
+            bs['r'][i] = comb['r'][0]
+            bs['dsig'][i] = comb['dsig'][0]
+            bs['dsigerr'][i] = comb['dsigerr'][0]
+            bs['osig'][i] = comb['osig'][0]
+            bs['npair'][i] = comb['npair'][0]
+            """
+
+            # now the things we are averaging by lens weight
             mn,err,sdev = lens_wmom(data,'photoz_cts',ind=w, sdev=True)
             bs['z_mean'][i] = mn
             bs['z_err'][i] = err

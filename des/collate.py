@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import sys
 from sys import stdout,stderr
@@ -74,6 +75,7 @@ class ColumnCollator:
                                                fname, 
                                                serun=self.serun, 
                                                ext=1, 
+                                               ensure_native=True,
                                                verbose=True)
 
         data['idvals'] = self.uid_offset + numpy.arange(data['stars'].size,dtype='i4')
@@ -171,8 +173,10 @@ class ColumnCollator:
 
         cols = self.cols
 
-        cols.write_column('ra',data['shear']['ra'])
-        cols.write_column('dec',data['shear']['dec'])
+        ra = numpy.array(data['shear']['ra'], dtype='f8')
+        cols.write_column('ra',ra)
+        dec = numpy.array(data['shear']['dec'], dtype='f8')
+        cols.write_column('dec',dec)
 
         gal_order=numpy.array(data['shear']['gal_order'], dtype='i1')
         cols.write_column('shapelets_order',gal_order)
@@ -328,42 +332,45 @@ class ColumnCollator:
             os.makedirs(fitsdir)
             os.makedirs(psfstars_fitsdir)
 
-        print 'coldir:',coldir
-        print 'fitsdir:',fitsdir
-        print 'psfstars_fitsdir:',psfstars_fitsdir
+        print('coldir:',coldir)
+        print('fitsdir:',fitsdir)
+        print('psfstars_fitsdir:',psfstars_fitsdir)
 
         cols = columns.Columns(coldir)
 
-        print cols
+        print(cols)
 
         for col in sorted(cols):
-            print 'column: ',col
+            if col in ['shapelets_prepsf','interp_psf_shapelets']:
+                print("skipping large column:",col)
+            else:
+                print('column: ',col)
 
-            if col == 'psfstars':
-                continue
+                if col == 'psfstars':
+                    continue
 
-            fname = cols[col].filename
+                fname = cols[col].filename
 
-            data = esutil.sfile.read(fname)
+                data = esutil.sfile.read(fname)
 
-            fitsfile = os.path.join(fitsdir, col+'.fits')
-            print fitsfile
+                fitsfile = os.path.join(fitsdir, col+'.fits')
+                print(fitsfile)
 
-            # don't make a copy!
-            esutil.io.write(fitsfile, data, clobber=True,copy=False)
+                # don't make a copy!
+                esutil.io.write(fitsfile, data, clobber=True,copy=False)
 
-            del data
+                del data
 
         psfstars_cols = cols['psfstars']
         for col in sorted(psfstars_cols):
-            print 'column: ',col
+            print('column: ',col)
 
             fname = psfstars_cols[col].filename
 
             data = esutil.sfile.read(fname)
 
             fitsfile = os.path.join(psfstars_fitsdir, col+'.fits')
-            print fitsfile
+            print(fitsfile)
 
             # don't make a copy!
             esutil.io.write(fitsfile, data, clobber=True,copy=False)
@@ -372,64 +379,6 @@ class ColumnCollator:
 
 
 
-
-def collate_se_shear_columns2fits(serun, coldir=None):
-    """
-    Just make fits versions of all the files
-    """
-
-    if coldir is None:
-        coldir = deswl.files.wlse_coldir(serun)
-
-    coldir = expand_path(coldir)
-
-    fitsdir = coldir.replace('.cols','-fits')
-    psfstars_fitsdir = os.path.join(fitsdir,'psfstars-fits')
-    if not os.path.exists(fitsdir):
-        os.makedirs(fitsdir)
-        os.makedirs(psfstars_fitsdir)
-
-
-    print 'fitsdir: ',fitsdir
-    print 'psfstars_fitsdir: ',psfstars_fitsdir
-
-    cols = columns.Columns(coldir)
-
-    print cols
-
-    for col in sorted(cols):
-        print 'column: ',col
-
-        if col == 'psfstars':
-            continue
-
-        fname = cols[col].filename
-
-        data = esutil.sfile.read(fname)
-
-        fitsfile = os.path.join(fitsdir, col+'.fits')
-        print fitsfile
-
-        # don't make a copy!
-        esutil.io.write(fitsfile, data, clobber=True,copy=False)
-
-        del data
-
-    psfstars_cols = cols['psfstars']
-    for col in sorted(psfstars_cols):
-        print 'column: ',col
-
-        fname = psfstars_cols[col].filename
-
-        data = esutil.sfile.read(fname)
-
-        fitsfile = os.path.join(psfstars_fitsdir, col+'.fits')
-        print fitsfile
-
-        # don't make a copy!
-        esutil.io.write(fitsfile, data, clobber=True,copy=False)
-
-        del data
 
 
 def create_se_shear_columns_indexes(serun, coldir=None):
@@ -862,6 +811,11 @@ def collate_se_shear(serun, objclass='all',
 
 
 def write_se_collate_html(serun, showsplit=False):
+    """
+
+    Need to make collation band-aware!
+
+    """
 
     rc = deswl.files.Runconfig(serun)
 
@@ -873,13 +827,33 @@ def write_se_collate_html(serun, showsplit=False):
     fitsdir=path_join(dir,serun+'-fits')
     coldir=path_join(dir,serun+'.cols')
     if os.path.exists(fitsdir):
-        fits_comment=''
+        table_comment='<i>Note: The collated FITS files do not include the large columns <code>shapelets_prepsf</code> and <code>interp_psf_shapelets</code></i>'
     else:
-        fits_comment='<b>(Not Yet Available)</b>'
-    if os.path.exists(coldir):
-        col_comment=''
+        table_comment='<i><b>FITS Not Yet Available</b></i>'
+    if not os.path.exists(coldir):
+        col_comment += ' <i><b>Columns database not yet available</b></i>'
+
+
+    collate_dir= deswl.files.wlse_collated_dir(serun)
+    plotdir=path_join(collate_dir,'plots')
+
+    band='i'
+    tfile= path_join(plotdir, '%s-%s-sizemag.png' % (serun,band))
+    if os.path.exists(tfile):
+        qatext = """
+		<td>
+			<p>
+			<p>
+			<h2>QA and Analysis</h2>
+			Here are  some <a href="html/qa.html">QA plots  and tests</a>.
+			<p>
+			<p>
+		</td>
+        """
     else:
-        col_comment='<b>(Not Yet Available)</b>'
+        qatext=""
+
+
 
     if showsplit:
         splitinfo="NOTE: <b>Validation splits 1/2 are in the %s-fits/split* and %s.cols/split* subdirectories</b>" % (serun,serun)
@@ -933,6 +907,11 @@ Region RA          Dec        gamma1     gamma2   gamma1     gamma2    posangle
             <h2>Raw WL outputs</h2>
             Raw outputs can be found <a href="..">Here</a>.   If you plan to download
             <i><b>all the data</b></i>, please contact Erin Sheldon.
+            <p>
+            These files are located on the <a href="https://sites.google.com/site/bnlwlens/software-tutorials/software-setup">astro cluster</a> at
+            <pre>
+    /astro/u/astrodat/data/DES/wlbnl/{serun}
+            </pre>
 
 			<h2>Collated WL outputs</h2>
             The data are broken up into two "tables": A main table for every object and a sub-table for
@@ -948,41 +927,45 @@ Region RA          Dec        gamma1     gamma2   gamma1     gamma2    posangle
             to the row number in the main table.
 
             <p>
-            <table class=simple>
-                <tr><th width=50%>FITS</th><th width=50%>Column Database</th></tr>
-                <tr>
-                    <td>
-                        Files for each column in FITS format{fits_comment}
-                        <ul>
-				            <li><a href="{serun}-fits">{serun}-fits</a> 
-				            <li><a href="{serun}-fits/psfstars-fits">{serun}-fits/psfstars-fits</a>
-			            </ul>
-                    </td>
-                    <td>
-                        Files for each column in "recfile" format.  This is a 
-                        <a href="http://code.google.com/p/pycolumns/">columns database</a>.
-                        {col_comment}
-                        <ul>
-                            <li><a href="{serun}.cols">{serun}.cols</a>
-                            <li><a href="{serun}.cols/psfstars.cols">{serun}.cols/psfstars.cols</a>
-                        </ul>
-                    </td>
+            <table>
+                <table class=simple>
+                    <caption>Collated downloads</caption>
+                    <tr><th width=50%>Column Database</th><th width=50%>FITS</th></tr>
+                    <tr>
+                        <td>
+                            Files for each column in "recfile" format.  This is a 
+                            <a href="http://code.google.com/p/pycolumns/">columns database</a>.
+                            <ul>
+                                <li><a href="{serun}.cols">{serun}.cols</a>
+                                <li><a href="{serun}.cols/psfstars.cols">{serun}.cols/psfstars.cols</a>
+                            </ul>
+                        </td>
 
-                </tr>
+                        <td>
+                            Files for each column in FITS format<b>*</b>
+                            <ul>
+                                <li><a href="{serun}-fits">{serun}-fits</a> 
+                                <li><a href="{serun}-fits/psfstars-fits">{serun}-fits/psfstars-fits</a>
+                            </ul>
+                        </td>
+                    </tr>
+                </table>
+                {table_comment}
             </table>
             {splitinfo}
 
 		</td>
 	</tr>
+    <tr>
+        <p>
+        The collate directories are located on the <a href="https://sites.google.com/site/bnlwlens/software-tutorials/software-setup">astro cluster</a> under<br>
+        <pre>
+    /astro/u/astrodat/data/DES/wlbnl/{serun}/collated
+        </pre>
+    </tr>
+
 	<tr>
-		<td>
-			<p>
-			<p>
-			<h2>QA and Analysis</h2>
-			Here are  some <a href="html/qa.html">QA plots  and tests</a>.
-			<p>
-			<p>
-		</td>
+    {qatext}
 	</tr>
     {shear_desc}
 </table>
@@ -995,8 +978,8 @@ Region RA          Dec        gamma1     gamma2   gamma1     gamma2    posangle
                splitinfo=splitinfo, 
                shear_desc=shear_desc, 
                dataset=rc['dataset'],
-               fits_comment=fits_comment,
-               col_comment=col_comment)
+               table_comment=table_comment,
+               qatext=qatext)
 
     download_file=path_join(dir,'download.html')
     stdout.write("Writing download file: %s\n" % download_file)
