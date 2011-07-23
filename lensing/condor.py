@@ -13,7 +13,7 @@ Universe        = vanilla
 Notification    = Error
 GetEnv          = True
 Notify_user     = esheldon@bnl.gov
-Requirements    = (CPU_Experiment == "astro")
+Requirements    = (CPU_Experiment == "astro") && (TotalSlots == 12 || TotalSlots == 8)
 +Experiment     = "astro"
 Initialdir      = {proc_dir}
 """
