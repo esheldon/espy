@@ -2,6 +2,7 @@
     %prog type sample
 
 Description:
+
     Create an input catalog for objshear.  type must be 'scat' or 'lcat'.  The
     sample id implies a config file in ${ESPY_DIR}/lensing/config. 
 

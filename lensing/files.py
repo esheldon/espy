@@ -319,7 +319,7 @@ def lensout_dtype(nbin, old=False):
 def lcat_write(sample, data):
     file = sample_file('lcat',sample)
 
-    stdout.write("Writing %d to lens cat: '%s'\n" % (data.size, file))
+    stdout.write("Writing %d to %s: '%s'\n" % (data.size, 'lcat', file))
 
     d = os.path.dirname(file)
     if not os.path.exists(d):
@@ -340,6 +340,7 @@ def lcat_read(sample=None, file=None, old=False):
     import lensing
     d = lcat_read(file='somefile')
     d = lcat_read(sample='03')
+
     """
 
     if file is None and sample is None:

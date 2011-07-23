@@ -10,9 +10,17 @@ class GaussMix(mixture.GMM):
 
     Simpler calls for 1-d data.
 
+    construction
+        __init__(self, n_states=1, cvtype='diag')
+
+
     """
 
     def fit1d(self, data1d, **keywords):
+        """
+        Important keyword is min_covar, size of smallest
+        possible gaussian
+        """
         self.fit(data1d.reshape(data1d.size, 1), **keywords)
     def score1d(self, xvals, state=None):
         import numpy as np
