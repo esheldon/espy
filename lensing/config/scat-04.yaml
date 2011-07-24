@@ -13,5 +13,5 @@ dzl:                0.015
 # we have to demand consistency
 cosmo_sample:       "01"
 Rcut:               0.33
-nsplit:             212
+nsplit:             100
 comment: note 04 is a coincidence with procrun. first try with regauss catalog and mean scinv

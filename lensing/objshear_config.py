@@ -48,16 +48,23 @@ class ObjshearRunConfig(dict):
             sf = lensing.files.sample_file('scat',self['src_sample'])
             of = lensing.files.sample_file('lensout',self['run'])
 
-            self._write_config(cf,lf,sf,of)
+            tmpfile = os.path.basename(of)
+            tmpfile = os.path.join('/data', tmpfile)
+
+            self._write_config(cf,lf,sf,of,tmpfile)
         else:
             for i in xrange(self['src_config']['nsplit']):
                 cf = lensing.files.sample_file('config',self['run'], split=i)
                 sf = lensing.files.sample_file('scat',self['src_sample'], split=i)
                 of = lensing.files.sample_file('lensout',self['run'], split=i)
-                self._write_config(cf,lf,sf,of)
+
+                tmpfile = os.path.basename(of)
+                tmpfile = os.path.join('/data', tmpfile)
+
+                self._write_config(cf,lf,sf,of,tmpfile)
 
 
-    def _write_config(self, config_file, lfile, sfile, ofile):
+    def _write_config(self, config_file, lfile, sfile, ofile, tmpfile):
         d = os.path.dirname(config_file)
         if not os.path.exists(d):
             print "Making config dir:",d
@@ -74,6 +81,7 @@ class ObjshearRunConfig(dict):
         fobj.write(fmt % ("lens_file",lfile))
         fobj.write(fmt % ("source_file",sfile))
         fobj.write(fmt % ("output_file",ofile))
+        fobj.write(fmt % ("temp_file",tmpfile))
 
         for key in ['H0','omega_m','npts']:
             fobj.write(fmt % (key, self['cosmo_config'][key]))
