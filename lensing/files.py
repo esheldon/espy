@@ -8,17 +8,43 @@ import esutil as eu
 from esutil.ostools import path_join, expand_path
 from esutil.numpy_util import where1
 
-finfo={}
-finfo['lcat']     = {'subdir':'lcat',    'front':'lcat',    'ext':'.bin'}
-finfo['scat']     = {'subdir':'scat',    'front':'scat',    'ext':'.bin'}
-finfo['lensout']  = {'subdir':'lensout', 'front':'lensout', 'ext':'.rec'}
-finfo['lensred']  = {'subdir':'lensout', 'front':'lensred', 'ext':'.rec'}
-finfo['lensred-collate'] = {'subdir':'lensout', 'front':'lensred-collate', 'ext':'.rec'}
-finfo['config']   = {'subdir':'proc',    'front':'run',     'ext':'.config'}
-finfo['condor']   = {'subdir':'proc',    'front':'run',     'ext':'.condor'}
-finfo['script']   = {'subdir':'proc',    'front':'run',     'ext':'.sh'}
+finfo_old={}
+finfo_old['lcat']     = {'subdir':'lcat',    'front':'lcat',    'ext':'.bin'}
+finfo_old['scat']     = {'subdir':'scat',    'front':'scat',    'ext':'.bin'}
+finfo_old['lensout']  = {'subdir':'lensout', 'front':'lensout', 'ext':'.rec'}
+finfo_old['lensred']  = {'subdir':'lensout', 'front':'lensred', 'ext':'.fits'}
+finfo_old['lensred-collate'] = {'subdir':'lensout', 'front':'lensred-collate', 'ext':'.fits'}
 
-finfo['pbslens']  = {'subdir':'pbslens','ext':'.pbs'}
+finfo_old['config']   = {'subdir':'proc',    'front':'run',     'ext':'.config'}
+finfo_old['condor']   = {'subdir':'proc',    'front':'run',     'ext':'.condor'}
+finfo_old['script']   = {'subdir':'proc',    'front':'run',     'ext':'.sh'}
+
+finfo_old['pbslens']  = {'subdir':'pbslens','ext':'.pbs'}
+
+
+finfo={}
+finfo['lcat']     = {'subdir':'lcat/{sample}',  'name':'lcat-{sample}.bin'}
+finfo['scat']     = {'subdir':'scat/{sample}',  'name':'scat-{sample}.bin'}
+
+finfo['scat-split']  = {'subdir':'scat/{sample}',
+                            'name':'scat-{sample}-{split}.bin'}
+
+# lensout are always split, but we need this for the dir
+finfo['lensout']  = {'subdir':'lensout/{sample}'}
+finfo['lensout-split']  = {'subdir':'lensout/{sample}',
+                               'name':'lensout-{sample}-{split}.rec'}
+
+finfo['reduced']  = {'subdir':'lensout/{sample}',
+                         'name':'reduced-{sample}.fits'}
+finfo['collated']  = {'subdir':'lensout/{sample}',
+                                 'name':'collated-{sample}.fits'}
+
+finfo['lensbin']       = {'subdir':'lensout/{sample}/lensbin-{name}',
+                              'name':'lensbin-{sample}-{name}.fits'}
+finfo['lensbin-plots']       = {'subdir':'lensout/{sample}/lensbin-{name}/plots',
+                                'name':'lensbin-{sample}-{name}.{ext}'}
+finfo['lensbin-corr']  = {'subdir':'lensout/{sample}/lensbin-{name}',
+                              'name':'lensbin-{sample}-{name}.fits'}
 
 
 
@@ -30,8 +56,8 @@ def lensdir():
         raise ValueError("LENSDIR is not set")
     return os.environ['LENSDIR']
 
-def hadoop_dir():
-    return 'lensing'
+def hdfs_dir():
+    return 'hdfs:///user/esheldon/lensing'
 
 def local_dir():
     return '/data/objshear/lensing'
@@ -64,7 +90,7 @@ def read_original_catalog(type, sample):
         return lensing.scat.read_original(sample)
     
 
-def sample_dir(type, sample, fs='nfs'):
+def sample_dir(type, sample, name=None, fs='nfs'):
     """
     Generic routine to get the directory for a sample of a given type, e.g.
     for lcat,scat,proc files etc
@@ -75,18 +101,53 @@ def sample_dir(type, sample, fs='nfs'):
         raise ValueError("Unknown file type: '%s'" % type)
     if fs == 'nfs':
         d = lensdir()
-    elif fs == 'hadoop':
-        d = hadoop_dir()
+    elif fs == 'hdfs':
+        d = hdfs_dir()
     elif fs == 'local':
         d = local_dir()
     else:
         raise ValueError("file system not recognized: %s" % fs)
 
-    dsub = finfo[type]['subdir']
+    dsub = finfo[type]['subdir'].format(sample=sample, name=name)
+    d = path_join(d,dsub)
+    return d
+
+def sample_file(type, sample, split=None, name=None, fs='nfs'):
+    d = sample_dir(type, sample, name=name, fs=fs)
+    if split is not None:
+        split = '%03d' % split
+        type = type+'-split'
+
+    f = finfo[type]['name'].format(sample=sample, split=split, name=name)
+    f = os.path.join(d,f)
+    return f
+
+
+def sample_dir_old(type, sample, fs='nfs'):
+    """
+    Generic routine to get the directory for a sample of a given type, e.g.
+    for lcat,scat,proc files etc
+
+    See finfo for a list of types
+    """
+    if type not in finfo_old:
+        raise ValueError("Unknown file type: '%s'" % type)
+    if fs == 'nfs':
+        d = lensdir()
+    elif fs == 'hdfs':
+        d = hdfs_dir()
+    elif fs == 'local':
+        d = local_dir()
+    else:
+        raise ValueError("file system not recognized: %s" % fs)
+
+    dsub = finfo_old[type]['subdir']
     d = path_join(d,dsub,sample)
     return d
 
-def sample_file(type, sample, split=None, extra=None, ext=None, fs='nfs'):
+
+
+def sample_file_old(type, sample, split=None, extra=None, ext=None, fs='nfs'):
     """
     Generic routine to get a file name for a sample of a given type, e.g.  for
     lcat,scat,proc files etc
@@ -94,16 +155,17 @@ def sample_file(type, sample, split=None, extra=None, ext=None, fs='nfs'):
     See finfo for a list of types
     """
 
-    d = sample_dir(type,sample, fs=fs)
-    front = finfo[type]['front']
+    d = sample_dir_old(type,sample, fs=fs)
+    front = finfo_old[type]['front']
     fname=path_join(d, '%s-%s' % (front,sample))
     if split is not None:
         fname += '-%03d' % split
+
     if extra is not None:
         fname += '-%s' % extra
 
     if ext is None:
-        ext = finfo[type]['ext']
+        ext = finfo_old[type]['ext']
     fname += ext
     return fname
 
@@ -127,6 +189,7 @@ def lensfit_read(run, name, extra=None,verbose=True):
 
 def lensfit_dir(run,name):
     return lensbin_dir(run,name)
+
 def lensfit_file(run,name,extra=None):
     d=lensfit_dir(run,name)
     if extra is not None:
@@ -158,6 +221,23 @@ def lensinv_file(run,name):
     return path_join(d, 'lensinv-%s-%s.rec' % (run,name))
 
 
+# corrected binned outputs
+#
+def lensbin_corr_write(data, run, name, verbose=True):
+    d = lensbin_dir(run,name)
+    if not os.path.exists(d):
+        os.makedirs(d)
+    f = lensbin_corr_file(run,name)
+    eu.io.write(f,data,verbose=verbose)
+
+def lensbin_corr_read(run, name, verbose=True):
+    f = lensbin_corr_file(run,name)
+    return eu.io.read(f,verbose=verbose)
+
+def lensbin_corr_file(run,name):
+    d=lensbin_dir(run,name)
+    return path_join(d, 'lensbin-corr-%s-%s.rec' % (run,name))
+
 
 # binned outputs
 #
@@ -176,41 +256,38 @@ def lensbin_dir(run,name):
     """
     e.g. lensbin_dir('02','m12z3')
     """
-    dir = sample_dir('lensout',run)
-    return path_join(dir,'lensbin-'+name)
+    return sample_dir('lensbin',run,name=name)
+
 def lensbin_file(run,name):
-    d=lensbin_dir(run,name)
-    return path_join(d, 'lensbin-%s-%s.rec' % (run,name))
+    return sample_file('lensbin',run,name=name)
 
 def lensbin_plot_dir(run,name):
-    d = lensbin_dir(run,name)
-    d=path_join(d,'plots')
-    return d
+    return sample_dir('lensbin-plots',run,name=name)
 
 #
 # read objshear outputs
 #
 
-def lensred_collated_read(run):
-    f = sample_file('lensred-collate',run)
+def collated_read(run):
+    f = sample_file('collated',run)
     return eu.io.read(f, verbose=True)
 
-def lensred_read(run):
-    file = sample_file('lensred', run)
+def reduced_read(run):
+    file = sample_file('reduced', run)
     return eu.io.read(file, verbose=True)
     
-def lensout_read(file=None, run=None, split=None, silent=False, old=False):
+def lensout_read(file=None, run=None, split=None, silent=False, old=False, fs='hdfs'):
     if old:
         return lensout_read_old(file=file,run=run,split=split,silent=silent)
 
     if file is None and run is None:
-        raise ValueError("usage: lensout_read(file=, run=, split=, silent=False)")
+        raise ValueError("usage: lensout_read(file=, run=, split=, silent=False, fs='hdfs')")
     if file is None:
         if split is not None:
-            file=sample_file('lensout', run, split=split)
+            file=sample_file('lensout', run, split=split, fs=fs)
             return lensout_read(file=file)
 
-        return lensout_read_byrun(run)
+        return lensout_read_byrun(run, fs=fs)
 
     file=expand_path(file)
 
@@ -254,14 +331,14 @@ def lensout_read_old(file=None, run=None, split=None, silent=False, old=False):
 
     return data
 
-def lensout_read_byrun(run, old=False):
+def lensout_read_byrun(run, old=False, fs='hdfs'):
     conf = cascade_config(run)
     nsplit = conf['src_config']['nsplit']
 
     stdout.write("Combining %s splits from run %s\n" % (nsplit,run))
 
     for i in xrange(nsplit):
-        tdata = lensout_read(run=run, split=i, old=old)
+        tdata = lensout_read(run=run, split=i, old=old, fs=fs)
         if i == 0:
             data = tdata
         else:

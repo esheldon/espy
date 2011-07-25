@@ -81,8 +81,8 @@ class Scripts(dict):
         local_file=files.sample_file('lensout',self['run'],split=split,fs='local')
         local_dir=files.sample_dir('lensout',self['run'],fs='local')
 
-        hadoop_file=files.sample_file('lensout',self['run'],split=split,fs='hadoop')
-        hadoop_dir=files.sample_dir('lensout',self['run'],fs='hadoop')
+        hadoop_file=files.sample_file('lensout',self['run'],split=split,fs='hdfs')
+        hadoop_dir=files.sample_dir('lensout',self['run'],fs='hdfs')
 
         masktype=self['lens_config'].get('masktype',None)
         if masktype == 'sdss':

@@ -333,7 +333,7 @@ class MaxBCG(LcatBase):
 
     def read_original(self):
         infile = self.original_file()
-        stdout.write("Reading lens catalog: %s\n" % infile)
+        stdout.write("Reading original catalog: %s\n" % infile)
         data = eu.io.read(infile, lower=True, ensure_native=True)
         return data
 

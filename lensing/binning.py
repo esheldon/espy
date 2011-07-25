@@ -35,114 +35,15 @@ try:
 except:
     pass
 
-def reduce_from_ranges(data, 
-                       tag, range1, rangetype = '[)', 
-                       tag2=None, range2=None, range2type = '[)',
-                       getind=False):
-    """
-    Can add more ranges if needed
-    """
-    logic = (data[tag] >= range1[0]) & (data[tag] < range1[1])
-
-    logic = get_range_logic(data, tag, range1, rangetype)
-
-    if range2 is not None and tag2 is not None:
-        logic = logic & get_range_logic(data, tag2, range2, range2type)
-
-    w=where1(logic)
-
-    comb = lensing.outputs.reduce_lensums(data[w])
-
-    if getind:
-        return comb, w
+def bin_lenses_byrun(type, run, nbin):
+    if type == 'n200':
+        b = N200Binner(nbin)
+    elif type == 'mz':
+        b = MZBinner(nbin)
     else:
-        return comb
- 
+        raise ValueError("unsupported binner type: '%s'" % type)
 
-def get_range_logic(data, tag, brange, type):
-    if type == '[]':
-        logic = (data[tag] >= brange[0]) & (data[tag] <= brange[1])
-    elif type == '[)':
-        logic = (data[tag] >= brange[0]) & (data[tag] < brange[1])
-    elif type == '(]':
-        logic = (data[tag] > brange[0]) & (data[tag] <= brange[1])
-    elif type == '()':
-        logic = (data[tag] > brange[0]) & (data[tag] < brange[1])
-    else:
-        raise ValueError("Bad range type: '%s'" % type)
-
-    return logic
-
-def logbin_linear_edges(data, nbin, tag):
-    """
-
-    Do a log binning and print out the corresponding bin edges in
-    the linear variable.  
-    
-    For binning by mass estimators, probably want to combine the last 2 or 3
-    bins because of the exponential cutoff
-    
-    """
-
-    log_data = numpy.log10(data[tag])
-
-    # we can't just take the returned means because we want
-    # the mean in the linear value of the parameter
-    hdict = histogram(log_data, nbin=nbin, more=True, rev=True)
-
-    rev = hdict['rev']
-    mean_data = numpy.zeros(nbin,dtype='f8')
-    stdout.write("Getting mean of '%s'\n" % tag)
-    for i in xrange(nbin):
-        if rev[i] != rev[i+1]:
-            w=rev[ rev[i]:rev[i+1] ]
-            mean_data[i],err = lens_wmom(data, tag, ind=w)
-
-    h = hdict['hist']
-    low=10.0**hdict['low']
-    high=10.0**hdict['high']
-    fmt = "%-2i %8i %11.5e %11.5e %11.5e\n"
-    for i in xrange(nbin):
-        stdout.write(fmt % (i+1,h[i],low[i],high[i],mean_data[i]))
-
-    print(eu.numpy_util.arr2str(low))
-    print(eu.numpy_util.arr2str(high))
-    
-def lensbin_struct(nrbin, bintags=None, n=1):
-    dt = lensbin_dtype(nrbin, bintags=bintags)
-    return numpy.zeros(n, dtype=dt)
-
-def lensbin_dtype(nrbin, bintags=None):
-    """
-    This is the same as lensing.outputs.lensred_dtype
-    but with the averages added
-    """
-    dt=[]
-    if bintags is not None:
-        if not isinstance(bintags,list):
-            bintags = [bintags]
-
-        for bt in bintags:
-            tn = bt+'_range'
-            dt.append( (tn,'f8',2) )
-            tn = bt+'_mean'
-            dt.append( (tn,'f8') )
-            tn = bt+'_err'
-            dt.append( (tn,'f8') )
-            tn = bt+'_sdev'
-            dt.append( (tn,'f8') )
-
-    dt += lensing.outputs.lensred_dtype(nrbin)
-
-    """
-    nrbin = int(nrbin)
-    dt += [('r','f8',nrbin),
-           ('dsig','f8',nrbin),
-           ('dsigerr','f8',nrbin),
-           ('osig','f8',nrbin),
-           ('npair','i8',nrbin)]
-    """
-    return numpy.dtype(dt)
+    b.bin_byrun(run)
 
 class BinnerBase(dict):
     def __init__(self, nbin):
@@ -192,7 +93,7 @@ class N200Binner(BinnerBase):
         """
 
         name=self.name()
-        d = lensing.files.lensred_collated_read(run)
+        d = lensing.files.collated_read(run)
         res = self.bin(d)
         lensing.files.lensbin_write(res,run,name) 
 
@@ -357,7 +258,7 @@ class MZBinner(dict):
         """
 
         name=self.name()
-        d = lensing.files.lensred_collated_read(run)
+        d = lensing.files.collated_read(run)
         res = self.bin(d)
         lensing.files.lensbin_write(res,run,name) 
 
@@ -1145,7 +1046,7 @@ def combine_mzbin_lensum_from_ranges(data, tag, trange, zrange=None,getind=False
             (data['z'] >= zrange[0]) & (data['z'] < zrange[1])
     w=where1(logic)
 
-    comb = reduce_lensout(data[w])
+    comb = average_lensums(data[w])
 
     if getind:
         return comb, w
@@ -1153,4 +1054,118 @@ def combine_mzbin_lensum_from_ranges(data, tag, trange, zrange=None,getind=False
         return comb
  
 
+
+
+def reduce_from_ranges(data, 
+                       tag, range1, rangetype = '[)', 
+                       tag2=None, range2=None, range2type = '[)',
+                       getind=False):
+    """
+
+    Range 1 and range 2 are anded.
+
+    Can add more ranges if needed
+
+    """
+    logic = (data[tag] >= range1[0]) & (data[tag] < range1[1])
+
+    logic = get_range_logic(data, tag, range1, rangetype)
+
+    if range2 is not None and tag2 is not None:
+        logic = logic & get_range_logic(data, tag2, range2, range2type)
+
+    w=where1(logic)
+
+    comb = lensing.outputs.average_lensums(data[w])
+
+    if getind:
+        return comb, w
+    else:
+        return comb
+ 
+
+def get_range_logic(data, tag, brange, type):
+    if type == '[]':
+        logic = (data[tag] >= brange[0]) & (data[tag] <= brange[1])
+    elif type == '[)':
+        logic = (data[tag] >= brange[0]) & (data[tag] < brange[1])
+    elif type == '(]':
+        logic = (data[tag] > brange[0]) & (data[tag] <= brange[1])
+    elif type == '()':
+        logic = (data[tag] > brange[0]) & (data[tag] < brange[1])
+    else:
+        raise ValueError("Bad range type: '%s'" % type)
+
+    return logic
+
+def logbin_linear_edges(data, nbin, tag):
+    """
+
+    Do a log binning and print out the corresponding bin edges in
+    the linear variable.  
+    
+    For binning by mass estimators, probably want to combine the last 2 or 3
+    bins because of the exponential cutoff
+    
+    """
+
+    log_data = numpy.log10(data[tag])
+
+    # we can't just take the returned means because we want
+    # the mean in the linear value of the parameter
+    hdict = histogram(log_data, nbin=nbin, more=True, rev=True)
+
+    rev = hdict['rev']
+    mean_data = numpy.zeros(nbin,dtype='f8')
+    stdout.write("Getting mean of '%s'\n" % tag)
+    for i in xrange(nbin):
+        if rev[i] != rev[i+1]:
+            w=rev[ rev[i]:rev[i+1] ]
+            mean_data[i],err = lens_wmom(data, tag, ind=w)
+
+    h = hdict['hist']
+    low=10.0**hdict['low']
+    high=10.0**hdict['high']
+    fmt = "%-2i %8i %11.5e %11.5e %11.5e\n"
+    for i in xrange(nbin):
+        stdout.write(fmt % (i+1,h[i],low[i],high[i],mean_data[i]))
+
+    print(eu.numpy_util.arr2str(low))
+    print(eu.numpy_util.arr2str(high))
+    
+def lensbin_struct(nrbin, bintags=None, n=1):
+    dt = lensbin_dtype(nrbin, bintags=bintags)
+    return numpy.zeros(n, dtype=dt)
+
+def lensbin_dtype(nrbin, bintags=None):
+    """
+    This is the same as lensing.outputs.averaged_dtype
+    but with the averages added
+    """
+    dt=[]
+    if bintags is not None:
+        if not isinstance(bintags,list):
+            bintags = [bintags]
+
+        for bt in bintags:
+            tn = bt+'_range'
+            dt.append( (tn,'f8',2) )
+            tn = bt+'_mean'
+            dt.append( (tn,'f8') )
+            tn = bt+'_err'
+            dt.append( (tn,'f8') )
+            tn = bt+'_sdev'
+            dt.append( (tn,'f8') )
+
+    dt += lensing.outputs.averaged_dtype(nrbin)
+
+    """
+    nrbin = int(nrbin)
+    dt += [('r','f8',nrbin),
+           ('dsig','f8',nrbin),
+           ('dsigerr','f8',nrbin),
+           ('osig','f8',nrbin),
+           ('npair','i8',nrbin)]
+    """
+    return numpy.dtype(dt)
 

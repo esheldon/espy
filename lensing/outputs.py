@@ -11,35 +11,18 @@ from esutil.numpy_util import where1
 # collated outputs
 #
 
-def make_collated_lensred(run):
-    """
-    
-    run
-        collate_lensout_and_catalog
-
-    end write out the file
-
-    """
-    data = collate_lensred_and_catalog(run)
-    f = lensing.files.sample_file('lensred-collate', run)
-    print(f)
-    eu.io.write(f, data, verbose=True)
-
-def collate_lensred_and_catalog(run):
+def make_collated(run):
     """
 
-    Collate the reduced lensout (lens-by-lens) file created with
-
-        make_reduced_lensout
-
-    with the original input catalog.
+    Collate the reduced lensing outputs with the original
+    input file.  This is not necessary for randoms.
 
     """
 
     conf = lensing.files.cascade_config(run)
     lsample = conf['lens_config']['sample']
     cat = lensing.files.read_original_catalog('lens',lsample)
-    lout = lensing.files.lensred_read(run)
+    lout = lensing.files.reduced_read(run)
 
     # trim down to the ones we used
     print("Extracting by zindex")
@@ -50,28 +33,30 @@ def collate_lensred_and_catalog(run):
     data = eu.numpy_util.add_fields(cat, lout.dtype)
     eu.numpy_util.copy_fields(lout, data)
 
-    return data
+
+    f = lensing.files.sample_file('collated', run)
+    print(f)
+    eu.io.write(f, data, verbose=True, clobber=True)
+
 
 #
 # Code to reduce the split lensums (we split the source
 # catalog into chunks and run all lenses on each chunk)
 #
 
-def make_reduced_lensout(run):
+def make_reduced(run, fs='hdfs'):
     """
 
     reduce the lensout splits into a single, summed lensum (lensout) file.
     This is still lens-by-lens, but the sums from different source splits are
     added.
 
-    This is different than reduce_lensums below
-
     """
-    file = lensing.files.sample_file('lensred', run)
+    file = lensing.files.sample_file('reduced', run)
     print("Will combine into file:",file)
     print("Reading data\n")
     # this will read all the separate files and "add" them
-    data = lensing.files.lensout_read(run=run)
+    data = lensing.files.lensout_read(run=run, fs=fs)
 
     if 'totpairs' not in data.dtype.names:
         newdata = eu.numpy_util.add_fields(data, [('totpairs','i8')])
@@ -80,14 +65,13 @@ def make_reduced_lensout(run):
         del data
         data=newdata
 
-    eu.io.write(file, data, verbose=True)
+    eu.io.write(file, data, verbose=True, clobber=True)
 
 
 def add_lensums(l1, l2):
     """
 
-    Add the sums from l2 to l1.  Note this is different than reduce_lensums,
-    which produces averages
+    Add the sums from l2 to l1.
 
     The rows of l1 must correspond to those of l2; zindex must match
 
@@ -110,20 +94,25 @@ def add_lensums(l1, l2):
 # getting averages
 #
 
-def reduce_lensums(lout):
+def average_lensums(lout, weights=None):
     """
 
-    Reduce the lens-by-lens lensums by summing over
+    combine the lens-by-lens lensums by summing over
     all the individual sums and producing averages
 
+    This uses the averaged_dtype
+
+    This is used by the binner routines
+
     """
+
+    if weights is not None:
+        return average_lensums_weighted(lout,weights)
 
     nlens = lout.size
     nbin = lout['rsum'][0].size
 
-    #dt = lensred_dtype()
-    #comb=numpy.zeros(nbin,dtype=dt)
-    comb = lensred_struct(nbin)
+    comb = averaged_struct(nbin)
 
     # weight is the weight for the lens.  Call this weightsum to
     # indicate a sum over multiple lenses
@@ -155,14 +144,89 @@ def reduce_lensums(lout):
 
         comb['dsigerr'][0,i] = numpy.sqrt(1.0/wsum)
 
+        # this is average wsum over lenses
+        # we calculate clustering correction from this, wsum_mean/wsum_mean_random
+        comb['wsum_mean'][0,i] = wsum/nlens
+
+    return comb
+
+def average_lensums_weighted(lout, weights):
+    """
+
+    Reduce the lens-by-lens lensums by summing over
+    all the individual sums and producing averages
+
+    """
+
+    nlens = lout.size
+    nbin = lout['rsum'][0].size
+
+    if weights.size != nlens:
+        raise ValueError("weights not same size as lensout, "
+                         "%d instead of %d" % (weights.size,nlens))
+
+    totweights = weights.sum()
+
+    comb = averaged_struct(nbin)
+
+    # weight is the weight for the lens.  Call this weightsum to
+    # indicate a sum over multiple lenses
+
+    comb['weightsum'][0] = (lout['weight']*weights).sum()
+    comb['sshsum'][0] = (lout['sshsum']*weights).sum()
+
+    # should not use this for anything since weights
+    # make it non-integer
+    comb['totpairs'][0] = lout['totpairs'].sum()
+
+    comb['ssh'] = comb['sshsum']/comb['weightsum']
+
+    for i in xrange(nbin):
+
+        npair = lout['npair'][:,i].sum()
+        w_npair = (lout['npair'][:,i]*weights).sum()
+
+        # not weighting?
+        rsum  = lout['rsum'][:,i].sum()
+
+        wsum = lout['wsum'][:,i].sum()
+
+        w_wsum = (lout['wsum'][:,i]*weights).sum()
+        w_dsum = (lout['dsum'][:,i]*weights).sum()
+        w_osum = (lout['osum'][:,i]*weights).sum()
+
+
+        comb['npair'][0,i] = npair
+        comb['rsum'][0,i] = rsum
+        comb['wsum'][0,i] = w_wsum
+        comb['dsum'][0,i] = w_dsum
+        comb['osum'][0,i] = w_osum
+
+        # averages
+        comb['r'][0,i] = rsum/npair
+
+        comb['dsig'][0,i] = w_dsum/w_wsum
+        comb['osig'][0,i] = w_osum/w_wsum
+
+        # 1/err**2 = sum(1/sigma**2) = n*<1/sigma**2>
+        # so for errors by using nlens*(average wsum over lenses)
+        wsum_for_error = nlens*w_wsum/totweights
+        comb['dsigerr'][0,i] = numpy.sqrt(1.0/wsum_for_error)
+
+
+        # this is average wsum over lenses
+        # we calculate clustering correction from this, wsum_mean/wsum_mean_random
+        comb['wsum_mean'][0,i] = w_wsum/totweights
+
     return comb
 
 
-def lensred_struct(nbin, n=1):
-    dt = lensred_dtype(nbin)
+
+def averaged_struct(nbin, n=1):
+    dt = averaged_dtype(nbin)
     return numpy.zeros(n, dtype=dt)
 
-def lensred_dtype(nbin):
+def averaged_dtype(nbin):
     dt=[('ssh','f8'),          # sshsum/weight
         ('weightsum','f8'),       # this is total of weight for each lens
         ('sshsum','f8'),       # this is total of sshsum for each lens
@@ -171,6 +235,7 @@ def lensred_dtype(nbin):
         ('dsig','f8',nbin),
         ('dsigerr','f8',nbin),
         ('osig','f8',nbin),
+        ('wsum_mean','f8',nbin),
         ('npair','i8',nbin),
         ('rsum','f8',nbin),
         ('wsum','f8',nbin),
@@ -180,7 +245,7 @@ def lensred_dtype(nbin):
 
 
 
-def lensred_dtype_old():
+def averaged_dtype_old():
     dt=[('r','f8'),
         ('dsig','f8'),
         ('dsigerr','f8'),
