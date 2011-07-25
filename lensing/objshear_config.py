@@ -7,12 +7,16 @@ def write_configs(run):
     rc = ObjshearRunConfig(run)
     rc.write_config()
 
+
 class ObjshearRunConfig(dict):
     """
 
     This is reads the lcat, scat, run etc. config files and writes out the
     simple config files for input to objshear, as well as the pbs files to run
     the code.
+
+    Note the output is sent to file system fs='local', the script must make
+    the copy to nfs or hadoop
 
     The lensing.files config reading routines read the original hand written
     files, the "config" routines write the objshear inputs.
@@ -46,25 +50,20 @@ class ObjshearRunConfig(dict):
         if self['src_config']['nsplit'] == 0:
             cf = lensing.files.sample_file('config',self['run'])
             sf = lensing.files.sample_file('scat',self['src_sample'])
-            of = lensing.files.sample_file('lensout',self['run'])
+            of = lensing.files.sample_file('lensout',self['run'], fs='local')
 
-            tmpfile = os.path.basename(of)
-            tmpfile = os.path.join('/data', tmpfile)
 
-            self._write_config(cf,lf,sf,of,tmpfile)
+            self._write_config(cf,lf,sf,of)
         else:
             for i in xrange(self['src_config']['nsplit']):
                 cf = lensing.files.sample_file('config',self['run'], split=i)
                 sf = lensing.files.sample_file('scat',self['src_sample'], split=i)
-                of = lensing.files.sample_file('lensout',self['run'], split=i)
+                of = lensing.files.sample_file('lensout',self['run'], split=i, fs='local')
 
-                tmpfile = os.path.basename(of)
-                tmpfile = os.path.join('/data', tmpfile)
-
-                self._write_config(cf,lf,sf,of,tmpfile)
+                self._write_config(cf,lf,sf,of)
 
 
-    def _write_config(self, config_file, lfile, sfile, ofile, tmpfile):
+    def _write_config(self, config_file, lfile, sfile, ofile):
         d = os.path.dirname(config_file)
         if not os.path.exists(d):
             print "Making config dir:",d
@@ -81,7 +80,6 @@ class ObjshearRunConfig(dict):
         fobj.write(fmt % ("lens_file",lfile))
         fobj.write(fmt % ("source_file",sfile))
         fobj.write(fmt % ("output_file",ofile))
-        fobj.write(fmt % ("temp_file",tmpfile))
 
         for key in ['H0','omega_m','npts']:
             fobj.write(fmt % (key, self['cosmo_config'][key]))

@@ -30,6 +30,12 @@ def lensdir():
         raise ValueError("LENSDIR is not set")
     return os.environ['LENSDIR']
 
+def hadoop_dir():
+    return 'lensing'
+
+def local_dir():
+    return '/data/objshear/lensing'
+
 def catalog_dir():
     """
     The root of the catalog directory. ${LENSDIR}/catalogs
@@ -58,7 +64,7 @@ def read_original_catalog(type, sample):
         return lensing.scat.read_original(sample)
     
 
-def sample_dir(type,sample):
+def sample_dir(type, sample, fs='nfs'):
     """
     Generic routine to get the directory for a sample of a given type, e.g.
     for lcat,scat,proc files etc
@@ -67,12 +73,20 @@ def sample_dir(type,sample):
     """
     if type not in finfo:
         raise ValueError("Unknown file type: '%s'" % type)
-    d = lensdir()
+    if fs == 'nfs':
+        d = lensdir()
+    elif fs == 'hadoop':
+        d = hadoop_dir()
+    elif fs == 'local':
+        d = local_dir()
+    else:
+        raise ValueError("file system not recognized: %s" % fs)
+
     dsub = finfo[type]['subdir']
     d = path_join(d,dsub,sample)
     return d
 
-def sample_file(type, sample, split=None, extra=None, ext=None):
+def sample_file(type, sample, split=None, extra=None, ext=None, fs='nfs'):
     """
     Generic routine to get a file name for a sample of a given type, e.g.  for
     lcat,scat,proc files etc
@@ -80,7 +94,7 @@ def sample_file(type, sample, split=None, extra=None, ext=None):
     See finfo for a list of types
     """
 
-    d = sample_dir(type,sample)
+    d = sample_dir(type,sample, fs=fs)
     front = finfo[type]['front']
     fname=path_join(d, '%s-%s' % (front,sample))
     if split is not None:
