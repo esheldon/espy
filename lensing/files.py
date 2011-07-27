@@ -29,8 +29,6 @@ finfo['scat']     = {'subdir':'scat/{sample}',  'name':'scat-{sample}.bin'}
 finfo['scat-split']  = {'subdir':'scat/{sample}',
                             'name':'scat-{sample}-{split}.bin'}
 
-# lensout are always split, but we need this for the dir
-finfo['lensout']  = {'subdir':'lensout/{sample}'}
 finfo['lensout-split']  = {'subdir':'lensout/{sample}',
                                'name':'lensout-{sample}-{split}.rec'}
 
@@ -46,6 +44,10 @@ finfo['lensbin-plots']       = {'subdir':'lensout/{sample}/lensbin-{name}/plots'
 finfo['lensbin-corr']  = {'subdir':'lensout/{sample}/lensbin-{name}',
                               'name':'lensbin-{sample}-{name}.fits'}
 
+finfo['config-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.config'}
+finfo['script-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.sh'}
+finfo['condor-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.condor'}
+finfo['condor']   = {'subdir':'proc/{sample}', 'name':'run-{sample}.condor'}
 
 
 def lensdir():
@@ -98,7 +100,10 @@ def sample_dir(type, sample, name=None, fs='nfs'):
     See finfo for a list of types
     """
     if type not in finfo:
-        raise ValueError("Unknown file type: '%s'" % type)
+        if type+'-split' in finfo:
+            type=type+'-split'
+        else:
+            raise ValueError("Unknown file type: '%s'" % type)
     if fs == 'nfs':
         d = lensdir()
     elif fs == 'hdfs':

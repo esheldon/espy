@@ -98,6 +98,13 @@ class SDSSRandom(LcatBase):
         self['maptype'] = 'basic'
         self.map = es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'])
 
+    def read_original(self):
+        """
+        For randoms, the lens input is the catalog
+        """
+        return lensing.files.lcat_read(sample=self['sample'])
+
+
     def create_objshear_input(self):
         fname = self.file()
         nrand = self['nrand']

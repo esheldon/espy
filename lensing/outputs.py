@@ -11,11 +11,11 @@ from esutil.numpy_util import where1
 # collated outputs
 #
 
-def make_collated(run):
+def make_collated(run, fix_zindex_as_range=False):
     """
 
     Collate the reduced lensing outputs with the original
-    input file.  This is not necessary for randoms.
+    input file.
 
     """
 
@@ -24,14 +24,25 @@ def make_collated(run):
     cat = lensing.files.read_original_catalog('lens',lsample)
     lout = lensing.files.reduced_read(run)
 
+    # this is for the bugged randoms
+    if fix_zindex_as_range:
+        lout['zindex'] = numpy.arange(lout.size)
+
+
     # trim down to the ones we used
     print("Extracting by zindex")
     cat = cat[ lout['zindex'] ]
 
     # create a new struct with the lensing outputs at the end
     print('collating')
-    data = eu.numpy_util.add_fields(cat, lout.dtype)
+
+    # for randoms, we use the input lcat so we don't want zindex
+    # in the added tags
+    add_dt = [d for d in lout.dtype.descr if d[0] != 'zindex']
+    data = eu.numpy_util.add_fields(cat, add_dt)
     eu.numpy_util.copy_fields(lout, data)
+
+    # In case zindex was in the gif zindex was in the
 
 
     f = lensing.files.sample_file('collated', run)
@@ -64,6 +75,7 @@ def make_reduced(run, fs='hdfs'):
         newdata['totpairs'] = newdata['npair'].sum(axis=1)
         del data
         data=newdata
+
 
     eu.io.write(file, data, verbose=True, clobber=True)
 
