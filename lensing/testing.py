@@ -118,7 +118,7 @@ def load_test_data(run):
     s = lensing.files.scat_read(sample=conf['src_sample'])
     #l = lensing.files.lcat_read(sample=conf['lens_sample'])
     l = lensing.lcat.read_catalog(conf['lens_catalog'],conf['lens_version'])
-    lout = lensing.files.lensout_read(run=run)
+    lout = lensing.files.sample_read('reduced',run)
 
     print 'Getting lens x,y,z'
     xl,yl,zl = eq2xyz(l['ra'], l['dec'])

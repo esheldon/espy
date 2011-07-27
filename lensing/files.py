@@ -1,3 +1,31 @@
+"""
+
+Work with lensing files.
+
+Many of the files can be dealt with using the generic functions
+    sample_dir
+    sample_file
+    sample_read
+    sample_write
+
+The exceptions are the 
+
+    lcat/scat: 
+        simple binary format easily read by objshear
+    config:
+        These are the yaml config files.  These reside under
+        a different directory structure.  
+        
+        These *could* be put under the other system if we move from 'subdir' to
+        'dir' and use environment variables, e.g.
+
+            ${ESPY_DIR}/lensing/config
+            ${LENSDIR}/lcat
+
+        And run os.path.expandvars() on each path *before* expanding
+        the local variables.
+
+"""
 from __future__ import print_function
 import os
 from sys import stdout
@@ -37,14 +65,28 @@ finfo['reduced']  = {'subdir':'lensout/{sample}',
 finfo['collated']  = {'subdir':'lensout/{sample}',
                                  'name':'collated-{sample}.fits'}
 
-finfo['lensbin']       = {'subdir':'lensout/{sample}/lensbin-{name}',
-                              'name':'lensbin-{sample}-{name}.fits'}
-finfo['lensbin-plots']       = {'subdir':'lensout/{sample}/lensbin-{name}/plots',
-                                'name':'lensbin-{sample}-{name}.{ext}'}
-finfo['lensbin-corr']  = {'subdir':'lensout/{sample}/lensbin-{name}',
-                              'name':'lensbin-{sample}-{name}.fits'}
+finfo['binned']       = {'subdir':'lensout/{sample}/binned-{name}',
+                              'name':'binned-{sample}-{name}.fits'}
+finfo['binned-plots']       = {'subdir':'lensout/{sample}/binned-{name}/plots',
+                                'name':'binned-{sample}-{name}.{ext}'}
 
+# currently these must also be binned...
+finfo['corrected']  = {'subdir':'lensout/{sample}/binned-{name}',
+                       'name':'corrected-{sample}-{name}.fits'}
+
+finfo['invert']       = {'subdir':'lensout/{sample}/binned-{name}',
+                         'name':'invert-{sample}-{name}.fits'}
+
+# note if extra is not '' in a call to sample_file, it gets
+# a '-' prepended
+finfo['fit']       = {'subdir':'lensout/{sample}/binned-{name}',
+                      'name':'fit-{sample}-{name}{extra}.fits'}
+
+
+
+# this config is objshear_config not the yaml files
 finfo['config-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.config'}
+
 finfo['script-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.sh'}
 finfo['condor-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.condor'}
 finfo['condor']   = {'subdir':'proc/{sample}', 'name':'run-{sample}.condor'}
@@ -117,15 +159,45 @@ def sample_dir(type, sample, name=None, fs='nfs'):
     d = path_join(d,dsub)
     return d
 
-def sample_file(type, sample, split=None, name=None, fs='nfs'):
+def sample_file(type, sample, split=None, name=None, extra=None, fs='nfs'):
     d = sample_dir(type, sample, name=name, fs=fs)
     if split is not None:
         split = '%03d' % split
         type = type+'-split'
 
-    f = finfo[type]['name'].format(sample=sample, split=split, name=name)
+    if extra is None:
+        extra=''
+    if extra != '':
+        extra = '-'+extra
+
+    f = finfo[type]['name'].format(sample=sample, split=split, extra=extra, name=name)
     f = os.path.join(d,f)
     return f
+
+
+def sample_read(type, sample, split=None, name=None, extra=None, fs='nfs'):
+    """
+
+    Generic reader.
+
+    This works for most things, but won't work for reading multiple splits and
+    combining which is done by /bin/reduce-lensout.py and doesn't work for the
+    config, lcat and scat special file types.
+
+    """
+    f=sample_file(type, sample, split=split, name=name, extra=extra, fs=fs)
+    return eu.io.read(f, verbose=True)
+
+def sample_write(data, type, sample, split=None, name=None, extra=None, fs='nfs'):
+    """
+
+    Generic writer, just gets filename and runs eu.io.write
+
+    """
+    f=sample_file(type, sample, split=split, name=name, extra=extra, fs=fs)
+    print("writing",type,"file:",f)
+    return eu.io.write(f, data, verbose=True)
+
 
 
 def sample_dir_old(type, sample, fs='nfs'):
@@ -175,237 +247,7 @@ def sample_file_old(type, sample, split=None, extra=None, ext=None, fs='nfs'):
     return fname
 
 
-#
-# model fits. Go in same dir as bins
-#
 
-def lensfit_write(data, run, name, extra=None, verbose=True):
-    d = lensfit_dir(run,name)
-    if not os.path.exists(d):
-        os.makedirs(d)
-    f = lensfit_file(run,name,extra=extra)
-    eu.io.write(f,data,verbose=verbose)
-
-def lensfit_print(data):
-    f = '%0.7f %0.7f'
-def lensfit_read(run, name, extra=None,verbose=True):
-    f = lensfit_file(run,name,extra=extra)
-    return eu.io.read(f,verbose=verbose)
-
-def lensfit_dir(run,name):
-    return lensbin_dir(run,name)
-
-def lensfit_file(run,name,extra=None):
-    d=lensfit_dir(run,name)
-    if extra is not None:
-        ex='-'+extra
-    else:
-        ex=''
-    return path_join(d, 'lensfit-%s-%s%s.rec' % (run,name,ex))
-
-
-#
-# inversions
-#
-
-def lensinv_write(data, run, name, verbose=True):
-    d = lensinv_dir(run,name)
-    if not os.path.exists(d):
-        os.makedirs(d)
-    f = lensinv_file(run,name)
-    eu.io.write(f,data,verbose=verbose)
-
-def lensinv_read(run, name, verbose=True):
-    f = lensinv_file(run,name)
-    return eu.io.read(f,verbose=verbose)
-
-def lensinv_dir(run,name):
-    return lensbin_dir(run,name)
-def lensinv_file(run,name):
-    d=lensinv_dir(run,name)
-    return path_join(d, 'lensinv-%s-%s.rec' % (run,name))
-
-
-# corrected binned outputs
-#
-def lensbin_corr_write(data, run, name, verbose=True):
-    d = lensbin_dir(run,name)
-    if not os.path.exists(d):
-        os.makedirs(d)
-    f = lensbin_corr_file(run,name)
-    eu.io.write(f,data,verbose=verbose)
-
-def lensbin_corr_read(run, name, verbose=True):
-    f = lensbin_corr_file(run,name)
-    return eu.io.read(f,verbose=verbose)
-
-def lensbin_corr_file(run,name):
-    d=lensbin_dir(run,name)
-    return path_join(d, 'lensbin-corr-%s-%s.rec' % (run,name))
-
-
-# binned outputs
-#
-def lensbin_write(data, run, name, verbose=True):
-    d = lensbin_dir(run,name)
-    if not os.path.exists(d):
-        os.makedirs(d)
-    f = lensbin_file(run,name)
-    eu.io.write(f,data,verbose=verbose)
-
-def lensbin_read(run, name, verbose=True):
-    f = lensbin_file(run,name)
-    return eu.io.read(f,verbose=verbose)
-
-def lensbin_dir(run,name):
-    """
-    e.g. lensbin_dir('02','m12z3')
-    """
-    return sample_dir('lensbin',run,name=name)
-
-def lensbin_file(run,name):
-    return sample_file('lensbin',run,name=name)
-
-def lensbin_plot_dir(run,name):
-    return sample_dir('lensbin-plots',run,name=name)
-
-#
-# read objshear outputs
-#
-
-def collated_read(run):
-    f = sample_file('collated',run)
-    return eu.io.read(f, verbose=True)
-
-def reduced_read(run):
-    file = sample_file('reduced', run)
-    return eu.io.read(file, verbose=True)
-    
-def lensout_read(file=None, run=None, split=None, silent=False, old=False, fs='hdfs'):
-    if old:
-        return lensout_read_old(file=file,run=run,split=split,silent=silent)
-
-    if file is None and run is None:
-        raise ValueError("usage: lensout_read(file=, run=, split=, silent=False, fs='hdfs')")
-    if file is None:
-        if split is not None:
-            file=sample_file('lensout', run, split=split, fs=fs)
-            return lensout_read(file=file)
-
-        return lensout_read_byrun(run, fs=fs)
-
-    file=expand_path(file)
-
-    return eu.io.read(file, verbose=True)
-
-def lensout_read_old(file=None, run=None, split=None, silent=False, old=False):
-    '''
-    Note old means something different here
-    '''
-    if file is None and run is None:
-        raise ValueError("usage: lensout_read(file=, run=)")
-    if file is None:
-        if split is not None:
-            file=sample_file('lensout', run, split=split)
-            return lensout_read(file=file)
-
-        return lensout_read_byrun(run)
-
-    if not silent:
-        stdout.write('Opening lensout file: %s\n' % file)
-    file=expand_path(file)
-    fobj = open(file,'r')
-
-    if old:
-        idt='i4'
-    else:
-        idt='i8'
-    nlens = numpy.fromfile(fobj,dtype=idt,count=1)
-    if not silent:
-        stdout.write('  nlens: %s\n' % nlens[0])
-    nbin  = numpy.fromfile(fobj,dtype=idt,count=1)
-    if not silent:
-        stdout.write('  nbin: %s\n' % nbin[0])
-
-    dt = lensout_dtype(nbin[0], old=old)
-    if not silent:
-        stdout.write('Reading with dtype: %s\n' % str(dt))
-    data = numpy.fromfile(fobj,dtype=dt,count=nlens[0])
-
-    fobj.close()
-
-    return data
-
-def lensout_read_byrun(run, old=False, fs='hdfs'):
-    conf = cascade_config(run)
-    nsplit = conf['src_config']['nsplit']
-
-    stdout.write("Combining %s splits from run %s\n" % (nsplit,run))
-
-    for i in xrange(nsplit):
-        tdata = lensout_read(run=run, split=i, old=old, fs=fs)
-        if i == 0:
-            data = tdata
-        else:
-            # note zindex match occurs in add_lensums
-            lensing.outputs.add_lensums(data, tdata)
-
-    return data
-
-
-# the old split of the lenses: we now split the sources
-def lensout_read_byrun_lensplit(run):
-    runconf = read_config('run',run)
-    conf = read_config('lcat', runconf['lens_sample'])
-    nsplit = conf['nsplit']
-    if nsplit == 0:
-        file = sample_file('lensout', run)
-        return lensout_read(file)
-
-    # count number in each first
-    ntot = 0
-    for i in xrange(nsplit):
-        file = sample_file('lensout', run, split=i)
-        fobj = open(file,'r')
-        nlens = numpy.fromfile(fobj,dtype='i8',count=1)
-        nbin  = numpy.fromfile(fobj,dtype='i8',count=1)
-        fobj.close()
-        print("    %s:  nlens: %i   nbin: %i" % (file,nlens,nbin) )
-        ntot += nlens[0]
-
-    stdout.write("Reading %s from %s files\n" % (ntot,nsplit))
-    stdout.write("First file is: %s\n" % sample_file('lensout',run,split=0))
-    dt = lensout_dtype(nbin[0])
-    data = numpy.zeros(ntot, dtype=dt)
-    beg=0
-    for i in xrange(nsplit):
-        file = sample_file('lensout', run, split=i)
-        t = lensout_read(file,silent=True)
-
-        end = beg+t.size
-
-        data[beg:end] = t
-
-        beg = end
-
-    return data
-
-
-def lensout_dtype(nbin, old=False):
-
-    if old:
-        zidt='i4'
-    else:
-        zidt='i8'
-    nbin = int(nbin)
-    dt=[('zindex',zidt),
-        ('weight','f8'),
-        ('npair','i8',nbin),
-        ('rsum','f8',nbin),
-        ('wsum','f8',nbin),
-        ('dsum','f8',nbin),
-        ('osum','f8',nbin)]
-    return numpy.dtype(dt)
 
 #
 # read/write objshear lens input catalogs
@@ -697,4 +539,66 @@ def config_dir():
     return dir
 
 
+
+
+
+#
+# old read objshear outputs
+#
+
+
+def lensout_read_old(file=None, run=None, split=None, silent=False, old=False):
+    '''
+    Note old means something different here
+    '''
+    if file is None and run is None:
+        raise ValueError("usage: lensout_read(file=, run=)")
+    if file is None:
+        if split is not None:
+            file=sample_file('lensout', run, split=split)
+            return lensout_read(file=file)
+
+        return lensout_read_byrun(run)
+
+    if not silent:
+        stdout.write('Opening lensout file: %s\n' % file)
+    file=expand_path(file)
+    fobj = open(file,'r')
+
+    if old:
+        idt='i4'
+    else:
+        idt='i8'
+    nlens = numpy.fromfile(fobj,dtype=idt,count=1)
+    if not silent:
+        stdout.write('  nlens: %s\n' % nlens[0])
+    nbin  = numpy.fromfile(fobj,dtype=idt,count=1)
+    if not silent:
+        stdout.write('  nbin: %s\n' % nbin[0])
+
+    dt = lensout_dtype_old(nbin[0], old=old)
+    if not silent:
+        stdout.write('Reading with dtype: %s\n' % str(dt))
+    data = numpy.fromfile(fobj,dtype=dt,count=nlens[0])
+
+    fobj.close()
+
+    return data
+
+
+def lensout_dtype_old(nbin, old=False):
+
+    if old:
+        zidt='i4'
+    else:
+        zidt='i8'
+    nbin = int(nbin)
+    dt=[('zindex',zidt),
+        ('weight','f8'),
+        ('npair','i8',nbin),
+        ('rsum','f8',nbin),
+        ('wsum','f8',nbin),
+        ('dsum','f8',nbin),
+        ('osum','f8',nbin)]
+    return numpy.dtype(dt)
 

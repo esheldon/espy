@@ -84,8 +84,9 @@ class N200Binner(BinnerBase):
     #def __init__(self, nbin):
     #    self['nbin'] = nbin
     #    self.set_bin_ranges()
+    range_type='[]'
     def name(self):
-        return 'n200-%s' % self['nbin']
+        return 'n200-%02d' % self['nbin']
 
     def bin_byrun(self, run):
         """
@@ -93,17 +94,16 @@ class N200Binner(BinnerBase):
         """
 
         name=self.name()
-        d = lensing.files.collated_read(run)
+        d = lensing.files.sample_read('collated',run)
         res = self.bin(d)
-        lensing.files.lensbin_write(res,run,name) 
+
+        lensing.files.sample_write(res,'binned',run,name=name)
 
     def bin(self, data):
 
         nlow, nhigh = self.bin_ranges()
 
         nrbin = data['rsum'][0].size
-        #dt = lensbin_dtype(nrbin, bintags=['ngals200','z'])
-        #bs = numpy.zeros(self['nbin'], dtype=dt)
         bs = lensbin_struct(nrbin, bintags=['ngals200','z'], n=self['nbin'])
 
         i=0
@@ -112,20 +112,12 @@ class N200Binner(BinnerBase):
 
             print('%d <= N200 <= %d' % tuple(Nrange))
 
-            comb,w = reduce_from_ranges(data,'ngals_r200',Nrange, rangetype='[]',
+            comb,w = reduce_from_ranges(data,'ngals_r200',Nrange, range_type=self.range_type,
                                         getind=True)
         
             # first copy all common tags
             for n in comb.dtype.names:
                 bs[n][i] = comb[n][0]
-
-            """
-            bs['r'][i] = comb['r'][0]
-            bs['dsig'][i] = comb['dsig'][0]
-            bs['dsigerr'][i] = comb['dsigerr'][0]
-            bs['osig'][i] = comb['osig'][0]
-            bs['npair'][i] = comb['npair'][0]
-            """
 
             # now the things we are averaging by lens weight
             mn,err,sdev = lens_wmom(data,'photoz_cts',ind=w, sdev=True)
@@ -143,6 +135,18 @@ class N200Binner(BinnerBase):
             i+=1
 
         return bs
+
+    def select_bin(self, data, binnum):
+        """
+        Although not used by bin(), this is useful for other programs
+        such as the random hist matching and correction code
+        """
+        if binnum > self['nbin']:
+            raise ValueError("bin number must be in [0,%d]" % (self['nbin']-1,))
+
+        nlow, nhigh = self.bin_ranges()
+        logic = get_range_logic(data, 'ngals_r200', [nlow[binnum], nhigh[binnum]], self.range_type)
+        return where1(logic)
 
     def set_bin_ranges(self):
         if self['nbin'] == 12:
@@ -258,9 +262,10 @@ class MZBinner(dict):
         """
 
         name=self.name()
-        d = lensing.files.collated_read(run)
+        d = lensing.files.sample_read('collated',run)
         res = self.bin(d)
-        lensing.files.lensbin_write(res,run,name) 
+
+        lensing.files.sample_write(res,'binned',run,name=name)
 
     def bin(self, data):
 
@@ -418,7 +423,7 @@ class MZBinner(dict):
             ex=None
 
         name=self.name()
-        d = lensing.files.lensfit_read(run,name,extra=ex)
+        d = lensing.files.sample_read('fit', run, name=name, extra=ex)
 
         plt = FramedPlot()
         colors = ['blue','magenta','red']
@@ -490,9 +495,9 @@ class MZBinner(dict):
             if not os.path.exists(d):
                 os.makedirs(d)
             if residual:
-                f = 'lensfit-m200-residual-vs-true-%s-%s%s.eps' % (run,name,nex)
+                f = 'fit-m200-residual-vs-true-%s-%s%s.eps' % (run,name,nex)
             else:
-                f = 'lensfit-m200-vs-true-%s-%s%s.eps' % (run,name,nex)
+                f = 'fit-m200-vs-true-%s-%s%s.eps' % (run,name,nex)
             epsfile = path_join(d, f)
             stdout.write("Plotting to file: %s\n" % epsfile)
             plt.write_eps(epsfile)
@@ -526,7 +531,7 @@ class MZBinner(dict):
             Make the eps file
         """
         name=self.name()
-        d = lensing.files.lensinv_read(run,name)
+        d = lensing.files.sample_read('invert',run,name=name)
 
         plt = FramedPlot()
         colors = ['blue','magenta','red']
@@ -590,9 +595,9 @@ class MZBinner(dict):
             if not os.path.exists(d):
                 os.makedirs(d)
             if residual:
-                f = 'lensinv-m200'+type+'-residual-vs-true-%s-%s.eps' % (run,name)
+                f = 'invert-m200'+type+'-residual-vs-true-%s-%s.eps' % (run,name)
             else:
-                f = 'lensinv-m200'+type+'-vs-true-%s-%s.eps' % (run,name)
+                f = 'invert-m200'+type+'-vs-true-%s-%s.eps' % (run,name)
             epsfile = path_join(d, f)
             stdout.write("Plotting to file: %s\n" % epsfile)
             plt.write_eps(epsfile)
@@ -660,15 +665,6 @@ class MZBinner(dict):
 def mzbin_name(nmass,nz):
     name='m%02iz%01i' % (nmass,nz)
     return name
-
-def mzbin_byrun(run, nmass, nz):
-    """
-    Do the binning and write out a file
-    """
-    name='m%02iz%01i' % (nmass,nz)
-    d = lensing.files.lensout_collate(run)
-    res = mzbin(d, nmass, nz)
-    lensing.files.lensbin_write(res,run,name) 
 
 def zbins(nbin):
     if nbin == 3:
@@ -860,7 +856,7 @@ def plot_mzbin_invmass_byrun(run, nmass, nz, type='',
     """
     name=mzbin_name(nmass,nz)
     conf = lensing.files.read_config(run)
-    d = lensing.files.lensinv_read(run,name)
+    d = lensing.files.sample_read('invert',run,name=name)
 
     plt = FramedPlot()
     colors = ['blue','magenta','red']
@@ -924,9 +920,9 @@ def plot_mzbin_invmass_byrun(run, nmass, nz, type='',
         if not os.path.exists(d):
             os.makedirs(d)
         if residual:
-            f = 'lensinv-m200'+type+'-residual-vs-true-%s-%s.eps' % (run,name)
+            f = 'invert-m200'+type+'-residual-vs-true-%s-%s.eps' % (run,name)
         else:
-            f = 'lensinv-m200'+type+'-vs-true-%s-%s.eps' % (run,name)
+            f = 'invert-m200'+type+'-vs-true-%s-%s.eps' % (run,name)
         epsfile = path_join(d, f)
         stdout.write("Plotting to file: %s\n" % epsfile)
         plt.write_eps(epsfile)
@@ -957,7 +953,7 @@ def plot_mzbin_mass_byrun(run, nmass, nz,
 
     name=mzbin_name(nmass,nz)
     conf = lensing.files.read_config(run)
-    d = lensing.files.lensfit_read(run,name,extra=ex)
+    d = lensing.files.sample_read('fit', run, name=name, extra=ex)
 
     plt = FramedPlot()
     colors = ['blue','magenta','red']
@@ -1029,9 +1025,9 @@ def plot_mzbin_mass_byrun(run, nmass, nz,
         if not os.path.exists(d):
             os.makedirs(d)
         if residual:
-            f = 'lensfit-m200-residual-vs-true-%s-%s%s.eps' % (run,name,nex)
+            f = 'fit-m200-residual-vs-true-%s-%s%s.eps' % (run,name,nex)
         else:
-            f = 'lensfit-m200-vs-true-%s-%s%s.eps' % (run,name,nex)
+            f = 'fit-m200-vs-true-%s-%s%s.eps' % (run,name,nex)
         epsfile = path_join(d, f)
         stdout.write("Plotting to file: %s\n" % epsfile)
         plt.write_eps(epsfile)
@@ -1057,8 +1053,8 @@ def combine_mzbin_lensum_from_ranges(data, tag, trange, zrange=None,getind=False
 
 
 def reduce_from_ranges(data, 
-                       tag, range1, rangetype = '[)', 
-                       tag2=None, range2=None, range2type = '[)',
+                       tag, range1, range_type = '[)', 
+                       tag2=None, range2=None, range2_type = '[)',
                        getind=False):
     """
 
@@ -1069,10 +1065,10 @@ def reduce_from_ranges(data,
     """
     logic = (data[tag] >= range1[0]) & (data[tag] < range1[1])
 
-    logic = get_range_logic(data, tag, range1, rangetype)
+    logic = get_range_logic(data, tag, range1, range_type)
 
     if range2 is not None and tag2 is not None:
-        logic = logic & get_range_logic(data, tag2, range2, range2type)
+        logic = logic & get_range_logic(data, tag2, range2, range2_type)
 
     w=where1(logic)
 

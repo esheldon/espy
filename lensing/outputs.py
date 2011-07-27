@@ -1,3 +1,6 @@
+"""
+Some operations on output files
+"""
 from __future__ import print_function
 import os
 import sys
@@ -6,78 +9,6 @@ from numpy import log10,sqrt,linspace,where
 import lensing
 import esutil as eu
 from esutil.numpy_util import where1
-
-#
-# collated outputs
-#
-
-def make_collated(run, fix_zindex_as_range=False):
-    """
-
-    Collate the reduced lensing outputs with the original
-    input file.
-
-    """
-
-    conf = lensing.files.cascade_config(run)
-    lsample = conf['lens_config']['sample']
-    cat = lensing.files.read_original_catalog('lens',lsample)
-    lout = lensing.files.reduced_read(run)
-
-    # this is for the bugged randoms
-    if fix_zindex_as_range:
-        lout['zindex'] = numpy.arange(lout.size)
-
-
-    # trim down to the ones we used
-    print("Extracting by zindex")
-    cat = cat[ lout['zindex'] ]
-
-    # create a new struct with the lensing outputs at the end
-    print('collating')
-
-    # for randoms, we use the input lcat so we don't want zindex
-    # in the added tags
-    add_dt = [d for d in lout.dtype.descr if d[0] != 'zindex']
-    data = eu.numpy_util.add_fields(cat, add_dt)
-    eu.numpy_util.copy_fields(lout, data)
-
-    # In case zindex was in the gif zindex was in the
-
-
-    f = lensing.files.sample_file('collated', run)
-    print(f)
-    eu.io.write(f, data, verbose=True, clobber=True)
-
-
-#
-# Code to reduce the split lensums (we split the source
-# catalog into chunks and run all lenses on each chunk)
-#
-
-def make_reduced(run, fs='hdfs'):
-    """
-
-    reduce the lensout splits into a single, summed lensum (lensout) file.
-    This is still lens-by-lens, but the sums from different source splits are
-    added.
-
-    """
-    file = lensing.files.sample_file('reduced', run)
-    print("Will combine into file:",file)
-    print("Reading data\n")
-    # this will read all the separate files and "add" them
-    data = lensing.files.lensout_read(run=run, fs=fs)
-
-    if 'totpairs' not in data.dtype.names:
-        newdata = eu.numpy_util.add_fields(data, [('totpairs','i8')])
-        print("kludging totpairs")
-        newdata['totpairs'] = newdata['npair'].sum(axis=1)
-        del data
-        data=newdata
-
-
-    eu.io.write(file, data, verbose=True, clobber=True)
 
 
 def add_lensums(l1, l2):
