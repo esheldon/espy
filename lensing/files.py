@@ -12,6 +12,7 @@ The exceptions are the
 
     lcat/scat: 
         simple binary format easily read by objshear
+
     config:
         These are the yaml config files.  These reside under
         a different directory structure.  
@@ -35,19 +36,6 @@ import numpy
 import esutil as eu
 from esutil.ostools import path_join, expand_path
 from esutil.numpy_util import where1
-
-finfo_old={}
-finfo_old['lcat']     = {'subdir':'lcat',    'front':'lcat',    'ext':'.bin'}
-finfo_old['scat']     = {'subdir':'scat',    'front':'scat',    'ext':'.bin'}
-finfo_old['lensout']  = {'subdir':'lensout', 'front':'lensout', 'ext':'.rec'}
-finfo_old['lensred']  = {'subdir':'lensout', 'front':'lensred', 'ext':'.fits'}
-finfo_old['lensred-collate'] = {'subdir':'lensout', 'front':'lensred-collate', 'ext':'.fits'}
-
-finfo_old['config']   = {'subdir':'proc',    'front':'run',     'ext':'.config'}
-finfo_old['condor']   = {'subdir':'proc',    'front':'run',     'ext':'.condor'}
-finfo_old['script']   = {'subdir':'proc',    'front':'run',     'ext':'.sh'}
-
-finfo_old['pbslens']  = {'subdir':'pbslens','ext':'.pbs'}
 
 
 finfo={}
@@ -77,8 +65,8 @@ finfo['corrected']  = {'subdir':'lensout/{sample}/binned-{name}',
 finfo['invert']       = {'subdir':'lensout/{sample}/binned-{name}',
                          'name':'invert-{sample}-{name}.fits'}
 
-# note if extra is not '' in a call to sample_file, it gets
-# a '-' prepended
+# note if extra is not None/'' in a call to sample_file, it gets a '-'
+# prepended
 finfo['fit']       = {'subdir':'lensout/{sample}/binned-{name}',
                       'name':'fit-{sample}-{name}{extra}.fits'}
 
@@ -92,6 +80,10 @@ finfo['condor-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split
 finfo['condor']   = {'subdir':'proc/{sample}', 'name':'run-{sample}.condor'}
 
 
+#
+# base directories
+#
+
 def lensdir():
     """
     This is the root dir under which all data are stored
@@ -101,45 +93,27 @@ def lensdir():
     return os.environ['LENSDIR']
 
 def hdfs_dir():
+    """
+    my area in hdfs
+    """
     return 'hdfs:///user/esheldon/lensing'
 
 def local_dir():
+    """
+    This is a temporary "local" area on each node
+    """
     return '/data/objshear/lensing'
 
-def catalog_dir():
-    """
-    The root of the catalog directory. ${LENSDIR}/catalogs
-    """
-    catdir = path_join(lensdir(), 'catalogs')
-    return catdir
 
-def original_catalog_file(type, sample):
-    """
-    This is the original catalog from which we generate the objshear inputs.
-    Note for dr8 we read from columns, so there is no "original file"
-    """
-    if type == 'lens':
-        return lensing.lcat.original_file(sample)
-    elif type == 'source':
-        return lensing.scat.original_file(sample)
-
-def read_original_catalog(type, sample):
-    """
-    This is the original catalog from which we generate the objshear inputs.
-    Note for dr8 we read from columns, so there is no "original file"
-    """
-    if type == 'lens':
-        return lensing.lcat.read_original(sample)
-    elif type == 'source':
-        return lensing.scat.read_original(sample)
-    
 
 def sample_dir(type, sample, name=None, fs='nfs'):
     """
+
     Generic routine to get the directory for a sample of a given type, e.g.
     for lcat,scat,proc files etc
 
     See finfo for a list of types
+
     """
     if type not in finfo:
         if type+'-split' in finfo:
@@ -160,6 +134,15 @@ def sample_dir(type, sample, name=None, fs='nfs'):
     return d
 
 def sample_file(type, sample, split=None, name=None, extra=None, fs='nfs'):
+    """
+
+    Generic routine to get the file for a sample of a given type, e.g.  for
+    lcat,scat files etc
+
+    See finfo for a list of types
+
+    """
+
     d = sample_dir(type, sample, name=name, fs=fs)
     if split is not None:
         split = '%03d' % split
@@ -199,58 +182,46 @@ def sample_write(data, type, sample, split=None, name=None, extra=None, fs='nfs'
     return eu.io.write(f, data, verbose=True)
 
 
+#
+# these are the basic catalogs we use as inputs.  they get converted to 'lcat'
+# or 'scat' files for input to objshear, and collated with the reduced
+# catalogs.
+#
+# Note these call into lensing.lcat and lensing.scat where specialization
+# occurs
+#
 
-def sample_dir_old(type, sample, fs='nfs'):
+def catalog_dir():
     """
-    Generic routine to get the directory for a sample of a given type, e.g.
-    for lcat,scat,proc files etc
-
-    See finfo for a list of types
+    The root of the catalog directory. ${LENSDIR}/catalogs
     """
-    if type not in finfo_old:
-        raise ValueError("Unknown file type: '%s'" % type)
-    if fs == 'nfs':
-        d = lensdir()
-    elif fs == 'hdfs':
-        d = hdfs_dir()
-    elif fs == 'local':
-        d = local_dir()
-    else:
-        raise ValueError("file system not recognized: %s" % fs)
+    catdir = path_join(lensdir(), 'catalogs')
+    return catdir
 
-    dsub = finfo_old[type]['subdir']
-    d = path_join(d,dsub,sample)
-    return d
-
-
-
-def sample_file_old(type, sample, split=None, extra=None, ext=None, fs='nfs'):
+def original_catalog_file(type, sample):
     """
-    Generic routine to get a file name for a sample of a given type, e.g.  for
-    lcat,scat,proc files etc
-
-    See finfo for a list of types
+    This is the original catalog from which we generate the objshear inputs.
+    Note for dr8 we read from columns, so there is no "original file"
     """
+    if type == 'lens':
+        return lensing.lcat.original_file(sample)
+    elif type == 'source':
+        return lensing.scat.original_file(sample)
 
-    d = sample_dir_old(type,sample, fs=fs)
-    front = finfo_old[type]['front']
-    fname=path_join(d, '%s-%s' % (front,sample))
-    if split is not None:
-        fname += '-%03d' % split
-
-    if extra is not None:
-        fname += '-%s' % extra
-
-    if ext is None:
-        ext = finfo_old[type]['ext']
-    fname += ext
-    return fname
-
-
-
+def read_original_catalog(type, sample):
+    """
+    This is the original catalog from which we generate the objshear inputs.
+    Note for dr8 we read from columns, so there is no "original file"
+    """
+    if type == 'lens':
+        return lensing.lcat.read_original(sample)
+    elif type == 'source':
+        return lensing.scat.read_original(sample)
+ 
 
 #
-# read/write objshear lens input catalogs
+# read/write objshear lens and source input catalogs.  These are special
+# formats understood by the objshear code.
 #
 
 
@@ -314,11 +285,6 @@ def lcat_dtype(old=False):
             ('z','f8')]
 
     return dt
-
-
-#
-# source catalogs
-#
 
 
 def scat_write(sample, data,split=None):
@@ -496,7 +462,7 @@ def scat_dtype(sigmacrit_style, nzl=None):
 
 
 #
-# hand written json run config files
+# hand written yaml config files
 #
 
 def cascade_config(run):
