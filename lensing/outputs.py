@@ -71,6 +71,7 @@ def average_lensums(lout, weights=None):
 
 
         wsum = lout['wsum'][:,i].sum()
+        wsum2 = (lout['wsum'][:,i]**2).sum()
         dsum = lout['dsum'][:,i].sum()
         osum = lout['osum'][:,i].sum()
 
@@ -90,6 +91,7 @@ def average_lensums(lout, weights=None):
         # this is average wsum over lenses
         # we calculate clustering correction from this, wsum_mean/wsum_mean_random
         comb['wsum_mean'][0,i] = wsum/nlens
+        comb['wsum_err'][0,i] = sqrt(wsum2/nlens - wsum_mean**2)/sqrt(nlens)
 
     return comb
 
@@ -179,6 +181,7 @@ def averaged_dtype(nbin):
         ('dsigerr','f8',nbin),
         ('osig','f8',nbin),
         ('wsum_mean','f8',nbin),
+        ('wsum_err','f8',nbin),
         ('npair','i8',nbin),
         ('rsum','f8',nbin),
         ('wsum','f8',nbin),

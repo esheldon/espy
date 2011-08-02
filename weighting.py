@@ -16,7 +16,7 @@ import tempfile
 
 import recfile
 
-def plot_results1d(wc, binsize, xmin=None, xmax=None, xlabel=None):
+def plot_results1d(wc, binsize, xmin=None, xmax=None, xlabel=None, title=None, epsfile=None, show=True):
     """
     compare the histograms at the input binsize
 
@@ -56,7 +56,6 @@ def plot_results1d(wc, binsize, xmin=None, xmax=None, xlabel=None):
     hdifferr = h2err
 
 
-    #tab=biggles.Table(2,1)
     arr=biggles.FramedArray(2,1)
 
 
@@ -92,7 +91,14 @@ def plot_results1d(wc, binsize, xmin=None, xmax=None, xlabel=None):
     pltdiff.ylabel = 'hist2-weight hist1'
 
     arr.xlabel=xlabel
-    arr.show()
+    arr.title=title
+
+    if epsfile is not None:
+        print("writing eps file:",epsfile)
+        arr.write_eps(epsfile)
+
+    if show:
+        arr.show()
 
 class WeightCalculator(dict):
     def __init__(self, data1, data2):

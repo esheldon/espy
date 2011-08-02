@@ -27,6 +27,7 @@ The exceptions are the
         the local variables.
 
 """
+
 from __future__ import print_function
 import os
 from sys import stdout
@@ -53,10 +54,13 @@ finfo['reduced']  = {'subdir':'lensout/{sample}',
 finfo['collated']  = {'subdir':'lensout/{sample}',
                                  'name':'collated-{sample}.fits'}
 
+# here {extra} is really only used for the matched random sums
 finfo['binned']       = {'subdir':'lensout/{sample}/binned-{name}',
-                              'name':'binned-{sample}-{name}.fits'}
+                              'name':'binned-{sample}-{name}{extra}.fits'}
+
+# probably always want to send extra here
 finfo['binned-plots']       = {'subdir':'lensout/{sample}/binned-{name}/plots',
-                                'name':'binned-{sample}-{name}.{ext}'}
+                                'name':'binned-{sample}-{name}{extra}.{ext}'}
 
 # currently these must also be binned...
 finfo['corrected']  = {'subdir':'lensout/{sample}/binned-{name}',
@@ -133,7 +137,7 @@ def sample_dir(type, sample, name=None, fs='nfs'):
     d = path_join(d,dsub)
     return d
 
-def sample_file(type, sample, split=None, name=None, extra=None, fs='nfs'):
+def sample_file(type, sample, split=None, name=None, extra=None, ext=None, fs='nfs'):
     """
 
     Generic routine to get the file for a sample of a given type, e.g.  for
@@ -153,7 +157,7 @@ def sample_file(type, sample, split=None, name=None, extra=None, fs='nfs'):
     if extra != '':
         extra = '-'+extra
 
-    f = finfo[type]['name'].format(sample=sample, split=split, extra=extra, name=name)
+    f = finfo[type]['name'].format(sample=sample, split=split, extra=extra, ext=ext, name=name)
     f = os.path.join(d,f)
     return f
 

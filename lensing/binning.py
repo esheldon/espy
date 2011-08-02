@@ -35,14 +35,18 @@ try:
 except:
     pass
 
-def bin_lenses_byrun(type, run, nbin):
+def instantiate_binner(type, nbin):
     if type == 'n200':
         b = N200Binner(nbin)
     elif type == 'mz':
         b = MZBinner(nbin)
     else:
         raise ValueError("unsupported binner type: '%s'" % type)
+    return b
 
+
+def bin_lenses_byrun(type, run, nbin):
+    b=instantiate_binner(type, nbin)
     b.bin_byrun(run)
 
 class BinnerBase(dict):
@@ -76,6 +80,7 @@ class BinnerBase(dict):
     def plot_dsig_osig_byrun(self, run, **keys):
         for binnum in xrange(self['nbin']):
             self.plot_dsig_osig_byrun_bin(run, binnum, **keys)
+
 
 class N200Binner(BinnerBase):
     """
@@ -138,8 +143,10 @@ class N200Binner(BinnerBase):
 
     def select_bin(self, data, binnum):
         """
-        Although not used by bin(), this is useful for other programs
-        such as the random hist matching and correction code
+
+        Although not used by bin(), this is useful for other programs such as
+        the random hist matching and correction code
+
         """
         if binnum > self['nbin']:
             raise ValueError("bin number must be in [0,%d]" % (self['nbin']-1,))
@@ -147,6 +154,7 @@ class N200Binner(BinnerBase):
         nlow, nhigh = self.bin_ranges()
         logic = get_range_logic(data, 'ngals_r200', [nlow[binnum], nhigh[binnum]], self.range_type)
         return where1(logic)
+
 
     def set_bin_ranges(self):
         if self['nbin'] == 12:
