@@ -5,7 +5,7 @@ from __future__ import print_function
 import os
 import sys
 import numpy
-from numpy import log10,sqrt,linspace,where
+from numpy import log10,sqrt,linspace,where,diag
 import lensing
 import esutil as eu
 from esutil.numpy_util import where1
@@ -86,12 +86,18 @@ def average_lensums(lout, weights=None):
         comb['dsig'][0,i] = dsum/wsum
         comb['osig'][0,i] = osum/wsum
 
-        comb['dsigerr'][0,i] = numpy.sqrt(1.0/wsum)
+        comb['dsigerr_simple'][0,i] = numpy.sqrt(1.0/wsum)
 
         # this is average wsum over lenses
         # we calculate clustering correction from this, wsum_mean/wsum_mean_random
-        comb['wsum_mean'][0,i] = wsum/nlens
+        wsum_mean = wsum/nlens
+        comb['wsum_mean'][0,i] = wsum_mean
         comb['wsum_err'][0,i] = sqrt(wsum2/nlens - wsum_mean**2)/sqrt(nlens)
+
+    m,cov=lensing.jack.jackknife_bylens(dsum=lout['dsum'], wsum=lout['wsum'])
+    comb['dsigcov'][0,:,:] = cov
+    comb['dsigcor'][0,:,:] = lensing.jack.covar2corr(cov)
+    comb['dsigerr'][0,:] = sqrt(diag(cov))
 
     return comb
 
@@ -126,6 +132,9 @@ def average_lensums_weighted(lout, weights):
 
     comb['ssh'] = comb['sshsum']/comb['weightsum']
 
+    # these will get the extra weight
+    jwsum = lout['wsum']
+    jdsum = lout['dsum']
     for i in xrange(nbin):
 
         npair = lout['npair'][:,i].sum()
@@ -163,6 +172,15 @@ def average_lensums_weighted(lout, weights):
         # we calculate clustering correction from this, wsum_mean/wsum_mean_random
         comb['wsum_mean'][0,i] = w_wsum/totweights
 
+        jwsum[:,i] *= weights
+        jdsum[:,i] *= weights
+
+    m,cov=lensing.jack.jackknife_bylens(dsum=jdsum, wsum=jwsum)
+    comb['dsigcov'][0,:,:] = cov
+    comb['dsigcor'][0,:,:] = lensing.jack.covar2corr(cov)
+    comb['dsigerr'][0,:] = sqrt(diag(cov))
+
+
     return comb
 
 
@@ -178,7 +196,10 @@ def averaged_dtype(nbin):
         ('totpairs','i8'),
         ('r','f8',nbin),
         ('dsig','f8',nbin),
+        ('dsigerr_simple','f8',nbin),
         ('dsigerr','f8',nbin),
+        ('dsigcov','f8',(nbin,nbin)),
+        ('dsigcor','f8',(nbin,nbin)),
         ('osig','f8',nbin),
         ('wsum_mean','f8',nbin),
         ('wsum_err','f8',nbin),
