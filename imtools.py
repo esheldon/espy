@@ -9,6 +9,8 @@ from PIL import Image
 image_pattern = 'jpg|jpeg|png|gif'
 image_re = re.compile('.*('+image_pattern+')$',re.IGNORECASE)
 
+_space='&nbsp;'
+
 def GetImageFileList(dir):
     tdir = os.path.expanduser(dir)
     tdir = os.path.expandvars(tdir)
@@ -19,6 +21,7 @@ def GetImageFileList(dir):
         if image_re.match(f):
             f = os.path.join(dir,f)
             image_files.append(f)
+    image_files.sort()
     return image_files
 
 def ThumbDir(dir):
@@ -107,6 +110,19 @@ def MakeResizedImages(flist, size, ftype='thumb', overwrite=False):
                 sys.stdout.write('%s %s\n' % (mess,newf))
                 os.symlink(f, newf)
 
+def index_name(dir, page, npage, znum):
+    if page == 0:
+        name='index.html'
+    elif page < 0:
+        return ""
+    elif page > (npage-1):
+        return ""
+    else:
+        name='index'+str(page).zfill(znum)+'.html'
+
+    name=os.path.join(dir, name)
+    return name
+
 def MakeWebpages(conf):
     """
     Loops over files in the entered config, which must contain
@@ -139,11 +155,19 @@ def MakeWebpages(conf):
     if npage > 99:
         znum=3
     iim=0
-    for page in range(npage):
-        iname='index'
-        if page > 0:
-            iname=iname+str(page).zfill(znum)
-        iname=os.path.join(dir,iname+'.htm')
+
+
+    firstIndex = index_name(dir, 0, npage, znum)
+    lastIndex  = index_name(dir, npage-1, npage, znum)
+    firstIndex = '<a href="%s">First</a>' % firstIndex
+    lastIndex = '<a href="%s">Last</a>' % lastIndex
+
+    for page in xrange(npage):
+
+        prevIndex = index_name(dir, page-1, npage, znum)
+        iname=index_name(dir, page, npage, znum)
+        nextIndex = index_name(dir, page+1, npage, znum)
+
         ifobj=open(iname,'w')
 
         ifobj.write("<html>\n")
@@ -159,28 +183,80 @@ def MakeWebpages(conf):
         for row in range(nrow): 
             ifobj.write(indent*2+'<div class="row">\n')
             for col in range(ncol):
-                if iim < nimage:
-                    ifobj.write(indent*3+'<div class="td">\n')
-                    crap,image = os.path.split(imlist[iim])
-                    crap,thumb = os.path.split(tlist[iim])
-                    crap,red = os.path.split(rlist[iim])
+                ifobj.write(indent*3+'<div class="td">\n')
+                crap,image = os.path.split(imlist[iim])
+                crap,thumb = os.path.split(tlist[iim])
+                crap,red = os.path.split(rlist[iim])
 
-                    turl = os.path.join(tdir,thumb)
-                    rurl = os.path.join(tdir,red)
+                turl = os.path.join(tdir,thumb)
+                rurl = os.path.join(tdir,red)
 
-                    ifobj.write(indent*4+'<img src="'+turl+'">\n')
+                ifobj.write(indent*4+'<img src="'+turl+'">\n')
 
-                    ifobj.write(indent*4+'<br><span class="thumbname">'+image+'</span>\n')
-                    #ifobj.write(indent*4+'<font color=white>'+image+'</font>\n')
+                ifobj.write(indent*4+'<br><span class="thumbname">'+image+'</span>\n')
+                #ifobj.write(indent*4+'<font color=white>'+image+'</font>\n')
 
-                    ifobj.write(indent*3+'</div>\n')
+                ifobj.write(indent*3+'</div>\n')
+
                 iim+=1
+
+                # break out of column loop
+                if iim > (nimage-1):
+                    break
+
+            # row end div
             ifobj.write(indent*2+'</div>\n')
 
+            # break out of row loop
+            if iim > (nimage-1):
+                break
+
+        # The "previous" and "next" links
+        if nextIndex != "":
+            nextIndex='<a href="%s">Next</a>' % nextIndex
+        else:
+            nextIndex=_space*4
+        if prevIndex != "":
+            prevIndex='<a href="%s">Previous</a>' % prevIndex
+        else:
+            prevIndex=_space*8
+
+
+
         ifobj.write(indent+'</div>\n')
+
+        if page == 0:
+            firstlast = lastIndex
+        elif page == (npage-1):
+            firstlast = firstIndex
+        else:
+            firstlast = firstIndex + '/' + lastIndex
+
+        prevnextdiv="""
+  <div class="prevNext">
+    <div class="prevNextRow">
+      <div class="prevtd">
+        {prevIndex}
+      </div>
+      <div class="firstlast">
+        {firstlast}
+      </div>
+      <div class="nexttd">
+        {nextIndex}
+      </div>
+    </div>
+  </div>\n""".format(prevIndex=prevIndex, firstlast=firstlast, nextIndex=nextIndex)
+
+        ifobj.write(prevnextdiv)
+
+
         ifobj.write('</div>\n')
         ifobj.write('</body>\n</html>\n')
         ifobj.close() 
+
+
+
+
 
 stylesheet="""
     /* Colors used: 
@@ -199,7 +275,7 @@ stylesheet="""
       margin:0;
 
       color:#595B30;      /* A kind of brown */
-      background:#F0E68C; /* khaki; */
+      background:#000000; /* khaki; */
     }
 
     a:link {color:#595B30; text-decoration:none}
@@ -229,7 +305,7 @@ stylesheet="""
       height:100%;
       padding:0.5em;
 
-      background:#898B60; /* A tannish color */
+      background:#000000; /* A tannish color */
     }
 
     #navigation hr { display:none }
@@ -283,7 +359,7 @@ stylesheet="""
       border-spacing:2px;
       height:33%; 
 
-      background:#595B30;
+      background:#000000;
 
     }
 
@@ -344,6 +420,16 @@ stylesheet="""
       font-style:italic;
     }
 
+    .prevNextRow div.firstlast
+    {  
+      /*border: red 2px solid;*/
+      width:100%;
+      text-align:center;
+      font-style:italic;
+    }
+
+
+
 
 
     /*-----------------------------------------------*/
@@ -369,3 +455,38 @@ def WriteCSS(file):
     f.close()
 
 
+
+_imhtml="""<html>
+<!-- Created by images2html Erin Sheldon -->
+<head>\n";
+    <link rel="STYLESHEET" type="text/css" href="{css_url}>
+</head>
+    
+<body>
+    
+    <div id="content">
+
+        <div class="imagetable">
+            <em>{image_name}</em><br>
+
+	        <a href="{next_image_url}"><img src="../.thumbnails/{reduced_name}"></a>
+
+        </div>
+
+        <div class="prevNext">
+            <div class="prevNextRow">
+                <div class="prevtd">
+                    {prev_image_url}
+                </div>
+                <div class="firstlast">
+                    {index_url}
+                </div>
+                <div class="nexttd">
+                    {next_image_url}
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+"""
