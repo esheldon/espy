@@ -1,0 +1,415 @@
+#!/usr/bin/env python
+"""
+    %prog [options] product [version]
+
+Description:
+
+    Make an image gallery for the input image list.  All files in the image
+    list should be in the current working directory.  
+    
+    A subdirectory of the current working directory is made called
+    "images2html" and all thumbnails, reduced images, and html files other than
+    the index.html are stored there.  
+    
+    The index.html just redirects to images2html/index01.html
+    
+"""
+import os
+import sys
+import re
+from PIL import Image
+from optparse import OptionParser
+
+default_thumb_dims = (200,200)
+default_reduced_dims = (800,800)
+default_index_dims = (3,3)
+
+parser=OptionParser(__doc__)
+parser.add_option("-o","--overwrite", default=False, 
+                  help="Overwrite thumbs/reduced, default %default")
+parser.add_option("--thumb-dims", default=default_thumb_dims, 
+                  help="Thumbnail size, default %default")
+parser.add_option("--reduced-dims", default=default_reduced_dims, 
+                  help="Reduced image size, default %default")
+parser.add_option("--index-dims", default=default_index_dims, 
+                  help="nrows,ncols in index pages, default %default")
+
+
+_stylesheet="""
+    /* Colors used: 
+        #595B30  A kind of brown for the main text color
+        #F0E68C  Khaki for the main background
+        #898B60  A tannish color for nav background a few others
+        #ffe4c4  bisque. visited links in navigation bar
+    */
+
+    /******************************************/
+    /* Styling rules for the body             */
+    /******************************************/
+
+    html,body 
+    {
+      margin:0;
+
+      color:#595B30;      /* A kind of brown */
+      background:#000000; /* khaki; */
+    }
+
+    a:link {color:#595B30; text-decoration:none}
+    a:visited {color:#595B30; text-decoration:none}
+    a:hover {text-decoration:underline}
+
+    /*-----------------------------------------------*/
+    /* The main content, with absolute positioning   */
+    /*-----------------------------------------------*/
+
+    /*
+    #content 
+    {
+      position:absolute;
+      top:3em;
+      left:8em;
+    }
+    */
+
+    /*-----------------------------------------------*/
+    /* A navigation bar will be on the left          */
+    /*-----------------------------------------------*/
+
+    #navigation 
+    {
+      width:8em;
+      height:100%;
+      padding:0.5em;
+
+      background:#000000; /* A tannish color */
+    }
+
+    #navigation hr { display:none }
+    #navigation h2 { color:#595B30 }
+    #navigation a:link {color:white}
+    #navigation a:visited {color:#ffe4c4} /* bisque */
+
+
+    /*--------------------------------------------------------*/
+    /* A class for the main table division on the index pages */
+    /*--------------------------------------------------------*/
+
+    .thumbtable 
+    {
+      display:table; 
+      border-collapse:separate;
+
+      margin:10px auto;
+
+
+      width:640px;
+      height:480px;
+
+      /* this puts a background, and the border spacing, combined with 
+         a background color of the td's, creates the border. I switched to
+         putting an actual border on, see the row div.td */
+      /*border-spacing:2px;*/
+      /*background:#898B60;*/
+    }
+
+    .thumbname 
+    { 
+      font-style:italic;
+      font-size:small;
+
+      color:#898B60;
+    }
+
+    /*-----------------------------------------------*/
+    /* rows and data classes                         */
+    /*-----------------------------------------------*/
+
+    .row 
+    {
+      display:table-row;
+    }
+
+    .row div 
+    {
+      display:table-cell;
+      border-spacing:2px;
+      height:33%; 
+
+      background:#000000;
+
+    }
+
+    /* td is a subclass I guess */
+
+    .row div.td 
+    {
+      text-align:center;
+      vertical-align:middle;
+      width:25%;
+
+      /* these replace the effect of border-spacing and background in
+         the main thumbtable. Better, since \"missing\" images are filled
+         with the body background */
+      border: 1px #898B60 solid;
+    }
+
+    .row div.td img { border-color:#595B30 }
+
+    /*-----------------------------------------------*/
+    /* A class for the bottom \"previous\" and \"next\"  */
+    /* index                                         */
+    /*-----------------------------------------------*/
+
+    .prevNext 
+    {  
+      margin-left:auto;
+      margin-right:auto;
+      margin-top:0px;
+      margin-bottom:0px;
+      width:640px;
+      /*border: 2px black solid;*/
+      /*height:5em;*/
+    }
+
+    .prevNextRow 
+    {  
+      display:table-row;
+    }
+
+    .prevNextRow div
+    { 
+      display:table-cell;
+    }
+
+    .prevNextRow div.prevtd
+    {  
+      /*border: red 2px solid;*/
+      width:1%;
+      text-align:left;
+      font-style:italic;
+    }
+    .prevNextRow div.nexttd
+    {  
+      /*border: red 2px solid;*/
+      width:1%;
+      text-align:right;
+      font-style:italic;
+    }
+
+    .prevNextRow div.firstlast
+    {  
+      /*border: red 2px solid;*/
+      width:100%;
+      text-align:center;
+      font-style:italic;
+    }
+
+
+
+
+
+    /*-----------------------------------------------*/
+    /* A class for containing the images             */
+    /*-----------------------------------------------*/
+
+    .imagetable 
+    {
+      display:table; 
+      border-collapse:separate;
+
+      margin:10px auto;
+      border-spacing:2px;
+      font-style:italic;
+    }
+
+    .imagetable img { border-color:#898B60 }
+
+"""
+
+
+_imhtml="""<html>
+<!-- Created by images2html Erin Sheldon -->
+<head>
+    <link rel="STYLESHEET" type="text/css" href="{css_url}">
+</head>
+    
+<body>
+    
+    <div id="content">
+
+        <div class="imagetable">
+            {image_name}<br>
+
+	        <a href="{next_image_name}"><img src="{reduced_name}"></a>
+
+        </div>
+
+        <div class="prevNext">
+            <div class="prevNextRow">
+                <div class="prevtd">
+                    {prev_atag}
+                </div>
+                <div class="firstlast">
+                    {index_atag}
+                </div>
+                <div class="nexttd">
+                    {next_atag}
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+"""
+
+class GalleryMaker:
+    def __init__(self, images, **keys):
+        self.images = images
+
+
+        self.thumb_dims = keys.get('thumb_dims', default_thumb_dims)
+        self.reduced_dims = keys.get('reduced_dims', default_reduced_dims)
+        self.index_dims = keys.get('index_dims', default_index_dims)
+
+        self.outdir = './images2html'
+        if not os.path.exists(self.outdir):
+            os.makedirs(self.outdir)
+
+        self.css_name='images2html.css'
+        self.css_file=os.path.join(self.outdir, self.css_name)
+
+        self.make_thumb_names()
+
+    def write_css(self):
+        with open(self.css_file,'w') as fobj:
+            fobj.write(_stylesheet)
+
+    def write_pages(self):
+        for info in self.iminfo:
+            html_file = os.path.join(self.outdir, info['html'])
+            with open(html_file,'w') as fobj:
+                pagetext=_imhtml.format(css_url=self.css_name,
+                                        image_name=os.path.basename(info['image']),
+                                        reduced_name=info['reduced'],
+                                        prev_atag=info['prev-atag'],
+                                        next_atag=info['next-atag'],
+                                        next_image_name=info['next'],
+                                        index_atag="")
+
+                fobj.write(pagetext)
+
+    def make_thumbs(self, overwrite=False):
+        """
+        Make thumbnails and reduced images
+        """
+
+        for info in self.iminfo:
+            thumb_file = os.path.join(self.outdir, info['thumb'])
+            reduced_file = os.path.join(self.outdir, info['reduced'])
+
+            if not os.path.exists(thumb_file) or overwrite:
+                self.make_reduced_image(info['image'], self.thumb_dims, thumb_file)
+            if not os.path.exists(reduced_file) or overwrite:
+                self.make_reduced_image(info['image'], self.reduced_dims, reduced_file)
+
+    def make_reduced_image(self, imfile, dims, newfile):
+        new_totpix = dims[0]+dims[1]
+
+        image = Image.open(imfile)
+        osx, osy = image.size
+
+        totpix = osx+osy
+
+        if totpix > new_totpix:
+            image.thumbnail(dims, Image.ANTIALIAS ) 
+            print 'writing',newfile
+            image.save(newfile)
+        else:
+            print 'Image is smaller than requested size. Linking'
+            os.symlink(imfile, newfile)
+
+
+
+    def make_thumb_names(self):
+
+        self.iminfo=[]
+
+        nim = len(self.images)
+        for i in xrange(nim):
+            im = self.images[i]
+            thumb_name, reduced_name, html_name = self.im2altnames(im)
+
+            if i == 0:
+                prev_html_atag = ""
+                prev_html_name = ""
+            else:
+                tname, rname, hname = self.im2altnames(self.images[i-1])
+                prev_html_atag = '<a href="%s">Prev</a>' % hname
+                prev_html_name = hname
+
+            if i == (nim-1):
+                next_html_atag = ""
+                next_html_name = ""
+            else:
+                tname, rname, hname = self.im2altnames(self.images[i+1])
+                next_html_atag = '<a href="%s">Next</a>' % hname
+                next_html_name = hname
+
+            imdict = {'image':im, 
+                      'thumb':thumb_name, 
+                      'reduced':reduced_name, 
+                      'html':html_name,
+                      'prev-atag':prev_html_atag,
+                      'next-atag':next_html_atag,
+                      'prev':prev_html_name,
+                      'next':next_html_name}
+
+            self.iminfo.append(imdict)
+
+    def im2altnames(self, im):
+        dir, base = os.path.split(im)
+        front, ext = os.path.splitext(base)
+
+        thumb_name = front+'-thumb'+ext
+        reduced_name = front+'-reduced'+ext
+        html_name = front+'.html'
+
+        return thumb_name, reduced_name, html_name
+
+
+def option2tuple(option):
+    if isinstance(option, tuple):
+        return option
+    l = option.split(',')
+    return tuple( [int(i) for i in l] )
+
+def main():
+    options, args = parser.parse_args(sys.argv[1:])
+    if len(args) == 0:
+        parser.print_help()
+        sys.exit(45)
+
+    images=args[:]
+
+    thumb_dims = option2tuple(options.thumb_dims)
+    reduced_dims = option2tuple(options.reduced_dims)
+    index_dims = option2tuple(options.index_dims)
+    overwrite=options.overwrite
+
+    gmaker = GalleryMaker(images, 
+                          thumb_dims=thumb_dims, 
+                          reduced_dims=reduced_dims, 
+                          index_dims=index_dims)
+
+    for iminfo in gmaker.iminfo:
+        print iminfo
+
+    gmaker.write_css()
+    gmaker.make_thumbs(overwrite=overwrite)
+    gmaker.write_pages()
+
+
+main()
+
+
