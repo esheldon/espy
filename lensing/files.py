@@ -59,6 +59,9 @@ finfo['collated']  = {'subdir':'lensout/{sample}',
 finfo['binned']       = {'subdir':'lensout/{sample}/binned-{name}',
                               'name':'binned-{sample}-{name}{extra}.rec'}
 
+finfo['weights'] = {'subdir':'lensout/{sample}/binned-{name}',
+                    'name':'weights-{sample}-{name}{extra}.rec'}
+
 # probably always want to send extra here
 finfo['binned-plots']       = {'subdir':'lensout/{sample}/binned-{name}/plots',
                                 'name':'binned-{sample}-{name}{extra}.{ext}'}

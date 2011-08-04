@@ -139,12 +139,9 @@ def average_lensums_weighted(lout, weights):
     for i in xrange(nbin):
 
         npair = lout['npair'][:,i].sum()
-        w_npair = (lout['npair'][:,i]*weights).sum()
 
         # not weighting?
         rsum  = lout['rsum'][:,i].sum()
-
-        wsum = lout['wsum'][:,i].sum()
 
         w_wsum = (lout['wsum'][:,i]*weights).sum()
         w_dsum = (lout['dsum'][:,i]*weights).sum()
@@ -152,10 +149,10 @@ def average_lensums_weighted(lout, weights):
 
 
         comb['npair'][0,i] = npair
-        comb['rsum'][0,i] = rsum
-        comb['wsum'][0,i] = w_wsum
-        comb['dsum'][0,i] = w_dsum
-        comb['osum'][0,i] = w_osum
+        comb['rsum'][0,i]  = rsum
+        comb['wsum'][0,i]  = w_wsum
+        comb['dsum'][0,i]  = w_dsum
+        comb['osum'][0,i]  = w_osum
 
         # averages
         comb['r'][0,i] = rsum/npair

@@ -14,8 +14,10 @@ import lensing
 import weighting
 import converter
 
+import esutil as eu
+
 import numpy
-from numpy import where
+from numpy import where, zeros
 
 from optparse import OptionParser
 
@@ -57,6 +59,10 @@ def main():
 
     output = lensing.binning.lensbin_struct(data['rsum'][0].size, n=nbin)
 
+    outextra='randmatch-%s' % randrun
+    weights_file=lensing.files.sample_file('weights',lensrun,name=b.name(),extra=outextra)
+    print("opening weights file for writing:",weights_file)
+    wobj=eu.sfile.Open(weights_file,'w')
     for binnum in xrange(nbin):
 
         print("-"*70)
@@ -88,11 +94,15 @@ def main():
         print("combining randoms with weights")
         comb = lensing.outputs.average_lensums(rand, weights=weights)
 
+        wstruct=zeros(1, dtype=[('weights','f8',weights.size)])
+        wstruct['weights'] = weights
+        wobj.write(wstruct)
+
         # copy all common tags
         for n in comb.dtype.names:
             output[n][binnum] = comb[n][0]
 
-    outextra='randmatch-%s' % randrun
+    wobj.close()
     lensing.files.sample_write(output,'binned',lensrun,name=b.name(),extra=outextra)
 
 main()
