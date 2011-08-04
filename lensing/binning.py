@@ -63,10 +63,10 @@ class BinnerBase(dict):
 
     def plot_dsig_osig_byrun_bin(self, run, binnum, **keys):
         """
-        See lensing.plotting.plot_dsig_osig
+        See lensing.plotting.plot2dsig
         """
         name = self.name()
-        data=lensing.files.lensbin_read(run,name)
+        data=lensing.files.sample_read('binned',run,name)
 
         max_binnum = self['nbin']-1
         if (binnum < 0) or (binnum > max_binnum):
@@ -75,7 +75,10 @@ class BinnerBase(dict):
 
         if 'plot_label' not in keys:
             keys['plot_label'] = self.bin_label(binnum)
-        lensing.plotting.plot_dsig_osig(data, **keys)
+        lensing.plotting.plot2dsig(data['r'], 
+                                   data['dsig'], data['dsigerr'],
+                                   data['osig'], data['dsigerr'],
+                                   **keys)
 
     def plot_dsig_osig_byrun(self, run, **keys):
         for binnum in xrange(self['nbin']):
@@ -102,7 +105,7 @@ class N200Binner(BinnerBase):
         d = lensing.files.sample_read('collated',run)
         res = self.bin(d)
 
-        lensing.files.sample_write(res,'binned',run,name=name)
+        lensing.files.sample_write(res,'binned',run,name=name,clobber=True)
 
     def bin(self, data):
 
@@ -117,9 +120,11 @@ class N200Binner(BinnerBase):
 
             print('%d <= N200 <= %d' % tuple(Nrange))
 
+            print("    reducing and jackknifing by lens")
             comb,w = reduce_from_ranges(data,'ngals_r200',Nrange, range_type=self.range_type,
                                         getind=True)
         
+            print("    found",w.size,"in bin")
             # first copy all common tags
             for n in comb.dtype.names:
                 bs[n][i] = comb[n][0]
@@ -182,7 +187,7 @@ class N200Binner(BinnerBase):
         """
 
         name = self.name()
-        data=lensing.files.lensbin_read(run,name)
+        data=lensing.files.sample_read('binned',run,name=name)
 
         biggles.configure('screen','width', 1140)
         biggles.configure('screen','height', 1140)
@@ -235,10 +240,13 @@ class N200Binner(BinnerBase):
 
 
         if dops:
-            d = lensing.files.lensbin_plot_dir(run,name)
+            #d = lensing.files.lensbin_plot_dir(run,name)
+            d = lensing.files.sample_dir('binned',run,name=name)
             if not os.path.exists(d):
+                print("making dir:",d)
                 os.makedirs(d)
-            epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
+            #epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
+            epsfile=lensing.files.sample_file('binned-plots',run,name=name,extra='-allplot',ext='eps')
             stdout.write("Plotting to file: %s\n" % epsfile)
             pa.write_eps(epsfile)
         else:
@@ -273,7 +281,7 @@ class MZBinner(dict):
         d = lensing.files.sample_read('collated',run)
         res = self.bin(d)
 
-        lensing.files.sample_write(res,'binned',run,name=name)
+        lensing.files.sample_write(res,'binned',run,name=name,clobber=True)
 
     def bin(self, data):
 
@@ -1163,13 +1171,5 @@ def lensbin_dtype(nrbin, bintags=None):
 
     dt += lensing.outputs.averaged_dtype(nrbin)
 
-    """
-    nrbin = int(nrbin)
-    dt += [('r','f8',nrbin),
-           ('dsig','f8',nrbin),
-           ('dsigerr','f8',nrbin),
-           ('osig','f8',nrbin),
-           ('npair','i8',nrbin)]
-    """
     return numpy.dtype(dt)
 

@@ -5,11 +5,12 @@ from __future__ import print_function
 import os
 import sys
 import numpy
-from numpy import log10,sqrt,linspace,where
+from numpy import log10,sqrt,linspace,where,diag
 import lensing
 import esutil as eu
 from esutil.numpy_util import where1
 
+import jackknife
 
 def add_lensums(l1, l2):
     """
@@ -86,12 +87,18 @@ def average_lensums(lout, weights=None):
         comb['dsig'][0,i] = dsum/wsum
         comb['osig'][0,i] = osum/wsum
 
-        comb['dsigerr'][0,i] = numpy.sqrt(1.0/wsum)
+        comb['dsigerr_simple'][0,i] = numpy.sqrt(1.0/wsum)
 
         # this is average wsum over lenses
         # we calculate clustering correction from this, wsum_mean/wsum_mean_random
-        comb['wsum_mean'][0,i] = wsum/nlens
+        wsum_mean = wsum/nlens
+        comb['wsum_mean'][0,i] = wsum_mean
         comb['wsum_err'][0,i] = sqrt(wsum2/nlens - wsum_mean**2)/sqrt(nlens)
+
+    m,cov=jackknife.wjackknife(vsum=lout['dsum'], wsum=lout['wsum'])
+    comb['dsigcov'][0,:,:] = cov
+    comb['dsigcor'][0,:,:] = jackknife.covar2corr(cov)
+    comb['dsigerr'][0,:] = sqrt(diag(cov))
 
     return comb
 
@@ -126,15 +133,15 @@ def average_lensums_weighted(lout, weights):
 
     comb['ssh'] = comb['sshsum']/comb['weightsum']
 
+    # these will get the extra weight
+    jwsum = lout['wsum']
+    jdsum = lout['dsum']
     for i in xrange(nbin):
 
         npair = lout['npair'][:,i].sum()
-        w_npair = (lout['npair'][:,i]*weights).sum()
 
         # not weighting?
         rsum  = lout['rsum'][:,i].sum()
-
-        wsum = lout['wsum'][:,i].sum()
 
         w_wsum = (lout['wsum'][:,i]*weights).sum()
         w_dsum = (lout['dsum'][:,i]*weights).sum()
@@ -142,10 +149,10 @@ def average_lensums_weighted(lout, weights):
 
 
         comb['npair'][0,i] = npair
-        comb['rsum'][0,i] = rsum
-        comb['wsum'][0,i] = w_wsum
-        comb['dsum'][0,i] = w_dsum
-        comb['osum'][0,i] = w_osum
+        comb['rsum'][0,i]  = rsum
+        comb['wsum'][0,i]  = w_wsum
+        comb['dsum'][0,i]  = w_dsum
+        comb['osum'][0,i]  = w_osum
 
         # averages
         comb['r'][0,i] = rsum/npair
@@ -153,15 +160,21 @@ def average_lensums_weighted(lout, weights):
         comb['dsig'][0,i] = w_dsum/w_wsum
         comb['osig'][0,i] = w_osum/w_wsum
 
-        # 1/err**2 = sum(1/sigma**2) = n*<1/sigma**2>
-        # so for errors by using nlens*(average wsum over lenses)
-        wsum_for_error = nlens*w_wsum/totweights
-        comb['dsigerr'][0,i] = numpy.sqrt(1.0/wsum_for_error)
-
 
         # this is average wsum over lenses
         # we calculate clustering correction from this, wsum_mean/wsum_mean_random
         comb['wsum_mean'][0,i] = w_wsum/totweights
+
+        jwsum[:,i] *= weights
+        jdsum[:,i] *= weights
+
+    m,cov=jackknife.wjackknife(vsum=jdsum, wsum=jwsum)
+    comb['dsigcov'][0,:,:] = cov
+    comb['dsigcor'][0,:,:] = jackknife.covar2corr(cov)
+    comb['dsigerr'][0,:] = sqrt(diag(cov))
+
+ 
+
 
     return comb
 
@@ -178,7 +191,10 @@ def averaged_dtype(nbin):
         ('totpairs','i8'),
         ('r','f8',nbin),
         ('dsig','f8',nbin),
+        ('dsigerr_simple','f8',nbin),
         ('dsigerr','f8',nbin),
+        ('dsigcov','f8',(nbin,nbin)),
+        ('dsigcor','f8',(nbin,nbin)),
         ('osig','f8',nbin),
         ('wsum_mean','f8',nbin),
         ('wsum_err','f8',nbin),

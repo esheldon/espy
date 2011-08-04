@@ -20,65 +20,188 @@ labels['dsig'] = r'$\Delta\Sigma ~[M_{sun} pc^{-2}]$'
 labels['osig'] = r'$\Delta\Sigma_\times ~ [M_{sun} pc^{-2}]$'
 
 
-
-def plot_dsig_osig(comb, **keys):
+def plot2dsig_new(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
     """
-    Plot delta sigma and ortho delta sigma in two plots
+    Plot delta sigma and a second delta sigma in two plots the second of which
+    is linear.
 
     Parameters
     ----------
-    comb: structured array
-        a "scalar" structured array, e.g.
-            data=lensing.files.lensbin_read(run,name)
-            comb = data[3]
     show: bool, optional
         Show plot in a window, default True
-    dsigrange: [min,max]
+    yrange1: [min,max]
         The y range of the delta sigma plot
-    osigrange: [min,max]
+    yrange2: [min,max]
         The y range of the ortho-delta sigma plot
     range2var: [min,max]
         The x range over which to calculate a osig variance
         and determine a plot range.  This is overridden by
-        osigrange
+        range2
+
+    plot_label: string, optional
+        a label for the top plot
+
+    # label1,label2 go in a key in the bottom plot
+    label1: string, optional
+        a label for the first dsig
+    label2: string, optional
+        a label for the second dsig
+
+
+    """
+
+    color2 = 'red'
+    ptype1='filled circle'
+    size1=1
+    ptype2='filled circle'
+    size2=1
+
+    show = keys.get('show',True)
+    yrange1 = keys.get('yrange1',None)
+    yrange2 = keys.get('yrange2',None)
+
+    # this is a y-log plot, use more powerful range determination
+    yrange1 = eu.plotting.get_log_plot_range(dsig1, err=dsig1err, input_range=yrange1)
+
+    xrng = eu.plotting.get_log_plot_range(r)
+
+    # this over-rides
+    range4var = keys.get('range4var',None)
+    if yrange2 is None:
+        if range4var is not None:
+            w=where1( (r >= range4var[0]) & (r <= range4var[1]))
+            if w.size == 0:
+                raise ValueError("no points in range [%d,%d]" % tuple(range4var))
+            sdev = dsig2[w].std()
+        else:
+            sdev = dsig2.std()
+
+        yrange2 = [-3.5*sdev, 3.5*sdev]
+
+
+    label  = keys.get('plot_label',None)
+    label1 = keys.get('label1',None)
+    label2 = keys.get('label2',None)
+
+    # The points and zero curve
+    dsig1_p = Points(r, dsig1, color='black', type=ptype1, size=size1)
+    dsig1err_p = SymErrY(r, dsig1, dsig1err, color='black')
+    dsig1_p.label=label1
+
+    dsig2_p = Points(r, dsig2, color=color2, type=ptype2, size=size2)
+    dsig2err_p = SymErrY(r, dsig2, dsig2err, color=color2)
+    dsig2_p.label=label2
+
+    c=Curve([1.e-5,1.e5],[0,0], type='solid')
+
+
+    arr = FramedArray(2,1)
+    arr.cellspacing=1
+    arr.aspect_ratio=2
+    arr.xlabel = labels['rproj']
+    arr.ylabel = labels['dsig']
+    arr.xrange = xrng
+
+
+    arr[0,0].yrange = yrange1
+    arr[0,0].xlog=True
+    arr[0,0].ylog=True
+
+    # biggles chokes if you give it negative data for a log plot
+    arr[0,0].add(dsig1_p, dsig2_p)
+    eu.plotting.add_log_error_bars(arr[0,0],'y',r,dsig1,dsig1err,yrange1)
+    eu.plotting.add_log_error_bars(arr[0,0],'y',r,dsig2,dsig2err,yrange1,color=color2)
+
+    if label is not None:
+        arr[0,0].add(PlotLabel(0.9,0.9,label,halign='right'))
+
+
+    arr[1,0].yrange = yrange2
+    arr[1,0].xlog=True
+    arr[1,0].add(c)
+    arr[1,0].add(dsig1_p, dsig1err_p, dsig2_p, dsig2err_p)
+
+    if label1 is not None or label2 is not None:
+        key = PlotKey(0.9,0.15, [dsig1_p,dsig2_p], halign='right')
+        arr[1,0].add(key)
+
+
+    if show:
+        arr.show()
+    return arr
+
+
+
+def plot2dsig(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
+    """
+    Plot delta sigma and a second delta sigma in two plots the second of which
+    is linear.
+
+    Parameters
+    ----------
+    show: bool, optional
+        Show plot in a window, default True
+    range1: [min,max]
+        The y range of the delta sigma plot
+    range2: [min,max]
+        The y range of the ortho-delta sigma plot
+    range2var: [min,max]
+        The x range over which to calculate a osig variance
+        and determine a plot range.  This is overridden by
+        range2
+
+    plot_label: string, optional
+        a label for the top plot
+
+    # label1,label2 go in a key in the bottom plot
+    label1: string, optional
+        a label for the first dsig
+    label2: string, optional
+        a label for the second dsig
 
 
     """
 
     show = keys.get('show',True)
-    dsigrange = keys.get('dsigrange',None)
-    osigrange = keys.get('osigrange',None)
+    range1 = keys.get('range1',None)
+    range2 = keys.get('range2',None)
 
     # this over-rides
     range4var = keys.get('range4var',None)
-    if osigrange is None:
+    if range2 is None:
         if range4var is not None:
-            w=where1( (comb['r'] >= range4var[0]) & (comb['r'] <= range4var[1]))
+            w=where1( (r >= range4var[0]) & (r <= range4var[1]))
             if w.size == 0:
                 raise ValueError("no points in range [%d,%d]" % tuple(range4var))
-            sdev = comb['osig'][w].std()
+            sdev = dsig2[w].std()
         else:
-            sdev = comb['osig'].std()
+            sdev = dsig2.std()
 
-        osigrange = [-3.5*sdev, 3.5*sdev]
-        print 'osigrange:',osigrange
+        range2 = [-3.5*sdev, 3.5*sdev]
+        print 'range2:',range2
 
 
-    label=keys.get('plot_label',None)
+    label  = keys.get('plot_label',None)
+    label1 = keys.get('label1',None)
+    label2 = keys.get('label2',None)
 
     # for overplotting
-    dsig_p = Points(comb['r'], comb['dsig'], color='red')
-    dsigerr_p = SymErrY(comb['r'], comb['dsig'], comb['dsigerr'], color='red')
-    dsig_p.label=r'$\Delta\Sigma_+$'
+    dsig1_p = Points(r, dsig1, color='red')
+    dsig1err_p = SymErrY(r, dsig1, dsig1err, color='red')
+    dsig1_p.label=label1
+
+    dsig2_p = Points(r, dsig1, color='red')
+    dsig2err_p = SymErrY(r, dsig1, dsig1err, color='black')
+    dsig2_p.label=label1
 
     arr = FramedArray(2,1)
     arr.aspect_ratio=2
     arr.xlabel = labels['rproj']
+    arr.ylabel = labels['dsig']
 
-    eu.plotting.bscatter(comb['r'], comb['dsig'], yerr=comb['dsigerr'],
+    eu.plotting.bscatter(r, dsig1, yerr=dsig1err,
                          xlog=True, ylog=True, 
-                         ylabel=labels['dsig'],
-                         yrange=dsigrange,
+                         yrange=range1,
                          show=False, 
                          plt=arr[0,0],
                          **keys)
@@ -87,85 +210,26 @@ def plot_dsig_osig(comb, **keys):
         arr[0,0].add(PlotLabel(0.9,0.9,label,halign='right'))
 
 
-    pdict=eu.plotting.bscatter(comb['r'], comb['osig'], yerr=comb['dsigerr'],
+    pdict=eu.plotting.bscatter(r, dsig2, yerr=dsig2err,
                                xlog=True, 
-                               xlabel=labels['rproj'],
-                               ylabel=labels['osig'],
-                               yrange=osigrange,
-                               label=r'$\Delta\Sigma_\times$',
+                               yrange=range2,
+                               label=label2,
                                show=False,
                                dict=True,
                                plt=arr[1,0],
                                **keys)
     c=Curve([1.e-5,1.e5],[0,0], type='solid')
     arr[1,0].add(c)
+    arr[1,0].add(dsig1_p,dsig1err_p)
 
-    arr[1,0].add(dsig_p,dsigerr_p)
+    if label1 is not None or label2 is not None:
+        key = PlotKey(0.9,0.9, [dsig1_p,pdict['p']], halign='right')
+        arr[1,0].add(key)
 
-    key = PlotKey(0.9,0.9, [dsig_p,pdict['p']], halign='right')
-    arr[1,0].add(key)
-
-    arr[0,0].ylabel = labels['dsig']
-    arr[1,0].ylabel = labels['osig']
-    arr.ylabel = labels['dsig']
 
     if show:
         arr.show()
     return arr
-
-def plot_dsig_osig_tab(comb, show=True, dsigrange=None, osigrange=None, **keys):
-    '''
-    this one doesn't work as well
-    '''
-
-    tab = Table(2,1)
-    #tab.aspect_ratio=1.8
-    #tab.cellspacing=0
-    #tab.cellpadding=0
-
-    # for overplotting
-    dsig_p = Points(comb['r'], comb['dsig'], color='red')
-    dsigerr_p = SymErrY(comb['r'], comb['dsig'], comb['dsigerr'], color='red')
-
-    #arr.aspect_ratio=2
-    #arr.xlabel = labels['rproj']
-
-    #top_plt=FramedPlot()
-    #top_plt.aspect_ratio=1
-    #top_plt.xlog=True
-    #top_plt.ylog=True
-
-
-    top_plt = eu.plotting.bscatter(comb['r'], comb['dsig'], yerr=comb['dsigerr'],
-                         xlog=True, ylog=True, 
-                         ylabel=labels['dsig'],
-                         yrange=dsigrange,
-                         show=False, 
-                         **keys)
-    top_plt.x1.draw_ticklabels=0
-
-    bot_plt = eu.plotting.bscatter(comb['r'], comb['osig'], yerr=comb['dsigerr'],
-                                   xlog=True, 
-                                   xlabel=labels['rproj'],
-                                   ylabel=labels['osig'],
-                                   yrange=osigrange,
-                                   show=False,
-                                   **keys)
-
-    c=Curve([1.e-5,1.e5],[0,0], type='solid')
-    bot_plt.add(c)
-
-    bot_plt.add(dsig_p,dsigerr_p)
-
-    #top_plt.aspect_ratio=1
-    #bot_plt.aspect_ratio=0.2
-
-    tab[0,0] = top_plt
-    tab[1,0] = bot_plt
-
-    if show:
-        tab.show()
-    return tab
 
 
 

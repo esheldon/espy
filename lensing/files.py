@@ -55,8 +55,12 @@ finfo['collated']  = {'subdir':'lensout/{sample}',
                                  'name':'collated-{sample}.fits'}
 
 # here {extra} is really only used for the matched random sums
+# these need to be .rec because we have matrix columns
 finfo['binned']       = {'subdir':'lensout/{sample}/binned-{name}',
-                              'name':'binned-{sample}-{name}{extra}.fits'}
+                              'name':'binned-{sample}-{name}{extra}.rec'}
+
+finfo['weights'] = {'subdir':'lensout/{sample}/binned-{name}',
+                    'name':'weights-{sample}-{name}{extra}.rec'}
 
 # probably always want to send extra here
 finfo['binned-plots']       = {'subdir':'lensout/{sample}/binned-{name}/plots',
@@ -64,10 +68,10 @@ finfo['binned-plots']       = {'subdir':'lensout/{sample}/binned-{name}/plots',
 
 # currently these must also be binned...
 finfo['corrected']  = {'subdir':'lensout/{sample}/binned-{name}',
-                       'name':'corrected-{sample}-{name}.fits'}
+                       'name':'corrected-{sample}-{name}.rec'}
 
 finfo['invert']       = {'subdir':'lensout/{sample}/binned-{name}',
-                         'name':'invert-{sample}-{name}.fits'}
+                         'name':'invert-{sample}-{name}.rec'}
 
 # note if extra is not None/'' in a call to sample_file, it gets a '-'
 # prepended
@@ -175,7 +179,7 @@ def sample_read(type, sample, split=None, name=None, extra=None, fs='nfs'):
     f=sample_file(type, sample, split=split, name=name, extra=extra, fs=fs)
     return eu.io.read(f, verbose=True)
 
-def sample_write(data, type, sample, split=None, name=None, extra=None, fs='nfs'):
+def sample_write(data, type, sample, split=None, name=None, extra=None, fs='nfs', **keys):
     """
 
     Generic writer, just gets filename and runs eu.io.write
@@ -183,7 +187,8 @@ def sample_write(data, type, sample, split=None, name=None, extra=None, fs='nfs'
     """
     f=sample_file(type, sample, split=split, name=name, extra=extra, fs=fs)
     print("writing",type,"file:",f)
-    return eu.io.write(f, data, verbose=True)
+    #keys['verbose'] = True
+    return eu.io.write(f, data, **keys)
 
 
 #
