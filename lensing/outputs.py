@@ -10,6 +10,7 @@ import lensing
 import esutil as eu
 from esutil.numpy_util import where1
 
+import jackknife
 
 def add_lensums(l1, l2):
     """
@@ -94,9 +95,9 @@ def average_lensums(lout, weights=None):
         comb['wsum_mean'][0,i] = wsum_mean
         comb['wsum_err'][0,i] = sqrt(wsum2/nlens - wsum_mean**2)/sqrt(nlens)
 
-    m,cov=lensing.jack.jackknife_bylens(dsum=lout['dsum'], wsum=lout['wsum'])
+    m,cov=jackknife.wjackknife(vsum=lout['dsum'], wsum=lout['wsum'])
     comb['dsigcov'][0,:,:] = cov
-    comb['dsigcor'][0,:,:] = lensing.jack.covar2corr(cov)
+    comb['dsigcor'][0,:,:] = jackknife.covar2corr(cov)
     comb['dsigerr'][0,:] = sqrt(diag(cov))
 
     return comb
@@ -162,11 +163,6 @@ def average_lensums_weighted(lout, weights):
         comb['dsig'][0,i] = w_dsum/w_wsum
         comb['osig'][0,i] = w_osum/w_wsum
 
-        # 1/err**2 = sum(1/sigma**2) = n*<1/sigma**2>
-        # so for errors by using nlens*(average wsum over lenses)
-        wsum_for_error = nlens*w_wsum/totweights
-        comb['dsigerr'][0,i] = numpy.sqrt(1.0/wsum_for_error)
-
 
         # this is average wsum over lenses
         # we calculate clustering correction from this, wsum_mean/wsum_mean_random
@@ -175,10 +171,12 @@ def average_lensums_weighted(lout, weights):
         jwsum[:,i] *= weights
         jdsum[:,i] *= weights
 
-    m,cov=lensing.jack.jackknife_bylens(dsum=jdsum, wsum=jwsum)
+    m,cov=jackknife.wjackknife(vsum=jdsum, wsum=jwsum)
     comb['dsigcov'][0,:,:] = cov
-    comb['dsigcor'][0,:,:] = lensing.jack.covar2corr(cov)
+    comb['dsigcor'][0,:,:] = jackknife.covar2corr(cov)
     comb['dsigerr'][0,:] = sqrt(diag(cov))
+
+ 
 
 
     return comb

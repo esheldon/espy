@@ -17,60 +17,51 @@ import esutil as eu
 from esutil.numpy_util import where1
 import recfile
 
-def wjackknife(vsum=None, wsum=None, cleanup=True, slow=False):
+def wjackknife(vsum=None, wsum=None, cleanup=True, slow=False, verbose=False):
     """
     jackknife the weighted data
+
+    This calls the c routine "jackknife", creating the temporary input file,
+    and reads the output file and returns mean,covar
 
     parameters
     ----------
     vsum: array
         An (nsample, nvar) array.  Each element should be interpreted as
-        weight*var or sum(weights*var) such that the means will be
-            vsum/wsum
+        weight*var or sum(weights*var) such that the mean for variable i is
+
+            sum(vsum)/sum(wsum)
+
     wsum: array
-        An (nsample, nvar) array.  Each element should be interpreted as
-        weight or sum(weights)
+        An (nsample, nvar) array.  Each element should be interpreted as weight
+        or sum(weights)
 
     cleanup: bool, optional
+        If True, remove the input and output files
+
+    slow: bool, optional
+        If True, use the pury python version of the code.
     """
 
     if vsum is None or wsum is None:
         raise ValueError("send vsum and wsum")
 
     if slow:
-        return jackknife_purepy(vsum=vsum, wsum=wsum)
+        return wjackknife_purepy(vsum=vsum, wsum=wsum)
 
     f=tempfile.mktemp(prefix='jackknife-input-', suffix='.bin')
     fout = f.replace('.bin','-out.dat')
     try:
-
-        with open(f,'w') as fobj:
-            nsample, nvar = wsum.shape
-
-            nsample=numpy.array([nsample], dtype='i8')
-            nvar=numpy.array([nvar], dtype='i8')
-            vsum=numpy.array(vsum, ndmin=1, dtype='f8', copy=False)
-            wsum=numpy.array(wsum, ndmin=1, dtype='f8', copy=False)
-
-            nsample.tofile(fobj)
-            nvar.tofile(fobj)
-            vsum.tofile(fobj)
-            wsum.tofile(fobj)
         
+        write_wjackknife_inputs(f, vsum, wsum)
+       
         command='jackknife '+f+' '+fout
+        if not verbose:
+            command += ' &> /dev/null'
         if os.system(command) != 0:
             raise RuntimeError("command '%s' failed" % command)
 
-        nvar=int(nvar[0])
-
-        dtype=[('mean','f8'),('err','f8')]
-        fobj = recfile.Open(fout,dtype=dtype,delim=' ',nrows=nvar)
-
-        d=fobj.read()
-        mean = d['mean'].copy()
-
-        covar=numpy.fromfile(fobj.fobj, sep=' ', dtype='f8', count=nvar*nvar)
-        covar=covar.reshape((nvar,nvar))
+        mean, covar = read_jackknife_outputs(fout)
 
     finally:
         if cleanup:
@@ -81,7 +72,38 @@ def wjackknife(vsum=None, wsum=None, cleanup=True, slow=False):
 
     return mean, covar
 
-def jackknife_purepy(vsum=None, wsum=None):
+def write_wjackknife_inputs(filename, vsum, wsum):
+    with open(filename,'w') as fobj:
+        nsample, nvar = wsum.shape
+
+        nsample=numpy.array([nsample], dtype='i8')
+        nvar=numpy.array([nvar], dtype='i8')
+        vsum=numpy.array(vsum, ndmin=1, dtype='f8', copy=False)
+        wsum=numpy.array(wsum, ndmin=1, dtype='f8', copy=False)
+
+        nsample.tofile(fobj)
+        nvar.tofile(fobj)
+        vsum.tofile(fobj)
+        wsum.tofile(fobj)
+
+def read_jackknife_outputs(filename):
+    with open(filename,'r') as fobj:
+
+        vnvar = numpy.fromfile(fobj, sep=' ', count=1, dtype='i8')
+        nvar=int(vnvar[0])
+
+        dtype=[('mean','f8'),('err','f8')]
+        robj = recfile.Open(fobj,dtype=dtype,delim=' ',nrows=nvar)
+
+        d=robj.read()
+        mean = d['mean'].copy()
+
+        covar=numpy.fromfile(fobj, sep=' ', dtype='f8', count=nvar*nvar)
+        covar=covar.reshape((nvar,nvar))
+        
+    return mean, covar
+
+def wjackknife_purepy(vsum=None, wsum=None):
     """
 
     Simple jackknife removing one at a time instead of spacially

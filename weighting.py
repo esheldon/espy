@@ -10,13 +10,31 @@ from __future__ import print_function
 import os
 
 import numpy
-from numpy import where
+from numpy import where, zeros
+
+import esutil as eu
+from esutil.numpy_util import where1
+from esutil.stat import histogram
 
 import tempfile
 
 import recfile
 
-def plot_results1d(wc, binsize, xmin=None, xmax=None, xlabel=None, title=None, epsfile=None, show=True):
+def plothist_weights(weights):
+    import biggles
+    import esutil as eu
+    normweights = weights/weights.max()
+
+    w,=numpy.where(normweights > 0)
+    print("plothist_weights: greater than zero: %d/%d" % (w.size,normweights.size))
+
+    lw = numpy.log10(normweights[w])
+    binsize = 0.1*lw.std()
+    eu.plotting.bhist(lw, binsize=binsize, xlabel='log(relative weight)')
+
+
+def plot_results1d(data1, data2, weights1, binsize, 
+                   xmin=None, xmax=None, xlabel=None, title=None, epsfile=None, show=True):
     """
     compare the histograms at the input binsize
 
@@ -28,21 +46,27 @@ def plot_results1d(wc, binsize, xmin=None, xmax=None, xlabel=None, title=None, e
     import esutil as eu
 
     if xmin is None:
-        xmin = wc.data2.min()
+        xmin = data2.min()
     if xmax is None:
-        xmax = wc.data2.max()
+        xmax = data2.max()
 
-    print("histogramming data set 1")
-    h1dict = eu.stat.histogram(wc.data1, binsize=binsize, more=True, 
+    nw=weights1/weights1.max()
+    effnum = nw.sum()
+    effperc = effnum/data1.size*100
+    plabtext='effnum: %d/%d = %0.1f%%' % (effnum,data1.size,effperc)
+
+    print("plotting hist match results")
+    print("    histogramming data set 1")
+    h1dict = eu.stat.histogram(data1, binsize=binsize, more=True, 
                                min=xmin, max=xmax)
-    print("histogramming data set 1 with weights")
-    h1wdict = eu.stat.histogram(wc.data1, binsize=binsize, 
+    print("    histogramming data set 1 with weights")
+    h1wdict = eu.stat.histogram(data1, binsize=binsize, 
                                 min=xmin, max=xmax,
-                                weights=wc.weight_data['weight'],
+                                weights=weights1,
                                 more=True)
 
-    print("histogramming data set 2")
-    h2dict = eu.stat.histogram(wc.data2, binsize=binsize, more=True,
+    print("    histogramming data set 2")
+    h2dict = eu.stat.histogram(data2, binsize=binsize, more=True,
                                min=xmin, max=xmax)
 
     h1=h1dict['hist']/float(h1dict['hist'].sum())
@@ -50,9 +74,7 @@ def plot_results1d(wc, binsize, xmin=None, xmax=None, xlabel=None, title=None, e
     h2=h2dict['hist']/float(h2dict['hist'].sum())
 
     h2err = numpy.sqrt(h2dict['hist'])/float(h2dict['hist'].sum())
-    #h1werr = numpy.sqrt(h1wdict['whist'])/float(h1wdict['whist'].sum())
     hdiff = h2-h1w
-    #hdifferr = numpy.sqrt(h2err**2 + h1werr**2)
     hdifferr = h2err
 
 
@@ -62,7 +84,7 @@ def plot_results1d(wc, binsize, xmin=None, xmax=None, xlabel=None, title=None, e
     ph1 = biggles.Histogram(h1, binsize=binsize, x0=h1dict['low'][0],color='blue')
     ph1.label = 'dataset 1'
 
-    ph1w = biggles.Histogram(h1w, binsize=binsize, x0=h1dict['low'][0], color='red', type='longdashed')
+    ph1w = biggles.Histogram(h1w, binsize=binsize, x0=h1dict['low'][0], color='red', type='longdashed', width=2)
     ph1w.label = 'weighted 1'
 
     ph2 = biggles.Histogram(h2, binsize=binsize, x0=h2dict['low'][0], width=2)
@@ -75,7 +97,7 @@ def plot_results1d(wc, binsize, xmin=None, xmax=None, xlabel=None, title=None, e
     plt.add(ph1w)
     plt.xlabel=xlabel
 
-    key=biggles.PlotKey(0.1,0.90,[ph1,ph1w,ph2],halign='left')
+    key=biggles.PlotKey(0.1,0.90,[ph1,ph2,ph1w],halign='left')
     plt.add(key)
 
 
@@ -85,8 +107,10 @@ def plot_results1d(wc, binsize, xmin=None, xmax=None, xlabel=None, title=None, e
     phdifferr = biggles.SymmetricErrorBarsY(h1dict['center'], hdiff, hdifferr)
 
     zero=biggles.Curve([xmin,xmax],[0,0])
+
+    plab=biggles.PlotLabel(0.05,0.9,plabtext,halign='left')
     
-    pltdiff.add(phdiff, phdifferr, zero)
+    pltdiff.add(phdiff, phdifferr, zero, plab)
     pltdiff.xlabel = xlabel
     pltdiff.ylabel = 'hist2-weight hist1'
 
@@ -99,6 +123,42 @@ def plot_results1d(wc, binsize, xmin=None, xmax=None, xlabel=None, title=None, e
 
     if show:
         arr.show()
+
+def hist_match(data1, data2, binsize):
+    """
+    The simplest method for histogram matching
+
+    Generate a set of weights for data set 1 such that the distribution of
+    observables are matched to dataset 2.  
+
+    """
+
+    weights1 = zeros(data1.size)
+    min2=data2.min()
+    max2=data2.max()
+
+    h1,rev1 = histogram(data1, binsize=binsize, min=min2, max=max2, rev=True)
+    h2 = histogram(data2, min=min2, max=max2, binsize=binsize)
+
+    if h1.size != h2.size:
+        raise ValueError("histogram sizes don't match: %d/%d" % (h1.size,h2.size))
+
+    ratio = zeros(h1.size)
+    #w=where1(h2 > 0)
+    #ratio[w] = (h1[w]*1.0)/h2[w]
+    w=where1(h1 > 0)
+    ratio[w] = (h2[w]*1.0)/h1[w]
+
+    # this is the weight for each object in the bin
+    ratio /= ratio.max()
+
+    for i in xrange(h1.size):
+        if rev1[i] != rev1[i+1]:
+            w1 = rev1[ rev1[i]:rev1[i+1] ]
+
+            weights1[w1] = ratio[i]
+
+    return weights1
 
 class WeightCalculator(dict):
     def __init__(self, data1, data2):
@@ -385,30 +445,59 @@ if [ "$?" != "0" ]; then
 fi
     """
 
-def test(n_near, limit=False, binnum=9):
+def test_nearest(n_near, limit=False, binnum=9, l=None, r=None):
     import lensing
-    run='06'
-    l=lensing.files.collated_read(run)
-
-    rsample='06'
-    r=lensing.files.lcat_read(rsample)
+    if l is None or r is None:
+        l,r = load_test_data()
 
     binner=lensing.binning.N200Binner(12)
     print("selecting ",binner.bin_label(binnum))
     w=binner.select_bin(l, binnum)
     print("    kept %d/%d" % (w.size,l.size))
-    l=l[w]
 
     # in this case, we know r covers a larger range
     if limit:
         print("limiting random range to match lenses")
-        w,=where((r['z'] >= l['z'].min()) & (r['z'] <= l['z'].max()))
-        wc=WeightCalculator(r['z'][w],l['z'])
+        w,=where((r['z'] >= l['z'][w].min()) & (r['z'] <= l['z'][w].max()))
+        wc=WeightCalculator(r['z'][w],l['z'][w])
     else:
         print("no limits applied")
-        wc=WeightCalculator(r['z'],l['z'])
+        wc=WeightCalculator(r['z'],l['z'][w])
 
     wc.calc_1pass(n_near)
     return wc
+    
+def load_test_data():
+    import lensing
+    run='06'
+    rrun='07'
+    l=lensing.files.sample_read('collated',run)
+    r=lensing.files.sample_read('collated',rrun)
+
+    return l,r
+
+def test_hist_match(binsize, binnum=9, l=None, r=None):
+    import lensing
+    import biggles
+    biggles.configure('screen','width', 1140)
+    biggles.configure('screen','height', 1140)
+
+
+    if l is None or r is None:
+        l,r = load_test_data()
+
+    binner=lensing.binning.N200Binner(12)
+    print("selecting ",binner.bin_label(binnum))
+    w=binner.select_bin(l, binnum)
+    print("    kept %d/%d" % (w.size,l.size))
+
+    weights = hist_match(r['z'], l['z'][w], binsize)
+
+    effnum = weights.sum()
+    effperc = effnum/r.size
+    print("effective number: %d/%d = %0.2f" % (effnum,r.size, effperc))
+
+    plot_results1d(r['z'], l['z'][w], weights, binsize)
+    return weights
     
 

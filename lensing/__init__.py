@@ -115,6 +115,7 @@ from . import pbslens
 
 from . import binning
 from . import outputs
+from . import correct
 
 
 from . import fit
@@ -127,4 +128,3 @@ from . import plotting
 
 from . import testing
 
-from . import jack

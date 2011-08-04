@@ -63,7 +63,7 @@ class BinnerBase(dict):
 
     def plot_dsig_osig_byrun_bin(self, run, binnum, **keys):
         """
-        See lensing.plotting.plot_dsig_osig
+        See lensing.plotting.plot2dsig
         """
         name = self.name()
         data=lensing.files.sample_read('binned',run,name)
@@ -75,7 +75,10 @@ class BinnerBase(dict):
 
         if 'plot_label' not in keys:
             keys['plot_label'] = self.bin_label(binnum)
-        lensing.plotting.plot_dsig_osig(data, **keys)
+        lensing.plotting.plot2dsig(data['r'], 
+                                   data['dsig'], data['dsigerr'],
+                                   data['osig'], data['dsigerr'],
+                                   **keys)
 
     def plot_dsig_osig_byrun(self, run, **keys):
         for binnum in xrange(self['nbin']):
@@ -1168,13 +1171,5 @@ def lensbin_dtype(nrbin, bintags=None):
 
     dt += lensing.outputs.averaged_dtype(nrbin)
 
-    """
-    nrbin = int(nrbin)
-    dt += [('r','f8',nrbin),
-           ('dsig','f8',nrbin),
-           ('dsigerr','f8',nrbin),
-           ('osig','f8',nrbin),
-           ('npair','i8',nrbin)]
-    """
     return numpy.dtype(dt)
 

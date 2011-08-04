@@ -14,6 +14,9 @@ import lensing
 import weighting
 import converter
 
+import numpy
+from numpy import where
+
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
@@ -21,20 +24,10 @@ parser.add_option("-t",dest="bintype",default=None,
                   help="The type of binning, default %default")
 parser.add_option("-n",dest="nbin",default=None,
                   help="The number of bins, default %default")
-parser.add_option("--n-near",dest="n_near",default=100,
-                  help="The number of nearest neighbors to use, default %default")
-
-def get_n_near(zmin, zmax, npoints, resolution):
-    nbin = float(zmax-zmin)/resolution
-    x = npoints/nbin
-    if x > 100:
-        n_near=100
-    elif x > npoints:
-        n_near=npoints
-    else:
-        n_near=x
-
-    return n_near
+parser.add_option("-b",dest="binsize",default=0.01,
+                  help="Binsuze to use in z for hist matching, default %default")
+parser.add_option("-s",dest="show",default=False,
+                  help="Show histogram comparisons on the screen. default %default")
 
 
 def main():
@@ -49,7 +42,8 @@ def main():
 
     bintype=options.bintype
     nbin=int(options.nbin)
-    n_near=int(options.n_near)
+    binsize=float(options.binsize)
+    show=options.show
 
     if bintype is None or nbin is None:
         raise ValueError("currently demand some kind of binning")
@@ -61,12 +55,12 @@ def main():
     data = lensing.files.sample_read('collated', lensrun)
     rand = lensing.files.sample_read('collated', randrun)
 
-    # resolution gives is a rough number for our desired resolution
-    resolution=0.01
-
     output = lensing.binning.lensbin_struct(data['rsum'][0].size, n=nbin)
 
     for binnum in xrange(nbin):
+
+        print("-"*70)
+        print(b.bin_label(binnum))
 
         eps_extra='%02d-randmatch-%s' % (binnum,randrun)
         epsfile=lensing.files.sample_file('binned-plots',
@@ -74,19 +68,25 @@ def main():
                                           name=b.name(),
                                           extra=eps_extra, ext='eps')
 
-        tit=b.bin_label(binnum)
-        tit+=' rand: '+randrun
 
         w = b.select_bin(data, binnum)
-        wc = weighting.WeightCalculator(rand['z'], data['z'][w])
 
-        wc.calc_1pass(n_near)
+        weights = weighting.hist_match(rand['z'], data['z'][w], binsize)
 
-        weighting.plot_results1d(wc, resolution, epsfile=epsfile, title=tit)
-        converter.convert(epsfile, dpi=100, verbose=True)
+
+        effnum = weights.sum()
+        effperc = effnum/rand.size
+        print("effective number: %d/%d = %0.2f" % (effnum,rand.size, effperc))
+
+
+        tit=b.bin_label(binnum)
+        tit+=' rand: '+randrun
+        weighting.plot_results1d(rand['z'], data['z'][w], weights, binsize, 
+                                 epsfile=epsfile, title=tit, show=show)
+        converter.convert(epsfile, dpi=120, verbose=True)
 
         print("combining randoms with weights")
-        comb = lensing.outputs.average_lensums(rand, weights=wc.weight_data['weight'])
+        comb = lensing.outputs.average_lensums(rand, weights=weights)
 
         # copy all common tags
         for n in comb.dtype.names:
