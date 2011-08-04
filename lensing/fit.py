@@ -328,7 +328,7 @@ def fit_nfw_dsig_byrun(run, name, rrange=None, rhofac=180):
             e=d['m200_err'][i]
             print '    m200 true: %e +/- %e' % (m,e)
         
-    lensing.files.lensfit_write(d, run, name)
+    lensing.files.sample_write(d, 'fit', run, name=name)
 
 
 
@@ -347,7 +347,7 @@ def fit_nfw_lin_dsig_byrun(run, name, withlin=True, rmax_from_true=False,
         ex='lin'
     else:
         npar = 2
-        ex=None
+        ex=''
     newdt = [('rrange','f8',2),
              ('r200_fit','f8'),
              ('r200_fit_err','f8'),
@@ -414,7 +414,7 @@ def fit_nfw_lin_dsig_byrun(run, name, withlin=True, rmax_from_true=False,
             e=d['m200_err'][i]
             print '    m200 true: %e +/- %e' % (m,e)
         
-    lensing.files.lensfit_write(d, run, name, extra=ex)
+    lensing.files.sample_write(d, 'fit', run, name=name, extra=ex)
 
 
 
@@ -422,14 +422,21 @@ def fit_nfw_lin_dsig_byrun(run, name, withlin=True, rmax_from_true=False,
 def plot_nfw_lin_fits_byrun(run, name, npts=100, prompt=False, 
                             withlin=True,
                             ymin=0.01, ymax=2000.0):
+    """
+
+    This should be made not specific for the m-z splits we
+    used on the sims
+
+    """
     conf = lensing.files.cascade_config(run)
     if withlin:
         ex='lin'
         nex='lin'
     else:
         nex=''
-        ex=None
-    d = lensing.files.lensfit_read(run,name,extra=ex)
+        ex=''
+    d = lensing.sample_read('fit',run, name=name, extra=ex)
+
     omega_m = conf['cosmo_config']['omega_m']
 
     rravel = d['r'].ravel()
@@ -513,7 +520,7 @@ def plot_nfw_lin_fits_byrun(run, name, npts=100, prompt=False,
 
 def plot_nfwfits_byrun(run, name, prompt=False):
     conf = lensing.files.read_config(run)
-    d = lensing.files.lensfit_read(run,name)
+    d = lensing.sample_read('fit', run, name=name)
     omega_m = conf['omega_m']
 
 

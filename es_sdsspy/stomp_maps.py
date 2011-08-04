@@ -3,7 +3,7 @@ from sys import stdout
 import os
 import sdsspy
 import numpy
-from numpy import where
+from numpy import where, isscalar
 
 try:
     import stomp
@@ -12,16 +12,62 @@ try:
     SECOND_QUADRANT_OK=stomp.cvar.Map_SECOND_QUADRANT_OK
     THIRD_QUADRANT_OK=stomp.cvar.Map_THIRD_QUADRANT_OK
     FOURTH_QUADRANT_OK=stomp.cvar.Map_FOURTH_QUADRANT_OK
+
+    QUAD1_OK = FIRST_QUADRANT_OK
+    QUAD2_OK = SECOND_QUADRANT_OK
+    QUAD3_OK = THIRD_QUADRANT_OK
+    QUAD4_OK = FOURTH_QUADRANT_OK
+
+    QUAD12_OK = QUAD1_OK + QUAD2_OK
+    QUAD23_OK = QUAD2_OK + QUAD3_OK
+    QUAD34_OK = QUAD3_OK + QUAD4_OK
+    QUAD41_OK = QUAD4_OK + QUAD1_OK
+
+    QUADALL_OK = QUAD1_OK + QUAD2_OK + QUAD3_OK + QUAD4_OK
+
+
 except:
     pass
 
-def quad_check(maskflags, strict=False):
+def quad_check(maskflags, strict=False, reverse=False):
     """
     if strict=False
         We will keep anything that has two adjacent quadrants contained
     if strict=True
         We demand *all* quandrants are unmasked
     """
+
+    maskflags = numpy.array(maskflags, ndmin=1, copy=False)
+
+    if not strict:
+        good12 = (maskflags & QUAD12_OK) == QUAD12_OK
+        good23 = (maskflags & QUAD23_OK) == QUAD23_OK
+        good34 = (maskflags & QUAD34_OK) == QUAD34_OK
+        good41 = (maskflags & QUAD41_OK) == QUAD41_OK
+
+        if reverse:
+            logic =  (good12==0) & (good23==0) & (good34==0) & (good41==0)
+        else:
+            logic =  good12 | good23 | good34 | good41
+
+    else:
+        if reverse:
+            logic = (maskflags & QUADALL_OK) != QUADALL_OK
+        else:
+            logic = (maskflags & QUADALL_OK) == QUADALL_OK
+
+    w,=where(logic)
+    return w
+
+def quad_check_old(maskflags, strict=False):
+    """
+    if strict=False
+        We will keep anything that has two adjacent quadrants contained
+    if strict=True
+        We demand *all* quandrants are unmasked
+    """
+
+    maskflags = numpy.array(maskflags, ndmin=1, copy=False)
 
     if not strict:
         check1 = \
@@ -44,6 +90,8 @@ def quad_check(maskflags, strict=False):
                    & ( (maskflags & FOURTH_QUADRANT_OK) != 0 ) )
 
     return w
+
+
 
 
 def map_dir():
@@ -91,6 +139,55 @@ def test(radius=None, n=1, map=None):
     maskflags = esutil.stomp_util.in_window(map, ra=ra, dec=dec, radius=radius)
 
     return map, maskflags
+
+
+def read_boss_geometry():
+    maskdir = map_dir()
+
+    geom_file=os.path.join(maskdir,'boss_survey.par')
+
+    if not os.path.exists(geom_file):
+        raise ValueError("geometry file not found: '%s'" % geom_file)
+    stdout.write("Reading geometry file: %s\n" % geom_file)
+    bs = sdsspy.yanny.readone(geom_file)
+
+    return bs
+
+def plot_boss_geometry(color=None, colorwheel=None, plt=None, width=1, show=True):
+    """
+    Plot the boundaries in the boss_survey.par file
+    """
+    import esutil as eu
+    import biggles
+    from biggles import FramedPlot, Curve
+
+    bg = read_boss_geometry()
+
+    if plt is None:
+        plt = FramedPlot()
+        plt.xlabel=r'$\lambda$'
+        plt.ylabel=r'$\eta$'
+
+    if color is not None:
+        colors = [color]*len(bg)
+    elif colorwheel is not None:
+        colors = colorwheel
+    else:
+        colors = ['red','blue','green','magenta','navyblue','seagreen',
+                  'firebrick','cadetblue','green4']
+        
+
+    for i in xrange(len(bg)):
+        b = bg[i]
+        color = colors[i % len(colors)]
+        c = eu.plotting.bbox( b['clambdaMin'], b['clambdaMax'], b['cetaMin'], b['cetaMax'],
+                             color=color, width=width)
+        plt.add(c)
+
+    if show:
+        plt.show()
+
+    return plt
 
 def create_boss_survey():
     """

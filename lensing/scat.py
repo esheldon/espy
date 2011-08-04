@@ -83,7 +83,10 @@ class DR8Catalog(dict):
         print("  reading ra,dec,g1,g2,err")
         output['ra'][:] = self.rgcols['ra'][keep]
         output['dec'][:] = self.rgcols['dec'][keep]
-        output['g1'][:] = self.rgcols['e1_rg_eq_'+filter][keep]/2
+        # the code requires no minus sign for matt's simulations, but
+        # does seem to require one for my shapes converted to equatorial
+        print("Adding minus sign to e1")
+        output['g1'][:] = -self.rgcols['e1_rg_eq_'+filter][keep]/2
         output['g2'][:] = self.rgcols['e2_rg_eq_'+filter][keep]/2
         output['err'][:] = self.rgcols['uncer_rg_'+filter][keep]/2
 

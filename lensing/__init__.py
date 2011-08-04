@@ -28,14 +28,25 @@ Then submit the scripts
 
     condor_submit run-04-035.condor
 
+Since the results are split by source chunks, you then need
+to "reduce" the lens outputs, and collate with the original
+catalog
 
-You should then bin up the results. e.g.
-    mzbin = lensing.binning.MZBinner(nmass, nz)
-    mzbin.bin_byrun(run)
-which calls this under the hood
-    mzbin.bin(data)
+    lensing.outputs.make_reduced_lensout(run)
+    lensing.outputs.make_collated_lensred(run)
+
+
+You can then bin up the results. e.g.
+    binner = N200Binner(nbin)
+    binner.bin_byrun(run)
+
+    # add clustering/Ssh corrections here
+
+    binner.plot_dsig_byrun(run)
 
 Should make a more general binner like we had in IDL.
+
+Make some plots
 
 You can then fit NFW or NFW+lin masses
 
@@ -52,7 +63,12 @@ To fit a run/binning and write out a file with the fits:
     fit_nfw_lin_dsig_byrun(run, name, withlin=True, rmax_from_true=False,
                            rmin=None, rmax=None):
 
-Some plots that are on a grid are done currently from the binner:
+Above the name will be something like 'n200-12' or 'm12z3'
+    fit_nfw_lin_dsig_byrun('05', 'n200-12', withlin=True, 
+                           rmin=None, rmax=None):
+
+
+Some plots that are on a grid are done currently from the BINNER:
     
 
     mzbin.plot_dsig_byrun(run, dops=False)
@@ -68,9 +84,10 @@ Some plots that are on a grid are done currently from the binner:
                              yrange=None,
                              dops=False)
  
-Others done one-by-one are done in fit.py
+Others done one-by-one are done in fit.py, but note this
+is actually specific to mz binning right now
 
-    lensing.outputs.plot_nfw_lin_fits_byrun(run, name, prompt=False)
+    lensing.fit.plot_nfw_lin_fits_byrun(run, name, prompt=False)
 
 """
 

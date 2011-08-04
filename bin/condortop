@@ -2,8 +2,7 @@
 """
     %prog [options username] 
 
-    Display statistics about the local queue, refreshing at regular
-    intervals.
+    Display statistics about the condor queue, refreshing at regular intervals.
 
 Description
 
@@ -12,7 +11,7 @@ Description
         condor_q
 
     with some customized formatting and displays the jobs along with some
-    statistics.
+    statistics and host machine if available.
 
     Send the username to restrict the job listing to the specified user.
     
@@ -20,7 +19,7 @@ Description
     any key to update immediately.  Hit 'q' or control-c to quit."""
 
 modification_history="""
-    Created: 2009-07 Erin Sheldon, BNL, erin dot sheldon at gmail dot com
+    Created: 2011-07 Erin Sheldon, BNL, erin dot sheldon at gmail dot com
 """
 
 import os
@@ -34,9 +33,6 @@ try:
     import curses.wrapper.wrapper as curses_wrapper
 except:
     import curses.wrapper as curses_wrapper
-
-# remove this from host names to keep them short
-_domain = '.rcf.bnl.gov'
 
 parser=OptionParser(__doc__)
 parser.add_option("-r","--refresh",default=30, 
@@ -65,20 +61,6 @@ white=7+2
 
 _command="""
 condor_q \\
-    -format '%4d.' ClusterId \\
-    -format '%-3d ' ProcId \\
-    -format '%-14s ' Owner \\
-    -format '%-11s ' 'formatTime(QDate,"%m/%d %H:%M:%S")' \\
-    -format '%s ' ServerTime \\
-    -format '%s ' ShadowBday \\
-    -format '%-2s ' 'ifThenElse(JobStatus==0,"U",ifThenElse(JobStatus==1,"I",ifThenElse(JobStatus==2,"R",ifThenElse(JobStatus==3,"X",ifThenElse(JobStatus==4,"C",ifThenElse(JobStatus==5,"H",ifThenElse(JobStatus==6,"E",string(JobStatus))))))))' \\
-    -format '%-3d ' JobPrio \\
-    -format '%-4.1f ' ImageSize/1024.0 \\
-    -format '%s ' Cmd \\
-    -format '%s\\n' RemoteHost"""
-
-_command="""
-condor_q \\
     -format '%d.' ClusterId \\
     -format '%-d,' ProcId \\
     -format '%-s,' Owner \\
@@ -93,12 +75,6 @@ condor_q \\
     -format '%s' RemoteHost \\
     -format '\\n' Owner"""
 
-
-
-
-
-_line_format=' %-9s %-12s %-11s %12s %-2s %-3s %-7s %s %s'
-_header_front=' ID        Owner        Submitted        Run Time   ST Pri Size    Cmd '
 
 class CondorWatcher:
     def __init__(self, **keys):
@@ -122,6 +98,7 @@ class CondorWatcher:
         self.HOUR=self.MINUTE*60
         self.DAY=self.HOUR*24
 
+        self.headers=('ID','Owner','Submitted','Run Time','ST','Pri','Size','Cmd','Host')
         curses_wrapper(self.condor_watch)
 
 
@@ -142,24 +119,51 @@ class CondorWatcher:
             out = self.get_condor_q_output()
             out = out.split('\n')
 
-            stats={'njobs':0,'max_cmd_len':0,'R':0,'I':0,'H':0,'C':0,'X':0}
+            stats={'njobs':0,'R':0,'I':0,'H':0,'C':0,'X':0}
+            #lengths={'id':9,'owner':12,'qdate':11,'runtime':12,
+            #         'status':2,'pri':3,'size':7,'cmd':3,'host':4}
+            lengths={'id':2,'owner':5,'qdate':9,'runtime':8,
+                     'status':2,'pri':3,'size':4,'cmd':3,'host':4}
 
-            nprint = min(len(out), self.maxy3)
+            #nprint = min(len(out), self.maxy3)
+            nprint = min(len(out), self.maxy3-1)
+            line_splits = []
             for ii in xrange(len(out)):
                 line = out[ii]
                 if len(line) > 0:
                     stats['njobs'] += 1
-                    line=self.process_line(line,stats)
+                    lsplit = self.process_line(line,stats,lengths, dolengths=(ii < nprint))
                     if ii < nprint:
-                        self.win3.addstr(ii,0,line[0:self.maxx3-1])
-            self.win3.refresh()
+                        line_splits.append(tuple(lsplit))
 
-            self.write_header(self.win2, stats)
-            self.write_statline(self.win1, stats)
+            self.write_statline(stats)
+            self.write_job_listing(line_splits, lengths)
 
             c = self.win1.getch()
             if c == ord('q'): 
                 break
+
+    def write_job_listing(self, line_splits, lengths):
+
+        fmt  = ' %-' + str(lengths['id']) +'s  ' 
+        fmt += '%-' + str(lengths['owner']) + 's  '
+        fmt += '%-' + str(lengths['qdate']) + 's  '
+        fmt += '%-'  + str(lengths['runtime']) + 's  '
+        fmt += '%-' + str(lengths['status']) + 's  '
+        fmt += '%-' + str(lengths['pri']) + 's  '
+        fmt += '%-' + str(lengths['size']) + 's  '
+        fmt += '%-' + str(lengths['cmd']) + 's  '
+        fmt += '%-' + str(lengths['host']) + 's'
+
+        header = fmt % self.headers
+        self.win2.addstr(0,0,header[0:self.maxx2-1])
+
+        for ii in xrange(len(line_splits)):
+            ls = line_splits[ii]
+            line = fmt % ls
+            self.win3.addstr(ii,0,line[0:self.maxx3-1])
+        self.win2.refresh()
+        self.win3.refresh()
 
     def setup_windows(self, stdscr):
         self.make_color_pairs()
@@ -186,17 +190,10 @@ class CondorWatcher:
         self.maxy2, self.maxx2 = self.win2.getmaxyx()
         self.maxy3, self.maxx3 = self.win3.getmaxyx()
 
-    def write_header(self, win, stats):
-        h = _header_front
-        clen = stats['max_cmd_len']
-        if clen > 4:
-            h += ' '*(clen-4)
-        h += ' Host'
+    def write_statline(self, stats):
 
-        win.addstr(0,0,h[0:self.maxx2-1])
-        win.refresh()
+        win = self.win1
 
-    def write_statline(self, win, stats):
         win.erase()
         colors=self.colors
 
@@ -232,7 +229,7 @@ class CondorWatcher:
 
         win.refresh()
 
-    def process_line(self, line, stats):
+    def process_line(self, line, stats, lengths, dolengths=True):
         """
         process the line and return a new line with
         the executable represented only as the basname,
@@ -247,11 +244,7 @@ class CondorWatcher:
             raise ValueError("Expected 10 results from condor_q, got %d" % len(ls))
 
         cmd = os.path.basename(cmd)
-        host = host.replace(_domain,'')
-
-        if len(cmd) > stats['max_cmd_len']:
-            stats['max_cmd_len'] = len(cmd)
-            
+        host = host.split('.')[0]
 
         total_wall_time = 0
 
@@ -262,12 +255,31 @@ class CondorWatcher:
             total_wall_time += int(servertime)-int(shadowbday)
         runtime = self.format_time(total_wall_time)
 
-        line = _line_format % (id,owner,qdate,runtime,status,pri,size,cmd,host)
-        return line
+        if dolengths:
+            lengths['id']      = max(len(id),lengths['id'])
+            lengths['owner']   = max(len(owner),lengths['owner'])
+            lengths['qdate']   = max(len(qdate),lengths['qdate'])
+            lengths['runtime'] = max(len(runtime),lengths['runtime'])
+            lengths['status']  = max(len(status),lengths['status'])
+            lengths['pri']     = max(len(pri),lengths['pri'])
+            lengths['size']    = max(len(size),lengths['size'])
+            lengths['cmd']     = max(len(cmd),lengths['cmd'])
+            lengths['host']    = max(len(host),lengths['host'])
+        
+        return id,owner,qdate,runtime,status,pri,size,cmd,host
+        return {'id':id,
+                'owner':owner,
+                'qdate':qdate,
+                'runtime':runtime,
+                'status':status,
+                'pri':pri,
+                'size':size,
+                'cmd':cmd,
+                'host':host}
 
     def format_time(self, tot_seconds):
         if tot_seconds == 0:
-            return '  ----------'
+            return '----------'
         days = tot_seconds/self.DAY
         tsec = tot_seconds % self.DAY
         hours = tsec/self.HOUR
@@ -275,7 +287,7 @@ class CondorWatcher:
         min = tsec/self.MINUTE
         secs = tsec % self.MINUTE
 
-        return '%3d+%02d:%02d:%02d' % (days, hours, min, secs)
+        return '%d+%02d:%02d:%02d' % (days, hours, min, secs)
 
     def get_condor_q_output(self):
 

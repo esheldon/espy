@@ -698,6 +698,7 @@ class Stripe82Epochs:
                 mg = MultiGauss(gmm)
 
 
+                # unlike GMM, MultiGauss evaluates the prob not log prob
                 yfit = mg.eval(cmean_h['center'])
                 renorm = wbin.size/float(yfit.sum())
                 yfit *= renorm
@@ -1030,6 +1031,9 @@ class MultiGauss:
         self.gmm = gmm
 
     def eval(self, x):
+        """
+        Actually this can just be exp(gmm.eval(x))
+        """
         model = numpy.zeros(x.size, dtype='f8')
 
         gmm = self.gmm
