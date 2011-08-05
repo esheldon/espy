@@ -34,6 +34,19 @@ parser.add_option("--reduced-dims", default=default_reduced_dims,
 parser.add_option("--index-dims", default=default_index_dims, 
                   help="nrows,ncols in index pages, default %default")
 
+def gallery_dir():
+    return './gallery'
+
+def make_gallery_dir():
+    if not os.path.exists(gallery_dir()):
+        os.makedirs(gallery_dir())
+
+_gallery_css='images2html.css'
+
+def write_gallery_css():
+    f=os.path.join(gallery_dir(), _gallery_css)
+    with open(f,'w') as fobj:
+        fobj.write(_stylesheet)
 
 _stylesheet="""
     /* Colors used: 
@@ -216,6 +229,31 @@ _stylesheet="""
     }
 
 
+    .prevNextRow div.previmgtd
+    {  
+      /* border: red 2px solid; */
+      width:50%;
+      text-align:right;
+      font-style:italic;
+    }
+
+    .prevNextRow div.toindextd
+    {  
+      /* border: red 2px solid; */
+      width:1%;
+      text-align:center;
+      font-style:italic;
+    }
+
+    .prevNextRow div.nextimgtd
+    {  
+      /* border: red 2px solid; */
+      width:50%;
+      text-align:left;
+      font-style:italic;
+    }
+
+
 
 
 
@@ -239,6 +277,47 @@ _stylesheet="""
 
 
 _imhtml="""<html>
+<!-- Created by images2html Erin Sheldon -->
+<head>
+    <link rel="STYLESHEET" type="text/css" href="{css_url}">
+</head>
+    
+<body>
+    
+    <div id="content">
+
+        <div class="imagetable">
+
+
+            <div class="prevNext">
+                <div class="prevNextRow">
+                    <div class="previmgtd">
+                        {prev_atag} |
+                    </div>
+                    <div class="toindextd">
+                        {index_atag}
+                    </div>
+                    <div class="nextimgtd">
+                        | {next_atag}
+                    </div>
+                </div>
+            </div>
+
+
+	        <a href="{next_image_name}"><img src="{reduced_name}"></a>
+            <br>
+            {image_name}
+
+
+
+
+        </div>
+
+
+    </div>
+
+"""
+_imhtml_old="""<html>
 <!-- Created by images2html Erin Sheldon -->
 <head>
     <link rel="STYLESHEET" type="text/css" href="{css_url}">
@@ -280,119 +359,167 @@ _imhtml="""<html>
 
 """
 
-class GalleryMaker:
+def make_reduced_image(imfile, dims, newfile):
+
+    new_totpix = dims[0]+dims[1]
+
+    image = Image.open(imfile)
+    osx, osy = image.size
+
+    totpix = osx+osy
+
+    if totpix > new_totpix:
+        image.thumbnail(dims, Image.ANTIALIAS ) 
+        print 'writing',newfile
+        image.save(newfile)
+    else:
+        print 'Image',imfile,' is smaller than requested size. Linking'
+        os.symlink(imfile, newfile)
+
+
+class ImagePage(dict):
+    def __init__(self, image, prev_image, next_image, index_id, thumb_dims, reduced_dims):
+        self.image=image
+        self.thumb_dims=thumb_dims
+        self.reduced_dims=reduced_dims
+
+        self.prev_image=prev_image
+        self.next_image=next_image
+        self.index_id=index_id
+        
+
+    def altname(self, imfile, type):
+        if imfile is None:
+            return None
+
+        dir, base = os.path.split(imfile)
+        front, ext = os.path.splitext(base)
+
+        if type == 'html':
+            altname = '{front}.html'.format(front=front)
+        else:
+            altname = '{front}-{type}{ext}'.format(front=front,type=type,ext=ext)
+        return altname
+
+    def make_thumb_and_reduced(self, overwrite=False):
+        f=os.path.join(gallery_dir(), self.altname(self.image,'thumb'))
+        if not os.path.exists(f) or overwrite:
+            make_reduced_image(self.image, self.thumb_dims, f)
+
+        f=os.path.join(gallery_dir(), self.altname(self.image,'reduced'))
+        if not os.path.exists(f) or overwrite:
+            make_reduced_image(self.image, self.reduced_dims, f)
+
+
+    def prev_atag(self):
+        html_name=self.altname(self.prev_image, 'html')
+        if html_name is None:
+            return ""
+        return '<a href="%s">&lt;Back</a>' % html_name
+
+    def next_atag(self):
+        html_name=self.altname(self.next_image, 'html')
+        if html_name is None:
+            return ""
+        return '<a href="%s">Next&gt;</a>' % html_name
+
+    def html_file(self):
+        html_name=self.altname(self.image, 'html')
+        html_file = os.path.join(gallery_dir(), html_name)
+        return html_file
+
+    def index_atag(self):
+        index_html = 'index%02d.html' % self.index_id
+        index_atag = '<a href="%s">Index</a>' % index_html
+        return index_atag
+    def write(self):
+        html_file=self.html_file()
+        with open(html_file,'w') as fobj:
+            pagetext=_imhtml.format(css_url=_gallery_css,
+                                    image_name=self.image,
+                                    reduced_name=self.altname(self.image, 'reduced'),
+                                    prev_atag=self.prev_atag(),
+                                    next_atag=self.next_atag(),
+                                    next_image_name=self.next_image,
+                                    index_atag=self.index_atag())
+
+            fobj.write(pagetext)
+
+
+
+class Index:
+    def __init__(self, id, thumb_dims, reduced_dims):
+        self.id=id
+        self.thumb_dims=thumb_dims
+        self.reduced_dims=reduced_dims
+        self.image_pages = []
+
+        # number of image columns in index
+        # for now, this is pre-determined and number of rows
+        # is not constrained
+        self.ncol = 3
+
+    def add_page(self, image, prev_image, next_image):
+        image_page = ImagePage(image, prev_image, next_image, 
+                               self.id, self.thumb_dims, self.reduced_dims)
+        self.image_pages.append(image_page)
+
+    def make_thumbs_and_reduced(self, overwrite=False):
+        for p in self.image_pages:
+            p.make_thumb_and_reduced(overwrite=overwrite)
+
+    def write(self):
+        for page in self.image_pages:
+            page.write()
+
+class Gallery:
     def __init__(self, images, **keys):
         self.images = images
-
 
         self.thumb_dims = keys.get('thumb_dims', default_thumb_dims)
         self.reduced_dims = keys.get('reduced_dims', default_reduced_dims)
         self.index_dims = keys.get('index_dims', default_index_dims)
 
-        self.outdir = './images2html'
-        if not os.path.exists(self.outdir):
-            os.makedirs(self.outdir)
+        self.nperindex = self.index_dims[0]*self.index_dims[1]
 
-        self.css_name='images2html.css'
-        self.css_file=os.path.join(self.outdir, self.css_name)
+        self.init()
 
-        self.make_thumb_names()
+    def init(self):
 
-    def write_css(self):
-        with open(self.css_file,'w') as fobj:
-            fobj.write(_stylesheet)
-
-    def write_pages(self):
-        for info in self.iminfo:
-            html_file = os.path.join(self.outdir, info['html'])
-            with open(html_file,'w') as fobj:
-                pagetext=_imhtml.format(css_url=self.css_name,
-                                        image_name=os.path.basename(info['image']),
-                                        reduced_name=info['reduced'],
-                                        prev_atag=info['prev-atag'],
-                                        next_atag=info['next-atag'],
-                                        next_image_name=info['next'],
-                                        index_atag="")
-
-                fobj.write(pagetext)
-
-    def make_thumbs(self, overwrite=False):
-        """
-        Make thumbnails and reduced images
-        """
-
-        for info in self.iminfo:
-            thumb_file = os.path.join(self.outdir, info['thumb'])
-            reduced_file = os.path.join(self.outdir, info['reduced'])
-
-            if not os.path.exists(thumb_file) or overwrite:
-                self.make_reduced_image(info['image'], self.thumb_dims, thumb_file)
-            if not os.path.exists(reduced_file) or overwrite:
-                self.make_reduced_image(info['image'], self.reduced_dims, reduced_file)
-
-    def make_reduced_image(self, imfile, dims, newfile):
-        new_totpix = dims[0]+dims[1]
-
-        image = Image.open(imfile)
-        osx, osy = image.size
-
-        totpix = osx+osy
-
-        if totpix > new_totpix:
-            image.thumbnail(dims, Image.ANTIALIAS ) 
-            print 'writing',newfile
-            image.save(newfile)
-        else:
-            print 'Image is smaller than requested size. Linking'
-            os.symlink(imfile, newfile)
-
-
-
-    def make_thumb_names(self):
-
-        self.iminfo=[]
+        self.indexes=[]
 
         nim = len(self.images)
+        index_id=-1
+        index_old=-1
         for i in xrange(nim):
-            im = self.images[i]
-            thumb_name, reduced_name, html_name = self.im2altnames(im)
+
+            im=self.images[i]
+            if (i % self.nperindex) == 0:
+                index_id += 1
+                index = Index(index_id, self.thumb_dims, self.reduced_dims)
+                self.indexes.append(index)
 
             if i == 0:
-                prev_html_atag = ""
-                prev_html_name = ""
+                prev_image=None
+                next_image=self.images[i+1]
+            elif i == (nim-1):
+                prev_image=self.images[i-1]
+                next_image=None
             else:
-                tname, rname, hname = self.im2altnames(self.images[i-1])
-                prev_html_atag = '<a href="%s">Prev</a>' % hname
-                prev_html_name = hname
+                prev_image=self.images[i-1]
+                next_image=self.images[i+1]
 
-            if i == (nim-1):
-                next_html_atag = ""
-                next_html_name = ""
-            else:
-                tname, rname, hname = self.im2altnames(self.images[i+1])
-                next_html_atag = '<a href="%s">Next</a>' % hname
-                next_html_name = hname
+            index.add_page(im, prev_image, next_image)
 
-            imdict = {'image':im, 
-                      'thumb':thumb_name, 
-                      'reduced':reduced_name, 
-                      'html':html_name,
-                      'prev-atag':prev_html_atag,
-                      'next-atag':next_html_atag,
-                      'prev':prev_html_name,
-                      'next':next_html_name}
+    def make_thumbs_and_reduced(self, overwrite=False):
+        for index in self.indexes:
+            index.make_thumbs_and_reduced(overwrite=overwrite)
 
-            self.iminfo.append(imdict)
 
-    def im2altnames(self, im):
-        dir, base = os.path.split(im)
-        front, ext = os.path.splitext(base)
 
-        thumb_name = front+'-thumb'+ext
-        reduced_name = front+'-reduced'+ext
-        html_name = front+'.html'
-
-        return thumb_name, reduced_name, html_name
+    def write(self):
+        for index in self.indexes:
+            index.write()
 
 
 def option2tuple(option):
@@ -414,17 +541,17 @@ def main():
     index_dims = option2tuple(options.index_dims)
     overwrite=options.overwrite
 
-    gmaker = GalleryMaker(images, 
-                          thumb_dims=thumb_dims, 
-                          reduced_dims=reduced_dims, 
-                          index_dims=index_dims)
+    gmaker = Gallery(images, 
+                     thumb_dims=thumb_dims, 
+                     reduced_dims=reduced_dims, 
+                     index_dims=index_dims)
 
-    for iminfo in gmaker.iminfo:
-        print iminfo
 
-    gmaker.write_css()
-    gmaker.make_thumbs(overwrite=overwrite)
-    gmaker.write_pages()
+    make_gallery_dir()
+    write_gallery_css()
+
+    gmaker.make_thumbs_and_reduced(overwrite=overwrite)
+    gmaker.write()
 
 
 main()
