@@ -48,6 +48,20 @@ def write_gallery_css():
     with open(f,'w') as fobj:
         fobj.write(_stylesheet)
 
+# how to make this work within the other classes
+# based on the number of indices?
+def index_html_name(id, idmax):
+    if idmax <= 9:
+        return 'index%d.html' % (id+1,)
+    elif idmax <= 99:
+        return 'index%02d.html' % (id+1,)
+    elif idmax <= 999:
+        return 'index%03d.html' % (id+1,)
+    elif idmax <= 9999:
+        return 'index%04d.html' % (id+1,)
+    elif idmax <= 99999:
+        return 'index%05d.html' % (id+1,)
+
 _stylesheet="""
     /* Colors used: 
         #595B30  A kind of brown for the main text color
@@ -81,58 +95,89 @@ _stylesheet="""
     /* The main content, with absolute positioning   */
     /*-----------------------------------------------*/
 
-    /*
-    #content 
-    {
-      position:absolute;
-      top:3em;
-      left:8em;
-    }
-    */
+    .content {
 
-    /*-----------------------------------------------*/
-    /* A navigation bar will be on the left          */
-    /*-----------------------------------------------*/
 
-    #navigation 
-    {
-      width:8em;
-      height:100%;
-      padding:0.5em;
+        border-collapse:separate;
+        text-align: center;
+        /*border: orange 2px solid;*/
+        width:800px;
+        height:600px;
 
-      background:#000000; /* A tannish color */
+        /* this centers because auto forces margins to be equal */
+        margin-left: auto;
+        margin-right: auto;
+
+        /* add some room on top */
+        margin-top: 40px;
     }
 
-    #navigation hr { display:none }
-    #navigation h2 { color:#595B30 }
-    #navigation a:link {color:white}
-    #navigation a:visited {color:#ffe4c4} /* bisque */
+
+    /* this goes atop the thumbtable */
+    .indexNav {  
+      /*text-align:    center;*/
+      margin-left:   auto;
+      margin-right:  auto;
+      margin-top:    0px;
+      margin-bottom: 0px;
+      width:         100%;
+      /*border: 2px red solid;*/
+      /*height:5em;*/
+    }
+    .indexNavRow {
+        display:table-row;
+        width:100%;
+    }
+    .indexNavRow div { 
+      display:table-cell;
+    }
+    .indexNavRow div.prev_index
+    {  
+      /*border: blue 2px solid;*/
+      width:50%;
+      text-align:right;
+      font-style:italic;
+    }
+
+    .indexNavRow div.spacer
+    {  
+      /*border: blue 2px solid;*/
+      width:1%;
+      text-align:center;
+      font-style:italic;
+    }
+
+    .indexNavRow div.next_index
+    {  
+      /*border: blue 2px solid;*/
+      width:50%;
+      text-align:left;
+      font-style:italic;
+    }
+
+    .indexNavRow div.index_list {
+        width: 100%;
+        /*border: green 2px solid;*/
+        display:table-cell;
+        text-align: center;
+    }
+
+    .indexNavRow div.dummy {
+        width:50%;
+        /*border: green 2px purple;*/
+    }
+
+
 
 
     /*--------------------------------------------------------*/
     /* A class for the main table division on the index pages */
     /*--------------------------------------------------------*/
 
-    .thumbtable 
-    {
-      display:table; 
-      border-collapse:separate;
-
-      margin:10px auto;
-
-
-      /*
-      width:640px;
-      height:480px;
-      */
-      width:800px;
-      height:600px;
-
-      /* this puts a background, and the border spacing, combined with 
-         a background color of the td's, creates the border. I switched to
-         putting an actual border on, see the row div.td */
-      /*border-spacing:2px;*/
-      /*background:#898B60;*/
+    .thumbtable {
+        display:table; 
+        text-align: center;
+        width:100%;
     }
 
     .thumbname 
@@ -143,6 +188,10 @@ _stylesheet="""
       color:#898B60;
     }
 
+
+
+
+
     /*-----------------------------------------------*/
     /* rows and data classes                         */
     /*-----------------------------------------------*/
@@ -150,15 +199,12 @@ _stylesheet="""
     .row 
     {
       display:table-row;
+      width:100%;
     }
 
     .row div 
     {
       display:table-cell;
-      border-spacing:2px;
-      height:33%; 
-
-      background:#000000;
 
     }
 
@@ -168,15 +214,22 @@ _stylesheet="""
     {
       text-align:center;
       vertical-align:middle;
-      width:25%;
+
+      /* this assumes ncol=3 */
+      width:33%;
+      /*width:100%;*/
+
+      padding: 8px;
 
       /* these replace the effect of border-spacing and background in
-         the main thumbtable. Better, since \"missing\" images are filled
+         the main thumbtable. Better, since "missing" images are filled
          with the body background */
       border: 1px #898B60 solid;
     }
 
-    .row div.td img { border-color:#595B30 }
+    /*.row div.td img { border-color: #898B60; }*/
+    /*.row div.td img { border-color: black; }*/
+    .row div.td img { border: 0; }
 
     /*-----------------------------------------------*/
     /* A class for the bottom \"previous\" and \"next\"  */
@@ -191,8 +244,10 @@ _stylesheet="""
       margin-bottom:0px;
       /*width:640px;*/
       width:100%;
-      /*border: 2px black solid;*/
+      /*border: 2px red solid;*/
       /*height:5em;*/
+
+      text-align: center;
     }
 
     .prevNextRow 
@@ -205,21 +260,6 @@ _stylesheet="""
       display:table-cell;
     }
 
-    .prevNextRow div.prevtd
-    {  
-      /*border: red 2px solid;*/
-      width:100%;
-      text-align:left;
-      font-style:italic;
-    }
-    .prevNextRow div.nexttd
-    {  
-      /*border: red 2px solid;*/
-      width:100%;
-      text-align:right;
-      font-style:italic;
-    }
-
     .prevNextRow div.firstlast
     {  
       /*border: red 2px solid;*/
@@ -229,7 +269,7 @@ _stylesheet="""
     }
 
 
-    .prevNextRow div.previmgtd
+    .prevNextRow div.prevtd
     {  
       /* border: red 2px solid; */
       width:50%;
@@ -243,9 +283,11 @@ _stylesheet="""
       width:1%;
       text-align:center;
       font-style:italic;
+      /*overflow:hidden;*/
+      white-space: nowrap;
     }
 
-    .prevNextRow div.nextimgtd
+    .prevNextRow div.nexttd
     {  
       /* border: red 2px solid; */
       width:50%;
@@ -253,6 +295,11 @@ _stylesheet="""
       font-style:italic;
     }
 
+
+
+    .missing_link { 
+      color: #595B30;
+    }
 
 
 
@@ -271,7 +318,7 @@ _stylesheet="""
       font-style:italic;
     }
 
-    .imagetable img { border-color:#898B60 }
+    /*.imagetable img { border-color:#898B60 }*/
 
 """
 
@@ -288,75 +335,51 @@ _imhtml="""<html>
 
         <div class="imagetable">
 
-
             <div class="prevNext">
                 <div class="prevNextRow">
-                    <div class="previmgtd">
-                        {prev_atag} |
+                    <div class="prevtd">
+                        {prev_atag} | &nbsp;
                     </div>
                     <div class="toindextd">
                         {index_atag}
                     </div>
-                    <div class="nextimgtd">
-                        | {next_atag}
+                    <div class="toindextd">
+                        | <a href="{orig_url}">Original Size</a>
+                    </div>
+                    <div class="nexttd">
+                        &nbsp; | {next_atag}
                     </div>
                 </div>
+                {image_name}
             </div>
 
-
-	        <a href="{next_image_name}"><img src="{reduced_name}"></a>
-            <br>
-            {image_name}
-
-
-
+            {img_plus_next_atag}
 
         </div>
 
 
     </div>
 
+</body>
+</html>
 """
-_imhtml_old="""<html>
-<!-- Created by images2html Erin Sheldon -->
+
+_index_head="""<html>
 <head>
     <link rel="STYLESHEET" type="text/css" href="{css_url}">
 </head>
     
 <body>
-    
-    <div id="content">
 
-        <div class="imagetable">
+  <div class="content">
 
+"""
 
-            <div class="prevNext">
-                <div class="prevNextRow">
-                    <div class="prevtd">
-                        {prev_atag}
-                    </div>
-                    <div class="firstlast">
-                        {index_atag}
-                    </div>
-                    <div class="nexttd">
-                        {next_atag}
-                    </div>
-                </div>
-            </div>
+_index_foot="""
+  </div>
 
-
-	        <a href="{next_image_name}"><img src="{reduced_name}"></a>
-            <br>
-            {image_name}
-
-
-
-
-        </div>
-
-
-    </div>
-
+</body>
+</html>
 """
 
 def make_reduced_image(imfile, dims, newfile):
@@ -378,7 +401,7 @@ def make_reduced_image(imfile, dims, newfile):
 
 
 class ImagePage(dict):
-    def __init__(self, image, prev_image, next_image, index_id, thumb_dims, reduced_dims):
+    def __init__(self, image, prev_image, next_image, index_id, thumb_dims, reduced_dims, n_index_tot=100):
         self.image=image
         self.thumb_dims=thumb_dims
         self.reduced_dims=reduced_dims
@@ -386,6 +409,8 @@ class ImagePage(dict):
         self.prev_image=prev_image
         self.next_image=next_image
         self.index_id=index_id
+
+        self.n_index_tot=n_index_tot
         
 
     def altname(self, imfile, type):
@@ -414,13 +439,13 @@ class ImagePage(dict):
     def prev_atag(self):
         html_name=self.altname(self.prev_image, 'html')
         if html_name is None:
-            return ""
+            return '<span class="missing_link">&lt;Back</span>'
         return '<a href="%s">&lt;Back</a>' % html_name
 
     def next_atag(self):
         html_name=self.altname(self.next_image, 'html')
         if html_name is None:
-            return ""
+            return '<span class="missing_link">Next&gt;</span>'
         return '<a href="%s">Next&gt;</a>' % html_name
 
     def html_file(self):
@@ -429,27 +454,51 @@ class ImagePage(dict):
         return html_file
 
     def index_atag(self):
-        index_html = 'index%02d.html' % self.index_id
+        index_html = index_html_name(self.index_id, self.n_index_tot-1)
         index_atag = '<a href="%s">Index</a>' % index_html
         return index_atag
+
     def write(self):
         html_file=self.html_file()
+        imbase=os.path.basename(self.image)
+        orig_url = "../"+imbase
+
+        reduced_name=self.altname(self.image, 'reduced')
+        imgtag='<img src="%s"></a>' % reduced_name
+
+        next_image_url=self.altname(self.next_image, 'html')
+        if next_image_url is not None:
+            img_plus_next_atag= '<a href="%s">%s</a>' % (next_image_url,imgtag)
+        else:
+            img_plus_next_atag=imgtag
+
         with open(html_file,'w') as fobj:
             pagetext=_imhtml.format(css_url=_gallery_css,
                                     image_name=self.image,
-                                    reduced_name=self.altname(self.image, 'reduced'),
                                     prev_atag=self.prev_atag(),
                                     next_atag=self.next_atag(),
-                                    next_image_name=self.next_image,
-                                    index_atag=self.index_atag())
+                                    index_atag=self.index_atag(),
+                                    orig_url=orig_url,
+                                    img_plus_next_atag=img_plus_next_atag)
 
             fobj.write(pagetext)
 
+    def write_cell(self, fobj):
+        imname=os.path.basename(self.image)
+        thumb_url = self.altname(self.image, 'thumb')
+        html_url = self.altname(self.image, 'html')
+        fobj.write('        <div class="td">\n')
+        fobj.write('          <a href="{html_url}"><img src="{thumb_url}"></a>\n'.format(thumb_url=thumb_url,
+                                                                                         html_url=html_url))
+
+        fobj.write('          <br><span class="thumbname">{imname}</span>\n'.format(imname=imname))
+        fobj.write('        </div>\n')
 
 
 class Index:
-    def __init__(self, id, thumb_dims, reduced_dims):
+    def __init__(self, id, thumb_dims, reduced_dims, n_index_tot):
         self.id=id
+        self.n_index_tot=n_index_tot  # number in the overall list
         self.thumb_dims=thumb_dims
         self.reduced_dims=reduced_dims
         self.image_pages = []
@@ -461,7 +510,8 @@ class Index:
 
     def add_page(self, image, prev_image, next_image):
         image_page = ImagePage(image, prev_image, next_image, 
-                               self.id, self.thumb_dims, self.reduced_dims)
+                               self.id, self.thumb_dims, self.reduced_dims,
+                               n_index_tot=self.n_index_tot)
         self.image_pages.append(image_page)
 
     def make_thumbs_and_reduced(self, overwrite=False):
@@ -469,8 +519,114 @@ class Index:
             p.make_thumb_and_reduced(overwrite=overwrite)
 
     def write(self):
+        self.write_image_pages() 
+
+        index_name=index_html_name(self.id, self.n_index_tot-1)
+        outf=os.path.join(gallery_dir(), index_name)
+        with open(outf,'w') as fobj:
+            fobj.write(_index_head.format(css_url=_gallery_css))
+
+            self.write_header(fobj)
+            self.write_nav(fobj)
+            self.write_table(fobj)
+
+            fobj.write(_index_foot)
+
+    def write_table(self, fobj):
+        fobj.write('    <div class="thumbtable">\n')
+        self.write_cells(fobj)
+        fobj.write('    </div>\n')
+
+    def write_header(self, fobj):
+        """
+        Write a header, a sort of navigation bar at the top
+        """
+        fobj.write('    <div class="indexNav">\n')
+        fobj.write('      <div class="indexNavRow">\n')
+        #fobj.write('        <div class="dummy">&nbsp;\n')
+        #fobj.write('        <div style="width=50%; border: purple 2px solid">&nbsp;\n')
+        fobj.write('        <div style="width=50%">&nbsp;\n')
+        fobj.write('        </div>\n')
+        fobj.write('        <div class="index_list">\n')
+
+        fobj.write('          ')
+        for i in xrange(self.n_index_tot):
+            html_name = index_html_name(i, self.n_index_tot-1)
+            if i == self.id:
+                a='<u>%d</u>' % (i+1,)
+            else:
+                a='<a href="%s">%d</a>' % (html_name, i+1)
+            fobj.write('%s ' % a)
+        
+        fobj.write('\n')
+        fobj.write('        </div>\n')
+
+        #fobj.write('        <div style="width=50%; border: purple 2px solid">&nbsp;\n')
+        fobj.write('        <div style="width=50%">&nbsp;\n')
+        #fobj.write('        <div class="dummy">&nbsp;\n')
+        fobj.write('        </div>\n')
+        fobj.write('      </div>\n')
+        fobj.write('    </div>\n\n')
+
+
+
+    def write_nav(self, fobj):
+        """
+        back, next, etc
+        """
+        
+        prev_atag='<span class="missing_link">&lt;Back</span>'
+        next_atag='<span class="missing_link">Next&gt;</span>'
+
+        if self.id > 0:
+            prev_index_url = index_html_name(self.id-1, self.n_index_tot-1)
+            prev_atag='<a href="%s">&lt;Back</a>' % (prev_index_url,)
+        if self.id < (self.n_index_tot-1):
+            next_index_url = index_html_name(self.id+1, self.n_index_tot-1)
+            next_atag='<a href="%s">Next&gt;</a>' % (next_index_url,)
+
+        spacer='&nbsp;'*20
+        text="""
+    <div class="indexNav">
+      <div class="indexNavRow">
+        <div class="prev_index">
+          {prev_atag}
+        </div>
+        <div class="spacer">
+          {spacer}
+        </div>
+        <div class="next_index">
+          {next_atag}
+        </div>
+      </div>
+    </div>\n\n""".format(prev_atag=prev_atag, next_atag=next_atag,spacer=spacer)
+
+
+        fobj.write(text)
+
+
+    def write_cells(self, fobj):
+        for i in xrange(len(self.image_pages)):
+            if (i % self.ncol) == 0:
+                if i != 0:
+                    # end previous row
+                    self.end_row(fobj)
+                # start a row
+                self.start_row(fobj)
+
+            page=self.image_pages[i]
+            page.write_cell(fobj)
+
+    def start_row(self, fobj):
+        fobj.write('      <div class="row">\n')
+
+    def end_row(self, fobj):
+        fobj.write('      </div>\n')
+
+    def write_image_pages(self):
         for page in self.image_pages:
             page.write()
+
 
 class Gallery:
     def __init__(self, images, **keys):
@@ -482,6 +638,8 @@ class Gallery:
 
         self.nperindex = self.index_dims[0]*self.index_dims[1]
 
+        nim=len(images)
+        self.n_index = (nim // 9) + ((nim % 9) > 0)
         self.init()
 
     def init(self):
@@ -496,7 +654,10 @@ class Gallery:
             im=self.images[i]
             if (i % self.nperindex) == 0:
                 index_id += 1
-                index = Index(index_id, self.thumb_dims, self.reduced_dims)
+                prev_index=(index_id-1) if index_id > 0 else None
+                next_index=(index_id+1) if index_id < nim else None
+                index = Index(index_id, self.thumb_dims, self.reduced_dims, 
+                              self.n_index)
                 self.indexes.append(index)
 
             if i == 0:
@@ -511,15 +672,28 @@ class Gallery:
 
             index.add_page(im, prev_image, next_image)
 
+        if len(self.indexes) != self.n_index:
+            raise ValueError("expected %d indexes but "
+                             "got %d" % (len(self.indexes),self.n_index))
     def make_thumbs_and_reduced(self, overwrite=False):
         for index in self.indexes:
             index.make_thumbs_and_reduced(overwrite=overwrite)
 
-
-
     def write(self):
         for index in self.indexes:
             index.write()
+
+        self.add_index_symlink()
+    def add_index_symlink(self):
+        # make a link from the first index to index.html
+        src=index_html_name(0, self.n_index-1)
+        dest='index.html'
+        os.chdir(gallery_dir())
+
+        if os.path.exists(dest) or os.path.islink(dest):
+            os.remove(dest)
+        os.symlink(src,dest)
+        os.chdir('..')
 
 
 def option2tuple(option):
