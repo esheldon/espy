@@ -7,12 +7,9 @@ Description:
     Make an image gallery for the input image list.  All files in the image
     list should be in the current working directory.  
     
-    A subdirectory of the current working directory is made called
-    "images2html" and all thumbnails, reduced images, and html files other than
-    the index.html are stored there.  
-    
-    The index.html just redirects to images2html/index01.html
-    
+    A subdirectory of the current working directory is made called "gallery".
+    All thumbnails, reduced images, and html files html are stored there.
+    There is a main gallery/index.html file that is the first index.
 """
 import os
 import sys
