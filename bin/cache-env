@@ -1,0 +1,153 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import time
+import pprint
+from optparse import OptionParser
+
+_default_vars=['PATH',
+               'LD_LIBRARY_PATH',
+               'LIBRARY_PATH',
+               'C_INCLUDE_PATH',
+               'CPATH',
+               'CPLUS_INCLUDE_PATH',
+               'PYTHONPATH',
+               'PERL5LIB',
+               'IDL_PATH', 
+               'IDL_DLM_PATH',
+               'GDL_PATH', 
+               'TCL_LIBRARY', 
+               'TK_LIBRARY']
+
+def format_defvars():
+    indent=' '*8
+    defvars_fmt = indent
+
+    for i in xrange(len(_default_vars)):
+        v = _default_vars[i]
+        if ((i+1) % 4) == 0:
+            defvars_fmt += '\n'+indent
+        defvars_fmt += v+' '
+
+    return defvars_fmt
+
+_help="""
+    %prog [options] shell
+
+Description:
+
+    Print out a sourceable list of the desired environment variables for the
+    given shell. This can be redirected to a file and sourced later to set the
+    variables.
+    
+    If the shell is 'csh' or 'tcsh', c chell style 
+        setenv var val
+        
+    is used, otherwise bash style
+    
+        export var=val 
+        
+    is used for bash style shells.
+
+Examples:
+
+    # print the default vars for bash
+    cache-env bash
+
+    # add some vars for csh
+    cache-env -a CONFIG_PATH,SOMEDIR csh
+    # only use the specified vars 
+    cache-env -v CONFIG_PATH,SOMEDIR bash
+
+Defaults:
+
+    The default list of environment variables is
+
+"""+format_defvars()
+
+
+_head='''# this is a cache of requested variables in the 
+# current environment as of %s 
+# commented variables did not exist in the environment
+''' % time.strftime('%Y-%m-%d:%H:%M:%S')
+
+from optparse import OptionParser
+parser=OptionParser(_help)
+parser.add_option("-a","--addvars",default=None,
+                  help="Additional environment variables to cache, over the default set.  A CSV list.")
+parser.add_option("-v","--vars",default=None,
+                  help="The environment variables to cache, over-riding the default set.  A CSV list")
+
+def remduplist(lst):
+    d={}
+    for l in lst:
+        d[l] = l
+    return list(d.keys())
+
+class EnvCache:
+    def __init__(self, vars2cache):
+
+        self.vars2cache = remduplist(vars2cache)
+
+        self.existvars, self.noexistvars = self.check_vars(self.vars2cache)
+
+    def check_vars(self, vars):
+        """
+
+        Extract the variables that actually exist in the current environment.
+
+        """
+
+        existvars={}
+        noexistvars={}
+        for v in vars:
+            if v in os.environ:
+                existvars[v] = os.environ[v]
+            else:
+                noexistvars[v] = ''
+                
+        return existvars, noexistvars
+
+    def print_vars(self, shell):
+
+        print _head
+        if shell in ['csh','tcsh']:
+            for v in self.existvars:
+                print 'setenv %s %s' % (v,self.existvars[v])
+            for v in self.noexistvars:
+                print '#setenv %s ' % v
+        else:
+            for v in self.existvars:
+                print 'export %s=%s' % (v,self.existvars[v])
+            for v in self.noexistvars:
+                print '#export %s=' % v
+
+def csv2list(csv):
+    return csv.split(',')
+
+def main():
+    options, args = parser.parse_args(sys.argv[1:])
+
+    if len(args) == 0:
+        parser.print_help()
+        sys.exit(45)
+    shell=args[0]
+    vars=options.vars
+    addvars=options.addvars
+
+    if vars is not None:
+        # replace the defaults
+        vars2cache = csv2list(vars)
+    else:
+        vars2cache = _default_vars
+
+        if addvars is not None:
+            addvars = csv2list(addvars)
+            vars2cache += addvars
+
+
+    ecache=EnvCache(vars2cache)
+    ecache.print_vars(shell)
+
+main()

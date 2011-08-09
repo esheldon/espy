@@ -80,6 +80,13 @@ class LcatBase(dict):
 
 
 class SDSSRandom(LcatBase):
+    """
+    This is used for the new dr8 cluster catalog "Red Mapper".  
+    
+    I've also used it with the old MaxBCG for testing but it does not use the
+    right mask for that catalog.
+
+    """
     def __init__(self, sample, **keys):
 
         LcatBase.__init__(self, sample, **keys)
