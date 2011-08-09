@@ -26,8 +26,7 @@ parser=OptionParser(__doc__)
 
 parser.add_option("-c","--columns",default=None, 
     help="A comma-separated list of columns to print.  "
-         "Can be numerical or strings. Column names should be "
-         "specified in all lower case.  By default all columns are printed. ")
+         "Can be numerical or strings. By default all columns are printed. ")
 
 parser.add_option("-d","--delim",default=None, 
     help="The delimiter to be used between fields.  Default is a space.")
@@ -85,6 +84,8 @@ if __name__=="__main__":
         columns = columns.split(',')
         if not eu.misc.isstring(eval("'"+columns[0]+"'")):
             columns = [int(c) for c in columns]
+        else:
+            columns = [c.lower() for c in columns]
         write_keys['fields'] = columns
     if nlines is not None:
         nlines = int(nlines)
