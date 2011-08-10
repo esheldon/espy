@@ -24,12 +24,17 @@ import cosmology
 
 def instantiate_sample(sample):
     conf = lensing.files.read_config('lcat',sample)
-    if conf['catalog'] == 'maxbcg-full':
+    if conf['catalog'] in ['ProPer']:
+        # proper is the old version
+        return RedMapper(sample)
+    elif conf['catalog'] == 'maxbcg-full':
         return MaxBCG(sample)
     elif conf['catalog'] == 'maxbcg-random':
         return SDSSRandom(sample)
-    else:
+    elif conf['catalog'] == 'desmocks-2.13':
         return DESMockLensCatalog(sample)
+    else:
+        raise ValueError("don't know about catalog %s" % conf['catalog'])
 
 def create_input(sample):
     """
@@ -239,6 +244,203 @@ class SDSSRandom(LcatBase):
             print("Writing to eps file:",epsfile)
             plt.write_eps(epsfile)
         return plt
+
+class RedMapper(LcatBase):
+    def __init__(self, sample, **keys):
+
+        LcatBase.__init__(self, sample, **keys)
+
+        if self['catalog'] not in ['ProPer']:
+            raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
+
+    def create_objshear_input(self):
+        # this will change when we get the actual red mapper catalog
+        lambda_field = 'lambda_zred'
+        z_field = 'z_lambda'
+
+        fname = self.file()
+
+        data = self.read_original()
+
+        # keep index into original data
+        orig_size = data.size
+        zindex = numpy.arange(orig_size,dtype='i8')
+
+        # trim poorly understood low lambda stuff
+        lambda_logic = self.lambda_logic(data[lambda_field])
+
+        # trim z for speed
+        z_logic = self.z_logic(data[z_field])
+
+
+        good = where1(lambda_logic & z_logic)
+        print("Finally kept: %d/%d" % (good.size,data.size))
+
+        print('creating output array')
+        output = output_array(good.size)
+
+        print('copying data')
+        output['zindex']    = zindex[good]
+        output['ra']        = data['ra'][good]
+        output['dec']       = data['dec'][good]
+        output['z']         = data[z_field][good]
+        output['maskflags'] = self.get_maskflags(output['ra'],output['dec'],output['z'])
+        lensing.files.lcat_write(self['sample'], output)
+
+    def lambda_logic(self, lam):
+        print("Cutting lambda > %0.2f" % self['lambda_min'])
+        logic = lam > self['lambda_min']
+
+        w=where1(logic)
+        print("    Keeping %d/%d" % (w.size,lam.size))
+        if w.size == 0:
+            raise ValueError("No objects passed z cut")
+
+        return logic
+
+
+    def z_logic(self, z):
+        print("Cutting z to [%f, %f]" % (self['zmin'],self['zmax']))
+        logic = (z > self['zmin']) & (z < self['zmax']) 
+
+        w=where1(logic)
+        print("    Keeping %d/%d" % (w.size,z.size))
+        if w.size == 0:
+            raise ValueError("No objects passed z cut")
+
+        return logic
+
+    def get_maskflags(self, ra, dec, z):
+        """
+
+        Run the stomp edge checking code.
+
+        """
+
+        print("Getting BOSS basic maskflags")
+        # get radius for edge check
+        cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])
+        print(cconf)
+        
+        c = cosmology.Cosmo(H0=cconf['H0'], omega_m=cconf['omega_m'])
+
+        print("    Getting radii. z range of inputs is [%.2f, %.2f]" % (z.min(), z.max()))
+        # Da is in Mpc
+        Da = c.Da(0.0, z)
+
+        # radius in *degrees*
+        radius = self['rmax']/Da*180./PI
+
+        print("    radii are in range [%f,%f]" % (radius.min(), radius.max()))
+
+        
+        map = stomp_maps.load('boss','basic')
+        print("    Getting maskflags...")
+        maskflags = map.Contains(ra, dec, "eq", radius)
+
+        return numpy.array(maskflags, dtype='i8')
+
+
+    def original_dir(self):
+        catdir = lensing.files.catalog_dir()
+        d = path_join(catdir, self['catalog'])
+        return str(d)
+
+    def original_file(self):
+        d = self.original_dir()
+        f = 'dr8_proper_v3.2_lamgt10.fit'
+        infile = path_join(d, f)
+        return infile
+
+    def read_original(self):
+        infile = self.original_file()
+        stdout.write("Reading original catalog: %s\n" % infile)
+        data = eu.io.read(infile, lower=True, ensure_native=True)
+        return data
+
+    def plot_coverage(self, region='both', show=True, dops=True):
+        """
+
+        Plot the lenses, both masked and unmasked plus goemetry
+        bounds
+
+        """
+        import biggles
+        from biggles import FramedPlot, Points, PlotKey
+
+        symsize=0.5
+
+        l = self.read()
+        llam,leta = eu.coords.eq2sdss(l['ra'],l['dec'])
+        maskflags = l['maskflags']
+
+        lammin,lammax = (-70.,70.)
+
+        if region=='ngc':
+            # a bit high to make room for the legend
+            emin,emax=(-40,60)
+
+            biggles.configure('screen','width', 1800)
+            biggles.configure('screen','height', 1140)
+
+        elif region=='sgc':
+            emin,emax=(125,165)
+            biggles.configure('screen','width', 1800)
+            biggles.configure('screen','height', 1140)
+        else:
+            emin,emax=(-40,165)
+            biggles.configure('screen','width', 1140)
+            biggles.configure('screen','height', 1140)
+
+        wl=where1((leta > emin) & (leta < emax))
+        llam=llam[wl]
+        leta=leta[wl]
+        maskflags=maskflags[wl]
+
+
+        plt=FramedPlot()
+        plt.xlabel=r'$\lambda$'
+        plt.ylabel=r'$\eta$'
+        xrng = (lammin, lammax)
+        yrng = (emin, emax)
+        plt.xrange = xrng
+        plt.yrange = yrng
+
+
+        print("adding all lenses")
+
+        allp = Points(llam,leta,type='dot',size=symsize)
+        allp.label='all'
+        plt.add(allp)
+
+        wquad = es_sdsspy.stomp_maps.quad_check(maskflags)
+        print("adding quad pass")
+        quadp = Points(llam[wquad],leta[wquad],type='dot',color='red',size=symsize)
+        quadp.label = 'quad good'
+        plt.add(quadp)
+
+        fakepoints = eu.plotting.fake_filled_circles(['all','quad good'],['black','red'])
+        key=PlotKey(0.95,0.95,fakepoints,halign='right')
+        plt.add(key)
+
+        plt.aspect_ratio = (yrng[1]-yrng[0])/float(xrng[1]-xrng[0])
+
+        es_sdsspy.stomp_maps.plot_boss_geometry(color='blue',plt=plt,show=False)
+
+        if show:
+            plt.show()
+
+        if dops:
+            d = lensing.files.sample_dir('lcat',self['sample'])
+            d = os.path.join(d,'plots')
+            if not os.path.exists(d):
+                os.makedirs(d)
+            epsfile = os.path.join(d, 'lcat-%s-coverage.eps' % self['sample'])
+            print("Writing to eps file:",epsfile)
+            plt.write_eps(epsfile)
+        return plt
+
+
 
 
 

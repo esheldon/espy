@@ -226,6 +226,8 @@ def read_original_catalog(type, sample):
         return lensing.lcat.read_original(sample)
     elif type == 'source':
         return lensing.scat.read_original(sample)
+    else:
+        raise ValueError("send type lens or source")
  
 
 #

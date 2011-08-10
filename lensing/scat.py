@@ -187,14 +187,14 @@ class DR8Catalog(dict):
         return wgood, matches
 
 
-    def add_scinv(self, docorr=False, clobber=False, chunksize=100000):
+    def add_scinv(self, clobber=False, chunksize=100000):
         """
 
         Add a column to the REGAUSS db that is the man scinv as a function of
         lens redshift.
 
-        if docorr=True, then create scinv using the *corrected* p(z).  This
-        is separate so I can run them in parallel.
+        scinv are created using the *corrected* p(z).  This is separate so I
+        can run them in parallel.
 
         This will be particular to the source sample, and will have name
         scinv{sample}
@@ -218,10 +218,7 @@ class DR8Catalog(dict):
 
         # the colum which will hold the inverse critical density.
         # depending on keywords, we might want to raise an error
-        if docorr:
-            colname = 'scinv_corr%s' % self['sample']
-        else:
-            colname = 'scinv%s' % self['sample']
+        colname = 'scinv%s' % self['sample']
         print("Writing to column:\n",colname)
         if colname in cols:
             if not clobber:
@@ -248,9 +245,8 @@ class DR8Catalog(dict):
         #
         # correction factor to apply to all p(z)
         #
-        if docorr:
-            print("getting p(z) correction function\n")
-            corr = zphot.weighting.pofz_correction(self['pzrun'])
+        print("getting p(z) correction function\n")
+        corr = zphot.weighting.pofz_correction(self['pzrun'])
 
 
         print("")
@@ -287,8 +283,7 @@ class DR8Catalog(dict):
                 # read the p(z) for the matches
                 pofz = pzcols['pofz'][match[w]]
 
-                if docorr:
-                    pofz = pofz[:]*corr[:]
+                pofz = pofz[:]*corr[:]
 
                 for j in xrange(w.size):
                     scinv[w[j], :] = scalc.calc_mean_scinv(pofz[j])

@@ -96,6 +96,7 @@ from . import util
 from . import rotation
 
 from . import sigmacrit
+from . import lens_efficiency
 from . import test_estimators
 from . import lcat
 from . import scat

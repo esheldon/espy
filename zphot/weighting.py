@@ -832,21 +832,25 @@ def combine_nofz_and_simulated(pzrun):
     aspect_ratio=0.7
 
     epsfile=simf.replace('.rec', '-nofz-errors.eps')
-    plt=FramedPlot()
-    plt.xlabel = 'z'
-    plt.aspect_ratio=aspect_ratio
+    nzeplt=FramedPlot()
+    nzeplt.xlabel = 'z'
+    nzeplt.ylabel = 'N(z)'
+    nzeplt.aspect_ratio=aspect_ratio
 
     wH = Histogram(whist, x0=out['zmin'][0], binsize=out['zmax'][0]-out['zmin'][0],
                    width=width)
+    wH.label = 'N(z)'
     wHerr = SymmetricErrorBarsY((out['zmin']+out['zmax'])/2., 
                                 out['nofz'], 
                                 out['sample_variance'], width=width)
-    wH.label = 'N(z)'
+    nzerrlab = PlotLabel(0.9,0.9,'Sample Variance Errors', halign='right')
 
-    plt.add(wH,wHerr)
-    plt.show()
+
+    nzeplt.add(wH,wHerr,nzerrlab)
+    nzeplt.show()
     print("Writing plot file:",epsfile)
-    plt.write_eps(epsfile)
+    nzeplt.write_eps(epsfile)
+
 
     # now add simulation
     epsfile=simf.replace('.rec', '-nofz-sim-errors.eps')
