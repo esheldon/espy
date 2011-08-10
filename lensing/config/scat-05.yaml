@@ -1,0 +1,21 @@
+sample:             "05"
+catalog:            dr8regauss
+filter:             r
+sigmacrit_style:    2
+procrun:            "04"
+sweeptype:          gal
+pzrun:              "11"
+zlmin:              0.02
+zlmax:              0.41
+dzl:                0.015
+
+# this is redundant with the cosmo_sample declaration in the run file
+# we have to demand consistency
+cosmo_sample:       "01"
+Rcut:               0.33
+nsplit:             100
+comment: | 
+
+    this is same as sample 04 but with higher zlmax for the RedMapper catalog
+
+    pzrun of "11" means r < 21.5

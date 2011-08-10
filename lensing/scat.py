@@ -236,17 +236,21 @@ class DR8Catalog(dict):
         pzconf = zphot.cascade_config(self['pzrun'])
         cosmo = files.read_config('cosmo', self['cosmo_sample'])
 
+        """
         wo = zphot.weighting.WeightedOutputs()
         pofz_file = wo.zhist_file(self['pzrun'])
         print("reading summed p(z)")
         sumpofz_struct = eu.io.read(pofz_file)
         zs = (sumpofz_struct['zmin']+sumpofz_struct['zmax'])/2.
+        """
 
         #
         # correction factor to apply to all p(z)
         #
         print("getting p(z) correction function\n")
-        corr = zphot.weighting.pofz_correction(self['pzrun'])
+        corrstruct = eu.io.read(zphot.weighting.pofz_correction_file(self['pzrun']))
+        zs = (corrstruct['zmax']+corrstruct['zmin'])/2.
+        corr = corrstruct['corr']
 
 
         print("")
