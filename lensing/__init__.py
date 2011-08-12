@@ -17,6 +17,7 @@ Then create input catalogs.
     /bin/make-objshear-input.py scat run
     /bin/make-objshear-input.py lcat run
 
+For random lcat this can be *very* slow so be prepared.
 Note this requires dealing with catalog names in these
 
     lensing.lcat.create_input(sample)
