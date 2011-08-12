@@ -47,7 +47,7 @@ def main():
     data = eu.numpy_util.add_fields(cat, add_dt)
     eu.numpy_util.copy_fields(lout, data)
 
-    eu.io.write(f, data, verbose=True, clobber=True)
+    eu.io.write(outfile, data, verbose=True, clobber=True)
 
 
 main()

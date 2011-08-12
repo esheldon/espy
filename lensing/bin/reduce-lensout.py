@@ -9,6 +9,7 @@ Description:
 
 from __future__ import print_function
 
+import os
 import sys
 import lensing
 from optparse import OptionParser
@@ -35,12 +36,18 @@ def main():
     print("Will combine into file:",outfile)
     print("Combining",nsplit,"splits from run",run)
 
+    d=lensing.files.sample_dir('lensout',run)
+    if not os.path.exists(d):
+        print("Making output dir:",d)
+        os.makedirs(d)
+
     for i in xrange(nsplit):
         tdata = lensing.files.sample_read('lensout',run, split=i, fs=fs)
         if i == 0:
             data = tdata
         else:
             lensing.outputs.add_lensums(data, tdata)
+
 
     lensing.files.sample_write(data, 'reduced', run)
     

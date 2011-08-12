@@ -1,19 +1,28 @@
 """
 First you need a catalog class for each catalog type.
 See 
-    lensing.lcat.DESMockLensCatalog
-    lensing.scat.DESMockSrcCatalog
 
-Then add an entry in the if statement for these functions and run them:
+    lensing.lcat.RedMapper
+    lensing.scat.DR8Catalog
 
-    lensing.lcat.create_input(catalog, version, sample, nsplit=)
-    lensing.scat.create_input(catalog, version, sample)
+And an associated yaml config file with a sample name.
 
-You can run those with the script
+Then you must make sure you have source scinv in the
+sweeps_reduct/regauss/04.cols by running
 
-    /bin/make-objshear-input.py
+    /bin/add-scinv.py
 
-Then create a lensing run json in $ESPY_DIR/lensing/config/ and run
+Then create input catalogs. 
+
+    /bin/make-objshear-input.py scat run
+    /bin/make-objshear-input.py lcat run
+
+Note this requires dealing with catalog names in these
+
+    lensing.lcat.create_input(sample)
+    lensing.scat.create_input(sample)
+
+Then create a lensing run yaml in $ESPY_DIR/lensing/config/ and run
 the config, script, and condor file creators using 
 
     /bin/make-objshear-proc.py
@@ -32,19 +41,32 @@ Since the results are split by source chunks, you then need
 to "reduce" the lens outputs, and collate with the original
 catalog
 
-    lensing.outputs.make_reduced_lensout(run)
-    lensing.outputs.make_collated_lensred(run)
+    /bin/reduce-lensout.py
+    /bin/collate-reduced.py
 
+You can then bin up the results. Youll need to use a binner
+from binning.py or make a new one.
 
-You can then bin up the results. e.g.
+    /bin/bin-lenses.py  type run nbin
+
+    # also plots
     binner = N200Binner(nbin)
-    binner.bin_byrun(run)
-
-    # add clustering/Ssh corrections here
 
     binner.plot_dsig_byrun(run)
 
-Should make a more general binner like we had in IDL.
+Then you need to run some randoms for corrections.  This involves
+makine a new lcat.  Currently we have
+
+    lcat.SDSSRandom
+
+Then run as usual, reduce, collate, etc.
+
+The corrections are made, currently only for binned samples, with
+
+    /bin/correct-shear.py
+
+although this needs work.
+
 
 Make some plots
 

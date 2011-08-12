@@ -176,6 +176,11 @@ def sample_read(type, sample, split=None, name=None, extra=None, fs='nfs'):
     config, lcat and scat special file types.
 
     """
+    if type == 'lcat':
+        return lcat_read(sample)
+    elif type == 'scat':
+        return scat_read(sample)
+
     f=sample_file(type, sample, split=split, name=name, extra=extra, fs=fs)
     return eu.io.read(f, verbose=True)
 
@@ -187,7 +192,7 @@ def sample_write(data, type, sample, split=None, name=None, extra=None, fs='nfs'
     """
     f=sample_file(type, sample, split=split, name=name, extra=extra, fs=fs)
     print("writing",type,"file:",f)
-    #keys['verbose'] = True
+
     return eu.io.write(f, data, **keys)
 
 

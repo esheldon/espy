@@ -24,12 +24,12 @@ import cosmology
 
 def instantiate_sample(sample):
     conf = lensing.files.read_config('lcat',sample)
-    if conf['catalog'] in ['ProPer']:
+    if conf['catalog'] in ['redmapper','ProPer']:
         # proper is the old version
         return RedMapper(sample)
     elif conf['catalog'] == 'maxbcg-full':
         return MaxBCG(sample)
-    elif conf['catalog'] == 'maxbcg-random':
+    elif conf['catalog'] in ['redmapper-random','maxbcg-random']:
         return SDSSRandom(sample)
     elif conf['catalog'] == 'desmocks-2.13':
         return DESMockLensCatalog(sample)
@@ -96,7 +96,7 @@ class SDSSRandom(LcatBase):
 
         LcatBase.__init__(self, sample, **keys)
 
-        if self['catalog'] not in ['maxbcg-random']:
+        if self['catalog'] not in ['maxbcg-random','redmapper-random']:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
         cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])
@@ -250,7 +250,7 @@ class RedMapper(LcatBase):
 
         LcatBase.__init__(self, sample, **keys)
 
-        if self['catalog'] not in ['ProPer']:
+        if self['catalog'] not in ['redmapper','ProPer']:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
     def create_objshear_input(self):

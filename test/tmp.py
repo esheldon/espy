@@ -54,8 +54,8 @@ def test_convolve():
         s2 = sqrt(det2/det1)
         imc_fconv = (im1 + b*s2*im2)/(1+b*s2)
 
-        mom_fft=fimage.stat.moments(imc_fft)
-        mom_fconv=fimage.stat.moments(imc_fconv)
+        mom_fft=fimage.statistics.moments(imc_fft)
+        mom_fconv=fimage.statistics.moments(imc_fconv)
 
         print("moments from fft")
         pprint.pprint(mom_fft)

@@ -52,6 +52,7 @@ class DR8Catalog(dict):
     photoz sample using lensing.regauss.zphot_match()
 
     Run add_scinv() before running create_objshear_input()
+    (or /bin/add-scinv.py before /bin/make-objshear-input.py)
 
     """
     def __init__(self, sample):

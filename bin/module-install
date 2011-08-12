@@ -86,7 +86,7 @@ Description:
                 default_version='7.2'
 
                 url='''
-                'http://ftp.vim.org/pub/vim/unix/vim-%s.tar.bz2' % (self.version,)'''
+                'http://ftp.vim.org/pub/vim/unix/vim-%s.tar.bz2' % self.version'''
 
                 source_type = 'tar'
 
@@ -95,12 +95,12 @@ Description:
 
                 # create the module file after installation
 
-                create_module_file='''#%Module
+                create_module_file=\"\"\"'''#%Module
                 module-whatis	"The vim text editor."
                 conflict vim
 
                 prepend-path PATH %s/bin
-                ''' % self.install_dir
+                ''' % self.install_dir\"\"\"
 
             
             This is for installing numerical python. Note use of
@@ -125,18 +125,23 @@ Description:
                 pylib_install_subdir = pylib_install_subdir.replace('dist-packages','site-packages')
 
 
-                create_module_file='''#%Module
+                create_module_file=\"\"\"'''#%Module
                 module-whatis	"Numerical python."
                 conflict numpy
 
                 prepend-path PATH {INSTALL_DIR}/bin
                 prepend-path PYTHONPATH {INSTALL_DIR}/{PYLIB_INSTALL_DIR}
                 '''.format(install_dir=self.install_dir,
-                           pylib_install_dir=pylib_install_subdir)
+                           pylib_install_dir=pylib_install_subdir)\"\"\"
                     
 
 
 TODO:
+
+    * need to be more atomic: currently, there is an install failure
+    but also an install of module file failure afterward, and cleanup of the
+    install will not happen
+
     * No clobbering of existing installs or module files
     * Checking of dependencies.
 """
@@ -171,20 +176,16 @@ parser.add_option("--config-url",dest="config_url",
                   "Default is $MODULEHOME/install-config/product.install. "+\
                   "Only file system paths currently supported.")
 
-parser.add_option("-r","--install-dir",
+parser.add_option("--install-dir",
                   default=None,
                   dest="install_dir",
-                  help="Install under this directory.  '-r' is historical.")
+                  help="Install under this directory into {install_dir}/version.  '-r' is historical.")
 
-parser.add_option("--nodeclare",action="store_true",
-        dest="nodeclare",
-        default=False,
-        help="Don't declare the product. Useful for local installs. "
-            "Default %default")
-parser.add_option("-c","--declare-current",action="store_true",
-        dest="declare_current",
-        default=False,
-        help="Declare the installed product as current. Default %default")
+parser.add_option("--module-dir",
+                  default=None,
+                  dest="module_dir",
+                  help="Put module files under this directory as {module_name}/{version}.")
+
 
 parser.add_option("-y","--noprompt",action="store_true",
         dest="noprompt",
@@ -201,6 +202,7 @@ config_ignores=[]
 class ModuleInstaller(object):
     def __init__(self, name, 
                  version=None, 
+                 module_dir=None,
                  install_config=None, 
                  nodeclare=False,
                  verbose=True, **keys):
@@ -218,6 +220,8 @@ class ModuleInstaller(object):
             Keywords:
                 version         The version of the product, e.g. v1.5.1
                 default_version The default version to use, e.g. trunk
+                module_dir      The location to install module files, default
+                                is ${MODULEHOME}/modulefiles/modulename/version
                 install_config  A config file containing relevant installation
                                 info. In the future will support remote urls.
                 nodeclare       Don't declare the product.  Useful for local
@@ -262,9 +266,13 @@ class ModuleInstaller(object):
         self.pars={}
         self.name=name
         if self.verbose:
-            stdout.write('\nProduct name = %s\n' % name)
+            stdout.write('\nModule name = %s\n' % name)
 
         # load a config file
+        self.module_dir=module_dir
+        if module_dir is None:
+            self.module_dir = DefaultModuleDir()
+
         if install_config is None:
             install_config = DefaultInstallConfig(name) 
         if os.path.exists(install_config):
@@ -532,13 +540,15 @@ class ModuleInstaller(object):
         
         if 'create_module_file' in self.pars:
             # create the ups table with the given string
+            text=self.TryEval(self.pars['create_module_file'])
+
             tmpdir = tempfile.mkdtemp(dir='.', prefix='scratchdir-')
             table_file = os.path.join(tmpdir, self.name+'.table')
             if self.verbose:
                 stdout.write('\nCreating temporary module file for getting deps: %s\n' % table_file)
                 stdout.flush()
             fobj=open(table_file,'w')
-            fobj.write(self.pars['create_ups'])
+            fobj.write(text)
             fobj.close()
         else:
             # look for the ups subdirectory
@@ -639,15 +649,23 @@ class ModuleInstaller(object):
 
         if 'create_module_file' in self.pars:
             # create the module file with the given string
-            module_dir = os.path.join(self.modulefile_dir, self.name)
+            module_dir = os.path.join(self.module_dir, self.name)
+
             if not os.path.exists(module_dir):
+                stdout.write("\nCreating module dir: %s\n" % module_dir)
                 os.mkdir(module_dir)
+
             module_file = os.path.join(module_dir, self.version)
+
             if self.verbose:
                 stdout.write('\nCreating module file: %s\n' % module_file)
                 stdout.flush()
+
+            stdout.write(self.pars['create_module_file'])
+            text=self.TryEval(self.pars['create_module_file'])
+
             fobj=open(module_file,'w')
-            fobj.write(self.pars['create_module_file'])
+            fobj.write(text)
             fobj.close()
 
 
@@ -705,6 +723,7 @@ class ModuleInstaller(object):
         flavor_dir=FlavorDir()
         install_dir=os.path.join(flavor_dir, self.name, self.version)
         return install_dir
+
 
 
     def RunScons(self, install=False):
@@ -1162,7 +1181,7 @@ def GetEnv(name):
 
 def Flavor():
     """Return the current flavor"""
-
+    import re
     uname = os.uname()[0]
     mach =  os.uname()[4]
 
@@ -1184,168 +1203,27 @@ def Flavor():
 
 def FlavorDir():
     def_install_base = GetEnv('MODULE_INSTALLS')
+    flavor=Flavor()
     return os.path.join(def_install_base, flavor)
 
 def InstallConfigDir():
     path=GetEnv('MODULESHOME')
     return os.path.join(path,'install-config')
+
 def DefaultInstallConfig(name):
     return os.path.join(InstallConfigDir(), name+'.install')
 
+def DefaultModuleDir():
+    path=GetEnv('MODULESHOME')
+    path=os.path.join(path, 'modulefiles')
+    return path
 
 
 
-
-
-
-
-#
-# probably not going to use all this, using an external call
-# seems simpler and works
-#
-def SconsVersion():
-    """
-    If they would only print just the damn version
-    """
-    command='scons -v'
-    stdout_data, stderr_data = \
-        ExecuteCommand(command, 
-                       get_output=True,
-                       verbose=False)
-    script=stdout_data.split('\n')[1]
-    longv=script.split(':')[1].strip()
-    v='.'.join( longv.split('.')[0:3] )
-    # remove the front "v"
-    v=v[1:]
-    return v
-
-def SconsSetup():
-    """ 
-    This is a kludge because scons isn't installed as a library
-    """
-    # BEGIN STANDARD SCons SCRIPT HEADER
-    #
-    # This is the cut-and-paste logic so that a self-contained script can
-    # interoperate correctly with different SCons versions and installation
-    # locations for the engine.  If you modify anything in this section, you
-    # should also change other scripts that use this same header.
-
-    # Strip the script directory from sys.path() so on case-insensitive
-    # (WIN32) systems Python doesn't think that the "scons" script is the
-    # "SCons" package.  Replace it with our own library directories
-    # (version-specific first, in case they installed by hand there,
-    # followed by generic) so we pick up the right version of the build
-    # engine modules if they're in either directory.
-
-    # my local modification: E.S.S.
-    #script_dir = sys.path[0]
-    command='which scons'
-    stdout_data, stderr_data = \
-        ExecuteCommand(command, 
-                       verbose=False,
-                       get_output=True)
-    script_dir = os.path.dirname(stdout_data)
-    stdout.write('scons found at: %s\n' % script_dir)
-
-    if script_dir in sys.path:
-        sys.path.remove(script_dir)
-
-    libs = []
-
-    #__version__ = "1.2.0"
-    __version__ = SconsVersion()
-    stdout.write('scons version="%s"\n' % __version__)
-    if os.environ.has_key("SCONS_LIB_DIR"):
-        libs.append(os.environ["SCONS_LIB_DIR"])
-
-    local_version = 'scons-local-' + __version__
-    local = 'scons-local'
-    if script_dir:
-        local_version = os.path.join(script_dir, local_version)
-        local = os.path.join(script_dir, local)
-    libs.append(os.path.abspath(local_version))
-    libs.append(os.path.abspath(local))
-
-    scons_version = 'scons-%s' % __version__
-
-    prefs = []
-
-    if sys.platform == 'win32':
-        # sys.prefix is (likely) C:\Python*;
-        # check only C:\Python*.
-        prefs.append(sys.prefix)
-        prefs.append(os.path.join(sys.prefix, 'Lib', 'site-packages'))
-    else:
-        # On other (POSIX) platforms, things are more complicated due to
-        # the variety of path names and library locations.  Try to be smart
-        # about it.
-        if script_dir == 'bin':
-            # script_dir is `pwd`/bin;
-            # check `pwd`/lib/scons*.
-            prefs.append(os.getcwd())
-        else:
-            if script_dir == '.' or script_dir == '':
-                script_dir = os.getcwd()
-            head, tail = os.path.split(script_dir)
-            if tail == "bin":
-                # script_dir is /foo/bin;
-                # check /foo/lib/scons*.
-                prefs.append(head)
-
-        head, tail = os.path.split(sys.prefix)
-        if tail == "usr":
-            # sys.prefix is /foo/usr;
-            # check /foo/usr/lib/scons* first,
-            # then /foo/usr/local/lib/scons*.
-            prefs.append(sys.prefix)
-            prefs.append(os.path.join(sys.prefix, "local"))
-        elif tail == "local":
-            h, t = os.path.split(head)
-            if t == "usr":
-                # sys.prefix is /foo/usr/local;
-                # check /foo/usr/local/lib/scons* first,
-                # then /foo/usr/lib/scons*.
-                prefs.append(sys.prefix)
-                prefs.append(head)
-            else:
-                # sys.prefix is /foo/local;
-                # check only /foo/local/lib/scons*.
-                prefs.append(sys.prefix)
-        else:
-            # sys.prefix is /foo (ends in neither /usr or /local);
-            # check only /foo/lib/scons*.
-            prefs.append(sys.prefix)
-
-        temp = map(lambda x: os.path.join(x, 'lib'), prefs)
-        temp.extend(map(lambda x: os.path.join(x,
-                                               'lib',
-                                               'python' + sys.version[:3],
-                                               'site-packages'),
-                               prefs))
-        prefs = temp
-
-        # Add the parent directory of the current python's library to the
-        # preferences.  On SuSE-91/AMD64, for example, this is /usr/lib64,
-        # not /usr/lib.
-        try:
-            libpath = os.__file__
-        except AttributeError:
-            pass
-        else:
-            # Split /usr/libfoo/python*/os.py to /usr/libfoo/python*.
-            libpath, tail = os.path.split(libpath)
-            # Split /usr/libfoo/python* to /usr/libfoo
-            libpath, tail = os.path.split(libpath)
-            # Check /usr/libfoo/scons*.
-            prefs.append(libpath)
-
-# Look first for 'scons-__version__' in all of our preference libs,
-# then for 'scons'.
-    libs.extend(map(lambda x: os.path.join(x, scons_version), prefs))
-    libs.extend(map(lambda x: os.path.join(x, 'scons'), prefs))
-
-    sys.path = libs + sys.path
-
+def DefaultInstallDir(self):
+    flavor_dir=FlavorDir()
+    install_dir=os.path.join(flavor_dir, self.name, self.version)
+    return install_dir
 
 
 
@@ -1377,9 +1255,10 @@ if __name__=="__main__":
 
     prod=ModuleInstaller(product, version, 
                          prompt=prompt,
+                         module_dir=options.module_dir,
                          install_config=options.config_url,
-                         nodeclare=options.nodeclare,
-                         declare_current=options.declare_current, 
+                         #nodeclare=options.nodeclare,
+                         #declare_current=options.declare_current, 
                          install_dir=options.install_dir, 
                          force=force) 
     prod.DoInstall()

@@ -503,7 +503,7 @@ class RegaussSimulatorRescontrol(dict):
         #sys.stdout.flush()
 
     def add_unweighted_truth(self, rg, image0):
-        mom0=fimage.stat.fmom(image0)
+        mom0=fimage.statistics.fmom(image0)
 
         uw = rg['uwcorrstats']
 

@@ -10,6 +10,21 @@ source_type = 'tar'
 # this will use the install_dir as prefix in configure
 install_method = 'configure-make-install'
 
+# for the modules system
+create_module_file='''"""#%%Module
+# vim: set filetype=tcl :
+
+module-whatis	"SWIG"
+
+conflict swig
+module load pcre
+
+prepend-path PATH %s/bin
+""" % self.install_dir'''
+
+
+
+
 # create the ups directory after installation
 create_ups="""
 setupOptional("pcre")

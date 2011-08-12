@@ -8,6 +8,24 @@ source_type = 'tar'
 # this will use the install_dir as prefix in configure
 install_method = 'configure-make-install'
 
+
+# for the modules system
+create_module_file='''"""#%%Module
+# vim: set filetype=tcl :
+
+module-whatis	"pcre"
+
+conflict pcre
+
+prepend-path PATH            %s/bin
+prepend-path LD_LIBRARY_PATH %s/lib
+prepend-path LIBRARY_PATH    %s/lib
+prepend-path C_INCLUDE_PATH  %s/include
+prepend-path CPATH           %s/include
+""" % tuple([self.install_dir]*5)'''
+
+
+
 # create the ups directory after installation
 create_ups="""
 envPrepend(PATH,${PRODUCT_DIR}/bin)
