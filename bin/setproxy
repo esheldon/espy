@@ -61,7 +61,8 @@ def main():
     stdout.write(ip+'\n')
 
     os.chdir(svn_dir)
-    os.remove(svn_servers)
+    if os.path.exists(svn_servers):
+        os.remove(svn_servers)
     os.symlink(svn_servers_active, svn_servers)
 
 if __name__=="__main__":
