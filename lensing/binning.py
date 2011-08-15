@@ -36,7 +36,9 @@ except:
     pass
 
 def instantiate_binner(type, nbin):
-    if type == 'n200':
+    if type == 'lambda':
+        b = LambdaBinner(nbin)
+    elif type == 'n200':
         b = N200Binner(nbin)
     elif type == 'mz':
         b = MZBinner(nbin)
@@ -45,7 +47,7 @@ def instantiate_binner(type, nbin):
     return b
 
 
-def bin_lenses_byrun(type, run, nbin):
+def bin_lenses_byrun(run, type, nbin):
     b=instantiate_binner(type, nbin)
     b.bin_byrun(run)
 
@@ -54,15 +56,46 @@ class BinnerBase(dict):
         self['nbin'] = nbin
         self.set_bin_ranges()
 
+    def name(self):
+        raise RuntimeError("override this method")
+
+    def bin_byrun(self, run):
+        """
+        Do the binning and write out a file
+        """
+
+        name=self.name()
+        d = lensing.files.sample_read('collated',run)
+        res = self.bin(d)
+
+        outdir = lensing.files.sample_dir('binned',run,name=name)
+        if not os.path.exists(outdir):
+            print("Making output dir:",outdir)
+            os.makedirs(outdir)
+        lensing.files.sample_write(res,'binned',run,name=name,clobber=True)
+
+    def bin(self, data):
+        raise RuntimeError("override this method")
+
     def set_bin_ranges(self, binnum=None):
         raise RuntimeError("override this method")
+
     def bin_ranges(self, binnum=None):
-        raise RuntimeError("override this method")
+        if binnum is not None:
+            if (binnum < 0) or (binnum > (self['nbin']-1)):
+                raise ValueError("binnum out of bounds: [%d,%d]" % (0,self['nbin']-1))
+            return self.lowlim[binnum], self.highlim[binnum]
+
+        return self.lowlim, self.highlim
+
     def bin_label(binnum):
         raise RuntimeError("override this method")
 
     def plot_dsig_osig_byrun_bin(self, run, binnum, **keys):
         """
+
+        Plot a single bin, with dsig and osig.
+
         See lensing.plotting.plot2dsig
         """
         name = self.name()
@@ -81,8 +114,196 @@ class BinnerBase(dict):
                                    **keys)
 
     def plot_dsig_osig_byrun(self, run, **keys):
+        """
+
+        Plot all bins dsig+osig but one at a time, not in
+        an array
+
+        """
         for binnum in xrange(self['nbin']):
             self.plot_dsig_osig_byrun_bin(run, binnum, **keys)
+
+    def plot_dsig_byrun_1var(self, run, dops=False):
+        """
+
+        Make an array of plots with each plot a bin in one variable.  It is
+        expected that methods like self.bin_label() are meaningfully
+        over-ridden
+
+        """
+
+        name = self.name()
+        data=lensing.files.sample_read('binned',run,name=name)
+
+        # this is for the screen: currently tuned for my big screen!
+        biggles.configure('screen','width', 1140)
+        biggles.configure('screen','height', 1140)
+        biggles.configure('fontsize_min',1.0)
+
+        if self['nbin'] == 12:
+            nrow = 3
+            ncol = 4
+            aspect_ratio = 1.0/1.5
+        elif self['nbin'] == 16:
+            nrow = 4
+            ncol = 4
+            aspect_ratio = 1.0
+        else:
+            raise ValueError("Unsupported nbin: %s" % self['nbin'])
+
+        pa = FramedArray(nrow, ncol)
+        pa.aspect_ratio = aspect_ratio
+
+        pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+
+        xrnge = [0.01,60.0]
+        yrnge = [1.e-2,8000]
+        pa.xrange = xrnge
+        pa.yrange = yrnge
+        pa.xlog = True
+        pa.ylog = True
+
+
+        row = -1
+
+        low, high = self.bin_ranges()
+
+        i = 0
+        for i in xrange(self['nbin']):
+            col = i % ncol
+            if col == 0:
+                row += 1
+
+            eu.plotting.bscatter(data['r'][i],
+                                 data['dsig'][i],
+                                 yerr=data['dsigerr'][i],
+                                 xrange=xrnge,
+                                 yrange=yrnge,
+                                 xlog=True,ylog=True,
+                                 show=False, 
+                                 plt=pa[row,col])
+            label = self.bin_label(i)
+            pl = PlotLabel(.85, .85, label, halign='right')
+
+            pa[row,col].add(pl)
+
+
+        if dops:
+            #d = lensing.files.lensbin_plot_dir(run,name)
+            d = lensing.files.sample_dir('binned',run,name=name)
+            if not os.path.exists(d):
+                print("making dir:",d)
+                os.makedirs(d)
+            #epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
+            epsfile=lensing.files.sample_file('binned-plots',run,name=name,extra='allplot',ext='eps')
+            stdout.write("Plotting to file: %s\n" % epsfile)
+            pa.write_eps(epsfile)
+        else:
+            pa.show()
+
+
+
+
+class LambdaBinner(BinnerBase):
+    """
+    RedMapper binner on lambda
+    """
+    range_type='()'
+
+    lambda_field = 'lambda_zred'
+    z_field = 'z_lambda'
+    def name(self):
+        return 'lambda-%02d' % self['nbin']
+
+    def bin(self, data):
+        """
+        call also call base method bin_byrun
+        """
+
+        lambda_field = self.lambda_field
+        z_field = self.z_field
+
+        low, high = self.bin_ranges()
+
+        nrbin = data['rsum'][0].size
+        bs = lensbin_struct(nrbin, bintags=['lambda','z'], n=self['nbin'])
+
+        i=0
+        for l,h in zip(low,high):
+            lamrange = [l,h]
+
+            print('%0.2f < lambda < %0.2f' % tuple(lamrange))
+
+            print("    reducing and jackknifing by lens")
+            comb,w = reduce_from_ranges(data,lambda_field,lamrange, range_type=self.range_type,
+                                        getind=True)
+        
+            print("    found",w.size,"in bin")
+            # first copy all common tags
+            for n in comb.dtype.names:
+                bs[n][i] = comb[n][0]
+
+            # now the things we are averaging by lens weight
+            mn,err,sdev = lens_wmom(data,z_field,ind=w, sdev=True)
+            bs['z_mean'][i] = mn
+            bs['z_err'][i] = err
+            bs['z_sdev'][i] = sdev
+            bs['z_range'][i] = data[z_field][w].min(), data[z_field][w].max()
+
+            mn,err,sdev = lens_wmom(data,lambda_field,ind=w, sdev=True)
+            bs['lambda_mean'][i] = mn
+            bs['lambda_err'][i] = err
+            bs['lambda_sdev'][i] = sdev
+            bs['lambda_range'][i] = lamrange
+
+            i+=1
+
+        return bs
+
+    def select_bin(self, data, binnum):
+        """
+
+        Although not used by bin(), this is useful for other programs such as
+        the random hist matching and correction code
+
+        """
+        if binnum > self['nbin']:
+            raise ValueError("bin number must be in [0,%d]" % (self['nbin']-1,))
+
+        low, high = self.bin_ranges()
+        logic = get_range_logic(data, self.lambda_field, [low[binnum], high[binnum]], self.range_type)
+        return where1(logic)
+
+
+
+    def bin_label(self, binnum):
+        lrange = self.bin_ranges(binnum)
+        return r'$%0.2f < \lambda\ < %0.2f$' % lrange
+
+
+
+    def set_bin_ranges(self):
+        if self['nbin'] == 12:
+            # ran logbin_linear_edges with nbin=14 and combined last three
+            # also made upper exactly 189
+            lowlim  = [10.00, 12.33, 15.21, 18.75, 23.13, 28.52, 35.17, 43.37, 53.49, 65.96, 81.34, 100.31]
+            highlim = [12.33, 15.21, 18.75, 23.13, 28.52, 35.17, 43.37, 53.49, 65.96, 81.34, 100.31, 189.00]
+
+        elif self['nbin'] == 16:
+            # ran logbin_linear_edges with nbin=18 and combined last three
+            # also made upper exactly 189
+
+            lowlim  = [10.00, 11.77, 13.86, 16.31, 19.20, 22.59, 26.60, 31.30, 36.85, 43.37, 51.05, 60.09, 70.73, 83.26, 98.00, 115.35]
+            highlim = [11.77, 13.86, 16.31, 19.20, 22.59, 26.60, 31.30, 36.85, 43.37, 51.05, 60.09, 70.73, 83.26, 98.00, 115.35, 189.00]
+
+        else:
+            raise ValueError("Unsupported nbin: %d\n", self['nbin'])
+
+        self.lowlim = numpy.array(lowlim,dtype='f8')
+        self.highlim = numpy.array(highlim,dtype='f8')
+
+
 
 
 class N200Binner(BinnerBase):
@@ -96,16 +317,6 @@ class N200Binner(BinnerBase):
     def name(self):
         return 'n200-%02d' % self['nbin']
 
-    def bin_byrun(self, run):
-        """
-        Do the binning and write out a file
-        """
-
-        name=self.name()
-        d = lensing.files.sample_read('collated',run)
-        res = self.bin(d)
-
-        lensing.files.sample_write(res,'binned',run,name=name,clobber=True)
 
     def bin(self, data):
 
@@ -1110,7 +1321,7 @@ def get_range_logic(data, tag, brange, type):
 
     return logic
 
-def logbin_linear_edges(data, nbin, tag):
+def logbin_linear_edges_struct(data, nbin, tag):
     """
 
     Do a log binning and print out the corresponding bin edges in
@@ -1121,29 +1332,56 @@ def logbin_linear_edges(data, nbin, tag):
     
     """
 
-    log_data = numpy.log10(data[tag])
+    low, high, rev=logbin_linear_edges(data[tag], nbin, getrev=True) 
 
-    # we can't just take the returned means because we want
-    # the mean in the linear value of the parameter
-    hdict = histogram(log_data, nbin=nbin, more=True, rev=True)
-
-    rev = hdict['rev']
     mean_data = numpy.zeros(nbin,dtype='f8')
-    stdout.write("Getting mean of '%s'\n" % tag)
+    h=numpy.zeros(nbin,dtype='i8')
+    print("Getting mean of data")
     for i in xrange(nbin):
         if rev[i] != rev[i+1]:
             w=rev[ rev[i]:rev[i+1] ]
             mean_data[i],err = lens_wmom(data, tag, ind=w)
+            h[i] = w.size
+        else:
+            mean_data[i] = -9999
 
-    h = hdict['hist']
     low=10.0**hdict['low']
     high=10.0**hdict['high']
+
     fmt = "%-2i %8i %11.5e %11.5e %11.5e\n"
     for i in xrange(nbin):
         stdout.write(fmt % (i+1,h[i],low[i],high[i],mean_data[i]))
 
     print(eu.numpy_util.arr2str(low))
     print(eu.numpy_util.arr2str(high))
+ 
+def logbin_linear_edges(data, nbin, getrev=False):
+    """
+
+    Do a log binning and print out the corresponding bin edges in
+    the linear variable.  
+    
+    For binning by mass estimators, probably want to combine the last 2 or 3
+    bins because of the exponential cutoff
+    
+    """
+
+    #log_data = numpy.log10(data[tag])
+    log_data = numpy.log10(data)
+
+    # we can't just take the returned means because we want
+    # the mean in the linear value of the parameter
+    hdict = histogram(log_data, nbin=nbin, more=True, rev=True)
+
+    low=10**hdict['low']
+    high=10**hdict['high']
+
+    if getrev:
+        return low, high, hdict['rev']
+    else:
+        return low, high
+
+
     
 def lensbin_struct(nrbin, bintags=None, n=1):
     dt = lensbin_dtype(nrbin, bintags=bintags)

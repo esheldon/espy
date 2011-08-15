@@ -2,9 +2,6 @@
 Module:
     mcmc
 
-This is a sub-module of the esutil.stat package.  The full relationship is 
-    esutil.stat.mcmc
-
 Classes:
     MCMC: A class for running Monte Carlo Markov Chains.
     MCMCTester: A class for testing the MCMC class.

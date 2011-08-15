@@ -62,7 +62,11 @@ makine a new lcat.  Currently we have
 
 Then run as usual, reduce, collate, etc.
 
-The corrections are made, currently only for binned samples, with
+You must match the randoms to lenses using
+
+    /bin/match-randoms.py
+
+currently only for binned samples.  Then corrections are made with
 
     /bin/correct-shear.py
 

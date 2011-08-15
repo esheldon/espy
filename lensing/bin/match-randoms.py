@@ -9,6 +9,7 @@ Description:
 
 from __future__ import print_function
 
+import os
 import sys
 import lensing
 import weighting
@@ -27,10 +28,16 @@ parser.add_option("-t",dest="bintype",default=None,
 parser.add_option("-n",dest="nbin",default=None,
                   help="The number of bins, default %default")
 parser.add_option("-b",dest="binsize",default=0.01,
-                  help="Binsuze to use in z for hist matching, default %default")
+                  help="Binsize to use in z for hist matching, default %default")
 parser.add_option("-s",dest="show",default=False,
                   help="Show histogram comparisons on the screen. default %default")
 
+
+def makedir_fromfile(path):
+    d=os.path.dirname(path)
+    if not os.path.exists(d):
+        print("Making dir:",d)
+        os.makedirs(d)
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -73,6 +80,7 @@ def main():
                                           lensrun,
                                           name=b.name(),
                                           extra=eps_extra, ext='eps')
+        makedir_fromfile(epsfile)
 
 
         w = b.select_bin(data, binnum)

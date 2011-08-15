@@ -5,7 +5,12 @@ from sys import stdout, stderr
 import numpy
 from numpy import where
 
-import pgnumpy
+# this is unlikely to import unless someone
+# compiles it!
+try:
+    import pgnumpy
+except:
+    pass
 
 import esutil
 from esutil.ostools import path_join, expand_path, getenv_check

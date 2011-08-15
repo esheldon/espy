@@ -23,12 +23,16 @@ import numpy
 from numpy import where
 from optparse import OptionParser
 import biggles
+import esutil as eu
 
 parser=OptionParser(__doc__)
 parser.add_option("-t",dest="bintype",default=None,
                   help="The type of binning, default %default")
 parser.add_option("-n",dest="nbin",default=None,
                   help="The number of bins, default %default")
+
+parser.add_option("-s",dest="subtract_rand",action='store_true',default=False,
+                  help="Subtract the randoms.  default %default")
 parser.add_option("-r",dest="minrad",default=1.,
                   help="The minimum radius for the subtraction of random signal. "
                        "Set to a large number to turn off subtraction. Default %default Mpc")
@@ -46,34 +50,53 @@ def main():
     bintype=options.bintype
     nbin=int(options.nbin)
     minrad=float(options.minrad)
+    subtract_rand = bool(options.subtract_rand)
 
     if bintype is None or nbin is None:
         raise ValueError("currently demand some kind of binning")
 
     b = lensing.binning.instantiate_binner(bintype, nbin)
 
-    data = lensing.files.sample_read('binned', lensrun, name=b.name())
+    alldata_precorr = lensing.files.sample_read('binned', lensrun, name=b.name())
     extra='randmatch-%s' % randrun
-    rand = lensing.files.sample_read('binned', lensrun, name=b.name(), extra=extra)
+    allrand = lensing.files.sample_read('binned', lensrun, name=b.name(), extra=extra)
 
-    biggles.configure('screen','width', 1000)
-    biggles.configure('screen','height', 1000)
+    alldata = lensing.correct.correct(alldata_precorr, allrand, 
+                                      subtract_rand=subtract_rand, minrad=minrad)
+    
+    biggles.configure('screen','width', 1100)
+    biggles.configure('screen','height', 1100)
+
+    
+    range4var = [0.1,100]
     for binnum in xrange(nbin):
-        w,=where(data['r'][binnum] > minrad)
-        wr,=where(rand['r'][binnum] > minrad)
-        if w.size != wr.size:
-            raise ValueError("Found > minrad %d from data but %d "
-                             "from rand" % (w.size,wr.size))
+
+        data = alldata[binnum]
+        rand = allrand[binnum]
         
+
+        tab = biggles.Table(1,2)
 
         label=b.bin_label(binnum)
 
-        lensing.plotting.plot2dsig_new(data['r'][binnum], 
-                                   data['dsig'][binnum], data['dsigerr'][binnum],
-                                   rand['dsig'][binnum], rand['dsigerr'][binnum],
-                                   plot_label=label, label1='data', label2='random',
-                                   range4var=[0.1,100])
+        arr=lensing.plotting.plot2dsig(data['r'], 
+                                       data['dsig'], data['dsigerr'],
+                                       rand['dsig'], rand['dsigerr'],
+                                       plot_label=label, label1='data', label2='random',
+                                       range4var=[0.1,100],show=False)
 
+        
+        tab[0,0] = arr
+
+
+        cplt = eu.plotting.bscatter(data['r'], data['clust_corr']-1, yerr=data['clust_corr_err'],
+                                    xlabel=lensing.plotting.labels['rproj'], 
+                                    ylabel='Corr-1', show=False, xlog=True, ylog=True)
+
+        cplt.aspect_ratio=1
+        tab[0,1] = cplt
+
+        tab.show()
 
         key=raw_input("hit a key (q to quit): ")
         if key == 'q':

@@ -5,7 +5,7 @@ import time
 try:
     import pgnumpy
 except:
-    print 'could not import pgnumpy'
+    pass
 
 
 import esutil

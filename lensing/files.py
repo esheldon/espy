@@ -215,7 +215,20 @@ def catalog_dir():
 def original_catalog_file(type, sample):
     """
     This is the original catalog from which we generate the objshear inputs.
-    Note for dr8 we read from columns, so there is no "original file"
+
+    parameters
+    ----------
+    type: string
+        Either 'lens' or 'source'
+    sample: string
+        The sample id string
+
+    Examples
+    --------
+    f=original_catalog_file('lens','05')
+    f=original_catalog_file('lens','sdssrand01')
+    f=original_catalog_file('source','05')
+
     """
     if type == 'lens':
         return lensing.lcat.original_file(sample)
@@ -225,7 +238,21 @@ def original_catalog_file(type, sample):
 def read_original_catalog(type, sample):
     """
     This is the original catalog from which we generate the objshear inputs.
-    Note for dr8 we read from columns, so there is no "original file"
+
+    parameters
+    ----------
+    type: string
+        Either 'lens' or 'source'
+    sample: string
+        The sample id string
+
+    Examples
+    --------
+    data=read_original_catalog('lens','05')
+    data=read_original_catalog('lens','sdssrand01')
+    data=read_original_catalog('source','05')
+
+
     """
     if type == 'lens':
         return lensing.lcat.read_original(sample)

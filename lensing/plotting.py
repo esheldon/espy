@@ -20,7 +20,7 @@ labels['dsig'] = r'$\Delta\Sigma ~[M_{sun} pc^{-2}]$'
 labels['osig'] = r'$\Delta\Sigma_\times ~ [M_{sun} pc^{-2}]$'
 
 
-def plot2dsig_new(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
+def plot2dsig(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
     """
     Plot delta sigma and a second delta sigma in two plots the second of which
     is linear.
@@ -132,7 +132,7 @@ def plot2dsig_new(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
 
 
 
-def plot2dsig(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
+def plot2dsig_old(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
     """
     Plot delta sigma and a second delta sigma in two plots the second of which
     is linear.

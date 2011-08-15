@@ -87,6 +87,9 @@ class LcatBase(dict):
 class SDSSRandom(LcatBase):
     """
     This is used for the new dr8 cluster catalog "Red Mapper".  
+
+    Random points are generated from the tycho stomp, edges are 
+    checked against the basic map.
     
     I've also used it with the old MaxBCG for testing but it does not use the
     right mask for that catalog.
@@ -108,7 +111,7 @@ class SDSSRandom(LcatBase):
                                         method='cut')
         self['mapname'] = 'boss'
         self['maptype'] = 'basic'
-        self.map = es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'])
+        self['tycho_maptype'] = 'tycho'
 
     def read_original(self):
         """
@@ -117,7 +120,15 @@ class SDSSRandom(LcatBase):
         return lensing.files.lcat_read(sample=self['sample'])
 
 
+    def load_stomp_maps(self):
+        if not hasattr(self, 'basic_map'):
+            self.basic_map = es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'])
+            self.tycho_map = es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'])
+
     def create_objshear_input(self):
+        self.load_stomp_maps()
+
+
         fname = self.file()
         nrand = self['nrand']
         #nrand = 10000
@@ -136,7 +147,7 @@ class SDSSRandom(LcatBase):
             print("z",end='')
             z = self.zgen.genrand(nrand-n)
             print(" -> ra,dec ",end='')
-            ra,dec = self.map.GenerateRandomEq(nrand-n)
+            ra,dec = self.tycho_map.GenerateRandomEq(nrand-n)
 
             print(" -> maskflags ", end='')
             maskflags = self.get_maskflags(ra,dec,z)
@@ -156,10 +167,12 @@ class SDSSRandom(LcatBase):
     def get_maskflags(self, ra, dec, z):
         """
 
-        Run the stomp edge checking code.
+        Run the stomp edge checking code. This uses the basic map, while the
+        points themselves are generated from the tycho map
 
         """
 
+        self.load_stomp_maps()
 
         # Da is in Mpc
         Da = self.cosmo.Da(0.0, z)
@@ -167,7 +180,7 @@ class SDSSRandom(LcatBase):
         # radius in *degrees*
         radius = self['rmax']/Da*180./PI
         
-        maskflags = self.map.Contains(ra, dec, "eq", radius)
+        maskflags = self.basic_map.Contains(ra, dec, "eq", radius)
 
         return numpy.array(maskflags, dtype='i8')
 
