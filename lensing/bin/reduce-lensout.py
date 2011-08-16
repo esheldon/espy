@@ -49,7 +49,7 @@ def main():
             lensing.outputs.add_lensums(data, tdata)
 
 
-    lensing.files.sample_write(data, 'reduced', run)
+    lensing.files.sample_write(data, 'reduced', run, clobber=True)
     
 
 main()

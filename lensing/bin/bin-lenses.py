@@ -3,9 +3,12 @@
 
 Description:
 
-    Bin lenses.  Type is the type of binning, e.g. n200 or mz,
-    run is the lensing run, e.g. 07, and nbin is the number of bins
-
+    Bin lenses.  
+    
+    run is, e.g., l08.
+    
+    type is the type of binning, e.g. lambda, run is the lensing run, e.g. 07,
+    and nbin is the number of bins
 """
 import sys
 import lensing

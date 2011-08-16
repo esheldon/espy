@@ -29,7 +29,7 @@ parser.add_option("-n",dest="nbin",default=None,
                   help="The number of bins, default %default")
 parser.add_option("-b",dest="binsize",default=0.01,
                   help="Binsize to use in z for hist matching, default %default")
-parser.add_option("-s",dest="show",default=False,
+parser.add_option("-s",dest="show",action="store_true", default=False,
                   help="Show histogram comparisons on the screen. default %default")
 
 
@@ -61,6 +61,9 @@ def main():
 
     # read collated lens catalog and select lenses with the
     # bin criteria.  Then match the randoms redshift histogram
+    conf=lensing.files.cascade_config(lensrun)
+    # this is where z is, may be a different name in the collated data
+    lcat = lensing.files.sample_read('lcat', conf['lens_sample'])
     data = lensing.files.sample_read('collated', lensrun)
     rand = lensing.files.sample_read('collated', randrun)
 
@@ -85,7 +88,8 @@ def main():
 
         w = b.select_bin(data, binnum)
 
-        weights = weighting.hist_match(rand['z'], data['z'][w], binsize)
+        # simple histogram matching
+        weights = weighting.hist_match(rand['z'], lcat['z'][w], binsize)
 
 
         effnum = weights.sum()
@@ -95,7 +99,7 @@ def main():
 
         tit=b.bin_label(binnum)
         tit+=' rand: '+randrun
-        weighting.plot_results1d(rand['z'], data['z'][w], weights, binsize, 
+        weighting.plot_results1d(rand['z'], lcat['z'][w], weights, binsize, 
                                  epsfile=epsfile, title=tit, show=show)
         converter.convert(epsfile, dpi=120, verbose=True)
 

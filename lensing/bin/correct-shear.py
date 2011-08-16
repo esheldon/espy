@@ -37,6 +37,27 @@ parser.add_option("-r",dest="minrad",default=1.,
                   help="The minimum radius for the subtraction of random signal. "
                        "Set to a large number to turn off subtraction. Default %default Mpc")
 
+def doplot(data, rand, label):
+    tab = biggles.Table(1,2)
+    arr=lensing.plotting.plot2dsig(data['r'], 
+                                   data['dsig'], data['dsigerr'],
+                                   rand['dsig'], rand['dsigerr'],
+                                   plot_label=label, label1='data', label2='random',
+                                   range4var=[0.1,100],show=False)
+
+    
+    tab[0,0] = arr
+
+
+    cplt = eu.plotting.bscatter(data['r'], data['clust_corr']-1, yerr=data['clust_corr_err'],
+                                xlabel=lensing.plotting.labels['rproj'], 
+                                ylabel='Corr-1', show=False, xlog=True, ylog=True)
+
+    cplt.aspect_ratio=1
+    tab[0,1] = cplt
+
+    tab.show()
+
 def main():
     options,args = parser.parse_args(sys.argv[1:])
 
@@ -73,30 +94,11 @@ def main():
 
         data = alldata[binnum]
         rand = allrand[binnum]
-        
-
-        tab = biggles.Table(1,2)
 
         label=b.bin_label(binnum)
 
-        arr=lensing.plotting.plot2dsig(data['r'], 
-                                       data['dsig'], data['dsigerr'],
-                                       rand['dsig'], rand['dsigerr'],
-                                       plot_label=label, label1='data', label2='random',
-                                       range4var=[0.1,100],show=False)
+        doplot(data, rand, label)
 
-        
-        tab[0,0] = arr
-
-
-        cplt = eu.plotting.bscatter(data['r'], data['clust_corr']-1, yerr=data['clust_corr_err'],
-                                    xlabel=lensing.plotting.labels['rproj'], 
-                                    ylabel='Corr-1', show=False, xlog=True, ylog=True)
-
-        cplt.aspect_ratio=1
-        tab[0,1] = cplt
-
-        tab.show()
 
         key=raw_input("hit a key (q to quit): ")
         if key == 'q':

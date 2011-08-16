@@ -266,7 +266,12 @@ class RedMapper(LcatBase):
         if self['catalog'] not in ['redmapper','ProPer']:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
+        self['mapname'] = 'boss'
+        self['maptype'] = 'basic'
+        self['tycho_maptype'] = 'tycho'
+
     def create_objshear_input(self):
+        
         # this will change when we get the actual red mapper catalog
         lambda_field = 'lambda_zred'
         z_field = 'z_lambda'
@@ -279,14 +284,28 @@ class RedMapper(LcatBase):
         orig_size = data.size
         zindex = numpy.arange(orig_size,dtype='i8')
 
-        # trim poorly understood low lambda stuff
-        lambda_logic = self.lambda_logic(data[lambda_field])
-
         # trim z for speed
         z_logic = self.z_logic(data[z_field])
 
+        print("Actually trimming the bad z for speed")
+        w=where1(z_logic)
+        data = data[w]
+        zindex = zindex[w]
 
-        good = where1(lambda_logic & z_logic)
+
+
+        # trim poorly understood low lambda stuff
+        lambda_logic = self.lambda_logic(data[lambda_field])
+
+        # make sure in the tycho window and two adjacent quadrants
+        # not hitting edge
+
+        in_tycho, maskflags = self.get_maskflags(data['ra'], data['dec'], data[z_field])
+
+        tycho_logic = (in_tycho == 1)
+        quad_logic = es_sdsspy.stomp_maps.quad_logic(maskflags)
+
+        good = where1(lambda_logic & tycho_logic & quad_logic)
         print("Finally kept: %d/%d" % (good.size,data.size))
 
         print('creating output array')
@@ -297,7 +316,7 @@ class RedMapper(LcatBase):
         output['ra']        = data['ra'][good]
         output['dec']       = data['dec'][good]
         output['z']         = data[z_field][good]
-        output['maskflags'] = self.get_maskflags(output['ra'],output['dec'],output['z'])
+        output['maskflags'] = maskflags[good]
         lensing.files.lcat_write(self['sample'], output)
 
     def lambda_logic(self, lam):
@@ -323,12 +342,19 @@ class RedMapper(LcatBase):
 
         return logic
 
+    def load_stomp_maps(self):
+        if not hasattr(self, 'basic_map'):
+            self.basic_map = es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'])
+            self.tycho_map = es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'])
+
     def get_maskflags(self, ra, dec, z):
         """
 
         Run the stomp edge checking code.
 
         """
+
+        self.load_stomp_maps()
 
         print("Getting BOSS basic maskflags")
         # get radius for edge check
@@ -347,11 +373,22 @@ class RedMapper(LcatBase):
         print("    radii are in range [%f,%f]" % (radius.min(), radius.max()))
 
         
-        map = stomp_maps.load('boss','basic')
-        print("    Getting maskflags...")
-        maskflags = map.Contains(ra, dec, "eq", radius)
+        print("    Ensuring in tycho window")
+        in_tycho = self.tycho_map.Contains(ra, dec, "eq")
 
-        return numpy.array(maskflags, dtype='i8')
+        w=where1(in_tycho == 1)
+        print("    Keeping %d/%d" % (w.size,ra.size))
+
+        print("    Getting basic maskflags...")
+        maskflags = self.basic_map.Contains(ra, dec, "eq", radius)
+
+        w=es_sdsspy.stomp_maps.quad_check(maskflags)
+        print("    Keeping %d/%d" % (w.size,ra.size))
+
+        in_tycho = numpy.array(in_tycho, dtype='i8')
+        maskflags = numpy.array(maskflags, dtype='i8')
+
+        return in_tycho, maskflags
 
 
     def original_dir(self):
@@ -371,17 +408,142 @@ class RedMapper(LcatBase):
         data = eu.io.read(infile, lower=True, ensure_native=True)
         return data
 
+
+    def plot_coverage_bybin(self, binner, region='both', show=True, dops=True, rand=None):
+        import pcolors
+        import biggles
+        import converter
+        from biggles import FramedPlot, Points, PlotKey
+
+
+        orig = self.read_original()
+        lcat = self.read()
+
+        all_clam,all_ceta = eu.coords.eq2sdss(orig['ra'],orig['dec'])
+
+        l = orig[lcat['zindex']]
+        clam,ceta = eu.coords.eq2sdss(lcat['ra'],lcat['dec'])
+
+        clammin,clammax = (-70.,120.)
+
+        if region=='ngc':
+            # a bit high to make room for the legend
+            emin,emax=(-40,60)
+
+            biggles.configure('screen','width', 1800)
+            biggles.configure('screen','height', 1140)
+
+            clammin,clammax = (-70.,120.)
+
+        elif region=='sgc':
+            emin,emax=(105,165)
+            biggles.configure('screen','width', 1800)
+            biggles.configure('screen','height', 1140)
+            clammin,clammax = (-50.,90.)
+        else:
+            emin,emax=(-40,165)
+            biggles.configure('screen','width', 1140)
+            biggles.configure('screen','height', 1140)
+            clammin,clammax = (-70.,120.)
+
+        wl=where1((all_ceta > emin) & (all_ceta < emax))
+        all_clam=all_clam[wl]
+        all_ceta=all_ceta[wl]
+
+        wl=where1((ceta > emin) & (ceta < emax))
+        clam=clam[wl]
+        ceta=ceta[wl]
+        l=l[wl]
+
+
+        plt=FramedPlot()
+        plt.xlabel=r'$\lambda$'
+        plt.ylabel=r'$\eta$'
+        xrng = (clammin, clammax)
+        yrng = (emin, emax)
+        plt.xrange = xrng
+        plt.yrange = yrng
+
+
+        print("adding all lenses")
+
+        type = 'filled circle'
+        symsize=0.2
+        colors = pcolors.rainbow(binner['nbin'],'hex')
+
+
+        if rand is not None:
+            clam_r,ceta_r = eu.coords.eq2sdss(rand['ra'],rand['dec'])
+            wl=where1((ceta_r > emin) & (ceta_r < emax))
+            clam_r=clam_r[wl]
+            ceta_r=ceta_r[wl]
+            rp = Points(clam_r, ceta_r, type='dot', size=0.2)
+            plt.add(rp)
+        
+        size_min=0.2
+        size_max=4
+
+        sizes=[]
+        minlambda = l['lambda_zred'].min()
+        maxlambda = l['lambda_zred'].max()
+        for i in xrange(binner['nbin']):
+            w=binner.select_bin(l, i)
+            mlam=l['lambda_zred'][w].mean()
+            # scale 0 to 1
+            sz=(mlam-minlambda)/maxlambda
+            # now scale size
+            sz = size_min + sz*(size_max-size_min)
+            sizes.append(sz)
+
+        all_plots=[]
+        labels=[]
+        #for i in xrange(binner['nbin']):
+        for i in reversed(xrange(binner['nbin'])):
+            w=binner.select_bin(l, i)
+
+            #points = Points(clam[w], ceta[w],type=type,size=symsize, color=colors[i])
+            points = Points(clam[w], ceta[w],type=type,size=sizes[i], color=colors[i])
+            labels.append(binner.bin_label(i))
+
+            plt.add(points)
+
+
+        labels.reverse()
+        fakepoints = eu.plotting.fake_filled_circles(labels, colors)
+        key=PlotKey(0.95,0.95,fakepoints,halign='right',size=1.5)
+        plt.add(key)
+
+        plt.aspect_ratio = (yrng[1]-yrng[0])/float(xrng[1]-xrng[0])
+
+        es_sdsspy.stomp_maps.plot_boss_geometry(color='blue',plt=plt,show=False)
+
+        if show:
+            plt.show()
+
+        if dops:
+            d = lensing.files.sample_dir('lcat',self['sample'])
+            d = os.path.join(d,'plots')
+            if not os.path.exists(d):
+                os.makedirs(d)
+            epsfile = os.path.join(d, 'lcat-%s-coverage-bybin.eps' % self['sample'])
+            if rand is not None:
+                epsfile=epsfile.replace('.eps','-withrand.eps')
+            if region in ['sgc','ngc']:
+                epsfile=epsfile.replace('.eps','-%s.eps' % region)
+
+            print("Writing to eps file:",epsfile)
+            plt.write_eps(epsfile)
+            print("converting to png")
+            converter.convert(epsfile, dpi=300)
+        return plt
+
+
+
+
     def plot_coverage(self, region='both', show=True, dops=True):
-        """
-
-        Plot the lenses, both masked and unmasked plus goemetry
-        bounds
-
-        """
         import biggles
         from biggles import FramedPlot, Points, PlotKey
 
-        symsize=0.5
 
         l = self.read()
         llam,leta = eu.coords.eq2sdss(l['ra'],l['dec'])
@@ -397,7 +559,7 @@ class RedMapper(LcatBase):
             biggles.configure('screen','height', 1140)
 
         elif region=='sgc':
-            emin,emax=(125,165)
+            emin,emax=(100,165)
             biggles.configure('screen','width', 1800)
             biggles.configure('screen','height', 1140)
         else:
@@ -422,13 +584,16 @@ class RedMapper(LcatBase):
 
         print("adding all lenses")
 
-        allp = Points(llam,leta,type='dot',size=symsize)
+        type = 'filled circle'
+        symsize=0.2
+
+        allp = Points(llam,leta,type=type,size=symsize)
         allp.label='all'
         plt.add(allp)
 
         wquad = es_sdsspy.stomp_maps.quad_check(maskflags)
         print("adding quad pass")
-        quadp = Points(llam[wquad],leta[wquad],type='dot',color='red',size=symsize)
+        quadp = Points(llam[wquad],leta[wquad],type=type,color='red',size=symsize)
         quadp.label = 'quad good'
         plt.add(quadp)
 

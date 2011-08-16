@@ -37,6 +37,19 @@ def quad_check(maskflags, strict=False, reverse=False):
         We demand *all* quandrants are unmasked
     """
 
+    logic = quad_logic(maskflags, strict=strict, reverse=reverse)
+    w,=where(logic)
+
+    return w
+
+def quad_logic(maskflags, strict=False, reverse=False):
+    """
+    if strict=False
+        We will keep anything that has two adjacent quadrants contained
+    if strict=True
+        We demand *all* quandrants are unmasked
+    """
+
     maskflags = numpy.array(maskflags, ndmin=1, copy=False)
 
     if not strict:
@@ -56,8 +69,7 @@ def quad_check(maskflags, strict=False, reverse=False):
         else:
             logic = (maskflags & QUADALL_OK) == QUADALL_OK
 
-    w,=where(logic)
-    return w
+    return logic
 
 def quad_check_old(maskflags, strict=False):
     """

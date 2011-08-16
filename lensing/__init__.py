@@ -1,4 +1,42 @@
 """
+
+quick version
+-------------
+
+I'll go through each below, but for now assume you have a lens run called l07
+and a randoms run called r01, and the config files are set up, and scinv
+exists.
+
+    # if the scat are not already generated
+    /bin/make-objshear-input.py scat scat_sample
+
+    # now generate the lens samples
+    /bin/make-objshear-input.py lcat l07
+    /bin/make-objshear-input.py lcat r01
+
+    /bin/make-objshear-proc.py l07
+    /bin/make-objshear-proc.py r01
+
+    # in the $LENSDIR/proc/run directory
+    condor_submit run-l07.condor
+    condor_submit run-r01.condor
+
+    /bin/reduce-lensout.py l07
+    /bin/collate-reduced.py l07
+    /bin/reduce-lensout.py r01
+    /bin/collate-reduced.py r01
+
+    # bin by lambda into 12 bins, must have defined this binnign
+    /bin/bin-lenses.py -t lambda -n 12 l07
+    /bin/plot-dsig-byrun.py l07 lambda 12
+
+    # match randoms to those bins
+    /bin/match-randoms.py -t lambda -n 12 l07 r01
+
+
+Detailed version
+----------------
+
 First you need a catalog class for each catalog type.
 See 
 
@@ -14,8 +52,8 @@ sweeps_reduct/regauss/04.cols by running
 
 Then create input catalogs. 
 
-    /bin/make-objshear-input.py scat run
-    /bin/make-objshear-input.py lcat run
+    /bin/make-objshear-input.py scat scat_sample
+    /bin/make-objshear-input.py lcat lcat_sample
 
 For random lcat this can be *very* slow so be prepared.
 Note this requires dealing with catalog names in these

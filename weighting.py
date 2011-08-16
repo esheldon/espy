@@ -45,10 +45,14 @@ def plot_results1d(data1, data2, weights1, binsize,
     import biggles
     import esutil as eu
 
+    #if xmin is None:
+    #    xmin = data2.min()
+    #if xmax is None:
+    #    xmax = data2.max()
     if xmin is None:
-        xmin = data2.min()
+        xmin = min([data1.min(), data2.min()])
     if xmax is None:
-        xmax = data2.max()
+        xmax = max([data1.max(), data2.max()])
 
     nw=weights1/weights1.max()
     effnum = nw.sum()
