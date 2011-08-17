@@ -15,7 +15,6 @@ nbin:          21
 rmin:          0.02
 rmax:          36.567
 
-
 # this is chosen to be somewhat looser than redmapper
 zmin:          0.04
 zmax:          0.41
@@ -30,4 +29,3 @@ comment: |
 
     This sample is designed to be somewhat like the redmapper sample.
     Also ProPer in sample 07.
-

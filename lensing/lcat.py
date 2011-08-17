@@ -36,13 +36,13 @@ def instantiate_sample(sample):
     else:
         raise ValueError("don't know about catalog %s" % conf['catalog'])
 
-def create_input(sample):
+def create_input(sample, **keys):
     """
     e.g.  create_input('01')
     """
 
     c = instantiate_sample(sample)
-    c.create_objshear_input()
+    c.create_objshear_input(**keys)
 
 def plot_coverage(sample):
     c = instantiate_sample(sample)
@@ -125,15 +125,23 @@ class SDSSRandom(LcatBase):
             self.basic_map = es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'])
             self.tycho_map = es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'])
 
-    def create_objshear_input(self):
+    def create_objshear_input(self, nrand=None, extra=None):
+        """
+        To work in chunks, send nrand= and extra=chunknum
+        """
+        if nrand is not None:
+            if extra is None:
+                raise ValueError("If sending nrand, also send extra=")
+        else:
+            nrand = self['nrand']
+
         self.load_stomp_maps()
 
+        strict_edgecut = self.get('strict_edgecut',False)
 
         fname = self.file()
-        nrand = self['nrand']
-        #nrand = 10000
 
-        print("Generating",self['nrand'],"random points "
+        print("Generating",nrand,"random points "
               "with z in [%0.2f,%0.2f]" % (self['zmin'],self['zmax']))
         n=0
 
@@ -152,7 +160,7 @@ class SDSSRandom(LcatBase):
             print(" -> maskflags ", end='')
             maskflags = self.get_maskflags(ra,dec,z)
 
-            wgood = es_sdsspy.stomp_maps.quad_check(maskflags)
+            wgood = es_sdsspy.stomp_maps.quad_check(maskflags, strict=strict_edgecut)
             print(" -> good ones:",wgood.size)
             if wgood.size > 0:
                 output['zindex'][n:n+wgood.size] = numpy.arange(n,n+wgood.size,dtype='i8')
@@ -162,7 +170,7 @@ class SDSSRandom(LcatBase):
                 output['maskflags'][n:n+wgood.size] = maskflags[wgood]
                 n += wgood.size
 
-        lensing.files.lcat_write(self['sample'], output)
+        lensing.files.lcat_write(self['sample'], output, extra=extra)
 
     def get_maskflags(self, ra, dec, z):
         """
@@ -270,8 +278,10 @@ class RedMapper(LcatBase):
         self['maptype'] = 'basic'
         self['tycho_maptype'] = 'tycho'
 
-    def create_objshear_input(self):
+    def create_objshear_input(self, **keys):
         
+        strict_edgecut = self.get('strict_edgecut',False)
+
         # this will change when we get the actual red mapper catalog
         lambda_field = 'lambda_zred'
         z_field = 'z_lambda'
@@ -298,12 +308,12 @@ class RedMapper(LcatBase):
         lambda_logic = self.lambda_logic(data[lambda_field])
 
         # make sure in the tycho window and two adjacent quadrants
-        # not hitting edge
+        # not hitting edge (or no edge if strict=True)
 
         in_tycho, maskflags = self.get_maskflags(data['ra'], data['dec'], data[z_field])
 
         tycho_logic = (in_tycho == 1)
-        quad_logic = es_sdsspy.stomp_maps.quad_logic(maskflags)
+        quad_logic = es_sdsspy.stomp_maps.quad_logic(maskflags, strict=strict_edgecut)
 
         good = where1(lambda_logic & tycho_logic & quad_logic)
         print("Finally kept: %d/%d" % (good.size,data.size))
@@ -631,7 +641,7 @@ class MaxBCG(LcatBase):
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
 
-    def create_objshear_input(self):
+    def create_objshear_input(self, **keys):
         fname = self.file()
 
         data = self.read_original()
@@ -840,7 +850,7 @@ class DESMockLensCatalog(dict):
     def read(self, split=None):
         return lensing.files.lcat_read(sample=self['sample'], split=split)
 
-    def create_objshear_input(self):
+    def create_objshear_input(self, **keys):
         fname = self.file()
 
         data = self.read_original()

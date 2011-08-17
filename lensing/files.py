@@ -40,7 +40,7 @@ from esutil.numpy_util import where1
 
 
 finfo={}
-finfo['lcat']     = {'subdir':'lcat/{sample}',  'name':'lcat-{sample}.bin'}
+finfo['lcat']     = {'subdir':'lcat/{sample}',  'name':'lcat-{sample}{extra}.bin'}
 finfo['scat']     = {'subdir':'scat/{sample}',  'name':'scat-{sample}.bin'}
 
 finfo['scat-split']  = {'subdir':'scat/{sample}',
@@ -268,8 +268,8 @@ def read_original_catalog(type, sample):
 #
 
 
-def lcat_write(sample, data):
-    file = sample_file('lcat',sample)
+def lcat_write(sample, data, extra=None):
+    file = sample_file('lcat',sample, extra=extra)
 
     stdout.write("Writing %d to %s: '%s'\n" % (data.size, 'lcat', file))
 
@@ -287,7 +287,7 @@ def lcat_write(sample, data):
 
     fobj.close()
 
-def lcat_read(sample=None, file=None, old=False):
+def lcat_read(sample=None, extra=None, file=None, old=False):
     """
     import lensing
     d = lcat_read(file='somefile')
@@ -299,7 +299,7 @@ def lcat_read(sample=None, file=None, old=False):
         raise ValueError("usage: lcat_read(data, file=, sample=)")
 
     if file is None:
-        file = sample_file('lcat', sample)
+        file = sample_file('lcat', sample, extra=extra)
 
     stdout.write('Reading lens cat: %s\n' % file)
     fobj = open(file,'r')
