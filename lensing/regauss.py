@@ -100,6 +100,69 @@ def zphot_match(procrun, pzrun, sweeptype='gal'):
     print("Creating index")
     rgcols[match_column].create_index()
 
+def create_condor(type, procrun):
+    import pbs
+    proctype='regauss'
+    procshort='rg'
+    minscore=0.1
+
+    condor_dir=path_join('~/condor/sweep_reduce',proctype,procrun)
+    condor_dir = expand_path(condor_dir)
+    if not os.path.exists(condor_dir):
+        os.makedirs(condor_dir)
+
+    win = sdsspy.window.Window()
+    runs, reruns = win.runlist(minscore)
+
+    runs.sort()
+    print("writing to",condor_dir)
+    for run in runs:
+        for camcol in [1,2,3,4,5,6]:
+            # create the condor file name
+            rstr=sdsspy.files.run2string(run)
+            job_name = '%s%s-%s-%s' % (procshort,type,run,camcol)
+
+            script_base='%s%s-%s-%s-%s' % (procshort, type, procrun, rstr, camcol)
+            condor_filename=script_base+'.condor'
+            script_filename=script_base+'.py'
+            condor_filename=path_join(condor_dir, condor_filename)
+            script_filename=path_join(condor_dir, script_filename)
+
+            condor_script="""
+Universe        = vanilla
+Notification    = Error
+GetEnv          = True
+Notify_user     = esheldon@bnl.gov
+Requirements    = (CPU_Experiment == "astro") && (TotalSlots == 12 || TotalSlots == 8)
++Experiment     = "astro"
+Initialdir      = {proc_dir}
+
+Executable      = {script_base}.sh
+Output          = {script_base}.out
+Error           = {script_base}.err
+Log             = {script_base}.log
+
+Queue\n""".format(proc_dir=condor_dir,
+                  script_base=script_base)
+
+            script="""#!/usr/bin/env python
+from lensing.regauss import RegaussSweep
+from es_sdsspy import sweeps
+p=sweeps.Proc('{proctype}','{procrun}','{sweep_type}')
+p.process_runs(RegaussSweep, runs={run}, camcols={camcol})
+\n""".format(proctype=proctype,
+             procrun=procrun,
+             sweep_type=type,
+             run=run,
+             camcol=camcol)
+
+
+            with open(condor_filename,'w') as fobj:
+                fobj.write(condor_script)
+            with open(script_filename,'w') as fobj:
+                fobj.write(script)
+            os.system('chmod 755 '+script_filename)
+
 
 def create_pbs(type, procrun):
     import pbs

@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import numpy
-from numpy import sqrt, zeros, ones
+from numpy import where, sqrt, zeros, ones
 import esutil as eu
 from esutil.numpy_util import where1
 
@@ -82,8 +82,8 @@ def add_corrections(datain,
 
     corr = data['clust_corr']
     corr_clipped = corr.clip(1.0, corr.max())
-    data['dsig'] /= corr_clipped
-    data['dsigerr'] /= corr_clipped
+    data['dsig'] *= corr_clipped
+    data['dsigerr'] *= corr_clipped
 
     return data
 
@@ -141,8 +141,20 @@ def calc_clustering_correction(data, rand):
 
     corr = data['wsum_mean']/rand['wsum_mean']
 
-    corr_err = corr*sqrt(   (data['wsum_err']/data['wsum_mean'])**2
-                          + (rand['wsum_err']/rand['wsum_mean'])**2 )
+    if 'wsum_mean_err' in data.dtype.names:
+        derr = data['wsum_mean_err']
+    else:
+        derr = data['wsum_err']
+
+    if 'wsum_mean_err' in rand.dtype.names:
+        rerr = rand['wsum_mean_err']
+    else:
+        rerr = rand['wsum_err']
+
+    corr_err = zeros(data['wsum_mean'].shape) + 9999
+    w=where( (data['wsum_mean'] > 0) & (rand['wsum_mean'] > 0) )
+    corr_err[w] = corr[w]*sqrt(   (derr[w]/data['wsum_mean'][w])**2
+                                + (rerr[w]/rand['wsum_mean'][w])**2 )
 
     return corr, corr_err
 

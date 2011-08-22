@@ -30,6 +30,6 @@ types=options.types.split(',')
 if 'config' in types:
     lensing.objshear_config.write_configs(run)
 if 'script' in types:
-    lensing.scripts.write_scripts(run, manage=options.manager)
+    lensing.scripts.write_scripts(run, manager=options.manager)
 if 'condor' in types:
     lensing.condor.write_submit_scripts(run)

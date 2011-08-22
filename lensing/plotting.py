@@ -237,7 +237,7 @@ def plot2dsig_old(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
  
 def plot_dsig(comb=None, r=None, dsig=None, dsigerr=None, 
               color='black',type='filled circle',
-              nolabel=False, noshow=False, minval=1.e-3,
+              nolabel=False, show=True, minval=1.e-3,
               aspect_ratio=1):
     """
     This one stands alone. 
@@ -269,7 +269,7 @@ def plot_dsig(comb=None, r=None, dsig=None, dsigerr=None,
     plt.xrange = od['xrange']
     plt.yrange = od['yrange']
 
-    if not noshow:
+    if show:
         plt.show()
 
     od['plt'] = plt
@@ -368,6 +368,8 @@ def add_to_log_plot(plt, x, y, yerr,
     if w.size > 0:
         p = Points(x[w], y[w],type=type,color=color)
         plt.add(p)
+    else:
+        p=None
 
 
     ehigh = y + yerr
@@ -380,12 +382,16 @@ def add_to_log_plot(plt, x, y, yerr,
         elow = where(elow < minval, minval, elow)
         pe = ErrY(x[w], elow[w], ehigh[w],color=color)
         plt.add(pe)
+    else:
+        pe=None
 
     odict={}
     odict['p'] = p
     odict['pe'] = p
-    odict['xrange'] = [0.3*x.min(), 2.25*x.max()]
-    odict['yrange'] = [0.3*elow.min(), 2.25*ehigh.max()]
+    #odict['xrange'] = [0.3*x.min(), 2.25*x.max()]
+    #odict['yrange'] = [0.3*elow.min(), 2.25*ehigh.max()]
+    odict['xrange'] = eu.plotting.get_log_plot_range(x)
+    odict['yrange'] = eu.plotting.get_log_plot_range(y,yerr)
     return odict
 
 

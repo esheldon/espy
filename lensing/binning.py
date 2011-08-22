@@ -1,5 +1,6 @@
 """
 Binner classes
+    LambdaBinner: bin by redmapper lambda
     N200Binner: bin by ngals_r200
     MZBinner: bin by true mass and redshift
 
@@ -123,17 +124,25 @@ class BinnerBase(dict):
         for binnum in xrange(self['nbin']):
             self.plot_dsig_osig_byrun_bin(run, binnum, **keys)
 
-    def plot_dsig_byrun_1var(self, run, dops=False):
+    def plot_dsig_byrun_1var(self, run, type, dops=False):
         """
 
-        Make an array of plots with each plot a bin in one variable.  It is
-        expected that methods like self.bin_label() are meaningfully
+        Make an array of plots with each plot a bin in one variable.  
+        
+        It is expected that methods like self.bin_label() are meaningfully
         over-ridden
+
+        parameters
+        ----------
+        run: string
+            The lensing run id
+        type:
+            The type to read, e.g. 'binned', 'corrected'
 
         """
 
         name = self.name()
-        data=lensing.files.sample_read('binned',run,name=name)
+        data=lensing.files.sample_read(type,run,name=name)
 
         # this is for the screen: currently tuned for my big screen!
         biggles.configure('screen','width', 1140)
@@ -191,12 +200,12 @@ class BinnerBase(dict):
 
         if dops:
             #d = lensing.files.lensbin_plot_dir(run,name)
-            d = lensing.files.sample_dir('binned',run,name=name)
+            d = lensing.files.sample_dir(type,run,name=name)
             if not os.path.exists(d):
                 print("making dir:",d)
                 os.makedirs(d)
             #epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
-            epsfile=lensing.files.sample_file('binned-plots',run,name=name,extra='allplot',ext='eps')
+            epsfile=lensing.files.sample_file(type+'-plots',run,name=name,extra='allplot',ext='eps')
             stdout.write("Plotting to file: %s\n" % epsfile)
             pa.write_eps(epsfile)
         else:

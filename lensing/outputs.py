@@ -5,7 +5,7 @@ from __future__ import print_function
 import os
 import sys
 import numpy
-from numpy import log10,sqrt,linspace,where,diag
+from numpy import log10,sqrt,linspace,where,diag,zeros,ones
 import lensing
 import esutil as eu
 from esutil.numpy_util import where1
@@ -93,12 +93,17 @@ def average_lensums(lout, weights=None):
         # we calculate clustering correction from this, wsum_mean/wsum_mean_random
         wsum_mean = wsum/nlens
         comb['wsum_mean'][0,i] = wsum_mean
-        comb['wsum_err'][0,i] = sqrt(wsum2/nlens - wsum_mean**2)/sqrt(nlens)
+        comb['wsum_mean_err_simple'][0,i] = sqrt(wsum2/nlens - wsum_mean**2)/sqrt(nlens)
 
     m,cov=jackknife.wjackknife(vsum=lout['dsum'], wsum=lout['wsum'])
     comb['dsigcov'][0,:,:] = cov
     comb['dsigcor'][0,:,:] = jackknife.covar2corr(cov)
     comb['dsigerr'][0,:] = sqrt(diag(cov))
+
+    # turns out this agrees with the above one
+    w=ones(lout['wsum'].shape)
+    m,cov = jackknife.wjackknife(vsum=lout['wsum'], wsum=w)
+    comb['wsum_mean_err'][0,:] = sqrt(diag(cov))
 
     return comb
 
@@ -134,8 +139,9 @@ def average_lensums_weighted(lout, weights):
     comb['ssh'] = comb['sshsum']/comb['weightsum']
 
     # these will get the extra weight
-    jwsum = lout['wsum']
-    jdsum = lout['dsum']
+    # WE MUST MAKE A COPY!! ARRGGG THIS BIT ME!!!
+    jwsum = lout['wsum'].copy()
+    jdsum = lout['dsum'].copy()
     for i in xrange(nbin):
 
         npair = lout['npair'][:,i].sum()
@@ -174,6 +180,14 @@ def average_lensums_weighted(lout, weights):
     comb['dsigerr'][0,:] = sqrt(diag(cov))
 
  
+    # make weights in shape of wsum
+    w      = zeros(lout['wsum'].shape)
+    w_wsum = zeros(lout['wsum'].shape)
+    for i in xrange(lout.size):
+        w_wsum[i,:] = lout['wsum'][i,:]*weights[i]
+        w[i,:] = weights[i]
+    m,cov = jackknife.wjackknife(vsum=w_wsum, wsum=w)
+    comb['wsum_mean_err'][0,:] = sqrt(diag(cov))
 
 
     return comb
@@ -197,7 +211,8 @@ def averaged_dtype(nbin):
         ('dsigcor','f8',(nbin,nbin)),
         ('osig','f8',nbin),
         ('wsum_mean','f8',nbin),
-        ('wsum_err','f8',nbin),
+        ('wsum_mean_err','f8',nbin),
+        ('wsum_mean_err_simple','f8',nbin),
         ('npair','i8',nbin),
         ('rsum','f8',nbin),
         ('wsum','f8',nbin),
@@ -219,4 +234,64 @@ def averaged_dtype_old():
         ('dsum','f8'),
         ('osum','f8')]
     return numpy.dtype(dt)
+
+
+def compare_hist_match(binsize, binnum=9, l=None, r=None):
+    """
+    Compare hist_match with weights and with remove method.
+    """
+    import weighting
+    import lensing
+    """
+    import biggles
+    biggles.configure('screen','width', 1140)
+    biggles.configure('screen','height', 1140)
+    """
+
+
+    if l is None or r is None:
+        l,r = load_test_data()
+
+    binner=lensing.binning.LambdaBinner(12)
+    print("selecting ",binner.bin_label(binnum))
+    w=binner.select_bin(l, binnum)
+    print("    kept %d/%d" % (w.size,l.size))
+
+    print("using remove method")
+    keep = weighting.hist_match_remove(r['z'], l['z'][w], binsize)
+    perc = keep.size/(1.*r.size)
+    print("    used number: %d/%d = %0.2f" % (keep.size,r.size, perc))
+
+    print("    combining")
+    comb_rm = average_lensums(r[keep])
+
+
+    for i in xrange(comb_rm['r'].size):
+        print("%0.3f %15.12f %15.12f" % \
+              (comb_rm['r'][0,i], comb_rm['dsig'][0,i], comb_rm['wsum_mean'][0,i]))
+
+    print("using weights method")
+    weights = weighting.hist_match(r['z'], l['z'][w], binsize)
+    effnum = weights.sum()
+    effperc = effnum/r.size
+    print("    effective number: %d/%d = %0.2f" % (effnum,r.size, effperc))
+    print("    combining")
+    comb = average_lensums(r, weights=weights)
+
+    for i in xrange(comb_rm['r'].size):
+        print("%0.3f %15.12f %15.12f %15.12f %15.12f" % \
+              (comb['r'][0,i], 
+              comb['dsig'][0,i], comb_rm['dsig'][0,i],
+              comb['wsum_mean'][0,i], comb_rm['wsum_mean'][0,i]))
+
+    
+def load_test_data():
+    import lensing
+    run='08'
+    rrun='r01'
+    l=lensing.files.sample_read('collated',run)
+    r=lensing.files.sample_read('collated',rrun)
+
+    return l,r
+
 

@@ -1,5 +1,5 @@
 """
-    %prog [options] run type nbin
+    %prog [options] run bintype nbin
 
 Description:
 
@@ -13,7 +13,9 @@ from optparse import OptionParser
 
 parser=OptionParser(__doc__)
 parser.add_option("-p",dest="dops",action="store_true",default=False,
-                  help="Write a hardcopy encapsulated postscript file.  Default %default")
+                  help="Write a hard copy eps file.  Default %default")
+parser.add_option("-t",dest="type",default='corrected',
+                  help="Should be binned, corrected, jackknife.  Default %default")
 
 options,args = parser.parse_args(sys.argv[1:])
 
@@ -23,8 +25,8 @@ if len(args) < 3:
     sys.exit(1)
 
 run = args[0]
-type = args[1]
+bintype = args[1]
 nbin = int(args[2])
 
-b = lensing.binning.instantiate_binner(type, nbin)
-b.plot_dsig_byrun_1var(run, dops=options.dops)
+b = lensing.binning.instantiate_binner(bintype, nbin)
+b.plot_dsig_byrun_1var(run, options.type, dops=options.dops)

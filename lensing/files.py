@@ -57,18 +57,20 @@ finfo['collated']  = {'subdir':'lensout/{sample}',
 # here {extra} is really only used for the matched random sums
 # these need to be .rec because we have matrix columns
 finfo['binned']       = {'subdir':'lensout/{sample}/binned-{name}',
-                              'name':'binned-{sample}-{name}{extra}.rec'}
+                         'name':'binned-{sample}-{name}{extra}.rec'}
 
 finfo['weights'] = {'subdir':'lensout/{sample}/binned-{name}',
                     'name':'weights-{sample}-{name}{extra}.rec'}
 
 # probably always want to send extra here
 finfo['binned-plots']       = {'subdir':'lensout/{sample}/binned-{name}/plots',
-                                'name':'binned-{sample}-{name}{extra}.{ext}'}
+                               'name':'binned-{sample}-{name}{extra}.{ext}'}
 
 # currently these must also be binned...
 finfo['corrected']  = {'subdir':'lensout/{sample}/binned-{name}',
                        'name':'corrected-{sample}-{name}.rec'}
+finfo['corrected-plots']       = {'subdir':'lensout/{sample}/binned-{name}/plots',
+                                  'name':'corrected-{sample}-{name}{extra}.{ext}'}
 
 finfo['invert']       = {'subdir':'lensout/{sample}/binned-{name}',
                          'name':'invert-{sample}-{name}.rec'}
@@ -191,8 +193,9 @@ def sample_write(data, type, sample, split=None, name=None, extra=None, fs='nfs'
 
     """
     f=sample_file(type, sample, split=split, name=name, extra=extra, fs=fs)
-    print("writing",type,"file:",f)
+    make_dir_from_path(f)
 
+    print("writing",type,"file:",f)
     return eu.io.write(f, data, **keys)
 
 
@@ -273,10 +276,7 @@ def lcat_write(sample, data, extra=None):
 
     stdout.write("Writing %d to %s: '%s'\n" % (data.size, 'lcat', file))
 
-    d = os.path.dirname(file)
-    if not os.path.exists(d):
-        stdout.write("Making dir: '%s'\n" % d)
-        os.makedirs(d)
+    make_dir_from_path(file)
 
     fobj = open(file,'w')
 
@@ -351,10 +351,8 @@ def scat_write(sample, data,split=None):
             raise ValueError("Calculated nzl of %d but data has nzl of %d" % (nzl,data_nzl))
 
     print("Writing binary source file:",file)
-    d = os.path.dirname(file)
-    if not os.path.exists(d):
-        stdout.write("Making dir: '%s'\n" % d)
-        os.makedirs(d)
+
+    make_dir_from_path(file)
     fobj = open(file,'w')
 
 
@@ -404,10 +402,7 @@ def scat_write_ascii(sample, data,split=None):
             raise ValueError("Calculated nzl of %d but data has nzl of %d" % (nzl,data_nzl))
 
     print("Writing ascii source file:",file)
-    d = os.path.dirname(file)
-    if not os.path.exists(d):
-        stdout.write("Making dir: '%s'\n" % d)
-        os.makedirs(d)
+    make_dir_from_path(file)
 
     with recfile.Open(file,'w',delim=' ') as robj:
 
@@ -610,4 +605,11 @@ def lensout_dtype_old(nbin, old=False):
         ('dsum','f8',nbin),
         ('osum','f8',nbin)]
     return numpy.dtype(dt)
+
+def make_dir_from_path(fname):
+    d = os.path.dirname(fname)
+    if not os.path.exists(d):
+        print("Making dir:",d)
+        os.makedirs(d)
+
 

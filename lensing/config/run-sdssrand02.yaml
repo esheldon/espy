@@ -1,0 +1,16 @@
+run:           "sdssrand02"
+lens_sample:   "sdssrand02"
+src_sample:    "05"
+
+# for healpix
+nside:         4096
+
+comment: | 
+
+    lenses:
+        redmapper random sample, redshift [0.04,0.41], with strict edge cuts
+        nbin 21
+        r min max [0.02,36.567]
+    sources:
+        src r < 21.5.  Uses mean scinv as a function of lens redshift
+        with larger lens redshift range to accomodate lenses.

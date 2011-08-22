@@ -50,7 +50,7 @@ echo "Done Done"
 _script_text_modules="""#!/bin/bash
 
 source /opt/astro/SL53/bin/setup.hadoop.sh
-source /astro/u/astrodat/setup/setup-module.sh
+source /astro/u/astrodat/setup/setup-modules.sh
 module load objshear/{objshear_version}
 
 mkdir -p {local_dir}

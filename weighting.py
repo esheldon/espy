@@ -10,7 +10,7 @@ from __future__ import print_function
 import os
 
 import numpy
-from numpy import where, zeros
+from numpy import where, zeros, ones
 
 import esutil as eu
 from esutil.numpy_util import where1
@@ -163,6 +163,46 @@ def hist_match(data1, data2, binsize):
             weights1[w1] = ratio[i]
 
     return weights1
+
+def hist_match_remove(data1, data2, binsize):
+    """
+
+    Similar to hist_match but instead of returning the weights, actually remove
+    a random subset from data set 1
+
+    """
+
+    min2=data2.min()
+    max2=data2.max()
+
+    h1,rev1 = histogram(data1, binsize=binsize, min=min2, max=max2, rev=True)
+    h2 = histogram(data2, min=min2, max=max2, binsize=binsize)
+
+    if h1.size != h2.size:
+        raise ValueError("histogram sizes don't match: %d/%d" % (h1.size,h2.size))
+
+    ratio = zeros(h1.size)
+    #w=where1(h2 > 0)
+    #ratio[w] = (h1[w]*1.0)/h2[w]
+    w=where1(h1 > 0)
+    ratio[w] = (h2[w]*1.0)/h1[w]
+
+    # this is the weight for each object in the bin
+    ratio /= ratio.max()
+
+    keep=[]
+    for i in xrange(h1.size):
+        if rev1[i] != rev1[i+1]:
+            w1 = rev1[ rev1[i]:rev1[i+1] ]
+
+            # get a random subsample
+            nkeep = int(w1.size*ratio[i])
+            if nkeep > 0:
+                # sort method is faster here.
+                indices = eu.numpy_util.random_subset(w1.size, nkeep, method='sort')
+                keep.append(w1[indices])
+
+    return eu.numpy_util.combine_arrlist(keep)
 
 class WeightCalculator(dict):
     def __init__(self, data1, data2):
@@ -480,7 +520,7 @@ def load_test_data():
 
     return l,r
 
-def test_hist_match(binsize, binnum=9, l=None, r=None):
+def test_hist_match(binsize, binnum=9, l=None, r=None, remove=False):
     import lensing
     import biggles
     biggles.configure('screen','width', 1140)
@@ -495,13 +535,21 @@ def test_hist_match(binsize, binnum=9, l=None, r=None):
     w=binner.select_bin(l, binnum)
     print("    kept %d/%d" % (w.size,l.size))
 
-    weights = hist_match(r['z'], l['z'][w], binsize)
+    if remove:
+        keep = hist_match_remove(r['z'], l['z'][w], binsize)
+        perc = keep.size/(1.*r.size)
+        print("used number: %d/%d = %0.2f" % (keep.size,r.size, perc))
 
-    effnum = weights.sum()
-    effperc = effnum/r.size
-    print("effective number: %d/%d = %0.2f" % (effnum,r.size, effperc))
+        weights = ones(keep.size)
+        plot_results1d(r['z'][keep], l['z'][w], weights, binsize)
+    else:
+        weights = hist_match(r['z'], l['z'][w], binsize)
 
-    plot_results1d(r['z'], l['z'][w], weights, binsize)
+        effnum = weights.sum()
+        effperc = effnum/r.size
+        print("effective number: %d/%d = %0.2f" % (effnum,r.size, effperc))
+
+        plot_results1d(r['z'], l['z'][w], weights, binsize)
     return weights
     
 
