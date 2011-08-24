@@ -21,9 +21,10 @@ classes:
 
 """
 from __future__ import print_function
-import os
+import os, sys
 import glob
 import sdsspy
+from sdsspy.atlas.atlas import NoAtlasImageError
 import es_sdsspy
 import columns
 import numpy
@@ -137,7 +138,7 @@ Requirements    = (CPU_Experiment == "astro") && (TotalSlots == 12 || TotalSlots
 +Experiment     = "astro"
 Initialdir      = {proc_dir}
 
-Executable      = {script_base}.sh
+Executable      = {script_base}.py
 Output          = {script_base}.out
 Error           = {script_base}.err
 Log             = {script_base}.log
@@ -145,18 +146,23 @@ Log             = {script_base}.log
 Queue\n""".format(proc_dir=condor_dir,
                   script_base=script_base)
 
-            script="""#!/usr/bin/env python
+            script="""#!{executable} -u
+import os
+os.environ['PHOTO_SWEEP'] = 'hdfs:///user/esheldon/boss/sweeps/dr8_final'
+os.environ['SWEEP_REDUCE'] = 'hdfs:///user/esheldon/sweep-reduce'
 from lensing.regauss import RegaussSweep
 from es_sdsspy import sweeps
 p=sweeps.Proc('{proctype}','{procrun}','{sweep_type}')
 p.process_runs(RegaussSweep, runs={run}, camcols={camcol})
-\n""".format(proctype=proctype,
+\n""".format(executable=sys.executable,
+             proctype=proctype,
              procrun=procrun,
              sweep_type=type,
              run=run,
              camcol=camcol)
 
 
+            print(condor_filename)
             with open(condor_filename,'w') as fobj:
                 fobj.write(condor_script)
             with open(script_filename,'w') as fobj:
@@ -248,7 +254,10 @@ class RegaussSweep:
         flag_logic = s.flag_logic()
 
         print("  getting rmag logic")
-        rmag_logic = s.cmodelmag_logic("r", self.rmax)
+        if 'devflux' in self.objs.dtype.names:
+            rmag_logic = s.cmodelmag_logic("r", self.rmax)
+        else:
+            rmag_logic = s.modelmag_logic("r", self.rmax)
 
         logic = \
             resolve_logic & tycho_logic & flag_logic & rmag_logic
@@ -869,8 +878,13 @@ class Collator:
         Irc_psf = st['Irc_psf']
         Icc_psf = st['Icc_psf']
         T_psf = st['Irr_psf'] + st['Icc_psf']
-        cmodelmag_dered = self.sweep_cols['cmodelmag_dered'][w]
         modelmag_dered = self.sweep_cols['modelmag_dered'][w]
+        if 'devflux' in self.objs.dtype.names:
+            cmodelmag_dered = self.sweep_cols['cmodelmag_dered'][w]
+        else:
+            cmodelmag_dered = modelmag_dered.copy()
+            cmodelmag_dered[:] = -9999
+
         print("    Copying ellip,mags")
         for f in sdsspy.FILTERCHARS:
             fnum = sdsspy.FILTERNUM[f]

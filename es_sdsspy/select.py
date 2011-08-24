@@ -66,6 +66,25 @@ class Selector:
         if masktype not in self.masks:
             self.masks[masktype] = es_sdsspy.stomp_maps.load('boss',masktype,verbose=True)
 
+
+    def modelmag_logic(self, filter, limit, dered=True):
+        fnum = sdsspy.FILTERNUM[filter]
+        if dered:
+            name='cmodel_dered'
+        else:
+            name='cmodel'
+        
+        # cache the mags
+        if name not in self.mags:
+            mag = sdsspy.nmgy2mag(self.objs['modelflux'])
+            if dered:
+                mag -= self.objs['extinction']
+            self.mags[name] = mag
+
+        mag_logic = self.mags[name][:,fnum] < limit
+        return mag_logic
+
+
     def cmodelmag_logic(self, filter, limit, dered=True):
         fnum = sdsspy.FILTERNUM[filter]
         if dered:

@@ -86,7 +86,7 @@ class Proc():
         self.load_runlist()
         self.split_runlist()
 
-        e = self.get_environ()
+        environ = self.get_environ()
 
         runs2use,reruns2use = self.matchruns(runs)
         if camcols is None:
@@ -102,11 +102,12 @@ class Proc():
                              "camcol: %s\n\n" % (run,rerun,camcol))
                 output_file = \
                     self.output_file(run=run,rerun=rerun,camcol=camcol)
-                #stdout.write("Will output to file: %s\n" % output_file)
+                print("Will write to output file:",output_file)
+
                 # begin the status info
                 now = datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
 
-                status = copy.deepcopy(e)
+                status = copy.deepcopy(environ)
                 status['run'] = run
                 status['rerun'] = rerun
                 status['date'] = now
@@ -128,9 +129,11 @@ class Proc():
 
     def write_result(self, output_file, status, result):
         dir=os.path.dirname(output_file)
-        if not os.path.exists(dir):
+        if not path_exists(dir):
             stdout.write("Creating output directory: %s\n" % dir)
-            os.makedirs(dir)
+            makedirs(dir)
+        elif path_exists(output_file):
+            path_remove(output_file)
 
         if result is None:
             result = numpy.array([],'i4')
@@ -231,8 +234,11 @@ class Proc():
 
         if runs is None:
             return Proc._runs, Proc._reruns
+        else:
+            runs = numpy.array(runs, ndmin=1, dtype='i4')
 
-        uruns = numpy.unique1d(runs)
+        #uruns = numpy.unique1d(runs)
+        uruns = numpy.unique(runs)
 
         m1, m2 = esutil.numpy_util.match(uruns, Proc._runs)
 
@@ -287,7 +293,7 @@ class Proc():
                 output_file = \
                     self.output_file(run=run,rerun=rerun,camcol=camcol)
 
-                if not os.path.exists(output_file):
+                if not path_exists(output_file):
                     missing[ii] = 1
                     if not printed_errors:
                         print("")
@@ -333,7 +339,7 @@ class Proc():
         import columns
 
         coldir = self.columns_dir()
-        if os.path.exists(coldir):
+        if path_exists(coldir):
             raise ValueError("coldir already exists: %s\n"
                              "\tPlease start fresh" % coldir)
 
@@ -373,6 +379,20 @@ class Proc():
         admomvers  = os.path.basename( getenv_check("ADMOM_DIR") )
         fimagevers = os.path.basename( getenv_check("FIMAGE_DIR") )
         sdsspyvers = os.path.basename( getenv_check("SDSSPY_DIR") )
+
+        e = \
+            {'photo_resolve':resdir,
+             'photo_calib':calibdir,
+             'photo_sweep':sweepdir,
+             'photo_redux':redux,
+             'esutilvers': esutil.version(),
+             'espyvers': espyvers,
+             'stompvers': stompvers,
+             'admomvers': admomvers,
+             'fimagevers': fimagevers,
+             'sdsspyvers': sdsspyvers}
+
+        """
         e = \
             {'run':run,
              'rerun':rerun,
@@ -388,6 +408,7 @@ class Proc():
              'sdsspyvers': sdsspyvers,
              'date': now,
              'output_file':output_file}
+        """
         return e        
 
 
@@ -468,7 +489,7 @@ class ColumnSelector:
 
     def open_columns_new(self):
         coldir=self.columns_dir()
-        if os.path.exists(coldir):
+        if path_exists(coldir):
             raise ValueError("coldir exists: '%s'. Start fresh" % coldir)
 
         stdout.write("Opening columns: %s\n" % coldir)
@@ -665,7 +686,7 @@ class SweepExtractor:
         print("opening file:",filename)
         filename=os.path.expandvars(filename)
         filename=os.path.expanduser(filename)
-        if os.path.exists(filename):
+        if path_exists(filename):
             print("Removing existing file")
             os.remove(filename)
 
@@ -714,4 +735,31 @@ class SweepExtractor:
             else:
                 print(mess)
         return data
+
+def makedirs(path):
+    if not path_exists(path):
+        if path.find('hdfs://') == 0:
+            import hdfs
+            hdfs.mkdir(path)
+        else:
+            return os.path.exists(path)
+
+def path_remove(path):
+    if path.find('hdfs://') == 0:
+        import hdfs
+        hdfs.rm(path,verbose=True)
+    else:
+        return os.remove(path)
+
+
+def path_exists(path):
+    if path.find('hdfs://') == 0:
+        import hdfs
+        stat = hdfs.stat(path)
+        if stat is None:
+            return False
+        else:
+            return True
+    else:
+        return os.path.exists(path)
 

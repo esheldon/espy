@@ -1,12 +1,35 @@
 import os
 
+def stat(hdfs_url):
+    """
+    stat the hdfs URL, return None if does not exist.
+
+    Returns a dictionary with keys
+        filename: base name of file
+        blocks: number of blocks
+        block_size: size of each block
+        mod_date: last modification
+        replication: number of copies in hdfs
+    """
+
+    command="""hadoop fs -stat "{'blocks': %b, 'mod_date': '%y', 'replication': %r, 'filename':'%n'}" """
+    command += hdfs_url
+
+    exit_code, stdo, stde = exec_command(command)
+
+    if exit_code != 0:
+        return None
+    else:
+        return eval(stdo.strip())
+
+
 def ls(hdfs_url='', recurse=False):
     """
     List the hdfs URL.  If the URL is a directory, the contents are returned.
     """
     if recurse:
         cmd='lsr'
-    els:
+    else:
         cmd='ls'
 
     command = "hadoop fs -%s %s | awk 'NF==8 {print $8}'" % (cmd,hdfs_url)
@@ -23,7 +46,7 @@ def lsr(hdfs_url=''):
     """
     Recursively List the hdfs URL.  This is equivalent to hdfs.ls(url, recurse=True)
     """
-    ls(hdfs_url, True)
+    ls(hdfs_url, recurse=True)
 
 def read(hdfs_url, reader, verbose=False, **keys):
     with HDFSFile(hdfs_url, verbose=verbose) as fobj:
@@ -43,17 +66,47 @@ def put(local_file, hdfs_url, verbose=False):
         raise RuntimeError("Failed to copy to hdfs %s -> %s: %s" % (local_file,hdfs_url,stde))
 
 
-def rm(hdfs_url, verbose=False):
+def rm(hdfs_url, recurse=False, verbose=False):
     """
     Remove the specified hdfs url
     """
-    if verbose:
-        print 'hdfs removing',hdfs_url
+    mess='hdfs removing '+hdfs_url
+        
 
-    command = 'hadoop fs -rm '+hdfs_url
+    if recurse:
+        cmd='rmr'
+        mess+=' recursively'
+    else:
+        cmd='rm'
+
+    if verbose:
+        print mess
+
+    command = 'hadoop fs -%s %s' % (cmd, hdfs_url)
     exit_code, stdo, stde = exec_command(command)
     if exit_code != 0:
         raise RuntimeError("hdfs %s" % stde)
+
+def rmr(hdfs_url, verbose=False):
+    """
+
+    Remove the specified hdfs url recursively.  Equivalent to rm(url,
+    recurse=True)
+    """
+    rm(hdfs_url, recurse=True, verbose=verbose)
+
+def mkdir(hdfs_url, verbose=False):
+    """
+    Equivalent of mkdir -p in unix
+    """
+    if verbose:
+        print 'hdfs mkdir',hdfs_url
+
+    command = 'hadoop fs -mkdir '+hdfs_url
+    exit_code, stdo, stde = exec_command(command)
+    if exit_code != 0:
+        raise RuntimeError("hdfs %s" % stde)
+
 
 class HDFSFile:
     """
