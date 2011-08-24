@@ -1,5 +1,36 @@
 import os
 
+def exists(hdfs_url):
+    """
+    Test if the url exists.
+    """
+    return test(hdfs_url, test='e')
+ 
+def test(hdfs_url, test='e'):
+    """
+    Test the url.
+        
+    parameters
+    ----------
+    hdfs_url: string
+        The hdfs url
+    test: string, optional
+        'e': existence
+        'd': is a directory
+        'z': zero length
+
+        Default is an existence test, 'e'
+    """
+    command="""hadoop fs -test %s %s""" % (test, hdfs_url)
+
+    exit_code, stdo, stde = exec_command(command)
+
+    if exit_code != 0:
+        return False
+    else:
+        return True
+
+
 def stat(hdfs_url):
     """
     stat the hdfs URL, return None if does not exist.
@@ -65,6 +96,40 @@ def put(local_file, hdfs_url, verbose=False):
     if exit_code != 0:
         raise RuntimeError("Failed to copy to hdfs %s -> %s: %s" % (local_file,hdfs_url,stde))
 
+def opent(hdfs_url, tmpdir=None, verbose=False):
+    """
+    pipe the file from hadoop fs -cat into a temporary file, and then return
+    the file object for the temporary file.
+
+    The temporary file is automatically cleaned up when it is closed.
+    """
+    import subprocess
+    from subprocess import PIPE
+    import tempfile
+    bname = os.path.basename(hdfs_url)
+    temp_file = tempfile.NamedTemporaryFile(prefix='hdfs-', suffix='-'+bname, dir=tmpdir)
+
+    if verbose:
+        print 'hdfs opening: ',hdfs_url,'for reading, staging in temp file:',temp_file.name
+
+    command = 'hadoop fs -cat %s' % hdfs_url
+    pobj = subprocess.Popen(command, stdout=PIPE, stderr=PIPE, shell=True)
+
+    buffsize = 2*1024*1024
+    while True:
+        data = pobj.stdout.read(buffsize)
+        if len(data) == 0:
+            break
+        temp_file.write(data)
+
+    # we're done, just need to wait for exit
+    ret=pobj.wait()
+    if ret != 0:
+        raise RuntimeError("Failed to copy to hdfs %s -> %s: %s" % (temp_file.name,hdfs_url,pobj.stderr.read()))
+    print ret
+
+    temp_file.rewind()
+    return temp_file
 
 def rm(hdfs_url, recurse=False, verbose=False):
     """
