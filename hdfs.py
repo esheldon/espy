@@ -126,9 +126,8 @@ def opent(hdfs_url, tmpdir=None, verbose=False):
     ret=pobj.wait()
     if ret != 0:
         raise RuntimeError("Failed to copy to hdfs %s -> %s: %s" % (temp_file.name,hdfs_url,pobj.stderr.read()))
-    print ret
 
-    temp_file.rewind()
+    temp_file.seek(0)
     return temp_file
 
 def rm(hdfs_url, recurse=False, verbose=False):
