@@ -5,22 +5,23 @@ usage:
 
 Print out the fits header.  Defaults to extension 0
 
-Required pyfits
+Requires fitsio or pyfits
 """
 
 import sys
 try:
-    import pyfits
+    import fitsio
+    type='fitsio'
 except:
     try:
-        from esutil import pyfits
+        import pyfits
+        type='pyfits'
     except:
-        raise ImportError("Could not import pyfits")
+        raise ImportError("Could not import fitsio or pyfits")
 
 def usage():
-    sys.stdout.write('usage: fitshead filename [extension]\n')
-    sys.stdout.write("  extension is numerical, zero offset.  "
-                     "Defaults to zero, the first\n")
+    print 'usage: fitshead filename [extension]'
+    print '    default extension is 0'
 
 if len(sys.argv) < 2:
     usage()
@@ -32,6 +33,9 @@ ext=0
 if len(sys.argv) >= 3:
     ext=int(sys.argv[2])
 
-hdr = pyfits.getheader(fname, ext=ext)
+if type == 'fitsio':
+    hdr = fitsio.read_header(fname,ext)
+else:
+    hdr = pyfits.getheader(fname, ext=ext)
 
-sys.stdout.write('%s\n' % hdr)
+print hdr
