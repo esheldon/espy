@@ -37,12 +37,13 @@ def open_columns(type, primary=True):
 
 def verify(proctype,
            procrun, 
+           type,
            require_result=False,
            runs=None, 
            camcols=None, 
            reload=False):
 
-    p=Proc(proctype,procrun,'junk')
+    p=Proc(proctype,procrun,type)
     flag_status = p.verify(runs=runs,camcols=camcols,reload=reload)
     return flag_status
 
@@ -50,7 +51,7 @@ class Proc():
     def __init__(self, 
                  proctype, 
                  procrun, 
-                 type='gal', 
+                 type, 
                  nper=1, 
                  minscore=0.1,
                  reload=False, 
@@ -62,7 +63,7 @@ class Proc():
     def init(self, 
              proctype, 
              procrun, 
-             type='gal', 
+             type, 
              nper=1, 
              minscore=0.1,
              reload=False):
@@ -278,7 +279,7 @@ class Proc():
 
         ii=0
 
-        printed_error=False
+        printed_errors=False
         for irun in range(nrun):
             if (irun+1) % 10 == 0:
                 stdout.write('\b'*7)
@@ -301,7 +302,7 @@ class Proc():
                     printed_errors=True
                     flags[ii] = flagdict['missing_file']
                 else: 
-                    status=esutil.sfile.read_header(output_file)
+                    status=esutil.io.read_header(output_file)
                     flags[ii] = status['flags']
                 ii += 1
 
@@ -755,7 +756,7 @@ def path_remove(path):
 def path_exists(path):
     if path.find('hdfs://') == 0:
         import hdfs
-        stat = hdfs.stat(path)
+        stat = hdfs.exists(path)
         if stat is None:
             return False
         else:

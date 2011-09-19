@@ -24,8 +24,10 @@ import cosmology
 
 def instantiate_sample(sample):
     conf = lensing.files.read_config('lcat',sample)
-    if conf['catalog'] in ['redmapper','ProPer']:
+    if conf['catalog'][0:9] == 'redmapper':
         # proper is the old version
+        return RedMapper(sample)
+    elif conf['catalog'] == 'ProPer':
         return RedMapper(sample)
     elif conf['catalog'] == 'maxbcg-full':
         return MaxBCG(sample)
@@ -271,7 +273,7 @@ class RedMapper(LcatBase):
 
         LcatBase.__init__(self, sample, **keys)
 
-        if self['catalog'] not in ['redmapper','ProPer']:
+        if self['catalog'] not in ['redmapper-dr8-3.4-like','redmapper-dr8-3.4-nord','ProPer']:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
         self['mapname'] = 'boss'
@@ -283,7 +285,11 @@ class RedMapper(LcatBase):
         strict_edgecut = self.get('strict_edgecut',False)
 
         # this will change when we get the actual red mapper catalog
-        lambda_field = 'lambda_zred'
+        if self['catalog'] == 'ProPer':
+            lambda_field = 'lambda_zred'
+        else:
+            lambda_field = 'lambda_chisq'
+
         z_field = 'z_lambda'
 
         fname = self.file()
@@ -408,7 +414,10 @@ class RedMapper(LcatBase):
 
     def original_file(self):
         d = self.original_dir()
-        f = 'dr8_proper_v3.2_lamgt10.fit'
+        if self['catalog'] == 'ProPer':
+            f = 'dr8_proper_v3.2_lamgt10.fit'
+        else:
+            f='%s.fits' % self['catalog']
         infile = path_join(d, f)
         return infile
 
