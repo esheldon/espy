@@ -18,7 +18,8 @@ from subprocess import PIPE
 
 def get_ip():
     if sys.platform == "linux2":
-        command="ifconfig  | grep 'inet ' | grep -v 'inet addr:127' | awk '{print $2}' | cut -d ':' -f 2"
+        #command="ifconfig  | grep 'inet ' | grep -v 'inet addr:127' | awk '{print $2}' | cut -d ':' -f 2"
+        command="ip addr | grep 'inet ' | grep -v 'inet 127' | awk '{print $2}' | cut -d '/' -f 1"
     elif sys.platform == "darwin":
         command="ifconfig | grep 'inet ' | grep -v 'inet addr:127' | cut -d ' ' -f 2"
     else:
@@ -30,7 +31,13 @@ def get_ip():
     if returncode != 0:
         raise ValueError("Error getting ip address: %s", stderr)
     
-    return stdout.strip()
+    stdout=stdout.strip()
+
+    ver=tuple(sys.version_info)
+    if ver[0] >= 3:
+        return str(stdout,'ascii')
+    else:
+        return stdout.strip()
 
 def main():
 
