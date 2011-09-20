@@ -1,0 +1,28 @@
+sample: "rm01"
+catalog: "redmapper-dr8-3.4-nord"
+
+# this is redundant with the cosmo_sample declaration in the run file
+# we have to demand consistency
+cosmo_sample: "01"
+
+# these used to be in the run file. Moved here because we need to trim lenses
+# first
+nbin:          21
+rmin:          0.02
+rmax:          36.567
+
+# if true, use a strict edge cut
+strict_edgecut: false
+
+# not much usefulness for lenses beyond z=0.4
+zmin:          0.05
+zmax:          0.4
+
+# Eli's recommendation
+lambda_min: 10.
+
+masktype: sdss
+
+comment: |
+    
+    RedMapper sample using Nord's centers

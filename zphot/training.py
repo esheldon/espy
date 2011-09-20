@@ -742,7 +742,7 @@ Carlos
         #    yrange = [0.0, 0.45]
         #yrange = [0.0, 1]
         #plt.yrange = yrange
-        plt.xlabel = 'seeing'
+        plt.xlabel = 'seeing FWHM [arcsec]'
         plt.aspect_ratio=0.7
         plt.show()
 
