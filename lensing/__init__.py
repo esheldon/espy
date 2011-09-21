@@ -10,29 +10,51 @@ exists.
     # if the scat are not already generated
     /bin/make-objshear-input.py scat scat_sample
 
-    # now generate the lens samples
+    #
+    # now generate the lens samples and processing scripts, condor
+    #
     /bin/make-objshear-input.py lcat l07
-    /bin/make-objshear-input.py lcat r01
-
     /bin/make-objshear-proc.py l07
-    /bin/make-objshear-proc.py r01
 
     # in the $LENSDIR/proc/run directory
     condor_submit run-l07.condor
-    condor_submit run-r01.condor
 
     /bin/reduce-lensout.py l07
     /bin/collate-reduced.py l07
-    /bin/reduce-lensout.py r01
-    /bin/collate-reduced.py r01
 
     # bin by lambda into 12 bins, must have defined this binnign
     /bin/bin-lenses.py -t lambda -n 12 l07
     /bin/plot-dsig-byrun.py l07 lambda 12
 
+    #
+    # now randoms
+    #
+
+    # generation of randoms is slow, so do it in chunks, here 100
+    /bin/make-random-chunk-scripts.py r01 100
+
+    # scripts are in the $LENSDIR/lcat/r01/condor
+    for f in *.condor; do echo "$f"; condor_submit "$f"; done
+
+    # then combine them
+    /bin/combine-random-chunks.py r01 100
+
+    # now make the scripts, condor
+    /bin/make-objshear-proc.py r01
+
+    # in the $LENSDIR/proc/r01 directory
+    condor_submit run-r01.condor
+
+    # and combine same as lenses
+    /bin/reduce-lensout.py r01
+    /bin/collate-reduced.py r01
+
+
     # match randoms to those bins
     /bin/match-randoms.py -t lambda -n 12 l07 r01
 
+    # correct from randoms
+    /bin/correct-shear.py
 
 Detailed version
 ----------------
