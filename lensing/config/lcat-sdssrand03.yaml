@@ -16,7 +16,7 @@ rmin:          0.02
 rmax:          36.567
 
 # if true, use a strict edge cut
-strict_edgecut: true
+strict_edgecut: false
 
 
 # this is chosen to be somewhat looser than redmapper, which

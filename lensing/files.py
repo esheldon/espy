@@ -47,7 +47,7 @@ finfo['scat-split']  = {'subdir':'scat/{sample}',
                             'name':'scat-{sample}-{split}.bin'}
 
 finfo['lensout-split']  = {'subdir':'lensout/{sample}',
-                               'name':'lensout-{sample}-{split}.rec'}
+                           'name':'lensout-{sample}-{split}.rec'}
 
 finfo['reduced']  = {'subdir':'lensout/{sample}',
                          'name':'reduced-{sample}.fits'}
@@ -55,12 +55,13 @@ finfo['collated']  = {'subdir':'lensout/{sample}',
                                  'name':'collated-{sample}.fits'}
 
 # here {extra} is really only used for the matched random sums
-# these need to be .rec because we have matrix columns
 finfo['binned']       = {'subdir':'lensout/{sample}/binned-{name}',
-                         'name':'binned-{sample}-{name}{extra}.rec'}
+                         'name':'binned-{sample}-{name}{extra}.fits'}
+                         #'name':'binned-{sample}-{name}{extra}.rec'}
 
 finfo['weights'] = {'subdir':'lensout/{sample}/binned-{name}',
-                    'name':'weights-{sample}-{name}{extra}.rec'}
+                    'name':'weights-{sample}-{name}{extra}.fits'}
+                    #'name':'weights-{sample}-{name}{extra}.rec'}
 
 # probably always want to send extra here
 finfo['binned-plots']       = {'subdir':'lensout/{sample}/binned-{name}/plots',
@@ -68,12 +69,14 @@ finfo['binned-plots']       = {'subdir':'lensout/{sample}/binned-{name}/plots',
 
 # currently these must also be binned...
 finfo['corrected']  = {'subdir':'lensout/{sample}/binned-{name}',
-                       'name':'corrected-{sample}-{name}.rec'}
+                       'name':'corrected-{sample}-{name}.fits'}
+                       #'name':'corrected-{sample}-{name}.rec'}
 finfo['corrected-plots']       = {'subdir':'lensout/{sample}/binned-{name}/plots',
                                   'name':'corrected-{sample}-{name}{extra}.{ext}'}
 
 finfo['invert']       = {'subdir':'lensout/{sample}/binned-{name}',
-                         'name':'invert-{sample}-{name}.rec'}
+                         'name':'invert-{sample}-{name}.fits'}
+                         #'name':'invert-{sample}-{name}.rec'}
 
 # note if extra is not None/'' in a call to sample_file, it gets a '-'
 # prepended
@@ -191,11 +194,17 @@ def sample_write(data, type, sample, split=None, name=None, extra=None, fs='nfs'
 
     Generic writer, just gets filename and runs eu.io.write
 
+    clobber=True is default for this function.
     """
     f=sample_file(type, sample, split=split, name=name, extra=extra, fs=fs)
     make_dir_from_path(f)
 
-    print("writing",type,"file:",f)
+    if 'clobber' not in keys:
+        keys['clobber'] = True
+    if keys['clobber']:
+        print("over-writing",type,"file:",f)
+    else:
+        print("writing",type,"file:",f)
     return eu.io.write(f, data, **keys)
 
 

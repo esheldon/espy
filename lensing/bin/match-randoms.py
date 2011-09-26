@@ -15,6 +15,8 @@ import lensing
 import weighting
 import converter
 
+import fitsio
+
 import esutil as eu
 
 import numpy
@@ -77,7 +79,7 @@ def main():
         outextra='randmatch-%s' % randrun
         weights_file=lensing.files.sample_file('weights',lensrun,name=b.name(),extra=outextra)
         print("opening weights file for writing:",weights_file)
-        wobj=eu.sfile.Open(weights_file,'w')
+        wfits=fitsio.FITS(weights_file,'rw',clobber=True)
     else:
         outextra='randmatch-rm-%s' % randrun
 
@@ -132,9 +134,12 @@ def main():
             weighting.plot_results1d(rand['z'], lcat['z'][w], weights, binsize, 
                                      epsfile=epsfile, title=tit, show=show)
 
-            wstruct=zeros(1, dtype=[('weights','f8',weights.size)])
+            #wstruct=zeros(1, dtype=[('weights','f8',weights.size)])
+            wstruct=zeros(weights.size, dtype=[('weights','f8')])
             wstruct['weights'] = weights
-            wobj.write(wstruct)
+
+            # a new extension for each bin
+            wfits.write(wstruct)
 
         converter.convert(epsfile, dpi=120, verbose=True)
 
@@ -144,7 +149,7 @@ def main():
             output[n][binnum] = comb[n][0]
 
     if not remove:
-        wobj.close()
+        wfits.close()
 
     lensing.files.sample_write(output,'binned',lensrun,name=b.name(),extra=outextra)
 

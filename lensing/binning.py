@@ -200,12 +200,13 @@ class BinnerBase(dict):
 
         if dops:
             #d = lensing.files.lensbin_plot_dir(run,name)
-            d = lensing.files.sample_dir(type,run,name=name)
+            #d = lensing.files.sample_dir(type,run,name=name)
+            #epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
+            epsfile=lensing.files.sample_file(type+'-plots',run,name=name,extra='allplot',ext='eps')
+            d = os.path.dirname(epsfile)
             if not os.path.exists(d):
                 print("making dir:",d)
                 os.makedirs(d)
-            #epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
-            epsfile=lensing.files.sample_file(type+'-plots',run,name=name,extra='allplot',ext='eps')
             stdout.write("Plotting to file: %s\n" % epsfile)
             pa.write_eps(epsfile)
         else:
@@ -220,7 +221,8 @@ class LambdaBinner(BinnerBase):
     """
     range_type='()'
 
-    lambda_field = 'lambda_zred'
+    #lambda_field = 'lambda_zred'
+    lambda_field = 'lambda_chisq'
     z_field = 'z_lambda'
     def name(self):
         return 'lambda-%02d' % self['nbin']
@@ -296,8 +298,15 @@ class LambdaBinner(BinnerBase):
         if self['nbin'] == 12:
             # ran logbin_linear_edges with nbin=14 and combined last three
             # also made upper exactly 189
-            lowlim  = [10.00, 12.33, 15.21, 18.75, 23.13, 28.52, 35.17, 43.37, 53.49, 65.96, 81.34, 100.31]
-            highlim = [12.33, 15.21, 18.75, 23.13, 28.52, 35.17, 43.37, 53.49, 65.96, 81.34, 100.31, 189.00]
+            lowlim = [  10.00009882,   12.52914267,   15.69778647,   19.66778627,
+                      24.64180651,   30.87376584,   38.68179945,   48.46449947,
+                      60.72126278,   76.07778464,   95.31799984,  119.42410174]
+
+            highlim = [  12.52914267,   15.69778647,   19.66778627,   24.64180651,
+                       30.87376584,   38.68179945,   48.46449947,   60.72126278,
+                       76.07778464,   95.31799984,  119.42410174,  234.87844989]
+            #lowlim  = [10.00, 12.33, 15.21, 18.75, 23.13, 28.52, 35.17, 43.37, 53.49, 65.96, 81.34, 100.31]
+            #highlim = [12.33, 15.21, 18.75, 23.13, 28.52, 35.17, 43.37, 53.49, 65.96, 81.34, 100.31, 189.00]
 
         elif self['nbin'] == 16:
             # ran logbin_linear_edges with nbin=18 and combined last three

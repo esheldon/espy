@@ -23,8 +23,9 @@ exists.
     /bin/collate-reduced.py l07
 
     # bin by lambda into 12 bins, must have defined this binnign
-    /bin/bin-lenses.py -t lambda -n 12 l07
-    /bin/plot-dsig-byrun.py l07 lambda 12
+    /bin/bin-lenses.py l07 lambda 12
+    # plot the binning (not corrected, jackknife yet)
+    /bin/plot-dsig-byrun.py -t binned l07 lambda 12
 
     #
     # now randoms
