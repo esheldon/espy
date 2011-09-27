@@ -86,7 +86,7 @@ def main():
     for binnum in xrange(nbin):
 
         print("-"*70)
-        print(b.bin_label(binnum))
+        print("%s/%s: " % (binnum+1,nbin), b.bin_label(binnum))
 
         if remove:
             eps_extra='%02d-randmatch-rm-%s' % (binnum,randrun)

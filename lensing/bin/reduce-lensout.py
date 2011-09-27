@@ -46,7 +46,9 @@ def main():
         if i == 0:
             data = tdata
         else:
+            print("summing")
             lensing.outputs.add_lensums(data, tdata)
+        del tdata
 
 
     lensing.files.sample_write(data, 'reduced', run, clobber=True)
