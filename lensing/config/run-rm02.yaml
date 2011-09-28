@@ -1,5 +1,5 @@
-run:           "rm01"
-lens_sample:   "rm01"
+run:           "rm02"
+lens_sample:   "rm02"
 src_sample:    "05"
 
 # for healpix
@@ -9,7 +9,7 @@ comment: |
 
     lenses:
 
-        Red mapper "redmapper-dr8-3.4-nord", cut to z [0.08,0.4]
+        Red mapper "redmapper-dr8-3.4-like", cut to z [0.08,0.4]
         Includes the strict 1Mpc edge cut.
 
         nbin 21
