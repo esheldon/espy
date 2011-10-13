@@ -740,23 +740,20 @@ class SweepExtractor:
 def makedirs(path):
     if not path_exists(path):
         if path.find('hdfs://') == 0:
-            import hdfs
-            hdfs.mkdir(path)
+            eu.hdfs.mkdir(path)
         else:
             return os.path.exists(path)
 
 def path_remove(path):
     if path.find('hdfs://') == 0:
-        import hdfs
-        hdfs.rm(path,verbose=True)
+        eu.hdfs.rm(path,verbose=True)
     else:
         return os.remove(path)
 
 
 def path_exists(path):
     if path.find('hdfs://') == 0:
-        import hdfs
-        stat = hdfs.exists(path)
+        stat = eu.hdfs.exists(path)
         if stat is None:
             return False
         else:
