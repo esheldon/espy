@@ -45,19 +45,25 @@ def correct(data, rand, subtract_rand=False, minrad=None):
     ssh = calc_ssh(data)
     clust_corr, clust_corr_err = calc_clustering_correction(data, rand)
 
-    out = add_corrections(data, ssh, clust_corr, clust_corr_err, dsig_rand, dsigerr_rand)
+    out = add_corrections(data, ssh, 
+                          clust_corr, clust_corr_err, 
+                          rand['wsum_mean'], rand['wsum_mean_err'],
+                          dsig_rand, dsigerr_rand)
 
     return out
 
 def add_corrections(datain, 
                     ssh, 
                     clust_corr, clust_corr_err, 
+                    wsum_mean_rand, wsum_mean_rand_err,
                     dsig_rand, dsigerr_rand):
 
     nrad = datain['r'][0].size
     data = eu.numpy_util.add_fields(datain,
                                     [('dsig_orig','f8',nrad),
                                      ('dsigerr_orig','f8',nrad),
+                                     ('wsum_mean_rand','f8',nrad),
+                                     ('wsum_mean_rand_err','f8',nrad),
                                      ('dsig_rand','f8',nrad),
                                      ('dsigerr_rand','f8',nrad),
                                      ('clust_corr','f8',nrad),
@@ -66,6 +72,8 @@ def add_corrections(datain,
     # note copying over ssh that is there already
     data['ssh']            = ssh
 
+    data['wsum_mean_rand'] = wsum_mean_rand
+    data['wsum_mean_rand_err'] = wsum_mean_rand_err
     data['dsig_rand']      = dsig_rand
     data['dsigerr_rand']   = dsigerr_rand
     data['clust_corr']     = clust_corr

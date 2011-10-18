@@ -200,19 +200,27 @@ class BinnerBase(dict):
 
         if dops:
             #d = lensing.files.lensbin_plot_dir(run,name)
-            d = lensing.files.sample_dir(type,run,name=name)
+            #d = lensing.files.sample_dir(type,run,name=name)
+            #epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
+            epsfile=lensing.files.sample_file(type+'-plots',run,name=name,extra='allplot',ext='eps')
+            d = os.path.dirname(epsfile)
             if not os.path.exists(d):
                 print("making dir:",d)
                 os.makedirs(d)
-            #epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
-            epsfile=lensing.files.sample_file(type+'-plots',run,name=name,extra='allplot',ext='eps')
             stdout.write("Plotting to file: %s\n" % epsfile)
             pa.write_eps(epsfile)
         else:
             pa.show()
 
 
+def define_lambda_bins(sample, lastmin=58.):
+    l=lensing.files.read_original_catalog('lens',sample)
+    w=where1(l['z_lambda'] < 0.4)
+    l=l[w]
 
+    # 12 is unimportant here
+    lb = instantiate_binner('lambda', 12)
+    lb.define_bins(l['lambda_chisq'], lastmin=lastmin)
 
 class LambdaBinner(BinnerBase):
     """
@@ -220,7 +228,7 @@ class LambdaBinner(BinnerBase):
     """
     range_type='()'
 
-    lambda_field = 'lambda_zred'
+    lambda_field = 'lambda_chisq'
     z_field = 'z_lambda'
     def name(self):
         return 'lambda-%02d' % self['nbin']
@@ -242,7 +250,11 @@ class LambdaBinner(BinnerBase):
         for l,h in zip(low,high):
             lamrange = [l,h]
 
-            print('%0.2f < lambda < %0.2f' % tuple(lamrange))
+            print("l,h:",l,h)
+            if h is not None:
+                print('%0.2f < lambda < %0.2f' % tuple(lamrange))
+            else:
+                print('lambda > %0.2f' % l)
 
             print("    reducing and jackknifing by lens")
             comb,w = reduce_from_ranges(data,lambda_field,lamrange, range_type=self.range_type,
@@ -288,16 +300,149 @@ class LambdaBinner(BinnerBase):
 
     def bin_label(self, binnum):
         lrange = self.bin_ranges(binnum)
-        return r'$%0.2f < \lambda\ < %0.2f$' % lrange
+        if lrange[0] is None and lrange[1] is None:
+            raise ValueError("expected at least one in range to be not None")
+        elif lrange[1] is None:
+            return r'$\lambda\ > %0.1f$' % lrange[0]
+        elif lrange[0] is None:
+            return r'$\lambda\ < %0.1f$' % lrange[1]
+        else:
+            return r'$%0.1f < \lambda\ < %0.1f$' % lrange
 
 
+    def define_bins(self, lambda_input, lastmin=58., alpha=0.6666, show=False, prompt=False):
+        """
+        Data should be trimmed to a relevant sample, e.g. 
+        in redshift and lambda.
+
+        choose a lower bound for lambda on the last bin, then
+        work downward keeping N*lambda^alpha = constant
+
+        Note this will not produce a fixed number of bins; we may
+        want to adjust.
+        """
+        
+        lam = lambda_input.copy()
+        lam.sort()
+
+        # reverse sort, biggest to smallest
+        lam = numpy.fromiter(reversed(lam), dtype='f8')
+
+        ind = numpy.arange(lam.size,dtype='i8')
+
+        w_last = where1(lam > lastmin)
+        mlam_last = lam[w_last].sum()/w_last.size
+
+        print("wlast.size:",w_last.size,"mlam_last:",mlam_last)
+
+        cref = 0.5*log10(w_last.size) + alpha*log10(mlam_last)
+
+        # now look at mean lambda*N for rest by using cumulative
+        # sums
+
+
+        lam = lam[w_last[-1]:]
+        lam_last = lastmin
+        binnum=0
+
+        minbin=[]
+        maxbin=[]
+        while 1:
+            nd = 1+numpy.arange(lam.size)
+
+            mlam = lam.cumsum()/nd
+            cval = 0.5*log10(nd) + alpha*log10(mlam)
+
+            #wthis = where1(cval > cref)
+            wthis = where1(cval < cref)
+
+            lam_min = lam[wthis[-1]]
+            lam_max = lam_last
+
+            minbin.append(lam_min)
+            maxbin.append(lam_max)
+            if show:
+                print("numleft:",lam.size,"wthis.size",wthis.size)
+
+                plt=FramedPlot()
+                curve = Curve(lam, cval)
+                plt.add(curve)
+                #points = Points(lam, cval, type='filled circle', size=0.5)
+                #plt.add(points)
+
+                oc = Curve([lam.min(), lam.max()],[cref,cref],color='blue')
+                plt.add(oc)
+
+                #p = biggles.Point(lam[wthis.min()], cval[wthis.min()], color='orange', type='filled circle')
+                p = biggles.Point(lam[wthis[-1]], cval[wthis[-1]], color='orange', type='filled circle')
+                plt.add(p)
+
+                binnum -= 1
+                blab=PlotLabel(0.9,0.9,'bin %d' % binnum, halign='right')
+
+                rlab=PlotLabel(0.9,0.85,r'%0.2f $ < \lambda < $ %0.2f' % (lam_min,lam_max), halign='right')
+                nlab=PlotLabel(0.9,0.80,'N: %d' % wthis.size, halign='right')
+
+                plt.add(blab)
+                plt.add(rlab)
+                plt.add(nlab)
+                plt.show()
+
+                if prompt:
+                    key=raw_input('hit a key: ')
+                    if key == 'q':
+                        return
+            lam_last = lam_min
+            lam=lam[wthis[-1]+1:]
+
+
+            if len(lam) == 0:
+                break
+        
+        minbin = list(reversed(minbin))
+        maxbin = list(reversed(maxbin))
+        minbin.append(maxbin[-1])
+        maxbin.append(None)
+        
+        minstr=[]
+        maxstr=[]
+        for i in xrange(len(minbin)):
+            if minbin[i] is not None:
+                minstr.append('%0.1f' % minbin[i])
+            else:
+                minstr.append('None')
+            if maxbin[i] is not None:
+                maxstr.append('%0.1f' % maxbin[i])
+            else:
+                maxstr.append('None')
+
+        minstr = '[' + ', '.join(minstr) +']'
+        maxstr = '[' + ', '.join(maxstr) +']'
+
+        #for i in xrange(len(minbin)):
+        #    print('%i %0.1f %0.1f' % (i+1,minbin[i],maxbin[i]))
+
+        print("nbin:",len(minbin))
+        print(minstr)
+        print(maxstr)
 
     def set_bin_ranges(self):
         if self['nbin'] == 12:
+            # ran define_bins
+            lowlim  = [10.0, 10.4, 11.7, 13.3, 15.1, 17.3, 19.8, 23.0, 27.2, 32.9, 41.6, 58.0]
+            highlim = [10.4, 11.7, 13.3, 15.1, 17.3, 19.8, 23.0, 27.2, 32.9, 41.6, 58.0, None]
+
             # ran logbin_linear_edges with nbin=14 and combined last three
             # also made upper exactly 189
-            lowlim  = [10.00, 12.33, 15.21, 18.75, 23.13, 28.52, 35.17, 43.37, 53.49, 65.96, 81.34, 100.31]
-            highlim = [12.33, 15.21, 18.75, 23.13, 28.52, 35.17, 43.37, 53.49, 65.96, 81.34, 100.31, 189.00]
+            """
+            lowlim = [  10.00009882,   12.52914267,   15.69778647,   19.66778627,
+                      24.64180651,   30.87376584,   38.68179945,   48.46449947,
+                      60.72126278,   76.07778464,   95.31799984,  119.42410174]
+
+            highlim = [  12.52914267,   15.69778647,   19.66778627,   24.64180651,
+                       30.87376584,   38.68179945,   48.46449947,   60.72126278,
+                       76.07778464,   95.31799984,  119.42410174,  234.87844989]
+            """
 
         elif self['nbin'] == 16:
             # ran logbin_linear_edges with nbin=18 and combined last three
@@ -309,8 +454,10 @@ class LambdaBinner(BinnerBase):
         else:
             raise ValueError("Unsupported nbin: %d\n", self['nbin'])
 
-        self.lowlim = numpy.array(lowlim,dtype='f8')
-        self.highlim = numpy.array(highlim,dtype='f8')
+        #self.lowlim = numpy.array(lowlim,dtype='f8')
+        #self.highlim = numpy.array(highlim,dtype='f8')
+        self.lowlim = lowlim
+        self.highlim = highlim
 
 
 
@@ -1299,7 +1446,7 @@ def reduce_from_ranges(data,
     Can add more ranges if needed
 
     """
-    logic = (data[tag] >= range1[0]) & (data[tag] < range1[1])
+    #logic = (data[tag] >= range1[0]) & (data[tag] < range1[1])
 
     logic = get_range_logic(data, tag, range1, range_type)
 
@@ -1317,14 +1464,20 @@ def reduce_from_ranges(data,
  
 
 def get_range_logic(data, tag, brange, type):
+    minval,maxval = brange
+    if minval is None:
+        minval = data[tag].min()
+    if maxval is None:
+        maxval = data[tag].max()
+
     if type == '[]':
-        logic = (data[tag] >= brange[0]) & (data[tag] <= brange[1])
+        logic = (data[tag] >= minval) & (data[tag] <= maxval)
     elif type == '[)':
-        logic = (data[tag] >= brange[0]) & (data[tag] < brange[1])
+        logic = (data[tag] >= minval) & (data[tag] < maxval)
     elif type == '(]':
-        logic = (data[tag] > brange[0]) & (data[tag] <= brange[1])
+        logic = (data[tag] > minval) & (data[tag] <= maxval)
     elif type == '()':
-        logic = (data[tag] > brange[0]) & (data[tag] < brange[1])
+        logic = (data[tag] > minval) & (data[tag] < maxval)
     else:
         raise ValueError("Bad range type: '%s'" % type)
 

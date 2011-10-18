@@ -1481,7 +1481,7 @@ class CompareWeighting:
                                      x0=self.zmin, 
                                      binsize=zbin,
                                      width=self.line_width, 
-                                     color='blue')
+                                     color='darkgreen')
         p_htrain.label = 'train'
 
         # weighted histogram of z from training set
@@ -1570,7 +1570,7 @@ class CompareWeighting:
             p_hsum = biggles.Histogram(pzhist, 
                                        x0=0.0, 
                                        binsize=binsize, 
-                                       color='magenta',
+                                       color='blue',
                                        width=self.line_width)
             p_hsum.label = 'summed p(z)'
             pk = biggles.PlotKey(keyx,keyy,[p_htrain,p_whtrain,p_hsum])
@@ -1611,14 +1611,15 @@ class CompareWeighting:
 
         a=biggles.Table(3,2)
         a[0,0] = self.varhist1('cmodelmag_dered_r',
-                               'r',self.magmin,self.magmax,self.magbin)
+                               'r',self.magmin,self.magmax,self.magbin,
+                               dokey=True,keyx=0.5,)
         a[0,1] = self.varhist1('model_umg','u-g',-1.0,3.5,0.05)
 
         a[1,0] = self.varhist1('model_gmr','g-r',-0.2,2.4,0.04)
         a[1,1] = self.varhist1('model_rmi','r-i',-0.4,1.4,0.025)
 
-        a[2,0] = self.varhist1('model_imz','i-z',-0.8,1.1,0.025,
-                               dokey=True)
+        a[2,0] = self.varhist1('model_imz','i-z',-0.8,1.1,0.025)#,
+                               #dokey=True)
 
         if extra_colname is None:
             a[2,1] = self.whist()
@@ -1653,7 +1654,7 @@ class CompareWeighting:
         plt.xlabel = 'weight'
         return plt
 
-    def varhist1(self, tagname, xlabel, xmin, xmax, binsize, dokey=False):
+    def varhist1(self, tagname, xlabel, xmin, xmax, binsize, dokey=False, keyx=0.1):
 
         th = eu.stat.histogram(self.wtrain[tagname],
                                min=xmin,
@@ -1686,7 +1687,7 @@ class CompareWeighting:
             p_ph.label = 'photo'
             p_th.label = 'train'
             p_wh.label = 'weighted train'
-            key=PlotKey(0.1,0.9, [p_ph,p_th,p_wh])
+            key=PlotKey(keyx,0.9, [p_ph,p_th,p_wh])
             plt.add(key)
         return plt
 

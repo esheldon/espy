@@ -24,15 +24,15 @@ import cosmology
 
 def instantiate_sample(sample):
     conf = lensing.files.read_config('lcat',sample)
-    if conf['catalog'][0:9] == 'redmapper':
+    if conf['catalog'] in ['redmapper-random','maxbcg-random']:
+        return SDSSRandom(sample)
+    elif conf['catalog'][0:9] == 'redmapper':
         # proper is the old version
         return RedMapper(sample)
     elif conf['catalog'] == 'ProPer':
         return RedMapper(sample)
     elif conf['catalog'] == 'maxbcg-full':
         return MaxBCG(sample)
-    elif conf['catalog'] in ['redmapper-random','maxbcg-random']:
-        return SDSSRandom(sample)
     elif conf['catalog'] == 'desmocks-2.13':
         return DESMockLensCatalog(sample)
     else:
@@ -159,10 +159,21 @@ class SDSSRandom(LcatBase):
             print(" -> ra,dec ",end='')
             ra,dec = self.tycho_map.GenerateRandomEq(nrand-n)
 
-            print(" -> maskflags ", end='')
-            maskflags = self.get_maskflags(ra,dec,z)
+            if 'rmax_hard' in self:
+                print(" -> maskflags_hard (%0.1f)" % self['rmax_hard'], end='')
+                maskflags_hard = self.get_maskflags(ra,dec,z,hard=True)
+                hard_edge_logic = es_sdsspy.stomp_maps.quad_logic(maskflags_hard, strict=True)
 
-            wgood = es_sdsspy.stomp_maps.quad_check(maskflags, strict=strict_edgecut)
+            print(" -> maskflags (%0.1f)" % self['rmax'], end='')
+            maskflags = self.get_maskflags(ra,dec,z)
+            quad_logic      = es_sdsspy.stomp_maps.quad_logic(maskflags,      strict=strict_edgecut)
+
+            #wgood = es_sdsspy.stomp_maps.quad_check(maskflags, strict=strict_edgecut)
+            if 'rmax_hard' in self:
+                wgood = where1(quad_logic & hard_edge_logic)
+            else:
+                wgood = where1(quad_logic)
+
             print(" -> good ones:",wgood.size)
             if wgood.size > 0:
                 output['zindex'][n:n+wgood.size] = numpy.arange(n,n+wgood.size,dtype='i8')
@@ -174,7 +185,7 @@ class SDSSRandom(LcatBase):
 
         lensing.files.lcat_write(self['sample'], output, extra=extra)
 
-    def get_maskflags(self, ra, dec, z):
+    def get_maskflags(self, ra, dec, z, hard=False):
         """
 
         Run the stomp edge checking code. This uses the basic map, while the
@@ -188,7 +199,11 @@ class SDSSRandom(LcatBase):
         Da = self.cosmo.Da(0.0, z)
 
         # radius in *degrees*
-        radius = self['rmax']/Da*180./PI
+        if hard:
+            rmax = self['rmax_hard']
+        else:
+            rmax = self['rmax']
+        radius = rmax/Da*180./PI
         
         maskflags = self.basic_map.Contains(ra, dec, "eq", radius)
 
@@ -280,15 +295,18 @@ class RedMapper(LcatBase):
         self['maptype'] = 'basic'
         self['tycho_maptype'] = 'tycho'
 
-    def create_objshear_input(self, **keys):
-        
-        strict_edgecut = self.get('strict_edgecut',False)
-
-        # this will change when we get the actual red mapper catalog
+    def get_lambda_field(self):
         if self['catalog'] == 'ProPer':
             lambda_field = 'lambda_zred'
         else:
             lambda_field = 'lambda_chisq'
+        return lambda_field
+
+    def create_objshear_input(self, **keys):
+        
+        strict_edgecut = self.get('strict_edgecut',False)
+        
+        lambda_field = self.get_lambda_field()
 
         z_field = 'z_lambda'
 
@@ -309,19 +327,19 @@ class RedMapper(LcatBase):
         zindex = zindex[w]
 
 
-
         # trim poorly understood low lambda stuff
         lambda_logic = self.lambda_logic(data[lambda_field])
 
         # make sure in the tycho window and two adjacent quadrants
         # not hitting edge (or no edge if strict=True)
 
-        in_tycho, maskflags = self.get_maskflags(data['ra'], data['dec'], data[z_field])
+        md = self.get_maskflags(data['ra'], data['dec'], data[z_field])
 
-        tycho_logic = (in_tycho == 1)
-        quad_logic = es_sdsspy.stomp_maps.quad_logic(maskflags, strict=strict_edgecut)
+        tycho_logic = (md['in_tycho'] == 1)
+        quad_logic = es_sdsspy.stomp_maps.quad_logic(md['maskflags'], strict=strict_edgecut)
+        hard_edge_logic = es_sdsspy.stomp_maps.quad_logic(md['maskflags_hard'], strict=True)
 
-        good = where1(lambda_logic & tycho_logic & quad_logic)
+        good = where1(lambda_logic & tycho_logic & quad_logic & hard_edge_logic)
         print("Finally kept: %d/%d" % (good.size,data.size))
 
         print('creating output array')
@@ -332,7 +350,7 @@ class RedMapper(LcatBase):
         output['ra']        = data['ra'][good]
         output['dec']       = data['dec'][good]
         output['z']         = data[z_field][good]
-        output['maskflags'] = maskflags[good]
+        output['maskflags'] = md['maskflags'][good]
         lensing.files.lcat_write(self['sample'], output)
 
     def lambda_logic(self, lam):
@@ -363,16 +381,18 @@ class RedMapper(LcatBase):
             self.basic_map = es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'])
             self.tycho_map = es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'])
 
-    def get_maskflags(self, ra, dec, z):
+    def get_maskflags(self, ra, dec, z, types=['tycho','rmax','rmax_hard']):
         """
 
         Run the stomp edge checking code.
+
+        There are two checks: quadrant checking at full rmax, and a hard edge
+        cut at rmax_hard.
 
         """
 
         self.load_stomp_maps()
 
-        print("Getting BOSS basic maskflags")
         # get radius for edge check
         cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])
         print(cconf)
@@ -385,26 +405,47 @@ class RedMapper(LcatBase):
 
         # radius in *degrees*
         radius = self['rmax']/Da*180./PI
+        radius_hard = self['rmax_hard']/Da*180./PI
 
-        print("    radii are in range [%f,%f]" % (radius.min(), radius.max()))
-
+        in_tycho=None
+        maskflags_hard=None
+        maskflags=None
         
-        print("    Ensuring in tycho window")
-        in_tycho = self.tycho_map.Contains(ra, dec, "eq")
+        if 'tycho' in types:
+            print("    Ensuring in tycho window")
+            in_tycho = self.tycho_map.Contains(ra, dec, "eq")
 
-        w=where1(in_tycho == 1)
-        print("    Keeping %d/%d" % (w.size,ra.size))
+            w=where1(in_tycho == 1)
+            print("    Keeping %d/%d" % (w.size,ra.size))
+            in_tycho = numpy.array(in_tycho, dtype='i8')
 
-        print("    Getting basic maskflags...")
-        maskflags = self.basic_map.Contains(ra, dec, "eq", radius)
+        if 'rmax_hard' in types:
+            # two types of edge checks
+            print("    Getting basic maskflags at rmax_hard: %0.2f" % self['rmax_hard']) 
+            print("    radii are in range [%f,%f]" % (radius_hard.min(), radius_hard.max()))
+            maskflags_hard = self.basic_map.Contains(ra, dec, "eq", radius_hard)
+            whard=es_sdsspy.stomp_maps.quad_check(maskflags_hard, strict=True)
+            print("    Keeping %d/%d from hard cut" % (whard.size,ra.size))
+            maskflags_hard = numpy.array(maskflags_hard, dtype='i8')
 
-        w=es_sdsspy.stomp_maps.quad_check(maskflags)
-        print("    Keeping %d/%d" % (w.size,ra.size))
+        if 'rmax' in types:
+            print("    Getting basic quadrant maskflags at full rmax: %0.2f" % self['rmax'])
+            print("    radii are in range [%f,%f]" % (radius.min(), radius.max()))
+            maskflags = self.basic_map.Contains(ra, dec, "eq", radius)
+            w=es_sdsspy.stomp_maps.quad_check(maskflags)
+            print("    Keeping %d/%d quad" % (w.size,ra.size))
 
-        in_tycho = numpy.array(in_tycho, dtype='i8')
-        maskflags = numpy.array(maskflags, dtype='i8')
+            maskflags = numpy.array(maskflags, dtype='i8')
 
-        return in_tycho, maskflags
+        out={}
+        if in_tycho is not None:
+            out['in_tycho'] = in_tycho
+        if maskflags_hard is not None:
+            out['maskflags_hard'] = maskflags_hard
+        if maskflags is not None:
+            out['maskflags'] = maskflags
+
+        return out
 
 
     def original_dir(self):

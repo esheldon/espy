@@ -165,7 +165,8 @@ def read_boss_geometry():
 
     return bs
 
-def plot_boss_geometry(color=None, colorwheel=None, plt=None, width=1, show=True):
+def plot_boss_geometry(color=None, colorwheel=None, plt=None, width=1, show=True,
+                       region=None):
     """
     Plot the boundaries in the boss_survey.par file
     """
@@ -195,6 +196,19 @@ def plot_boss_geometry(color=None, colorwheel=None, plt=None, width=1, show=True
         c = eu.plotting.bbox( b['clambdaMin'], b['clambdaMax'], b['cetaMin'], b['cetaMax'],
                              color=color, width=width)
         plt.add(c)
+
+    if region == 'ngc':
+        plt.yrange = [-40.,50.]
+        plt.xrange = [-80.,80.]
+    elif region == 'sgc':
+        plt.yrange = [105.,165.]
+        plt.xrange = [-60.,60.]
+    else:
+        plt.yrange = [-40.,165.]
+        plt.xrange = [-80.,80.]
+
+
+    plt.aspect_ratio = (plt.yrange[1]-plt.yrange[0])/(plt.xrange[1]-plt.xrange[0])
 
     if show:
         plt.show()
