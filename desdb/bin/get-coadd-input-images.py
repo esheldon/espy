@@ -6,11 +6,8 @@ single epoch 'red' images that were used as input, and write out a json file
 with the coadd and red image info.  The json file is keyed by coadd_id.
 Release is something like 'dr012'
 
-The results are also written to stderr as you go so you can monitor progress.
-
-columns will be
-
-coadd_id,red_id,filetype,run,exposurename,band,ccd,filename
+Because the json file can't be written until the end, the results are also
+written to stderr along the way to show progress.
 
 """
 import os
