@@ -28,20 +28,7 @@ def main():
 
     table=args[0].strip()
     c=desdb.Connection()
-    s=c.conn.createStatement()
-    rset=s.executeQuery('select * from %s where rownum = %s' % (table,rownum))
-
-    meta = rset.getMetaData()
-    ncols = meta.getColumnCount()
-
-    rset.next()
-    for col in xrange(1,ncols+1): 
-        print   meta.getColumnName(col),\
-                meta.getColumnType(col),\
-                meta.getColumnTypeName(col),\
-                meta.getPrecision(col),\
-                meta.getScale(col),\
-                rset.getString(col)
+    c.describe(table)
 
 if __name__=='__main__':
     main()

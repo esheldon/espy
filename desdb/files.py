@@ -12,8 +12,8 @@ def des_rootdir():
         raise ValueError("The DESDATA environment variable is not set")
     return os.environ['DESDATA']
 
-def des_web_rootdir():
-    return 'https://desar.cosmology.illinois.edu/DESFiles/desardata/DES'
+def des_net_rootdir():
+    return 'ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES'
 
 class DESFiles:
     """
@@ -28,22 +28,18 @@ class DESFiles:
         The root for filenames.  Defaults to the DESDATA environment
         variable.
 
-        If you send root='web', the following is used:
-            https://desar.cosmology.illinois.edu/DESFiles/desardata/DES
-
+        If you send root='net', the following is used:
+            ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES
 
     Notes
     -----
-
     - Currently / is used for all path separators.  Good on unix and the web.
-    - Because jython is stuck in the dark ages, we can't use nice template
-    strings with curly bracked named specifiers.
     
     """
     def __init__(self, root=None):
 
-        if root == 'web':
-            self._root = des_web_rootdir()
+        if root == 'net':
+            self._root = des_net_rootdir()
         elif root is None:
             self._root = des_rootdir()
         else:

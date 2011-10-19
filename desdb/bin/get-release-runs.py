@@ -8,9 +8,8 @@ to see red runs or coadd runs for instance.
 
 import os
 import sys
-from desdb import desdb
-from desdb import files
-import csv
+from sys import stdout,stderr
+import desdb
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
@@ -18,6 +17,8 @@ parser.add_option("-u","--user",default=None, help="Username.")
 parser.add_option("-p","--password",default=None, help="Password.")
 parser.add_option("-s","--show", action='store_true', help="Show the query on stderr.")
 parser.add_option("--url", action='store_true', help="Show the URL for this run.")
+parser.add_option("-f","--format",default='csv',help=("File format for output.  csv, json, "
+                                                      "json-pretty. Default %default."))
 
 
 def main():
@@ -30,42 +31,44 @@ def main():
 
     release=args[0].strip()
     filetype=args[1].strip()
-    show=options.show
-    url=options.url
 
     if filetype == 'red':
         extra='order by nite'
     elif filetype == 'coadd':
         extra='order by tilename'
     else:
-        dtype=None
         extra='order by run'
 
+    base=desdb.files.des_net_rootdir()
 
-    # ugh, jython is still on 2.5, no nice string formatting
     query="""
     select
-        distinct(run),nite,tilename
+        distinct(run),
+        '{base}/' || '{filetype}/' || run || '/{filetype}' as url,
+        '$DESDATA/' || '{filetype}/' || run || '/{filetype}' as path,
+        nite,
+        tilename
     from
-        %s_files
+        {release}_files
     where
-        filetype='%s' %s\n""" % (release,filetype,extra)
+        filetype='{filetype}' {extra}\n""".format(base=base,
+                                                  release=release,
+                                                  filetype=filetype,
+                                                  extra=extra)
 
     conn=desdb.Connection(user=options.user,password=options.password)
 
-    res = conn.execute(query,show=show)
-
-    if url:
-        dtype='%s_run' % filetype
-        df=files.DESFiles(root='web')
-        urls = [df.url(dtype,run=r['run']) for r in res]
-        print 'run,url'
-        for i in xrange(len(res)):
-            print "%s,%s" % (res[i]['run'],urls[i])
+    if options.url:
+        conn.quickWrite(query,type=options.format,show=options.show)
     else:
-        print 'run'
-        for r in res:
-            print r['run']
+        res=conn.quick(query,show=options.show)
+        if options.format == 'csv':
+            print 'run'
+            for r in res:
+                print r['run']
+        else:
+            res=[{'run':r['run']} for r in res]
+            desdb.desdb.write_json(res,options.format) 
 
 
 if __name__=="__main__":

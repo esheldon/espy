@@ -4,131 +4,67 @@ Based heavily on code in the DES trivialAccess.py
 
 import os
 import sys
-from sys import stderr
+from sys import stdout,stderr
 import csv
 
-have_cxo=False
-have_java=False
-try:
-    import cx_Oracle as cxo
-    have_cxo=True
-except:
-    if sys.subversion[0] == 'Jython':
-        try:
-            from java.sql import DriverManager
-            have_java=True
-        except:
-            print 'Could not load either cx_Oracle or java DriverManager library'
-    else:
-        print 'Could not import cx_Oracle'
+import cx_Oracle
 
-# host/port/dbname
-if have_cxo:
-    #_url_template = "user/pass@leovip148.ncsa.uiuc.edu:1521/desoper
-    _url_template = "%s:%s%s/
-elif have_java:
-    _url_template =  "jdbc:oracle:thin://@%s:%s/%s"
+import json
+try:
+    import cjson
+    have_cjson=True
+except:
+    have_cjson=False
+
+_url_template = "%s:%s/%s"
+
+_defhost = 'leovip148.ncsa.uiuc.edu'
+_defport = 1521
+_defdb = 'desoper'
 
 _release_map={'dc6b':'dr012', 'dr012':'dr012'}
-
 
 def dataset2release(dataset):
     if dataset not in _release_map:
         raise ValueError("Unknown data set '%s'" % dataset)
     return _release_map[dataset]
 
-class Connection:
-    def __init__(self, user=None, password=None, host='leovip148.ncsa.uiuc.edu', 
-                 port=1521, dbname='desoper', row_prefetch=10000):
-        self.host=host
-        self.port=port
-        self.dbname=dbname
-        self.row_prefetch=row_prefetch
+def connect(**keys):
+    return Connection(**keys)
 
-        self.user=None
-        self.url=None
-        self.conn=None
-
-        self._connect(user=user, password=password)
-
-    def __repr__(self):
-        rep=["DESDB Connection"]
-        indent=' '*4
-        rep.append("%surl: %s" % (indent,self.url))
-        rep.append("%suser: %s" % (indent,self.user))
-        rep.append("%sprefetch: %d" % (indent,self.row_prefetch))
-
-        return '\n'.join(rep)
-
-    def _connect(self, user=None, password=None):
-        if self.conn is not None:
-            raise RuntimeError("You are already connected")
+class Connection(cx_Oracle.Connection):
+    def __init__(self, user=None, password=None, host=_defhost,
+                 port=_defport, dbname=_defdb):
 
         if user is not None or password is not None:
             if user is None or password is None:
                 raise ValueError("Send either both or neither of user password")
         else:
             f=os.path.join( os.environ['HOME'], '.desdb_pass')
+            if not os.path.exists(f):
+                raise ValueError("Send user=,password= or create %f" % f)
+
             data=open(f).readlines()
             if len(data) != 2:
                 raise ValueError("Expected first line user second line pass in %s" % f)
             user=data[0].strip()
             password=data[1].strip()
 
-        self.user=user                
+        self._host=host
+        self._port=port
+        self._dbname=dbname
+        url = _url_template % (self._host, self._port, self._dbname)
 
+        cx_Oracle.Connection.__init__(self,user,password,url)
 
-        self.url = _url_template % (self.host, self.port, self.dbname)
+    def __repr__(self):
+        rep=["DESDB Connection"]
+        indent=' '*4
+        rep.append("%s%s@%s" % (indent,self.username,self.dsn))
 
-        if have_cxo:
-            self.conn = cxo.connect(self.user, self.password, self.url)
-        elif have_java:
-            self.conn =  DriverManager.getConnection(self.url, user, password)
-            self.conn.setDefaultRowPrefetch(self.row_prefetch) 
-        else:
-            print 'Neither cx_Oracle or java found'
-            self.conn=None
+        return '\n'.join(rep)
 
-    def _extract_rset_value(self, rset, meta, colnum, strings=False):
-        """
-        Extract a value.  Default to string for non-numeric types
-        """
-        if strings:
-            return rset.getString(colnum)
-        dtype = meta.getColumnTypeName(colnum)
-        if 'BINARY' in dtype:
-            val =  rset.getDouble(colnum)
-        elif dtype == 'NUMBER':
-            scale = meta.getScale(colnum)
-            if scale > 0:
-                val =  rset.getDouble(colnum)
-            else:
-                val =  rset.getLong(colnum)
-        else:
-            # this includes varchar,varchar2,nchar,nchar2
-            # dates, etc
-            val = rset.getString(colnum)
-        return val
-
-    def _extract_results(self, rset, lists=False, strings=False):
-        meta = rset.getMetaData()
-        ncol = meta.getColumnCount()
-
-        res=[]
-        while rset.next():
-            if lists:
-                this=[]
-                for colnum in xrange(1,ncol+1):
-                    this.append( self._extract_rset_value(rset,meta,colnum,strings=strings) )
-            else:
-                this={}
-                for colnum in xrange(1,ncol+1):
-                    name = meta.getColumnName(colnum).lower()
-                    this[name] = self._extract_rset_value(rset,meta,colnum,strings=strings)
-            res.append(this)
-        return res
-
-    def execute(self, query, lists=False, strings=False, show=False):
+    def quick(self, query, lists=False, strings=False, array=False, show=False):
         """
         Execute the query and return the result.
 
@@ -145,17 +81,24 @@ class Connection:
         show: bool, optional
             If True, print the query to stderr
         """
-        stmt = self.conn.createStatement()
+
+        curs=self.cursor()
+
         if show: 
             stderr.write(query)
+        curs.execute(query)
 
-        rset = stmt.executeQuery(query)
-        res = self._extract_results(rset, lists=lists, strings=strings)
+        if lists:
+            res = curs.fetchall()
+        elif array:
+            raise ValueError("Implement array conversion")
+        else:
+            res = cursor2dictlist(curs)
 
-        stmt.close()
+        curs.close()
         return res
 
-    def executeWrite(self, query, type='csv', header='names', file=sys.stdout, show=False):
+    def quickWrite(self, query, type='csv', header='names', file=sys.stdout, show=False):
         """
         Execute the query and print the results.
 
@@ -175,110 +118,179 @@ class Connection:
             If True, print the query to stderr
         """
 
-        stmt = self.conn.createStatement()
+        curs=self.cursor()
+
         if show: 
             stderr.write(query)
+        curs.execute(query)
 
-        rset = stmt.executeQuery(query)
+        print_cursor(curs, type=type, header=header, file=file)
+        curs.close()
 
-        rw=ResultWriter(rset)
-        rw.write(type=type, header=header, file=file)
-        stmt.close()
-
-def write_result(rset, type='csv', header='names', file=sys.stdout):
-    rw=ResultWriter(rset)
-    rw.write(type=type, file=file, header='names')
-
-class ResultWriter:
-    """
-    You cannot inherit from an oracle result set for some reason.
-    So this encapsulates and tries to implement as many things
-    as possible.
-    """
-
-    def __init__(self, rset):
-        self.rset=rset
-
-    def __repr__(self):
-        meta = self.rset.getMetaData()
-        ncol = meta.getColumnCount()
-
-        rep=['ResultSet']
-
-        cspacing = ' '*4
-        nspace = 4
-        nname = 15
-        ntype = 15
-        format = "%s%-" + str(nname) + "s %" + str(ntype) + "s"
-        pformat = "%s%-" + str(nname) + "s\n %" + str(nspace+nname+ntype) + "s"
-
-        indent=' '*4
-        for c in xrange(ncol):
-            name = meta.getColumnLabel(c+1).lower()
-            dtype = meta.getColumnTypeName(c+1).lower()
-
-            if len(name) > nname:
-                f = pformat
-            else:
-                f = format
-
-            crep = f % (indent,name,dtype)
-            rep.append(crep)
-
-        return '\n'.join(rep)
-
-    def write(self, type='csv', header='names', file=sys.stdout):
+    def describe(self, table, show=False):
         """
-        Print out a result set.  Need to figure out how
+        Print a simple description of the input table.
+        """
+        q="""
+            SELECT
+                column_name, 
+                CAST(data_type as VARCHAR2(15)) as type, 
+                CAST(data_length as VARCHAR(6)) as length, 
+                CAST(data_precision as VARCHAR(9)) as precision, 
+                CAST(data_scale as VARCHAR(5)) as scale, 
+                CAST(nullable as VARCHAR(8)) as nullable
+            FROM
+                all_tab_columns
+            WHERE
+                table_name = '%s'
+                AND column_name <> 'TNAME'
+                AND column_name <> 'CREATOR'
+                AND column_name <> 'TABLETYPE'
+                AND column_name <> 'REMARKS'
+            ORDER BY 
+                column_id
+        """
+
+        q = q % (table.upper(),)
+
+        if show:
+            stderr.write(q)
+
+        curs = self.cursor()
+        curs.execute(q) 
+        print_cursor(curs,type='pretty')
+
+        # now indexes
+        q = """
+            select
+                index_name, column_name, column_position, descend
+            from
+                all_ind_columns
+            where
+                table_name = '%s' order by index_name, column_position
+        """ % table.upper()
+
+        curs.execute(q)
+        print_cursor(curs, type='pretty')
+
+        curs.close()
+
+
+def cursor2dictlist(curs, lower=True):
+    if curs is None:
+        return None
+
+    keys=[]
+    for d in curs.description:
+        key=d[0]
+        if lower:
+            key=key.lower()
+        keys.append(key)
+        
+    output=[]
+    for row in curs:
+        tmp={}
+        for i,val in enumerate(row):
+            tmp[keys[i]] = val    
+        output.append(tmp)
+
+    return output
+
+def print_cursor(curs, type='csv', header='names', file=sys.stdout):
+    rw=CursorWriter(type=type, file=file, header='names')
+    rw.write(curs)
+
+def write_json(obj, type):
+    if type != 'json-pretty' and have_cjson:
+        jstring = cjson.encode(obj)
+        stdout.write(jstring)
+    else:
+        json.dump(obj, stdout, indent=1, separators=(',', ':'))
+
+
+class CursorWriter:
+    def __init__(self, file=sys.stdout, type='csv', header='names'):
+        self.type=type
+        self.header_type=header
+        self.file=file
+
+    def write(self, curs):
+        """
+        Write rows from the cursor set.  Need to figure out how
         to use a custom result set that can write itself
         """
 
-
-        if type == 'csv':
-            self.write_csv(header=header, file=file)
+        if self.type == 'csv':
+            self.write_csv(curs)
+        elif self.type == 'json' or self.type == 'json-pretty':
+            self.write_json(curs)
+        elif self.type == 'pretty':
+            self.write_pretty(curs)
         else:
             raise ValueError("only support csv writing for now")
 
+    def write_json(self, curs):
+        data = cursor2dictlist(curs)
+        write_json(data, self.type)
 
-    def write_csv(self, header='names', file=sys.stdout):
+    def write_csv(self, curs):
         """
-        informed by trivialAccess.py
+        Simple csv with, by default, a header
         """
 
-        meta = self.rset.getMetaData()
+        desc = curs.description
 
-        ncol = meta.getColumnCount()
+        ncol = len(desc)
         if 0 == ncol:
-            # no results,  exit, no header
             return
 
-
-        writer = csv.writer(sys.stdout,dialect='excel',
+        writer = csv.writer(self.file,dialect='excel',
                             quoting=csv.QUOTE_MINIMAL)
 
-        if header == 'names': 
-            hdr = get_column_names(meta)
+        if self.header_type == 'names': 
+            hdr = [d[0].lower() for d in desc]
             writer.writerow(hdr)
         else:
-            #descr = get_numpy_descr(meta)
             pass
 
         nresults = 0
-        while (self.rset.next()):
-            rowdata = []
-            for c in xrange(ncol): 
-                rowdata.append(self.rset.getString(c+1))
-            writer.writerow(rowdata)
+        for row in curs:
+            writer.writerow(row)
             nresults += 1
         return nresults
 
-def get_column_names(meta):
-    ncol = meta.getColumnCount()
-    hdr=[]
-    for c in xrange(ncol): 
-        name = meta.getColumnLabel(c+1).lower()
-        hdr.append(name)
-    return hdr
+    def write_pretty(self, curs, delim=' ', maxwidth=30):
+
+        # build up a format string
+        formats=[]
+        separators=[]
+        names=[]
+        for d in curs.description:
+            dsize = d[2]
+            if dsize > maxwidth:
+                dsize=maxwidth
+
+            formats.append('%'+repr(dsize)+'s')
+            names.append(d[0])
+            separators.append('-'*dsize)
+
+        format=delim.join(formats)
+
+        count = 0
+        for row in curs:
+            if ((count % 50) == 0):
+                self.file.write('\n')
+                self.file.write(format % tuple(names))
+                self.file.write('\n')
+                self.file.write(format % tuple(separators))
+                self.file.write('\n')
+
+            self.file.write(format % row)
+            self.file.write('\n')
+
+            count += 1
+
+
 
 def get_numpy_descr(meta):
     """
