@@ -1,9 +1,12 @@
 """
     %prog [options] release band
 
-Look up all coadd images for the requested release and bandpass, find the single
-epoch 'red' images that were used as input, and write out a csv with the coadd
-and red image info.  Release is something like 'dr012'
+Look up all coadd images for the requested release and bandpass, find the
+single epoch 'red' images that were used as input, and write out a json file
+with the coadd and red image info.  The json file is keyed by coadd_id.
+Release is something like 'dr012'
+
+The results are also written to stderr as you go so you can monitor progress.
 
 columns will be
 
@@ -13,8 +16,9 @@ coadd_id,red_id,filetype,run,exposurename,band,ccd,filename
 import os
 import sys
 from sys import stderr
-from desdb import desdb
+import desdb
 import csv
+import json
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
@@ -48,8 +52,10 @@ def main():
 
     conn=desdb.Connection(user=options.user,password=options.password)
 
-    res = desdb.execute(query, show=verbose)
+    res = conn.quick(query, show=verbose)
     first=True
+
+    json_output=[]
     for iddict in res:
         coadd_id = iddict['id']
         query="""
@@ -61,9 +67,8 @@ def main():
             coadd_src.coadd_imageid = %d
             AND coadd_src.src_imageid = image.id\n""" % coadd_id
 
-        res = desdb.execute(query, show=verbose)
+        res = conn.quick(query, show=verbose)
 
-        idlist = [] 
         idlist = [str(d['parentid']) for d in res]
 
         ftype=None
@@ -83,7 +88,7 @@ def main():
             WHERE
                 id in (%s)\n""" % idcsv
 
-            res = desdb.execute(query, show=verbose)
+            res = conn.quick(query, show=verbose)
             idlist = [str(d['parentid']) for d in res]
             ftype = res[0]['imagetype']
             
@@ -118,9 +123,14 @@ def main():
         else:
             header=False
 
-        desdb.executeWrite(query, show=verbose, header=header)
+
+        res = conn.quick(query, show=verbose, header=header)
+        json_output[coadd_id] = res
+
 
         first=False
+    
+    json.dump(json_output, stdout, indent=1, separators=(',', ':'))
 
 if __name__=="__main__":
     main()
