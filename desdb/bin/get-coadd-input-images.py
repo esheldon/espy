@@ -122,7 +122,7 @@ def main():
         query="""
         select
             %s as coadd_id,
-            id,
+            id as red_id,
             '$DESDATA/' || path as path
         from
             %s_files
@@ -136,7 +136,7 @@ def main():
 
         # write to stderr so we can see progress
         #keywords=['coadd_id','id','path','url']
-        keywords=['coadd_id','id','path']
+        keywords=['coadd_id','red_id','path']
         w=csv.DictWriter(stderr,keywords)
         stderr.write(','.join(keywords))
         stderr.write('\n')

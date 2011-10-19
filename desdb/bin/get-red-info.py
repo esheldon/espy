@@ -1,13 +1,14 @@
 """
     %prog [options] release band
 
-Look up all coadd images in the input release and write out their file ids,
-along with some other info. A release id is something like 'dr012' (dc6b)
+Look up all red catalogs and images in the input release and write out their
+file ids, path info, and external url.  A release id is something like 'dr012'
+(dc6b)
 
 """
 import os
 import sys
-from sys import stdout
+from sys import stderr,stdout
 import desdb
 
 try:
@@ -38,25 +39,29 @@ def main():
     band=args[1].strip()
 
     net_rootdir=desdb.files.des_net_rootdir()
+
+    # Note the kludge on filename to remove dups associated with standard star
+    # fields
     query="""
     select
-        id,
-        filetype,
-        run,
-        tilename,
-        band,
-        filename,
-        '$DESDATA/' || path as path,
-        '%s/' || path as url
+        im.id as image_id,
+        '$DESDATA/' || im.path as image_path,
+        '%(netroot)s/' || im.path as image_url,
+        cat.id as cat_id,
+        '$DESDATA/' || cat.path as cat_path,
+        '%(netroot)s/' || cat.path as cat_url
     from
-        %s_files
+        %(release)s_files cat,
+        %(release)s_files im
     where
-        filetype='coadd'
-        and band = '%s'
-        order by tilename\n""" % (net_rootdir,release,band)
+        cat.filetype='red_cat'
+        and cat.band='%(band)s'
+        and im.filename not like 'decam%%-0-%%.fits%%'
+        and cat.catalog_parentid = im.id
+    order by 
+        cat_id\n""" % {'netroot':net_rootdir,'release':release,'band':band}
 
     conn=desdb.Connection(user=options.user,password=options.password)
-
     conn.quickWrite(query,type=options.format,show=options.show)
 
 if __name__=="__main__":
