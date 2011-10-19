@@ -47,13 +47,15 @@ def main():
         band,
         filename,
         '$DESDATA/' || path as path,
-        '%s/' || path as url
+        '%(netroot)s/' || path as url
     from
-        %s_files
+        %(release)s_files
     where
         filetype='coadd'
-        and band = '%s'
-        order by tilename\n""" % (net_rootdir,release,band)
+        and band = '%(band)s'
+        order by tilename\n""" % {'netroot':net_rootdir,
+                                  'release':release,
+                                  'band':band}
 
     conn=desdb.Connection(user=options.user,password=options.password)
 

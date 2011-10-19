@@ -17,8 +17,8 @@ parser.add_option("-u","--user",default=None, help="Username.")
 parser.add_option("-p","--password",default=None, help="Password.")
 parser.add_option("-s","--show", action='store_true', help="Show the query on stderr.")
 parser.add_option("--url", action='store_true', help="Show the URL for this run.")
-parser.add_option("-f","--format",default='csv',help=("File format for output.  csv, json, "
-                                                      "json-pretty. Default %default."))
+parser.add_option("-f","--format",default='json-pretty',help=("File format for output.  csv, json, "
+                                                              "json-pretty. Default %default."))
 
 
 def main():
@@ -44,17 +44,17 @@ def main():
     query="""
     select
         distinct(run),
-        '{base}/' || '{filetype}/' || run || '/{filetype}' as url,
-        '$DESDATA/' || '{filetype}/' || run || '/{filetype}' as path,
+        '%(base)s/' || '%(filetype)s/' || run || '/%(filetype)s' as url,
+        '$DESDATA/' || '%(filetype)s/' || run || '/%(filetype)s' as path,
         nite,
         tilename
     from
-        {release}_files
+        %(release)s_files
     where
-        filetype='{filetype}' {extra}\n""".format(base=base,
-                                                  release=release,
-                                                  filetype=filetype,
-                                                  extra=extra)
+        filetype='%(filetype)s' %(extra)s\n""" % {'base':base,
+                                                  'release':release,
+                                                  'filetype':filetype,
+                                                  'extra':extra}
 
     conn=desdb.Connection(user=options.user,password=options.password)
 
