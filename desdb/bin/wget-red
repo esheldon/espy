@@ -12,6 +12,19 @@ fi
 red_run="$1"
 band=$2
 
+echo "
+downloading:
+    red run: ${red_run}
+    band:    ${band}
+"
+
+echo "changing to DESDATA dir $DESDATA"
+cd $DESDATA
+if [[ "$?" != "0" ]]; then
+    echo "Failed to chdir to DESDATA: $DESDATA"
+    exit 45
+fi
+
 # No following slash on URL or it won't work!
 # use -nv for non-verbose 
 wget                        \
