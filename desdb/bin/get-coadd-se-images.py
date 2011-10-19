@@ -15,7 +15,7 @@ coadd_id,red_id,filetype,run,exposurename,band,ccd,filename
 """
 import os
 import sys
-from sys import stderr
+from sys import stdout,stderr
 import desdb
 import csv
 import json
@@ -55,7 +55,8 @@ def main():
     res = conn.quick(query, show=verbose)
     first=True
 
-    json_output=[]
+    json_output={}
+
     for iddict in res:
         coadd_id = iddict['id']
         query="""
@@ -117,17 +118,32 @@ def main():
             id in (%s)
         """ % (coadd_id,idcsv)
 
+        #net_rootdir=desdb.files.des_net_rootdir()
+        query="""
+        select
+            %s as coadd_id,
+            id,
+            '$DESDATA/' || path as path
+        from
+            %s_files
+        where
+            id in (%s)
+        order by
+            id\n""" % (coadd_id, release, idcsv)
+            
 
-        if first:
-            header='names'
-        else:
-            header=False
+        res = conn.quick(query, show=verbose)
 
+        # write to stderr so we can see progress
+        #keywords=['coadd_id','id','path','url']
+        keywords=['coadd_id','id','path']
+        w=csv.DictWriter(stderr,keywords)
+        stderr.write(','.join(keywords))
+        stderr.write('\n')
+        for r in res:
+            w.writerow(r)
 
-        res = conn.quick(query, show=verbose, header=header)
         json_output[coadd_id] = res
-
-
         first=False
     
     json.dump(json_output, stdout, indent=1, separators=(',', ':'))

@@ -216,8 +216,10 @@ class CursorWriter:
 
     def write(self, curs):
         """
-        Write rows from the cursor set.  Need to figure out how
-        to use a custom result set that can write itself
+
+        Write rows from the cursor or list of dictionaries set.  Need to figure
+        out how to use a custom result set that can write itself
+
         """
 
         if self.type == 'csv':
