@@ -1,0 +1,27 @@
+#!/bin/bash
+
+function usage_and_exit {
+    echo "usage: wget-red red_run band"
+    exit 45
+}
+
+if [[ $# -lt 2 ]]; then
+    usage_and_exit
+fi
+
+red_run="$1"
+band=$2
+
+# No following slash on URL or it won't work!
+# use -nv for non-verbose 
+wget                        \
+    -c                      \
+    --mirror                \
+    --progress=dot:mega     \
+    -nH                     \
+    --cut-dirs=3            \
+    --no-parent             \
+    --tries 50              \
+    --accept "*-${band}-*[0-9].fits.fz,*-${band}-*_cat.fits" \
+    ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES/red/${red_run}/red
+
