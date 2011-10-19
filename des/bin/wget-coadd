@@ -1,4 +1,7 @@
 #!/bin/bash
+# Download DES coadd images and catalogs for a given run and band.
+# Data will be copied to $DESDATA/red/${red_run}/red and $DESDATA
+# must be set.
 
 function usage_and_exit {
     echo "usage: wget-red coadd_run band"
@@ -8,6 +11,10 @@ function usage_and_exit {
 if [[ $# -lt 2 ]]; then
     usage_and_exit
 fi
+if [[ ${DESDATA:+1} == "" ]]; then
+    echo "The DESDATA environment variable must be set"
+    exit 45
+fi
 
 coadd_run="$1"
 band="$2"
@@ -15,10 +22,11 @@ band="$2"
 echo "
 downloading:
     coadd run: ${coadd_run}
-    band:    ${band}
+    band:      ${band}
+    DESDATA:   ${DESDATA}
 "
 
-echo "changing to DESDATA dir $DESDATA"
+echo "chdir to DESDATA dir $DESDATA"
 cd $DESDATA
 if [[ "$?" != "0" ]]; then
     echo "Failed to chdir to DESDATA: $DESDATA"

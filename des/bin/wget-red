@@ -1,4 +1,7 @@
 #!/bin/bash
+# Download DES red images and catalogs for a given run and band.  
+# Data will be copied to $DESDATA/red/${red_run}/red and $DESDATA
+# must be set.
 
 function usage_and_exit {
     echo "usage: wget-red red_run band"
@@ -8,6 +11,10 @@ function usage_and_exit {
 if [[ $# -lt 2 ]]; then
     usage_and_exit
 fi
+if [[ ${DESDATA:+1} == "" ]]; then
+    echo "The DESDATA environment variable must be set"
+    exit 45
+fi
 
 red_run="$1"
 band=$2
@@ -16,9 +23,10 @@ echo "
 downloading:
     red run: ${red_run}
     band:    ${band}
+    DESDATA: ${DESDATA}
 "
 
-echo "changing to DESDATA dir $DESDATA"
+echo "chdir to DESDATA dir $DESDATA"
 cd $DESDATA
 if [[ "$?" != "0" ]]; then
     echo "Failed to chdir to DESDATA: $DESDATA"
@@ -37,4 +45,3 @@ wget                        \
     --tries 50              \
     --accept "*-${band}-*[0-9].fits.fz,*-${band}-*_cat.fits" \
     ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES/red/${red_run}/red
-
