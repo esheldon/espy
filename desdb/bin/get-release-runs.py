@@ -1,8 +1,10 @@
 """
     %prog [options] release filetype
 
-Print all runs for input release and file type. You might want
-to see red runs or coadd runs for instance.
+Print all runs for input release and file type. You might want to see red runs
+or coadd runs for instance.  By default the output is one run per line. If you
+request the urls, either a csv or json file are written depending on the
+requested format.
 
 """
 
@@ -17,8 +19,8 @@ parser.add_option("-u","--user",default=None, help="Username.")
 parser.add_option("-p","--password",default=None, help="Password.")
 parser.add_option("-s","--show", action='store_true', help="Show the query on stderr.")
 parser.add_option("--url", action='store_true', help="Show the URL for this run.")
-parser.add_option("-f","--format",default='json-pretty',help=("File format for output.  csv, json, "
-                                                              "json-pretty. Default %default."))
+parser.add_option("-f","--format",default='json',help=("File format when outputting urls.  csv, json. "
+                                                              "Default %default."))
 
 
 def main():
@@ -62,13 +64,8 @@ def main():
         conn.quickWrite(query,type=options.format,show=options.show)
     else:
         res=conn.quick(query,show=options.show)
-        if options.format == 'csv':
-            print 'run'
-            for r in res:
-                print r['run']
-        else:
-            res=[{'run':r['run']} for r in res]
-            desdb.desdb.write_json(res,options.format) 
+        for r in res:
+            print r['run']
 
 
 if __name__=="__main__":
