@@ -1,0 +1,75 @@
+#!/bin/bash
+# Download DES red or coadd files. 
+#
+#  usage:  wget-des type run band
+#
+# type is the file type, "red" or "coadd"
+#
+# Data are copied from
+#
+#    ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES/{type}/${run}/{type}
+#
+# Data are copied to 
+#
+#   $DESDATA/{type}/${run}/{type} 
+#
+# $DESDATA must be set.
+
+function usage_and_exit {
+    echo "usage: wget-des type run band"
+    echo "  type should be red or coadd"
+    exit 45
+}
+
+if [[ $# -lt 3 ]]; then
+    usage_and_exit
+fi
+if [[ ${DESDATA:+1} == "" ]]; then
+    echo "The DESDATA environment variable must be set"
+    exit 45
+fi
+
+type="$1"
+run="$2"
+band=$3
+
+case $type in
+    "red") 
+        accept="*-${band}-*[0-9].fits.fz,*-${band}-*_cat.fits"
+        ;;
+    "coadd")
+        accept="*${band}.fits.fz,*${band}_cat.fits"
+        ;;
+      *) usage_and_exit
+        ;;
+esac
+
+url="ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES/${type}/${run}/${type}"
+echo "
+    type:    ${type}
+    run:     ${run}
+    band:    ${band}
+    url:     ${url}
+    DESDATA: ${DESDATA}
+"
+
+echo "chdir to DESDATA dir $DESDATA"
+cd $DESDATA
+if [[ "$?" != "0" ]]; then
+    echo "Failed to chdir to DESDATA: $DESDATA"
+    exit 45
+fi
+
+# No following slash on URL or it won't work!
+# use -nv for non-verbose 
+#    --progress=dot:mega     \
+wget                        \
+    -c                      \
+    -nv                     \
+    --mirror                \
+    -nH                     \
+    --cut-dirs=3            \
+    --no-parent             \
+    --tries 50              \
+    --accept "$accept"      \
+    "$url"

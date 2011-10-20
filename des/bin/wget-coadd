@@ -38,7 +38,7 @@ fi
 wget                        \
     -c                      \
     --mirror                \
-    --progress=dot:mega     \
+    -nv                     \
     -nH                     \
     --cut-dirs=3            \
     --no-parent             \

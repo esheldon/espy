@@ -35,10 +35,11 @@ fi
 
 # No following slash on URL or it won't work!
 # use -nv for non-verbose 
+#    --progress=dot:mega     \
 wget                        \
     -c                      \
+    -nv                     \
     --mirror                \
-    --progress=dot:mega     \
     -nH                     \
     --cut-dirs=3            \
     --no-parent             \

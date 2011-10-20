@@ -42,7 +42,7 @@ class Connection(cx_Oracle.Connection):
         else:
             f=os.path.join( os.environ['HOME'], '.desdb_pass')
             if not os.path.exists(f):
-                raise ValueError("Send user=,password= or create %f" % f)
+                raise ValueError("Send user=,password= or create %s" % f)
 
             data=open(f).readlines()
             if len(data) != 2:

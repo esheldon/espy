@@ -1,0 +1,15 @@
+#!/bin/bash
+# the resume feature doesn't seem to work because
+# the des website doesn't support it.  Not sure how
+# to proceed, maybe wget is our only option?
+
+while read remote local; do
+    # expand $DESDATA
+    local=$(echo $local | sed "s:\$DESDATA:$DESDATA:g")
+
+    echo "$remote $local"
+
+    # -C - means to retry based on existing data if file exists
+    curl -C - -x $http_proxy --create-dirs -o "$local" "$remote"
+done
+
