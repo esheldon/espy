@@ -32,7 +32,7 @@ parser.add_option("--url",action='store_true',
 parser.add_option("--noexpand",action='store_true', 
                   help="Don't expand the $DESDATA environment variable.")
 parser.add_option("-o","--orderby",default=None, 
-                  help="A field by which to order the results.")
+                  help="A csv list of fields by which to order the results.")
 
 def main():
 
