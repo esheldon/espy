@@ -7,26 +7,65 @@
 #
 # Data are copied from
 #
-#    ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES/{type}/${run}/{type}
+#    ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES/{type}/${run}/{type}/...
 #
-# Data are copied to 
+# By default, data are copied to 
 #
-#   $DESDATA/{type}/${run}/{type} 
+#   $DESDATA/{type}/${run}/{type}/...
+# 
+# But an alternative prefix to then environment variable $DESDATA can be
+# specified with the -d keyword
 #
-# $DESDATA must be set.
 
 function usage_and_exit {
-    echo "usage: wget-des type run band"
-    echo "  type should be red or coadd"
+    echo "
+Usage 
+        wget-des type run band
+
+Description
+
+        Download images and catalogs for the input file type, run identifier
+        and band.  The data are, by default, downloaded to 
+        
+            \$DESDATA/{type}/{run}/{type} 
+        
+        where \$DESDATA is an environment variable pointing to the base of your
+        DES data area. You can send the -d keyword to specify an alternative
+        prefix to \$DESDATA.
+
+Arguments
+        type: either 'red' or 'coadd'
+        run:  The run identifier
+        band: g,r,i,z,Y
+Options
+        -d The download directory, defaults to \$DESDATA environment
+           variable.
+"
     exit 45
 }
 
 if [[ $# -lt 3 ]]; then
     usage_and_exit
 fi
-if [[ ${DESDATA:+1} == "" ]]; then
-    echo "The DESDATA environment variable must be set"
-    exit 45
+
+dir=""
+while getopts "n:d:" Option
+  do
+  case $Option in
+      n)  njobs=$OPTARG ;;
+      d)  dir=$OPTARG ;;
+      [?]) usage_and_exit ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+if [[ $dir == "" ]]; then
+    if [[ ${DESDATA:+1} == "" ]]; then
+        echo "Either send -d dir or make sure the DESDATA "
+        echo "environment variable is set"
+        exit 45
+    fi
+    dir="$DESDATA"
 fi
 
 type="$1"
@@ -46,17 +85,17 @@ esac
 
 url="ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES/${type}/${run}/${type}"
 echo "
-    type:    ${type}
-    run:     ${run}
-    band:    ${band}
-    url:     ${url}
-    DESDATA: ${DESDATA}
+    type:    $type
+    run:     $run
+    band:    $band
+    url:     $url
+    dir:     $dir
 "
 
-echo "chdir to DESDATA dir $DESDATA"
-cd $DESDATA
+echo "chdir to dir $dir"
+cd "$dir"
 if [[ "$?" != "0" ]]; then
-    echo "Failed to chdir to DESDATA: $DESDATA"
+    echo "Failed to chdir to: $dir"
     exit 45
 fi
 
