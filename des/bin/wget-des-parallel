@@ -1,0 +1,27 @@
+#!/bin/bash
+# run wget-des in parallel
+
+function usage_and_exit {
+    echo "wget-des-parallel [-n njobs] type band"
+    echo "  send the runlist on stdin"
+    echo "  njobs defaults to 3"
+    exit 45
+}
+if [[ $# -lt 2 ]]; then
+    usage_and_exit
+fi
+
+njobs=3
+while getopts "nh" Option
+  do
+  case $Option in
+      n)  njobs=$OPTARG ;;
+      [?]) usage_and_exit ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+type=$1
+band=$2
+
+cat - | parallel -u -j${njobs} "wget-des ${type} {} ${band}"
