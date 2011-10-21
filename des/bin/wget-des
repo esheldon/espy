@@ -61,6 +61,8 @@ if [[ "$?" != "0" ]]; then
 fi
 
 # No following slash on URL or it won't work!
+# -c means continue downloading, as opposed to name.1 business
+# -nH no host directories
 # use -nv for non-verbose 
 #    --progress=dot:mega     \
 wget                        \
