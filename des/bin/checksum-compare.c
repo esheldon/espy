@@ -27,6 +27,7 @@ struct filehash* load_files(char* filename, int master) {
     fobj=fopen(filename,"r");
     if (!fobj) {
         fprintf(stderr,"Could not open file: %s\n", filename);
+        exit(45);
     }
 
     while ((fscanf(fobj, "%s %s", md5sum, name) == 2)) {
