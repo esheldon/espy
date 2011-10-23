@@ -46,13 +46,10 @@ struct filehash* find_file(struct filehash* files, char* name) {
     // a single file reference, don't allocate
     struct filehash* afile=NULL;
     HASH_FIND_STR(files, name, afile);
-    if (afile==NULL) {
-        fprintf(stderr,"Did not find file: %s\n", name);
-    }
     return afile;
 }
 
-int compare_md5sums(struct filehash* master_files, struct filehash* test_files) {
+void compare_md5sums(struct filehash* master_files, struct filehash* test_files) {
     // run through the test files, see if contained in master list, see
     // if md5sums are the same
     // If a file is not found, say so
@@ -67,8 +64,8 @@ int compare_md5sums(struct filehash* master_files, struct filehash* test_files) 
             fprintf(stderr,"%s not found in master list\n", afile->name);
         } else {
             if (strcmp(afile->md5sum, master_file->md5sum) != 0) {
-                fprintf(stderr,"%s has different md5sum: %s instead of %s\n", 
-                               afile->md5sum, master_file->md5sum);
+                fprintf(stderr,"%s has md5sum %s instead of %s\n", 
+                               afile->name, afile->md5sum, master_file->md5sum);
             }
         }
     }
@@ -79,16 +76,9 @@ int main(int argc, char** argv) {
         exit(45);
     }
 
-    // this will represent our files
+    // these will represent our files/md5sums
     struct filehash* master_files=NULL;
     struct filehash* test_files=NULL;
-    // a single file reference, don't allocate
-    struct filehash* afile=NULL;
-
-    char* master_fname=argv[1];
-    char* test_fname=argv[2];
-    char test_name[FLEN], test_md5sum[MD5LEN];
-    int i=0;
 
     //fprintf(stderr,"Loading master file list\n");
     master_files = load_files(argv[1],1);
@@ -96,4 +86,6 @@ int main(int argc, char** argv) {
     test_files  = load_files(argv[2],0);
 
     compare_md5sums(master_files, test_files);
+
+    return 0;
 }
