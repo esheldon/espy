@@ -80,12 +80,9 @@ int main(int argc, char** argv) {
     struct filehash* master_files=NULL;
     struct filehash* test_files=NULL;
 
-    //fprintf(stderr,"Loading master file list\n");
     master_files = load_files(argv[1],1);
-    //fprintf(stderr,"Loading test file list\n");
-    test_files  = load_files(argv[2],0);
+    test_files   = load_files(argv[2],0);
 
     compare_md5sums(master_files, test_files);
-
     return 0;
 }
