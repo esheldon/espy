@@ -1,7 +1,7 @@
 #!/bin/bash
 # Download DES red or coadd files. 
 #
-#  usage:  wget-des type run band
+#  usage:  wget-des [-d dir] type run band
 #
 # type is the file type, "red" or "coadd"
 #
@@ -9,18 +9,21 @@
 #
 #    ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES/{type}/${run}/{type}/...
 #
-# By default, data are copied to 
+# By default, data are copied under the $DESDATA directory
 #
 #   $DESDATA/{type}/${run}/{type}/...
 # 
-# But an alternative prefix to then environment variable $DESDATA can be
+# But an alternative prefix to the environment variable $DESDATA can be
 # specified with the -d keyword
+#
+# Author
+#   Erin Sheldon, Brookhaven National Laboratory
 #
 
 function usage_and_exit {
     echo "
 Usage 
-        wget-des type run band
+        wget-des [-d dir] type run band
 
 Description
 

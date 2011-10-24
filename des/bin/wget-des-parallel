@@ -1,5 +1,9 @@
 #!/bin/bash
 # run wget-des in parallel
+#
+# Author
+#   Erin Sheldon, Brookhaven National Laboratory
+#
 
 function usage_and_exit {
     echo "
