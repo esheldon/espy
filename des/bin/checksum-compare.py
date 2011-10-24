@@ -1,3 +1,6 @@
+"""
+ Compare our checksum list on files to the master list
+"""
 import sys
 def load_files(fname, is_master=False):
     if is_master:

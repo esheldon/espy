@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+"""
+    %prog [options]
+
+Either send the file list as arguments or send the file list on standard input
+
+    fits-chksum-verify file1 file2 ..
+or
+    cat filelist | fits-chksum-verify
+or
+    fits-chksum-verify < filelist
+
+By default it verifies the first HDU with data.  Send -e/--ext to choose the
+ext or give a csv list of hdus.  Only numbered extensions are accepted.
+
+"""
+import sys
+from sys import stdin,stderr
+import fitsio
+
+from optparse import OptionParser
+parser=OptionParser(__doc__)
+parser.add_option("-e","--ext", default=0, 
+                  help="Which extension(s) to verify. Can be a csv list "
+                       "Default %default")
+parser.add_option("-v","--verbose", action='store_true',
+                  help="Print the current file to stderr")
+
+def main():
+    options,args = parser.parse_args(sys.argv[1:])
+
+    extnums=options.ext
+    if not isinstance(extnums,int):
+        extnums=[int(e) for e in extnums.split(',')]
+    else:
+        extnums=[extnums]
+
+    if len(args) == 0:
+        flist=stdin
+    else:
+        flist=args[:]
+
+    for line in flist:
+        fname=line.strip()
+
+        f=fitsio.FITS(fname)
+        for ext in extnums:
+            if options.verbose:
+                stderr.write('%s[%s]\n' % (fname,ext))
+            try:
+                f[ext].verify_checksum()
+            except:
+                print 'Checksum failed for %s[%s]: %s' % (fname,ext,sys.exc_info()[1])
+
+main()

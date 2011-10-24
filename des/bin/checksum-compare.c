@@ -1,3 +1,7 @@
+/*
+ * Compare our checksum list on files to the master list
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
