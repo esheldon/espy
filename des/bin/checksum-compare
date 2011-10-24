@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
  Compare our checksum list on files to the master list
 """
