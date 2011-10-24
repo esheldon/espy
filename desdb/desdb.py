@@ -9,7 +9,11 @@ import csv
 
 import cx_Oracle
 
-import json
+try:
+    import json
+    have_json=True
+except:
+    have_json=False
 try:
     import cjson
     have_cjson=True
@@ -201,6 +205,9 @@ def print_cursor(curs, type='csv', header='names', file=sys.stdout):
     rw.write(curs)
 
 def write_json(obj, type):
+    if not have_json and not have_cjson:
+        raise ValueError("don't have either json or cjson libraries")
+
     if type != 'json-pretty' and have_cjson:
         jstring = cjson.encode(obj)
         stdout.write(jstring)
