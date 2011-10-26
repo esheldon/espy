@@ -18,7 +18,10 @@ from esutil.stat import histogram
 
 import tempfile
 
-import recfile
+try:
+    import recfile
+except:
+    pass
 
 def plothist_weights(weights):
     import biggles
