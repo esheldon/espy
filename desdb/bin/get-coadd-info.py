@@ -46,8 +46,8 @@ def main():
         tilename,
         band,
         filename,
-        '$DESDATA/' || path as path,
-        '%(netroot)s/' || path as url
+        '$DESDATA/' || path as image_url,
+        '%(netroot)s/' || path as image_url_remote
     from
         %(release)s_files
     where

@@ -44,12 +44,15 @@ def main():
     # fields
     query="""
     select
+        im.file_exposure_name as exposurename,
+        im.band,
+        im.ccd,
         im.id as image_id,
-        '$DESDATA/' || im.path as image_path,
-        '%(netroot)s/' || im.path as image_url,
+        '$DESDATA/' || im.path as image_url,
+        '%(netroot)s/' || im.path as image_url_remote,
         cat.id as cat_id,
-        '$DESDATA/' || cat.path as cat_path,
-        '%(netroot)s/' || cat.path as cat_url
+        '$DESDATA/' || cat.path as cat_url,
+        '%(netroot)s/' || cat.path as cat_url_remote
     from
         %(release)s_files cat,
         %(release)s_files im
