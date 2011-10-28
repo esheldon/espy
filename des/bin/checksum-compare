@@ -1,25 +1,39 @@
 #!/usr/bin/env python
 """
-usage: checksum-compare master_list test_list
-    Compare checksum list to a master list
+    %prog [options] master_list test_list
+
+Compare a checksum list to a master list.  Defaults at bnl are mfirst=2
+tfirst=27
 """
 import sys
 
-if len(sys.argv) != 3:
-    print "usage: checksum-compare master_list test_list"
+from optparse import OptionParser
+parser=OptionParser(__doc__)
+parser.add_option("--mfirst",default=0, 
+                  help="First character to read from names in the master list.  Default %default")
+parser.add_option("--tfirst",default=0, 
+                  help="First character to read from names in the test list. Default %default")
+
+options,args = parser.parse_args(sys.argv[1:])
+
+if len(args) != 2:
+    parser.print_help()
     sys.exit(45)
 
+mfirst=int(options.mfirst)
+tfirst=int(options.tfirst)
+
 master={}
-with open(sys.argv[1]) as fobj:
+with open(args[0]) as fobj:
     for line in fobj:
         md5sum,name=line.split()
-        name=name[2:]
+        name=name[mfirst:]
         master[name]=md5sum
 
-with open(sys.argv[2]) as fobj:
+with open(args[1]) as fobj:
     for line in fobj:
         md5sum,name=line.split()
-        name=name[27:]
+        name=name[tfirst:]
 
         if name not in master:
             print '%s missing from master list' % name
