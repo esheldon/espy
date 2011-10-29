@@ -11,7 +11,7 @@ from optparse import OptionParser
 
 parser=OptionParser(__doc__)
 
-parser.add_option("-s","--sortby",default="avail", dest="sortby",
+parser.add_option("-s","--sortby",default="name", dest="sortby",
     help="Specify the sort ordering.  Default is '%default'.  Possibilities are 'size','used','avail','perc','name'. The secondary sort is by name, e.g. avail-name")
 
 
@@ -19,7 +19,9 @@ parser.add_option("-s","--sortby",default="avail", dest="sortby",
 # Some data
 #
 
+# we won't use the name node, astro0033
 NMACHINE=34
+MACHINE_SKIP=['astro0034']
 # How to perform the sorting
 sortmap = {'size':  {'sortf': lambda d: '%010d-%s' % (d['size'],d['machine']), 'reverse':False},
            'used':  {'sortf': lambda d: '%010d-%s' % (d['used'],d['machine']), 'reverse':False},
@@ -68,6 +70,8 @@ def dfall():
     for i in xrange(1,NMACHINE+1):
 
         machine = 'astro%04d' % i
+        if machine in MACHINE_SKIP:
+            continue
         command='ssh %s "df /data | grep data"' % machine
         si,so=os.popen2(command)
         df=so.read().strip()
