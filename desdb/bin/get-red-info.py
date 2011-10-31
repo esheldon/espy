@@ -59,7 +59,6 @@ def main():
     where
         cat.filetype='red_cat'
         and cat.band='%(band)s'
-        and im.filename not like 'decam%%-0-%%.fits%%'
         and cat.catalog_parentid = im.id
     order by 
         cat_id\n""" % {'netroot':net_rootdir,'release':release,'band':band}

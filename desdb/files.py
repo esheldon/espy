@@ -15,6 +15,107 @@ def des_rootdir():
 def des_net_rootdir():
     return 'ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES'
 
+
+class Coadd(dict):
+    def __init__(self, id=None, run=None, band=None, verbose=False, 
+                 user=None, password=None):
+        """
+        Construct either with
+            c=Coadd(id=id)
+        or with both
+            c=Coadd(run=run, band=band)
+
+        The tilename can be inferred (at least for now) from the run
+        """
+        if (id is None and (run is None or band is None)):
+            raise ValueError("Send id= or both run= and band=")
+        self['image_id'] = id
+        self['cat_id']   = None
+        self['run']      = run
+        self['band']     = band
+
+        self['verbose']=verbose
+
+        self.user=user
+        self.password=password
+
+    def image(self):
+        if not hasattr(self, 'image_url'):
+            self._get_info() 
+        return self.image_file
+    
+    def _get_info(self):
+            if self['image_id'] is not None:
+                self._get_info_by_id()
+            else:
+                self._get_info_by_runband()
+
+    def _get_info_by_runband(self):
+        import desdb
+        query="""
+        select
+            im.id as image_id,
+            cat.id as cat_id,
+            im.tilename,
+            '$DESDATA/' || im.path as image_url,
+            '%(netroot)s/' || im.path as image_url_remote,
+            '$DESDATA/' || cat.path as cat_url,
+            '%(netroot)s/' || cat.path as cat_url_remote
+        from
+            files cat,
+            files im
+        where
+            cat.filetype='coadd_cat'
+            and cat.catalog_parentid = im.id
+            and im.run = %(run)s
+            and im.band = %(band)s\n""" % {'netroot':des_net_rootdir(),
+                                           'run':self['run'],
+                                           'band':self['band']}
+
+        if self['verbose']:
+            show=True
+        else:
+            show=False
+        conn=desdb.Connection(user=self.user,password=self.password)
+        res=conn.quick(query,show=show)
+
+        for key in res[0]:
+            self[key] = res[0][key]
+
+    def _get_info_by_id(self):
+        import desdb
+        query="""
+        select
+            cat.id as cat_id,
+            im.run,
+            im.band,
+            im.tilename,
+            '$DESDATA/' || im.path as image_url,
+            '%(netroot)s/' || im.path as image_url_remote,
+            '$DESDATA/' || cat.path as cat_url,
+            '%(netroot)s/' || cat.path as cat_url_remote
+        from
+            files cat,
+            files im
+        where
+            cat.filetype='coadd_cat'
+            and cat.catalog_parentid = im.id
+            and im.id = %(id)s\n""" % {'netroot':des_net_rootdir(),
+                                       'id':self['image_id']}
+
+        if self['verbose']:
+            show=True
+        else:
+            show=False
+        conn=desdb.Connection(user=self.user,password=self.password)
+        res=conn.quick(query,show=show)
+
+        for key in res[0]:
+            self[key] = res[0][key]
+
+
+
+
 class DESFiles:
     """
     Generate file urls/paths from filetype, run, etc.
