@@ -1,7 +1,7 @@
 """
-    %prog [options] release band
+    %prog [options] release
 
-Look up all coadd images for the requested release and bandpass, find the
+Look up all coadd images for the requested release, find the
 single epoch 'red' images that were used as input, and write out a json file
 with the coadd and red image info.  The json file is keyed by coadd_id.
 Release is something like 'dr012'
@@ -28,13 +28,12 @@ def main():
 
     options,args = parser.parse_args(sys.argv[1:])
 
-    if len(args) < 2:
+    if len(args) < 1:
         parser.print_help()
         sys.exit(45)
 
 
     release=args[0].strip()
-    band=args[1].strip()
     verbose=options.verbose
 
     # ugh, jython is still on 2.5, no nice string formatting
@@ -51,9 +50,7 @@ def main():
         %(release)s_files im
     where
         cat.filetype='coadd_cat'
-        and cat.band = '%(band)s'
-        and cat.catalog_parentid = im.id\n""" % {'release':release,
-                                                 'band':band}
+        and cat.catalog_parentid = im.id\n""" % {'release':release}
 
 
     conn=desdb.Connection(user=options.user,password=options.password)
@@ -133,7 +130,7 @@ def main():
                  'release':release,
                  'tilename':cdict['tilename'],
                  'run':cdict['run'],
-                 'band':band,
+                 'band':cdict['band'],
                  'image_url':cdict['image_url'],
                  'cat_url':cdict['cat_url'],
                  'srclist':res}

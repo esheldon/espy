@@ -1,5 +1,5 @@
 """
-    %prog [options] release band
+    %prog [options] release
 
 Look up all coadd images in the input release and write out their file ids,
 along with some other info. A release id is something like 'dr012' (dc6b)
@@ -23,13 +23,12 @@ def main():
 
     options,args = parser.parse_args(sys.argv[1:])
 
-    if len(args) < 2:
+    if len(args) < 1:
         parser.print_help()
         sys.exit(45)
 
 
     release=args[0].strip()
-    band=args[1].strip()
 
     net_rootdir=desdb.files.des_net_rootdir()
     query="""
@@ -50,11 +49,9 @@ def main():
         %(release)s_files im
     where
         cat.filetype='coadd_cat'
-        and cat.band = '%(band)s'
         and cat.catalog_parentid = im.id
     order by tilename\n""" % {'netroot':net_rootdir,
-                              'release':release,
-                              'band':band}
+                              'release':release}
 
     conn=desdb.Connection(user=options.user,password=options.password)
 
