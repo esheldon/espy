@@ -1,4 +1,5 @@
 import os
+import desdb
 
 def get_url(type, root=None, **keys):
     df=DESFiles(root=root)
@@ -13,7 +14,9 @@ def des_rootdir():
     return os.environ['DESDATA']
 
 def des_net_rootdir():
-    return 'ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES'
+    if 'DESREMOTE' not in os.environ:
+        raise ValueError("The DESREMOTE environment variable is not set")
+    return os.environ['DESREMOTE']
 
 
 class Coadd(dict):
@@ -39,37 +42,38 @@ class Coadd(dict):
         self.user=user
         self.password=password
 
-    def image(self):
-        if not hasattr(self, 'image_url'):
-            self._get_info() 
-        return self.image_file
+        self._get_info()
     
     def _get_info(self):
-            if self['image_id'] is not None:
-                self._get_info_by_id()
-            else:
-                self._get_info_by_runband()
+        if self['image_id'] is not None:
+            self._get_info_by_id()
+        else:
+            self._get_info_by_runband()
+
+        df=DESFiles()
+        self['image_url'] = df.url('coadd_image', 
+                                   run=self['run'], 
+                                   tilename=self['tilename'], 
+                                   band=self['band'])
+        self['cat_url'] = df.url('coadd_cat', 
+                                 run=self['run'], 
+                                 tilename=self['tilename'], 
+                                 band=self['band'])
 
     def _get_info_by_runband(self):
-        import desdb
         query="""
         select
             im.id as image_id,
             cat.id as cat_id,
-            im.tilename,
-            '$DESDATA/' || im.path as image_url,
-            '%(netroot)s/' || im.path as image_url_remote,
-            '$DESDATA/' || cat.path as cat_url,
-            '%(netroot)s/' || cat.path as cat_url_remote
+            im.tilename
         from
-            files cat,
-            files im
+            coadd im,
+            catalog cat 
         where
-            cat.filetype='coadd_cat'
-            and cat.catalog_parentid = im.id
-            and im.run = %(run)s
-            and im.band = %(band)s\n""" % {'netroot':des_net_rootdir(),
-                                           'run':self['run'],
+            cat.catalogtype='coadd_cat'
+            and cat.parentid = im.id
+            and im.run = '%(run)s'
+            and im.band = '%(band)s'\n""" % {'run':self['run'],
                                            'band':self['band']}
 
         if self['verbose']:
@@ -83,25 +87,19 @@ class Coadd(dict):
             self[key] = res[0][key]
 
     def _get_info_by_id(self):
-        import desdb
         query="""
         select
             cat.id as cat_id,
             im.run,
             im.band,
-            im.tilename,
-            '$DESDATA/' || im.path as image_url,
-            '%(netroot)s/' || im.path as image_url_remote,
-            '$DESDATA/' || cat.path as cat_url,
-            '%(netroot)s/' || cat.path as cat_url_remote
+            im.tilename
         from
-            files cat,
-            files im
+            coadd im,
+            catalog cat
         where
-            cat.filetype='coadd_cat'
-            and cat.catalog_parentid = im.id
-            and im.id = %(id)s\n""" % {'netroot':des_net_rootdir(),
-                                       'id':self['image_id']}
+            cat.catalogtype='coadd_cat'
+            and cat.parentid = im.id
+            and im.id = %(id)s\n""" % {'id':self['image_id']}
 
         if self['verbose']:
             show=True
@@ -110,9 +108,76 @@ class Coadd(dict):
         conn=desdb.Connection(user=self.user,password=self.password)
         res=conn.quick(query,show=show)
 
+        if len(res) > 1:
+            raise ValueError("Expected a single result, found %d")
+
         for key in res[0]:
             self[key] = res[0][key]
 
+class CoaddList:
+    """
+    Similar to Coadd but only takes ids and can take a list
+
+    Retrieves the relevant info for the input list.  Get the
+    result as a dictionary using get_info(), keyed by id
+    """
+    def __init__(self, ids, user=None, password=None, verbose=False):
+
+        if not isinstance(ids,(type,list)):
+            ids=[ids]
+
+        self.image_ids = ids
+        self.idcsv = ','.join([str(id) for id in ids])
+        self.verbose=verbose
+
+        self.user=user
+        self.password=password
+
+        self._get_info()
+    
+    def get_info(self):
+        return self._info
+
+    def _get_info(self):
+        import desdb
+
+        query="""
+        select
+            im.id,
+            cat.id as cat_id,
+            im.run,
+            im.band,
+            im.tilename
+        from
+            coadd im,
+            catalog cat
+        where
+            cat.catalogtype='coadd_cat'
+            and cat.parentid = im.id
+            and im.id in (%(idcsv)s)\n""" % {'idcsv':self.idcsv}
+
+        if self.verbose:
+            show=True
+        else:
+            show=False
+        conn=desdb.Connection(user=self.user,password=self.password)
+        res=conn.quick(query,show=show)
+
+        df=DESFiles()
+
+        info={}
+        for r in res:
+            r['image_url'] = df.url('coadd_image', 
+                                    run=r['run'], 
+                                    tilename=r['tilename'], 
+                                    band=r['band'])
+            r['cat_url'] = df.url('coadd_cat', 
+                                  run=r['run'], 
+                                  tilename=r['tilename'], 
+                                  band=r['band'])
+            info[r['id']] = r
+
+        self._info = info
 
 
 
@@ -187,13 +252,18 @@ class DESFiles:
 #   - .fz might not always hold
 #   - EXPOSURENAME can also be built from POINTING-BAND-VISIT
 _fs={}
-_fs['red_run']   = {'dir':'$DESDATA/red/$RUN/red/'}
+_fs['red_run']   = {'dir':'$DESDATA/red/$RUN/red'}
 _fs['red_exp']   = {'dir':'$DESDATA/red/$RUN/red/$EXPOSURENAME'}
 _fs['red_image'] = {'dir':_fs['red_exp']['dir'], 'name':'$EXPOSURENAME_$CCD.fits.fz'}
 _fs['red_cat']   = {'dir':_fs['red_exp']['dir'], 'name':'$EXPOSURENAME_$CCD_cat.fits'}
-_fs['coadd_run']   = {'dir':'$DESDATA/coadd/$RUN/coadd/'}
-_fs['coadd_image'] = {'dir':_fs['coadd_run']['dir'], 'name':'$TILENAME-$BAND.fits.fz'}
-_fs['coadd_cat']   = {'dir':_fs['coadd_run']['dir'], 'name':'$TILENAME-$BAND_cat.fits'}
+_fs['coadd_run']   = {'remote_dir': '$DESREMOTE/coadd/$RUN/coadd',
+                      'dir':        '$DESDATA/coadd/$RUN/coadd'}
+_fs['coadd_image'] = {'remote_dir': _fs['coadd_run']['remote_dir'],
+                      'dir':        _fs['coadd_run']['dir'], 
+                      'name':       '$TILENAME_$BAND.fits.fz'}
+_fs['coadd_cat']   = {'remote_dir': _fs['coadd_run']['remote_dir'],
+                      'dir':_fs['coadd_run']['dir'], 
+                      'name':'$TILENAME_$BAND_cat.fits'}
 
 def expand_desvars(string_in, **keys):
 
@@ -209,6 +279,17 @@ def expand_desvars(string_in, **keys):
                 raise ValueError("send desdata keyword or have DESDATA set for '%s'" % string_in)
             root=os.environ['DESDATA']
         string = string.replace('$DESDATA', str(root))
+
+    if string.find('$DESREMOTE') != -1:
+        root=keys.get('root', None)
+        if root is None:
+            root=keys.get('desremote',None)
+        if root is None:
+            if 'DESREMOTE' not in os.environ:
+                raise ValueError("send desdata keyword or have DESREMOTE set for '%s'" % string_in)
+            root=os.environ['DESREMOTE']
+        string = string.replace('$DESREMOTE', str(root))
+
 
 
     if string.find('$RUN') != -1:
@@ -241,6 +322,15 @@ def expand_desvars(string_in, **keys):
             raise ValueError("band keyword must be sent: '%s'" % string_in)
 
         string = string.replace('$BAND', str(band))
+
+
+    if string.find('$TILENAME') != -1:
+        run=keys.get('tilename', None)
+        if run is None:
+            raise ValueError("run keyword must be sent: '%s'" % string_in)
+        string = string.replace('$TILENAME', str(run))
+
+
 
     # see if there are any leftover un-expanded variables.  If so
     # raise an exception

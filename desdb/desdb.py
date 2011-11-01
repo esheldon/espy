@@ -235,12 +235,20 @@ class CursorWriter:
             self.write_json(curs)
         elif self.type == 'pretty':
             self.write_pretty(curs)
+        elif self.type == 'pyobj':
+            self.write_pyobj(curs)
         else:
-            raise ValueError("only support csv writing for now")
+            raise ValueError("only support csv,json,json-pretty,pretty,pyobj writing for now")
 
     def write_json(self, curs):
         data = cursor2dictlist(curs)
         write_json(data, self.type)
+
+    def write_pyobj(curs):
+        import pprint
+        data = cursor2dictlist(curs)
+        pprint.pprint(data)
+
 
     def write_csv(self, curs):
         """
