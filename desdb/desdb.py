@@ -93,7 +93,14 @@ class Connection(cx_Oracle.Connection):
         curs.execute(query)
 
         if lists:
-            res = curs.fetchall()
+            res=[]
+            try:
+                for r in curs:
+                    res.append(r)
+            except KeyboardInterrupt:
+                curs.close()
+                raise RuntimeError("Interrupt encountered")
+
         elif array:
             raise ValueError("Implement array conversion")
         else:
@@ -192,11 +199,15 @@ def cursor2dictlist(curs, lower=True):
         keys.append(key)
         
     output=[]
-    for row in curs:
-        tmp={}
-        for i,val in enumerate(row):
-            tmp[keys[i]] = val    
-        output.append(tmp)
+    try:
+        for row in curs:
+            tmp={}
+            for i,val in enumerate(row):
+                tmp[keys[i]] = val    
+            output.append(tmp)
+    except KeyboardInterrupt:
+        curs.close()
+        raise RuntimeError("Interrupt encountered")
 
     return output
 
@@ -247,7 +258,7 @@ class CursorWriter:
         """
         Simple csv with, by default, a header
         """
-
+        import time
         desc = curs.description
 
         ncol = len(desc)
@@ -265,9 +276,13 @@ class CursorWriter:
             pass
 
         nresults = 0
-        for row in curs:
-            writer.writerow(row)
-            nresults += 1
+        try:
+            for row in curs:
+                writer.writerow(row)
+                nresults += 1
+        except KeyboardInterrupt:
+            curs.close()
+            raise RuntimeError("Interrupt encountered")
         return nresults
 
     def write_pretty(self, curs, delim=' ', maxwidth=30):
@@ -288,18 +303,22 @@ class CursorWriter:
         format=delim.join(formats)
 
         count = 0
-        for row in curs:
-            if ((count % 50) == 0):
-                self.file.write('\n')
-                self.file.write(format % tuple(names))
-                self.file.write('\n')
-                self.file.write(format % tuple(separators))
+        try:
+            for row in curs:
+                if ((count % 50) == 0):
+                    self.file.write('\n')
+                    self.file.write(format % tuple(names))
+                    self.file.write('\n')
+                    self.file.write(format % tuple(separators))
+                    self.file.write('\n')
+
+                self.file.write(format % row)
                 self.file.write('\n')
 
-            self.file.write(format % row)
-            self.file.write('\n')
-
-            count += 1
+                count += 1
+        except KeyboardInterrupt:
+            curs.close()
+            raise RuntimeError("Interrupt encountered")
 
 class ObjWriter:
     def __init__(self, file=sys.stdout, fmt='csv', header='names'):

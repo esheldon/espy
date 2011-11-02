@@ -21,40 +21,61 @@ def des_net_rootdir():
 
 
 class Coadd(dict):
-    def __init__(self, id=None, run=None, band=None, verbose=False, 
+    def __init__(self, 
+                 id=None, 
+                 run=None, band=None, 
+                 dataset=None, tilename=None,
+                 verbose=False, 
                  user=None, password=None,
-                 expandroot=True):
+                 expandroot=True,
+                 conn=None):
         """
         Construct either with
-            c=Coadd(id=id)
-        or with both
-            c=Coadd(run=run, band=band)
+            c=Coadd(id=)
+        or
+            c=Coadd(run=, band=)
+        or
+            c=Coadd(dataset=, tilename=, band=)
 
         The tilename can be inferred (at least for now) from the run
+
+        Sending a connection can speed things up greatly.
         """
-        if (id is None and (run is None or band is None)):
-            raise ValueError("Send id= or both run= and band=")
+        if id is not None:
+            self.method='id'
+        elif run is not None and band is not None:
+            self.method='runband'
+        elif (dataset is not None 
+              and tilename is not None 
+              and band is not None):
+            self.method='dataset'
+        else:
+            raise ValueError("Send id= or (run=,band=) or (dataset=,tilename=,band=")
+
         self['image_id'] = id
         self['cat_id']   = None
         self['run']      = run
         self['band']     = band
+        self['dataset']  = dataset
+        self['tilename'] = tilename
         self.expandroot=expandroot
 
         self.verbose=verbose
 
-        self.user=user
-        self.password=password
 
-        self.conn=None
+        if conn is None:
+            self.conn=desdb.Connection(user=user,password=password)
+        else:
+            self.conn=conn
 
     def load(self, srclist=False):
-        if self.conn is None:
-            self.conn=desdb.Connection(user=self.user,password=self.password)
 
-        if self['image_id'] is not None:
+        if self.method == 'id':
             self._get_info_by_id()
-        else:
+        elif self.method == 'runband':
             self._get_info_by_runband()
+        else:
+            self._get_info_by_dataset()
 
         df=DESFiles()
         self['image_url'] = df.url('coadd_image', 
@@ -115,6 +136,31 @@ class Coadd(dict):
 
         for key in res[0]:
             self[key] = res[0][key]
+
+    def _get_info_by_dataset(self):
+        query="""
+        select
+            im.id as image_id,
+            cat.id as cat_id,
+            im.run
+        from
+            %(release)s_files cat,
+            %(release)s_files im
+        where
+            cat.filetype='coadd_cat'
+            and cat.catalog_parentid = im.id
+            and cat.tilename = '%(tile)s'
+            and cat.band='%(band)s'\n""" % {'tile':self['tilename'],
+                                            'band':self['band'],
+                                            'release':self['dataset']}
+
+        res=self.conn.quick(query,show=self.verbose)
+        if len(res) != 1:
+            raise ValueError("Expected a single result, found %d")
+
+        for key in res[0]:
+            self[key] = res[0][key]
+
 
     def _load_srclist(self):
         query="""
@@ -177,7 +223,7 @@ class Coadd(dict):
                        run=r['run'],
                        expname=r['exposurename'],
                        ccd=r['ccd'])
-            r['path'] = url
+            r['url'] = url
             srclist.append(r)
 
         self.srclist=srclist
