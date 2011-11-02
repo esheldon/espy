@@ -1,4 +1,5 @@
 import os
+from sys import stderr
 import desdb
 
 def get_url(type, root=None, **keys):
@@ -21,7 +22,8 @@ def des_net_rootdir():
 
 class Coadd(dict):
     def __init__(self, id=None, run=None, band=None, verbose=False, 
-                 user=None, password=None):
+                 user=None, password=None,
+                 expandroot=True):
         """
         Construct either with
             c=Coadd(id=id)
@@ -36,15 +38,19 @@ class Coadd(dict):
         self['cat_id']   = None
         self['run']      = run
         self['band']     = band
+        self.expandroot=expandroot
 
-        self['verbose']=verbose
+        self.verbose=verbose
 
         self.user=user
         self.password=password
 
-        self._get_info()
-    
-    def _get_info(self):
+        self.conn=None
+
+    def load(self, srclist=False):
+        if self.conn is None:
+            self.conn=desdb.Connection(user=self.user,password=self.password)
+
         if self['image_id'] is not None:
             self._get_info_by_id()
         else:
@@ -54,11 +60,17 @@ class Coadd(dict):
         self['image_url'] = df.url('coadd_image', 
                                    run=self['run'], 
                                    tilename=self['tilename'], 
-                                   band=self['band'])
+                                   band=self['band'],
+                                   expandroot=self.expandroot)
         self['cat_url'] = df.url('coadd_cat', 
                                  run=self['run'], 
                                  tilename=self['tilename'], 
-                                 band=self['band'])
+                                 band=self['band'],
+                                 expandroot=self.expandroot)
+
+        if srclist:
+            self._load_srclist()
+        
 
     def _get_info_by_runband(self):
         query="""
@@ -74,14 +86,9 @@ class Coadd(dict):
             and cat.parentid = im.id
             and im.run = '%(run)s'
             and im.band = '%(band)s'\n""" % {'run':self['run'],
-                                           'band':self['band']}
+                                             'band':self['band']}
 
-        if self['verbose']:
-            show=True
-        else:
-            show=False
-        conn=desdb.Connection(user=self.user,password=self.password)
-        res=conn.quick(query,show=show)
+        res=self.conn.quick(query,show=self.verbose)
 
         for key in res[0]:
             self[key] = res[0][key]
@@ -101,12 +108,7 @@ class Coadd(dict):
             and cat.parentid = im.id
             and im.id = %(id)s\n""" % {'id':self['image_id']}
 
-        if self['verbose']:
-            show=True
-        else:
-            show=False
-        conn=desdb.Connection(user=self.user,password=self.password)
-        res=conn.quick(query,show=show)
+        res=self.conn.quick(query,show=self.verbose)
 
         if len(res) > 1:
             raise ValueError("Expected a single result, found %d")
@@ -114,71 +116,71 @@ class Coadd(dict):
         for key in res[0]:
             self[key] = res[0][key]
 
-class CoaddList:
-    """
-    Similar to Coadd but only takes ids and can take a list
+    def _load_srclist(self):
+        query="""
+        SELECT
+            image.parentid
+        FROM
+            image,coadd_src
+        WHERE
+            coadd_src.coadd_imageid = %d
+            AND coadd_src.src_imageid = image.id\n""" % self['image_id']
 
-    Retrieves the relevant info for the input list.  Get the
-    result as a dictionary using get_info(), keyed by id
-    """
-    def __init__(self, ids, user=None, password=None, verbose=False):
+        res = self.conn.quick(query, show=self.verbose)
 
-        if not isinstance(ids,(type,list)):
-            ids=[ids]
+        idlist = [str(d['parentid']) for d in res]
 
-        self.image_ids = ids
-        self.idcsv = ','.join([str(id) for id in ids])
-        self.verbose=verbose
+        ftype=None
+        itmax=5
 
-        self.user=user
-        self.password=password
+        i=0 
+        while ftype != 'red' and i < itmax:
+            idcsv = ', '.join(idlist)
 
-        self._get_info()
-    
-    def get_info(self):
-        return self._info
+            query="""
+            SELECT
+                id,
+                imagetype,
+                parentid
+            FROM
+                image
+            WHERE
+                id in (%s)\n""" % idcsv
 
-    def _get_info(self):
-        import desdb
+            res = self.conn.quick(query)
+            idlist = [str(d['parentid']) for d in res]
+            ftype = res[0]['imagetype']
+            
+            if self.verbose: stderr.write('ftype: %s\n' % ftype)
+            i+=1
+
+        if ftype != 'red':
+            raise ValueError("Reach itmax=%s before finding 'red' images. last is %s" % (itmax, ftype))
+
+        if self.verbose: stderr.write("Found %d red images after %d iterations\n" % (len(idlist),i))
 
         query="""
-        select
-            im.id,
-            cat.id as cat_id,
-            im.run,
-            im.band,
-            im.tilename
-        from
-            coadd im,
-            catalog cat
-        where
-            cat.catalogtype='coadd_cat'
-            and cat.parentid = im.id
-            and im.id in (%(idcsv)s)\n""" % {'idcsv':self.idcsv}
+        select 
+            id,run,exposurename,ccd
+        from 
+            location 
+        where 
+            id in (%(idcsv)s) 
+        order by id\n""" % {'idcsv':idcsv}
 
-        if self.verbose:
-            show=True
-        else:
-            show=False
-        conn=desdb.Connection(user=self.user,password=self.password)
-        res=conn.quick(query,show=show)
+        res = self.conn.quick(query)
 
-        df=DESFiles()
-
-        info={}
+        df=DESFiles(expandroot=self.expandroot)
+        srclist=[]
         for r in res:
-            r['image_url'] = df.url('coadd_image', 
-                                    run=r['run'], 
-                                    tilename=r['tilename'], 
-                                    band=r['band'])
-            r['cat_url'] = df.url('coadd_cat', 
-                                  run=r['run'], 
-                                  tilename=r['tilename'], 
-                                  band=r['band'])
-            info[r['id']] = r
+            url=df.url('red_image',
+                       run=r['run'],
+                       expname=r['exposurename'],
+                       ccd=r['ccd'])
+            r['path'] = url
+            srclist.append(r)
 
-        self._info = info
-
+        self.srclist=srclist
 
 
 class DESFiles:
@@ -202,7 +204,7 @@ class DESFiles:
     - Currently / is used for all path separators.  Good on unix and the web.
     
     """
-    def __init__(self, root=None):
+    def __init__(self, root=None, expandroot=True):
 
         if root == 'net':
             self._root = des_net_rootdir()
@@ -210,6 +212,8 @@ class DESFiles:
             self._root = des_rootdir()
         else:
             self._root=root
+
+        self.expandroot=expandroot
 
         if isinstance(root,(str,unicode)):
             self.root_type = 'remote'
@@ -245,6 +249,8 @@ class DESFiles:
     def _expand_desvars(self, url, **keys):
         if 'root' not in keys and 'desdata' not in keys:
             keys['root'] = self._root
+        if 'expandroot' not in keys:
+            keys['expandroot'] = self.expandroot
         return expand_desvars(url, **keys)
 
 
@@ -252,10 +258,20 @@ class DESFiles:
 #   - .fz might not always hold
 #   - EXPOSURENAME can also be built from POINTING-BAND-VISIT
 _fs={}
-_fs['red_run']   = {'dir':'$DESDATA/red/$RUN/red'}
-_fs['red_exp']   = {'dir':'$DESDATA/red/$RUN/red/$EXPOSURENAME'}
-_fs['red_image'] = {'dir':_fs['red_exp']['dir'], 'name':'$EXPOSURENAME_$CCD.fits.fz'}
-_fs['red_cat']   = {'dir':_fs['red_exp']['dir'], 'name':'$EXPOSURENAME_$CCD_cat.fits'}
+_fs['red_run']   = {'remote_dir':'$DESREMOTE/red/$RUN/red',
+                    'dir':         '$DESDATA/red/$RUN/red'}
+
+_fs['red_exp']   = {'remote_dir':'$DESREMOTE/red/$RUN/red/$EXPOSURENAME',
+                    'dir':         '$DESDATA/red/$RUN/red/$EXPOSURENAME'}
+
+_fs['red_image'] = {'remote_dir':_fs['red_exp']['remote_dir'],
+                    'dir':       _fs['red_exp']['dir'], 
+                    'name':'$EXPOSURENAME_$CCD.fits.fz'}
+
+_fs['red_cat']   = {'remote_dir':_fs['red_exp']['remote_dir'],
+                    'dir':       _fs['red_exp']['dir'], 
+                    'name':'$EXPOSURENAME_$CCD_cat.fits'}
+
 _fs['coadd_run']   = {'remote_dir': '$DESREMOTE/coadd/$RUN/coadd',
                       'dir':        '$DESDATA/coadd/$RUN/coadd'}
 _fs['coadd_image'] = {'remote_dir': _fs['coadd_run']['remote_dir'],
@@ -269,8 +285,9 @@ def expand_desvars(string_in, **keys):
 
     string=string_in
 
+    expandroot=keys.get('expandroot',True)
     # allow keyword root=, desdata=, or fall back to environment variable
-    if string.find('$DESDATA') != -1:
+    if string.find('$DESDATA') != -1 and expandroot:
         root=keys.get('root', None)
         if root is None:
             root=keys.get('desdata',None)
@@ -313,8 +330,9 @@ def expand_desvars(string_in, **keys):
         ccd=keys.get('ccd', None)
         if ccd is None:
             raise ValueError("ccd keyword must be sent: '%s'" % string_in)
+        ccd=int(ccd)
 
-        string = string.replace('$CCD', str(ccd))
+        string = string.replace('$CCD', '%02i' % ccd)
 
     if string.find('$BAND') != -1:
         band=keys.get('band', None)
@@ -334,7 +352,7 @@ def expand_desvars(string_in, **keys):
 
     # see if there are any leftover un-expanded variables.  If so
     # raise an exception
-    if string.find('$') != -1:
+    if string.find('$') != -1 and expandroot:
         raise ValueError("There were unexpanded variables: '%s'" % string_in)
 
     return string

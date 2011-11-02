@@ -102,7 +102,7 @@ class Connection(cx_Oracle.Connection):
         curs.close()
         return res
 
-    def quickWrite(self, query, type='csv', header='names', file=sys.stdout, show=False):
+    def quickWrite(self, query, fmt='csv', header='names', file=sys.stdout, show=False):
         """
         Execute the query and print the results.
 
@@ -110,7 +110,7 @@ class Connection(cx_Oracle.Connection):
         ----------
         query: string
             A query to execute
-        type: string, optional
+        fmt: string, optional
             The format for writing.  Default 'csv'
         header: string,optional
             If not False, put a header.  Can be
@@ -128,7 +128,7 @@ class Connection(cx_Oracle.Connection):
             stderr.write(query)
         curs.execute(query)
 
-        print_cursor(curs, type=type, header=header, file=file)
+        print_cursor(curs, fmt=fmt, header=header, file=file)
         curs.close()
 
     def describe(self, table, show=False):
@@ -162,7 +162,7 @@ class Connection(cx_Oracle.Connection):
 
         curs = self.cursor()
         curs.execute(q) 
-        print_cursor(curs,type='pretty')
+        print_cursor(curs,fmt='pretty')
 
         # now indexes
         q = """
@@ -175,7 +175,7 @@ class Connection(cx_Oracle.Connection):
         """ % table.upper()
 
         curs.execute(q)
-        print_cursor(curs, type='pretty')
+        print_cursor(curs, fmt='pretty')
 
         curs.close()
 
@@ -200,15 +200,15 @@ def cursor2dictlist(curs, lower=True):
 
     return output
 
-def print_cursor(curs, type='csv', header='names', file=sys.stdout):
-    rw=CursorWriter(type=type, file=file, header='names')
+def print_cursor(curs, fmt='csv', header='names', file=sys.stdout):
+    rw=CursorWriter(fmt=fmt, file=file, header='names')
     rw.write(curs)
 
-def write_json(obj, type):
+def write_json(obj, fmt):
     if not have_json and not have_cjson:
         raise ValueError("don't have either json or cjson libraries")
 
-    if type != 'json-pretty' and have_cjson:
+    if fmt == 'cjson':
         jstring = cjson.encode(obj)
         stdout.write(jstring)
     else:
@@ -216,39 +216,32 @@ def write_json(obj, type):
 
 
 class CursorWriter:
-    def __init__(self, file=sys.stdout, type='csv', header='names'):
-        self.type=type
+    """
+
+    The only reason for it is that, for csv and pretty formatting, we can work
+    row by row and save memory.  The other fmts we will use the ObjWriter
+
+    """
+    def __init__(self, file=sys.stdout, fmt='csv', header='names'):
+        self.fmt=fmt
         self.header_type=header
         self.file=file
 
     def write(self, curs):
         """
-
-        Write rows from the cursor or list of dictionaries set.  Need to figure
-        out how to use a custom result set that can write itself
-
+        Write rows from the cursor.
         """
 
-        if self.type == 'csv':
+        if self.fmt == 'csv':
             self.write_csv(curs)
-        elif self.type == 'json' or self.type == 'json-pretty':
-            self.write_json(curs)
-        elif self.type == 'pretty':
+        elif self.fmt == 'pretty':
             self.write_pretty(curs)
-        elif self.type == 'pyobj':
-            self.write_pyobj(curs)
         else:
-            raise ValueError("only support csv,json,json-pretty,pretty,pyobj writing for now")
-
-    def write_json(self, curs):
-        data = cursor2dictlist(curs)
-        write_json(data, self.type)
-
-    def write_pyobj(curs):
-        import pprint
-        data = cursor2dictlist(curs)
-        pprint.pprint(data)
-
+            data = cursor2dictlist(curs)
+            w=ObjWriter(file=self.file, 
+                        fmt=self.fmt, 
+                        header=self.header_type)
+            w.write(data)
 
     def write_csv(self, curs):
         """
@@ -306,6 +299,92 @@ class CursorWriter:
             self.file.write('\n')
 
             count += 1
+
+class ObjWriter:
+    def __init__(self, file=sys.stdout, fmt='csv', header='names'):
+        self.fmt=fmt
+        self.header_type=header
+        self.file=file
+
+    def write(self, data):
+        """
+        Write rows from the list of dictionaries.
+        """
+
+        if isinstance(data,dict) and self.fmt not in ['json','cjson','pyobj']:
+            raise ValueError("Can only write a dictionary to json or pyobj")
+
+        if self.fmt == 'csv':
+            self.write_csv(data)
+        elif self.fmt in ['json','cjson']:
+            self.write_json(data)
+        elif self.fmt == 'pretty':
+            self.write_pretty(data)
+        elif self.fmt == 'pyobj':
+            self.write_pyobj(data)
+        else:
+            raise ValueError("bad format %s. Only support "
+                             "csv,json,cjson,pretty,pyobj writing for now" % self.fmt)
+
+    def write_json(self, data):
+        write_json(data, self.fmt)
+
+    def write_pyobj(self, data):
+        import pprint
+        pprint.pprint(data)
+
+
+    def write_csv(self, data):
+        """
+        Simple csv with, by default, a header
+        """
+
+        ncol = len(data[0])
+        if 0 == ncol:
+            return
+
+        writer = csv.DictWriter(self.file, list(data.keys()),
+                                quoting=csv.QUOTE_MINIMAL)
+        if self.header_type == 'names': 
+            writer.writeheader()
+        else:
+            raise ValueError("Only support names as header for now")
+
+        writer.writerows(data)
+
+    def write_pretty(self, data, delim=' ', maxwidth=30):
+
+        # build up a format string
+        formats=[]
+        separators=[]
+        names=[]
+
+        for k in data[0]:
+            size_max=0
+            for d in data:
+                size_max=max(size_max,d[k])
+
+            formats.append('%('+k+')'+repr(size_max)+'s')
+            names.append(k)
+            separators.append('-'*size_max)
+
+        format=delim.join(formats)
+
+        count = 0
+        for row in curs:
+            if ((count % 50) == 0):
+                self.file.write('\n')
+                self.file.write(format % tuple(names))
+                self.file.write('\n')
+                self.file.write(format % tuple(separators))
+                self.file.write('\n')
+
+            self.file.write(format % row)
+            self.file.write('\n')
+
+            count += 1
+
+
 
 
 

@@ -18,8 +18,8 @@ parser.add_option("-q","--query",default=None, help="The query, overriding stdin
 parser.add_option("-u","--user",default=None, help="Username.")
 parser.add_option("-p","--password",default=None, help="Password.")
 parser.add_option("-s","--show",action='store_true', help="Show query on stderr.")
-parser.add_option("-f","--format",default='json-pretty',
-    help=("File format for output.  csv,json,json-pretty,pyobj,pretty."
+parser.add_option("-f","--format",default='csv',
+    help=("File format for output.  csv,json,cjson,pyobj,pretty."
           "Default %default."))
 
 def main():
@@ -31,7 +31,7 @@ def main():
         query = stdin.read()
 
     conn=desdb.Connection(user=options.user,password=options.password)
-    res=conn.quickWrite(query,show=options.show,type=options.format)
+    res=conn.quickWrite(query,show=options.show,fmt=options.format)
 
 if __name__=="__main__":
     main()

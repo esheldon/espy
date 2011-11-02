@@ -22,7 +22,7 @@ parser.add_option("-u","--user",default=None, help="Username.")
 parser.add_option("-p","--password",default=None, help="Password.")
 parser.add_option("-v","--verbose",action="store_true",default=False, 
                   help="Print out queries as they are executed.")
-parser.add_option("-f","--format",default='pyobj',help=("File format for output.  pyobj, json-pretty."
+parser.add_option("-f","--format",default='pyobj',help=("File format for output.  pyobj, json, cjson."
                                                         "Default %default."))
 def main():
 
@@ -36,7 +36,8 @@ def main():
     release=args[0].strip()
     verbose=options.verbose
 
-    # ugh, jython is still on 2.5, no nice string formatting
+    conn=desdb.Connection(user=options.user,password=options.password)
+
     query="""
     select
         im.id as image_id,
@@ -52,10 +53,31 @@ def main():
         cat.filetype='coadd_cat'
         and cat.catalog_parentid = im.id\n""" % {'release':release}
 
-
-    conn=desdb.Connection(user=options.user,password=options.password)
-
     res = conn.quick(query, show=verbose)
+
+    dlw=desdb.ObjWriter(fmt=options.format)
+    output={}
+    for cdict in res:
+        coadd_id = cdict['image_id']
+        c=desdb.files.Coadd(id=coadd_id,expandroot=False)
+        c.load(srclist=True)
+        thisone={'coadd_id':coadd_id,
+                 'release':release,
+                 'tilename':cdict['tilename'],
+                 'run':cdict['run'],
+                 'band':cdict['band'],
+                 'image_url':cdict['image_url'],
+                 'cat_url':cdict['cat_url'],
+                 'srclist':c.srclist}
+        output[coadd_id] = thisone
+
+        for r in c.srclist:
+            stderr.write('%d %s %s\n' % (coadd_id,r['id'],r['path']))
+
+    dlw.write(output)
+
+    return
+
     output={}
 
     for cdict in res:

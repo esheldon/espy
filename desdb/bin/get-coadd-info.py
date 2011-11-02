@@ -16,7 +16,7 @@ parser=OptionParser(__doc__)
 parser.add_option("-u","--user",default=None, help="Username.")
 parser.add_option("-p","--password",default=None, help="Password.")
 parser.add_option("-s","--show",action='store_true', help="Show query on stderr.")
-parser.add_option("-f","--format",default='pyobj',help=("File format for output.  pyobj, json-pretty."
+parser.add_option("-f","--format",default='pyobj',help=("File format for output.  pyobj, json, cjson."
                                                         "Default %default."))
 
 def main():
@@ -62,12 +62,8 @@ def main():
         image_id=c['image_id']
         out[image_id] = c
 
-    if options.format[0:4] == 'json':
-        import json
-        json.dump(out, stdout, indent=1, separators=(',', ':'))
-    else:
-        import pprint
-        pprint.pprint(out)
+    dlw=desdb.desdb.ObjWriter(fmt=options.format)
+    dlw.write(out)
 
 if __name__=="__main__":
     main()

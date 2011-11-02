@@ -61,7 +61,7 @@ def main():
     conn=desdb.Connection(user=options.user,password=options.password)
 
     if options.url:
-        conn.quickWrite(query,type=options.format,show=options.show)
+        conn.quickWrite(query,fmt=options.format,show=options.show)
     else:
         res=conn.quick(query,show=options.show)
         for r in res:

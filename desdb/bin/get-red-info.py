@@ -11,20 +11,13 @@ import sys
 from sys import stderr,stdout
 import desdb
 
-try:
-    import cjson
-    have_cjson=True
-except:
-    import json
-    have_cjson=False
-
 from optparse import OptionParser
 parser=OptionParser(__doc__)
 parser.add_option("-u","--user",default=None, help="Username.")
 parser.add_option("-p","--password",default=None, help="Password.")
 parser.add_option("-s","--show",action='store_true', help="Show query on stderr.")
-parser.add_option("-f","--format",default='json-pretty',help=("File format for output.  csv, json, "
-                                                              "json-pretty. Default %default."))
+parser.add_option("-f","--format",default='json',help=("File format for output.  csv, json, "
+                                                       "cjson, pyobj. Default %default."))
 
 def main():
 
@@ -64,7 +57,7 @@ def main():
         cat_id\n""" % {'netroot':net_rootdir,'release':release,'band':band}
 
     conn=desdb.Connection(user=options.user,password=options.password)
-    conn.quickWrite(query,type=options.format,show=options.show)
+    conn.quickWrite(query,fmt=options.format,show=options.show)
 
 if __name__=="__main__":
     main()
