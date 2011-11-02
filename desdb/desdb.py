@@ -255,7 +255,8 @@ class CursorWriter:
             return
 
         writer = csv.writer(self.file,dialect='excel',
-                            quoting=csv.QUOTE_MINIMAL)
+                            quoting=csv.QUOTE_MINIMAL,
+                            lineterminator = '\n')
 
         if self.header_type == 'names': 
             hdr = [d[0].lower() for d in desc]
@@ -344,7 +345,9 @@ class ObjWriter:
             return
 
         writer = csv.DictWriter(self.file, list(data.keys()),
-                                quoting=csv.QUOTE_MINIMAL)
+                                quoting=csv.QUOTE_MINIMAL,
+                                lineterminator = '\n')
+
         if self.header_type == 'names': 
             writer.writeheader()
         else:
