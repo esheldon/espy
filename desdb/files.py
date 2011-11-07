@@ -19,6 +19,116 @@ def des_net_rootdir():
         raise ValueError("The DESREMOTE environment variable is not set")
     return os.environ['DESREMOTE']
 
+class Red(dict):
+    def __init__(self, 
+                 id=None, 
+                 expname=None,
+                 ccd=None,
+                 dataset=None,
+                 verbose=False, 
+                 user=None, password=None,
+                 expandroot=True,
+                 conn=None):
+ 
+        """
+        id is the red image id
+        """
+        if id is not None:
+            self.method='id'
+        elif expname is not None and dataset is not None:
+            self.method='dataset-exp-ccd'
+        else:
+            raise ValueError("send either id= or (expname= and ccd= and dataset=). "
+                             "-- Should add run=,expname=")
+
+        self['image_id']=id
+        self['cat_id'] = None
+        self['expname'] = expname
+        self['ccd'] = ccd
+        self['dataset']=dataset
+        self.expandroot=expandroot
+
+        self.verbose=verbose
+
+        if conn is None:
+            self.conn=desdb.Connection(user=user,password=password)
+        else:
+            self.conn=conn
+
+    def load(self, srclist=False):
+
+        if self.method == 'id':
+            self._get_info_by_id()
+        else:
+            self._get_info_by_dataset()
+
+        df=DESFiles()
+        self['image_url'] = df.url('red_image', 
+                                   run=self['image_run'], 
+                                   expname=self['expname'],
+                                   ccd=self['ccd'],
+                                   expandroot=self.expandroot)
+        self['cat_url'] = df.url('red_cat', 
+                                 run=self['cat_run'], 
+                                 expname=self['expname'],
+                                 ccd=self['ccd'],
+                                 expandroot=self.expandroot)
+
+
+    def _get_info_by_id(self):
+        query="""
+        select
+            cat.id as cat_id,
+            im.run as image_run,
+            cat.run as cat_run,
+            im.exposurename as expname,
+            im.ccd as ccd,
+            im.band
+        from
+            location im,
+            catalog cat
+        where
+            cat.catalogtype='red_cat'
+            and cat.parentid = im.id
+            and im.id = %(id)s\n""" % {'id':self['image_id']}
+
+        res=self.conn.quick(query,show=self.verbose)
+
+        if len(res) > 1:
+            raise ValueError("Expected a single result, found %d")
+
+        for key in res[0]:
+            self[key] = res[0][key]
+
+
+    def _get_info_by_dataset(self):
+        query="""
+        select
+            im.id as image_id,
+            cat.id as cat_id,
+            im.run as image_run,
+            cat.run as cat_run,
+            im.band
+        from
+            %(release)s_files cat,
+            %(release)s_files im
+        where
+            cat.filetype='red_cat'
+            and cat.catalog_parentid = im.id
+            and cat.file_exposure_name = '%(expname)s'
+            and cat.ccd = %(ccd)s\n""" % {'expname':self['expname'],
+                                          'ccd':self['ccd'],
+                                          'release':self['dataset']}
+
+        res=self.conn.quick(query,show=self.verbose)
+        if len(res) != 1:
+            raise ValueError("Expected a single result, found %d" % len(res))
+
+        for key in res[0]:
+            self[key] = res[0][key]
+
+
+
 
 class Coadd(dict):
     def __init__(self, 
