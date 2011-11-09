@@ -1,6 +1,8 @@
 """
 usage:
     %prog [options] serun
+
+Run this on tutti or it will take days!
 """
 import des
 import sys

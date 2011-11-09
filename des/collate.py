@@ -70,20 +70,20 @@ class ColumnCollator:
 
         for type in tdict:
             fname=tdict[type]
-            data[type] = deswl.files.wlse_read(data['exposurename'], 
-                                               data['ccd'], 
-                                               fname, 
-                                               serun=self.serun, 
-                                               ext=1, 
-                                               ensure_native=True,
-                                               verbose=True)
+            data[type] = deswl.files.se_read(data['exposurename'], 
+                                             data['ccd'], 
+                                             fname, 
+                                             serun=self.serun, 
+                                             ext=1, 
+                                             ensure_native=True,
+                                             verbose=True)
 
         data['idvals'] = self.uid_offset + numpy.arange(data['stars'].size,dtype='i4')
         self.uid_offset += data['stars'].size
 
 
     def coldir(self, fits=False):
-        coldir = deswl.files.wlse_coldir(self.serun, fits=fits)
+        coldir = deswl.files.se_coldir(self.serun, fits=fits)
         coldir = expand_path(coldir)
 
         if self.split is not None:
@@ -118,7 +118,7 @@ class ColumnCollator:
 
 
     def load_flist(self):
-        flistfile=deswl.files.wlse_collated_path(self.serun,'goodlist')
+        flistfile=deswl.files.se_collated_path(self.serun,'goodlist')
         self.flist=esutil.io.read(flistfile, verbose=True)
 
 
@@ -384,7 +384,7 @@ class ColumnCollator:
 def create_se_shear_columns_indexes(serun, coldir=None):
 
     if coldir is None:
-        coldir = deswl.files.wlse_coldir(serun)
+        coldir = deswl.files.se_coldir(serun)
     coldir = expand_path(coldir)
 
     cols = columns.Columns(coldir,verbose=True)
@@ -419,7 +419,7 @@ def collate_se_shear_columns(serun, split=False,
     del header['run']
 
     if coldir is None:
-        coldir = deswl.files.wlse_coldir(serun, split=split)
+        coldir = deswl.files.se_coldir(serun, split=split)
     coldir = expand_path(coldir)
 
     stdout.write('Will write to coldir %s\n' % coldir)
@@ -428,7 +428,7 @@ def collate_se_shear_columns(serun, split=False,
         raise RuntimeError("Coldir exists. Please start from scratch\n")
 
 
-    flistfile=deswl.files.wlse_collated_path(serun,'goodlist')
+    flistfile=deswl.files.se_collated_path(serun,'goodlist')
     stdout.write("Reading goodlist: %s\n" % flistfile)
     flist=json_util.read(flistfile)
 
@@ -453,12 +453,12 @@ def collate_se_shear_columns(serun, split=False,
         data['exposurename'] = exposurename
         data['ccd'] = ccd
 
-        data['stars'] = deswl.files.wlse_read(exposurename, ccd, 'stars', 
+        data['stars'] = deswl.files.se_read(exposurename, ccd, 'stars', 
                                               serun=serun, ext=1, verbose=True)
 
         data['idvals'] = uid + numpy.arange(data['stars'].size,dtype='i4')
 
-        data['shear'] = deswl.files.wlse_read(exposurename, ccd, 'shear', 
+        data['shear'] = deswl.files.se_read(exposurename, ccd, 'shear', 
                                               serun=serun, ext=1, verbose=True)
 
         if data['stars'].size != data['shear'].size:
@@ -473,7 +473,7 @@ def collate_se_shear_columns(serun, split=False,
 
 
         # write psf columns
-        data['psf'] = deswl.files.wlse_read(exposurename, ccd, 'psf', 
+        data['psf'] = deswl.files.se_read(exposurename, ccd, 'psf', 
                                             serun=serun, ext=1,verbose=True)
 
         _do_collate_se_shear_columns_psf(cols, data)
@@ -727,7 +727,7 @@ def collate_se_shear(serun, objclass='all',
     header['serun'] = header['run']
     del header['run']
 
-    flistfile=deswl.files.wlse_collated_path(serun,'goodlist')
+    flistfile=deswl.files.se_collated_path(serun,'goodlist')
     stdout.write("Reading goodlist: %s\n" % flistfile)
     flist=json_util.read(flistfile)
 
@@ -736,7 +736,7 @@ def collate_se_shear(serun, objclass='all',
         if not os.path.exists(outdir):
             os.makedirs(outdir)
 
-    outfile = deswl.files.wlse_collated_path(serun, objclass, ftype='rec', 
+    outfile = deswl.files.se_collated_path(serun, objclass, ftype='rec', 
                                              dir=outdir)
     stdout.write('Will write to %s\n' % outfile)
 
@@ -762,18 +762,18 @@ def collate_se_shear(serun, objclass='all',
 
         #if True:
         if (i % 10) == 0:
-            stars_file=deswl.files.wlse_path(exposurename,ccd,'stars',
+            stars_file=deswl.files.se_path(exposurename,ccd,'stars',
                                              serun=serun)
-            shear_file=deswl.files.wlse_path(exposurename,ccd,'shear',
+            shear_file=deswl.files.se_path(exposurename,ccd,'shear',
                                              serun=serun)
             stdout.write('Reading: %d/%d\n\t%s\n' % (i,ntot,stars_file))
 
-        stars = deswl.files.wlse_read(exposurename, ccd, 'stars', 
+        stars = deswl.files.se_read(exposurename, ccd, 'stars', 
                                       serun=serun, ext=1)
 
         if (i % 10) == 0:
             stdout.write('\t%s\n' % shear_file)
-        shear = deswl.files.wlse_read(exposurename, ccd, 'shear', 
+        shear = deswl.files.se_read(exposurename, ccd, 'shear', 
                                       serun=serun, ext=1)
 
         # we output ra/dec in arcsec!?!?!
@@ -819,7 +819,7 @@ def write_se_collate_html(serun, showsplit=False):
 
     rc = deswl.files.Runconfig(serun)
 
-    dir=deswl.files.wlse_collated_dir(serun)
+    dir=deswl.files.se_collated_dir(serun)
     html_dir = path_join(dir, 'html')
     if not os.path.exists(html_dir):
         os.makedirs(html_dir)
@@ -834,7 +834,7 @@ def write_se_collate_html(serun, showsplit=False):
         col_comment += ' <i><b>Columns database not yet available</b></i>'
 
 
-    collate_dir= deswl.files.wlse_collated_dir(serun)
+    collate_dir= deswl.files.se_collated_dir(serun)
     plotdir=path_join(collate_dir,'plots')
 
     band='i'
