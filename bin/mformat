@@ -254,9 +254,11 @@ class EmailFileFormatter:
 
         htmlname = fname+'.html'
 
-        p = Popen(self.HTML_VIEWER+' file://"%s"' % htmlname,
+        #p = Popen(self.HTML_VIEWER+' file://"%s"' % htmlname,
+        p = Popen(self.HTML_VIEWER+' file://%s' % htmlname,
                   stdout=PIPE,stderr=PIPE,shell=True)
         os.remove(fname)
+        print 'hello'
         #os.remove(htmlname)
 
 
