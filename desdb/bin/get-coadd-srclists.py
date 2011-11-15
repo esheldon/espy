@@ -1,7 +1,7 @@
 """
-    %prog [options] release band
+    %prog [options] release
 
-Look up all coadd images for the requested release and bandpass, find the
+Look up all coadd images for the requested release, find the
 single epoch 'red' images that were used as input, and write out a json file
 with the coadd and red image info.  The json file is keyed by coadd_id.
 Release is something like 'dr012'
@@ -15,7 +15,6 @@ import sys
 from sys import stdout,stderr
 import desdb
 import csv
-import json
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
@@ -23,39 +22,66 @@ parser.add_option("-u","--user",default=None, help="Username.")
 parser.add_option("-p","--password",default=None, help="Password.")
 parser.add_option("-v","--verbose",action="store_true",default=False, 
                   help="Print out queries as they are executed.")
-
+parser.add_option("-f","--format",default='pyobj',help=("File format for output.  pyobj, json, cjson."
+                                                        "Default %default."))
 def main():
 
     options,args = parser.parse_args(sys.argv[1:])
 
-    if len(args) < 2:
+    if len(args) < 1:
         parser.print_help()
         sys.exit(45)
 
 
     release=args[0].strip()
-    band=args[1].strip()
     verbose=options.verbose
-
-    # ugh, jython is still on 2.5, no nice string formatting
-    query="""
-    SELECT
-        id
-    FROM
-        %s_files
-    WHERE
-        filetype='coadd'
-        and band = '%s'\n""" % (release,band)
 
     conn=desdb.Connection(user=options.user,password=options.password)
 
+    query="""
+    select
+        im.id as image_id,
+        im.run,
+        im.tilename,
+        im.band,
+        '$DESDATA/' || im.path as image_url,
+        '$DESDATA/' || cat.path as cat_url
+    from
+        %(release)s_files cat,
+        %(release)s_files im
+    where
+        cat.filetype='coadd_cat'
+        and cat.catalog_parentid = im.id\n""" % {'release':release}
+
     res = conn.quick(query, show=verbose)
-    first=True
 
-    json_output={}
+    dlw=desdb.ObjWriter(fmt=options.format)
+    output={}
+    for cdict in res:
+        coadd_id = cdict['image_id']
+        c=desdb.files.Coadd(id=coadd_id,expandroot=False)
+        c.load(srclist=True)
+        thisone={'coadd_id':coadd_id,
+                 'release':release,
+                 'tilename':cdict['tilename'],
+                 'run':cdict['run'],
+                 'band':cdict['band'],
+                 'image_url':cdict['image_url'],
+                 'cat_url':cdict['cat_url'],
+                 'srclist':c.srclist}
+        output[coadd_id] = thisone
 
-    for iddict in res:
-        coadd_id = iddict['id']
+        for r in c.srclist:
+            stderr.write('%d %s %s\n' % (coadd_id,r['id'],r['path']))
+
+    dlw.write(output)
+
+    return
+
+    output={}
+
+    for cdict in res:
+        coadd_id = cdict['image_id']
         query="""
         SELECT
             image.parentid
@@ -98,52 +124,47 @@ def main():
 
         if verbose: stderr.write("Found %d red images after %d iterations" % (len(idlist),i))
 
-        # now the idlist comes from id instead of parentid
-        query="""
-        select
-            %s as coadd_id,
-            id as red_id,
-            filetype,
-            run,
-            exposurename,
-            band,
-            ccd,
-            filename
-        from
-            location
-        where
-            id in (%s)
-        """ % (coadd_id,idcsv)
-
         #net_rootdir=desdb.files.des_net_rootdir()
         query="""
         select
-            %s as coadd_id,
-            id as red_id,
+            id,
+            run,
+            file_exposure_name as exposurename,
+            ccd,
             '$DESDATA/' || path as path
         from
-            %s_files
+            %(release)s_files
         where
-            id in (%s)
+            id in (%(idcsv)s)
         order by
-            id\n""" % (coadd_id, release, idcsv)
+            id\n""" % {'release':release, 
+                       'idcsv':idcsv}
             
 
         res = conn.quick(query, show=verbose)
 
         # write to stderr so we can see progress
-        #keywords=['coadd_id','id','path','url']
-        keywords=['coadd_id','red_id','path']
-        w=csv.DictWriter(stderr,keywords)
-        stderr.write(','.join(keywords))
-        stderr.write('\n')
+        stderr.write('coadd_id id path\n')
         for r in res:
-            w.writerow(r)
+            stderr.write('%d %s %s\n' % (coadd_id,r['id'],r['path']))
 
-        json_output[coadd_id] = res
-        first=False
+        thisone={'coadd_id':coadd_id,
+                 'release':release,
+                 'tilename':cdict['tilename'],
+                 'run':cdict['run'],
+                 'band':cdict['band'],
+                 'image_url':cdict['image_url'],
+                 'cat_url':cdict['cat_url'],
+                 'srclist':res}
+        output[coadd_id] = thisone
     
-    json.dump(json_output, stdout, indent=1, separators=(',', ':'))
+    if options.format[0:4] == 'json':
+        import json
+        json.dump(output, stdout, indent=1, separators=(',', ':'))
+    else:
+        import pprint
+        pprint.pprint(output)
+
 
 if __name__=="__main__":
     main()

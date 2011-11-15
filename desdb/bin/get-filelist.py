@@ -1,7 +1,7 @@
 """
     %prog [options] release band types
 
-Look up the listed file types and write out there local path information.  The
+Look up the listed file types and write out their local path information.  The
 types should be a comma separated list.
 
 By default the paths are relative to the $DESDATA environment variable, which
