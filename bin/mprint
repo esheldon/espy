@@ -56,7 +56,7 @@ parser.add_option("-b","--background",action="store_true",dest="background",
                   "Note the temporary file will be left in /tmp. default: %default")
 
 
-if sys.platform == "linux2":
+if sys.platform[0:5] == "linux":
     #open_programs = ["gv","evince"]
     open_programs = ["evince","gv"]
 elif sys.platform == "darwin":
