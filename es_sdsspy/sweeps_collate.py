@@ -65,10 +65,17 @@ class Collator:
     """
     
     def __init__(self, type='gal'):
-        if type not in ['gal','primgal']:
-            raise ValueError("add support for 'star' type")
+        #if type not in ['gal','primgal']:
+        #    raise ValueError("add support for 'star' type")
 
         self.type=type
+        if type in ['gal','primgal']:
+            self.sweep_type = 'gal'
+        elif type in ['star','primstar']:
+            self.sweep_type = 'star'
+        else:
+            raise ValueError("type should be 'gal','primgal','star','primstar'")
+
         self.minscore=0.1
         self.flags = sdsspy.flags.Flags()
         self.masktypes = ['basic','good','tycho']
@@ -103,7 +110,7 @@ class Collator:
             print("-"*70)
             for camcol in [1,2,3,4,5,6]:
                 print("  %06i-%i" % (run,camcol))
-                tmp = sdsspy.read('calibobj.'+self.type, run, camcol, 
+                tmp = sdsspy.read('calibobj.'+self.sweep_type, run, camcol, 
                                   lower=True, ensure_native=True)
 
                 if len(tmp) == 0:
@@ -127,6 +134,58 @@ class Collator:
                     for name in out_dict:
                         c.write_column(name, out_dict[name])
         print("Done")
+
+
+    def create_output(self, st):
+        bands = ['u','g','r','i','z']
+
+        out_dict = {}
+        for d in st.dtype.descr:
+            name = str( d[0] )
+
+            if len(d) == 3:
+                if d[2] == 5:
+                    # ignoring the higher dim stuff
+                    for bandi in xrange(5):
+                        fname = name+'_'+bands[bandi]
+                        out_dict[fname] = st[name][:, bandi]
+            else:
+                out_dict[name] = st[name]
+
+        if 'devflux' in st.dtype.names:
+            #cmodelflux, cmodelflux_ivar = sdsspy.make_cmodelflux(st, doivar=True)
+            cmodelmag_dered, cmodelmag_dered_err = sdsspy.make_cmodelmag(st, dered=True)
+
+        modelflux, modelflux_ivar = sdsspy.dered_fluxes(st['extinction'], 
+                                                        st['modelflux'], 
+                                                        st['modelflux_ivar'])
+        modelmag_dered, modelmag_dered_err = sdsspy.nmgy2mag(modelflux, modelflux_ivar)
+
+        for f in sdsspy.FILTERCHARS:
+            fnum = sdsspy.FILTERNUM[f]
+            if 'devflux' in st.dtype.names:
+                out_dict['cmodelflux_'+f] = cmodelmag_dered[:,fnum]
+                out_dict['cmodelflux_ivar_'+f] = cmodelmag_dered_err[:,fnum]
+                out_dict['cmodelmag_dered_'+f] = cmodelmag_dered[:,fnum]
+                out_dict['cmodelmag_dered_err_'+f] = cmodelmag_dered_err[:,fnum]
+            out_dict['modelmag_dered_'+f] = modelmag_dered[:,fnum]
+            out_dict['modelmag_dered_err_'+f] = modelmag_dered_err[:,fnum]
+
+        out_dict['photoid'] = sdsspy.photoid(st)
+
+        self.set_maskflags(out_dict)
+
+        # we will add an "survey_primary" column if we are not explicitly 
+        # selecting survey_primary
+        if self.type not in ['primgal','primstar']:
+            survey_primary = numpy.zeros(st.size, dtype='i1')
+            w=self.get_primary_indices(st)
+            if w.size > 0:
+                survey_primary[w] = 1
+            out_dict['survey_primary'] = survey_primary
+
+        return out_dict
+
 
     def get_primary_indices(self, objs, run_primary=False):
         if run_primary:
@@ -194,54 +253,6 @@ class Collator:
 
             
 
-    def create_output(self, st):
-        bands = ['u','g','r','i','z']
-
-        out_dict = {}
-        for d in st.dtype.descr:
-            name = str( d[0] )
-
-            if len(d) == 3:
-                if d[2] == 5:
-                    # ignoring the higher dim stuff
-                    for bandi in xrange(5):
-                        fname = name+'_'+bands[bandi]
-                        out_dict[fname] = st[name][:, bandi]
-            else:
-                out_dict[name] = st[name]
-
-        cmodelflux, cmodelflux_ivar = sdsspy.make_cmodelflux(st, doivar=True)
-
-        cmodelmag_dered, cmodelmag_dered_err = sdsspy.make_cmodelmag(st, dered=True)
-
-        modelflux, modelflux_ivar = sdsspy.dered_fluxes(st['extinction'], 
-                                                        st['modelflux'], 
-                                                        st['modelflux_ivar'])
-        modelmag_dered, modelmag_dered_err = sdsspy.nmgy2mag(modelflux, modelflux_ivar)
-
-        for f in sdsspy.FILTERCHARS:
-            fnum = sdsspy.FILTERNUM[f]
-            out_dict['cmodelflux_'+f] = cmodelmag_dered[:,fnum]
-            out_dict['cmodelflux_ivar_'+f] = cmodelmag_dered_err[:,fnum]
-            out_dict['cmodelmag_dered_'+f] = cmodelmag_dered[:,fnum]
-            out_dict['cmodelmag_dered_err_'+f] = cmodelmag_dered_err[:,fnum]
-            out_dict['modelmag_dered_'+f] = modelmag_dered[:,fnum]
-            out_dict['modelmag_dered_err_'+f] = modelmag_dered_err[:,fnum]
-
-        out_dict['photoid'] = sdsspy.photoid(st)
-
-        self.set_maskflags(out_dict)
-
-        # we will add an "survey_primary" column if we are not explicitly 
-        # selecting survey_primary
-        if self.type not in ['primgal','primstar']:
-            survey_primary = numpy.zeros(st.size, dtype='i1')
-            w=self.get_primary_indices(st)
-            if w.size > 0:
-                survey_primary[w] = 1
-            out_dict['survey_primary'] = survey_primary
-
-        return out_dict
 
     def create_indices(self):
         c = self.open_columns()
@@ -253,8 +264,9 @@ class Collator:
             cnames += ['survey_primary']
 
         for n in cnames:
-            print("Creating index for:",n)
-            c[n].create_index(force=True)
+            if n in c:
+                print("Creating index for:",n)
+                c[n].create_index(force=True)
 
 
 

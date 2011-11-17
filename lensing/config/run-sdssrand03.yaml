@@ -8,7 +8,7 @@ nside:         4096
 comment: | 
 
     lenses:
-        redmapper random sample, redshift [0.04,0.41], with strict edge cuts
+        redmapper random sample, redshift [0.04,0.41]
         nbin 21
         r min max [0.02,36.567]
     sources:

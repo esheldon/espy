@@ -37,6 +37,3 @@ comment: |
 
     This sample is designed to be somewhat like the redmapper sample.
     Also ProPer in sample 07.
-
-    We use a strict edge cut in this one, to test cross-correlation
-    function.

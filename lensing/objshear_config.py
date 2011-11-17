@@ -24,6 +24,7 @@ class ObjshearRunConfig(dict):
     """
 
     def __init__(self, run):
+
         conf = lensing.files.cascade_config(run)
         for key in conf:
             self[key] = conf[key]
@@ -43,22 +44,35 @@ class ObjshearRunConfig(dict):
             """ % (l['cosmo_sample'],s['cosmo_sample'])
             raise ValueError(err)
         
+    def make_zlvals(self):
+        import sigmacrit
+        sconf = self['src_config']
+        return sigmacrit.make_zlvals(sconf['dzl'], sconf['zlmin'], sconf['zlmax'])
+
     # inputs to objshear
     def write_config(self):
 
-        lf = lensing.files.sample_file('lcat',self['lens_sample'])
+        stream=self.get('streaming',False)
+        if stream:
+            ext='dat'
+            fs='hdfs'
+        else:
+            ext='bin'
+            fs='local'
+
+        lf = lensing.files.sample_file('lcat',self['lens_sample'],fs=fs,ext=ext)
         if self['src_config']['nsplit'] == 0:
             cf = lensing.files.sample_file('config',self['run'])
-            sf = lensing.files.sample_file('scat',self['src_sample'])
-            of = lensing.files.sample_file('lensout',self['run'], fs='local')
+            sf = lensing.files.sample_file('scat',self['src_sample'],fs=fs,ext=ext)
+            of = lensing.files.sample_file('lensout',self['run'],fs=fs,ext=ext)
 
 
             self._write_config(cf,lf,sf,of)
         else:
             for i in xrange(self['src_config']['nsplit']):
                 cf = lensing.files.sample_file('config',self['run'], split=i)
-                sf = lensing.files.sample_file('scat',self['src_sample'], split=i)
-                of = lensing.files.sample_file('lensout',self['run'], split=i, fs='local')
+                sf = lensing.files.sample_file('scat',self['src_sample'], split=i,fs=fs,ext=ext)
+                of = lensing.files.sample_file('lensout',self['run'], split=i,fs=fs,ext=ext)
 
                 self._write_config(cf,lf,sf,of)
 
@@ -78,8 +92,11 @@ class ObjshearRunConfig(dict):
 
         fmt='%-17s %s\n'
         fobj.write(fmt % ("lens_file",lfile))
-        fobj.write(fmt % ("source_file",sfile))
-        fobj.write(fmt % ("output_file",ofile))
+
+        stream=self.get('streaming',False)
+        if not stream:
+            fobj.write(fmt % ("source_file",sfile))
+            fobj.write(fmt % ("output_file",ofile))
 
         for key in ['H0','omega_m','npts']:
             fobj.write(fmt % (key, self['cosmo_config'][key]))
@@ -90,6 +107,14 @@ class ObjshearRunConfig(dict):
             fobj.write(fmt % (key,self['src_config'][key]))
         for key in ['nbin','rmin','rmax']:
             fobj.write(fmt % (key,self['lens_config'][key]))
+
+        if self['src_config']['sigmacrit_style'] == 2:
+            zlvals=self.make_zlvals()
+            fobj.write(fmt % ('nzl',zlvals.size))
+
+            fobj.write('zlvals ')
+            zlvals.tofile(fobj, sep=' ')
+            fobj.write('\n')
 
         fobj.close()
 

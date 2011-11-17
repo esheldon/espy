@@ -18,19 +18,19 @@ import copy
 
 import zphot
 
-def instantiate_sample(sample):
+def instantiate_sample(sample, ascii=False):
     conf = lensing.files.read_config('scat', sample)
     if 'dr8regauss' in conf['catalog']:
-        c = DR8Catalog(sample)
+        c = DR8Catalog(sample, ascii=ascii)
     else:
         c = DESMockSrcCatalog(sample)
     return c
 
-def create_input(sample):
+def create_input(sample, ascii=False):
     """
         create_input('01')
     """
-    c = instantiate_sample(sample)
+    c = instantiate_sample(sample, ascii=ascii)
     c.create_objshear_input()
     c.split()
 
@@ -55,7 +55,10 @@ class DR8Catalog(dict):
     (or /bin/add-scinv.py before /bin/make-objshear-input.py)
 
     """
-    def __init__(self, sample):
+    def __init__(self, sample, ascii=False):
+        if ascii:
+            print('Writing ascii files')
+        self['ascii']=ascii
         conf = lensing.files.read_config('scat', sample)
         for k in conf:
             self[k] = conf[k]
@@ -95,7 +98,10 @@ class DR8Catalog(dict):
         print("  reading",scinv_colname)
         output['scinv'][:] = self.rgcols[scinv_colname][keep]
         
-        lensing.files.scat_write(self['sample'], output)
+        if self['ascii']:
+            lensing.files.scat_write_ascii(self['sample'], output)
+        else:
+            lensing.files.scat_write(self['sample'], output)
         #return output
 
     def make_ascii(self):
@@ -129,7 +135,10 @@ class DR8Catalog(dict):
                 end += nleft
             sdata = data[beg:end]
 
-            lensing.files.scat_write(self['sample'], sdata, split=i)
+            if self['ascii']:
+                lensing.files.scat_write_ascii(self['sample'], sdata, split=i)
+            else:
+                lensing.files.scat_write(self['sample'], sdata, split=i)
 
 
     def file(self, split=None):
