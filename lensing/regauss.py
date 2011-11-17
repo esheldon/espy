@@ -44,16 +44,16 @@ import admom
 
 import zphot
 
-def open_columns(procrun, sweeptype='gal'):
+def open_columns(procrun, sweeptype):
     coll = Collator(procrun, sweeptype)
     return coll.open_columns()
 
-def output_dir(procrun, sweeptype='gal'):
+def output_dir(procrun, sweeptype):
     coll = Collator(procrun, sweeptype)
     return coll.output_dir()
 
 
-def zphot_match(procrun, pzrun, sweeptype='gal'):
+def zphot_match(procrun, pzrun, sweeptype):
     '''
     add a match index into photoz column databases
 
@@ -763,7 +763,7 @@ class Collator:
 
     """
     
-    def __init__(self, procrun, sweeptype='gal', fs='nfs', coldir=None):
+    def __init__(self, procrun, sweeptype, fs='nfs', coldir=None):
 
         self.proctype='regauss'
         self.sweeptype=sweeptype
@@ -1003,6 +1003,7 @@ class Collator:
         out['date'] = date
         out['proctype'] = self.proctype
         out['procrun'] = self.procrun
+        out['sweeptype'] = self.sweeptype
 
   
         return out
@@ -1019,7 +1020,7 @@ class Collator:
     def columns_dir(self):
         if self.coldir is None:
             p=es_sdsspy.sweeps.Proc(self.proctype,self.procrun,self.sweeptype) 
-            p = columns.Columns(self.coldir)
+            d = p.columns_dir()
         else:
             d=self.coldir
         return d

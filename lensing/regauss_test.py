@@ -20,21 +20,34 @@ class Tester(dict):
     """
     testing a single run
     """
-    def __init__(self,procrun,band, run='any'):
+    def __init__(self,procrun,sweeptype,band,run='any', coldir=None):
         self.procrun = procrun
+        self.sweeptype=sweeptype
         self.run = run
         self.band = band
+        self.coldir=coldir
 
         if self.procrun in ['01','02','03']:
             self.old=True
         else:
             self.old=False
 
+    def load_data(self, field):
 
-    def load_data(self):
-        if 'field' not in self:
+        # loading basic columns
+        if 'e1' not in self or field not in self:
             print("Opening columns")
-            c = regauss.open_columns(self.procrun)
+            if self.coldir is not None:
+                print("using coldir:",self.coldir)
+                c = columns.Columns(self.coldir)
+            else:
+                c = regauss.open_columns(self.procrun,self.sweeptype)
+                print("using coldir:",c.dir)
+
+            meta = c['meta'].read()
+            if meta['sweeptype'] != self.sweeptype:
+                raise ValueError("Requested sweeptype %s but "
+                                 "columns dir has %s " % (self.sweeptype,meta['sweeptype']))
 
             if self.run != 'any':
                 print('Getting indices of run:',self.run)
@@ -45,84 +58,98 @@ class Tester(dict):
             else:
                 w=None
 
-            # basic tags to load
-            if self.old:
-                cn_byband={'R_rg':'r_rg',
-                           'amflags_rg':'whyflag_rg',
-                           'e1_rg':'e1_rg','e2_rg':'e2_rg',
-                           'uncer_rg':'momerr_rg',
-                           'Irr':'iyy','Icc':'ixx',
-                           'Irr_psf':'iyy_rg','Icc_psf':'ixx_rg',
-                           'e1_psf':'e1_psf','e2_psf':'e2_psf'}
-                for n in cn_byband:
-                    print("    loading col: ",n)
-                    nn = cn_byband[n] + '_'+self.band
-                    if w is None:
-                        self[n] = c[nn][:]
-                    else:
-                        self[n] = c[nn][w]
 
-            else:
-                cn_byband=['R_rg',
-                           'amflags_rg',
-                           'e1_rg','e2_rg',
-                           'uncer_rg',
-                           'Irr','Icc',
-                           'Irr_psf','Icc_psf',
-                           'e1_psf','e2_psf']
-
-                for name in cn_byband:
-                    cname = name+'_'+self.band
-                    print("    loading col: ",cname)
-                    if w is None:
-                        self[name] = c[cname][:]
-                    else:
-                        self[name] = c[cname][w]
-
-            Tpsf = self['Irr_psf'] + self['Icc_psf']
-            self['psf_sigma'] = mom2sigma(Tpsf)
-            self['psf_fwhm'] = mom2fwhm(Tpsf, pixscale=0.396)
-
-            Tobj = self['Irr'] + self['Icc']
-            self['sigma'] = mom2sigma(Tobj)
-
-            cn = ['field','cmodelmag_dered_r']
-            for name in cn:
-                print("    loading col: ",name)
-                if w is None:
-                    self[name] = c[name][:]
+            if 'e1' not in self:
+                fdict={}
+                if self.sweeptype == 'gal':
+                    fdict = {'R_rg':'R',
+                             'amflags_rg':'amflags',
+                             'e1_rg':'e1',
+                             'e2_rg':'e2',
+                             'uncer_rg':'uncer'}
                 else:
-                    self[name] = c[name][w]
+                    fdict = {'amflags':'amflags',
+                             'e1':'e1','e2':'e2',
+                             'uncer':'uncer'}
+                
+                for f in ['Irr','Icc','Irr_psf','Icc_psf','e1_psf','e2_psf']:
+                    fdict[f] = f
+
+                for name in fdict:
+                    uname = fdict[name]
+
+                    cname = name+'_'+self.band
+                    print("    loading col",cname,"as",uname)
+                    if w is None:
+                        self[uname] = c[cname][:]
+                    else:
+                        self[uname] = c[cname][w]
+
+                Tpsf = self['Irr_psf'] + self['Icc_psf']
+                self['sigma_psf'] = mom2sigma(Tpsf)
+                self['fwhm_psf'] = mom2fwhm(Tpsf, pixscale=0.396)
+
+                Tobj = self['Irr'] + self['Icc']
+                self['sigma'] = mom2sigma(Tobj)
+
+                fdict={'field':'field'}
+                if self.sweeptype == 'gal':
+                    fdict['cmodelmag_dered_r'] = 'rmag'
+                else:
+                    fdict['psfmag_dered_r'] = 'rmag'
+
+                for name in fdict:
+                    uname = fdict[name]
+                    print("    loading col",name,"as",uname)
+                    if w is None:
+                        self[uname] = c[name][:]
+                    else:
+                        self[uname] = c[name][w]
+
+            if field not in self':
+                print("loading plot field:",field)
+                if w is None:
+                    self[field] = c[field][:]
+                else:
+                    self[field] = c[field][w]
 
 
+    def plot_vs_field(self, field, rmag_max=21.8, fmin=None, fmax=None, nbin=20, nperbin=50000,
+                            yrange=None, show=True, type='meane'):
 
-    def plot_ellip_vs_field(self, field, rmag_max=21.8, fmin=None, fmax=None, nbin=20, nperbin=50000,
-                            yrange=None, show=True):
-        self.load_data()
+        
+        if type == 'residual' and self.sweeptype != 'star':
+            raise ValueError("residuals only supported for stars")
 
-        w=where1(  (self['R_rg'] > 1.0/3.0) 
-                 & (self['R_rg'] < 1.0)
-                 & (self['amflags_rg'] == 0)
-                 & (self['e1_rg'] < 4)
-                 & (self['e1_rg'] > -4)
-                 & (self['cmodelmag_dered_r'] > 18.0)
-                 & (self['cmodelmag_dered_r'] < rmag_max) )
+        # this will only load the main data once.
+        self.load_data(field)
 
+        logic = ((self['amflags'] == 0)
+                 & (self['e1'] < 4)
+                 & (self['e1'] > -4)
+                 & (self['rmag'] > 18.0)
+                 & (self['rmag'] < rmag_max) )
+        
+        if self.sweeptype == 'gal':
+            logic = logic & (self['R'] > 1.0/3.0) & (self['R'] < 1.0)
+
+        w=where1(logic)
         if w.size == 0:
             print("no good objects")
             return
 
-        weights = 1.0/(0.32**2 + self['uncer_rg'][w]**2)
+        weights = 1.0/(0.32**2 + self['uncer'][w]**2)
 
-        if field == 'psf_fwhm':
-            field_data = self['psf_fwhm'][w]
+        # we can try to get nice labels for some fields
+        if field == 'fwhm_psf':
+            field_data = self['fwhm_psf'][w]
             fstr = 'PSF FWHM (arcsec)'
-        elif field == 'psf_sigma':
-            field_data = self['psf_sigma'][w]
-            fstr = r'$\sigma_{PSF}$'
+        elif field == 'sigma_psf':
+            field_data = self['sigma_psf'][w]
+            fstr = r'\sigma_{PSF}'
         elif field == 'sigma':
             field_data = self['sigma'][w]
-            fstr = r'$\sigma_{obj+PSF}$'
+            fstr = r'\sigma_{obj+PSF}'
         else:
             field_data = self[field][w]
             fstr=field
@@ -130,9 +157,14 @@ class Tester(dict):
 
         print("Plotting mean e for field:",field)
 
-
-        be1 = eu.stat.Binner(field_data, self['e1_rg'][w], weights=weights)
-        be2 = eu.stat.Binner(field_data, self['e2_rg'][w], weights=weights)
+        if type == 'residual':
+            be1 = eu.stat.Binner(field_data, self['e1'][w]-self['e1_psf'][w], weights=weights)
+            be2 = eu.stat.Binner(field_data, self['e2'][w]-self['e2_psf'][w], weights=weights)
+            ylabel = r'$<e_{star}-e_{PSF}$'
+        else:
+            be1 = eu.stat.Binner(field_data, self['e1'][w], weights=weights)
+            be2 = eu.stat.Binner(field_data, self['e2'][w], weights=weights)
+            ylabel = r'$<e>$'
 
         print("  hist  e1")
         be1.dohist(nperbin=nperbin, min=fmin, max=fmax)
@@ -167,28 +199,35 @@ class Tester(dict):
         plt.add(procrun_lab)
 
         plt.xlabel = r'$'+fstr+'$'
-        plt.ylabel = r'$<e>$'
+        plt.ylabel = ylabel
 
         if yrange is not None:
             plt.yrange=yrange
 
         if show:
             plt.show()
-        epsfile = self.plotfile(field, rmag_max)
+        epsfile = self.plotfile(field, rmag_max, type=type)
+        eu.ostools.makedirs_fromfile(epsfile, verbose=True)
         print("  Writing eps file:",epsfile)
         plt.write_eps(epsfile)
 
        
 
-    def plotfile(self, field, rmag_max):
-        f = 'rg-meane-%s-vs-%s-rmag%0.2f' % (self.band, field, rmag_max)
+    def plotfile(self, field, rmag_max, type='meane'):
+        f = 'rg-%(run)s%(band)s-%(type)s-meane-vs-%(field)s-%(rmag_max)0.2f'
+        f = f % {'run':self.procrun,'band':self.band,'type':type,
+                 'field':field,'rmag_max':rmag_max}
+        #f = 'rg-%s-meane-%s-vs-%s-rmag%0.2f' % (self.procrun,self.band, field, rmag_max)
         if self.run != 'any':
             f += '-%06i' % self.run
         f += '.eps'
         d=self.plotdir()
         f=path_join(d,f)
         return f
+
     def plotdir(self):
         d=os.environ['LENSDIR']
-        d=path_join(d,'regauss-tests')
+        d=path_join(d,'regauss-tests',self.procrun)
+        if self.run != 'any':
+            d = path_join(d,self.run)
         return d
