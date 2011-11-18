@@ -883,6 +883,40 @@ class Collator:
 
         return out_dict
 
+    def replace_e1e2(self):
+        """
+        I had a bug calculating e1,e2 first time.  This will replace it
+        """
+        c = self.open_columns()
+        for band in ['u','g','r','i','z']:
+            print('band:',band)
+            e1col = 'e1_'+band
+            e2col = 'e2_'+band
+
+            print("  reading Irr")
+            Irr = c['Irr_'+band][:]
+            print("  reading Irc")
+            Irc = c['Irc_'+band][:]
+            print("  reading Icc")
+            Icc = c['Icc_'+band][:]
+            print("  reading flags")
+            flags = c['amflags_'+band][:]
+
+            T = Irr + Icc
+
+            e1 = 0*Irr.copy() -9999
+            e2 = e1.copy()
+
+            w,=numpy.where( (flags==0) & (T > 0) )
+            if w.size > 0:
+                e1[w] = (Icc[w]-Irr[w])/T[w]
+                e2[w] = 2*Irc[w]/T[w]
+
+            print("  writing new column:",e1col)
+            c.write_column(e1col, e1, create=True)
+            print("  writing new column:",e2col)
+            c.write_column(e2col, e2, create=True)
+
     def make_e1e2(self, st):
         """
         We forgot to put regular e1,e2 in struct
@@ -890,7 +924,7 @@ class Collator:
         Irr = st['Irr']
         Irc = st['Irc']
         Icc = st['Icc']
-        T = Irr + Irc
+        T = Irr + Icc
 
         e1 = 0*Irr.copy() -9999
         e2 = e1.copy()

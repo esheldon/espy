@@ -9,12 +9,14 @@ from esutil.ostools import path_join, expand_path
 
 import biggles
 from biggles import FramedPlot, PlotKey, Table, PlotLabel, Points, \
-            SymmetricErrorBarsY as SymErrY, SymmetricErrorBarsX as SymErrX
+        SymmetricErrorBarsY as SymErrY, SymmetricErrorBarsX as SymErrX
 
 import fimage
 from fimage.conversions import mom2sigma,mom2fwhm
 
 from . import regauss
+
+import converter
 
 class Tester(dict):
     """
@@ -106,7 +108,7 @@ class Tester(dict):
                     else:
                         self[uname] = c[name][w]
 
-            if field not in self':
+            if field not in self:
                 print("loading plot field:",field)
                 if w is None:
                     self[field] = c[field][:]
@@ -114,12 +116,31 @@ class Tester(dict):
                     self[field] = c[field][w]
 
 
-    def plot_vs_field(self, field, rmag_max=21.8, fmin=None, fmax=None, nbin=20, nperbin=50000,
-                            yrange=None, show=True, type='meane'):
+    def plot_vs_field(self, field, plot_type, 
+                      rmag_min=None, 
+                      rmag_max=None, 
+                      fmin=None, fmax=None, 
+                      nbin=20, nperbin=50000,
+                      yrange=None, show=True):
 
         
-        if type == 'residual' and self.sweeptype != 'star':
+        allowed=['meane','residual']
+        if plot_type not in allowed:
+            raise ValueError("plot_type should be in [%s]" % ','.join(allowed))
+        if plot_type == 'residual' and self.sweeptype != 'star':
             raise ValueError("residuals only supported for stars")
+
+        if rmag_min is None:
+            if self.sweeptype == 'gal':
+                rmag_min=18.0
+            else:
+                rmag_min=15.0
+
+        if rmag_max is None:
+            if self.sweeptype == 'gal':
+                rmag_max=21.8
+            else:
+                rmag_max=19.0
 
         # this will only load the main data once.
         self.load_data(field)
@@ -127,7 +148,7 @@ class Tester(dict):
         logic = ((self['amflags'] == 0)
                  & (self['e1'] < 4)
                  & (self['e1'] > -4)
-                 & (self['rmag'] > 18.0)
+                 & (self['rmag'] > rmag_min)
                  & (self['rmag'] < rmag_max) )
         
         if self.sweeptype == 'gal':
@@ -155,16 +176,28 @@ class Tester(dict):
             fstr=field
             fstr = fstr.replace('_','\_')
 
-        print("Plotting mean e for field:",field)
+        print("Plotting for field:",field)
 
-        if type == 'residual':
+        if plot_type == 'residual':
+            print('  doing: residual')
             be1 = eu.stat.Binner(field_data, self['e1'][w]-self['e1_psf'][w], weights=weights)
             be2 = eu.stat.Binner(field_data, self['e2'][w]-self['e2_psf'][w], weights=weights)
-            ylabel = r'$<e_{star}-e_{PSF}$'
+            ylabel = r'$<e_{star}-e_{PSF}>$'
         else:
+            print('  doing meane')
             be1 = eu.stat.Binner(field_data, self['e1'][w], weights=weights)
             be2 = eu.stat.Binner(field_data, self['e2'][w], weights=weights)
             ylabel = r'$<e>$'
+
+
+        # regular hist for display
+        print("  regular fixed binsize hist")
+        xm,xe,xstd=eu.stat.wmom(field_data, weights, sdev=True)
+        #hxmin = xm-4.0*xstd
+        #hxmax = xm+4.0*xstd
+        bsize = xstd/5.
+        hist = eu.stat.histogram(field_data, binsize=bsize, weights=weights, more=True)
+
 
         print("  hist  e1")
         be1.dohist(nperbin=nperbin, min=fmin, max=fmax)
@@ -177,7 +210,23 @@ class Tester(dict):
         print("  stats e2")
         be2.calc_stats()
 
+
+
         plt = FramedPlot()
+
+        if yrange is not None:
+            plt.yrange=yrange
+            ymin = yrange[0]
+            ymax = 0.8*yrange[1]
+        else:
+            ymin = min( be1['wymean'].min(),be2['wymean'].min() )
+            ymax = 0.8*max( be1['wymean'].max(),be2['wymean'].max() )
+
+        # this is a histogram-like object
+        ph = eu.plotting.make_hist_curve(hist['low'], hist['high'], hist['whist'], 
+                                         ymin=ymin, ymax=ymax, color='grey50')
+        plt.add(ph)
+
         p1 = Points( be1['wxmean'], be1['wymean'], type='filled circle', color='blue')
         p1err = SymErrY( be1['wxmean'], be1['wymean'], be1['wyerr2'], color='blue')
         p1.label = r'$e_1$'
@@ -189,8 +238,8 @@ class Tester(dict):
         key = PlotKey(0.1,0.9, [p1,p2])
         plt.add(p1, p1err, p2, p2err, key)
 
-        if field != 'cmodelmag_dered_r':
-            rmag_lab = PlotLabel(0.1,0.05,'rmag < %0.2f' % rmag_max, halign='left')
+        if field != 'rmag':
+            rmag_lab = PlotLabel(0.1,0.05,'%0.2f < rmag < %0.2f' % (rmag_min,rmag_max), halign='left')
             plt.add(rmag_lab)
 
         procrun_lab = PlotLabel(0.1,0.1,
@@ -201,23 +250,22 @@ class Tester(dict):
         plt.xlabel = r'$'+fstr+'$'
         plt.ylabel = ylabel
 
-        if yrange is not None:
-            plt.yrange=yrange
 
         if show:
             plt.show()
-        epsfile = self.plotfile(field, rmag_max, type=type)
+        epsfile = self.plotfile(field, rmag_max, plot_type=plot_type)
         eu.ostools.makedirs_fromfile(epsfile, verbose=True)
         print("  Writing eps file:",epsfile)
         plt.write_eps(epsfile)
 
+        converter.convert(epsfile,dpi=90, verbose=True)
+
        
 
-    def plotfile(self, field, rmag_max, type='meane'):
-        f = 'rg-%(run)s%(band)s-%(type)s-meane-vs-%(field)s-%(rmag_max)0.2f'
-        f = f % {'run':self.procrun,'band':self.band,'type':type,
+    def plotfile(self, field, rmag_max, plot_type='meane'):
+        f = 'rg-%(run)s%(band)s-%(type)s-vs-%(field)s-%(rmag_max)0.2f'
+        f = f % {'run':self.procrun,'band':self.band,'type':plot_type,
                  'field':field,'rmag_max':rmag_max}
-        #f = 'rg-%s-meane-%s-vs-%s-rmag%0.2f' % (self.procrun,self.band, field, rmag_max)
         if self.run != 'any':
             f += '-%06i' % self.run
         f += '.eps'
