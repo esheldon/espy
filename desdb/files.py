@@ -55,7 +55,7 @@ class Red(dict):
         else:
             self.conn=conn
 
-    def load(self, srclist=False):
+    def load(self):
 
         if self.method == 'id':
             self._get_info_by_id()

@@ -22,10 +22,11 @@ class Tester(dict):
     """
     testing a single run
     """
-    def __init__(self,procrun,sweeptype,band,run='any', coldir=None):
+    def __init__(self,procrun,sweeptype,band, run='any', camcol='any', coldir=None):
         self.procrun = procrun
         self.sweeptype=sweeptype
         self.run = run
+        self.camcol=camcol
         self.band = band
         self.coldir=coldir
 
@@ -34,29 +35,46 @@ class Tester(dict):
         else:
             self.old=False
 
+    def open_columns(self):
+        if self.coldir is not None:
+            print("using coldir:",self.coldir)
+            c = columns.Columns(self.coldir)
+        else:
+            c = regauss.open_columns(self.procrun,self.sweeptype)
+            print("using coldir:",c.dir)
+
+        return c
+
     def load_data(self, field):
 
         # loading basic columns
         if 'e1' not in self or field not in self:
             print("Opening columns")
-            if self.coldir is not None:
-                print("using coldir:",self.coldir)
-                c = columns.Columns(self.coldir)
-            else:
-                c = regauss.open_columns(self.procrun,self.sweeptype)
-                print("using coldir:",c.dir)
+            c = self.open_columns()
 
             meta = c['meta'].read()
             if meta['sweeptype'] != self.sweeptype:
                 raise ValueError("Requested sweeptype %s but "
                                  "columns dir has %s " % (self.sweeptype,meta['sweeptype']))
 
-            if self.run != 'any':
+            if self.run != 'any' and self.camcol != 'any':
+                print('Getting indices of run:',self.run,'camcol:',self.camcol)
+                w=c['run'].match(self.run) & c['camcol'] == self.camcol
+
+                if w.size == 0:
+                    raise ValueError("Run",self.run,"not found")
+            elif self.run != 'any':
                 print('Getting indices of run:',self.run)
                 w=(c['run'].match(self.run))
 
                 if w.size == 0:
                     raise ValueError("Run",self.run,"not found")
+            elif self.camcol != 'any':
+
+                print('Getting indices of camcol:',self.camcol)
+                w=(c['camcol'] == self.camcol)
+                if w.size == 0:
+                    raise ValueError("camcol",self.camcol,"not found")
             else:
                 w=None
 
@@ -155,8 +173,9 @@ class Tester(dict):
             logic = logic & (self['R'] > 1.0/3.0) & (self['R'] < 1.0)
 
         w=where1(logic)
-        if w.size == 0:
-            print("no good objects")
+        minnum=31000
+        if w.size < minnum:
+            print("want %d good objects, found %d" % (minnum,w.size))
             return
 
         weights = 1.0/(0.32**2 + self['uncer'][w]**2)
@@ -246,6 +265,14 @@ class Tester(dict):
                                 'procrun: %s filter: %s' % (self.procrun, self.band), 
                                 halign='left')
         plt.add(procrun_lab)
+        if self.run != 'any':
+            run_lab = PlotLabel(0.9,0.9, 'run: %06i' % self.run, halign='right')
+            plt.add(run_lab)
+        if self.camcol != 'any':
+            run_lab = PlotLabel(0.9,0.8, 'run: %i' % self.camcol, halign='right')
+            plt.add(run_lab)
+
+
 
         plt.xlabel = r'$'+fstr+'$'
         plt.ylabel = ylabel
@@ -258,7 +285,7 @@ class Tester(dict):
         print("  Writing eps file:",epsfile)
         plt.write_eps(epsfile)
 
-        converter.convert(epsfile,dpi=90, verbose=True)
+        converter.convert(epsfile, verbose=True)
 
        
 
@@ -268,6 +295,8 @@ class Tester(dict):
                  'field':field,'rmag_max':rmag_max}
         if self.run != 'any':
             f += '-%06i' % self.run
+        if self.camcol != 'any':
+            f += '-%i' % self.camcol
         f += '.eps'
         d=self.plotdir()
         f=path_join(d,f)
@@ -277,5 +306,7 @@ class Tester(dict):
         d=os.environ['LENSDIR']
         d=path_join(d,'regauss-tests',self.procrun)
         if self.run != 'any':
-            d = path_join(d,self.run)
+            d = path_join(d,'%06i' % self.run)
+        if self.camcol != 'any':
+            d = path_join(d,'%i' % self.camcol)
         return d
