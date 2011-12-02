@@ -18,6 +18,9 @@ from numpy import where
 
 import columns
 
+def open_columns(run):
+    coldir=deswl.files.coldir(run)
+    return columns.Columns(coldir)
 
 class SEColumnCollator: 
     def __init__(self, serun, split=None):
@@ -107,7 +110,7 @@ class SEColumnCollator:
 
         stdout.write('Will write to coldir %s\n' % coldir)
         if os.path.exists(coldir):
-            raise RuntimeError("Coldir exists. Please start from scratch\n")
+            raise RuntimeError("Coldir %s exists. Please start from scratch" % coldir)
 
         self.cols = columns.Columns(coldir)
         self.cols.create()
@@ -377,10 +380,29 @@ class SEColumnCollator:
 
             del data
 
+    def create_indexes(self):
+
+        coldir=self.coldir()
+        cols = columns.Columns(coldir,verbose=True)
+        if not cols.dir_exists():
+            raise RuntimeError("You haven't added the data yet")
+
+        # create some indexes
+        # after this, data automatically gets added to the index
+        cols['ccd'].create_index()
+        cols['size_flags'].create_index()
+        cols['star_flag'].create_index()
+        cols['shear_flags'].create_index()
+        cols['exposurename'].create_index()
+
+        cols['psfstars']['psf_flags'].create_index()
+        cols['psfstars']['uid'].create_index()
+
+
 
 class MEColumnCollator: 
     def __init__(self, run):
-        self.serun = run
+        self.run = run
 
     def collate(self):
         self.load_columns_for_writing()
@@ -390,27 +412,44 @@ class MEColumnCollator:
         ntot = len(self.flist)
         i=1
         for fdict in self.flist:
-            print '-'*70
-            print "Processing %d/%d" % (i,ntot)
+            print('-'*70)
+            print("Processing %d/%d" % (i,ntot))
 
             fname=fdict['multishear']
-            print fname
-            data = fitsio.read(fname)
+            print("    ",fname)
+            data = esutil.io.read(fname)
+
+            catname=fdict['cat']
+            print("    ",catname)
+            cat=esutil.io.read(catname,
+                               columns=['mag_model','magerr_model'],lower=True)
+
+            if cat.size != data.size:
+                raise ValueError("cat and multishear sizes don't "
+                                 "match: %d/%d" % (cat.size,data.size))
+
             self.write(data)
+            self.write(cat)
             i+=1
 
     def write(self,data):
         for c in data.dtype.names:
             if c in ['nimages_found','nimages_gotpix','gal_order']:
-                d=numpy.array(data[c], dtype='i1')
+                d=numpy.array(data[c], dtype='>i1')
             elif c == 'input_flags':
-                d=numpy.array(data[c], dtype='i2')
+                d=numpy.array(data[c], dtype='>i2')
+            elif c == 'shear_signal_to_noise':
+                d=data[c]
+                c = 'shear_s2n'
+            elif c == 'shapelet_sigma':
+                d=data[c]
+                c = 'shapelets_sigma'
             else:
                 d = data[c]
             self.cols.write_column(c, d)
 
     def load_flist(self):
-        flistfile=deswl.files.se_collated_path(self.serun,'goodlist')
+        flistfile=deswl.files.me_collated_path(self.run,'goodlist')
         self.flist=esutil.io.read(flistfile, verbose=True)
 
     def load_columns_for_writing(self):
@@ -418,439 +457,245 @@ class MEColumnCollator:
 
         stdout.write('Will write to coldir %s\n' % coldir)
         if os.path.exists(coldir):
-            raise RuntimeError("Coldir exists. Please start from scratch\n")
+            raise RuntimeError("Coldir %s exists. Please start from scratch" % coldir)
 
         self.cols = columns.Columns(coldir)
         self.cols.create()
 
 
-def create_se_shear_columns_indexes(serun, coldir=None):
+    def convert2fits(self):
+        """
+        Just make fits versions of all the files
+        """
 
-    if coldir is None:
-        coldir = deswl.files.coldir(serun)
-    coldir = expand_path(coldir)
+        coldir=deswl.files.coldir(self.run)
+        fitsdir = coldir.replace('.cols','-fits')
 
-    cols = columns.Columns(coldir,verbose=True)
-    if not cols.dir_exists():
-        raise RuntimeError("You haven't added the data yet")
+        if not os.path.exists(fitsdir):
+            os.makedirs(fitsdir)
 
-    # create some indexes
-    # after this, data automatically gets added to the index
-    cols['ccd'].create_index()
-    cols['size_flags'].create_index()
-    cols['star_flag'].create_index()
-    cols['shear_flags'].create_index()
-    cols['exposurename'].create_index()
+        print('coldir:',coldir)
+        print('fitsdir:',fitsdir)
 
+        cols = columns.Columns(coldir)
 
-    cols['psfstars']['psf_flags'].create_index()
-    cols['psfstars']['uid'].create_index()
+        print(cols)
 
+        for col in sorted(cols):
+            if col in ['shapelets_prepsf']:
+                print("skipping large column:",col)
+            else:
+                print('column: ',col)
 
+                fname = cols[col].filename
 
-def collate_se_shear_columns(serun, split=False,
-                             coldir=None, limit=None):
-    """
-    """
+                # use sfile so we get a rec array
+                data = esutil.sfile.read(fname)
 
-    # start id counter
-    uid = 0
+                fitsfile = os.path.join(fitsdir, col+'.fits')
+                print("    ",fitsfile)
 
-    rc=deswl.files.Runconfig(serun)
-    header = rc.asdict()
-    header['serun'] = header['run']
-    del header['run']
+                # don't make a copy!
+                esutil.io.write(fitsfile, data, clobber=True)
 
-    if coldir is None:
-        coldir = deswl.files.coldir(serun, split=split)
-    coldir = expand_path(coldir)
+                del data
 
-    stdout.write('Will write to coldir %s\n' % coldir)
 
-    if os.path.exists(coldir):
-        raise RuntimeError("Coldir exists. Please start from scratch\n")
+    def create_indexes(self):
 
+        coldir=deswl.files.coldir(self.run)
+        cols = columns.Columns(coldir,verbose=True)
+        if not cols.dir_exists():
+            raise RuntimeError("You haven't added the data yet")
 
-    flistfile=deswl.files.se_collated_path(serun,'goodlist')
-    stdout.write("Reading goodlist: %s\n" % flistfile)
-    flist=json_util.read(flistfile)
+        # create some indexes
+        # after this, data automatically gets added to the index
+        for c in ['id','input_flags','shear_flags','mag_model',
+                  'shear_signal_to_noise','ra','dec','nimages_found','nimages_gotpix']:
+            cols[c].create_index()
 
-    cols = columns.Columns(coldir)
-    cols.create()
 
-    # load the sub columns dir for PSF stars
-    psf_subcoldir = os.path.join(coldir, 'psfstars.cols')
-    cols.load_coldir(psf_subcoldir)
+    def write_html(self):
+        rc = deswl.files.Runconfig(self.run)
 
-    ntot=len(flist)
-    i=1
-    for fdict in flist:
+        collate_dir = deswl.files.collated_dir(self.run)
+        html_dir = path_join(collate_dir, 'html')
+        if not os.path.exists(html_dir):
+            os.makedirs(html_dir)
 
-        stdout.write('-'*70)
-        stdout.write('\nReading: %d/%d\n' % (i,ntot))
-        data = {}
+        coldir = deswl.files.coldir(self.run)
+        fitsdir = coldir.replace('.cols','-fits')
+        plotdir=path_join(collate_dir,'plots')
 
-        exposurename=fdict['exposurename']
-        ccd=int(fdict['ccd'])
-
-        data['exposurename'] = exposurename
-        data['ccd'] = ccd
-
-        data['stars'] = deswl.files.se_read(exposurename, ccd, 'stars', 
-                                              serun=serun, ext=1, verbose=True)
-
-        data['idvals'] = uid + numpy.arange(data['stars'].size,dtype='i4')
-
-        data['shear'] = deswl.files.se_read(exposurename, ccd, 'shear', 
-                                              serun=serun, ext=1, verbose=True)
-
-        if data['stars'].size != data['shear'].size:
-            raise ValueError('Size file and shears file must be same length')
-        w,=numpy.where(data['stars']['id'] != data['shear']['id'])
-        if w.size > 0:
-            raise ValueError("id fields don't match up")
-
-        
-        # write main columns
-        _do_collate_se_shear_columns(cols, data)
-
-
-        # write psf columns
-        data['psf'] = deswl.files.se_read(exposurename, ccd, 'psf', 
-                                            serun=serun, ext=1,verbose=True)
-
-        _do_collate_se_shear_columns_psf(cols, data)
-
-        stdout.flush()
-        
-        i += 1
-        uid += stars.size
-
-        if limit is not None:
-            if i > limit:
-                return
-
-
-def _do_collate_se_shear_columns(cols, stars, shear, idvals, ccd, exposurename):
-    # note I'm using some smaller types here to save space
-
-    # data from the stars structure
-    id = numpy.array(stars['id'], dtype='i2')
-    cols.write_column('id',id)
-    del id
-
-    x=numpy.array(stars['x'], dtype='f4')
-    cols.write_column('x',x)
-    del x
-
-    y=numpy.array(stars['y'], dtype='f4')
-    cols.write_column('y',y)
-    del y
-
-    sky=numpy.array(stars['sky'], dtype='f4')
-    cols.write_column('sky',sky)
-    del sky
-
-
-    size_flags=numpy.array(stars['size_flags'], dtype='i2')
-    cols.write_column('size_flags',size_flags)
-    del size_flags
-
-
-    sigma0=numpy.array(stars['sigma0'], dtype='f4')
-    cols.write_column('sigma0',sigma0)
-    del sigma0
-
-
-    cols.write_column('imag',stars['mag'])
-
-
-    star_flag=numpy.array(stars['star_flag'], dtype='i1')
-    cols.write_column('star_flag',star_flag)
-    del star_flag
-
-
-    # Data from the shear structure
-    cols.write_column('shear_flags',shear['shear_flags'])
-    cols.write_column('ra',shear['ra'])
-    cols.write_column('dec',shear['dec'])
-
-    shear1=numpy.array(shear['shear1'], dtype='f4')
-    cols.write_column('shear1',shear1)
-    del shear1
-    shear2=numpy.array(shear['shear2'], dtype='f4')
-    cols.write_column('shear2',shear2)
-    del shear2
-
-    shear_cov00=numpy.array(shear['shear_cov00'], dtype='f4')
-    cols.write_column('shear_cov00',shear_cov00)
-    del shear_cov00
-    shear_cov01=numpy.array(shear['shear_cov01'], dtype='f4')
-    cols.write_column('shear_cov01',shear_cov01)
-    del shear_cov01
-    shear_cov11=numpy.array(shear['shear_cov11'], dtype='f4')
-    cols.write_column('shear_cov11',shear_cov11)
-    del shear_cov11
-
-    gal_order=numpy.array(shear['gal_order'], dtype='i1')
-    cols.write_column('shapelets_order',gal_order)
-    del gal_order
-
-
-    shapelet_sigma=numpy.array(shear['shapelet_sigma'], dtype='f4')
-    cols.write_column('shapelets_sigma',shapelet_sigma)
-    del shapelet_sigma
-
-
-    shapelets_prepsf=numpy.array(shear['shapelets_prepsf'], dtype='f4')
-    cols.write_column('shapelets_prepsf',shapelets_prepsf)
-
-
-    e1 = shapelets_prepsf[:,3]*numpy.sqrt(2)
-    e2 = -shapelets_prepsf[:,4]*numpy.sqrt(2)
-    del shapelets_prepsf
-
-    cols.write_column('e1',e1)
-    del e1
-    cols.write_column('e2',e2)
-    del e2
-
-    # shapelets info interpolated from PSF stars
-    psf_order=numpy.array(shear['interp_psf_order'], dtype='i1')
-    cols.write_column('interp_psf_order',psf_order)
-    del psf_order
-
-
-    psf_sigma=numpy.array(shear['interp_psf_sigma'], dtype='f4')
-    cols.write_column('interp_psf_sigma',psf_sigma)
-    del psf_sigma
-
-    psf_coeffs=numpy.array(shear['interp_psf_coeffs'], dtype='f4')
-    cols.write_column('interp_psf_shapelets',psf_coeffs)
-
-    # get e1/e2 from interpolated coeffs
-    psf_e1 = psf_coeffs[:,3]*numpy.sqrt(2)
-    psf_e2 = -psf_coeffs[:,4]*numpy.sqrt(2)
-
-    cols.write_column('interp_psf_e1',psf_e1)
-    cols.write_column('interp_psf_e2',psf_e2)
-
-    del psf_coeffs
-    del psf_e1
-    del psf_e2
-
-
-
-    # nu, the S/N.  Error on either component e1,e2 is sqrt(2)/nu
-    nu=numpy.array(shear['nu'],dtype='f4')
-    cols.write_column('nu',nu)
-
-
-
-    # our id column
-    cols.write_column('uid', idvals)
-
-    # Same for all objects in this set
-    ccd_array = numpy.zeros(stars.size, dtype='i1')
-    ccd_array[:] = ccd
-    cols.write_column('ccd',ccd_array)
-
-    exp_array = numpy.zeros(stars.size, dtype='S20')
-    exp_array[:] = exposurename
-    cols.write_column('exposurename',exp_array)
-
-    del ccd_array
-    del exp_array
-
-
-def _do_collate_se_shear_columns_psf(cols, stars, psf, idvals):
-    cols['psfstars'].write_column('psf_flags', psf['psf_flags'])
-
-    nu=numpy.array(psf['nu'],dtype='f4')
-    cols['psfstars'].write_column('nu', nu)
-
-    order=numpy.array(psf['psf_order'],dtype='i1')
-    cols['psfstars'].write_column('shapelets_order', order)
-
-    sigma_p = numpy.array(psf['sigma_p'], dtype='f4')
-    cols['psfstars'].write_column('shapelets_sigma', sigma_p)
-
-    psf_shapelets = numpy.array(psf['shapelets'], dtype='f4')
-    cols['psfstars'].write_column('shapelets', psf_shapelets)
-
-
-    e1 = psf_shapelets[:,3]*numpy.sqrt(2)
-    e2 = -psf_shapelets[:,4]*numpy.sqrt(2)
-
-    cols['psfstars'].write_column('e1',e1)
-    cols['psfstars'].write_column('e2',e2)
-
-
-    pind, sind = esutil.numpy_util.match(psf['id'], stars['id'])
-
-    if pind.size != psf.size:
-        raise ValueError("Some PSF stars did not match\n")
-    p_idvals = idvals[sind]
-    cols['psfstars'].write_column('uid', p_idvals)
-
-    del nu
-    del order
-    del sigma_p
-    del psf_shapelets
-    del p_idvals
-    del e1
-    del e2
-
-
-
-
-def collate_se_shear_array(num=1, fields=None, allfields=False):
-    """
-    This is just a minimal structure
-
-    Note I'm using f4 instead of f8 here
-    """
-    dt=[('x','f4'),
-        ('y','f4'),
-        ('ra','f8'),
-        ('dec','f8'),
-        ('exposurename','S20'),
-        ('ccd','i1'),
-        ('size_flags','i4'),
-        ('magi','f4'),
-        ('sigma0','f4'),
-        ('star_flag','i4'),
-        ('shear_flags','i4'),
-        ('shapelet_sigma','f4'),
-        ('shear1','f4'),
-        ('shear2','f4'),
-        ('shear_cov00','f4'),
-        ('shear_cov01','f4'),
-        ('shear_cov11','f4'),
-        ('shapelets_prepsf','f4',28)]
-
-    dnames=[d[0] for d in dt]
-
-
-    if fields is None:
-        if allfields:
-            fields = dnames
+        if os.path.exists(fitsdir):
+            table_comment=('<i>* The collated FITS files do not include the large '
+                           'column <code>shapelets_prepsf</code></i>')
         else:
-            fields = [f[0] for f in dt if f[0] != 'shapelets_prepsf']
+            table_comment='<i><b>* FITS Not Yet Available</b></i>'
 
-    # preserve order
-    newdt = []
-    for f in fields:
-        try:
-            ind = dnames.index(f)
-        except:
-            raise ValueError,"Field '%s' not available" % f
+        if not os.path.exists(coldir):
+            col_comment += ' <i><b>Columns database not yet available</b></i>'
 
-        newdt.append(dt[ind]) 
-    dt=newdt
+        if os.path.exists(plotdir):
+            qatext = """
+            <td>
+                <p>
+                <p>
+                <h2>QA and Analysis</h2>
+                Here are  some <a href="html/qa.html">QA plots and tests</a>.
+                <p>
+                <p>
+            </td>
+            """
+        else:
+            qatext=""
 
-    return numpy.zeros(num, dtype=dt)
+        table_css_file=path_join(html_dir, 'table.css')
+        write_css(table_css_file)
+
+        download="""
+<html>
+<head>
+	<link rel="stylesheet" href="html/table.css" type="text/css">
+</head>
+
+<body bgcolor=white>
+
+<h1>{dataset} Multi-Epoch Catalogs: Run {run}</h1>
+
+<table width="500px">
+	<tr>
+		<td>
+
+            <h2>Raw WL outputs</h2>
+            Raw outputs can be found <a href="..">Here</a>.   If you plan to download
+            <i><b>all the data</b></i>, please contact Erin Sheldon.
+            <p>
+            These files are located on the <a href="https://sites.google.com/site/bnlwlens/software-tutorials/software-setup">astro cluster</a> at
+            <pre>
+    /astro/u/astrodat/data/DES/wlbnl/{run}
+            </pre>
+			<h2>Collated WL outputs</h2>
+            <ul>
+                <li><a href="html/columns-descr.html">Description of the table</a>
+            </ul>
+
+            This "table" is actually just a file for each column.
+
+            <p>
+            <table>
+                <table class=simple>
+                    <caption>Collated downloads</caption>
+                    <tr><th width=50%>Column Database</th><th width=50%>FITS</th></tr>
+                    <tr>
+                        <td>
+                            Files for each column in "recfile" format.  This is a 
+                            <a href="http://code.google.com/p/pycolumns/">columns database</a>.
+                            <ul>
+                                <li><a href="{run}.cols">{run}.cols</a>
+                            </ul>
+                        </td>
+
+                        <td>
+                            Files for each column in FITS format<b>*</b>
+                            <ul>
+                                <li><a href="{run}-fits">{run}-fits</a> 
+                            </ul>
+                        </td>
+                    </tr>
+                </table>
+                {table_comment}
+            </table>
+
+		</td>
+	</tr>
+    <tr>
+        <p>
+        The collate directories are located on the <a href="https://sites.google.com/site/bnlwlens/software-tutorials/software-setup">astro cluster</a> under<br>
+        <pre>
+    /astro/u/astrodat/data/DES/wlbnl/{run}/collated
+        </pre>
+    </tr>
+
+	<tr>
+    {qatext}
+	</tr>
+</table>
 
 
-def collate_se_shear(serun, objclass='all',
-                     fields=None,
-                     allfields=False,
-                     clobber=True,
-                     outdir=None,
-                     convert_to_degrees=False,
-                     limit=None):
 
-    """
-    """
+</body>
+</html>
+        """.format(run=self.run, 
+                   dataset=rc['dataset'],
+                   table_comment=table_comment,
+                   qatext=qatext)
+
+        download_file=path_join(collate_dir,'download.html')
+        stdout.write("Writing download file: %s\n" % download_file)
+        with open(download_file,'w') as fobj:
+            fobj.write(download)
 
 
+        coldescr = """
+<html>
+<head>
+	<link rel="stylesheet" href="table.css" type="text/css">
+</head>
 
-    rc=deswl.files.Runconfig(serun)
-    header = rc.asdict()
-    header['serun'] = header['run']
-    del header['run']
+<body bgcolor=white>
 
-    flistfile=deswl.files.se_collated_path(serun,'goodlist')
-    stdout.write("Reading goodlist: %s\n" % flistfile)
-    flist=json_util.read(flistfile)
+<h2>Description of Fields in {run} Multi-epoch Shear Table</h2>
 
-    if outdir is not None:
-        outdir=esutil.ostools.expand_path(outdir)
-        if not os.path.exists(outdir):
-            os.makedirs(outdir)
+Data types are described using this key:
 
-    outfile = deswl.files.se_collated_path(serun, objclass, ftype='rec', 
-                                             dir=outdir)
-    stdout.write('Will write to %s\n' % outfile)
+<pre>
+f=floating point  
+i=integer  
+S=string
+</pre>
 
-    odir=os.path.dirname(outfile)
-    if not os.path.exists(odir):
-        stdout.write("Creating output directory: %s\n" % odir)
-        os.makedirs(odir)
+<p>
+<table class=simple>
+	<tr><th>Column Name</th><th>Data Type<br>[type][bytes]</th><th>Description</th></tr>
 
-    ename=esutil.ostools.expand_path(outfile)
-    if os.path.exists(ename):
-        if not clobber:
-            raise RuntimeError("Outfile exists. Send clobber=True to "
-                               "overwrite")
+	<tr> <td>id</td>                <td> i4</td>    <td>SExtractor id in this field</td>    </tr>
 
-    sf = esutil.sfile.Open(outfile, mode='w')
+	<tr> <td>ra</td>                <td> f8</td>    <td>ra (degrees, J2000)</td>  </tr>
+	<tr> <td>dec</td>               <td> f8</td>    <td>dec (degrees, J2000)</td>  </tr>
 
-    ntot=len(flist)
-    i=1
-    for fdict in flist:
+	<tr> <td>input_flags</td>       <td> i2</td>    <td>Input flags from catalog</tr>
 
-        exposurename=fdict['exposurename']
-        ccd=int(fdict['ccd'])
+	<tr> <td>mag_model</td>         <td> f4</td>    <td>i-band </td>  </tr>
+	<tr> <td>magerr_model</td>      <td> f4</td>    <td>i-band </td>  </tr>
 
-        #if True:
-        if (i % 10) == 0:
-            stars_file=deswl.files.se_path(exposurename,ccd,'stars',
-                                             serun=serun)
-            shear_file=deswl.files.se_path(exposurename,ccd,'shear',
-                                             serun=serun)
-            stdout.write('Reading: %d/%d\n\t%s\n' % (i,ntot,stars_file))
+	<tr> <td>nimages_found</td>     <td> i1</td>    <td>Number of images found to overlap</tr>
+	<tr> <td>nimages_gotpix</td>    <td> i1</td>    <td>Number of images that contributed pixels</tr>
 
-        stars = deswl.files.se_read(exposurename, ccd, 'stars', 
-                                      serun=serun, ext=1)
+	<tr> <td>shear_flags</td>       <td> i4</td>    <td>shear and shapelets error flags</td>  </tr>
+	<tr> <td>shear_s2n</td>         <td> f8</td>    <td>shear S/N for this object. Error on e1/e2 is sqrt(2)/s2n</td> </tr>
+	<tr> <td>shapelets_sigma</td>   <td> f8</td>    <td>size used for pre-psf <br>shapelet decompositions </td>  </tr>
+	<tr> <td>shapelets_prepsf</td>  <td> f8</td>    <td>pre-psf shapelet decompositions </td>  </tr>
+	<tr> <td>gal_order</td>         <td> i1</td>    <td>Order used for shear </td>  </tr>
 
-        if (i % 10) == 0:
-            stdout.write('\t%s\n' % shear_file)
-        shear = deswl.files.se_read(exposurename, ccd, 'shear', 
-                                      serun=serun, ext=1)
+	<tr> <td>shear1</td>            <td> f8</td>    <td>shear component 1 in ra/dec coords</td>  </tr>
+	<tr> <td>shear2</td>            <td> f8</td>    <td>shear compoment 2 in ra/dec coords</td>  </tr>
+	<tr> <td>shear_cov00</td>       <td> f8</td>    <td>err squared for first shear compoment</td>  </tr>
+	<tr> <td>shear_cov01</td>       <td> f8</td>    <td>covariance between 1st and 2nd <br>shear components</td>  </tr>
+	<tr> <td>shear_cov11</td>       <td> f8</td>    <td>err squared for 2nd shear component</td> </tr>
 
-        # we output ra/dec in arcsec!?!?!
-        if convert_to_degrees:
-            deswl.files.convert_to_degrees(shear)
+</table>
 
-        if stars.size != shear.size:
-            raise ValueError('Size file and shears file must be same length')
-        w,=numpy.where(stars['id'] != shear['id'])
-        if w.size > 0:
-            raise ValueError("id fields don't match up")
+</body>
+</html>
+""".format(run=self.run)
 
-        outarr=collate_se_shear_array(stars.size, 
-                                      fields=fields, 
-                                      allfields=allfields)
 
-        numpy_util.copy_fields(stars, outarr)
-        numpy_util.copy_fields(shear, outarr)
+        descr_file=path_join(html_dir, 'columns-descr.html')
+        print("Writing allcols description file",descr_file)
+        with open(descr_file,'w') as fobj:
+            fobj.write(coldescr)
 
-        # renaming
-        outarr['magi'] = stars['mag']
-
-        outarr['ccd'] = ccd
-        outarr['exposurename'] = exposurename
-
-        sf.write(outarr, header=header)
-        i += 1
-
-        if limit is not None:
-            if i > limit:
-                return
-
-    sf.close()
-    stdout.write('Wrote to %s\n' % outfile)
 
 
 def write_se_collate_html(serun, showsplit=False):
@@ -862,7 +707,7 @@ def write_se_collate_html(serun, showsplit=False):
 
     rc = deswl.files.Runconfig(serun)
 
-    dir=deswl.files.se_collated_dir(serun)
+    dir=deswl.files.collated_dir(serun)
     html_dir = path_join(dir, 'html')
     if not os.path.exists(html_dir):
         os.makedirs(html_dir)
@@ -877,7 +722,7 @@ def write_se_collate_html(serun, showsplit=False):
         col_comment += ' <i><b>Columns database not yet available</b></i>'
 
 
-    collate_dir= deswl.files.se_collated_dir(serun)
+    collate_dir= deswl.files.collated_dir(serun)
     plotdir=path_join(collate_dir,'plots')
 
     band='i'
@@ -1254,10 +1099,11 @@ S=string
     fobj.write(qa)
     fobj.close()
 
+    table_css_file=path_join(html_dir, 'table.css')
 
+    write_css(table_css_file)
 
-
-
+def write_css(fname):
     table_css="""
 table.simple {
 	border-width: 1px;
@@ -1278,9 +1124,8 @@ table.simple td {
 
     """
 
-    table_css_file=path_join(html_dir, 'table.css')
-    stdout.write("Writing table.css file\n")
-    fobj=open(table_css_file,'w')
+    print("Writing table.css file",fname)
+    fobj=open(fname,'w')
     fobj.write(table_css)
     fobj.close()
 
