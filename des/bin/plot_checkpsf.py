@@ -355,7 +355,7 @@ def run_from_serun():
     if options.coldir is not None:
         coldir=options.coldir
     else:
-        coldir = deswl.files.wlse_coldir(serun)
+        coldir = deswl.files.coldir(serun)
 
     # open the column database
     stdout.write("Opening coldir: '%s'\n" % coldir)

@@ -19,7 +19,7 @@ from numpy import where
 import columns
 
 
-class ColumnCollator: 
+class SEColumnCollator: 
     def __init__(self, serun, split=None):
         self.serun = serun
         self.split=split
@@ -83,7 +83,7 @@ class ColumnCollator:
 
 
     def coldir(self, fits=False):
-        coldir = deswl.files.se_coldir(self.serun, fits=fits)
+        coldir = deswl.files.coldir(self.serun, fits=fits)
         coldir = expand_path(coldir)
 
         if self.split is not None:
@@ -378,13 +378,56 @@ class ColumnCollator:
             del data
 
 
+class MEColumnCollator: 
+    def __init__(self, run):
+        self.serun = run
 
+    def collate(self):
+        self.load_columns_for_writing()
+
+        self.load_flist()
+
+        ntot = len(self.flist)
+        i=1
+        for fdict in self.flist:
+            print '-'*70
+            print "Processing %d/%d" % (i,ntot)
+
+            fname=fdict['multishear']
+            print fname
+            data = fitsio.read(fname)
+            self.write(data)
+            i+=1
+
+    def write(self,data):
+        for c in data.dtype.names:
+            if c in ['nimages_found','nimages_gotpix','gal_order']:
+                d=numpy.array(data[c], dtype='i1')
+            elif c == 'input_flags':
+                d=numpy.array(data[c], dtype='i2')
+            else:
+                d = data[c]
+            self.cols.write_column(c, d)
+
+    def load_flist(self):
+        flistfile=deswl.files.se_collated_path(self.serun,'goodlist')
+        self.flist=esutil.io.read(flistfile, verbose=True)
+
+    def load_columns_for_writing(self):
+        coldir=deswl.files.coldir(self.run)
+
+        stdout.write('Will write to coldir %s\n' % coldir)
+        if os.path.exists(coldir):
+            raise RuntimeError("Coldir exists. Please start from scratch\n")
+
+        self.cols = columns.Columns(coldir)
+        self.cols.create()
 
 
 def create_se_shear_columns_indexes(serun, coldir=None):
 
     if coldir is None:
-        coldir = deswl.files.se_coldir(serun)
+        coldir = deswl.files.coldir(serun)
     coldir = expand_path(coldir)
 
     cols = columns.Columns(coldir,verbose=True)
@@ -419,7 +462,7 @@ def collate_se_shear_columns(serun, split=False,
     del header['run']
 
     if coldir is None:
-        coldir = deswl.files.se_coldir(serun, split=split)
+        coldir = deswl.files.coldir(serun, split=split)
     coldir = expand_path(coldir)
 
     stdout.write('Will write to coldir %s\n' % coldir)

@@ -18,7 +18,7 @@ from esutil.ostools import path_join
 class SizeMagSelector(dict):
     def __init__(self, run):
         self._run=run
-        coldir = deswl.files.wlse_coldir(run)
+        coldir = deswl.files.coldir(run)
         if not os.path.exists(coldir):
             raise ValueError("No such coldir: %s" % coldir)
         self['cols'] = columns.Columns(coldir)
