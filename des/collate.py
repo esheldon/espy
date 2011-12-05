@@ -435,9 +435,9 @@ class MEColumnCollator:
     def write(self,data):
         for c in data.dtype.names:
             if c in ['nimages_found','nimages_gotpix','gal_order']:
-                d=numpy.array(data[c], dtype='>i1')
+                d=numpy.array(data[c], dtype='i1')
             elif c == 'input_flags':
-                d=numpy.array(data[c], dtype='>i2')
+                d=numpy.array(data[c], dtype='i2')
             elif c == 'shear_signal_to_noise':
                 d=data[c]
                 c = 'shear_s2n'
@@ -446,6 +446,8 @@ class MEColumnCollator:
                 c = 'shapelets_sigma'
             else:
                 d = data[c]
+
+            numpy_util.to_native(d, inplace=True)
             self.cols.write_column(c, d)
 
     def load_flist(self):
@@ -512,7 +514,10 @@ class MEColumnCollator:
         # after this, data automatically gets added to the index
         for c in ['id','input_flags','shear_flags','mag_model',
                   'shear_signal_to_noise','ra','dec','nimages_found','nimages_gotpix']:
-            cols[c].create_index()
+            if cols[c].has_index():
+                print("skipping '%s' which already has an index" % c)
+            else:
+                cols[c].create_index()
 
 
     def write_html(self):
