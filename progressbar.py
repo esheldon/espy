@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 # Copyright: 2009 Nadia Alramli
 # License: BSD
+#
+# Modification History
+#  Make sure percent is integer 
+#       Erin Sheldon, Brookhaven National Laboratory
+
 """Draws an animated terminal progress bar
 Usage:
     p = ProgressBar("blue")
@@ -15,6 +20,9 @@ class ProgressBar(object):
     TEMPLATE = (
      '%(percent)-2s%% %(color)s%(progress)s%(normal)s%(empty)s %(message)s\n'
     )
+    #TEMPLATE = (
+    # '%(percent)-2s%% [%(color)s%(progress)s%(normal)s%(empty)s] %(message)s\n'
+    #)
     PADDING = 7
  
     def __init__(self, color=None, width=None, block='█', empty=' '):
@@ -43,6 +51,8 @@ class ProgressBar(object):
         percent -- the progress percentage %
         message -- message string (optional)
         """
+        percent = int(percent)
+
         inline_msg_len = 0
         if message:
             # The length of the first line in the message

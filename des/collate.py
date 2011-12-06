@@ -421,8 +421,11 @@ class MEColumnCollator:
 
             catname=fdict['cat']
             print("    ",catname)
-            cat=esutil.io.read(catname,
-                               columns=['mag_model','magerr_model'],lower=True)
+            cat0=esutil.io.read(catname,
+                                columns=['mag_model','magerr_model','x_image','y_image'],lower=True)
+
+            cat = numpy_util.add_fields(cat0, [('tilename','S12')])
+            cat['tilename'] = fdict['tilename']
 
             if cat.size != data.size:
                 raise ValueError("cat and multishear sizes don't "
@@ -449,6 +452,9 @@ class MEColumnCollator:
 
             numpy_util.to_native(d, inplace=True)
             self.cols.write_column(c, d)
+
+
+
 
     def load_flist(self):
         flistfile=deswl.files.me_collated_path(self.run,'goodlist')
