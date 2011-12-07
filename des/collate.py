@@ -7,6 +7,7 @@ from copy import copy
 import esutil
 from esutil import json_util
 from esutil import numpy_util
+from esutil.numpy_util import replicate
 from esutil.plotting import setuplot, bwhiskers
 from esutil.ostools import path_join, getenv_check, expand_path
 
@@ -14,7 +15,7 @@ import deswl
 from deswl import wlpipe
 
 import numpy
-from numpy import where
+from numpy import where, arange
 
 import columns
 
@@ -411,6 +412,8 @@ class MEColumnCollator:
 
         ntot = len(self.flist)
         i=1
+
+        uid0=0
         for fdict in self.flist:
             print('-'*70)
             print("Processing %d/%d" % (i,ntot))
@@ -424,16 +427,20 @@ class MEColumnCollator:
             cat0=esutil.io.read(catname,
                                 columns=['mag_model','magerr_model','x_image','y_image'],lower=True)
 
-            cat = numpy_util.add_fields(cat0, [('tilename','S12')])
-            cat['tilename'] = fdict['tilename']
-
             if cat.size != data.size:
                 raise ValueError("cat and multishear sizes don't "
                                  "match: %d/%d" % (cat.size,data.size))
 
+            uids = uid0 + arange(data.size,dtype='i4')
+            tilenames = replicate(fdict['tilename'], data.size)
+
             self.write(data)
             self.write(cat)
+            self.cols.write_column('tilename', tilenames)
+            self.cols.write_column('uid', uids)
+
             i+=1
+            uid0 += data.size
 
     def write(self,data):
         for c in data.dtype.names:
@@ -661,24 +668,29 @@ class MEColumnCollator:
 Data types are described using this key:
 
 <pre>
-f=floating point  
-i=integer  
-S=string
+f  -> floating point  
+i  -> integer  
+S  -> string
+[] -> vector
 </pre>
 
 <p>
 <table class=simple>
 	<tr><th>Column Name</th><th>Data Type<br>[type][bytes]</th><th>Description</th></tr>
 
+	<tr> <td>uid</td>               <td> i4</td>    <td>A unique id for this run</td>    </tr>
+	<tr> <td>tilename</td>          <td> S12</td>   <td>Coadd tilename</td>    </tr>
 	<tr> <td>id</td>                <td> i4</td>    <td>SExtractor id in this field</td>    </tr>
+	<tr> <td>x_image</td>           <td> f4</td>    <td>SExtractor x position in image (in python im[y,x])</td></tr>
+	<tr> <td>y_image</td>           <td> f4</td>    <td>SExtractor y position in image (in python im[y,x])</td></tr>
 
-	<tr> <td>ra</td>                <td> f8</td>    <td>ra (degrees, J2000)</td>  </tr>
-	<tr> <td>dec</td>               <td> f8</td>    <td>dec (degrees, J2000)</td>  </tr>
+	<tr> <td>ra</td>                <td> f8</td>    <td>SExtractor ra (degrees, J2000)</td>  </tr>
+	<tr> <td>dec</td>               <td> f8</td>    <td>SExtractor dec (degrees, J2000)</td>  </tr>
 
-	<tr> <td>input_flags</td>       <td> i2</td>    <td>Input flags from catalog</tr>
+	<tr> <td>input_flags</td>       <td> i2</td>    <td>SExtractor catalog flags</tr>
 
-	<tr> <td>mag_model</td>         <td> f4</td>    <td>i-band </td>  </tr>
-	<tr> <td>magerr_model</td>      <td> f4</td>    <td>i-band </td>  </tr>
+	<tr> <td>mag_model</td>         <td> f4</td>    <td>SExtractor i-band </td>  </tr>
+	<tr> <td>magerr_model</td>      <td> f4</td>    <td>SExtractor i-band </td>  </tr>
 
 	<tr> <td>nimages_found</td>     <td> i1</td>    <td>Number of images found to overlap</tr>
 	<tr> <td>nimages_gotpix</td>    <td> i1</td>    <td>Number of images that contributed pixels</tr>
@@ -686,7 +698,7 @@ S=string
 	<tr> <td>shear_flags</td>       <td> i4</td>    <td>shear and shapelets error flags</td>  </tr>
 	<tr> <td>shear_s2n</td>         <td> f8</td>    <td>shear S/N for this object. Error on e1/e2 is sqrt(2)/s2n</td> </tr>
 	<tr> <td>shapelets_sigma</td>   <td> f8</td>    <td>size used for pre-psf <br>shapelet decompositions </td>  </tr>
-	<tr> <td>shapelets_prepsf</td>  <td> f8</td>    <td>pre-psf shapelet decompositions </td>  </tr>
+	<tr> <td>shapelets_prepsf</td>  <td> f8[]</td>    <td>pre-psf shapelet decompositions </td>  </tr>
 	<tr> <td>gal_order</td>         <td> i1</td>    <td>Order used for shear </td>  </tr>
 
 	<tr> <td>shear1</td>            <td> f8</td>    <td>shear component 1 in ra/dec coords</td>  </tr>
@@ -905,16 +917,17 @@ Region RA          Dec        gamma1     gamma2   gamma1     gamma2    posangle
 Data types are described using this key:
 
 <pre>
-f=floating point  
-i=integer  
-S=string
+f  -> floating point  
+i  -> integer  
+S  -> string
+[] -> vector
 </pre>
 
 <p>
 <table class=simple>
 	<tr><th>Column Name</th><th>Data Type<br>[type][bytes]</th><th>Description</th></tr>
 
-	<tr> <td>uid</td>               <td> i4</td>    <td>A unique id</td>    </tr>
+	<tr> <td>uid</td>               <td> i4</td>    <td>A unique id for this run</td>    </tr>
 	<tr> <td>exposurename</td>      <td> S20</td>   <td>e.g. decam--27--41-i-11</td>  </tr>
 	<tr> <td>ccd</td>               <td> i2</td>    <td>ccd number</td>  </tr>
 	<tr> <td>id</td>                <td> i2</td>    <td>SExtractor id in this field</td>    </tr>
@@ -937,7 +950,7 @@ S=string
 	<tr> <td>shear_s2n</td>         <td> f4</td>    <td>shear S/N for this object. Error on e1/e2 is sqrt(2)/s2n</td> </tr>
 	<tr> <td>shapelets_sigma</td>   <td> f4</td>    <td>size used for pre-psf <br>shapelet decompositions </td>  </tr>
 	<tr> <td>shapelets_order</td>   <td> i2</td>    <td>Order used for pre-psf <br>shapelet decompositions </td>  </tr>
-	<tr> <td>shapelets_prepsf</td>  <td> f4</td>    <td>pre-psf shapelet decompositions </td>  </tr>
+	<tr> <td>shapelets_prepsf</td>  <td> f4[]</td>    <td>pre-psf shapelet decompositions </td>  </tr>
 
 	<tr> <td>e1</td>  <td> f4</td>    <td>pre-psf e1 in ra/dec coords</td>  </tr>
 	<tr> <td>e2</td>  <td> f4</td>    <td>pre-psf e2 in ra/dec coords</td>  </tr>
