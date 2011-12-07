@@ -38,6 +38,9 @@ parser=OptionParser(__doc__)
 parser.add_option("-s","--imsize",default=800, 
                   help=("Optional size of png images in pixels, used "
                         "when not sent in last column"))
+
+parser.add_option("-r","--range",default=None, 
+                  help=("Range from image to use"))
 parser.add_option("--show",action='store_true',
                   help="show each cutout on the screen and wait pause.")
 
@@ -122,6 +125,15 @@ def process_line(line, options):
 def main():
     options, args = parser.parse_args(sys.argv[1:])
 
+    rng = options.range
+    if rng is not None:
+        rng = rng.split(',')
+        rng = [float(r) for r in rng]
+        print 'using range:',rng
+    else:
+        rng=[None,None]
+
+
     imfile_old=''
     for line in stdin:
 
@@ -140,7 +152,7 @@ def main():
             continue
 
 
-        plt = images.view(cutout, show=options.show)
+        plt = images.view(cutout, show=options.show, min=rng[0], max=rng[1])
 
         if options.show:
             key=raw_input('hit a key (q to quit): ')
