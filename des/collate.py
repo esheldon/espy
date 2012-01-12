@@ -39,7 +39,7 @@ class SEColumnCollator:
             stdout.write('-'*70)
             stdout.write("\nProcessing %d/%d\n" % (i,ntot))
             data={}
-            data['exposurename']=fdict['exposurename']
+            data['exposurename']=fdict['expname']
             data['ccd']=int(fdict['ccd'])
 
             # this will add data to the dictionary
@@ -414,6 +414,7 @@ class MEColumnCollator:
         i=1
 
         uid0=0
+        cat_cols=['mag_model','magerr_model','x_image','y_image','flags_weight']
         for fdict in self.flist:
             print('-'*70)
             print("Processing %d/%d" % (i,ntot))
@@ -424,15 +425,14 @@ class MEColumnCollator:
 
             catname=fdict['cat']
             print("    ",catname)
-            cat0=esutil.io.read(catname,
-                                columns=['mag_model','magerr_model','x_image','y_image'],lower=True)
+            cat=esutil.io.read(catname,columns=cat_cols,lower=True)
 
             if cat.size != data.size:
                 raise ValueError("cat and multishear sizes don't "
                                  "match: %d/%d" % (cat.size,data.size))
 
             uids = uid0 + arange(data.size,dtype='i4')
-            tilenames = replicate(fdict['tilename'], data.size)
+            tilenames = replicate(str(fdict['tilename']), data.size)
 
             self.write(data)
             self.write(cat)
@@ -525,11 +525,12 @@ class MEColumnCollator:
 
         # create some indexes
         # after this, data automatically gets added to the index
-        for c in ['id','input_flags','shear_flags','mag_model',
-                  'shear_signal_to_noise','ra','dec','nimages_found','nimages_gotpix']:
+        for c in ['id','input_flags','shear_flags','flags_weight','mag_model',
+                  'shear_s2n','ra','dec','nimages_found','nimages_gotpix']:
             if cols[c].has_index():
                 print("skipping '%s' which already has an index" % c)
             else:
+                print("creating index for column:",c)
                 cols[c].create_index()
 
 
@@ -688,6 +689,7 @@ S  -> string
 	<tr> <td>dec</td>               <td> f8</td>    <td>SExtractor dec (degrees, J2000)</td>  </tr>
 
 	<tr> <td>input_flags</td>       <td> i2</td>    <td>SExtractor catalog flags</tr>
+	<tr> <td>flags_weight</td>      <td> i2</td>    <td>SExtractor coadd weights flags</tr>
 
 	<tr> <td>mag_model</td>         <td> f4</td>    <td>SExtractor i-band </td>  </tr>
 	<tr> <td>magerr_model</td>      <td> f4</td>    <td>SExtractor i-band </td>  </tr>

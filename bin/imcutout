@@ -47,15 +47,6 @@ parser.add_option("--show",action='store_true',
 _allowed_ext=['png','eps']
 _ext_err='extension must be ['+','.join(_allowed_ext)+']'
 
-def make_name(imfile, x, y, npix, type, name=None):
-    imbase=os.path.basename(imfile)
-
-    if name is None:
-        n='%s-%d-%0.2f-%0.2f.%s' %(imbase,npix,x,y,type)
-    else:
-        n='%s-%d-%s.%s' % (imbase,npix,name)
-    return n
-
 def write_output(plt, name, imsize):
     print 'writing file:',name
     ext = get_ext(name)
