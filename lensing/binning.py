@@ -257,7 +257,10 @@ class LambdaBinner(BinnerBase):
                 print('lambda > %0.2f' % l)
 
             print("    reducing and jackknifing by lens")
-            comb,w = reduce_from_ranges(data,lambda_field,lamrange, range_type=self.range_type,
+            comb,w = reduce_from_ranges(data,
+                                        lambda_field,
+                                        lamrange, 
+                                        range_type=self.range_type,
                                         getind=True)
         
             print("    found",w.size,"in bin")

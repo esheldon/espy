@@ -1,6 +1,7 @@
-import checksg
+from . import checksg
 
-import util
-import collate
-import select
-import archive
+from . import util
+from . import collate
+from . import select
+from . import archive
+from . import flags

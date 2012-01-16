@@ -1,3 +1,8 @@
+if [[ $# -lt 2 ]]; then
+    echo "usage: domatch.sh merun serun"
+    exit 1
+fi
+
 merun=$1
 serun=$2
 

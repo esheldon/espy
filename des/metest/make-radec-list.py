@@ -24,11 +24,10 @@ print 'getting flags'
 flags   = c['shear_flags'][:]
 
 if run[0:2] == 'me':
-    print 'doing flagsin for me'
-    flagsin = c['input_flags'][:]
-    w = where1((flags == 0) & (flagsin == 0))
+    print 'doing flagsin and flags_weight for me'
+    w=des.flags.select_good_me_bycol(c)
 else:
-    w = where1(flags == 0)
+    w=des.flags.select_good_se_bycol(c)
 
 print 'kept',w.size,'of',flags.size
 print 'reading ra/dec'

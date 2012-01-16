@@ -7,7 +7,7 @@ from copy import copy
 import esutil
 from esutil import json_util
 from esutil import numpy_util
-from esutil.numpy_util import replicate
+from esutil.numpy_util import replicate, where1
 from esutil.plotting import setuplot, bwhiskers
 from esutil.ostools import path_join, getenv_check, expand_path
 
