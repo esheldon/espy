@@ -1,5 +1,5 @@
 import sys
-from sys import stdout
+from sys import stdout, stderr
 import os
 import sdsspy
 import numpy
@@ -133,7 +133,7 @@ def load(name, maptype=None, band=None, verbose=True):
     f=map_name(name, maptype=maptype, band=band)
     if not os.path.exists(f):
         raise IOError("stomp map file does not exist: %s" % f)
-    stdout.write('Loading map: %s\n' % f)
+    stderr.write('Loading map: %s\n' % f)
     m = stomp.Map(f) 
     return m
 

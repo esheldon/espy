@@ -1,9 +1,3 @@
-"""
-
-Plot histograms of ra and dec diff between coadd and matched single epoch
-
-"""
-
 import os,sys
 import recfile
 import esutil as eu
@@ -12,20 +6,6 @@ import numpy
 import deswl
 import des
 import converter
-
-def select_me(c):
-    flags   = c['shear_flags'][:]
-    flagsin = c['input_flags'][:]
-    flagswt = c['flag_weights'][:]
-    w = where1((flags == 0) & (flagsin == 0) & (flagswt==0))
-
-    return w
-
-def select_se(c):
-    flags   = c['shear_flags'][:]
-    w = where1(flags == 0)
-
-    return w
 
 def make_html(pd,merun,serun):
     html="""

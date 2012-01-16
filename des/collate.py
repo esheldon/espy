@@ -399,7 +399,8 @@ class SEColumnCollator:
         cols['psfstars']['psf_flags'].create_index()
         cols['psfstars']['uid'].create_index()
 
-
+    def write_html(self):
+        write_se_collate_html(self.serun)
 
 class MEColumnCollator: 
     def __init__(self, run):
