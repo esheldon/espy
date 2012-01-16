@@ -9,6 +9,7 @@ import recfile
 import esutil as eu
 from esutil.numpy_util import where1
 import numpy
+import deswl
 import des
 import converter
 
@@ -26,6 +27,35 @@ def select_se(c):
 
     return w
 
+def make_html(pd,merun,serun):
+    html="""
+<html>
+    <body bgcolor=white>
+
+        <p>
+        <img src="%(merun)s_%(serun)s_match_radiff_vs_shear_s2n.png">
+        <img src="%(merun)s_%(serun)s_match_radiff_sdev_vs_shear_s2n.png">
+        <p>
+        <img src="%(merun)s_%(serun)s_match_decdiff_vs_shear_s2n.png">
+        <img src="%(merun)s_%(serun)s_match_decdiff_sdev_vs_shear_s2n.png">
+
+        <p>
+        <img src="%(merun)s_%(serun)s_match_radiff_vs_mag_model.png">
+        <img src="%(merun)s_%(serun)s_match_radiff_sdev_vs_mag_model.png">
+        <p>
+        <img src="%(merun)s_%(serun)s_match_decdiff_vs_mag_model.png">
+        <img src="%(merun)s_%(serun)s_match_decdiff_sdev_vs_mag_model.png">
+
+    </body>
+</html>
+
+    """ % {'merun':merun,'serun':serun}
+
+    html_file=os.path.join(pd,'poserr.html')
+    print 'writing html file:',html_file
+    with open(html_file,'w') as fobj:
+        fobj.write(html)
+
 if len(sys.argv) < 3:
     print 'usage: plot-match-posdiff.py merun serun'
     sys.exit(1)
@@ -34,7 +64,8 @@ merun=sys.argv[1]
 serun=sys.argv[2]
 d=deswl.files.collated_dir(merun)
 pd=os.path.join(d,'poserr')
-os.makedirs(pd) 
+if not os.path.exists(pd):
+    os.makedirs(pd) 
 
 f='%(dir)s/match-%(serun)s-%(merun)s.dat' % {'dir':d,'merun':merun,'serun':serun}
 f=os.path.expandvars(f)
@@ -240,3 +271,4 @@ if ptypes['decdiff_hist']:
         converter.convert(epsfile, dpi=dpi, verbose=True)
 
 
+make_html(pd,merun,serun)
