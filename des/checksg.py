@@ -8,31 +8,36 @@ def plot_sg_all_exposures(run, **keys):
     if 'ptype' not in keys:
         keys['ptype'] = 'eps'
 
-    f=deswl.files.wlse_collated_path('wlse0011t', 'goodlist', ftype='json')
-    flist = eu.io.read(f,verbose=True)
-    # get unique exposures
-    d={}
-    for f in flist:
-        expname = f['exposurename']
-        d[expname] = expname
+    expname=keys.get('expname',None)
+    if expname is None:
+        # load exposure names 
+        f=deswl.files.se_collated_path(run, 'goodlist', ftype='json')
+        flist = eu.io.read(f,verbose=True)
+        # get unique ones
+        d={}
+        for f in flist:
+            expname = f['expname']
+            d[expname] = expname
+    else:
+        d=[expname]
 
     i=1
     n=len(d)
     for expname in sorted(d):
         print('-'*70)
-        print("exposurename: %s  (%d/%d)" % (expname,i,n))
+        print("expname: %s  (%d/%d)" % (expname,i,n))
         plot_sg_by_exposure(run, expname, **keys)
         i+=1
 
-def plot_sg_by_exposure(run, exposurename, **keys):
+def plot_sg_by_exposure(run, expname, **keys):
     """
 
     parameters
     ----------
     run: string
         serun
-    exposurename: string
-        des exposurename
+    expname: string
+        des expname
     combine: bool, optional
         Show a combined plot from all ccds, default False
 
@@ -53,7 +58,7 @@ def plot_sg_by_exposure(run, exposurename, **keys):
             raise ValueError("don't send ptype == screen for plots by exposure "
                              "unless you send combine=True also")
         for ccd in xrange(1,62+1):
-            plot_sg_by_ccd(run, exposurename, ccd, **keys)
+            plot_sg_by_ccd(run, expname, ccd, **keys)
     else:
 
         # make a combined plot
@@ -61,33 +66,33 @@ def plot_sg_by_exposure(run, exposurename, **keys):
         colors = pcolors.rainbow(62, 'hex')
         tab=None
         for ccd in xrange(1,62+1):
-            tab=plot_sg_by_ccd(run, exposurename, ccd, star_color=colors[ccd-1], 
+            tab=plot_sg_by_ccd(run, expname, ccd, star_color=colors[ccd-1], 
                                tab=tab, show=False, addlabel=False)
 
-        #lab = biggles.PlotLabel(0.05,0.9,'%s-%s' % (run,exposurename), halign='left',color='blue')
+        #lab = biggles.PlotLabel(0.05,0.9,'%s-%s' % (run,expname), halign='left',color='blue')
         #tab[0,0].add(lab)
-        tab.title = '%s-%s' % (run,exposurename)
+        tab.title = '%s-%s' % (run,expname)
         
-        subdir = 'checksg'
+        subdir = ['checksg','byexp']
         ptype = keys.get('ptype','screen')
         if ptype == 'screen':
             tab.show()
         elif ptype == 'eps':
-            outf = deswl.files.wlse_test_path(run, subdir=subdir, extra=exposurename, ext='eps')
+            outf = deswl.files.se_test_path(run, subdir=subdir, extra=expname, ext='eps')
             makedirs_fromfile(outf)
             print("writing plot file:",outf)
             tab.write_eps(outf)
         else:
-            outf = deswl.files.wlse_test_path(run, subdir=subdir, extra=exposurename, ext='png')
+            outf = deswl.files.se_test_path(run, subdir=subdir, extra=expname, ext='png')
             makedirs_fromfile(outf)
             print("writing plot file:",outf)
             tab.write_img(800,800,outf)
 
 
-def plot_sg_by_ccd(run, exposurename, ccd, star_color='red', show=True, ptype='screen', fwhm_range=None, tab=None, addlabel=True):
+def plot_sg_by_ccd(run, expname, ccd, star_color='red', show=True, ptype='screen', fwhm_range=None, tab=None, addlabel=True, **keys):
     import biggles
 
-    f = deswl.files.wlse_path(exposurename,ccd,'stars',serun=run)
+    f = deswl.files.se_path(expname,ccd,'stars',serun=run)
     stars = eu.io.read(f)
 
     wstar = where1(stars['star_flag'] == 1)
@@ -103,7 +108,7 @@ def plot_sg_by_ccd(run, exposurename, ccd, star_color='red', show=True, ptype='s
         tab[1,0] = plt2
 
     if addlabel:
-        lab = biggles.PlotLabel(0.1,0.9,'%s-%s-%0.2d' % (run,exposurename,ccd), halign='left')
+        lab = biggles.PlotLabel(0.1,0.9,'%s-%s-%0.2d' % (run,expname,ccd), halign='left')
         tab[0,0].add(lab)
 
     pall1 = biggles.Points(stars['mag'], stars['sg'], type='filled circle', size=0.25)
@@ -153,8 +158,8 @@ def plot_sg_by_ccd(run, exposurename, ccd, star_color='red', show=True, ptype='s
             if show:
                 tab.show()
         else:
-            subdir = ['checksg',exposurename]
-            outf = deswl.files.wlse_test_path(run, subdir=subdir, extra='%02d' % ccd, ext=ext)
+            subdir = ['checksg',expname]
+            outf = deswl.files.se_test_path(run, subdir=subdir, extra='%02d' % ccd, ext=ext)
             makedirs_fromfile(outf)
             print("Writing plot:",outf)
             if pt == 'eps':

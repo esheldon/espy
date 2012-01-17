@@ -1,6 +1,6 @@
 import os
 from sys import stderr
-import desdb
+from . import desdb
 
 def get_url(type, root=None, **keys):
     df=DESFiles(root=root)
@@ -18,6 +18,44 @@ def des_net_rootdir():
     if 'DESREMOTE' not in os.environ:
         raise ValueError("The DESREMOTE environment variable is not set")
     return os.environ['DESREMOTE']
+
+def get_red_info(release, band, 
+                 user=None,password=None,
+                 show=True,
+                 doprint=False, fmt='json'):
+
+    net_rootdir=des_net_rootdir()
+
+    query="""
+    select
+        im.file_exposure_name as expname,
+        im.band,
+        im.ccd,
+        im.id as image_id,
+        '$DESDATA/' || im.path as image_url,
+        '%(netroot)s/' || im.path as image_url_remote,
+        cat.id as cat_id,
+        '$DESDATA/' || cat.path as cat_url,
+        '%(netroot)s/' || cat.path as cat_url_remote
+    from
+        %(release)s_files cat,
+        %(release)s_files im
+    where
+        cat.filetype='red_cat'
+        and cat.band='%(band)s'
+        and cat.catalog_parentid = im.id
+    order by 
+        cat_id\n""" % {'netroot':net_rootdir,'release':release,'band':band}
+
+    conn=desdb.Connection(user=user,password=password)
+    if doprint:
+        conn.quickWrite(query,fmt=fmt,show=show)
+    else:
+        data=conn.quick(query,show=show)
+        return data
+
+
+
 
 class Red(dict):
     def __init__(self, 
@@ -317,7 +355,7 @@ class Coadd(dict):
 
         query="""
         select 
-            id,run,exposurename,ccd
+            id,run,exposurename as expname,ccd
         from 
             location 
         where 
@@ -331,7 +369,7 @@ class Coadd(dict):
         for r in res:
             url=df.url('red_image',
                        run=r['run'],
-                       expname=r['exposurename'],
+                       expname=r['expname'],
                        ccd=r['ccd'])
             r['url'] = url
             srclist.append(r)
@@ -412,21 +450,21 @@ class DESFiles:
 
 # notes 
 #   - .fz might not always hold
-#   - EXPOSURENAME can also be built from POINTING-BAND-VISIT
+#   - EXPNAME can also be built from POINTING-BAND-VISIT
 _fs={}
 _fs['red_run']   = {'remote_dir':'$DESREMOTE/red/$RUN/red',
                     'dir':         '$DESDATA/red/$RUN/red'}
 
-_fs['red_exp']   = {'remote_dir':'$DESREMOTE/red/$RUN/red/$EXPOSURENAME',
-                    'dir':         '$DESDATA/red/$RUN/red/$EXPOSURENAME'}
+_fs['red_exp']   = {'remote_dir':'$DESREMOTE/red/$RUN/red/$EXPNAME',
+                    'dir':         '$DESDATA/red/$RUN/red/$EXPNAME'}
 
 _fs['red_image'] = {'remote_dir':_fs['red_exp']['remote_dir'],
                     'dir':       _fs['red_exp']['dir'], 
-                    'name':'$EXPOSURENAME_$CCD.fits.fz'}
+                    'name':'$EXPNAME_$CCD.fits.fz'}
 
 _fs['red_cat']   = {'remote_dir':_fs['red_exp']['remote_dir'],
                     'dir':       _fs['red_exp']['dir'], 
-                    'name':'$EXPOSURENAME_$CCD_cat.fits'}
+                    'name':'$EXPNAME_$CCD_cat.fits'}
 
 _fs['coadd_run']   = {'remote_dir': '$DESREMOTE/coadd/$RUN/coadd',
                       'dir':        '$DESDATA/coadd/$RUN/coadd'}
@@ -471,7 +509,7 @@ def expand_desvars(string_in, **keys):
             raise ValueError("run keyword must be sent: '%s'" % string_in)
         string = string.replace('$RUN', str(run))
 
-    if string.find('$EXPOSURENAME') != -1:
+    if string.find('$EXPNAME') != -1:
         expname=keys.get('expname', None)
         if expname is None:
             if 'pointing' in keys and 'band' in keys and 'visit' in keys:
@@ -480,7 +518,7 @@ def expand_desvars(string_in, **keys):
             raise ValueError("expname keyword or pointing,band,visit keywords "
                              "must be sent: '%s'" % string_in)
 
-        string = string.replace('$EXPOSURENAME', str(expname))
+        string = string.replace('$EXPNAME', str(expname))
 
     if string.find('$CCD') != -1:
         ccd=keys.get('ccd', None)

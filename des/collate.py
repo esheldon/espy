@@ -39,7 +39,7 @@ class SEColumnCollator:
             stdout.write('-'*70)
             stdout.write("\nProcessing %d/%d\n" % (i,ntot))
             data={}
-            data['exposurename']=fdict['expname']
+            data['expname']=fdict['expname']
             data['ccd']=int(fdict['ccd'])
 
             # this will add data to the dictionary
@@ -74,7 +74,7 @@ class SEColumnCollator:
 
         for type in tdict:
             fname=tdict[type]
-            data[type] = deswl.files.se_read(data['exposurename'], 
+            data[type] = deswl.files.se_read(data['expname'], 
                                              data['ccd'], 
                                              fname, 
                                              serun=self.serun, 
@@ -269,8 +269,8 @@ class SEColumnCollator:
         cols.write_column('ccd',ccd_array)
 
         exp_array = numpy.zeros(data['stars'].size, dtype='S20')
-        exp_array[:] = data['exposurename']
-        cols.write_column('exposurename',exp_array)
+        exp_array[:] = data['expname']
+        cols.write_column('expname',exp_array)
 
         del ccd_array
         del exp_array
@@ -394,7 +394,7 @@ class SEColumnCollator:
         cols['size_flags'].create_index()
         cols['star_flag'].create_index()
         cols['shear_flags'].create_index()
-        cols['exposurename'].create_index()
+        cols['expname'].create_index()
 
         cols['psfstars']['psf_flags'].create_index()
         cols['psfstars']['uid'].create_index()
@@ -931,7 +931,7 @@ S  -> string
 	<tr><th>Column Name</th><th>Data Type<br>[type][bytes]</th><th>Description</th></tr>
 
 	<tr> <td>uid</td>               <td> i4</td>    <td>A unique id for this run</td>    </tr>
-	<tr> <td>exposurename</td>      <td> S20</td>   <td>e.g. decam--27--41-i-11</td>  </tr>
+	<tr> <td>expname</td>      <td> S20</td>   <td>e.g. decam--27--41-i-11</td>  </tr>
 	<tr> <td>ccd</td>               <td> i2</td>    <td>ccd number</td>  </tr>
 	<tr> <td>id</td>                <td> i2</td>    <td>SExtractor id in this field</td>    </tr>
 

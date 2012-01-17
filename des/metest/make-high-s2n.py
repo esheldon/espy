@@ -15,7 +15,6 @@ from esutil.numpy_util import where1
 import numpy
 
 from optparse import OptionParser
-
 parser=OptionParser(__doc__)
 
 options, args = parser.parse_args(sys.argv[1:])
