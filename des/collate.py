@@ -492,6 +492,25 @@ job_name: %(job_name)s\n"""
             with open(job_file,'w') as fobj:
                 fobj.write(text)
 
+        comb_name=os.path.join(outd,'%s-combine.py' % self.serun)
+        print("Writing combine script:",comb_name,file=stderr)
+
+        collated_dir=deswl.files.collated_dir(self.serun)
+        with open(comb_name,'w') as fobj:
+            text="""
+import columns
+import glob
+
+coldir='%(dir)s/%(serun)s.cols'
+
+pattern='%(dir)s/%(serun)s-*.cols'
+f=glob.glob(pattern)
+f.sort()
+
+c=columns.Columns(coldir)
+c.from_columns(f,create=True)\n""" % {'dir':collated_dir,
+                                      'serun':self.serun}
+            fobj.write(text)
 
 class MEColumnCollator: 
     def __init__(self, run):
