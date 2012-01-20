@@ -4,7 +4,9 @@ import sys
 from sys import stdout,stderr
 from copy import copy
 
-import esutil
+import shutil
+
+import esutil as eu
 from esutil import json_util
 from esutil import numpy_util
 from esutil.numpy_util import replicate, where1
@@ -24,28 +26,52 @@ def open_columns(run):
     return columns.Columns(coldir)
 
 class SEColumnCollator: 
-    def __init__(self, serun, split=None):
+    def __init__(self, serun, small=False, njob=None, job=None, no_cleanup=False):
         self.serun = serun
-        self.split=split
+        self.small=small
+
+        self.njob=int(njob)
+        self.job=int(job)
+
+        self.no_cleanup=no_cleanup
+
+        self.set_suffix()
+        self.set_names()
+
+    def set_suffix(self):
+        if self.job is not None:
+            if self.njob is None:
+                raise ValueError("Send both job and njob")
+            if self.job < 0 or self.job > (self.njob-1):
+                raise ValueError("job must be in [0,%s], got %s" % (self.njob-1,self.job))
+            self.suffix = '-%03d' % self.job
+        else:
+            self.suffix = ''
+
+
 
     def collate(self):
-        self.load_columns_for_writing()
+        try:
+            self.load_columns_for_writing()
 
-        self.load_flist()
+            self.load_flist()
 
-        ntot = len(self.flist)
-        i=1
-        for fdict in self.flist:
-            stdout.write('-'*70)
-            stdout.write("\nProcessing %d/%d\n" % (i,ntot))
-            data={}
-            data['expname']=fdict['expname']
-            data['ccd']=int(fdict['ccd'])
+            ntot = len(self.flist)
+            i=1
+            for fdict in self.flist:
+                print('-'*70,file=stderr)
+                print("Processing %d/%d" % (i,ntot), file=stderr)
 
-            # this will add data to the dictionary
-            self.load_data(data)
-            self.write_data(data)
-            i+=1
+                # this will add data to the dictionary
+                data=self.load_data(fdict)
+                print('writing',file=stderr)
+                self.write_data(data)
+                i+=1
+
+            self.copy_to_final()
+        finally:
+            if not self.no_cleanup:
+                self.cleanup()
 
     def write_data(self, data):
         self.write_from_stars(data)
@@ -54,77 +80,82 @@ class SEColumnCollator:
 
 
 
-    def load_data(self, data):
+    def load_data(self, fdict):
         
-        if self.split not in [None,1,2]:
-            raise ValueError("split must be None,1 or 2, found %s" % self.split)
+        data={}
 
         if not hasattr(self,'uid_offset'):
             # start id counter
             self.uid_offset = 0
 
-        tdict = {}
-        tdict['stars'] = 'stars'
-        tdict['psf'] = 'psf'
-        tdict['shear'] = 'shear'
-        
-        if self.split is not None:
-            tdict['psf'] += str(self.split)
-            tdict['shear'] += str(self.split)
+        data['expname'] = fdict['expname']
+        data['ccd'] = fdict['ccd']
 
-        for type in tdict:
-            fname=tdict[type]
-            data[type] = deswl.files.se_read(data['expname'], 
-                                             data['ccd'], 
-                                             fname, 
-                                             serun=self.serun, 
-                                             ext=1, 
-                                             ensure_native=True,
-                                             verbose=True)
+        for k in ['stars','psf','shear']:
+            kk=k
+            data[k] = eu.io.read(fdict[kk], ensure_native=True, verbose=True)
 
         data['idvals'] = self.uid_offset + numpy.arange(data['stars'].size,dtype='i4')
         self.uid_offset += data['stars'].size
 
+        return data
 
-    def coldir(self, fits=False):
-        coldir = deswl.files.coldir(self.serun, fits=fits)
+    def set_names(self):
+        self.temp_coldir  = self.coldir(temp=True)
+        self.final_coldir = self.coldir()
+
+    def coldir(self, fits=False, temp=False):
+        coldir = deswl.files.coldir(self.serun, fits=fits, suffix=self.suffix)
         coldir = expand_path(coldir)
 
-        if self.split is not None:
-            if not os.path.exists(coldir):
-                raise RuntimeError("Coldir must exist before doing split")
-            main_cols = columns.Columns(coldir)
-
-            # in this case we need the columns dir to exist
-            splitname = 'split%s' % self.split
+        if temp:
             if fits:
-                coldir = path_join(coldir,splitname+'-fits')
-            else:
-                coldir = path_join(coldir,splitname+'.cols')
-        
-        coldir = expand_path(coldir)
+                raise ValueError("don't use temp=True for fits")
+            coldir=os.path.basename(coldir)
+            coldir=os.path.join('/data/esheldon/tmp',coldir)
         return coldir
 
 
     def load_columns_for_writing(self):
-        coldir=self.coldir()
 
-        stdout.write('Will write to coldir %s\n' % coldir)
-        if os.path.exists(coldir):
-            raise RuntimeError("Coldir %s exists. Please start from scratch" % coldir)
+        print('Will write to temporary coldir:',self.temp_coldir,file=stderr)
+        print('Will copy to:',self.final_coldir,file=stderr)
 
-        self.cols = columns.Columns(coldir)
+        if os.path.exists(self.temp_coldir):
+            raise RuntimeError("temp coldir %s exists. Please start from scratch" % self.temp_coldir)
+        if os.path.exists(self.final_coldir):
+            raise RuntimeError("Final coldir %s exists. Please start from scratch" % self.final_coldir)
+
+        self.cols = columns.Columns(self.temp_coldir)
         self.cols.create()
 
         # load the sub columns dir for PSF stars
-        psf_subdir = os.path.join(coldir, 'psfstars.cols')
+        psf_subdir = os.path.join(self.temp_coldir, 'psfstars.cols')
         self.cols.load_coldir(psf_subdir)
 
+    def copy_to_final(self):
+        print("Copying to final dest:",self.final_coldir,file=stderr)
+        shutil.copytree(self.temp_coldir, self.final_coldir)
+    def cleanup(self):
+        print("Cleaning up temp dir:",self.temp_coldir)
+        if os.path.exists(self.temp_coldir):
+            shutil.rmtree(self.temp_coldir)
 
     def load_flist(self):
         flistfile=deswl.files.se_collated_path(self.serun,'goodlist')
-        self.flist=esutil.io.read(flistfile, verbose=True)
+        flist=eu.io.read(flistfile, verbose=True)
 
+        if self.job is not None:
+
+            nf=len(flist)
+            nper=nf/self.njob
+
+            if self.job == (self.njob-1):
+                flist=flist[self.job*nper:]
+            else:
+                flist=flist[self.job*nper:(self.job+1)*nper]
+
+        self.flist=flist
 
     def write_from_stars(self, data):
 
@@ -211,8 +242,8 @@ class SEColumnCollator:
 
 
         shapelets_prepsf=numpy.array(data['shear']['shapelets_prepsf'], dtype='f4')
-        cols.write_column('shapelets_prepsf',shapelets_prepsf)
-
+        if not self.small:
+            cols.write_column('shapelets_prepsf',shapelets_prepsf)
 
         e1 = shapelets_prepsf[:,3]*numpy.sqrt(2)
         e2 = -shapelets_prepsf[:,4]*numpy.sqrt(2)
@@ -234,7 +265,8 @@ class SEColumnCollator:
         del psf_sigma
 
         psf_coeffs=numpy.array(data['shear']['interp_psf_coeffs'], dtype='f4')
-        cols.write_column('interp_psf_shapelets',psf_coeffs)
+        if not self.small:
+            cols.write_column('interp_psf_shapelets',psf_coeffs)
 
         # get e1/e2 from interpolated coeffs
         psf_e1 = psf_coeffs[:,3]*numpy.sqrt(2)
@@ -308,7 +340,7 @@ class SEColumnCollator:
         cols['psfstars'].write_column('e2',e2)
 
 
-        pind, sind = esutil.numpy_util.match(psf['id'], stars['id'])
+        pind, sind = eu.numpy_util.match(psf['id'], stars['id'])
 
         if pind.size != psf.size:
             raise ValueError("Some PSF stars did not match\n")
@@ -355,13 +387,13 @@ class SEColumnCollator:
 
                 fname = cols[col].filename
 
-                data = esutil.sfile.read(fname)
+                data = eu.sfile.read(fname)
 
                 fitsfile = os.path.join(fitsdir, col+'.fits')
                 print(fitsfile)
 
                 # don't make a copy!
-                esutil.io.write(fitsfile, data, clobber=True,copy=False)
+                eu.io.write(fitsfile, data, clobber=True,copy=False)
 
                 del data
 
@@ -371,13 +403,13 @@ class SEColumnCollator:
 
             fname = psfstars_cols[col].filename
 
-            data = esutil.sfile.read(fname)
+            data = eu.sfile.read(fname)
 
             fitsfile = os.path.join(psfstars_fitsdir, col+'.fits')
             print(fitsfile)
 
             # don't make a copy!
-            esutil.io.write(fitsfile, data, clobber=True,copy=False)
+            eu.io.write(fitsfile, data, clobber=True,copy=False)
 
             del data
 
@@ -402,6 +434,65 @@ class SEColumnCollator:
     def write_html(self):
         write_se_collate_html(self.serun)
 
+
+class SECollateWQJob:
+    def __init__(self, serun, njob):
+        self.serun=serun
+        self.njob=njob
+        self.groups='group: [new,new2]'
+
+    def job_template(self):
+        text = """
+command: |
+    hostname
+    source /opt/astro/SL53/bin/setup.hadoop.sh
+    source ~astrodat/setup/setup.sh
+    source ~/.dotfiles/bash/astro.bnl.gov/modules.sh
+    %(esutil_load)s
+    %(tmv_load)s
+    %(wl_load)s
+    module load espy
+
+    script=$ESPY_DIR/des/bin/collate2columns.py
+    python $script -s -n %(njob)s -j %(job)s %(serun)s &> %(log)s
+
+%(groups)s
+priority: low
+job_name: %(job_name)s\n""" 
+        return text
+
+    def write(self):
+
+        rc=deswl.files.Runconfig(self.serun)
+        wl_load = deswl.files._make_load_command('wl',rc['wlvers'])
+        tmv_load = deswl.files._make_load_command('tmv',rc['tmvvers'])
+        esutil_load = deswl.files._make_load_command('esutil', rc['esutilvers'])
+
+        job_template=self.job_template()
+        outd=deswl.files.wq_dir(self.serun, subdir='collate')
+        if not os.path.exists(outd):
+            os.makedirs(outd)
+        for job in xrange(self.njob):
+            job_name='%s-collate-%03i' % (self.serun,job)
+            job_file=os.path.join(outd,job_name+'.yaml')
+
+            log=job_name+'.out'
+
+            text=job_template % {'esutil_load':esutil_load,
+                                 'tmv_load':tmv_load,
+                                 'wl_load':wl_load,
+                                 'groups':self.groups,
+                                 'njob':self.njob,
+                                 'job':job,
+                                 'serun':self.serun,
+                                 'log':log,
+                                 'job_name':job_name}
+
+            print("Writing job file:",job_file,file=stderr)
+            with open(job_file,'w') as fobj:
+                fobj.write(text)
+
+
 class MEColumnCollator: 
     def __init__(self, run):
         self.run = run
@@ -422,11 +513,11 @@ class MEColumnCollator:
 
             fname=fdict['multishear']
             print("    ",fname)
-            data = esutil.io.read(fname)
+            data = eu.io.read(fname)
 
             catname=fdict['cat']
             print("    ",catname)
-            cat=esutil.io.read(catname,columns=cat_cols,lower=True)
+            cat=eu.io.read(catname,columns=cat_cols,lower=True)
 
             if cat.size != data.size:
                 raise ValueError("cat and multishear sizes don't "
@@ -466,12 +557,12 @@ class MEColumnCollator:
 
     def load_flist(self):
         flistfile=deswl.files.me_collated_path(self.run,'goodlist')
-        self.flist=esutil.io.read(flistfile, verbose=True)
+        self.flist=eu.io.read(flistfile, verbose=True)
 
     def load_columns_for_writing(self):
         coldir=deswl.files.coldir(self.run)
 
-        stdout.write('Will write to coldir %s\n' % coldir)
+        print('Will write to coldir',coldir,file=stderr)
         if os.path.exists(coldir):
             raise RuntimeError("Coldir %s exists. Please start from scratch" % coldir)
 
@@ -506,13 +597,13 @@ class MEColumnCollator:
                 fname = cols[col].filename
 
                 # use sfile so we get a rec array
-                data = esutil.sfile.read(fname)
+                data = eu.sfile.read(fname)
 
                 fitsfile = os.path.join(fitsdir, col+'.fits')
                 print("    ",fitsfile)
 
                 # don't make a copy!
-                esutil.io.write(fitsfile, data, clobber=True)
+                eu.io.write(fitsfile, data, clobber=True)
 
                 del data
 
@@ -652,7 +743,7 @@ class MEColumnCollator:
                    qatext=qatext)
 
         download_file=path_join(collate_dir,'download.html')
-        stdout.write("Writing download file: %s\n" % download_file)
+        print("Writing download file:",download_file,file=stderr)
         with open(download_file,'w') as fobj:
             fobj.write(download)
 
@@ -896,7 +987,7 @@ Region RA          Dec        gamma1     gamma2   gamma1     gamma2    posangle
                qatext=qatext)
 
     download_file=path_join(dir,'download.html')
-    stdout.write("Writing download file: %s\n" % download_file)
+    print("Writing download file:",download_file,file=stderr)
     fobj=open(download_file,'w')
     fobj.write(download)
     fobj.close()
@@ -979,7 +1070,7 @@ S  -> string
 
 
     allcol_descr_file=path_join(html_dir, 'all-columns-descr.html')
-    stdout.write("Writing allcols description file\n")
+    print("Writing allcols description file",file=stderr)
     fobj = open(allcol_descr_file,'w')
     fobj.write(allcol)
     fobj.close()
@@ -1032,7 +1123,7 @@ S=string
 
 
     psfcol_descr_file=path_join(html_dir, 'psfstars-columns-descr.html')
-    stdout.write("Writing psfstars cols description file\n")
+    print("Writing psfstars cols description file",file=stderr)
     fobj = open(psfcol_descr_file,'w')
     fobj.write(psfcol)
     fobj.close()
@@ -1121,7 +1212,7 @@ S=string
     """.format(serun=serun,band='i')
 
     qa_file=path_join(html_dir, 'qa.html')
-    stdout.write("Writing qa file\n")
+    print("Writing qa file",file=stderr)
     fobj = open(qa_file,'w')
     fobj.write(qa)
     fobj.close()

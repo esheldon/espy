@@ -12,9 +12,9 @@ from sys import stdout
 from optparse import OptionParser
 parser=OptionParser(__doc__)
 
-parser.add_option("-s","--split",
-                  default=None,
-                  help="Process the split for SE.  Should be 1 or 2")
+parser.add_option("-s","--small",
+                  default=False,action='store_true',
+                  help="Don't write interp_pfs_shapelets or shapelets_prepsf")
 parser.add_option("--fits",
                   default=False,action='store_true',
                   help="Convert to fits")
@@ -27,6 +27,9 @@ parser.add_option("--html",
                   default=False,action='store_true',
                   help="Create the html")
 
+parser.add_option("-n","--njob", default=None, help="Number of jobs for collate")
+parser.add_option("-j","--job", default=None, help="This job number")
+
 options, args = parser.parse_args(sys.argv[1:])
 
 
@@ -36,12 +39,10 @@ if len(args) < 1:
     sys.exit(1)
 
 run=args[0]
-split=options.split
-if split is not None:
-    split=int(split)
 
 if run[0:2] == 'se':
-    c = des.collate.SEColumnCollator(run,split=split)
+    c = des.collate.SEColumnCollator(run,small=options.small,
+                                     njob=options.njob,job=options.job)
 elif run[0:2] == 'me':
     c = des.collate.MEColumnCollator(run)
 else:

@@ -26,6 +26,7 @@ def get_red_info(release, band,
 
     net_rootdir=des_net_rootdir()
 
+    # note removing 0 dec stuff because there are dups
     query="""
     select
         im.file_exposure_name as expname,
@@ -44,6 +45,7 @@ def get_red_info(release, band,
         cat.filetype='red_cat'
         and cat.band='%(band)s'
         and cat.catalog_parentid = im.id
+        and cat.file_exposure_name not like '%%-0-%(band)s%%'
     order by 
         cat_id\n""" % {'netroot':net_rootdir,'release':release,'band':band}
 

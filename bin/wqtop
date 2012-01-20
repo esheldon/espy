@@ -180,6 +180,8 @@ class WQWatcher:
             return statline,lines
 
         # pop empty one at bottom
+        if len(lines) == 0:
+            return statline,lines
         crap=lines.pop()
         if len(lines) == 0:
             return statline,lines
@@ -187,11 +189,15 @@ class WQWatcher:
         statline = lines.pop()
 
         # pop blank line
+        if len(lines) == 0:
+            return statline,lines
         crap=lines.pop()
         if len(lines) == 0:
             return statline,lines
 
         # pop blank line at top too
+        if len(lines) == 0:
+            return statline,lines
         crap=lines.pop(0)
         if len(lines) == 0:
             return statline,lines
