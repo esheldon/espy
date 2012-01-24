@@ -1,30 +1,47 @@
 import os
 from sys import stderr
 from . import desdb
+import deswl
 
-def get_url(type, root=None, **keys):
-    df=DESFiles(root=root)
+def get_url(type, **keys):
+    df=DESFiles(**keys)
     return df.url(type, **keys)
 
 get_name=get_url
 get_path=get_url
 
-def des_rootdir():
-    if 'DESDATA' not in os.environ:
-        raise ValueError("The DESDATA environment variable is not set")
-    return os.environ['DESDATA']
+def get_expnames(release, band, show=False,
+                 user=None,password=None):
+    """
+    This is usually much faster then the get_red_info query
+    """
+    # note removing 0 dec stuff because there are dups
+    query="""
+    select
+        distinct(file_exposure_name) as expname
+    from
+        %(release)s_files
+    where
+        filetype='red'
+        and band='%(band)s'
+        and file_exposure_name not like '%%-0-%(band)s%%'
+    """ % {'release':release,'band':band}
 
-def des_net_rootdir():
-    if 'DESREMOTE' not in os.environ:
-        raise ValueError("The DESREMOTE environment variable is not set")
-    return os.environ['DESREMOTE']
+    conn=desdb.Connection(user=user,password=password)
+    curs = conn.cursor()
+    curs.execute(query)
+
+    expnames = [r[0] for r in curs]
+
+    curs.close()
+    return expnames
 
 def get_red_info(release, band, 
                  user=None,password=None,
                  show=True,
                  doprint=False, fmt='json'):
 
-    net_rootdir=des_net_rootdir()
+    net_rootdir=deswl.files.des_rootdir(fs='net')
 
     # note removing 0 dec stuff because there are dups
     query="""
@@ -67,7 +84,6 @@ class Red(dict):
                  dataset=None,
                  verbose=False, 
                  user=None, password=None,
-                 expandroot=True,
                  conn=None):
  
         """
@@ -86,7 +102,6 @@ class Red(dict):
         self['expname'] = expname
         self['ccd'] = ccd
         self['dataset']=dataset
-        self.expandroot=expandroot
 
         self.verbose=verbose
 
@@ -106,13 +121,11 @@ class Red(dict):
         self['image_url'] = df.url('red_image', 
                                    run=self['image_run'], 
                                    expname=self['expname'],
-                                   ccd=self['ccd'],
-                                   expandroot=self.expandroot)
+                                   ccd=self['ccd'])
         self['cat_url'] = df.url('red_cat', 
                                  run=self['cat_run'], 
                                  expname=self['expname'],
-                                 ccd=self['ccd'],
-                                 expandroot=self.expandroot)
+                                 ccd=self['ccd'])
 
 
     def _get_info_by_id(self):
@@ -175,9 +188,9 @@ class Coadd(dict):
                  id=None, 
                  run=None, band=None, 
                  dataset=None, tilename=None,
+                 fs=deswl.files._default_fs,
                  verbose=False, 
                  user=None, password=None,
-                 expandroot=True,
                  conn=None):
         """
         Construct either with
@@ -208,9 +221,9 @@ class Coadd(dict):
         self['band']     = band
         self['dataset']  = dataset
         self['tilename'] = tilename
-        self.expandroot=expandroot
 
         self.verbose=verbose
+        self.fs=fs
 
 
         if conn is None:
@@ -227,17 +240,15 @@ class Coadd(dict):
         else:
             self._get_info_by_dataset()
 
-        df=DESFiles()
+        df=DESFiles(fs=self.fs)
         self['image_url'] = df.url('coadd_image', 
                                    run=self['run'], 
                                    tilename=self['tilename'], 
-                                   band=self['band'],
-                                   expandroot=self.expandroot)
+                                   band=self['band'])
         self['cat_url'] = df.url('coadd_cat', 
                                  run=self['run'], 
                                  tilename=self['tilename'], 
-                                 band=self['band'],
-                                 expandroot=self.expandroot)
+                                 band=self['band'])
 
         if srclist:
             self._load_srclist()
@@ -366,7 +377,7 @@ class Coadd(dict):
 
         res = self.conn.quick(query)
 
-        df=DESFiles(expandroot=self.expandroot)
+        df=DESFiles(fs=self.fs)
         srclist=[]
         for r in res:
             url=df.url('red_image',
@@ -400,24 +411,12 @@ class DESFiles:
     - Currently / is used for all path separators.  Good on unix and the web.
     
     """
-    def __init__(self, root=None, expandroot=True):
-
-        if root == 'net':
-            self._root = des_net_rootdir()
-        elif root is None:
-            self._root = des_rootdir()
-        else:
-            self._root=root
-
-        self.expandroot=expandroot
-
-        if isinstance(root,(str,unicode)):
-            self.root_type = 'remote'
-        else:
-            self.root_type = 'local'
+    def __init__(self, fs=deswl.files._default_fs):
+        self.fs = fs
+        self.root=deswl.files.des_rootdir(fs=self.fs)
 
     def root(self):
-        return self._root
+        return self.root
     
     def dir(self, type=None, **keys):
         if type is None:
@@ -443,10 +442,7 @@ class DESFiles:
     name=url
 
     def _expand_desvars(self, url, **keys):
-        if 'root' not in keys and 'desdata' not in keys:
-            keys['root'] = self._root
-        if 'expandroot' not in keys:
-            keys['expandroot'] = self.expandroot
+        keys['fs'] = self.fs
         return expand_desvars(url, **keys)
 
 
@@ -480,30 +476,15 @@ _fs['coadd_cat']   = {'remote_dir': _fs['coadd_run']['remote_dir'],
 def expand_desvars(string_in, **keys):
 
     string=string_in
+    fs=keys.get('fs',deswl.files._default_fs)
+    root=deswl.files.des_rootdir(fs=fs)
+    root_remote=deswl.files.des_rootdir(fs='net')
 
-    expandroot=keys.get('expandroot',True)
-    # allow keyword root=, desdata=, or fall back to environment variable
-    if string.find('$DESDATA') != -1 and expandroot:
-        root=keys.get('root', None)
-        if root is None:
-            root=keys.get('desdata',None)
-        if root is None:
-            if 'DESDATA' not in os.environ:
-                raise ValueError("send desdata keyword or have DESDATA set for '%s'" % string_in)
-            root=os.environ['DESDATA']
-        string = string.replace('$DESDATA', str(root))
+    if string.find('$DESDATA') != -1:
+        string = string.replace('$DESDATA', root)
 
     if string.find('$DESREMOTE') != -1:
-        root=keys.get('root', None)
-        if root is None:
-            root=keys.get('desremote',None)
-        if root is None:
-            if 'DESREMOTE' not in os.environ:
-                raise ValueError("send desdata keyword or have DESREMOTE set for '%s'" % string_in)
-            root=os.environ['DESREMOTE']
-        string = string.replace('$DESREMOTE', str(root))
-
-
+        string = string.replace('$DESREMOTE', root_remote)
 
     if string.find('$RUN') != -1:
         run=keys.get('run', None)
@@ -548,7 +529,7 @@ def expand_desvars(string_in, **keys):
 
     # see if there are any leftover un-expanded variables.  If so
     # raise an exception
-    if string.find('$') != -1 and expandroot:
+    if string.find('$') != -1:
         raise ValueError("There were unexpanded variables: '%s'" % string_in)
 
     return string

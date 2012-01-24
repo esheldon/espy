@@ -30,24 +30,13 @@ class SEColumnCollator:
         self.serun = serun
         self.small=small
 
-        self.njob=int(njob)
-        self.job=int(job)
+        self.njob=None if njob is None else int(njob)
+        self.job=None if job is None else int(job)
 
         self.no_cleanup=no_cleanup
 
         self.set_suffix()
         self.set_names()
-
-    def set_suffix(self):
-        if self.job is not None:
-            if self.njob is None:
-                raise ValueError("Send both job and njob")
-            if self.job < 0 or self.job > (self.njob-1):
-                raise ValueError("job must be in [0,%s], got %s" % (self.njob-1,self.job))
-            self.suffix = '-%03d' % self.job
-        else:
-            self.suffix = ''
-
 
 
     def collate(self):
@@ -57,8 +46,7 @@ class SEColumnCollator:
             self.load_flist()
 
             ntot = len(self.flist)
-            i=1
-            for fdict in self.flist:
+            for i,fdict in enumerate(self.flist,1):
                 print('-'*70,file=stderr)
                 print("Processing %d/%d" % (i,ntot), file=stderr)
 
@@ -66,7 +54,6 @@ class SEColumnCollator:
                 data=self.load_data(fdict)
                 print('writing',file=stderr)
                 self.write_data(data)
-                i+=1
 
             self.copy_to_final()
         finally:
@@ -104,6 +91,18 @@ class SEColumnCollator:
         self.temp_coldir  = self.coldir(temp=True)
         self.final_coldir = self.coldir()
 
+    def set_suffix(self):
+        if self.job is not None:
+            if self.njob is None:
+                raise ValueError("Send both job and njob")
+            if self.job < 0 or self.job > (self.njob-1):
+                raise ValueError("job must be in [0,%s], got %s" % (self.njob-1,self.job))
+            self.suffix = '-%03d' % self.job
+        else:
+            self.suffix = ''
+
+
+
     def coldir(self, fits=False, temp=False):
         coldir = deswl.files.coldir(self.serun, fits=fits, suffix=self.suffix)
         coldir = expand_path(coldir)
@@ -136,6 +135,7 @@ class SEColumnCollator:
     def copy_to_final(self):
         print("Copying to final dest:",self.final_coldir,file=stderr)
         shutil.copytree(self.temp_coldir, self.final_coldir)
+
     def cleanup(self):
         print("Cleaning up temp dir:",self.temp_coldir)
         if os.path.exists(self.temp_coldir):
@@ -513,45 +513,56 @@ c.from_columns(f,create=True)\n""" % {'dir':collated_dir,
             fobj.write(text)
 
 class MEColumnCollator: 
-    def __init__(self, run):
+    def __init__(self, run, no_cleanup=False, njob=None, job=None):
         self.run = run
 
+        self.njob=None if njob is None else int(njob)
+        self.job=None if job is None else int(job)
+
+        self.no_cleanup=no_cleanup
+
+        self.set_suffix()
+        self.set_names()
+
+
     def collate(self):
-        self.load_columns_for_writing()
+        try:
+            self.load_columns_for_writing()
 
-        self.load_flist()
+            self.load_flist()
 
-        ntot = len(self.flist)
-        i=1
+            ntot = len(self.flist)
+            uid0=0
+            cat_cols=['mag_model','magerr_model','x_image','y_image','flags_weight']
+            for i,fdict in enumerate(self.flist,1):
+                print('-'*70)
+                print("Processing %d/%d" % (i,ntot))
 
-        uid0=0
-        cat_cols=['mag_model','magerr_model','x_image','y_image','flags_weight']
-        for fdict in self.flist:
-            print('-'*70)
-            print("Processing %d/%d" % (i,ntot))
+                # eu.io.read works correctly with hdfs
+                fname=fdict['multishear']
+                print("    ",fname)
+                data = eu.io.read(fname)
 
-            fname=fdict['multishear']
-            print("    ",fname)
-            data = eu.io.read(fname)
+                catname=fdict['cat']
+                print("    ",catname)
+                cat=eu.io.read(catname,columns=cat_cols,lower=True)
 
-            catname=fdict['cat']
-            print("    ",catname)
-            cat=eu.io.read(catname,columns=cat_cols,lower=True)
+                if cat.size != data.size:
+                    raise ValueError("cat and multishear sizes don't "
+                                     "match: %d/%d" % (cat.size,data.size))
 
-            if cat.size != data.size:
-                raise ValueError("cat and multishear sizes don't "
-                                 "match: %d/%d" % (cat.size,data.size))
+                uids = uid0 + arange(data.size,dtype='i4')
+                tilenames = replicate(str(fdict['tilename']), data.size)
 
-            uids = uid0 + arange(data.size,dtype='i4')
-            tilenames = replicate(str(fdict['tilename']), data.size)
+                self.write(data)
+                self.write(cat)
+                self.cols.write_column('tilename', tilenames)
+                self.cols.write_column('uid', uids)
 
-            self.write(data)
-            self.write(cat)
-            self.cols.write_column('tilename', tilenames)
-            self.cols.write_column('uid', uids)
-
-            i+=1
-            uid0 += data.size
+                uid0 += data.size
+        finally:
+            if not self.no_cleanup:
+                self.cleanup()
 
     def write(self,data):
         for c in data.dtype.names:
@@ -576,17 +587,44 @@ class MEColumnCollator:
 
     def load_flist(self):
         flistfile=deswl.files.me_collated_path(self.run,'goodlist')
-        self.flist=eu.io.read(flistfile, verbose=True)
+        flist=eu.io.read(flistfile, verbose=True)
+
+        if self.job is not None:
+
+            nf=len(flist)
+            nper=nf/self.njob
+
+            if self.job == (self.njob-1):
+                flist=flist[self.job*nper:]
+            else:
+                flist=flist[self.job*nper:(self.job+1)*nper]
+
+        self.flist=flist
+
+
 
     def load_columns_for_writing(self):
-        coldir=deswl.files.coldir(self.run)
 
-        print('Will write to coldir',coldir,file=stderr)
-        if os.path.exists(coldir):
-            raise RuntimeError("Coldir %s exists. Please start from scratch" % coldir)
+        print('Will write to temporary coldir:',self.temp_coldir,file=stderr)
+        print('Will copy to:',self.final_coldir,file=stderr)
 
-        self.cols = columns.Columns(coldir)
+        if os.path.exists(self.temp_coldir):
+            raise RuntimeError("temp coldir %s exists. Please start from scratch" % self.temp_coldir)
+        if os.path.exists(self.final_coldir):
+            raise RuntimeError("Final coldir %s exists. Please start from scratch" % self.final_coldir)
+
+        self.cols = columns.Columns(self.temp_coldir)
         self.cols.create()
+
+    def copy_to_final(self):
+        print("Copying to final dest:",self.final_coldir,file=stderr)
+        shutil.copytree(self.temp_coldir, self.final_coldir)
+
+    def cleanup(self):
+        print("Cleaning up temp dir:",self.temp_coldir)
+        if os.path.exists(self.temp_coldir):
+            shutil.rmtree(self.temp_coldir)
+
 
 
     def convert2fits(self):
@@ -625,6 +663,32 @@ class MEColumnCollator:
                 eu.io.write(fitsfile, data, clobber=True)
 
                 del data
+
+    def set_names(self):
+        self.temp_coldir  = self.coldir(temp=True)
+        self.final_coldir = self.coldir()
+
+    def coldir(self, fits=False, temp=False):
+        coldir = deswl.files.coldir(self.run, fits=fits, suffix=self.suffix)
+        coldir = expand_path(coldir)
+
+        if temp:
+            if fits:
+                raise ValueError("don't use temp=True for fits")
+            coldir=os.path.basename(coldir)
+            coldir=os.path.join('/data/wlpipe',coldir)
+        return coldir
+
+
+    def set_suffix(self):
+        if self.job is not None:
+            if self.njob is None:
+                raise ValueError("Send both job and njob")
+            if self.job < 0 or self.job > (self.njob-1):
+                raise ValueError("job must be in [0,%s], got %s" % (self.njob-1,self.job))
+            self.suffix = '-%03d' % self.job
+        else:
+            self.suffix = ''
 
 
     def create_indexes(self):
@@ -834,7 +898,7 @@ S  -> string
 
 
 
-def write_se_collate_html(serun, showsplit=False):
+def write_se_collate_html(serun):
     """
 
     Need to make collation band-aware!
@@ -860,10 +924,11 @@ def write_se_collate_html(serun, showsplit=False):
 
     collate_dir= deswl.files.collated_dir(serun)
     plotdir=path_join(collate_dir,'plots')
+    szmagdir=path_join(collate_dir,'../test/checksg/byexp')
 
     band='i'
     tfile= path_join(plotdir, '%s-%s-sizemag.png' % (serun,band))
-    if os.path.exists(tfile):
+    if os.path.exists(tfile) or os.path.exists(szmagdir):
         qatext = """
 		<td>
 			<p>
@@ -876,13 +941,6 @@ def write_se_collate_html(serun, showsplit=False):
         """
     else:
         qatext=""
-
-
-
-    if showsplit:
-        splitinfo="NOTE: <b>Validation splits 1/2 are in the %s-fits/split* and %s.cols/split* subdirectories</b>" % (serun,serun)
-    else:
-        splitinfo=""
 
     dc4_shear_byreg="""
 	<tr>
@@ -976,7 +1034,6 @@ Region RA          Dec        gamma1     gamma2   gamma1     gamma2    posangle
                 </table>
                 {table_comment}
             </table>
-            {splitinfo}
 
 		</td>
 	</tr>
@@ -999,7 +1056,6 @@ Region RA          Dec        gamma1     gamma2   gamma1     gamma2    posangle
 </body>
 </html>
     """.format(serun=serun, 
-               splitinfo=splitinfo, 
                shear_desc=shear_desc, 
                dataset=rc['dataset'],
                table_comment=table_comment,
@@ -1161,8 +1217,19 @@ S=string
 	<body>
 
 		<h1>QA Plots for single epoch weak lensing run {serun}</h1>
+    """.format(serun=serun)
 
-        <h2>Comparison of star shapes and interpolated PSF shapes</h2>
+    if os.path.exists(szmagdir):
+        qa += """
+    <h2>Size-mag diagrams for each exposure</h2>
+
+            Size-mag and spreadmodel-mag plots for each exposure are <a
+            href="../../test/checksg/byexp/phpshow.php">here</a>.  ccds are shown in different
+            colors.
+        """
+    if os.path.exists(plotdir):
+        qa += """
+    <h2>Comparison of star shapes and interpolated PSF shapes</h2>
         <table width="500px">
             <tr>
                 <td>

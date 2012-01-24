@@ -51,7 +51,7 @@ parser.add_option("--magrange",
 parser.add_option("--screen",action="store_true",
         dest="screen",
         default=False,
-        help="Send plots to the screen additioin to a file. Default %default")
+        help="Send plots to the screen in addition to a file. Default %default")
 
 parser.add_option("-n",dest="nbin",
                   default=3,
