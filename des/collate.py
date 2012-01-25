@@ -1,7 +1,7 @@
 from __future__ import print_function
 import os
 import sys
-from sys import stdout,stderr
+from sys import stderr
 from copy import copy
 
 import shutil
@@ -137,12 +137,12 @@ class SEColumnCollator:
         shutil.copytree(self.temp_coldir, self.final_coldir)
 
     def cleanup(self):
-        print("Cleaning up temp dir:",self.temp_coldir)
+        print("Cleaning up temp dir:",self.temp_coldir,file=stderr)
         if os.path.exists(self.temp_coldir):
             shutil.rmtree(self.temp_coldir)
 
     def load_flist(self):
-        flistfile=deswl.files.se_collated_path(self.serun,'goodlist')
+        flistfile=deswl.files.collated_path(self.serun,'goodlist')
         flist=eu.io.read(flistfile, verbose=True)
 
         if self.job is not None:
@@ -368,19 +368,19 @@ class SEColumnCollator:
             os.makedirs(fitsdir)
             os.makedirs(psfstars_fitsdir)
 
-        print('coldir:',coldir)
-        print('fitsdir:',fitsdir)
-        print('psfstars_fitsdir:',psfstars_fitsdir)
+        print('coldir:',coldir,file=stderr)
+        print('fitsdir:',fitsdir,file=stderr)
+        print('psfstars_fitsdir:',psfstars_fitsdir,file=stderr)
 
         cols = columns.Columns(coldir)
 
-        print(cols)
+        print(cols,file=stderr)
 
         for col in sorted(cols):
             if col in ['shapelets_prepsf','interp_psf_shapelets']:
-                print("skipping large column:",col)
+                print("skipping large column:",col,file=stderr)
             else:
-                print('column: ',col)
+                print('column: ',col,file=stderr)
 
                 if col == 'psfstars':
                     continue
@@ -390,7 +390,7 @@ class SEColumnCollator:
                 data = eu.sfile.read(fname)
 
                 fitsfile = os.path.join(fitsdir, col+'.fits')
-                print(fitsfile)
+                print(fitsfile,file=stderr)
 
                 # don't make a copy!
                 eu.io.write(fitsfile, data, clobber=True,copy=False)
@@ -399,14 +399,14 @@ class SEColumnCollator:
 
         psfstars_cols = cols['psfstars']
         for col in sorted(psfstars_cols):
-            print('column: ',col)
+            print('column: ',col,file=stderr)
 
             fname = psfstars_cols[col].filename
 
             data = eu.sfile.read(fname)
 
             fitsfile = os.path.join(psfstars_fitsdir, col+'.fits')
-            print(fitsfile)
+            print(fitsfile,file=stderr)
 
             # don't make a copy!
             eu.io.write(fitsfile, data, clobber=True,copy=False)
@@ -435,11 +435,15 @@ class SEColumnCollator:
         write_se_collate_html(self.serun)
 
 
-class SECollateWQJob:
-    def __init__(self, serun, njob):
-        self.serun=serun
+class CollateWQJob:
+    def __init__(self, run, njob, hosts=None):
+        self.run=run
         self.njob=njob
-        self.groups='group: [new,new2]'
+        if hosts is None:
+            hosts = ['astro%04i' % i for i in xrange(1,12)]
+            hosts += ['astro%04i' % i for i in xrange(21,34)]
+
+        self.hosts=hosts
 
     def job_template(self):
         text = """
@@ -448,73 +452,80 @@ command: |
     source /opt/astro/SL53/bin/setup.hadoop.sh
     source ~astrodat/setup/setup.sh
     source ~/.dotfiles/bash/astro.bnl.gov/modules.sh
-    %(esutil_load)s
-    %(tmv_load)s
-    %(wl_load)s
+    {esutil_load}
+    {tmv_load}
+    {wl_load}
     module load espy
 
     script=$ESPY_DIR/des/bin/collate2columns.py
-    python $script -s -n %(njob)s -j %(job)s %(serun)s &> %(log)s
+    python $script -s -n {njob} -j {job} {run} &> {log}
 
-%(groups)s
+mode: byhost
+host: {host}
 priority: low
-job_name: %(job_name)s\n""" 
+job_name: {job_name}\n""" 
         return text
 
     def write(self):
 
-        rc=deswl.files.Runconfig(self.serun)
+        rc=deswl.files.Runconfig(self.run)
         wl_load = deswl.files._make_load_command('wl',rc['wlvers'])
         tmv_load = deswl.files._make_load_command('tmv',rc['tmvvers'])
         esutil_load = deswl.files._make_load_command('esutil', rc['esutilvers'])
 
         job_template=self.job_template()
-        outd=deswl.files.wq_dir(self.serun, subdir='collate')
+        outd=deswl.files.wq_dir(self.run, subdir='collate')
         if not os.path.exists(outd):
             os.makedirs(outd)
+
+        nh=len(self.hosts)
         for job in xrange(self.njob):
-            job_name='%s-collate-%03i' % (self.serun,job)
+            job_name='%s-collate-%03i' % (self.run,job)
             job_file=os.path.join(outd,job_name+'.yaml')
 
             log=job_name+'.out'
 
-            text=job_template % {'esutil_load':esutil_load,
-                                 'tmv_load':tmv_load,
-                                 'wl_load':wl_load,
-                                 'groups':self.groups,
-                                 'njob':self.njob,
-                                 'job':job,
-                                 'serun':self.serun,
-                                 'log':log,
-                                 'job_name':job_name}
+            host = self.hosts[job % nh]
+            text=job_template.format(esutil_load=esutil_load,
+                                     tmv_load=tmv_load,
+                                     wl_load=wl_load,
+                                     host=host,
+                                     njob=self.njob,
+                                     job=job,
+                                     run=self.run,
+                                     log=log,
+                                     job_name=job_name)
 
             print("Writing job file:",job_file,file=stderr)
             with open(job_file,'w') as fobj:
                 fobj.write(text)
 
-        comb_name=os.path.join(outd,'%s-combine.py' % self.serun)
+        comb_name=os.path.join(outd,'%s-combine.py' % self.run)
         print("Writing combine script:",comb_name,file=stderr)
 
-        collated_dir=deswl.files.collated_dir(self.serun)
+        collated_dir=deswl.files.collated_dir(self.run)
         with open(comb_name,'w') as fobj:
             text="""
 import columns
 import glob
 
-coldir='%(dir)s/%(serun)s.cols'
+coldir='%(dir)s/%(run)s.cols'
 
-pattern='%(dir)s/%(serun)s-*.cols'
+pattern='%(dir)s/%(run)s-*.cols'
 f=glob.glob(pattern)
 f.sort()
 
 c=columns.Columns(coldir)
 c.from_columns(f,create=True)\n""" % {'dir':collated_dir,
-                                      'serun':self.serun}
+                                      'run':self.run}
             fobj.write(text)
 
+
+
 class MEColumnCollator: 
-    def __init__(self, run, no_cleanup=False, njob=None, job=None):
+    def __init__(self, run, small=False, no_cleanup=False, njob=None, job=None):
         self.run = run
+        self.small=small
 
         self.njob=None if njob is None else int(njob)
         self.job=None if job is None else int(job)
@@ -523,7 +534,6 @@ class MEColumnCollator:
 
         self.set_suffix()
         self.set_names()
-
 
     def collate(self):
         try:
@@ -535,16 +545,16 @@ class MEColumnCollator:
             uid0=0
             cat_cols=['mag_model','magerr_model','x_image','y_image','flags_weight']
             for i,fdict in enumerate(self.flist,1):
-                print('-'*70)
-                print("Processing %d/%d" % (i,ntot))
+                print('-'*70,file=stderr)
+                print("Processing %d/%d" % (i,ntot),file=stderr)
 
                 # eu.io.read works correctly with hdfs
                 fname=fdict['multishear']
-                print("    ",fname)
+                print("    ",fname,file=stderr)
                 data = eu.io.read(fname)
 
                 catname=fdict['cat']
-                print("    ",catname)
+                print("    ",catname,file=stderr)
                 cat=eu.io.read(catname,columns=cat_cols,lower=True)
 
                 if cat.size != data.size:
@@ -560,12 +570,16 @@ class MEColumnCollator:
                 self.cols.write_column('uid', uids)
 
                 uid0 += data.size
+            self.copy_to_final()
         finally:
             if not self.no_cleanup:
                 self.cleanup()
 
     def write(self,data):
         for c in data.dtype.names:
+            if self.small and c == 'shapelets_prepsf':
+                continue
+
             if c in ['nimages_found','nimages_gotpix','gal_order']:
                 d=numpy.array(data[c], dtype='i1')
             elif c == 'input_flags':
@@ -586,7 +600,7 @@ class MEColumnCollator:
 
 
     def load_flist(self):
-        flistfile=deswl.files.me_collated_path(self.run,'goodlist')
+        flistfile=deswl.files.collated_path(self.run,'goodlist')
         flist=eu.io.read(flistfile, verbose=True)
 
         if self.job is not None:
@@ -621,7 +635,7 @@ class MEColumnCollator:
         shutil.copytree(self.temp_coldir, self.final_coldir)
 
     def cleanup(self):
-        print("Cleaning up temp dir:",self.temp_coldir)
+        print("Cleaning up temp dir:",self.temp_coldir,file=stderr)
         if os.path.exists(self.temp_coldir):
             shutil.rmtree(self.temp_coldir)
 
@@ -638,18 +652,18 @@ class MEColumnCollator:
         if not os.path.exists(fitsdir):
             os.makedirs(fitsdir)
 
-        print('coldir:',coldir)
-        print('fitsdir:',fitsdir)
+        print('coldir:',coldir,file=stderr)
+        print('fitsdir:',fitsdir,file=stderr)
 
         cols = columns.Columns(coldir)
 
-        print(cols)
+        print(cols,file=stderr)
 
         for col in sorted(cols):
             if col in ['shapelets_prepsf']:
-                print("skipping large column:",col)
+                print("skipping large column:",col,file=stderr)
             else:
-                print('column: ',col)
+                print('column: ',col,file=stderr)
 
                 fname = cols[col].filename
 
@@ -657,7 +671,7 @@ class MEColumnCollator:
                 data = eu.sfile.read(fname)
 
                 fitsfile = os.path.join(fitsdir, col+'.fits')
-                print("    ",fitsfile)
+                print("    ",fitsfile,file=stderr)
 
                 # don't make a copy!
                 eu.io.write(fitsfile, data, clobber=True)
@@ -703,9 +717,9 @@ class MEColumnCollator:
         for c in ['id','input_flags','shear_flags','flags_weight','mag_model',
                   'shear_s2n','ra','dec','nimages_found','nimages_gotpix']:
             if cols[c].has_index():
-                print("skipping '%s' which already has an index" % c)
+                print("skipping '%s' which already has an index" % c,file=stderr)
             else:
-                print("creating index for column:",c)
+                print("creating index for column:",c,file=stderr)
                 cols[c].create_index()
 
 
@@ -892,7 +906,7 @@ S  -> string
 
 
         descr_file=path_join(html_dir, 'columns-descr.html')
-        print("Writing allcols description file",descr_file)
+        print("Writing allcols description file",descr_file,file=stderr)
         with open(descr_file,'w') as fobj:
             fobj.write(coldescr)
 
@@ -1328,7 +1342,7 @@ table.simple td {
 
     """
 
-    print("Writing table.css file",fname)
+    print("Writing table.css file",fname,file=stderr)
     fobj=open(fname,'w')
     fobj.write(table_css)
     fobj.close()

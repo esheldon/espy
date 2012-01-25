@@ -11,6 +11,8 @@ from sys import stdout
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
+parser.add_option('--hosts',default=None,
+                  help="A list of hosts")
 
 options, args = parser.parse_args(sys.argv[1:])
 
@@ -21,11 +23,9 @@ if len(args) < 2:
 run=args[0]
 njob=int(args[1])
 
-if run[0:2] == 'se':
-    c = des.collate.SECollateWQJob(run,njob)
-elif run[0:2] == 'me':
-    raise ValueError("ME not yet implemented")
-else:
-    raise ValueError("Expected run 'me*' or 'se*'")
+hosts=options.hosts
+if isinstance(hosts,basestring):
+    hosts = hosts.split(',')
 
+c = des.collate.CollateWQJob(run,njob,hosts=hosts)
 c.write()

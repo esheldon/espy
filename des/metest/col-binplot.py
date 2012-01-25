@@ -29,12 +29,16 @@ pdir=os.path.expandvars(pdir)
 
 use_input_flags=True
 use_flags_weight=True
+if run[0:2] == 'se':
+    use_input_flags=False
+    use_flags_weight=False
 
 print 'reading shear_flags'
 f=c['shear_flags'][:]
 
 name_end=[]
 logic = (f == 0)
+
 if use_input_flags:
     print 'reading input_flags'
     fi=c['input_flags'][:]
@@ -47,7 +51,11 @@ if use_flags_weight:
     logic = logic & (fw == 0)
     name_end += ['wflags']
 
-name_end = '-'.join(name_end)
+if len(name_end) == 0:
+    name_end=''
+else:
+    name_end = '-'.join(name_end)
+
 print 'checking logic'
 w=where1(logic)
 print 'keeping:',w.size,'of',f.size
@@ -68,8 +76,8 @@ else:
 clip=False
 
 keys={}
-if 'se' in run and fields[0] == 'imag':
-    keys['max'] = 14.5
+#if 'se' in run and fields[0] == 'imag':
+#    keys['max'] = 14.5
 
 print 'doing bhist_vs'
 plts = eu.plotting.bhist_vs(data, *fields, nperbin=100000, xlog=xlog, 

@@ -33,7 +33,7 @@ if not os.path.exists(cd):
 
 c=des.collate.open_columns(run)
 
-flistfile=deswl.files.me_collated_path(run,'goodlist')
+flistfile=deswl.files.collated_path(run,'goodlist')
 glist=eu.io.read(flistfile)
 
 f=c['shear_flags'][:]
