@@ -1,5 +1,6 @@
 if [[ $# -lt 2 ]]; then
     echo "usage: domatch.sh merun serun"
+    echo "find closest match"
     exit 1
 fi
 

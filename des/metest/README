@@ -16,4 +16,5 @@ Matching needed
             domatch.sh merun serun
 
     Plot position differences
-    plot-match-posdiff.py merun serun
+        plot-match-posdiff.py merun serun
+        plot-match-sheardiff.py merun serun
