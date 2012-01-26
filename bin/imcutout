@@ -27,7 +27,8 @@ Description
     If consecutive image names are the same, the image is only read once.
 """
 
-import fitsio
+import esutil as eu
+#import fitsio
 import images
 import sys
 from sys import stdin, stderr
@@ -132,8 +133,7 @@ def main():
 
         if imfile != imfile_old:
             imfile_old = imfile
-            ff = fitsio.FITS(imfile)
-            image = ff[ext].read()
+            image=eu.io.read(imfile,ext=ext,type='fits')
 
 
         cutout = make_cutout(image, x, y, npix)
