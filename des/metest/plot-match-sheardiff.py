@@ -13,13 +13,13 @@ def make_html(pd,merun,serun):
     <body bgcolor=white>
 
         <p>
-        <img src="%(merun)s_%(serun)s_match_shear1diff_vs_shear_s2n.png">
-        <img src="%(merun)s_%(serun)s_match_shear2diff_vs_shear_s2n.png">
-        <img src="%(merun)s_%(serun)s_match_sizediff_vs_shear_s2n.png">
+        <img src="%(merun)s-%(serun)s-match-shear1diff-vs-shear_s2n.png">
+        <img src="%(merun)s-%(serun)s-match-shear2diff-vs-shear_s2n.png">
+        <img src="%(merun)s-%(serun)s-match-sizediff-vs-shear_s2n.png">
         <p>
-        <img src="%(merun)s_%(serun)s_match_shear1diff_vs_mag_model.png">
-        <img src="%(merun)s_%(serun)s_match_shear2diff_vs_mag_model.png">
-        <img src="%(merun)s_%(serun)s_match_sizediff_vs_mag_model.png">
+        <img src="%(merun)s-%(serun)s-match-shear1diff-vs-mag_model.png">
+        <img src="%(merun)s-%(serun)s-match-shear2diff-vs-mag_model.png">
+        <img src="%(merun)s-%(serun)s-match-sizediff-vs-mag_model.png">
 
     </body>
 </html>
@@ -104,7 +104,7 @@ for xfield in ['mag_model','shear_s2n']:
                                    max=xmax,
                                    nperbin=nperbin, 
                                    xlog=xlog)
-        epsfile='%s_%s_match_%s_vs_%s.eps' % (merun,serun,diffname,xfield)
+        epsfile='%s-%s-match-%s-vs-%s.eps' % (merun,serun,diffname,xfield)
         epsfile=os.path.join(pd,epsfile)
         plt[0].write_eps(epsfile)
         converter.convert(epsfile, dpi=dpi, verbose=True)

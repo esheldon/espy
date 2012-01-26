@@ -1,3 +1,6 @@
+"""
+    %prog [options] merun serun
+"""
 import os,sys
 import recfile
 import esutil as eu
@@ -7,47 +10,66 @@ import deswl
 import des
 import converter
 
-def make_html(pd,merun,serun):
+def make_html(pd,pfront):
     html="""
 <html>
     <body bgcolor=white>
 
         <p>
-        <img src="%(merun)s_%(serun)s_match_radiff_vs_shear_s2n.png">
-        <img src="%(merun)s_%(serun)s_match_radiff_sdev_vs_shear_s2n.png">
+        <img src="{pfront}-match-radiff-vs-shear-s2n.png">
+        <img src="{pfront}-match-radiff-sdev-vs-shear-s2n.png">
         <p>
-        <img src="%(merun)s_%(serun)s_match_decdiff_vs_shear_s2n.png">
-        <img src="%(merun)s_%(serun)s_match_decdiff_sdev_vs_shear_s2n.png">
+        <img src="{pfront}-match-decdiff-vs-shear-s2n.png">
+        <img src="{pfront}-match-decdiff-sdev-vs-shear-s2n.png">
 
         <p>
-        <img src="%(merun)s_%(serun)s_match_radiff_vs_mag_model.png">
-        <img src="%(merun)s_%(serun)s_match_radiff_sdev_vs_mag_model.png">
+        <img src="{pfront}-match-radiff-vs-mag-model.png">
+        <img src="{pfront}-match-radiff-sdev-vs-mag-model.png">
         <p>
-        <img src="%(merun)s_%(serun)s_match_decdiff_vs_mag_model.png">
-        <img src="%(merun)s_%(serun)s_match_decdiff_sdev_vs_mag_model.png">
+        <img src="{pfront}-match-decdiff-vs-mag-model.png">
+        <img src="{pfront}-match-decdiff-sdev-vs-mag-model.png">
+        <p>
+        <img src="{pfront}-match-radiff.png">
+        <img src="{pfront}-match-decdiff.png">
 
     </body>
 </html>
 
-    """ % {'merun':merun,'serun':serun}
+    """.format(pfront=pfront)
 
-    html_file=os.path.join(pd,'poserr.html')
+    html_file=os.path.join(pd,pfront+'-poserr.html')
     print 'writing html file:',html_file
     with open(html_file,'w') as fobj:
         fobj.write(html)
 
-if len(sys.argv) < 3:
-    print 'usage: plot-match-posdiff.py merun serun'
+from optparse import OptionParser
+parser=OptionParser(__doc__)
+parser.add_option("-s","--stars", action='store_true', help="Use PSF stars")
+
+options, args = parser.parse_args(sys.argv[1:])
+
+
+if len(args) < 2:
+    parser.print_help()
     sys.exit(1)
 
-merun=sys.argv[1]
-serun=sys.argv[2]
+merun=args[0]
+serun=args[1]
 d=deswl.files.collated_dir(merun)
 pd=os.path.join(d,'poserr')
 if not os.path.exists(pd):
     os.makedirs(pd) 
 
-f='%(dir)s/match-%(serun)s-%(merun)s.dat' % {'dir':d,'merun':merun,'serun':serun}
+fextra=''
+if options.stars:
+    fextra='-stars'
+    pfront='{serun}-stars-{merun}'.format(serun=serun,merun=merun)
+else:
+    pfront='{serun}-{merun}'.format(serun=serun,merun=merun)
+
+f='{dir}/match-{serun}{fextra}-{merun}.dat'.format(dir=d,
+                                                   merun=merun,serun=serun,
+                                                   fextra=fextra)
 f=os.path.expandvars(f)
 
 print 'reading:',f
@@ -60,7 +82,11 @@ mc = des.collate.open_columns(merun)
 sc = des.collate.open_columns(serun)
 
 mw = des.flags.select_good_me_bycol(mc)
-sw = des.flags.select_good_se_bycol(sc)
+if options.stars:
+    star_flag=sc['star_flag'][:]
+    sw=where1(star_flag != 0)
+else:
+    sw = des.flags.select_good_se_bycol(sc)
 
 print 'reading ra,dec from me'
 mra = mc['ra'][mw]
@@ -92,6 +118,8 @@ names_sdev = {'radiff':r'$\sigma(RA_{coadd}-RA_{se})$ [arcsec]',
 
 nperbin=100000
 
+make_html(pd,pfront)
+
 domag=ptypes['mag']
 if domag:
     print 'reading mag_model'
@@ -112,7 +140,7 @@ if domag:
                                    names=names_sdev,
                                    max=25,
                                    nperbin=nperbin, xlog=xlog)
-        epsfile='%s_%s_match_radiff_sdev_vs_mag_model.eps' % (merun,serun)
+        epsfile=pfront+'-match-radiff-sdev-vs-mag-model.eps'
         epsfile=os.path.join(pd,epsfile)
         plt[0].write_eps(epsfile)
         converter.convert(epsfile, dpi=dpi, verbose=True)
@@ -123,7 +151,7 @@ if domag:
                                    names=names,
                                    max=25,
                                    nperbin=nperbin, xlog=xlog)
-        epsfile='%s_%s_match_radiff_vs_mag_model.eps' % (merun,serun)
+        epsfile=pfront+'-match-radiff-vs-mag-model.eps'
         epsfile=os.path.join(pd,epsfile)
         plt[0].write_eps(epsfile)
         converter.convert(epsfile, dpi=dpi, verbose=True)
@@ -137,7 +165,7 @@ if domag:
                                    names=names_sdev,
                                    max=25,
                                    nperbin=nperbin, xlog=xlog)
-        epsfile='%s_%s_match_decdiff_sdev_vs_mag_model.eps' % (merun,serun)
+        epsfile=pfront+'-match-decdiff-sdev-vs-mag-model.eps'
         epsfile=os.path.join(pd,epsfile)
         plt[0].write_eps(epsfile)
         converter.convert(epsfile, dpi=dpi, verbose=True)
@@ -149,7 +177,7 @@ if domag:
                                    names=names,
                                    max=25,
                                    nperbin=nperbin, xlog=xlog)
-        epsfile='%s_%s_match_decdiff_vs_mag_model.eps' % (merun,serun)
+        epsfile=pfront+'-match-decdiff-vs-mag-model.eps'
         epsfile=os.path.join(pd,epsfile)
         plt[0].write_eps(epsfile)
         converter.convert(epsfile, dpi=dpi, verbose=True)
@@ -157,6 +185,37 @@ if domag:
 
     del mag
     del magm
+
+
+if ptypes['radiff_hist']:
+    sdev=radiff.std()
+    binsize = 0.1*sdev
+    print 'radiff sdev:',sdev
+
+    print 'doing radiff'
+    plt=eu.plotting.bhist(radiff, binsize=binsize, xlabel=names['radiff'],ylog=True)
+    epsfile=pfront+'-match-radiff.eps'
+    epsfile=os.path.join(pd,epsfile)
+    plt.write_eps(epsfile)
+    converter.convert(epsfile, dpi=dpi, verbose=True)
+
+if ptypes['decdiff_hist']:
+    sdev=decdiff.std()
+    binsize = 0.1*sdev
+    print 'decdiff sdev:',sdev
+
+    print 'doing decdiff'
+    plt=eu.plotting.bhist(decdiff, binsize=binsize, xlabel=names['decdiff'],ylog=True)
+    epsfile=pfront+'-match-decdiff.eps'
+    epsfile=os.path.join(pd,epsfile)
+    plt.write_eps(epsfile)
+    converter.convert(epsfile, dpi=dpi, verbose=True)
+
+
+
+
+if options.stars:
+    sys.exit(0)
 
 
 dos2n=ptypes['s2n']
@@ -177,7 +236,7 @@ if dos2n:
                                    stype='sdev',
                                    names=names_sdev,
                                    nperbin=nperbin, xlog=xlog)
-        epsfile='%s_%s_match_radiff_sdev_vs_shear_s2n.eps' % (merun,serun)
+        epsfile=pfront+'-match-radiff-sdev-vs-shear-s2n.eps'
         epsfile=os.path.join(pd,epsfile)
         plt[0].write_eps(epsfile)
         converter.convert(epsfile, dpi=dpi, verbose=True)
@@ -188,7 +247,7 @@ if dos2n:
         plt = eu.plotting.bhist_vs(ddata, 'shear_s2n','radiff', 
                                    names=names,
                                    nperbin=nperbin, xlog=xlog)
-        epsfile='%s_%s_match_radiff_vs_shear_s2n.eps' % (merun,serun)
+        epsfile=pfront+'-match-radiff-vs-shear-s2n.eps'
         epsfile=os.path.join(pd,epsfile)
         plt[0].write_eps(epsfile)
         converter.convert(epsfile, dpi=dpi, verbose=True)
@@ -202,7 +261,7 @@ if dos2n:
                                    stype='sdev',
                                    names=names_sdev,
                                    nperbin=nperbin, xlog=xlog)
-        epsfile='%s_%s_match_decdiff_sdev_vs_shear_s2n.eps' % (merun,serun)
+        epsfile=pfront+'-match-decdiff-sdev-vs-shear-s2n.eps'
         epsfile=os.path.join(pd,epsfile)
         plt[0].write_eps(epsfile)
         converter.convert(epsfile, dpi=dpi, verbose=True)
@@ -214,7 +273,7 @@ if dos2n:
         plt = eu.plotting.bhist_vs(ddata, 'shear_s2n','decdiff', 
                                    names=names,
                                    nperbin=nperbin, xlog=xlog)
-        epsfile='%s_%s_match_decdiff_vs_shear_s2n.eps' % (merun,serun)
+        epsfile=pfront+'-match-decdiff-vs-shear-s2n.eps'
         epsfile=os.path.join(pd,epsfile)
         plt[0].write_eps(epsfile)
         converter.convert(epsfile, dpi=dpi, verbose=True)
@@ -224,31 +283,4 @@ if dos2n:
     del s2n
     del s2nm
 
-if ptypes['radiff_hist']:
-    sdev=radiff.std()
-    binsize = 0.1*sdev
-    print 'radiff sdev:',sdev
 
-    if False:
-        print 'doing radiff'
-        plt=eu.plotting.bhist(radiff, binsize=binsize, xlabel=names['radiff'],ylog=True)
-        epsfile='%s_%s_match_radiff.eps' % (merun,serun)
-        epsfile=os.path.join(pd,epsfile)
-        plt.write_eps(epsfile)
-        converter.convert(epsfile, dpi=dpi, verbose=True)
-
-if ptypes['decdiff_hist']:
-    sdev=decdiff.std()
-    binsize = 0.1*sdev
-    print 'decdiff sdev:',sdev
-
-    if False:
-        print 'doing decdiff'
-        plt=eu.plotting.bhist(decdiff, binsize=binsize, xlabel=names['decdiff'])
-        epsfile='%s_%s_match_decdiff.eps' % (merun,serun)
-        epsfile=os.path.join(pd,epsfile)
-        plt.write_eps(epsfile)
-        converter.convert(epsfile, dpi=dpi, verbose=True)
-
-
-make_html(pd,merun,serun)

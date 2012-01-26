@@ -12,6 +12,26 @@ import columns
 import converter
 import des
 
+
+def write_html(pdir,run):
+    text="""
+<html>
+    <body bgcolor=white>
+        <img src="{run}-mag_model-shear1-iflags-wflags.png">
+        <img src="{run}-mag_model-shear2-iflags-wflags.png"><br>
+        <p>
+        <img src="{run}-shear_s2n-shear1-iflags-wflags.png">
+        <img src="{run}-shear_s2n-shear2-iflags-wflags.png"><br>
+        <p>
+    </body>
+</html>
+    """.format(run=run)
+    
+    f=os.path.join(pdir,'shear-vs.html')
+    print 'writing html:',f
+    with open(f,'w') as fobj:
+        fobj.write(text)
+
 args=sys.argv[1:]
 if len(args) < 2:
     print 'usage: shearplot run x y1 y2 ...'
@@ -26,6 +46,7 @@ print 'columns dir:',c.dir
 
 pdir='$DESDATA/wlbnl/%s/collated/shear-vs' % run
 pdir=os.path.expandvars(pdir)
+write_html(pdir,run)
 
 use_input_flags=True
 use_flags_weight=True
