@@ -7,6 +7,7 @@ import numpy
 from numpy import where
 
 import esutil as eu
+from esutil.numpy_util import where1
 from esutil.ostools import path_join, expand_path
 
 import columns
@@ -123,7 +124,45 @@ class ColumnSelector:
         self.load_cols(primary=primary)
         c = self.cols
 
+        #
+        # first cut everything down to mask and r < 21.8
+        #
 
+        masktype = self.conf['masktype']
+        mask_colname = 'in'+masktype
+        print("Reading %s (and good)" % mask_colname)
+        inmask = c[mask_colname][:]
+        print("Getting %s mask logic" % masktype)
+        mask_logic = (inmask == 1)
+        wmask,=where(mask_logic)
+        ntot=inmask.size
+        print("    %s/%s passed (%0.2f)" % (wmask.size,ntot,wmask.size/float(ntot)))
+
+
+        rmin = self.conf['cmodel_rmin']
+        if for_training:
+            self.conf['cmodel_rmax'] = 22.1
+        rmax = self.conf['cmodel_rmax']
+
+        print("Cutting to cmodel_r: [%s,%s]" % (rmin,rmax))
+        print("Reading cmodelmag_dered")
+        cmag = c['cmodelmag_dered_r'][:]
+        print('Getting cmag logic:',rmax)
+        cmag_logic = (cmag > rmin) & (cmag < rmax)
+        wrmag,=where(cmag_logic)
+        print("    %s/%s passed (%0.2f)" % (wrmag.size,ntot,wrmag.size/float(ntot)))
+
+        wmagmask, = where(mask_logic & cmag_logic)
+        print("    %s/%s passed both (%0.2f)" % (wmagmask.size,ntot,wmagmask.size/float(ntot)))
+
+        del inmask
+        del cmag
+
+        #
+        # Now watch the rest of the cuts to see how it breaks down
+        #
+
+        print("**\n** NOTE From here on, we have cut to the mask and rmag\n**")
 
         print("\nReading flags,objc_flags,calib_status")
         data = c.read_columns(['objc_flags',
@@ -132,16 +171,27 @@ class ColumnSelector:
                                'calib_status_g',
                                'calib_status_r',
                                'calib_status_i',
-                               'calib_status_z'])
+                               'calib_status_z'], rows=wmagmask)
         ntot = data.size
                                
         selector = es_sdsspy.select.Selector(data)
-        # this combines binned, calib, object1
-        print("Getting binned,calib,object1 logic")
-        logic = selector.flag_logic()
 
-        w,=where(logic)
-        print("    %s/%s passed" % (w.size,ntot))
+        print("Getting binned logic")
+        binned_logic = selector.binned_logic()
+        w,=where(binned_logic)
+        print("    %s/%s passed (%0.2f)" % (w.size,ntot,w.size/float(ntot)))
+
+        print("Getting calib logic")
+        calib_logic = selector.calib_logic()
+        w,=where(calib_logic)
+        print("    %s/%s passed (%0.2f)" % (w.size,ntot,w.size/float(ntot)))
+
+        print("Getting object1 logic")
+        object1_logic = selector.object1_logic()
+        w,=where(object1_logic)
+        print("    %s/%s passed (%0.2f)" % (w.size,ntot,w.size/float(ntot)))
+
+
         del data
 
 
@@ -152,11 +202,11 @@ class ColumnSelector:
         print("Cutting to reasonable model mags: [%s,%s]" \
                      % (mmin,mmax))
         print("Reading modelmag_dered")
-        mag_u = c['modelmag_dered_u'][:]
-        mag_g = c['modelmag_dered_g'][:]
-        mag_r = c['modelmag_dered_r'][:]
-        mag_i = c['modelmag_dered_i'][:]
-        mag_z = c['modelmag_dered_z'][:]
+        mag_u = c['modelmag_dered_u'][wmagmask]
+        mag_g = c['modelmag_dered_g'][wmagmask]
+        mag_r = c['modelmag_dered_r'][wmagmask]
+        mag_i = c['modelmag_dered_i'][wmagmask]
+        mag_z = c['modelmag_dered_z'][wmagmask]
         print('Getting mag logic')
         mag_logic = \
                   (mag_u > mmin) & (mag_u < mmax) \
@@ -165,55 +215,43 @@ class ColumnSelector:
                 & (mag_i > mmin) & (mag_i < mmax) \
                 & (mag_z > mmin) & (mag_z < mmax)
         w,=where(mag_logic)
-        print("    %s/%s passed" % (w.size,ntot))
+        print("    %s/%s passed (%0.2f)" % (w.size,ntot,w.size/float(ntot)))
+        print("        Breakdown:")
 
-        logic = logic & mag_logic
+        w=where1((mag_u > mmin) & (mag_u < mmax))
+        print("            u %s/%s passed (%0.2f)" % (w.size,ntot,w.size/float(ntot)))
+        w=where1((mag_g > mmin) & (mag_g < mmax))
+        print("            g %s/%s passed (%0.2f)" % (w.size,ntot,w.size/float(ntot)))
+        w=where1((mag_r > mmin) & (mag_r < mmax))
+        print("            r %s/%s passed (%0.2f)" % (w.size,ntot,w.size/float(ntot)))
+        w=where1((mag_i > mmin) & (mag_i < mmax))
+        print("            i %s/%s passed (%0.2f)" % (w.size,ntot,w.size/float(ntot)))
+        w=where1((mag_z > mmin) & (mag_z < mmax))
+        print("            z %s/%s passed (%0.2f)" % (w.size,ntot,w.size/float(ntot)))
 
-        rmin = self.conf['cmodel_rmin']
-
-        if for_training:
-            self.conf['cmodel_rmax'] = 22.1
-        rmax = self.conf['cmodel_rmax']
 
 
-        print("Cutting to cmodel_r: [%s,%s]" % (rmin,rmax))
-        print("Reading cmodelmag_dered")
-        cmag = c['cmodelmag_dered_r'][:]
-        print('Getting cmag logic:',rmax)
-        cmag_logic = (cmag > rmin) & (cmag < rmax)
-        w,=where(cmag_logic)
-        print("    %s/%s passed" % (w.size,ntot))
-
-        logic = logic & cmag_logic
 
         print("Cutting thing_id >= 0")
-        thing_id = c['thing_id'][:]
+        thing_id = c['thing_id'][wmagmask]
         thing_id_logic = (thing_id >= 0)
         w,=where(thing_id_logic)
-        print("    %s/%s passed" % (w.size,ntot))
+        print("    %s/%s passed (%0.2f)" % (w.size,ntot,w.size/float(ntot)))
 
 
+        logic = \
+            binned_logic \
+            & calib_logic \
+            & object1_logic \
+            & mag_logic \
+            & thing_id_logic
 
-        logic = logic & thing_id_logic
-
-        masktype = self.conf['masktype']
-        if masktype is not None:
-            mask_colname = 'in'+masktype
-            print("Reading %s (and good)" % mask_colname)
-            inmask = c[mask_colname][:]
-            print("Getting %s mask logic" % masktype)
-            mask_logic = (inmask == 1)
-            w,=where(mask_logic)
-            print("    %s/%s passed" % (w.size,ntot))
-            del inmask
-
-            logic = logic & mask_logic
 
         
         w,=where(logic)
-        print("A total of %s/%s passed" % (w.size,ntot))
+        print("A total of %s/%s passed (%0.2f)" % (w.size,ntot,w.size/float(ntot)))
 
-        self.keep_indices = w
+        self.keep_indices = wmagmask[w]
 
 
     def filename(self, chunk=None):
@@ -438,6 +476,7 @@ class ColumnSelectorOld:
                 & (mag[:,2] > mmin) & (mag[:,2] < mmax) \
                 & (mag[:,3] > mmin) & (mag[:,3] < mmax) \
                 & (mag[:,4] > mmin) & (mag[:,4] < mmax)
+
         w,=where(mag_logic)
         stdout.write("    %s/%s passed\n" % (w.size,c['flags'].size))
         del mag
