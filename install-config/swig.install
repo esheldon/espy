@@ -19,7 +19,10 @@ module-whatis	"SWIG"
 conflict swig
 module load pcre
 
-prepend-path PATH %s/bin
+set PRODUCT_DIR %s
+setenv SWIG_DIR $PRODUCT_DIR
+
+prepend-path PATH $PRODUCT_DIR/bin
 """ % self.install_dir'''
 
 
