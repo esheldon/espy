@@ -16,6 +16,7 @@ parser=OptionParser(__doc__)
 parser.add_option("-u","--user",default=None, help="Username.")
 parser.add_option("-p","--password",default=None, help="Password.")
 parser.add_option("-s","--show",action='store_true', help="Show query on stderr.")
+parser.add_option("-b","--band",default=None, help="limit to the specified band.")
 parser.add_option("-f","--format",default='pyobj',help=("File format for output.  pyobj, json, cjson."
                                                         "Default %default."))
 
@@ -29,6 +30,10 @@ def main():
 
 
     release=args[0].strip()
+
+    extra=[]
+    if options.band is not None
+        extra += 'im.band = %s' % options.band
 
     net_rootdir=desdb.files.des_net_rootdir()
     query="""
@@ -47,11 +52,13 @@ def main():
     from
         %(release)s_files cat,
         %(release)s_files im
+        %(extra)s
     where
         cat.filetype='coadd_cat'
         and cat.catalog_parentid = im.id
     order by tilename\n""" % {'netroot':net_rootdir,
-                              'release':release}
+                              'release':release,
+                              'extra':extra}
 
     conn=desdb.Connection(user=options.user,password=options.password)
 

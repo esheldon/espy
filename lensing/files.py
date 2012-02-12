@@ -40,14 +40,14 @@ from esutil.numpy_util import where1
 
 
 finfo={}
-finfo['lcat']     = {'subdir':'lcat/{sample}',  'name':'lcat-{sample}{extra}.bin'}
-finfo['scat']     = {'subdir':'scat/{sample}',  'name':'scat-{sample}.bin'}
+finfo['lcat']     = {'subdir':'lcat/{sample}',  'name':'lcat-{sample}{extra}.{ext}', 'default_ext':'bin'}
+finfo['scat']     = {'subdir':'scat/{sample}',  'name':'scat-{sample}.{ext}','default_ext':'bin'}
 
 finfo['scat-split']  = {'subdir':'scat/{sample}',
-                            'name':'scat-{sample}-{split}.bin'}
+                            'name':'scat-{sample}-{split}.{ext}','default_ext':'bin'}
 
 finfo['lensout-split']  = {'subdir':'lensout/{sample}',
-                           'name':'lensout-{sample}-{split}.rec'}
+                           'name':'lensout-{sample}-{split}.{ext}','default_ext':'bin'}
 
 finfo['reduced']  = {'subdir':'lensout/{sample}',
                          'name':'reduced-{sample}.fits'}
@@ -166,6 +166,9 @@ def sample_file(type, sample, split=None, name=None, extra=None, ext=None, fs='n
     if extra != '':
         extra = '-'+extra
 
+    if ext is None:
+        ext=finfo[type].get('default_ext',None)
+
     f = finfo[type]['name'].format(sample=sample, split=split, extra=extra, ext=ext, name=name)
     f = os.path.join(d,f)
     return f
@@ -280,21 +283,34 @@ def read_original_catalog(type, sample):
 #
 
 
-def lcat_write(sample, data, extra=None):
-    file = sample_file('lcat',sample, extra=extra)
-
+def lcat_write(sample, data, extra=None, ascii=False, file=None):
+    if ascii:
+        ext='dat'
+    else:
+        ext='bin'
+    if file is None:
+        file = sample_file('lcat',sample, extra=extra,ext=ext)
+        make_dir_from_path(file)
     stdout.write("Writing %d to %s: '%s'\n" % (data.size, 'lcat', file))
 
-    make_dir_from_path(file)
 
-    fobj = open(file,'w')
+    if ascii:
+        import recfile
+        with recfile.Open(file,'w',delim=' ') as rec:
+            rec.fobj.write('%d\n' % data.size)
+            rec.write(data)
+    else:
+        fobj = open(file,'w')
 
-    narr =  numpy.array([data.size],dtype='i8')
-    narr.tofile(fobj)
+        narr =  numpy.array([data.size],dtype='i8')
+        narr.tofile(fobj)
+        data.tofile(fobj)
 
-    data.tofile(fobj)
+        fobj.close()
 
-    fobj.close()
+def lcat_convert_to_ascii(sample, extra=None):
+    t=lcat_read(sample=sample, extra=extra)
+    lcat_write(sample, t, extra=extra, ascii=True)
 
 def lcat_read(sample=None, extra=None, file=None, old=False):
     """
@@ -341,7 +357,7 @@ def lcat_dtype(old=False):
 
 def scat_write(sample, data,split=None):
     from . import sigmacrit
-    file = sample_file('scat',sample, split=split)
+    file = sample_file('scat',sample, split=split, ext='bin')
     conf = read_config('scat', sample)
     style=conf['sigmacrit_style']
     if style not in [1,2]:
@@ -386,12 +402,16 @@ def scat_write(sample, data,split=None):
 
     fobj.close()
 
-def scat_write_ascii(sample, data,split=None):
+def scat_convert_to_ascii(sample, split=None, header=False):
+    t,zl = scat_read(sample=sample, split=split)
+    scat_write_ascii(sample, t, split=split, header=header)
+
+def scat_write_ascii(sample, data, split=None, header=False):
     from esutil import recfile
     from sys import stdout
     from . import sigmacrit
 
-    file = sample_file('scat',sample, split=split, ext='.dat')
+    file = sample_file('scat',sample, split=split, ext='dat')
 
     conf = read_config('scat', sample)
     style=conf['sigmacrit_style']
@@ -399,7 +419,7 @@ def scat_write_ascii(sample, data,split=None):
         raise ValueError("sigmacrit_style should be in [1,2]")
 
 
-    if style == 2:
+    if header and style == 2:
         if 'zlmin' not in conf or 'zlmax' not in conf or 'dzl' not in conf:
             raise ValueError("You must have zlmin,zlmax,dzl in config")
 
@@ -417,31 +437,32 @@ def scat_write_ascii(sample, data,split=None):
 
         #robj = recfile.Open(file,'w',delim=' ')
 
-        print("Writing header\n")
-        #print("  Writing size of sources:",data.size)
-        robj.fobj.write('%-15s = %d\n' % ("size",data.size))
-        stdout.write('%-15s = %d\n' % ("size",data.size))
+        if header:
+            print("Writing header\n")
+            #print("  Writing size of sources:",data.size)
+            robj.fobj.write('%-15s = %d\n' % ("size",data.size))
+            stdout.write('%-15s = %d\n' % ("size",data.size))
 
-        #print("  Writing style:",style,"to file")
-        robj.fobj.write('%-15s = %d\n' % ("sigmacrit_style",style))
-        stdout.write('%-15s = %d\n' % ("sigmacrit_style",style))
+            #print("  Writing style:",style,"to file")
+            robj.fobj.write('%-15s = %d\n' % ("sigmacrit_style",style))
+            stdout.write('%-15s = %d\n' % ("sigmacrit_style",style))
 
-        if style == 2:
-            #print("  Writing nzl:",nzl,"to file")
-            robj.fobj.write('%-15s = %d\n' % ("nzlens",nzl))
-            stdout.write('%-15s = %d\n' % ("nzlens",nzl))
+            if style == 2:
+                #print("  Writing nzl:",nzl,"to file")
+                robj.fobj.write('%-15s = %d\n' % ("nzlens",nzl))
+                stdout.write('%-15s = %d\n' % ("nzlens",nzl))
 
-            #print("  Writing zl to file")
-            #robj.fobj.write("%-15s = " % "zlens")
-            stdout.write("%-15s = " % "zlens")
-            zlwrite = numpy.array(zlvals,dtype='f8',copy=False)
-            zlwrite.tofile(robj.fobj, sep=' ')
-            zlwrite.tofile(stdout, sep=' ')
-            robj.fobj.write('\n')
-            stdout.write('\n')
+                #print("  Writing zl to file")
+                #robj.fobj.write("%-15s = " % "zlens")
+                stdout.write("%-15s = " % "zlens")
+                zlwrite = numpy.array(zlvals,dtype='f8',copy=False)
+                zlwrite.tofile(robj.fobj, sep=' ')
+                zlwrite.tofile(stdout, sep=' ')
+                robj.fobj.write('\n')
+                stdout.write('\n')
 
-        robj.fobj.write("END\n\n")
-        stdout.write("END\n\n")
+            robj.fobj.write("END\n\n")
+            stdout.write("END\n\n")
 
         print("Writing data")
         robj.write(data)

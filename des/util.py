@@ -219,7 +219,7 @@ def dc4_create_shear_samples(serun, objclass='gal',
         esutil.sfile.write(indata, outfile, delim=delim, header=header)
 
 
-def collate_se_pointing(serun, exposurename):
+def collate_se_pointing(serun, expname):
     """
     Collate the output data from 
         $DESDATA/wlbnl/$SERUN/pointing
@@ -232,13 +232,13 @@ def collate_se_pointing(serun, exposurename):
     import shutil
 
     dir = deswl.files.wlse_collated_dir(serun)
-    dir = path_join(dir, 'pointings', exposurename)
+    dir = path_join(dir, 'pointings', expname)
     if not os.path.exists(dir):
         os.mkdir(dir)
 
     # now read all the json files and copy data over
     for ccd in range(1,62+1):
-        statfile=deswl.files.wlse_path(exposurename, ccd, 'stat', serun=serun)
+        statfile=deswl.files.wlse_path(expname, ccd, 'stat', serun=serun)
 
         stdout.write("\nReading stat file: %s\n" % statfile)
         stat = esutil.io.read(statfile)
@@ -572,7 +572,7 @@ def dc4_plot_exposures(serun, overplot=True, prompt=False, typ='png', data=None)
 
     fpath = deswl.files.wlse_collated_path(serun, 'gal', ftype='rec', 
                                            region=[1,2,3,4])
-    fields=['ra','dec','exposurename','ccd']
+    fields=['ra','dec','expname','ccd']
     if data is None:
         data=esutil.io.read(fpath, verbose=True, fields=fields, norecfile=True)
 
@@ -620,7 +620,7 @@ def dc4_plot_exposures(serun, overplot=True, prompt=False, typ='png', data=None)
     #return
 
     stdout.write('Getting exposure names\n')
-    enames = numpy_util.unique(data['exposurename'],values=True)
+    enames = numpy_util.unique(data['expname'],values=True)
 
     stdout.write('Plotting exposures\n')
 
@@ -629,7 +629,7 @@ def dc4_plot_exposures(serun, overplot=True, prompt=False, typ='png', data=None)
     for ename in sorted(enames):
         stdout.write('%s/%s %s\n' % (i,ntot,ename))
         i += 1
-        w, = numpy.where( data['exposurename'] == ename )
+        w, = numpy.where( data['expname'] == ename )
         if w.size > 0:
 
             x, y = map(sra[w], data['dec'][w])
@@ -692,8 +692,8 @@ def dc4_plot_exposures(serun, overplot=True, prompt=False, typ='png', data=None)
                       bbox_inches='tight',pad_inches=0.5)
 
 
-def _get_exposure_wcs_byccd(run, exposurename, ccd):
-    redfile=deswl.files.red_image_path(run, exposurename, ccd, check=True)
+def _get_exposure_wcs_byccd(run, expname, ccd):
+    redfile=deswl.files.red_image_path(run, expname, ccd, check=True)
     stdout.write("Getting wcs from %s\n" % redfile)
     h = pyfits.getheader(redfile, ext=1)
     wcs = wcsutil.WCS(h)
@@ -707,9 +707,9 @@ def _get_redimage_wcs(redfile, verbose=False):
     return wcs
 
 
-def get_exposure_wcs(exposurename, ccd=None, dataset=None, verbose=False):
+def get_exposure_wcs(expname, ccd=None, dataset=None, verbose=False):
     """
-    wcs = get_exposure_wcs(run, exposurename, ccd=None)
+    wcs = get_exposure_wcs(run, expname, ccd=None)
 
     if ccd is None, a list for all ccds is returned.  If ccd is a scalar, 
     a single wcs object is returned
@@ -718,13 +718,13 @@ def get_exposure_wcs(exposurename, ccd=None, dataset=None, verbose=False):
     if dataset is None:
         dataset = deswl.wlpipe.default_dataset('wlse')
 
-    band=deswl.wlpipe.getband_from_exposurename(exposurename)
+    band=deswl.wlpipe.getband_from_expname(expname)
 
     infodict = deswl.files.collated_redfiles_read(dataset, band)
 
     imdict={}
     for tinfo in infodict['flist']:
-        if tinfo['exposurename'] == exposurename:
+        if tinfo['expname'] == expname:
             tmp_ccd = int(tinfo['ccd'])
             imdict[tmp_ccd] = tinfo['imfile']
 
@@ -747,12 +747,12 @@ def get_exposure_wcs_example():
     from esutil.ostools import getenv_check, path_join
     import cPickle as pickle
 
-    exposurename='decam--24--15-i-6'
+    expname='decam--24--15-i-6'
     d=getenv_check('DESFILES_DIR')
-    pickle_path=path_join(d, 'wcsexample', 'wcs-'+exposurename+'.pickle')
+    pickle_path=path_join(d, 'wcsexample', 'wcs-'+expname+'.pickle')
     if not os.path.exists(pickle_path):
         stdout.write("Creating pickled version: %s\n" % pickle_path)
-        tmpwcs = get_exposure_wcs(exposurename)
+        tmpwcs = get_exposure_wcs(expname)
         pickle.dump(tmpwcs, open(pickle_path,'w'))
         stdout.write("Don't forget to svn add!\n")
 

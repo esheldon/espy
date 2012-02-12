@@ -129,7 +129,7 @@ def main():
         select
             id,
             run,
-            file_exposure_name as exposurename,
+            file_exposure_name as expname,
             ccd,
             '$DESDATA/' || path as path
         from

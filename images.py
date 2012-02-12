@@ -99,19 +99,33 @@ def scale(image, **keys):
     reverse=keys.get('reverse', False)
     scaling = keys.get('scaling', 'asinh')
 
+    if 'min' in keys or 'max' in keys:
+        doclip=True
+    else:
+        doclip=False
+
     minval = keys.get('min', None)
     maxval = keys.get('max', None)
 
+    thismax = image.max()
+
+    if minval is None:
+        minval = image.min()
+
+    if maxval is None:
+        setmax=False
+        maxval = thismax
+    else:
+        setmax=True
 
     im = numpy.array(image, copy=True, dtype='f4')
+    if doclip:
+        im.clip(minval, maxval, im)
 
-    if minval is not None:
-        im.clip(minval, im.max(), im)
-
-    im -= im.min()
-
-    thismax = image.max()
-    im /= thismax
+    # subtract so min is zero
+    im -= minval
+    # and make sure in [0,1]
+    im /= (maxval-minval)
 
     if scaling == 'asinh':
         #alpha        = keys.get('alpha',0.02)
@@ -131,10 +145,9 @@ def scale(image, **keys):
         numpy.arcsinh(im, im)
         im /= nonlinearity
 
-        if maxval is not None:
+        if setmax:
             tmv = asinh_scale(thismax, alpha=alpha, nonlinearity=nonlinearity)
             mv = asinh_scale(maxval, alpha=alpha, nonlinearity=nonlinearity)
-            #print("thismax/maxval:",tmv/mv)
 
 
     elif scaling == 'linear':
@@ -142,13 +155,13 @@ def scale(image, **keys):
     else:
         raise ValueError('Uknown scaling: %s' % scaling)
 
-    # make sure between [0,1], already subtracted min
-    if maxval is None:
-        im /= im.max()
-    else:
-        im /= im.max()
+    im /= im.max()
+    if setmax:
+        # e.g. if we set the max to a value *higher* than our max input value, 
+        # the max now will be less than one
+        
         im *= (tmv/mv)
-        #print("max/min:",im.max(),im.min())
+        # in case max value was less than input max
         im.clip(0.,1.,im)
 
     if reverse:

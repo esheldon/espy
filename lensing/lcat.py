@@ -22,28 +22,30 @@ from es_sdsspy import stomp_maps
 
 import cosmology
 
-def instantiate_sample(sample):
+def instantiate_sample(sample, **keys):
     conf = lensing.files.read_config('lcat',sample)
+
     if conf['catalog'] in ['redmapper-random','maxbcg-random']:
-        return SDSSRandom(sample)
+        return SDSSRandom(sample, **keys)
+
     elif conf['catalog'][0:9] == 'redmapper':
-        # proper is the old version
-        return RedMapper(sample)
-    elif conf['catalog'] == 'ProPer':
-        return RedMapper(sample)
+        return RedMapper(sample, **keys)
+
     elif conf['catalog'] == 'maxbcg-full':
         return MaxBCG(sample)
+
     elif conf['catalog'] == 'desmocks-2.13':
         return DESMockLensCatalog(sample)
+
     else:
         raise ValueError("don't know about catalog %s" % conf['catalog'])
 
 def create_input(sample, **keys):
     """
-    e.g.  create_input('01')
+    e.g.  create_input('01', ascii=True)
     """
 
-    c = instantiate_sample(sample)
+    c = instantiate_sample(sample, **keys)
     c.create_objshear_input(**keys)
 
 def plot_coverage(sample):
@@ -70,6 +72,9 @@ def output_array(num):
 class LcatBase(dict):
     def __init__(self, sample, **keys):
 
+        for k in keys:
+            self[k] = keys[k]
+
         conf = lensing.files.read_config('lcat',sample)
         for k in conf:
             self[k] = conf[k]
@@ -77,11 +82,18 @@ class LcatBase(dict):
         if self['sample'] != sample:
             raise ValueError("The config sample '%s' doesn't match input '%s'" % (self['sample'],sample))
 
+        ascii=self.get('ascii',None)
+        if ascii:
+            print('Using ascii files')
     def read(self):
         return lensing.files.lcat_read(sample=self['sample'])
 
     def file(self):
-        fname = lensing.files.sample_file('lcat',self['sample'])
+        if self['ascii']:
+            ext='dat'
+        else:
+            ext='bin'
+        fname = lensing.files.sample_file('lcat',self['sample'], ext=ext)
         return fname
 
 
@@ -99,6 +111,7 @@ class SDSSRandom(LcatBase):
     """
     def __init__(self, sample, **keys):
 
+        # this copies each key to self[key]
         LcatBase.__init__(self, sample, **keys)
 
         if self['catalog'] not in ['maxbcg-random','redmapper-random']:
@@ -183,7 +196,7 @@ class SDSSRandom(LcatBase):
                 output['maskflags'][n:n+wgood.size] = maskflags[wgood]
                 n += wgood.size
 
-        lensing.files.lcat_write(self['sample'], output, extra=extra)
+        lensing.files.lcat_write(self['sample'], output, extra=extra, ascii=self['ascii'])
 
     def get_maskflags(self, ra, dec, z, hard=False):
         """
@@ -286,27 +299,20 @@ class SDSSRandom(LcatBase):
 class RedMapper(LcatBase):
     def __init__(self, sample, **keys):
 
+        # this copies each key to self[key]
         LcatBase.__init__(self, sample, **keys)
 
-        if self['catalog'] not in ['redmapper-dr8-3.4-like','redmapper-dr8-3.4-nord','ProPer']:
+        if self['catalog'] not in ['redmapper-dr8-3.4-like','redmapper-dr8-3.4-nord']:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
         self['mapname'] = 'boss'
         self['maptype'] = 'basic'
         self['tycho_maptype'] = 'tycho'
 
-    def get_lambda_field(self):
-        if self['catalog'] == 'ProPer':
-            lambda_field = 'lambda_zred'
-        else:
-            lambda_field = 'lambda_chisq'
-        return lambda_field
 
     def create_objshear_input(self, **keys):
         
         strict_edgecut = self.get('strict_edgecut',False)
-        
-        lambda_field = self.get_lambda_field()
 
         z_field = 'z_lambda'
 
@@ -328,7 +334,7 @@ class RedMapper(LcatBase):
 
 
         # trim poorly understood low lambda stuff
-        lambda_logic = self.lambda_logic(data[lambda_field])
+        lambda_logic = self.lambda_logic(data['lambda_chisq'])
 
         # make sure in the tycho window and two adjacent quadrants
         # not hitting edge (or no edge if strict=True)
@@ -351,7 +357,7 @@ class RedMapper(LcatBase):
         output['dec']       = data['dec'][good]
         output['z']         = data[z_field][good]
         output['maskflags'] = md['maskflags'][good]
-        lensing.files.lcat_write(self['sample'], output)
+        lensing.files.lcat_write(self['sample'], output, ascii=self['ascii'])
 
     def lambda_logic(self, lam):
         print("Cutting lambda > %0.2f" % self['lambda_min'])
@@ -455,10 +461,7 @@ class RedMapper(LcatBase):
 
     def original_file(self):
         d = self.original_dir()
-        if self['catalog'] == 'ProPer':
-            f = 'dr8_proper_v3.2_lamgt10.fit'
-        else:
-            f='%s.fits' % self['catalog']
+        f='%s.fits' % self['catalog']
         infile = path_join(d, f)
         return infile
 

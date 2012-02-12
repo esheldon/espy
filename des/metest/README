@@ -1,0 +1,20 @@
+no prep needed
+    Plot average as a function of x.  Works on both me and se runs
+        col-binplot.py run x y1 y2 ...
+
+Cutouts of high s2n
+    First do this
+        make-high-s2n.py run s2nmin
+    Then make cutouts
+        make-cutouts.sh run s2nmin
+
+Matching needed
+    Do these first
+        Make ra/dec list for the me and se runs
+            make-radec-list.py run
+        Match ra/dec lists
+            domatch.sh merun serun
+
+    Plot position differences
+        plot-match-posdiff.py merun serun
+        plot-match-sheardiff.py merun serun

@@ -10,7 +10,7 @@ if len(sys.argv) < 2:
     raise RuntimeError("usage: plot_imaghist serun")
 
 serun=sys.argv[1]
-coldir = deswl.files.wlse_coldir(serun)
+coldir = deswl.files.coldir(serun)
 
 c = columns.Columns(coldir)
 

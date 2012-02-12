@@ -4,7 +4,6 @@
 
 Take the query on standard input, or via the -q parameter write the results on
 standard output.
-
 """
 
 import sys

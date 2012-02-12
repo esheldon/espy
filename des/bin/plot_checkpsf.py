@@ -51,7 +51,7 @@ parser.add_option("--magrange",
 parser.add_option("--screen",action="store_true",
         dest="screen",
         default=False,
-        help="Send plots to the screen additioin to a file. Default %default")
+        help="Send plots to the screen in addition to a file. Default %default")
 
 parser.add_option("-n",dest="nbin",
                   default=3,
@@ -355,7 +355,7 @@ def run_from_serun():
     if options.coldir is not None:
         coldir=options.coldir
     else:
-        coldir = deswl.files.wlse_coldir(serun)
+        coldir = deswl.files.coldir(serun)
 
     # open the column database
     stdout.write("Opening coldir: '%s'\n" % coldir)
