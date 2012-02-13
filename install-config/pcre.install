@@ -17,12 +17,15 @@ module-whatis	"pcre"
 
 conflict pcre
 
-prepend-path PATH            %s/bin
-prepend-path LD_LIBRARY_PATH %s/lib
-prepend-path LIBRARY_PATH    %s/lib
-prepend-path C_INCLUDE_PATH  %s/include
-prepend-path CPATH           %s/include
-""" % tuple([self.install_dir]*5)'''
+set PRODUCT_DIR %s
+setenv PCRE_DIR $PRODUCT_DIR
+
+Prepend-path PATH            $PRODUCT_DIR/bin
+prepend-path LD_LIBRARY_PATH $PRODUCT_DIR/lib
+prepend-path LIBRARY_PATH    $PRODUCT_DIR/lib
+prepend-path C_INCLUDE_PATH  $PRODUCT_DIR/include
+prepend-path CPATH           $PRODUCT_DIR/include
+""" % self.install_dir'''
 
 
 
