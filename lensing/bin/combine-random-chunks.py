@@ -35,4 +35,4 @@ for i in xrange(nchunk):
 data=eu.numpy_util.combine_arrlist(alldata)
 
 data['zindex'] = numpy.arange(data.size, dtype='i8')
-lensing.files.lcat_write(sample, data)
+lensing.files.lcat_write(sample=sample, data=data)

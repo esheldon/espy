@@ -283,36 +283,62 @@ def read_original_catalog(type, sample):
 #
 
 
-def lcat_write(sample, data, extra=None, ascii=False, file=None):
-    if ascii:
-        ext='dat'
-    else:
-        ext='bin'
+def lcat_write(sample=None, data=None, extra=None, fs='hdfs', file=None):
+    if (sample is None and file is None) or (data is None):
+        raise ValueError("usage: lcat_write(sample=, file=, data=, fs='hdfs')")
+
     if file is None:
-        file = sample_file('lcat',sample, extra=extra,ext=ext)
-        make_dir_from_path(file)
+        file = sample_file('lcat',sample, extra=extra,ext='dat',fs=fs)
+        if fs != 'hdfs':
+            make_dir_from_path(file)
+
+    if file[0:7] == 'hdfs://':
+        with eu.hdfs.HDFSFile(file,verbose=True) as fobj:
+            lcat_write(file=fobj.localfile, data=data)
+            fobj.put(clobber=True)
+        return
+
     stdout.write("Writing %d to %s: '%s'\n" % (data.size, 'lcat', file))
 
+    import recfile
+    with recfile.Open(file,'w',delim=' ') as rec:
+        rec.fobj.write('%d\n' % data.size)
+        rec.write(data)
 
-    if ascii:
-        import recfile
-        with recfile.Open(file,'w',delim=' ') as rec:
-            rec.fobj.write('%d\n' % data.size)
-            rec.write(data)
-    else:
-        fobj = open(file,'w')
+def lcat_read(sample=None, file=None, extra=None, fs='hdfs'):
+    """
+    import lensing
+    d = lcat_read(sample='03')
 
-        narr =  numpy.array([data.size],dtype='i8')
-        narr.tofile(fobj)
-        data.tofile(fobj)
+    """
 
-        fobj.close()
+    if sample is None and file is None:
+        raise ValueError("usage: lcat_read(sample=, file=, fs='hdfs')")
 
-def lcat_convert_to_ascii(sample, extra=None):
-    t=lcat_read(sample=sample, extra=extra)
-    lcat_write(sample, t, extra=extra, ascii=True)
+    if file is None:
+        file = sample_file('lcat', sample, extra=extra, fs=fs)
 
-def lcat_read(sample=None, extra=None, file=None, old=False):
+    if file[0:7] == 'hdfs://':
+        with eu.hdfs.HDFSFile(file,verbose=True) as fobj:
+            fobj.stage()
+            data = lcat_read(file=hf.localfile)
+        return data
+
+    stdout.write('Reading lens cat: %s\n' % file)
+    fobj = open(file,'r')
+
+    nlens=int(fobj.readline())
+
+    print >>stder,'Reading',nlens,'lenses'
+    dt = lcat_dtype()
+
+    data = eu.io.read(fobj, type='rec', dtype=dt, delim=' ')
+    fobj.close()
+
+    return data
+
+
+def lcat_read_old(sample=None, extra=None, file=None, old=False):
     """
     import lensing
     d = lcat_read(file='somefile')

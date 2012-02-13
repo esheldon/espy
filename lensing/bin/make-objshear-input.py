@@ -20,8 +20,6 @@ parser.add_option("-n",dest="nrand",default=None,
                        "you must send an extra name in this case")
 parser.add_option("-e",dest="extra_name",default=None,
                   help="an extra name to add to the output file")
-parser.add_option("-a","--ascii",action='store_true',
-                  help="write ascii files")
 
 options,args = parser.parse_args(sys.argv[1:])
 
@@ -32,15 +30,14 @@ if len(args) < 2:
 type = args[0]
 sample = args[1]
 if type == 'scat':
-    lensing.scat.create_input(sample, ascii=options.ascii)
+    lensing.scat.create_input(sample)
 elif type == 'lcat':
     if options.nrand is not None:
         lensing.lcat.create_input(sample, 
                                   nrand=int(options.nrand), 
-                                  extra=options.extra_name,
-                                  ascii=options.ascii)
+                                  extra=options.extra_name)
     else:
-        lensing.lcat.create_input(sample,ascii=options.ascii)
+        lensing.lcat.create_input(sample)
 else:
     raise ValueError("type must be 'scat' or 'lcat'")
 

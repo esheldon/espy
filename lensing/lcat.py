@@ -42,7 +42,7 @@ def instantiate_sample(sample, **keys):
 
 def create_input(sample, **keys):
     """
-    e.g.  create_input('01', ascii=True)
+    e.g.  create_input('01')
     """
 
     c = instantiate_sample(sample, **keys)
@@ -82,18 +82,11 @@ class LcatBase(dict):
         if self['sample'] != sample:
             raise ValueError("The config sample '%s' doesn't match input '%s'" % (self['sample'],sample))
 
-        ascii=self.get('ascii',None)
-        if ascii:
-            print('Using ascii files')
     def read(self):
         return lensing.files.lcat_read(sample=self['sample'])
 
     def file(self):
-        if self['ascii']:
-            ext='dat'
-        else:
-            ext='bin'
-        fname = lensing.files.sample_file('lcat',self['sample'], ext=ext)
+        fname = lensing.files.sample_file('lcat',self['sample'], ext='dat')
         return fname
 
 
@@ -196,7 +189,7 @@ class SDSSRandom(LcatBase):
                 output['maskflags'][n:n+wgood.size] = maskflags[wgood]
                 n += wgood.size
 
-        lensing.files.lcat_write(self['sample'], output, extra=extra, ascii=self['ascii'])
+        lensing.files.lcat_write(sample=self['sample'], data=output, extra=extra)
 
     def get_maskflags(self, ra, dec, z, hard=False):
         """
@@ -302,7 +295,7 @@ class RedMapper(LcatBase):
         # this copies each key to self[key]
         LcatBase.__init__(self, sample, **keys)
 
-        if self['catalog'] not in ['redmapper-dr8-3.4-like','redmapper-dr8-3.4-nord']:
+        if self['catalog'] not in ['redmapper-dr8-3.4-like','redmapper-dr8-3.4-nord','redmapper-dr8-3.14']:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
         self['mapname'] = 'boss'
@@ -357,7 +350,7 @@ class RedMapper(LcatBase):
         output['dec']       = data['dec'][good]
         output['z']         = data[z_field][good]
         output['maskflags'] = md['maskflags'][good]
-        lensing.files.lcat_write(self['sample'], output, ascii=self['ascii'])
+        lensing.files.lcat_write(sample=self['sample'], data=output)
 
     def lambda_logic(self, lam):
         print("Cutting lambda > %0.2f" % self['lambda_min'])
