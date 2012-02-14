@@ -40,14 +40,14 @@ from esutil.numpy_util import where1
 
 
 finfo={}
-finfo['lcat']     = {'subdir':'lcat/{sample}',  'name':'lcat-{sample}{extra}.{ext}', 'default_ext':'bin'}
-finfo['scat']     = {'subdir':'scat/{sample}',  'name':'scat-{sample}.{ext}','default_ext':'bin'}
+finfo['lcat']     = {'subdir':'lcat/{sample}',  'name':'lcat-{sample}{extra}.{ext}', 'default_ext':'dat'}
+finfo['scat']     = {'subdir':'scat/{sample}',  'name':'scat-{sample}.{ext}','default_ext':'dat'}
 
 finfo['scat-split']  = {'subdir':'scat/{sample}',
-                            'name':'scat-{sample}-{split}.{ext}','default_ext':'bin'}
+                            'name':'scat-{sample}-{split}.{ext}','default_ext':'dat'}
 
 finfo['lensout-split']  = {'subdir':'lensout/{sample}',
-                           'name':'lensout-{sample}-{split}.{ext}','default_ext':'bin'}
+                           'name':'lensout-{sample}-{split}.{ext}','default_ext':'dat'}
 
 finfo['reduced']  = {'subdir':'lensout/{sample}',
                          'name':'reduced-{sample}.fits'}
@@ -86,11 +86,14 @@ finfo['fit']       = {'subdir':'lensout/{sample}/binned-{name}',
 
 
 # this config is objshear_config not the yaml files
-finfo['config-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.config'}
+finfo['config']   = {'subdir':'proc/{sample}', 'name':'run-{sample}.config'}
 
 finfo['script-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.sh'}
 finfo['condor-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.condor'}
 finfo['condor']   = {'subdir':'proc/{sample}', 'name':'run-{sample}.condor'}
+
+finfo['wq-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.yaml'}
+finfo['log-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.log'}
 
 
 #
@@ -109,7 +112,7 @@ def hdfs_dir():
     """
     my area in hdfs
     """
-    return 'hdfs:///user/esheldon/lensing'
+    return 'hdfs://astro0034.rcf.bnl.gov/user/esheldon/lensing'
 
 def local_dir():
     """

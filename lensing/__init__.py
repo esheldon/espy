@@ -192,6 +192,7 @@ from . import convert
 from . import objshear_config
 from . import scripts
 from . import condor
+from . import wqsubmit
 
 
 from . import regauss

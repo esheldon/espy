@@ -3,8 +3,7 @@
 
 Description:
 
-    Create config, script, and condor files for the input run, one for each
-    split of the sources.
+    Create config, wq submit and reduce script
 
 """
 import sys
@@ -13,9 +12,11 @@ from optparse import OptionParser
 
 parser=OptionParser(__doc__)
 parser.add_option("-t",dest="types",default="config,script,condor",
-                  help="types to make.  Default is config,script,condor")
-parser.add_option("--manager",dest="manager",default="modules",
-                  help="How to manage software.  Default is %default")
+                  help="types to make.  Default is config,wq")
+parser.add_option("-g",dest="groups",default="new,new2",
+                  help="machine groups to use.  Default is %default")
+parser.add_option("-p",dest="priority",default="med",
+                  help="priority use.  Default is %default")
 
 options,args = parser.parse_args(sys.argv[1:])
 
@@ -29,7 +30,6 @@ types=options.types.split(',')
 
 if 'config' in types:
     lensing.objshear_config.write_configs(run)
-if 'script' in types:
-    lensing.scripts.write_scripts(run, manager=options.manager)
-if 'condor' in types:
-    lensing.condor.write_submit_scripts(run)
+if 'wq' in types:
+    wql=lensing.wqsubmit.WQLens(run,options.groups,options.priority)
+    wql.write_scripts()
