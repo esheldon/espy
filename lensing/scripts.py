@@ -1,44 +1,8 @@
+# this is obsolete
 from __future__ import print_function
 
 import os
 from . import files
-
-
-def write_reduce_script(run):
-    pattern = files.sample_file('lensout', run, split=0,fs='hdfs')
-    pattern = pattern.replace('-000.dat','-*.dat')
-    outf = files.sample_file('lensout', run, fs='hdfs')
-
-    _reduce_script="""
-#!/bin/bash
-
-module load sobjshear/sdssmask-work
-pattern="{pattern}"
-outf={oufile}
-
-tmp_dir=/data/esheldon/redshear-$RANDOM-$RANDOM
-mkdir -vp $tmp_dir
-tmp_outf=$tmp_dir/$(basename $outf)
-
-echo "reducing files with pattern $pattern"
-hadoop fs -cat "$pattern" | redshear > $tmp_outf
-
-err=$?
-if [[ $err != "0" ]]; then
-    echo "Error running redshear: $err"
-fi
-if [[ -e $tmp_outf ]]; then
-    echo -e "pushing temp file to\\n  $outf"
-    hadoop fs -rm $outf 2> /dev/null 1 > /dev/null
-    hadoop fs -put $tmp_outf $outf
-fi
-rm -rvf $tmp_dir
-
-echo `date`
-    """.format(pattern=pattern,
-               outf=outf)
-
-
 
 class Scripts(dict):
     def __init__(self, run, manager='modules'):
