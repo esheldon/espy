@@ -32,4 +32,5 @@ if 'config' in types:
     lensing.objshear_config.write_configs(run)
 if 'wq' in types:
     wql=lensing.wqsubmit.WQLens(run,options.groups,options.priority)
-    wql.write_scripts()
+    wql.write_reduce_script()
+    wql.write_shear_scripts()

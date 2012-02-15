@@ -63,7 +63,6 @@ class ObjshearRunConfig(dict):
             with open(hdfs_file.localfile,'w') as local_file:
 
                 fmt='%-17s %s\n'
-                local_file.write(fmt % ("lens_file",lens_file))
 
                 for key in ['H0','omega_m','npts']:
                     local_file.write(fmt % (key, self['cosmo_config'][key]))

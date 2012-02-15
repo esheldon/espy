@@ -46,6 +46,9 @@ finfo['scat']     = {'subdir':'scat/{sample}',  'name':'scat-{sample}.{ext}','de
 finfo['scat-split']  = {'subdir':'scat/{sample}',
                             'name':'scat-{sample}-{split}.{ext}','default_ext':'dat'}
 
+# this is the reduced one over the splits
+finfo['lensout']  = {'subdir':'lensout/{sample}',
+                     'name':'lensout-{sample}.{ext}','default_ext':'dat'}
 finfo['lensout-split']  = {'subdir':'lensout/{sample}',
                            'name':'lensout-{sample}-{split}.{ext}','default_ext':'dat'}
 
@@ -94,6 +97,10 @@ finfo['condor']   = {'subdir':'proc/{sample}', 'name':'run-{sample}.condor'}
 
 finfo['wq-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.yaml'}
 finfo['log-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.log'}
+
+finfo['wq-reduce']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-reduce.yaml'}
+finfo['log-reduce']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-reduce.log'}
+
 
 
 #

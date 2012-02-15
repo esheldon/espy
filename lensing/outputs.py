@@ -19,6 +19,9 @@ def add_lensums(l1, l2):
 
     The rows of l1 must correspond to those of l2; zindex must match
 
+    Note we now do the combination from the splits using the c program
+    redshear, but this could still be useful
+
     """
 
     w=where1(l1['zindex'] != l2['zindex'])
