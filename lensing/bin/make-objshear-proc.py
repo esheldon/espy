@@ -11,8 +11,8 @@ import lensing
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
-parser.add_option("-t",dest="types",default="config,script,condor",
-                  help="types to make.  Default is config,wq")
+parser.add_option("-t",dest="types",default="config,wq",
+                  help="types to make.  Default is %default")
 parser.add_option("-g",dest="groups",default="new,new2",
                   help="machine groups to use.  Default is %default")
 parser.add_option("-p",dest="priority",default="med",

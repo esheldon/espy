@@ -70,7 +70,7 @@ class WQLens(dict):
 
         pattern = files.sample_file('lensout', self['run'], split=0,fs='hdfs')
         pattern = pattern.replace('-000.dat','-*.dat')
-        out_file = files.sample_file('lensout', self['run'], fs='hdfs')
+        out_file = files.sample_file('reduced', self['run'], fs='hdfs')
         log_file=files.sample_file('log-reduce',self['run'])
         config_file=files.sample_file('config',self['run'],fs='hdfs')
 

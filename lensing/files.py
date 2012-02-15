@@ -30,7 +30,7 @@ The exceptions are the
 
 from __future__ import print_function
 import os
-from sys import stdout
+from sys import stdout, stderr
 import lensing
 import numpy
 
@@ -46,14 +46,15 @@ finfo['scat']     = {'subdir':'scat/{sample}',  'name':'scat-{sample}.{ext}','de
 finfo['scat-split']  = {'subdir':'scat/{sample}',
                             'name':'scat-{sample}-{split}.{ext}','default_ext':'dat'}
 
-# this is the reduced one over the splits
+# usually we only have the split versions of these
 finfo['lensout']  = {'subdir':'lensout/{sample}',
                      'name':'lensout-{sample}.{ext}','default_ext':'dat'}
 finfo['lensout-split']  = {'subdir':'lensout/{sample}',
                            'name':'lensout-{sample}-{split}.{ext}','default_ext':'dat'}
-
+# this is the reduced one over the splits
 finfo['reduced']  = {'subdir':'lensout/{sample}',
-                         'name':'reduced-{sample}.fits'}
+                     'name':'reduced-{sample}.{ext}','default_ext':'dat'}
+
 finfo['collated']  = {'subdir':'lensout/{sample}',
                                  'name':'collated-{sample}.fits'}
 
@@ -346,6 +347,39 @@ def lcat_read(sample=None, file=None, extra=None, fs='hdfs'):
     fobj.close()
 
     return data
+
+def lensout_read(run, split=None, fs='hdfs'):
+    conf = cascade_config(run)
+    nbin = conf['lens_config']['nbin']
+
+    dtype=lensout_dtype(nbin)
+
+    fname = sample_file('lensout', run, split=split, fs=fs)
+    print('Reading lensout:',fname,file=stderr)
+    return eu.io.read(fname, dtype=dtype, delim=' ', type='rec')
+
+def reduced_read(run, fs='hdfs'):
+    conf = cascade_config(run)
+    nbin = conf['lens_config']['nbin']
+
+    dtype=lensout_dtype(nbin)
+
+    fname = sample_file('reduced', run, fs=fs)
+    print('Reading reduced:',fname,file=stderr)
+    return eu.io.read(fname, dtype=dtype, delim=' ', type='rec')
+
+def lensout_dtype(nbin):
+    dtype=[('index','i8'),
+           ('zindex','i8'),
+           ('weight','f8'),
+           ('totpairs','i8'),
+           ('sshsum','f8'),
+           ('npair','i8',nbin),
+           ('rsum','f8',nbin),
+           ('wsum','f8',nbin),
+           ('dsum','f8',nbin),
+           ('osum','f8',nbin)]
+    return numpy.dtype(dtype)
 
 
 def lcat_read_old(sample=None, extra=None, file=None, old=False):

@@ -26,26 +26,26 @@ def main():
 
     run = args[0]
 
-    outfile = lensing.files.sample_file('collated', run)
+    outfile = lensing.files.sample_file('collated', run, fs='hdfs')
     print("will collate to file:",outfile)
 
     conf = lensing.files.cascade_config(run)
     lsample = conf['lens_config']['sample']
     cat = lensing.files.read_original_catalog('lens',lsample)
-    lout = lensing.files.sample_read('reduced',run)
+    reduced = lensing.files.reduced_read(run)
 
     # trim down to the ones we used
     print("Extracting by zindex")
-    cat = cat[ lout['zindex'] ]
+    cat = cat[ reduced['zindex'] ]
 
     # create a new struct with the lensing outputs at the end
     print('collating')
 
     # for randoms, we use the input lcat so we don't want zindex
     # in the added tags
-    add_dt = [d for d in lout.dtype.descr if d[0] != 'zindex']
+    add_dt = [d for d in reduced.dtype.descr if d[0] != 'zindex']
     data = eu.numpy_util.add_fields(cat, add_dt)
-    eu.numpy_util.copy_fields(lout, data)
+    eu.numpy_util.copy_fields(reduced, data)
 
     eu.io.write(outfile, data, verbose=True, clobber=True)
 
