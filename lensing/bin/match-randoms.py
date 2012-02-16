@@ -69,9 +69,9 @@ def main():
     # bin criteria.  Then match the randoms redshift histogram
     conf=lensing.files.cascade_config(lensrun)
     # this is where z is, may be a different name in the collated data
-    lcat = lensing.files.sample_read('lcat', conf['lens_sample'])
-    data = lensing.files.sample_read('collated', lensrun)
-    rand = lensing.files.sample_read('collated', randrun)
+    lcat = lensing.files.lcat_read(sample=conf['lens_sample'])
+    data = lensing.files.sample_read('collated', lensrun, fs='hdfs')
+    rand = lensing.files.sample_read('collated', randrun, fs='hdfs')
 
     output = lensing.binning.lensbin_struct(data['rsum'][0].size, n=nbin)
 

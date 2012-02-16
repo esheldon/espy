@@ -330,8 +330,8 @@ def lcat_read(sample=None, file=None, extra=None, fs='hdfs'):
         file = sample_file('lcat', sample, extra=extra, fs=fs)
 
     if file[0:7] == 'hdfs://':
-        with eu.hdfs.HDFSFile(file,verbose=True) as fobj:
-            fobj.stage()
+        with eu.hdfs.HDFSFile(file,verbose=True) as hf:
+            hf.stage()
             data = lcat_read(file=hf.localfile)
         return data
 
@@ -340,7 +340,7 @@ def lcat_read(sample=None, file=None, extra=None, fs='hdfs'):
 
     nlens=int(fobj.readline())
 
-    print >>stder,'Reading',nlens,'lenses'
+    print('Reading',nlens,'lenses',file=stderr)
     dt = lcat_dtype()
 
     data = eu.io.read(fobj, type='rec', dtype=dt, delim=' ')

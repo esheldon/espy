@@ -12,8 +12,8 @@ import lensing
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
-parser.add_option("-p",dest="dops",action="store_true",default=False,
-                  help="Write a hard copy eps file.  Default %default")
+parser.add_option("-s",dest="show",action="store_true",default=False,
+                  help="Show plot on screen.  Default %default")
 parser.add_option("-t",dest="type",default='corrected',
                   help="Should be binned, corrected, jackknife.  Default %default")
 
@@ -29,4 +29,4 @@ bintype = args[1]
 nbin = int(args[2])
 
 b = lensing.binning.instantiate_binner(bintype, nbin)
-b.plot_dsig_byrun_1var(run, options.type, dops=options.dops)
+b.plot_dsig_byrun_1var(run, options.type, show=options.show)

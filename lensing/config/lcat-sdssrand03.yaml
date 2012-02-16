@@ -29,8 +29,8 @@ rmax_hard: 1.0
 
 masktype: sdss
 
-# redmapper catalog for lambda > 10 is 66150, so this is
-# a factor of 75
+# redmapper catalog for lambda > 10 is 50000, so this is
+# a factor of 100
 nrand: 5000000
 
 comment: |

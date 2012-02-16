@@ -23,6 +23,8 @@ from esutil.ostools import path_join
 from esutil.stat import histogram
 from esutil.numpy_util import where1
 
+import converter
+
 import lensing
 
 from .util import lens_wmom
@@ -66,7 +68,7 @@ class BinnerBase(dict):
         """
 
         name=self.name()
-        d = lensing.files.sample_read('collated',run)
+        d = lensing.files.sample_read('collated',run, fs='hdfs')
         res = self.bin(d)
 
         outdir = lensing.files.sample_dir('binned',run,name=name)
@@ -124,7 +126,7 @@ class BinnerBase(dict):
         for binnum in xrange(self['nbin']):
             self.plot_dsig_osig_byrun_bin(run, binnum, **keys)
 
-    def plot_dsig_byrun_1var(self, run, type, dops=False):
+    def plot_dsig_byrun_1var(self, run, type, show=False):
         """
 
         Make an array of plots with each plot a bin in one variable.  
@@ -198,19 +200,17 @@ class BinnerBase(dict):
             pa[row,col].add(pl)
 
 
-        if dops:
-            #d = lensing.files.lensbin_plot_dir(run,name)
-            #d = lensing.files.sample_dir(type,run,name=name)
-            #epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
-            epsfile=lensing.files.sample_file(type+'-plots',run,name=name,extra='allplot',ext='eps')
-            d = os.path.dirname(epsfile)
-            if not os.path.exists(d):
-                print("making dir:",d)
-                os.makedirs(d)
-            stdout.write("Plotting to file: %s\n" % epsfile)
-            pa.write_eps(epsfile)
-        else:
+        if show:
             pa.show()
+
+        epsfile=lensing.files.sample_file(type+'-plots',run,name=name,extra='allplot',ext='eps')
+        d = os.path.dirname(epsfile)
+        if not os.path.exists(d):
+            print("making dir:",d)
+            os.makedirs(d)
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        pa.write_eps(epsfile)
+        converter.convert(epsfile, dpi=120, verbose=True)
 
 
 def define_lambda_bins(sample, lastmin=58.):
@@ -547,7 +547,7 @@ class N200Binner(BinnerBase):
         return self.lowlim, self.highlim
 
 
-    def plot_dsig_byrun(self, run, dops=False):
+    def plot_dsig_byrun(self, run, show=False):
         """
 
         Run is a run of the lensing code.
@@ -608,19 +608,16 @@ class N200Binner(BinnerBase):
 
             pa[row,col].add(pl)
 
-
-        if dops:
-            #d = lensing.files.lensbin_plot_dir(run,name)
-            d = lensing.files.sample_dir('binned',run,name=name)
-            if not os.path.exists(d):
-                print("making dir:",d)
-                os.makedirs(d)
-            #epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
-            epsfile=lensing.files.sample_file('binned-plots',run,name=name,extra='-allplot',ext='eps')
-            stdout.write("Plotting to file: %s\n" % epsfile)
-            pa.write_eps(epsfile)
-        else:
+        if show:
             pa.show()
+
+        d = lensing.files.sample_dir('binned',run,name=name)
+        if not os.path.exists(d):
+            print("making dir:",d)
+            os.makedirs(d)
+        epsfile=lensing.files.sample_file('binned-plots',run,name=name,extra='-allplot',ext='eps')
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        pa.write_eps(epsfile)
 
 
     def bin_label(self, binnum):
@@ -706,7 +703,7 @@ class MZBinner(dict):
         return bs
 
 
-    def plot_dsig_byrun(self, run, dops=False):
+    def plot_dsig_byrun(self, run, show=False):
         """
 
         Run is a run of the lensing code.
@@ -776,15 +773,15 @@ class MZBinner(dict):
             pa[row,col].add(pl)
 
 
-        if dops:
-            d = lensing.files.lensbin_plot_dir(run,name)
-            if not os.path.exists(d):
-                os.makedirs(d)
-            epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
-            stdout.write("Plotting to file: %s\n" % epsfile)
-            pa.write_eps(epsfile)
-        else:
+        if show:
             pa.show()
+
+        d = lensing.files.lensbin_plot_dir(run,name)
+        if not os.path.exists(d):
+            os.makedirs(d)
+        epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        pa.write_eps(epsfile)
 
 
     def plot_nfwmass_byrun(self,run, 
@@ -793,7 +790,7 @@ class MZBinner(dict):
                            noerr=False,
                            fudge=None,tag='m200',
                            yrange=None,
-                           dops=False):
+                           show=False):
         """
 
         M200 fit vs M200 true, in z bins
@@ -876,26 +873,25 @@ class MZBinner(dict):
         if not withlin:
             plt.add(PlotLabel(0.7,0.1,"no linear bias"))
 
-        if dops:
-            d = lensing.files.lensbin_plot_dir(run,name)
-            if not os.path.exists(d):
-                os.makedirs(d)
-            if residual:
-                f = 'fit-m200-residual-vs-true-%s-%s%s.eps' % (run,name,nex)
-            else:
-                f = 'fit-m200-vs-true-%s-%s%s.eps' % (run,name,nex)
-            epsfile = path_join(d, f)
-            stdout.write("Plotting to file: %s\n" % epsfile)
-            plt.write_eps(epsfile)
-
-        else:
+        if show:
             plt.show()
+
+        d = lensing.files.lensbin_plot_dir(run,name)
+        if not os.path.exists(d):
+            os.makedirs(d)
+        if residual:
+            f = 'fit-m200-residual-vs-true-%s-%s%s.eps' % (run,name,nex)
+        else:
+            f = 'fit-m200-vs-true-%s-%s%s.eps' % (run,name,nex)
+        epsfile = path_join(d, f)
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        plt.write_eps(epsfile)
 
 
     def plot_invmass_byrun(self, run, type='',
                            residual=False,
                            yrange=None,
-                           dops=False):
+                           show=False):
 
         """
 
@@ -913,8 +909,6 @@ class MZBinner(dict):
                 'out' for mass determined from points outside radius
         residual: boolean, optional
             Plot the residual from true value.
-        dops: boolean, optional
-            Make the eps file
         """
         name=self.name()
         d = lensing.files.sample_read('invert',run,name=name)
@@ -976,20 +970,19 @@ class MZBinner(dict):
 
         plt.aspect_ratio=1
 
-        if dops:
-            d = lensing.files.lensbin_plot_dir(run,name)
-            if not os.path.exists(d):
-                os.makedirs(d)
-            if residual:
-                f = 'invert-m200'+type+'-residual-vs-true-%s-%s.eps' % (run,name)
-            else:
-                f = 'invert-m200'+type+'-vs-true-%s-%s.eps' % (run,name)
-            epsfile = path_join(d, f)
-            stdout.write("Plotting to file: %s\n" % epsfile)
-            plt.write_eps(epsfile)
-
-        else:
+        if show:
             plt.show()
+
+        d = lensing.files.lensbin_plot_dir(run,name)
+        if not os.path.exists(d):
+            os.makedirs(d)
+        if residual:
+            f = 'invert-m200'+type+'-residual-vs-true-%s-%s.eps' % (run,name)
+        else:
+            f = 'invert-m200'+type+'-vs-true-%s-%s.eps' % (run,name)
+        epsfile = path_join(d, f)
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        plt.write_eps(epsfile)
 
 
 
@@ -1153,7 +1146,7 @@ def mzbin(data, nmass, nz):
 
     return bs
 
-def plot_mzbin_byrun(run, nmass, nz, dops=False):
+def plot_mzbin_byrun(run, nmass, nz, show=False):
     """
 
     Run is a run of the lensing code.
@@ -1222,20 +1215,20 @@ def plot_mzbin_byrun(run, nmass, nz, dops=False):
         pa[row,col].add(pl)
 
 
-    if dops:
-        d = lensing.files.lensbin_plot_dir(run,name)
-        if not os.path.exists(d):
-            os.makedirs(d)
-        epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
-        stdout.write("Plotting to file: %s\n" % epsfile)
-        pa.write_eps(epsfile)
-    else:
+    if show:
         pa.show()
+
+    d = lensing.files.lensbin_plot_dir(run,name)
+    if not os.path.exists(d):
+        os.makedirs(d)
+    epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
+    stdout.write("Plotting to file: %s\n" % epsfile)
+    pa.write_eps(epsfile)
 
 def plot_mzbin_invmass_byrun(run, nmass, nz, type='',
                              residual=False,
                              yrange=None,
-                             dops=False):
+                             show=False):
 
     """
     Inverted M200 vs M200 true, in z bins
@@ -1301,20 +1294,19 @@ def plot_mzbin_invmass_byrun(run, nmass, nz, type='',
 
     plt.aspect_ratio=1
 
-    if dops:
-        d = lensing.files.lensbin_plot_dir(run,name)
-        if not os.path.exists(d):
-            os.makedirs(d)
-        if residual:
-            f = 'invert-m200'+type+'-residual-vs-true-%s-%s.eps' % (run,name)
-        else:
-            f = 'invert-m200'+type+'-vs-true-%s-%s.eps' % (run,name)
-        epsfile = path_join(d, f)
-        stdout.write("Plotting to file: %s\n" % epsfile)
-        plt.write_eps(epsfile)
-
-    else:
+    if show:
         plt.show()
+
+    d = lensing.files.lensbin_plot_dir(run,name)
+    if not os.path.exists(d):
+        os.makedirs(d)
+    if residual:
+        f = 'invert-m200'+type+'-residual-vs-true-%s-%s.eps' % (run,name)
+    else:
+        f = 'invert-m200'+type+'-vs-true-%s-%s.eps' % (run,name)
+    epsfile = path_join(d, f)
+    stdout.write("Plotting to file: %s\n" % epsfile)
+    plt.write_eps(epsfile)
 
 
 
@@ -1324,7 +1316,7 @@ def plot_mzbin_mass_byrun(run, nmass, nz,
                           noerr=False,
                           fudge=None,tag='m200',
                           yrange=None,
-                          dops=False):
+                          show=False):
     """
 
     M200 fit vs M200 true, in z bins
@@ -1406,20 +1398,19 @@ def plot_mzbin_mass_byrun(run, nmass, nz,
     if not withlin:
         plt.add(PlotLabel(0.7,0.1,"no linear bias"))
 
-    if dops:
-        d = lensing.files.lensbin_plot_dir(run,name)
-        if not os.path.exists(d):
-            os.makedirs(d)
-        if residual:
-            f = 'fit-m200-residual-vs-true-%s-%s%s.eps' % (run,name,nex)
-        else:
-            f = 'fit-m200-vs-true-%s-%s%s.eps' % (run,name,nex)
-        epsfile = path_join(d, f)
-        stdout.write("Plotting to file: %s\n" % epsfile)
-        plt.write_eps(epsfile)
-
-    else:
+    if show:
         plt.show()
+
+    d = lensing.files.lensbin_plot_dir(run,name)
+    if not os.path.exists(d):
+        os.makedirs(d)
+    if residual:
+        f = 'fit-m200-residual-vs-true-%s-%s%s.eps' % (run,name,nex)
+    else:
+        f = 'fit-m200-vs-true-%s-%s%s.eps' % (run,name,nex)
+    epsfile = path_join(d, f)
+    stdout.write("Plotting to file: %s\n" % epsfile)
+    plt.write_eps(epsfile)
 
 def combine_mzbin_lensum_from_ranges(data, tag, trange, zrange=None,getind=False):
     logic = (data[tag] >= trange[0]) & (data[tag] < trange[1])
