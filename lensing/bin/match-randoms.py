@@ -83,6 +83,12 @@ def main():
     else:
         outextra='randmatch-rm-%s' % randrun
 
+    html_name=lensing.files.sample_file('binned-plots', lensrun, name=b.name(),
+                                        extra=outextra, ext='html')
+    makedir_fromfile(html_name)
+    html_file=open(html_name,'w')
+    html_file.write('<html>\n<body bgcolor=white>\n')
+
     for binnum in xrange(nbin):
 
         print("-"*70)
@@ -97,7 +103,8 @@ def main():
                                           lensrun,
                                           name=b.name(),
                                           extra=eps_extra, ext='eps')
-        makedir_fromfile(epsfile)
+        pngfile=epsfile.replace('.eps','.png')
+
 
         tit=b.bin_label(binnum)
         tit+=' rand: '+randrun
@@ -142,11 +149,15 @@ def main():
             wfits.write(wstruct)
 
         converter.convert(epsfile, dpi=120, verbose=True)
+        html_file.write('    <img src="%s"><p>\n' % os.path.basename(pngfile))
 
 
         # copy all common tags
         for n in comb.dtype.names:
             output[n][binnum] = comb[n][0]
+
+    html_file.write('</body>\n</html>\n')
+    html_file.close()
 
     if not remove:
         wfits.close()

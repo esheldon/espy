@@ -59,7 +59,7 @@ class Tester(dict):
 
             if self.run != 'any' and self.camcol != 'any':
                 print('Getting indices of run:',self.run,'camcol:',self.camcol)
-                w=c['run'].match(self.run) & c['camcol'] == self.camcol
+                w=c['run'].match(self.run) & (c['camcol'] == self.camcol)
 
                 if w.size == 0:
                     raise ValueError("Run",self.run,"not found")
@@ -139,7 +139,7 @@ class Tester(dict):
                       rmag_max=None, 
                       fmin=None, fmax=None, 
                       nbin=20, nperbin=50000,
-                      yrange=None, show=True):
+                      xrng=None, yrng=None, show=True):
 
         
         allowed=['meane','residual']
@@ -163,6 +163,10 @@ class Tester(dict):
         # this will only load the main data once.
         self.load_data(field)
 
+        print("Using rmag range: [%0.2f,%0.2f]" % (rmag_min,rmag_max))
+        # notes 
+        #  - amflags here is really rg for gals
+        #  - e1 is really e1_rg for gals
         logic = ((self['amflags'] == 0)
                  & (self['e1'] < 4)
                  & (self['e1'] > -4)
@@ -173,6 +177,7 @@ class Tester(dict):
             logic = logic & (self['R'] > 1.0/3.0) & (self['R'] < 1.0)
 
         w=where1(logic)
+        print("Number passing cuts:",w.size)
         minnum=31000
         if w.size < minnum:
             print("want %d good objects, found %d" % (minnum,w.size))
@@ -218,12 +223,12 @@ class Tester(dict):
         hist = eu.stat.histogram(field_data, binsize=bsize, weights=weights, more=True)
 
 
-        print("  hist  e1")
+        print("  hist  e1, nperbin: ",nperbin)
         be1.dohist(nperbin=nperbin, min=fmin, max=fmax)
         #be1.dohist(nbin=nbin, min=fmin, max=fmax)
         print("  stats e1")
         be1.calc_stats()
-        print("  hist  e2")
+        print("  hist  e2, nperbin: ",nperbin)
         be2.dohist(nperbin=nperbin, min=fmin, max=fmax)
         #be2.dohist(nbin=nbin, min=fmin, max=fmax)
         print("  stats e2")
@@ -233,10 +238,13 @@ class Tester(dict):
 
         plt = FramedPlot()
 
-        if yrange is not None:
-            plt.yrange=yrange
-            ymin = yrange[0]
-            ymax = 0.8*yrange[1]
+        if xrng is not None:
+            plt.xrange=xrng
+
+        if yrng is not None:
+            plt.yrange=yrng
+            ymin = yrng[0]
+            ymax = 0.8*yrng[1]
         else:
             ymin = min( be1['wymean'].min(),be2['wymean'].min() )
             ymax = 0.8*max( be1['wymean'].max(),be2['wymean'].max() )
@@ -265,11 +273,13 @@ class Tester(dict):
                                 'procrun: %s filter: %s' % (self.procrun, self.band), 
                                 halign='left')
         plt.add(procrun_lab)
+        cy=0.9
         if self.run != 'any':
             run_lab = PlotLabel(0.9,0.9, 'run: %06i' % self.run, halign='right')
             plt.add(run_lab)
+            cy=0.8
         if self.camcol != 'any':
-            run_lab = PlotLabel(0.9,0.8, 'run: %i' % self.camcol, halign='right')
+            run_lab = PlotLabel(0.9,cy, 'camcol: %i' % self.camcol, halign='right')
             plt.add(run_lab)
 
 
@@ -308,5 +318,6 @@ class Tester(dict):
         if self.run != 'any':
             d = path_join(d,'%06i' % self.run)
         if self.camcol != 'any':
-            d = path_join(d,'%i' % self.camcol)
+            #d = path_join(d,'%i' % self.camcol)
+            d = path_join(d,'bycamcol')
         return d
