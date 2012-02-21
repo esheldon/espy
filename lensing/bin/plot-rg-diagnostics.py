@@ -114,7 +114,7 @@ def main():
         if plot_type == 'residual':
             yrng = [-0.004,0.004]
         else:
-            if run == 'any':
+            if runs[0] == 'any':
                 yrng=[-0.016,0.016]
             else:
                 yrng = [-0.02,0.02]

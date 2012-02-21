@@ -1,5 +1,9 @@
 """
 
+class Contamination is for checking against "truth" galaxy catalogs.
+
+Also:
+
 Find objects with > N observations.  Start by limiting to the stripe82 runs,
 and then just read through them. Save a collated file of 
 
@@ -1406,5 +1410,81 @@ def test_fit2gauss():
     return res
 
 
+class Contamination:
+    def match_sdss_goods(self):
+        import lensing
+        print("reading goods")
+        goods=self.read_goods()
 
+        cols=lensing.regauss.open_columns('04','gal')
 
+        print("reading ra")
+        ra=cols['ra'][:]
+        print("reading dec")
+        dec=cols['dec'][:]
+
+        print("pre-cutting area")
+        ws=where1( (ra > 188) & (ra < 190) & (dec > 62) & (dec < 62.5))
+        ra=ra[ws]
+        dec=dec[ws]
+        print("reading amflags")
+        amflags_rg=cols['amflags_rg_r'][ws]
+
+        print("cutting bad amflags")
+        ws=where1(amflags_rg==0)
+        ra=ra[ws]
+        dec=dec[ws]
+
+        wg=where1((goods['flags'] == 0) & (goods['mag_best'] < 23))
+        goods=goods[wg]
+
+        p_plt = eu.plotting.bscatter(goods['ra'],goods['dec'],type='dot',show=False)
+        s_plt=eu.plotting.bscatter(goods['mag_best'], goods['class_star'], 
+                                   xrange=[15,30], yrange=[-0.05,1.05], type='dot',
+                                   xlabel='mag_best',ylabel='class_star', show=False)
+
+        print("running match")
+        h=eu.htm.HTM()
+        msdss,mgoods,dis=h.match(ra,dec,goods['ra'],goods['dec'], 1.0/3600.)
+        print("found %d/%d matches" % (msdss.size,goods.size))
+
+        
+        eu.plotting.bscatter(goods['ra'][mgoods],goods['dec'][mgoods],
+                             plt=p_plt,type='filled circle',color='red')
+        eu.plotting.bscatter(goods['mag_best'][mgoods], goods['class_star'][mgoods], 
+                             type='filled circle', color='red',
+                             plt=s_plt)
+        
+    def select_goods_gal(self,d):
+
+        wf=where1(d['flags'] == 0)
+
+        plt=eu.plotting.bscatter(d['mag_best'][wf], d['class_star'][wf], 
+                                 xrange=[15,30], yrange=[-0.05,1.05], type='dot',
+                                 xlabel='mag_best',ylabel='class_star', show=False)
+
+        w=where1( (d['flags'] == 0) & (d['mag_best'] < 25) & (d['class_star'] < 0.8))
+        eu.plotting.bscatter(d['mag_best'][w], d['class_star'][w], type='filled circle', color='red',
+                             plt=plt)
+
+        
+        
+
+    def read_goods(self):
+        import recfile
+        f='/astro/u/esheldon/oh/goods/h_goods_i_r1.1z_cat_sub.txt'
+        dtype=[('ra','f8'),
+               ('dec','f8'),
+               ('fwhm_image','f8'),
+               ('class_star','f8'),
+               ('flags','i4'),
+               ('mag_best','f8'),
+               ('magerr_best','f8'),
+               ('x2_image','f8'),
+               ('y2_image','f8'),
+               ('xy_image','f8')]
+
+        with recfile.Recfile(f,dtype=dtype,delim=' ') as fobj:
+            data=fobj[:]
+
+        return data
