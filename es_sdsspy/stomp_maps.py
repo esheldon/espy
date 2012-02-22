@@ -3,7 +3,8 @@ from sys import stdout, stderr
 import os
 import sdsspy
 import numpy
-from numpy import where, isscalar
+from numpy import where, isscalar, rad2deg, arccos
+import esutil as eu
 
 try:
     import stomp
@@ -317,6 +318,54 @@ def create_boss_survey_good():
     map.Write(outfile)
 	
 def create_boss_survey_tycho():
+    """
+    In this one I get the tycho star definitions from the bosslss
+    bright star mask and exclude them as I go
+
+    Resolution is set to 2048 since that is what the others have
+    been using, we might need to increase it?
+    """
+
+    import time
+
+    boss_tycho_file = map_name("boss","tycho")
+    print "Will write to file:",boss_tycho_file
+
+    d=map_dir()
+    f=os.path.join(d,'bright_star_mask.fits')
+    print 'loading tycho defs:',f
+    tycho_defs = eu.io.read(f,ext=1,lower=True)
+
+
+    print "Loading good"
+    mgood = load("boss","good")
+
+    print "Excluding tycho stars from good map"
+    system=stomp.AngularCoordinate.Equatorial
+    weight=1.0
+    maxres=2048
+    verbose=True
+    nstep=100
+
+    nstar = tycho_defs.size
+    tm0=time.time()
+    for i,star in enumerate(tycho_defs,1):
+        if (i % nstep) == 0:
+            print '%d/%d, ETA: ' % (i,nstar),
+            eu.misc.ptime( (time.time()-tm0)*float(nstar)/i)
+
+        ang=stomp.AngularCoordinate(star['ra'],star['dec'],system)
+        # CMCAPS (cm) is 1-cos(radius)
+        # so radius = arccos(1-cm)
+        radius = rad2deg(arccos(1.-star['cmcaps']))
+        star_bound=stomp.CircleBound(ang, radius)
+        star_map=stomp.Map(star_bound, weight, maxres)
+        mgood.ExcludeMap(star_map)
+
+    print "Writing to file:",boss_tycho_file
+    mgood.Write(boss_tycho_file)
+
+def create_boss_survey_tycho_old():
     boss_tycho_file = map_name("boss","tycho")
     stdout.write("Will write to file: %s\n" % boss_tycho_file)
 
