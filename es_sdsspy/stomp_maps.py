@@ -352,7 +352,7 @@ def create_boss_survey_tycho():
     for i,star in enumerate(tycho_defs,1):
         if (i % nstep) == 0:
             print '%d/%d, ETA: ' % (i,nstar),
-            eu.misc.ptime( (time.time()-tm0)*float(nstar)/i)
+            eu.misc.ptime( (time.time()-tm0)*float(nstar-i)/i)
 
         ang=stomp.AngularCoordinate(star['ra'],star['dec'],system)
         # CMCAPS (cm) is 1-cos(radius)

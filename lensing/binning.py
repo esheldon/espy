@@ -237,7 +237,7 @@ class LambdaBinner(BinnerBase):
         """
         call also call base method bin_byrun
         """
-
+        from math import ceil
         lambda_field = self.lambda_field
         z_field = self.z_field
 
@@ -280,6 +280,12 @@ class LambdaBinner(BinnerBase):
             bs['lambda_err'][i] = err
             bs['lambda_sdev'][i] = sdev
             bs['lambda_range'][i] = lamrange
+            bs['lambda_minmax'][i] = \
+                data[lambda_field][w].min(), data[lambda_field][w].max()
+
+            # fix up last one
+            if i == (bs.size-1):
+                bs['lambda_range'][i,1] = ceil(bs['lambda_minmax'][i,1])
 
             i+=1
 
@@ -433,7 +439,7 @@ class LambdaBinner(BinnerBase):
         if self['nbin'] == 12:
             # ran define_bins
             lowlim  = [10.0, 10.4, 11.7, 13.3, 15.1, 17.3, 19.8, 23.0, 27.2, 32.9, 41.6, 58.0]
-            highlim = [10.4, 11.7, 13.3, 15.1, 17.3, 19.8, 23.0, 27.2, 32.9, 41.6, 58.0, None]
+            highlim = [10.4, 11.7, 13.3, 15.1, 17.3, 19.8, 23.0, 27.2, 32.9, 41.6, 58.0, 1.e6]
 
             # ran logbin_linear_edges with nbin=14 and combined last three
             # also made upper exactly 189
@@ -1556,10 +1562,16 @@ def lensbin_dtype(nrbin, bintags=None):
         for bt in bintags:
             tn = bt+'_range'
             dt.append( (tn,'f8',2) )
+
+            tn = bt+'_minmax'
+            dt.append( (tn,'f8',2) )
+
             tn = bt+'_mean'
             dt.append( (tn,'f8') )
+
             tn = bt+'_err'
             dt.append( (tn,'f8') )
+
             tn = bt+'_sdev'
             dt.append( (tn,'f8') )
 
