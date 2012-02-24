@@ -114,7 +114,7 @@ def map_dir():
     mapdir = os.path.join(mapdir, 'stomp-sdss')
     return mapdir
 
-def map_name(name, maptype=None, band=None):
+def map_name(name, maptype=None, band=None, maxres=None):
     mapdir=map_dir()
 
     fname=name
@@ -123,15 +123,21 @@ def map_name(name, maptype=None, band=None):
         fname += '-%s' % maptype
     if band is not None:
         fname += '-%s' % band
+    if maxres is not None:
+        fname += '-%06i' % maxres
 
     fname += '.hmap'
 
     fname = os.path.join(mapdir, fname)
     return fname
 
-def load(name, maptype=None, band=None, verbose=True):
+def load(name, maptype=None, band=None, maxres=None, verbose=True):
+    """
+    Can use maxres keyword or just {maptype}_{maxres} where maxres
+    is formatted %06d
+    """
     import stomp
-    f=map_name(name, maptype=maptype, band=band)
+    f=map_name(name, maptype=maptype, band=band, maxres=maxres)
     if not os.path.exists(f):
         raise IOError("stomp map file does not exist: %s" % f)
     stderr.write('Loading map: %s\n' % f)
@@ -216,7 +222,7 @@ def plot_boss_geometry(color=None, colorwheel=None, plt=None, width=1, show=True
 
     return plt
 
-def create_boss_survey():
+def create_boss_survey(maxres=2048):
     """
     Create a stomp map from the boss_survey.par ceta,clambda bounds
     """
@@ -224,7 +230,7 @@ def create_boss_survey():
 
     maskdir = map_dir()
 
-    map_file=map_name('boss','basic')
+    map_file=map_name('boss','basic',maxres=maxres)
     stdout.write("Will write to file: %s\n" % map_file)
 
     geom_file=os.path.join(maskdir,'boss_survey.par')
@@ -238,7 +244,6 @@ def create_boss_survey():
 
     system = stomp.AngularCoordinate.Survey
     weight=1.0
-    maxres=2048
     verbose=True
     mess = "-"*70 + "\nBound {i}/{ntot}: {lammin}:{lammax} {etamin}:{etamax}\n"
     for i in xrange(bs.size):
@@ -265,15 +270,15 @@ def create_boss_survey():
     stdout.write("Writing map file: %s\n" % map_file)  
     map.Write(map_file)
 
-def create_boss_survey_good():
+def create_boss_survey_good(maxres=2048):
     """
     Excise places where u amplifiers were not working
     """
 
-    outfile = map_name("boss","good")
+    outfile = map_name("boss","good",maxres=maxres)
     stdout.write("Will write to file: %s\n" % outfile)
 
-    map = load("boss", "basic")
+    map = load("boss", "basic",maxres=maxres)
 
 
 	# ordered basically from bottom to top in eta
@@ -296,7 +301,6 @@ def create_boss_survey_good():
 
     system = stomp.AngularCoordinate.Survey
     weight=1.0
-    maxres=2048
     verbose=True
     for i in xrange(ranges.size):
 
@@ -317,7 +321,7 @@ def create_boss_survey_good():
     stdout.write("Writing to file: %s\n" % outfile)
     map.Write(outfile)
 	
-def create_boss_survey_tycho():
+def create_boss_survey_tycho(maxres=2048):
     """
     In this one I get the tycho star definitions from the bosslss
     bright star mask and exclude them as I go
@@ -328,7 +332,7 @@ def create_boss_survey_tycho():
 
     import time
 
-    boss_tycho_file = map_name("boss","tycho")
+    boss_tycho_file = map_name("boss","tycho", maxres=maxres)
     print "Will write to file:",boss_tycho_file
 
     d=map_dir()
@@ -338,12 +342,11 @@ def create_boss_survey_tycho():
 
 
     print "Loading good"
-    mgood = load("boss","good")
+    mgood = load("boss","good",maxres=maxres,verbose=True)
 
     print "Excluding tycho stars from good map"
     system=stomp.AngularCoordinate.Equatorial
     weight=1.0
-    maxres=2048
     verbose=True
     nstep=100
 
@@ -353,13 +356,16 @@ def create_boss_survey_tycho():
         if (i % nstep) == 0:
             print '%d/%d, ETA: ' % (i,nstar),
             eu.misc.ptime( (time.time()-tm0)*float(nstar-i)/i)
+            verbose=True
+        else:
+            verbose=False
 
         ang=stomp.AngularCoordinate(star['ra'],star['dec'],system)
         # CMCAPS (cm) is 1-cos(radius)
         # so radius = arccos(1-cm)
         radius = rad2deg(arccos(1.-star['cmcaps']))
         star_bound=stomp.CircleBound(ang, radius)
-        star_map=stomp.Map(star_bound, weight, maxres)
+        star_map=stomp.Map(star_bound, weight, maxres,verbose)
         mgood.ExcludeMap(star_map)
 
     print "Writing to file:",boss_tycho_file

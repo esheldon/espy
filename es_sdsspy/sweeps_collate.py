@@ -64,7 +64,7 @@ class Collator:
 
     """
     
-    def __init__(self, type='gal'):
+    def __init__(self, type='gal', maxres=8192):
         #if type not in ['gal','primgal']:
         #    raise ValueError("add support for 'star' type")
 
@@ -78,7 +78,13 @@ class Collator:
 
         self.minscore=0.1
         self.flags = sdsspy.flags.Flags()
-        self.masktypes = ['basic','good','tycho']
+
+        mt=['basic','good','tycho']
+        mstr=str(maxres)
+
+        mt=[t+'_'+mstr for t in mt]
+        self.masktypes = mt
+        self.maxres=maxres
 
     def run(self, runs=None):
         """
@@ -317,7 +323,7 @@ class Collator:
         if not hasattr(self,'masks'):
             self.masks = {}
             for masktype in self.masktypes:
-                self.masks[masktype] = stomp_maps.load('boss',masktype)
+                self.masks[masktype] = stomp_maps.load('boss',masktype,maxres=self.maxres)
 
 
 

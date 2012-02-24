@@ -12,7 +12,7 @@ from esutil.numpy_util import where1, to_big_endian
 import es_sdsspy
 import sdssgal
 
-import maxbcg
+from . import files
 
 from columns import Columns
 
@@ -36,23 +36,23 @@ def do_radcut(cat, rmpc=1.3):
     print("Kept %s/%s" % (w.size,cat.size))
     return w
 
-# select the maxbcg input data from a columns database
+# select the input data from a columns database
 # and into a columns database
 class Selector:
     """
-
     mcs = Selector()
     mcs.select()
     mcs.write_columns()
-
     """
-    def __init__(self, rmax=22.0):
+    def __init__(self, version, rmax=22.0, maxres=8192, name='redmapper'):
         """
         E.g.  procrun='prim03'
         """
 
-        self.basedir = os.environ['MAXBCG_INPUT']
+        self.version
+        self.name=name
         self.rmax=rmax
+        self.maxres=maxres
 
         self.cols = es_sdsspy.sweeps_collate.open_columns('primgal')
 
@@ -61,7 +61,7 @@ class Selector:
 
     def write_columns(self):
 
-        d = maxbcg.files.input_coldir()
+        d = files.input_coldir(self.version, name=self.name)
         if os.path.exists(d):
             raise ValueError("coldir exists, start fresh: '%s'" % d)
         outcols = Columns(d)
@@ -79,8 +79,8 @@ class Selector:
                     'dec',
                     'objc_flags',
                     'objc_flags2',
-                    'ingood',
-                    'intycho']
+                    'ingood_8192',
+                    'intycho_8192']
 
         for col in colnames:
             print('Creating:',col)
@@ -126,13 +126,15 @@ class Selector:
         # for shorthand notation
         c = self.cols
 
-        mask_colname = 'inbasic'
-        print("Reading",mask_colname)
+        mask_colname = 'inbasic_%s' % self.maxres
+        print("Reading:",mask_colname,'res:',self.maxres)
         inmask = c[mask_colname][:]
+        ntot = inmask.size
+
         print("Getting mask logic")
         mask_logic = (inmask == 1)
         w=where1(mask_logic)
-        print("    %s/%s passed" % (w.size,c[mask_colname].size))
+        print("    %s/%s passed" % (w.size,ntot))
 
 
         # now read columns needed for binned_logic, object1_logic
@@ -147,7 +149,7 @@ class Selector:
         binned_logic = selector.binned_logic()
 
         w=where1(binned_logic)
-        print("    %s/%s passed" % (w.size,c[mask_colname].size))
+        print("    %s/%s passed" % (w.size,ntot))
 
         print("object1 logic")
         object1_logic = selector.object1_logic()
@@ -160,15 +162,15 @@ class Selector:
         print('mag logic')
         cmag_r_logic = (cmag_r < self.rmax)
         w=where1(mask_logic & cmag_r_logic)
-        print("    %s/%s passed" % (w.size,c[mask_colname].size))
+        print("    %s/%s passed" % (w.size,ntot))
 
         w=where1(cmag_r_logic)
-        print("    %s/%s passed mag+mask" % (w.size,c[mask_colname].size))
+        print("    %s/%s passed mag+mask" % (w.size,ntot))
 
         logic = binned_logic & object1_logic & cmag_r_logic & mask_logic
         
         w=where1(logic)
-        print("A total of %s/%s passed" % (w.size,c[mask_colname].size))
+        print("A total of %s/%s passed" % (w.size,ntot))
 
         self.logic = logic
         self.mag_and_mask_logic = cmag_r_logic & mask_logic

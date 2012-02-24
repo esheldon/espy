@@ -75,6 +75,13 @@ sample/run tree:
                 |-> pzrun 14 CREATE THIS
 
 
+    # new star mask
+    photo_sample: 06          # r < 21.8
+        |-> train_sample: 13  # CREATE
+            |-> wrun: 13      # CREATE THIS
+                |-> pzrun 15  # CREATE THIS
+
+
 
 
 zinput-{photo_sample}.json
