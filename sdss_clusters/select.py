@@ -44,12 +44,12 @@ class Selector:
     mcs.select()
     mcs.write_columns()
     """
-    def __init__(self, version, rmax=22.0, maxres=8192, name='redmapper'):
+    def __init__(self, name, version, rmax=22.0, maxres=8192):
         """
-        E.g.  procrun='prim03'
+        E.g.  Selector('rm','dr8-v2')
         """
 
-        self.version
+        self.version = version
         self.name=name
         self.rmax=rmax
         self.maxres=maxres
@@ -61,7 +61,7 @@ class Selector:
 
     def write_columns(self):
 
-        d = files.input_coldir(self.version, name=self.name)
+        d = files.input_coldir(self.name, self.version)
         if os.path.exists(d):
             raise ValueError("coldir exists, start fresh: '%s'" % d)
         outcols = Columns(d)
@@ -127,7 +127,7 @@ class Selector:
         c = self.cols
 
         mask_colname = 'inbasic_%s' % self.maxres
-        print("Reading:",mask_colname,'res:',self.maxres)
+        print("Reading mask info:",mask_colname)
         inmask = c[mask_colname][:]
         ntot = inmask.size
 

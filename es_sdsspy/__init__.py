@@ -42,18 +42,19 @@ from . import files
 from . import window
 from . import sweeps
 from . import sweeps_collate
-import yanny
+from . import starmask
+from . import yanny
 
-import flags
-from flags import flagval
+from . import flags
+from .flags import flagval
 
 
-import util
-from util import *
+from .import util
+from .util import *
 
-import stomp_maps
-import cas
+from . import stomp_maps
+from . import cas
 
-import pg
+from . import pg
 
-import target
+from . import target

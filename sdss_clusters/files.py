@@ -6,29 +6,25 @@ import es_sdsspy
 import esutil as eu
 from esutil.ostools import path_join
 
-import maxbcg
 
-
-def input_coldir(version, name='redmapper'):
+def input_coldir(name, version):
     """
     version should be e.g. dr8-v2
     """
-    if name == 'redmapper':
-        basedir = os.environ['REDMAPPER_INPUT']
-    else:
-        basedir = os.environ['MAXBCG_INPUT']
+    basedir = os.environ['CLUSTERS_INPUT']
 
     coldir='%s-input-%s.cols' % (name,version)
     coldir = path_join(basedir, coldir)
     return coldir
 
-def open_input_columns(version, name='redmapper'):
+def open_input_columns(name, version):
     import columns
-    d=input_coldir(version, name=name)
+    d=input_coldir(name, version)
     return columns.Columns(d)
 
 
 
+# these old maxbcg things should be adapted?
 def read_catalog(type):
     f = catalog_file(type)
     return eu.io.read(f, verbose=True, lower=True)

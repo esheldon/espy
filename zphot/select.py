@@ -296,9 +296,9 @@ class ColumnSelector:
                         'modelmag_dered_i',
                         'modelmag_dered_z']
 
-            if 'extra_columns' in self.conf:
-                for cdict in self.conf['extra_columns']:
-                    colnames.append(cdict['name'])
+            extra_columns = self.conf.get('extra_columns',[])
+            for cdict in extra_columns:
+                colnames.append(cdict['name'])
 
 
 
@@ -323,7 +323,7 @@ class ColumnSelector:
             data['model_imz'] = \
                 tmp['modelmag_dered_i'] - tmp['modelmag_dered_z']
 
-            for cdict in self.conf['extra_columns']:
+            for cdict in extra_columns:
                 name=cdict['name']
                 data[name] = tmp[name]
             del tmp
