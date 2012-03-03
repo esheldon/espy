@@ -16,8 +16,10 @@
             Tools for working with the SDSS window function, as well as getting
             lists of runs that have certain properties.
 
-        sdss_stomp:
+        stomp_maps:
             Tools for working with sdss stomp maps.
+        mangle_masks:
+            Tools for working with sdss mangle masks.
 
         yanny:
             tools for working with yanny parameter files.
@@ -53,6 +55,7 @@ from .import util
 from .util import *
 
 from . import stomp_maps
+from . import mangle_masks
 from . import cas
 
 from . import pg

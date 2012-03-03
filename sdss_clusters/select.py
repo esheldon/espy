@@ -44,7 +44,7 @@ class Selector:
     mcs.select()
     mcs.write_columns()
     """
-    def __init__(self, name, version, rmax=22.0, maxres=8192):
+    def __init__(self, name, version, rmax=22.0):
         """
         E.g.  Selector('rm','dr8-v2')
         """
@@ -52,7 +52,6 @@ class Selector:
         self.version = version
         self.name=name
         self.rmax=rmax
-        self.maxres=maxres
 
         self.cols = es_sdsspy.sweeps_collate.open_columns('primgal')
 
@@ -79,8 +78,9 @@ class Selector:
                     'dec',
                     'objc_flags',
                     'objc_flags2',
-                    'ingood_8192',
-                    'intycho_8192']
+                    'ingood',
+                    'instar',
+                    'inbadfield']
 
         for col in colnames:
             print('Creating:',col)
@@ -120,13 +120,27 @@ class Selector:
         outcols.write_column('keep', keep)
 
 
+    def add_inbadfield(self):
+        import es_sdsspy
+        m=es_sdsspy.mangle_masks.load('boss','badfield')
+        d = files.input_coldir(self.name, self.version)
+        c = Columns(d)
+
+        print("reading ra")
+        ra=c['ra'][:]
+        print("reading dec")
+        dec=c['dec'][:]
  
+        print("checking mask")
+        cont = m.contains(ra,dec).astype('i1')
+
+        c.write_column('inbadfield', cont)
 
     def select(self):
         # for shorthand notation
         c = self.cols
 
-        mask_colname = 'inbasic_%s' % self.maxres
+        mask_colname = 'inbasic'
         print("Reading mask info:",mask_colname)
         inmask = c[mask_colname][:]
         ntot = inmask.size

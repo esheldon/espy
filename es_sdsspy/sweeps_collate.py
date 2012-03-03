@@ -8,7 +8,8 @@ import os
 import columns
 import datetime
 
-from . import stomp_maps
+from . import mangle_masks
+from . import starmask
 
 def columns_dir(type):
     collator = Collator(type)
@@ -64,7 +65,7 @@ class Collator:
 
     """
     
-    def __init__(self, type='gal', maxres=8192):
+    def __init__(self, type='gal'):
         #if type not in ['gal','primgal']:
         #    raise ValueError("add support for 'star' type")
 
@@ -79,12 +80,8 @@ class Collator:
         self.minscore=0.1
         self.flags = sdsspy.flags.Flags()
 
-        mt=['basic','good','tycho']
-        mstr=str(maxres)
-
-        mt=[t+'_'+mstr for t in mt]
+        mt=['basic','good','star']
         self.masktypes = mt
-        self.maxres=maxres
 
     def run(self, runs=None):
         """
@@ -265,7 +262,7 @@ class Collator:
 
         cnames = ['cmodelmag_dered_r','modelmag_dered_r',
                   'run','camcol','ra','dec','thing_id','photoid',
-                  'inbasic','ingood','intycho']
+                  'inbasic','ingood','instar']
         if self.type not in ['primgal','primstar']:
             cnames += ['survey_primary']
 
@@ -300,10 +297,9 @@ class Collator:
         dir=path_join(dir ,self.type+'.cols')
         return dir
 
-
     
     def set_maskflags(self, new):
-        self.load_masks()
+        self.load_masks(self.masktypes)
         ra = new['ra']
         dec = new['dec']
         print("        Checking mask: ",end='')
@@ -312,18 +308,56 @@ class Collator:
             name = 'in'+masktype
             print(" ",name,end='')
 
-            inside[:] = self.masks[masktype].Contains(ra,dec,'eq')
+            inside[:] = self.masks[masktype].contains(ra,dec)
             new[name] = inside.copy()
      
         print("")
 
 
+    def redo_maskflags(self, masktypes=None):
+        """
+        This loads the columns, reads ra,dec and recreates
+        the mask flags
+        """
+        if masktypes is None:
+            masktypes=self.masktypes
+        if isinstance(masktypes,basestring):
+            masktypes=[masktypes]
+        self.load_masks(masktypes)
+        print("will do masks:",masktypes)
 
-    def load_masks(self):
+        c = self.open_columns()
+        print("reading ra")
+        ra = c['ra'][:]
+        print("reading dec")
+        dec = c['dec'][:]
+
+        for masktype in masktypes:
+            colname = 'in'+masktype
+            colname = colname.replace('-','_')
+            print("Checking",masktype)
+
+            inside = self.masks[masktype].contains(ra,dec)
+            print("writing column:",colname)
+            c.write_column(colname, inside.astype('i1'), create=True)
+            print("creating index")
+            c[colname].create_index(force=True)
+ 
+    def load_masks(self, masktypes):
         if not hasattr(self,'masks'):
             self.masks = {}
-            for masktype in self.masktypes:
-                self.masks[masktype] = stomp_maps.load('boss',masktype,maxres=self.maxres)
+            for masktype in masktypes:
+                print('masktype:',masktype,('badfield' in masktype))
+                if 'badfield' in masktype:
+                    print("loading",masktype,"as veto mask")
+                    veto=True
+                else:
+                    veto=False
+
+                if masktype == 'star':
+                    self.masks[masktype] = starmask.StarMask()
+                else:
+                    self.masks[masktype] = mangle_masks.load('boss',masktype,veto=veto)
 
 
 

@@ -75,10 +75,10 @@ sample/run tree:
                 |-> pzrun 14 CREATE THIS
 
 
-    # new star mask
+    # new star mask, good mask
     photo_sample: 06          # r < 21.8
-        |-> train_sample: 13  # CREATE
-            |-> wrun: 13      # CREATE THIS
+        |-> train_sample: 13
+            |-> wrun: 13
                 |-> pzrun 15  # CREATE THIS
 
 

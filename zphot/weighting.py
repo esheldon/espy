@@ -23,20 +23,19 @@ weights and the smaller ones for the individual p(z) calculations, which can be
 done in parallel.
 
 Create the config file in 
-    ${ESPY_DIR}/zphot/config/zinput-{photo_sample}.json
+    ${ESPY_DIR}/zphot/config/zinput-{photo_sample}.yaml
 e.g.
-{
- "sample":"01",
- "proctype":"sdssgal",
- "procrun":"prim04",
- "cmodel_rmin":15.0,
- "cmodel_rmax":21.5,
- "modelmag_min":15.0,
- "modelmag_max":29.0,
- "weighting":true,
- "masktype":"tycho",
- "filetype":"rec"
-}
+
+photo_sample:   "06"
+source:         dr8_final
+primary:        true
+cmodel_rmin:    15.0
+cmodel_rmax:    21.8
+modelmag_min:   15.0
+modelmag_max:   29.0
+weighting:      true
+masktype:       [good,star]
+filetype:       rec
 
 Then run these scripts
 
@@ -45,17 +44,16 @@ Then run these scripts
 
 Then match the training samples.  You'll need to create a config file under 
 
-    ${ESPY_DIR}/zphot/config/train-{train_sample}.json
+    ${ESPY_DIR}/zphot/config/train-{train_sample}.yaml
 
 e.g.
-{
-    "train_sample":"09",
-    "photo_sample":"01",
-    "sdss_rmax":19.6,
-    "zmin":0.01,
-    "zmax":2.0,
-    "comment":"some comment"
-}
+
+train_sample:   "13"
+photo_sample:   "06"
+sdss_rmax:      19.6
+zmin:           -0.001
+zmax:           2.0
+comment:        photo sample 06, r < 21.8
 
 NOTE: photo_sample is specified here, so train_sample is the only identifier
 you'll need after this.
@@ -67,17 +65,17 @@ First do a match and then make the versions formatted for input to weighting:
     
 
 
-Then run to get the overall weights.  Create the pbs file.  
+Then run to get the overall weights.  Create the wq file.  
 
-    /bin/create_pbs.py weights wrun
+    /bin/create-wq.py weights wrun
 
-For that you'll need to create a weights-{wrun}.json file:
-{
-    "wrun":"02",
-    "train_sample":"02",
-    "n_near1":5,
-    "n_near2":100
-}
+For that you'll need to create a weights-{wrun}.yaml file:
+
+wrun: "13"
+train_sample: "13"
+n_near1: 5
+n_near2: 100
+
 
 Then make some plots comparing the distributions of the variables:
     /bin/weighting-qaplots.py train_sample
@@ -85,26 +83,40 @@ Then make some plots comparing the distributions of the variables:
 To just do the z hist since varhist is slow:
     /bin/weighting-qaplots.py -z train_sample
 
-Add the p(z) from summed individual (see below)
-    /bin/weighting-qaplots.py -z --pzrun pzrun wrun
 
 To make p(z) for each object
-    /bin/create_pbs.py -n 50 pofz pzrun
+    /bin/create-wq.py -n 50 pofz pzrun
 
-Which will require a pofz run defined in pofz-{pzrun}.json in the
+Which will require a pofz run defined in pofz-{pzrun}.yaml in the
 config directory, e.g.
-{
-    "pzrun":"04",
-    "wrun":"02",
-    "nz": 35,
-    "zmin":0.0,
-    "zmax":1.1
-}
+
+pzrun:  15
+wrun:   13
+nz:     35
+zmin:   0.0
+zmax:   1.1
+
 
 Then you can sum up the p(z) to get an overall histogram
     /bin/sum-pofz.py {pzrun}
 
-Which can be overplotted as shown above:
+
+Plot with the p(z) from summed individual overplotted
+    /bin/weighting-qaplots.py -z --pzrun pzrun wrun
+
+You can correct the individual p(z) using the ratio
+of N(z) to summed p(z)
+
+    /bin/correct-pofz.py pzrun
+
+You can make a columns database after the corrected p(z) are created
+
+    /bin/make-pofz-columns.py pzrun
+
+Finally, after the columns db is made, you can make an official release split
+up by run,camcol
+
+    /bin/make-release.py pzrun
 """
 from __future__ import print_function
 
@@ -418,7 +430,242 @@ def read_pofz_file(filename, nz, with_rmag=False):
     stdout.write("    read %s\n" % data.size)
     return data
 
-   
+def wq_dir(type, runid):
+    dir = path_join(zphot.photoz_dir(), 'wq')
+    dir = path_join(dir, '%s-%s' % (type,runid))
+    return dir
+
+def wq_file(type, runid, chunk=None):
+    dir = wq_dir(type, runid)
+
+    if type == 'weights':
+        fname = 'weights-%s.yaml' % runid
+        fname = path_join(dir,fname)
+    elif type == 'pofz':
+        if chunk is None:
+            raise ValueError("for pofz send chunk")
+        fname = 'pofz-%s-%03i.yaml' % (runid,chunk)
+        fname = path_join(dir, fname)
+    else:
+        raise ValueError("'weights' or 'pofz'")
+
+    return fname
+
+def create_weights_wq(wrun):
+
+    conf = zphot.read_config('weights',wrun)
+    pprint.pprint(conf)
+
+    train_sample = conf['train_sample']
+
+    # get the input training file
+    wt = WeightedTraining(train_sample)
+    train_file = wt.filename('all')
+    photo_sample = wt.conf['photo_sample']
+
+    # get the photo input file
+    zs = zphot.select.ColumnSelector(photo_sample)
+
+    ndim = 5
+    if 'extra_columns' in zs.conf:
+        ndim += len(zs.conf['extra_columns'])
+
+    photo_file = zs.filename()
+
+
+    setups = 'setup weighting -r ~esheldon/exports/weighting-work'
+
+
+
+    script = """
+mode: bynode
+group: [new,new2]
+job_name: {job_name}
+command: |
+    source ~/.bashrc
+
+    logf="{logf}"
+    photo_file="{photo_file}"
+    train_file="{train_file}"
+
+    n_near1={n_near1}
+    n_near2={n_near2}
+
+    weights_file1="{weights_file1}"
+    weights_file_nozero1="{weights_file_nozero1}"
+    weights_file2="{weights_file2}"
+
+    num_file1="{num_file1}"
+    num_file2="{num_file2}"
+
+    # first run
+
+    echo "
+    Running calcweights
+
+    First run with n_near=$n_near1
+    " > "$logf"
+
+    calcweights{ndim}         \\
+        "$train_file"    \\
+        "$photo_file"    \\
+        "$n_near1"       \\
+        "$weights_file1" \\
+        "$num_file1"  >> "$logf" 2>&1
+
+    if [ "$?" != "0" ]; then
+        echo Halting >> "$logf"
+        exit 45
+    fi
+
+
+    # remove training set objects with zero weight at first
+    # n_near
+    echo "
+    removing zero weight training objects to
+        "$weights_file_nozero1"
+    " >> "$logf"
+    awk '$3>0' < "$weights_file1" 1> "$weights_file_nozero1" 2>> "$logf"
+
+    if [ "$?" != "0" ]; then
+        echo Error running awk.  Halting >> "$logf"
+        exit 45
+    fi
+
+    # second run
+    echo "
+    Second run with n_near=$n_near2
+    " >> "$logf"
+
+    calcweights{ndim}                \\
+        "$weights_file_nozero1" \\
+        "$photo_file"           \\
+        "$n_near2"              \\
+        "$weights_file2"        \\
+        "$num_file2" >>"$logf" 2>&1
+
+    if [ "$?" != "0" ]; then
+        echo Halting >> "$logf"
+        exit 45
+    fi
+    """.format(job_name             = 'weights-%s' % wrun,
+               ndim                 = ndim,
+               logf                 = wq_file('weights',wrun).replace('yaml','log'),
+               train_file           = train_file,
+               photo_file           = photo_file,
+               n_near1              = conf['n_near1'],
+               n_near2              = conf['n_near2'],
+               weights_file1        = weights_file(wrun,1),
+               num_file1            = num_file(wrun,1),
+               weights_file_nozero1 = weights_file(wrun,1,nozero=True),
+               weights_file2        = weights_file(wrun,2),
+               num_file2            = num_file(wrun,2))
+
+    # make output dir for calcweights
+    wdir = weights_dir(wrun)
+    if not os.path.exists(wdir):
+        os.makedirs(wdir)
+
+    fname=wq_file('weights',wrun)
+    eu.ostools.makedirs_fromfile(fname)
+    print("Writing wq config:",fname)
+    with open(fname,'w') as fobj:
+        fobj.write(script)
+    
+
+def create_pofz_wq(pzrun, nchunk):
+    """
+    For calculating the individual p(z)
+    """
+
+    pzdir = pofz_dir(pzrun)
+    if not os.path.exists(pzdir):
+        os.makedirs(pzdir)
+
+    conf = zphot.read_config('pofz',pzrun)
+    pprint.pprint(conf)
+
+    # get output weights file from last round.
+    wrun = conf['wrun']
+    iteration = 2
+    wfile = weights_file(wrun,iteration)
+
+    # to get the photo input file
+    wconf = zphot.read_config('weights',wrun)
+    train_sample = wconf['train_sample']
+    tconf = zphot.read_config('train',train_sample)
+    photo_sample = tconf['photo_sample']
+    zs = zphot.select.ColumnSelector(photo_sample, nchunk=nchunk)
+
+    ndim = 5
+    if 'extra_columns' in zs.conf:
+        ndim += len(zs.conf['extra_columns'])
+
+ 
+    template="""
+group: [new,new2]
+job_name: {job_name}
+
+command: |
+    source ~/.bashrc
+
+    logf="{logf}"
+    weights_file="{weights_file}"
+    photo_file="{photo_file}"
+
+    n_near={n_near}
+    nz={nz}
+    zmin={zmin}
+    zmax={zmax}
+    pofz_file="{pofz_file}"
+    z_file="{z_file}"
+
+    echo "
+    Running calcpofz
+    " > "$logf"
+
+    calcpofz{ndim}           \\
+        "$weights_file" \\
+        "$photo_file"   \\
+        "$n_near"       \\
+        "$nz"           \\
+        "$zmin"         \\
+        "$zmax"         \\
+        "$pofz_file"    \\
+        "$z_file"  >>"$logf" 2>&1
+
+    if [ "$?" != "0" ]; then
+        echo Halting >> "$logf"
+        exit 45
+    fi
+    """
+    setups = 'setup weighting -r ~esheldon/exports/weighting-work'
+
+    for chunk in xrange(nchunk):
+
+
+        script=template.format(job_name = 'pofz-%s-%03i' % (pzrun,chunk),
+                               ndim=ndim,
+                               logf = wq_file('pofz',pzrun,chunk=chunk).replace('yaml','log'),
+                               weights_file=wfile,
+                               photo_file=zs.filename(chunk),
+                               n_near=wconf['n_near2'],
+                               nz=conf['nz'],
+                               zmin=conf['zmin'],
+                               zmax=conf['zmax'],
+                               pofz_file=pofz_file(pzrun,chunk),
+                               z_file=z_file(pzrun,chunk))
+
+
+
+        fname = wq_file('pofz',pzrun,chunk=chunk)
+        eu.ostools.makedirs_fromfile(fname)
+        print("Writing wq file:",fname)
+        with open(fname,'w') as fobj:
+            fobj.write(script)
+
+
+  
 def pbs_dir(type, runid, create=False):
     dir = path_join(zphot.photoz_dir(), 'pbs')
     dir = path_join(dir, '%s-%s' % (type,runid))
@@ -1124,12 +1371,10 @@ class WeightedOutputs:
         if ntot == 0:
             raise ValueError("No files matched pattern: '%s'" % pattern)
 
-        flist.sort()
-
         # ii keeps track of location in the overall num file
         ii = 0
         zhist=None
-        for f in flist:
+        for f in sorted(flist):
             print(f)
             r=eu.recfile.Open(f,'r',delim=' ',dtype=pofz_dt)
             data = r.read()

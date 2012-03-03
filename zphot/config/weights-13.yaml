@@ -1,0 +1,4 @@
+wrun: "13"
+train_sample: "13"
+n_near1: 5
+n_near2: 100

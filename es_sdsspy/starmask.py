@@ -1,3 +1,9 @@
+"""
+
+Since the bright star mask is simple disks centered on the stars,
+it is faster to use a point matching code than a mangle mask.
+
+"""
 import os,sys
 import time
 import esutil as eu
@@ -13,6 +19,9 @@ class StarMask:
         self.depth=depth
 
     def contains(self, ra, dec):
+        """
+        Returns 1 if the point did not match a bright star.
+        """
         cont = ones(ra.size, dtype='u1')
         self.load_data()
 
@@ -33,13 +42,13 @@ class StarMask:
             dir=os.getenv('MASK_DIR')
             if dir is None:
                 raise ValueError("MASK_DIR is not defined")
-            dir = os.path.join(dir, 'stomp-sdss')
+            dir = os.path.join(dir, 'mangle')
             f=os.path.join(dir,'bright_star_mask.fits')
 
-            print 'loading star defs:',f
+            #print 'loading star defs:',f
             self.data = eu.io.read(f, lower=True)
 
-            print 'setting radii'
+            #print 'setting radii'
             self.radii = rad2deg(arccos(1.-self.data['cmcaps']))
 
 def compare_speed(n=100000):
