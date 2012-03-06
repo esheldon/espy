@@ -33,7 +33,7 @@ def plot2dsig(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
         The y range of the delta sigma plot
     yrange2: [min,max]
         The y range of the ortho-delta sigma plot
-    range2var: [min,max]
+    range4var: [min,max]
         The x range over which to calculate a osig variance
         and determine a plot range.  This is overridden by
         range2

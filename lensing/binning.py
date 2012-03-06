@@ -94,7 +94,7 @@ class BinnerBase(dict):
     def bin_label(binnum):
         raise RuntimeError("override this method")
 
-    def plot_dsig_osig_byrun_bin(self, run, binnum, **keys):
+    def plot_dsig_osig_byrun_bin(self, run, type, binnum, **keys):
         """
 
         Plot a single bin, with dsig and osig.
@@ -102,21 +102,20 @@ class BinnerBase(dict):
         See lensing.plotting.plot2dsig
         """
         name = self.name()
-        data=lensing.files.sample_read('binned',run,name)
+        data=lensing.files.sample_read(type,run,name=name)
 
         max_binnum = self['nbin']-1
         if (binnum < 0) or (binnum > max_binnum):
             raise ValueError("binnum is out of range [0,%d]" % max_binnum)
         data = data[binnum]
 
-        if 'plot_label' not in keys:
-            keys['plot_label'] = self.bin_label(binnum)
+        keys['plot_label'] = self.bin_label(binnum)
         lensing.plotting.plot2dsig(data['r'], 
                                    data['dsig'], data['dsigerr'],
                                    data['osig'], data['dsigerr'],
                                    **keys)
 
-    def plot_dsig_osig_byrun(self, run, **keys):
+    def plot_dsig_osig_byrun(self, run, type, **keys):
         """
 
         Plot all bins dsig+osig but one at a time, not in
@@ -124,7 +123,7 @@ class BinnerBase(dict):
 
         """
         for binnum in xrange(self['nbin']):
-            self.plot_dsig_osig_byrun_bin(run, binnum, **keys)
+            self.plot_dsig_osig_byrun_bin(run, type, binnum, **keys)
 
     def plot_dsig_byrun_1var(self, run, type, show=False):
         """
@@ -211,6 +210,97 @@ class BinnerBase(dict):
         stdout.write("Plotting to file: %s\n" % epsfile)
         pa.write_eps(epsfile)
         converter.convert(epsfile, dpi=120, verbose=True)
+
+
+    def plot_osig_byrun_1var(self, run, type, show=False):
+        """
+
+        Make an array of orthotangential with each plot a bin in one variable.  
+        
+        It is expected that methods like self.bin_label() are meaningfully
+        over-ridden
+
+        parameters
+        ----------
+        run: string
+            The lensing run id
+        type:
+            The type to read, e.g. 'binned', 'corrected'
+
+        """
+
+        name = self.name()
+        data=lensing.files.sample_read(type,run,name=name)
+
+        # this is for the screen: currently tuned for my big screen!
+        biggles.configure('screen','width', 1140)
+        biggles.configure('screen','height', 1140)
+        biggles.configure('fontsize_min',1.0)
+
+        if self['nbin'] == 12:
+            nrow = 3
+            ncol = 4
+            aspect_ratio = 1.0/1.5
+        elif self['nbin'] == 16:
+            nrow = 4
+            ncol = 4
+            aspect_ratio = 1.0
+        else:
+            raise ValueError("Unsupported nbin: %s" % self['nbin'])
+
+        pa = FramedArray(nrow, ncol)
+        pa.aspect_ratio = aspect_ratio
+
+        pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+
+        xrnge = [0.01,60.0]
+        yrnge = [-20,20]
+        pa.xrange = xrnge
+        pa.yrange = yrnge
+        pa.xlog = True
+
+
+        row = -1
+
+        low, high = self.bin_ranges()
+
+        i = 0
+        for i in xrange(self['nbin']):
+            col = i % ncol
+            if col == 0:
+                row += 1
+
+            eu.plotting.bscatter(data['r'][i],
+                                 data['osig'][i],
+                                 yerr=data['dsigerr'][i],
+                                 xrange=xrnge,
+                                 yrange=yrnge,
+                                 xlog=True,ylog=False,
+                                 show=False, 
+                                 plt=pa[row,col])
+            label = self.bin_label(i)
+            pl = PlotLabel(.85, .85, label, halign='right')
+
+            pa[row,col].add(pl)
+
+            line=biggles.Curve([xrnge[0],xrnge[1]],[0,0])
+            pa[row,col].add(line)
+
+
+        if show:
+            pa.show()
+
+        epsfile=lensing.files.sample_file(type+'-plots',run,name=name,extra='osig-allplot',ext='eps')
+        d = os.path.dirname(epsfile)
+        if not os.path.exists(d):
+            print("making dir:",d)
+            os.makedirs(d)
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        pa.write_eps(epsfile)
+        converter.convert(epsfile, dpi=120, verbose=True)
+
+
 
 
 def define_lambda_bins(sample, lastmin=58.):
@@ -311,7 +401,7 @@ class LambdaBinner(BinnerBase):
         lrange = self.bin_ranges(binnum)
         if lrange[0] is None and lrange[1] is None:
             raise ValueError("expected at least one in range to be not None")
-        elif lrange[1] is None:
+        elif lrange[1] == 1.e6:
             return r'$\lambda\ > %0.1f$' % lrange[0]
         elif lrange[0] is None:
             return r'$\lambda\ < %0.1f$' % lrange[1]
