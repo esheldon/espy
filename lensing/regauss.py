@@ -244,18 +244,15 @@ class RegaussSweep:
 
     def select(self):
         """
-        recently removed mask cuts: no need!
-
-        But no runs yet without mask cut
         """
+        raise RuntimeError("use mangle mask")
         print("Selecting objects")
         s = es_sdsspy.select.Selector(self.objs)
         print("  getting resolve logic")
         resolve_logic = s.resolve_logic()
-        """
-        print("  getting tycho logic")
-        tycho_logic = s.mask_logic('tycho')
-        """
+
+        print("  getting mask logic")
+        mask_logic = s.mask_logic('basic')
 
         print("  getting flag logic")
         flag_logic = s.flag_logic()
@@ -267,9 +264,9 @@ class RegaussSweep:
             rmag_logic = s.modelmag_logic("r", self.rmax)
 
         #logic = \
-        #    resolve_logic & tycho_logic & flag_logic & rmag_logic
-        logic = \
-            resolve_logic & flag_logic & rmag_logic
+        #    resolve_logic & mask_logic & flag_logic & rmag_logic
+        #logic = \
+        #    resolve_logic & flag_logic & rmag_logic
 
         keep = where1(logic)
         print("  keeping %i/%i" % (keep.size, self.objs.size))
