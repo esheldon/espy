@@ -1403,10 +1403,13 @@ class WeightedOutputs:
         Add columns to the collated photoz table
         """
 
-        newcols = ['run','rerun','camcol','field','id',
-                   'cmodelmag_dered_r','ra','dec']
-
+        print("Adding columns\n")
         cols = open_pofz_columns(pzrun)
+
+        # we will also do colors and objid below
+        newcols = ['run','rerun','camcol','field','id',
+                   'cmodelmag_dered_r','ra','dec','inbadfield']
+
         print("reading pofz photoid")
         photoid = cols['photoid'][:]
 
@@ -1419,6 +1422,11 @@ class WeightedOutputs:
         if mcols.size != photoid.size:
             raise ValueError("Some did not match: %d/%d" % (mcols.size,photoid.size))
 
+        # first write the index into the primgal sweeps
+        matchcol='primgal_id'
+        print("    writing",matchcol)
+        cols.write_column(matchcol,mscols)
+
         for col in newcols:
             print("Reading data for: ",col)
             data = scols[col][mscols]
@@ -1426,6 +1434,7 @@ class WeightedOutputs:
             if col == 'cmodelmag_dered_r':
                 col = 'cmodelmag_r'
             cols.write_column(col, data, create=True)
+
 
         print("creating umg")
         u=scols['modelmag_dered_u'][mscols]
@@ -1490,6 +1499,7 @@ class WeightedOutputs:
         columns=['objid',
                  'run','rerun','camcol','field','id',
                  'ra','dec',
+                 'inbadfield',
                  'cmodelmag_r',
                  'modelmag_umg',
                  'modelmag_gmr',
