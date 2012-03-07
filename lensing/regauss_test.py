@@ -9,7 +9,8 @@ from esutil.ostools import path_join, expand_path
 
 import biggles
 from biggles import FramedPlot, PlotKey, Table, PlotLabel, Points, \
-        SymmetricErrorBarsY as SymErrY, SymmetricErrorBarsX as SymErrX
+        SymmetricErrorBarsY as SymErrY, SymmetricErrorBarsX as SymErrX, \
+        Curve
 
 import fimage
 from fimage.conversions import mom2sigma,mom2fwhm
@@ -22,7 +23,8 @@ class Tester(dict):
     """
     testing a single run
     """
-    def __init__(self,procrun,sweeptype,band, run='any', camcol='any', coldir=None):
+    def __init__(self, procrun, sweeptype, band, 
+                 run='any', camcol='any', coldir=None):
         self.procrun = procrun
         self.sweeptype=sweeptype
         self.run = run
@@ -204,8 +206,10 @@ class Tester(dict):
 
         if plot_type == 'residual':
             print('  doing: residual')
-            be1 = eu.stat.Binner(field_data, self['e1'][w]-self['e1_psf'][w], weights=weights)
-            be2 = eu.stat.Binner(field_data, self['e2'][w]-self['e2_psf'][w], weights=weights)
+            be1 = eu.stat.Binner(field_data, self['e1'][w]-self['e1_psf'][w], 
+                                 weights=weights)
+            be2 = eu.stat.Binner(field_data, self['e2'][w]-self['e2_psf'][w], 
+                                 weights=weights)
             ylabel = r'$<e_{star}-e_{PSF}>$'
         else:
             print('  doing meane')
@@ -220,7 +224,8 @@ class Tester(dict):
         #hxmin = xm-4.0*xstd
         #hxmax = xm+4.0*xstd
         bsize = xstd/5.
-        hist = eu.stat.histogram(field_data, binsize=bsize, weights=weights, more=True)
+        hist = eu.stat.histogram(field_data, binsize=bsize, 
+                                 weights=weights, more=True)
 
 
         print("  hist  e1, nperbin: ",nperbin)
@@ -254,24 +259,46 @@ class Tester(dict):
                                          ymin=ymin, ymax=ymax, color='grey50')
         plt.add(ph)
 
-        p1 = Points( be1['wxmean'], be1['wymean'], type='filled circle', color='blue')
+        p1 = Points( be1['wxmean'], be1['wymean'], 
+                    type='filled circle', color='blue')
         p1err = SymErrY( be1['wxmean'], be1['wymean'], be1['wyerr2'], color='blue')
         p1.label = r'$e_1$'
 
-        p2 = Points( be2['wxmean'], be2['wymean'], type='filled circle', color='red')
+        p2 = Points( be2['wxmean'], be2['wymean'], 
+                    type='filled circle', color='red')
         p2.label = r'$e_2$'
         p2err = SymErrY( be2['wxmean'], be2['wymean'], be2['wyerr2'], color='red')
 
         key = PlotKey(0.1,0.9, [p1,p2])
         plt.add(p1, p1err, p2, p2err, key)
 
+        if field == 'R' and plot_type=='meane':
+            order=3
+            print("  getting poly order",order)
+            coeff1 = numpy.polyfit(be1['wxmean'], be1['wymean'], order)
+            poly1=numpy.poly1d(coeff1)
+            coeff2 = numpy.polyfit(be2['wxmean'], be2['wymean'], order)
+            poly2=numpy.poly1d(coeff2)
+
+            ps1 = Curve( be1['wxmean'], poly1(be1['wxmean']), color='blue')
+            ps2 = Curve( be2['wxmean'], poly2(be2['wxmean']), color='red')
+            plt.add(ps1,ps2)
+
+            polyf = self.plotfile(field, rmag_max, plot_type=plot_type)
+            polyf=polyf.replace('.eps','-polyfit.yaml')
+            out={'coeff_e1':list([float(c) for c in coeff1]),
+                 'coeff_e2':list([float(c) for c in coeff2])}
+            print("    -- Writing poly coeffs to:",polyf)
+            eu.io.write(polyf,out)
         if field != 'rmag':
-            rmag_lab = PlotLabel(0.1,0.05,'%0.2f < rmag < %0.2f' % (rmag_min,rmag_max), halign='left')
+            rmag_lab = \
+                PlotLabel(0.1,0.05,'%0.2f < rmag < %0.2f' % (rmag_min,rmag_max), 
+                          halign='left')
             plt.add(rmag_lab)
 
         procrun_lab = PlotLabel(0.1,0.1,
-                                'procrun: %s filter: %s' % (self.procrun, self.band), 
-                                halign='left')
+                            'procrun: %s filter: %s' % (self.procrun, self.band), 
+                            halign='left')
         plt.add(procrun_lab)
         cy=0.9
         if self.run != 'any':
@@ -298,6 +325,10 @@ class Tester(dict):
         converter.convert(epsfile, verbose=True)
 
        
+    def polyfile(self, field, rmag_max, plot_type='meane'):
+        polyf = self.plotfile(field, rmag_max, plot_type=plot_type)
+        polyf=polyf.replace('.eps','-polyfit.yaml')
+        return polyf
 
     def plotfile(self, field, rmag_max, plot_type='meane'):
         f = 'rg-%(run)s%(band)s-%(type)s-vs-%(field)s-%(rmag_max)0.2f'
@@ -321,3 +352,58 @@ class Tester(dict):
             #d = path_join(d,'%i' % self.camcol)
             d = path_join(d,'bycamcol')
         return d
+
+
+def smooth(x, window_len=10, window='hanning'):
+    """smooth the data using a window with requested size.
+    
+    This method is based on the convolution of a scaled window with the signal.
+    The signal is prepared by introducing reflected copies of the signal 
+    (with the window size) in both ends so that transient parts are minimized
+    in the begining and end part of the output signal.
+    
+    input:
+        x: the input signal 
+        window_len: the dimension of the smoothing window
+        window: the type of window from 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'
+            flat window will produce a moving average smoothing.
+
+    output:
+        the smoothed signal
+        
+    example:
+
+    import numpy as np    
+    t = numpy.linspace(-2,2,0.1)
+    x = numpy.sin(t)+numpy.random.randn(len(t))*0.1
+    y = smooth(x)
+    
+    see also: 
+    
+    numpy.hanning, numpy.hamming, numpy.bartlett, numpy.blackman, numpy.convolve
+    scipy.signal.lfilter
+ 
+    TODO: the window parameter could be the window itself if an array instead of a string   
+    """
+
+    if x.ndim != 1:
+        raise ValueError, "smooth only accepts 1 dimension arrays."
+
+    if x.size < window_len:
+        raise ValueError, "Input vector needs to be bigger than window size."
+
+    if window_len < 3:
+        return x
+
+    if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+        raise ValueError, "Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'"
+
+    s=numpy.r_[2*x[0]-x[window_len:1:-1], x, 2*x[-1]-x[-1:-window_len:-1]]
+    #print(len(s))
+    
+    if window == 'flat': #moving average
+        w = numpy.ones(window_len,'d')
+    else:
+        w = getattr(np, window)(window_len)
+    y = numpy.convolve(w/w.sum(), s, mode='same')
+    return y[window_len-1:-window_len+1]
