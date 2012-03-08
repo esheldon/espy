@@ -1,3 +1,13 @@
+"""
+Run the tester to see trends of <e> etc. with various parameters.
+
+The most important for gal ellip is <e> vs R.  A polynomial
+will be fit for this case and written to a file.
+
+You can then run the Tester.detrend(rmag_max) function to 
+create a new column that is detrended.
+
+"""
 from __future__ import print_function
 import os
 import columns
@@ -10,7 +20,9 @@ from esutil.ostools import path_join, expand_path
 import biggles
 from biggles import FramedPlot, PlotKey, Table, PlotLabel, Points, \
         SymmetricErrorBarsY as SymErrY, SymmetricErrorBarsX as SymErrX, \
-        Curve
+        Curve,FramedArray,Table
+
+import pprint
 
 import fimage
 from fimage.conversions import mom2sigma,mom2fwhm
@@ -57,7 +69,7 @@ class Tester(dict):
             meta = c['meta'].read()
             if meta['sweeptype'] != self.sweeptype:
                 raise ValueError("Requested sweeptype %s but "
-                                 "columns dir has %s " % (self.sweeptype,meta['sweeptype']))
+                    "columns dir has %s " % (self.sweeptype,meta['sweeptype']))
 
             if self.run != 'any' and self.camcol != 'any':
                 print('Getting indices of run:',self.run,'camcol:',self.camcol)
@@ -245,6 +257,9 @@ class Tester(dict):
 
         if xrng is not None:
             plt.xrange=xrng
+        else:
+            if field == 'R':
+                plt.xrange=[0.29,1.01]
 
         if yrng is not None:
             plt.yrange=yrng
@@ -284,8 +299,7 @@ class Tester(dict):
             ps2 = Curve( be2['wxmean'], poly2(be2['wxmean']), color='red')
             plt.add(ps1,ps2)
 
-            polyf = self.plotfile(field, rmag_max, plot_type=plot_type)
-            polyf=polyf.replace('.eps','-polyfit.yaml')
+            polyf = self.R_polyfile(self.camcol, rmag_max)
             out={'coeff_e1':list([float(c) for c in coeff1]),
                  'coeff_e2':list([float(c) for c in coeff2])}
             print("    -- Writing poly coeffs to:",polyf)
@@ -324,20 +338,132 @@ class Tester(dict):
 
         converter.convert(epsfile, verbose=True)
 
-       
-    def polyfile(self, field, rmag_max, plot_type='meane'):
-        polyf = self.plotfile(field, rmag_max, plot_type=plot_type)
-        polyf=polyf.replace('.eps','-polyfit.yaml')
-        return polyf
+    def detrend(self, rmag_min, rmag_max):
+        """
+        Use the polynomial fit to <e1,2> vs R to detrend
+        the data
+        """
+
+        band=self.band
+        c = self.open_columns()
+
+        cols=['R_rg','e1_rg','e2_rg','amflags_rg', 'e1_psf','e2_psf','uncer_rg']
+        cols = [col+'_'+band for c in cols]
+        cols += ['camcol','cmodelmag_dered_r']
+
+        print("Reading columns:")
+        pprint.pprint(cols)
+        data = c.read_columns(cols)
+        
+        dtflag=numpy.zeros(data.size,dtype='u1')
+        e1dt=numpy.zeros(data.size,dtype='f8') - 9999.
+        e2dt=numpy.zeros(data.size,dtype='f8') - 9999.
+
+        for camcol in [1,2,3,4,5,6]:
+            print("camcol:",camcol)
+            pfile=self.R_polyfile(camcol, rmag_max)
+            print("    ",pfile)
+            d=eu.io.read(pfile)
+            poly_e1=numpy.poly1d(d['coeff_e1'])
+            poly_e2=numpy.poly1d(d['coeff_e2'])
+
+            # this is the same logic as in
+            # Tester.plot_vs_field
+            print("    getting logic")
+            w = where1((data['camcol'] == camcol)
+                       & (data['R_rg_'+band] > 1.0/3.0)
+                       & (data['R_rg_'+band] < 1.0)
+                       & (data['amflags_rg_'+band] == 0)
+                       & (data['e1_rg_'+band] < 4)
+                       & (data['e1_rg_'+band] > -4)
+                       & (data['cmodelmag_dered_r'] > rmag_min)
+                       & (data['cmodelmag_dered_r'] < rmag_max) )
+            print("    de-trending")
+            Rsub = data['R_rg_'+band][w]
+            trend1 = poly_e1(Rsub)
+            e1dt[w] = data['e1_rg_'+band][w] - trend1
+            del trend1
+            trend2 = poly_e2(Rsub)
+            e2dt[w] = data['e2_rg_'+band][w] - trend2
+
+            dtflag[w] = 1
+
+            self.plot_detrend(data,e1dt,e2dt,w,camcol,rmag_max,
+                              poly_e1,poly_e2)
+
+        
+        e1name='e1_rg_dt_'+band
+        e2name='e2_rg_dt_'+band
+        dtflagname='dtflag_'+band
+        print("writing:",e1name)
+        c.write_column(e1name, e1dt, create=True)
+        print("writing:",e2name)
+        c.write_column(e2name, e2dt, create=True)
+        print("writing:",dtflagname)
+        c.write_column(dtflagname, use, create=True)
+
+    def plot_detrend(self, data, e1dt, e2dt, w, camcol, rmag_max, 
+                     coeffs):
+        """
+        Make a table of plots.  
+        """
+        band=self.band
+        d=self.plotdir()
+        f = 'rg-%(run)s%(band)s-meane-vs-R-%(rmag_max)0.2f-%(camcol)s-detrend.eps'
+        f = f % {'run':self.procrun,'band':self.band,
+                 'rmag_max':rmag_max,'camcol':camcol}
+
+        weights = 1.0/(0.32**2 + data['uncer'][w]**2)
+        nperbin = 200000
+
+        # trends vs R
+        ymin = -0.03
+        ymax =  0.06
+        pe1,pe2,ph,t1,t2 = self.make_plot_components(data['R_rg_'+band][w],
+                                                     data['e1_rg_'+band][w], 
+                                                     data['e2_rg_'+band][w], 
+                                                     weights, nperbin, ymin, ymax,
+                                                     fmin=0.29,fmax=1.01,
+                                                     coeffs=coeffs)
+
+        pe1dt,pe2dt,phdt = self.make_plot_components(data['R_rg_'+band][w],
+                                                     e1dt[w], 
+                                                     e2dt[w], 
+                                                     weights, nperbin, ymin, ymax,
+                                                     fmin=0.29,fmax=1.01)
+
+
+        # one column for each type (R,e1psf,e2psf)
+        tab=Table(1,3)
+
+        # one row for before and after detrend
+        a=FramedArray(2,1)
+        a.uniform_limits=0
+
+        a[0,0].add( pe1, pe2, ph, t1, t2)
+        a[1,0].add( pe1dt, pe2dt, phdt)
+
+        a.show()
+        tab[0,0] = a
+        tab.show()
+
+
+    def R_polyfile(self, camcol, rmag_max):
+
+        f = 'rg-%(run)s%(band)s-meane-vs-R-%(rmag_max)0.2f-%(camcol)s-polyfit.yaml'
+        f = f % {'run':self.procrun,'band':self.band,
+                 'rmag_max':rmag_max,'camcol':camcol}
+        return f
 
     def plotfile(self, field, rmag_max, plot_type='meane'):
+        camcol=self.camcol
         f = 'rg-%(run)s%(band)s-%(type)s-vs-%(field)s-%(rmag_max)0.2f'
         f = f % {'run':self.procrun,'band':self.band,'type':plot_type,
                  'field':field,'rmag_max':rmag_max}
         if self.run != 'any':
             f += '-%06i' % self.run
-        if self.camcol != 'any':
-            f += '-%i' % self.camcol
+        if camcol != 'any':
+            f += '-%i' % camcol
         f += '.eps'
         d=self.plotdir()
         f=path_join(d,f)
@@ -352,6 +478,52 @@ class Tester(dict):
             #d = path_join(d,'%i' % self.camcol)
             d = path_join(d,'bycamcol')
         return d
+
+
+    def make_plot_components(self, fdata, e1, e2, weights, nperbin, 
+                             ymin,ymax,
+                             fmin=None, fmax=None,
+                             coeffs=None):
+        be1 = eu.stat.Binner(fdata, e1, weights=weights)
+        be2 = eu.stat.Binner(fdata, e2, weights=weights)
+
+        print("  hist  e1, nperbin: ",nperbin)
+        be1.dohist(nperbin=nperbin, min=fmin, max=fmax)
+        print("  stats e1")
+        be1.calc_stats()
+        print("  hist  e2, nperbin: ",nperbin)
+        be2.dohist(nperbin=nperbin, min=fmin, max=fmax)
+        print("  stats e2")
+        be2.calc_stats()
+
+        # regular hist for display
+        print("  regular fixed binsize hist")
+        xm,xe,xstd=eu.stat.wmom(fdata, weights, sdev=True)
+        bsize = xstd/5.
+        hist = eu.stat.histogram(fdata, binsize=bsize, 
+                                 weights=weights, more=True)
+
+        ph = eu.plotting.make_hist_curve(hist['low'], hist['high'], hist['whist'], 
+                                         ymin=ymin, ymax=ymax, color='grey50')
+
+        p1 = Points( be1['wxmean'], be1['wymean'], 
+                    type='filled circle', color='blue')
+        p1err = SymErrY( be1['wxmean'], be1['wymean'], be1['wyerr2'], color='blue')
+        p1.label = r'$e_1$'
+
+        p2 = Points( be2['wxmean'], be2['wymean'], 
+                    type='filled circle', color='red')
+        p2.label = r'$e_2$'
+        p2err = SymErrY( be2['wxmean'], be2['wymean'], be2['wyerr2'], color='red')
+
+        if coeffs is not None:
+            poly1=numpy.poly1d(coeffs['coeff_e1'])
+            poly2=numpy.poly1d(coeffs['coeff_e2'])
+            t1 = Curve( be1['wxmean'], poly1(be1['wxmean']), color='blue')
+            t2 = Curve( be2['wxmean'], poly2(be2['wxmean']), color='red')
+            return p1,p2,ph,t1,t2
+        else:
+            return p1,p2,ph
 
 
 def smooth(x, window_len=10, window='hanning'):
