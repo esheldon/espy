@@ -20,7 +20,7 @@ from esutil.ostools import path_join, expand_path
 import biggles
 from biggles import FramedPlot, PlotKey, Table, PlotLabel, Points, \
         SymmetricErrorBarsY as SymErrY, SymmetricErrorBarsX as SymErrX, \
-        Curve,FramedArray,Table
+        Curve,FramedArray
 
 import pprint
 
@@ -338,17 +338,18 @@ class Tester(dict):
 
         converter.convert(epsfile, verbose=True)
 
-    def detrend(self, rmag_min, rmag_max):
+    def detrend(self, rmag_min, rmag_max, show=False):
         """
         Use the polynomial fit to <e1,2> vs R to detrend
         the data
         """
 
+        biggles.configure('fontsize_min', 1)
         band=self.band
         c = self.open_columns()
 
         cols=['R_rg','e1_rg','e2_rg','amflags_rg', 'e1_psf','e2_psf','uncer_rg']
-        cols = [col+'_'+band for c in cols]
+        cols = [col+'_'+band for col in cols]
         cols += ['camcol','cmodelmag_dered_r']
 
         print("Reading columns:")
@@ -363,9 +364,9 @@ class Tester(dict):
             print("camcol:",camcol)
             pfile=self.R_polyfile(camcol, rmag_max)
             print("    ",pfile)
-            d=eu.io.read(pfile)
-            poly_e1=numpy.poly1d(d['coeff_e1'])
-            poly_e2=numpy.poly1d(d['coeff_e2'])
+            coeffs=eu.io.read(pfile)
+            poly_e1=numpy.poly1d(coeffs['coeff_e1'])
+            poly_e2=numpy.poly1d(coeffs['coeff_e2'])
 
             # this is the same logic as in
             # Tester.plot_vs_field
@@ -388,22 +389,24 @@ class Tester(dict):
 
             dtflag[w] = 1
 
-            self.plot_detrend(data,e1dt,e2dt,w,camcol,rmag_max,
-                              poly_e1,poly_e2)
+            self.plot_detrend(data,e1dt,e2dt,w,camcol,rmag_min,rmag_max,
+                              coeffs, show=show)
 
         
-        e1name='e1_rg_dt_'+band
-        e2name='e2_rg_dt_'+band
-        dtflagname='dtflag_'+band
+        ls='%0.2f' % rmag_max
+        ls = ls.replace('.','')
+        e1name='e1_rg_dt'+ls+'_'+band
+        e2name='e2_rg_dt'+ls+'_'+band
+        dtflagname='dt'+ls+'_flag_'+band
         print("writing:",e1name)
         c.write_column(e1name, e1dt, create=True)
         print("writing:",e2name)
         c.write_column(e2name, e2dt, create=True)
         print("writing:",dtflagname)
-        c.write_column(dtflagname, use, create=True)
+        c.write_column(dtflagname, dtflag, create=True)
 
-    def plot_detrend(self, data, e1dt, e2dt, w, camcol, rmag_max, 
-                     coeffs):
+    def plot_detrend(self, data, e1dt, e2dt, w, camcol, rmag_min, rmag_max, 
+                     coeffs, show=False):
         """
         Make a table of plots.  
         """
@@ -412,47 +415,171 @@ class Tester(dict):
         f = 'rg-%(run)s%(band)s-meane-vs-R-%(rmag_max)0.2f-%(camcol)s-detrend.eps'
         f = f % {'run':self.procrun,'band':self.band,
                  'rmag_max':rmag_max,'camcol':camcol}
-
-        weights = 1.0/(0.32**2 + data['uncer'][w]**2)
-        nperbin = 200000
-
-        # trends vs R
-        ymin = -0.03
-        ymax =  0.06
-        pe1,pe2,ph,t1,t2 = self.make_plot_components(data['R_rg_'+band][w],
-                                                     data['e1_rg_'+band][w], 
-                                                     data['e2_rg_'+band][w], 
-                                                     weights, nperbin, ymin, ymax,
-                                                     fmin=0.29,fmax=1.01,
-                                                     coeffs=coeffs)
-
-        pe1dt,pe2dt,phdt = self.make_plot_components(data['R_rg_'+band][w],
-                                                     e1dt[w], 
-                                                     e2dt[w], 
-                                                     weights, nperbin, ymin, ymax,
-                                                     fmin=0.29,fmax=1.01)
-
+        epsfile=path_join(d,'bycamcol',f)
 
         # one column for each type (R,e1psf,e2psf)
         tab=Table(1,3)
+        gratio=1.61803399
+        #tab.aspect_ratio = 1/gratio
+        tab.aspect_ratio = 1./2.
+
+        weights = 1.0/(0.32**2 + data['uncer_rg_'+band][w]**2)
+        nperbin = 200000
+
+        # trends vs R
+        print("\n* R")
+        xmin=0.29
+        xmax=1.01
+        if band=='r':
+            ymin = -0.03
+            ymax =  0.03
+        else:
+            ymin = -0.03
+            ymax =  0.06
+        pe1,pe1err,pe2,pe2err,ph,t1,t2 = \
+            self.make_plot_components(data['R_rg_'+band][w],
+                                      data['e1_rg_'+band][w], 
+                                      data['e2_rg_'+band][w], 
+                                      weights, nperbin, ymin, ymax,
+                                      fmin=xmin,fmax=xmax,
+                                      coeffs=coeffs)
+
+        pe1dt,pe1dterr,pe2dt,pe2dterr,phdt = \
+            self.make_plot_components(data['R_rg_'+band][w],
+                                      e1dt[w], 
+                                      e2dt[w], 
+                                      weights, nperbin, ymin, ymax,
+                                      fmin=xmin,fmax=xmax)
+
+
 
         # one row for before and after detrend
-        a=FramedArray(2,1)
-        a.uniform_limits=0
+        Ra=FramedArray(2,1)
+        Ra.xrange = [xmin,xmax]
+        Ra.yrange = [ymin,ymax]
+        Ra.xlabel = 'R'
+        Ra.ylabel = '<e>'
 
-        a[0,0].add( pe1, pe2, ph, t1, t2)
-        a[1,0].add( pe1dt, pe2dt, phdt)
+        rmag_lab = \
+            PlotLabel(0.1,0.07,'%0.2f < rmag < %0.2f' % (rmag_min,rmag_max), 
+                      halign='left')
+        cflab = PlotLabel(0.1,0.15,
+                          'camcol: %s filter: %s' % (camcol, self.band), 
+                          halign='left')
 
-        a.show()
-        tab[0,0] = a
-        tab.show()
+        key = PlotKey(0.1,0.9, [pe1,pe2])
+        keydt = PlotKey(0.1,0.9, [pe1dt,pe2dt])
+        Rz=Curve([xmin,xmax],[0,0])
+        Ra[0,0].add( Rz,pe1,pe1err,pe2,pe2err,ph,t1,t2,key)
+        Ra[1,0].add( Rz,pe1dt,pe1dterr,pe2dt,pe2dterr,phdt,keydt,rmag_lab,cflab)
 
+        if show:
+            Ra.show()
+        tab[0,0] = Ra
+
+        # trends vs e1 psf
+        print("\n* e1_psf")
+        xmin = -0.275
+        xmax =  0.275
+        #ymin = -0.015
+        #ymax =  0.015
+
+        pe1psf_e1,pe1psf_e1err,pe1psf_e2,pe1psf_e2err,pe1psf_ph = \
+                self.make_plot_components(data['e1_psf_'+band][w],
+                                          data['e1_rg_'+band][w], 
+                                          data['e2_rg_'+band][w], 
+                                          weights, nperbin, ymin, ymax,
+                                          fmin=xmin,fmax=xmax)
+
+        pe1psf_e1_dt,pe1psf_e1_dterr,pe1psf_e2_dt,pe1psf_e2_dterr,pe1psf_ph_dt = \
+                self.make_plot_components(data['e1_psf_'+band][w],
+                                          e1dt[w], 
+                                          e2dt[w], 
+                                          weights, nperbin, ymin, ymax,
+                                          fmin=xmin,fmax=xmax)
+
+
+
+        # one row for before and after detrend
+        e1psf_a=FramedArray(2,1)
+        e1psf_a.xrange = [xmin,xmax]
+        e1psf_a.yrange = [ymin,ymax]
+        e1psf_a.xlabel = r'$e1_{PSF}$'
+        #e1psf_a.ylabel = '<e>'
+
+        e1psf_key = PlotKey(0.1,0.9, [pe1psf_e1,pe1psf_e2])
+        e1psf_keydt = PlotKey(0.1,0.9, [pe1psf_e1_dt,pe1psf_e2_dt])
+        e1psf_z=Curve([xmin,xmax],[0,0])
+        e1psf_a[0,0].add(e1psf_z, 
+                         pe1psf_e1,pe1psf_e1err, 
+                         pe1psf_e2, pe1psf_e2err,
+                         pe1psf_ph, e1psf_key)
+        e1psf_a[1,0].add(e1psf_z, 
+                         pe1psf_e1_dt, pe1psf_e1_dterr,
+                         pe1psf_e2_dt, pe1psf_e2_dterr,
+                         pe1psf_ph_dt, 
+                         e1psf_keydt)
+
+        if show:
+            e1psf_a.show()
+        tab[0,1] = e1psf_a
+
+
+        # trends vs e2 psf
+        print("\n* e2_psf")
+        pe2psf_e1,pe2psf_e1err,pe2psf_e2,pe2psf_e2err,pe2psf_ph = \
+                self.make_plot_components(data['e2_psf_'+band][w],
+                                          data['e1_rg_'+band][w], 
+                                          data['e2_rg_'+band][w], 
+                                          weights, nperbin, ymin, ymax,
+                                          fmin=xmin,fmax=xmax)
+
+        pe2psf_e1_dt,pe2psf_e1_dterr,pe2psf_e2_dt,pe2psf_e2_dterr,pe2psf_ph_dt = \
+                self.make_plot_components(data['e2_psf_'+band][w],
+                                          e1dt[w], 
+                                          e2dt[w], 
+                                          weights, nperbin, ymin, ymax,
+                                          fmin=xmin,fmax=xmax)
+
+
+
+        # one row for before and after detrend
+        e2psf_a=FramedArray(2,1)
+        e2psf_a.xrange = [xmin,xmax]
+        e2psf_a.yrange = [ymin,ymax]
+        e2psf_a.xlabel = r'$e2_{PSF}$'
+        #e2psf_a.ylabel = '<e>'
+
+        e2psf_key = PlotKey(0.1,0.9, [pe2psf_e1,pe2psf_e2])
+        e2psf_keydt = PlotKey(0.1,0.9, [pe2psf_e1_dt,pe2psf_e2_dt])
+        e2psf_z=Curve([xmin,xmax],[0,0])
+        e2psf_a[0,0].add(e2psf_z, 
+                         pe2psf_e1, pe2psf_e1err,
+                         pe2psf_e2, pe2psf_e2err,
+                         pe2psf_ph, e2psf_key)
+        e2psf_a[1,0].add(e2psf_z, 
+                         pe2psf_e1_dt, pe2psf_e1_dterr,
+                         pe2psf_e2_dt, pe2psf_e2_dterr,
+                         pe2psf_ph_dt, 
+                         e2psf_keydt)
+
+        if show:
+            e2psf_a.show()
+        tab[0,2] = e2psf_a
+
+        if show:
+            tab.show()
+
+        tab.write_eps(epsfile)
+        converter.convert(epsfile, dpi=150, verbose=True)
 
     def R_polyfile(self, camcol, rmag_max):
 
         f = 'rg-%(run)s%(band)s-meane-vs-R-%(rmag_max)0.2f-%(camcol)s-polyfit.yaml'
         f = f % {'run':self.procrun,'band':self.band,
                  'rmag_max':rmag_max,'camcol':camcol}
+        d=self.plotdir()
+        f=path_join(d,'bycamcol',f)
         return f
 
     def plotfile(self, field, rmag_max, plot_type='meane'):
@@ -521,9 +648,9 @@ class Tester(dict):
             poly2=numpy.poly1d(coeffs['coeff_e2'])
             t1 = Curve( be1['wxmean'], poly1(be1['wxmean']), color='blue')
             t2 = Curve( be2['wxmean'], poly2(be2['wxmean']), color='red')
-            return p1,p2,ph,t1,t2
+            return p1,p1err,p2,p2err,ph,t1,t2
         else:
-            return p1,p2,ph
+            return p1,p1err,p2,p2err,ph
 
 
 def smooth(x, window_len=10, window='hanning'):
