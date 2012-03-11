@@ -18,22 +18,20 @@ import copy
 
 import zphot
 
-def instantiate_sample(sample, ascii=False):
+def instantiate_sample(sample):
     conf = lensing.files.read_config('scat', sample)
     if 'dr8regauss' in conf['catalog']:
-        c = DR8Catalog(sample, ascii=ascii)
+        c = DR8Catalog(sample)
     else:
         c = DESMockSrcCatalog(sample)
     return c
 
-def create_input(sample, ascii=False):
+def create_input(sample):
     """
         create_input('01')
     """
-    c = instantiate_sample(sample, ascii=ascii)
+    c = instantiate_sample(sample)
     c.create_objshear_input()
-    c.split()
-
 
 def original_file(sample):
     c = instantiate_sample(sample)
@@ -55,14 +53,13 @@ class DR8Catalog(dict):
     (or /bin/add-scinv.py before /bin/make-objshear-input.py)
 
     """
-    def __init__(self, sample, ascii=False):
-        if ascii:
-            print('Writing ascii files')
-        self['ascii']=ascii
+    def __init__(self, sample, fs='hdfs'):
         conf = lensing.files.read_config('scat', sample)
         for k in conf:
             self[k] = conf[k]
 
+        #if not self['detrend']:
+        #    raise ValueError("expected detrend")
         if 'dr8regauss' not in self['catalog']:
             raise ValueError("Expected dr8regauss as catalog")
         if self['sigmacrit_style'] != 2:
@@ -70,10 +67,32 @@ class DR8Catalog(dict):
 
         self.open_all_columns()
 
+    def get_colnames(self):
+        if self['detrend']:
+            rmstr='%0.1f' % self['rmag_max']
+            rmstr = rmstr.replace('.','')
+            e1name = 'e1_rg_dt'+rmstr+'_eq'
+            e2name = 'e2_rg_dt'+rmstr+'_eq'
+            flagname = 'dt'+rmstr+'_flag'
+        else:
+            e1name = 'e1_rg_eq'
+            e2name = 'e2_rg_eq'
+            flagname = 'corrflags_rg'
+
+        e1name += '_'+self['filter']
+        e2name += '_'+self['filter']
+        errname = 'uncer_rg_'+self['filter']
+        flagname += '_'+self['filter']
+        return e1name,e2name,errname,flagname
+    
+    def scinv_colname(self):
+        return 'scinv%s' % self['sample']
 
     def create_objshear_input(self):
         filter=self['filter']
-        zlvals=lensing.sigmacrit.make_zlvals(self['dzl'], self['zlmin'], self['zlmax'])
+        zlvals=lensing.sigmacrit.make_zlvals(self['dzl'], 
+                                             self['zlmin'], 
+                                             self['zlmax'])
         nzl = zlvals.size
 
         keep,zphot_matches = self.select()
@@ -87,41 +106,37 @@ class DR8Catalog(dict):
         print("  reading ra,dec,g1,g2,err")
         output['ra'][:] = self.rgcols['ra'][keep]
         output['dec'][:] = self.rgcols['dec'][keep]
+
+        e1name,e2name,errname,flagname=self.get_colnames()
         # the code requires no minus sign for matt's simulations, but
         # does seem to require one for my shapes converted to equatorial
         print("Adding minus sign to e1")
-        output['g1'][:] = -self.rgcols['e1_rg_eq_'+filter][keep]/2
-        output['g2'][:] = self.rgcols['e2_rg_eq_'+filter][keep]/2
-        output['err'][:] = self.rgcols['uncer_rg_'+filter][keep]/2
+        print(e1name)
+        output['g1'][:] = -self.rgcols[e1name][keep]/2
+        print(e2name)
+        output['g2'][:] =  self.rgcols[e2name][keep]/2
+        output['err'][:] = self.rgcols[errname][keep]/2
 
-        scinv_colname = 'scinv%s' % self['sample']
-        print("  reading",scinv_colname)
-        output['scinv'][:] = self.rgcols[scinv_colname][keep]
+        scinvcol = self.scinv_colname()
+        print("  reading",scinvcol)
+        output['scinv'][:] = self.rgcols[scinvcol][keep]
         
-        if self['ascii']:
-            lensing.files.scat_write_ascii(self['sample'], output)
-        else:
-            lensing.files.scat_write(self['sample'], output)
-        #return output
+        #lensing.files.scat_write_ascii(self['sample'], output)
+        if self['nsplit'] > 0:
+            self.split(data=output)
 
-    def make_ascii(self):
-        data, zl = lensing.files.scat_read(self['sample'])
-        lensing.files.scat_write_ascii(self['sample'], data)
-
-
-    def split(self):
+    def split(self, data=None):
         """
         Split the source file into nsplit parts
         """
         
-
-        data = self.read()
-        if self['sigmacrit_style'] == 2:
-            data, zl = data
-
         nsplit = self['nsplit']
         if nsplit == 0:
             return
+
+        if data is None:
+            data = self.read()
+
 
         ntot = data.size
         nper = ntot/nsplit
@@ -135,16 +150,11 @@ class DR8Catalog(dict):
                 end += nleft
             sdata = data[beg:end]
 
-            if self['ascii']:
-                lensing.files.scat_write_ascii(self['sample'], sdata, split=i)
-            else:
-                lensing.files.scat_write(self['sample'], sdata, split=i)
+            lensing.files.scat_write_ascii(self['sample'], sdata, split=i)
 
 
-    def file(self, split=None):
-        return lensing.files.sample_file('scat', sample=self['sample'], split=split)
     def read(self, split=None):
-        return lensing.files.scat_read(sample=self['sample'], split=split)
+        return lensing.files.scat_read_ascii(self['sample'], split=split)
 
     def select(self):
         """
@@ -153,6 +163,12 @@ class DR8Catalog(dict):
         resolution cuts and selecting those with good photoz matches.
 
         """
+
+        scinvcol = self.scinv_colname()
+        if scinvcol not in self.rgcols:
+            raise ValueError("you need to run add-scinv for this sample")
+
+        # first make sure scinv column exists
 
         filter = self['filter']
 
@@ -164,8 +180,16 @@ class DR8Catalog(dict):
         m = self.rgcols[match_column][:]
         print("Reading R")
         R = self.rgcols['R_rg_'+filter][:]
-        print("Reading corrflags")
-        flags = self.rgcols['corrflags_rg_'+filter][:]
+
+
+        e1name,e2name,errname,flagname=self.get_colnames()
+        print("reading e1:",e1name)
+        e1 = self.rgcols[e1name][:]
+        print("reading e2:",e2name)
+        e2 = self.rgcols[e2name][:]
+
+        print("Reading corrflags:",flagname)
+        flags = self.rgcols[flagname][:]
 
 
         # note this is *not* in a where statement!
@@ -174,20 +198,32 @@ class DR8Catalog(dict):
         print("Found %s/%s zphot matches" % (wmatch.size, m.size))
         
 
+        # sample 5 didn't have range
         print("Getting R logic")
-        R_logic = R > self['Rcut']
+        Rrange = self.get('Rrange',[1.0/3.0,1.0])
+        R_logic = ((R > Rrange[0]) & (R < Rrange[1]))
         wR = where1(match_logic & R_logic)
-        print("R > %f: %i/%i" % (self['Rcut'], wR.size, wmatch.size))
+        print("R in %s: %i/%i" % (Rrange, wR.size, wmatch.size))
+
+        # sample 5 didn't have this cut
+        print("Getting erange logic")
+        erange = self.get('erange',[-4,4])
+        erange_logic = ((e1 > erange[0]) 
+                        & (e1 < erange[1])
+                        & (e2 > erange[0])
+                        & (e2 < erange[1]) )
+        we=where1(match_logic & erange_logic)
+        print("erange %s: %i/%i" % (erange,wR.size, wmatch.size))
 
 
         print("Getting flag logic")
-        flag_logic = flags == 0
+        flag_logic = (flags == 0)
         wflag = where1(match_logic & flag_logic)
-        print("corrflags_rg == 0: %i/%i" % (wflag.size, wmatch.size))
+        print("flags == 0: %i/%i" % (wflag.size, wmatch.size))
 
 
         # combined logic
-        wgood=where1(match_logic & R_logic & flag_logic)
+        wgood=where1(match_logic & R_logic & erange_logic & flag_logic)
 
         print("Found %s/%s good objects" % (wgood.size, m.size))
 
@@ -336,11 +372,8 @@ class DESMockSrcCatalog(dict):
 
         self['cosmo'] = lensing.files.read_config('cosmo',self['cosmo_sample'])
 
-    def file(self, split=None):
-        fname = lensing.files.sample_file('scat',self['sample'], split=split)
-        return fname
     def read(self, split=None):
-        return lensing.files.scat_read(self['sample'], split=split)
+        return lensing.files.scat_read_ascii(self['sample'], split=split)
 
     def add_scinv(self):
         from . import sigmacrit
@@ -402,7 +435,6 @@ class DESMockSrcCatalog(dict):
         eu.io.write(outf, out, header=h)
 
     def create_objshear_input(self):
-        outfile = self.file()
 
         print("sigmacrit_style:",self['sigmacrit_style'])
         if self['sigmacrit_style'] == 2:
@@ -432,23 +464,23 @@ class DESMockSrcCatalog(dict):
         else:
             output['scinv'] = data['scinv']
 
-        lensing.files.scat_write(self['sample'], output)
+        lensing.files.scat_write_ascii(self['sample'], output)
 
+        if self['nsplit'] > 0:
+            self.split(data=output)
 
-    def split(self):
+    def split(self, data=None):
         """
         Split the source file into nsplit parts
         """
         
-
-        data = self.read()
-        if self['sigmacrit_style'] == 2:
-            data, zl = data
-
-        fname=self.file()
         nsplit = self['nsplit']
         if nsplit == 0:
             return
+
+        data = self.read()
+
+        fname=self.file()
 
         ntot = data.size
         nper = ntot/nsplit
@@ -462,7 +494,7 @@ class DESMockSrcCatalog(dict):
                 end += nleft
             sdata = data[beg:end]
 
-            lensing.files.scat_write(self['sample'], sdata, split=i)
+            lensing.files.scat_write_ascii(self['sample'], sdata, split=i)
 
 
 

@@ -942,7 +942,10 @@ class Collator:
         return e1,e2
 
 
-    def add_rotated_e1e2(self, filters=['u','g','r','i','z'], system='eq'):
+    def add_rotated_e1e2(self, filters=['u','g','r','i','z'], 
+                         system='eq', 
+                         detrend=False,
+                         rmag_max=21.8):
         from . import rotation
         rotator = rotation.SDSSRotator(system)
         c=self.open_columns()
@@ -952,9 +955,18 @@ class Collator:
         fields  = c['field'][:]
 
         if self.sweeptype == 'gal':
-            e1name = 'e1_rg'
-            e2name = 'e2_rg'
-            flagname = 'corrflags_rg'
+            if detrend:
+                rmstr='%0.1f' % rmag_max
+                rmstr = rmstr.replace('.','')
+                e1name = 'e1_rg_dt'+rmstr
+                e2name = 'e2_rg_dt'+rmstr
+                flagname = 'dt'+rmstr+'_flag'
+                rotname='rot_dt'+rmstr
+            else:
+                e1name = 'e1_rg'
+                e2name = 'e2_rg'
+                flagname = 'corrflags_rg'
+                rotname='rot'
         else:
             e1name = 'e1'
             e2name = 'e2'
@@ -965,7 +977,7 @@ class Collator:
 
             e1col=e1name + '_'+system+'_'+filter
             e2col=e2name + '_'+system+'_'+filter
-            rotcol='rot_'+system+'_'+filter
+            rotcol=rotname+'_'+system+'_'+filter
 
             print("  Reading flags,e1,e2")
 

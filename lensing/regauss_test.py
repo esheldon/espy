@@ -97,7 +97,7 @@ class Tester(dict):
                 fdict={}
                 if self.sweeptype == 'gal':
                     fdict = {'R_rg':'R',
-                             'amflags_rg':'amflags',
+                             'corrflags_rg':'amflags',
                              'e1_rg':'e1',
                              'e2_rg':'e2',
                              'uncer_rg':'uncer'}
@@ -179,7 +179,7 @@ class Tester(dict):
 
         print("Using rmag range: [%0.2f,%0.2f]" % (rmag_min,rmag_max))
         # notes 
-        #  - amflags here is really rg for gals
+        #  - amflags here is really corrflags_rg for gals
         #  - e1 is really e1_rg for gals
         logic = ((self['amflags'] == 0)
                  & (self['e1'] < 4)
@@ -287,7 +287,7 @@ class Tester(dict):
         key = PlotKey(0.1,0.9, [p1,p2])
         plt.add(p1, p1err, p2, p2err, key)
 
-        if field == 'R' and plot_type=='meane':
+        if self.camcol != 'any' and field == 'R' and plot_type=='meane':
             order=3
             print("  getting poly order",order)
             coeff1 = numpy.polyfit(be1['wxmean'], be1['wymean'], order)
@@ -348,7 +348,7 @@ class Tester(dict):
         band=self.band
         c = self.open_columns()
 
-        cols=['R_rg','e1_rg','e2_rg','amflags_rg', 'e1_psf','e2_psf','uncer_rg']
+        cols=['R_rg','e1_rg','e2_rg','corrflags_rg', 'e1_psf','e2_psf','uncer_rg']
         cols = [col+'_'+band for col in cols]
         cols += ['camcol','cmodelmag_dered_r']
 
@@ -356,7 +356,7 @@ class Tester(dict):
         pprint.pprint(cols)
         data = c.read_columns(cols)
         
-        dtflag=numpy.zeros(data.size,dtype='u1')
+        dtflag=numpy.ones(data.size,dtype='u1')
         e1dt=numpy.zeros(data.size,dtype='f8') - 9999.
         e2dt=numpy.zeros(data.size,dtype='f8') - 9999.
 
@@ -374,7 +374,7 @@ class Tester(dict):
             w = where1((data['camcol'] == camcol)
                        & (data['R_rg_'+band] > 1.0/3.0)
                        & (data['R_rg_'+band] < 1.0)
-                       & (data['amflags_rg_'+band] == 0)
+                       & (data['corrflags_rg_'+band] == 0)
                        & (data['e1_rg_'+band] < 4)
                        & (data['e1_rg_'+band] > -4)
                        & (data['cmodelmag_dered_r'] > rmag_min)
@@ -387,13 +387,13 @@ class Tester(dict):
             trend2 = poly_e2(Rsub)
             e2dt[w] = data['e2_rg_'+band][w] - trend2
 
-            dtflag[w] = 1
+            dtflag[w] = 0
 
             self.plot_detrend(data,e1dt,e2dt,w,camcol,rmag_min,rmag_max,
                               coeffs, show=show)
 
         
-        ls='%0.2f' % rmag_max
+        ls='%0.1f' % rmag_max
         ls = ls.replace('.','')
         e1name='e1_rg_dt'+ls+'_'+band
         e2name='e2_rg_dt'+ls+'_'+band
@@ -584,15 +584,17 @@ class Tester(dict):
 
     def plotfile(self, field, rmag_max, plot_type='meane'):
         camcol=self.camcol
+        d=self.plotdir()
+
         f = 'rg-%(run)s%(band)s-%(type)s-vs-%(field)s-%(rmag_max)0.2f'
         f = f % {'run':self.procrun,'band':self.band,'type':plot_type,
                  'field':field,'rmag_max':rmag_max}
         if self.run != 'any':
             f += '-%06i' % self.run
         if camcol != 'any':
+            d = path_join(d,'bycamcol')
             f += '-%i' % camcol
         f += '.eps'
-        d=self.plotdir()
         f=path_join(d,f)
         return f
 
@@ -601,9 +603,8 @@ class Tester(dict):
         d=path_join(d,'regauss-tests',self.procrun)
         if self.run != 'any':
             d = path_join(d,'%06i' % self.run)
-        if self.camcol != 'any':
-            #d = path_join(d,'%i' % self.camcol)
-            d = path_join(d,'bycamcol')
+        #if self.camcol != 'any':
+        #    d = path_join(d,'bycamcol')
         return d
 
 

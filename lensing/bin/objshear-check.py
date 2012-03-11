@@ -3,6 +3,8 @@
 
 Description:
     Check all expected outputs exist for the input run
+
+    Also verified they have the same number of lines (nlens)
 """
 import sys
 from sys import stderr
@@ -49,6 +51,6 @@ for split in xrange(nsplit):
             nlines_expected = nlines
 
         if nlines != nlines_expected:
-            print >>stderr,'\nfound file with different line count:',f
+            print >>stderr,'\nfound file with different line count:',f,"(%s/%s)" % (nlines,nlines_expected)
 
 print '\ndone'

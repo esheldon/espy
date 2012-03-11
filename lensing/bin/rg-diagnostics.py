@@ -117,13 +117,11 @@ def main():
             yrng = [-0.004,0.004]
         else:
             if runs[0] == 'any':
-                yrng=[-0.03,0.06]
-                """
                 if filter == 'r':
-                    yrng=[-0.03,0.03]
+                    #yrng=[-0.03,0.03]
+                    yrng=[-0.03,0.06]
                 else:
                     yrng=[-0.03,0.06]
-                """
             else:
                 yrng = [-0.02,0.02]
     else:

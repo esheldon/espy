@@ -31,7 +31,7 @@ exists.
     /bin/plot-dsig-byrun.py -t binned rm03s06 lambda 12
 
     #
-    # now randoms with run r03s06s06
+    # now randoms with run r03s06
     #
 
     # generation of randoms is slow, so do it in chunks, here 100
@@ -49,7 +49,10 @@ exists.
 
     # submit and reduce the results as for lenses above
 
+    #
     # match randoms to the lens bins
+    #
+
     /bin/match-randoms.py -t lambda -n 12 rm03s06 r03s06
 
     # correct from randoms

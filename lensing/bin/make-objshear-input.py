@@ -30,6 +30,7 @@ if len(args) < 2:
 type = args[0]
 sample = args[1]
 if type == 'scat':
+    # this will also run split() on the sample
     lensing.scat.create_input(sample)
 elif type == 'lcat':
     if options.nrand is not None:
