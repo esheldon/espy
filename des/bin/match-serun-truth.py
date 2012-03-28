@@ -94,6 +94,16 @@ def make_match_column(run, mock_catalog):
     print >>stderr,'writing column:',colname
     c.write_column(colname, coldata, create=True)
 
+    cname=c[colname].filename
+    d=os.path.dirname(cname)
+    d=os.path.dirname(d)
+    fitsf=os.path.basename(cname)
+    fitsf=fitsf.replace('.col','.fits')
+    fitsf=os.path.join(d,run+'-fits',fitsf)
+    print >>stderr,'writing fits:',fitsf
+    eu.io.write(fitsf,coldata,clobber=True)
+
+
 def main():
     options,args = parser.parse_args(sys.argv[1:])
 
