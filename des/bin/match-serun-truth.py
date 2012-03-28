@@ -86,12 +86,10 @@ def make_match_column(run, mock_catalog):
     matches=rf.read()
 
     c=des.collate.open_columns(run)
-    coldata=-9999+numpy.zeros(c['ra'].size)
+    coldata=-9999+numpy.zeros(c['ra'].size,dtype='i8')
     coldata[matches['seid']] = matches['mockid']
 
-    colname = 'match_%s' % mock_catalog
-    colname = colname.replace('.','_')
-    colname = colname.replace('-','_')
+    colname = des.compare_truth.match_colname(mock_catalog)
 
     print >>stderr,'writing column:',colname
     c.write_column(colname, coldata, create=True)
