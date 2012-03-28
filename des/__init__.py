@@ -7,3 +7,5 @@ from . import archive
 from . import flags
 
 from . import wqutil
+
+from . import compare_truth

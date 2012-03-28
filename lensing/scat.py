@@ -349,11 +349,38 @@ class DR8Catalog(dict):
         print("  #rows:",self.pzcols['photoid'].size)
 
 
+class DESMockCatalog(dict):
+    """
+    This is just for reading the original catalog
+    """
+    def __init__(self, catalog):
+        self['catalog'] = catalog
+
+    def dir(self):
+        catdir = lensing.files.catalog_dir()
+        d = path_join(catdir, self['catalog'])
+        return d
+
+    def fname(self, scinv=False):
+        d = self.dir()
+        f='%s-sources.fits' % self['catalog']
+        if scinv:
+            f=f.replace('sources','sources-scinv')
+        infile = path_join(d, f)
+        return infile
+
+    def read(self, scinv=False):
+        infile = self.fname(scinv=scinv)
+        if not os.path.exists(infile):
+            raise ValueError("File not found: %s\n" % infile)
+
+        data = eu.io.read(infile, lower=True, verbose=True)
+        return data
+
 class DESMockSrcCatalog(dict):
     """
     This reads the mock catalog and creates an input
     catalog for objshear
-
 
     Need to have config files that tell us what kind
     of sigma crit inv we are using.
@@ -364,7 +391,7 @@ class DESMockSrcCatalog(dict):
         for k in conf:
             self[k] = conf[k]
 
-        if self['catalog'] not in ['desmocks-2.13o-f8']:
+        if self['catalog'] not in ['desmocks-2.13o-f8','desmocks-3.02']:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
         if self['sample'] != sample:
@@ -497,28 +524,13 @@ class DESMockSrcCatalog(dict):
             lensing.files.scat_write_ascii(self['sample'], sdata, split=i)
 
 
-
-
-    def original_dir(self):
-        catdir = lensing.files.catalog_dir()
-        d = path_join(catdir, self['catalog'])
-        return d
-
     def original_file(self, scinv=False):
-        d = self.original_dir()
-        f='%s-sources.rec' % self['catalog']
-        if scinv:
-            f=f.replace('sources','sources-scinv')
-        infile = path_join(d, f)
-        return infile
+        dmc=DESMockCatalog(self['catalog'])
+        return dmc.fname(scinv=scinv)
 
     def read_original(self, scinv=False):
-        infile = self.original_file(scinv=scinv)
-        if not os.path.exists(infile):
-            raise ValueError("File not found: %s\n" % infile)
-
-        data = eu.io.read(infile, lower=True, verbose=True)
-        return data
+        dmc=DESMockCatalog(self['catalog'])
+        return dmc.read(scinv=scinv)
 
     def output_array(self, num, nzl=None):
         dt = lensing.files.scat_dtype(self['sigmacrit_style'], nzl=nzl)
