@@ -52,9 +52,9 @@ def plot2dsig(r1, dsig1, dsig1err, r2, dsig2, dsig2err, **keys):
 
     color2 = 'red'
     ptype1='filled circle'
-    size1=1
+    size1=2
     ptype2='filled circle'
-    size2=1
+    size2=2
 
     show = keys.get('show',True)
     yrange1 = keys.get('yrange1',None)

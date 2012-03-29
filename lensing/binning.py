@@ -195,7 +195,8 @@ class BinnerBase(dict):
                                  yrange=yrnge,
                                  xlog=True,ylog=True,
                                  show=False, 
-                                 plt=pa[row,col])
+                                 plt=pa[row,col],
+                                 size=2)
             label = self.bin_label(i)
             pl = PlotLabel(.85, .85, label, halign='right')
 
@@ -284,7 +285,8 @@ class BinnerBase(dict):
                                  yrange=yrnge,
                                  xlog=True,ylog=False,
                                  show=False, 
-                                 plt=pa[row,col])
+                                 plt=pa[row,col],
+                                 size=2)
             label = self.bin_label(i)
             pl = PlotLabel(.85, .85, label, halign='right')
 
@@ -305,6 +307,128 @@ class BinnerBase(dict):
         stdout.write("Plotting to file: %s\n" % epsfile)
         pa.write_eps(epsfile)
         converter.convert(epsfile, dpi=120, verbose=True)
+
+    def plot_dsig_2runs(self, run1, run2, type, show=False):
+        """
+
+        Make an array of plots with each plot a bin in one variable.  
+        Overplot a second run.
+        
+        It is expected that methods like self.bin_label() are meaningfully
+        over-ridden
+
+        parameters
+        ----------
+        run: string
+            The lensing run id
+        type:
+            The type to read, e.g. 'binned', 'corrected'
+
+        """
+
+        name = self.name()
+        data1=lensing.files.sample_read(type,run1,name=name)
+        data2=lensing.files.sample_read(type,run2,name=name)
+        color1='blue'
+        color2='red'
+        sym1='filled circle'
+        sym2='square'
+        width=4
+        size1=2
+        size2=3
+
+        # this is for the screen: currently tuned for my big screen!
+        biggles.configure('screen','width', 1140)
+        biggles.configure('screen','height', 1140)
+        biggles.configure('fontsize_min',1.0)
+        biggles.configure('_HalfAxis','ticks_size',3)
+        biggles.configure('_HalfAxis','subticks_size',1.5)
+        biggles.configure('linewidth',0.6)
+
+        if self['nbin'] == 12:
+            nrow = 3
+            ncol = 4
+            aspect_ratio = 1.0/1.5
+        elif self['nbin'] == 16:
+            nrow = 4
+            ncol = 4
+            aspect_ratio = 1.0
+        else:
+            raise ValueError("Unsupported nbin: %s" % self['nbin'])
+
+        pa = FramedArray(nrow, ncol)
+        pa.aspect_ratio = aspect_ratio
+
+        pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+
+        xrnge = [0.01,60.0]
+        yrnge = [1.e-2,8000]
+        pa.xrange = xrnge
+        pa.yrange = yrnge
+        pa.xlog = True
+        pa.ylog = True
+
+
+        row = -1
+
+        low, high = self.bin_ranges()
+
+        i = 0
+        for i in xrange(self['nbin']):
+            col = i % ncol
+            if col == 0:
+                row += 1
+
+            pdict2=eu.plotting.bscatter(data2['r'][i],
+                                        data2['dsig'][i],
+                                        yerr=data2['dsigerr'][i],
+                                        xrange=xrnge,
+                                        yrange=yrnge,
+                                        xlog=True,ylog=True,
+                                        show=False, 
+                                        plt=pa[row,col],
+                                        color=color2,
+                                        label=run2,
+                                        type=sym2,
+                                        size=size2,width=width,
+                                        dict=True)
+
+            pdict1=eu.plotting.bscatter(data1['r'][i],
+                                        data1['dsig'][i],
+                                        yerr=data1['dsigerr'][i],
+                                        xrange=xrnge,
+                                        yrange=yrnge,
+                                        xlog=True,ylog=True,
+                                        show=False, 
+                                        plt=pa[row,col],
+                                        color=color1,
+                                        type=sym1,
+                                        label=run1,
+                                        size=size1,width=width,
+                                        dict=True)
+
+            if i == (self['nbin']-1):
+                key=PlotKey(0.9,0.2,[pdict1['p'],pdict2['p']],halign='right')
+                pa[row,col].add(key)
+
+            label = self.bin_label(i)
+            pl = PlotLabel(.85, .85, label, halign='right')
+
+            pa[row,col].add(pl)
+
+
+        if show:
+            pa.show()
+
+        epsfile=lensing.files.sample_file(type+'-plots',run1,name=name,extra='allplot-'+run2,ext='eps')
+        d = os.path.dirname(epsfile)
+        if not os.path.exists(d):
+            print("making dir:",d)
+            os.makedirs(d)
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        pa.write_eps(epsfile)
+        converter.convert(epsfile, dpi=150, verbose=True)
 
 
 

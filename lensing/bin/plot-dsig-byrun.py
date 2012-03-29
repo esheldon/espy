@@ -20,6 +20,7 @@ parser.add_option("-o","--osig",action="store_true",
                   help="Make plots of osig")
 parser.add_option("--compare-osig",action="store_true",
                   help="Make plots of dsig compared to osig")
+parser.add_option("--run2",default=None, help="Overplot a second run")
 
 options,args = parser.parse_args(sys.argv[1:])
 
@@ -38,4 +39,7 @@ if options.compare_osig:
 elif options.osig:
     b.plot_osig_byrun_1var(run, options.type, show=options.show)
 else:
-    b.plot_dsig_byrun_1var(run, options.type, show=options.show)
+    if options.run2 is not None:
+        b.plot_dsig_2runs(run, options.run2, options.type, show=options.show)
+    else:
+        b.plot_dsig_byrun_1var(run, options.type, show=options.show)
