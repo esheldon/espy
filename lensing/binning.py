@@ -149,6 +149,9 @@ class BinnerBase(dict):
         biggles.configure('screen','width', 1140)
         biggles.configure('screen','height', 1140)
         biggles.configure('fontsize_min',1.0)
+        biggles.configure('_HalfAxis','ticks_size',3)
+        biggles.configure('_HalfAxis','subticks_size',1.5)
+        biggles.configure('linewidth',1)
 
         if self['nbin'] == 12:
             nrow = 3
@@ -236,6 +239,9 @@ class BinnerBase(dict):
         biggles.configure('screen','width', 1140)
         biggles.configure('screen','height', 1140)
         biggles.configure('fontsize_min',1.0)
+        biggles.configure('_HalfAxis','ticks_size',3)
+        biggles.configure('_HalfAxis','subticks_size',1.5)
+        biggles.configure('linewidth',1)
 
         if self['nbin'] == 12:
             nrow = 3

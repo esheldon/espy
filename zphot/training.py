@@ -609,7 +609,8 @@ Carlos
         converter.convert(psfile, dpi=120, verbose=True)
 
 
-    def plot_seeing(self, types=None, yrange=None):
+    def plot_seeing(self, types=['primus','vvds','zcosmos','deep2'], 
+                    yrange=None):
         """
 
         The BOSS all is normalized to one
@@ -625,7 +626,7 @@ Carlos
 
         binsize=0.025
 
-        if types is None:
+        if types is None or types is 'all':
             name='all'
             # convert keys to a list
             types=list(self.types)

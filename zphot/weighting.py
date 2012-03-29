@@ -1023,8 +1023,8 @@ def read_simulated_nofz(pzrun):
 def combine_nofz_and_simulated(pzrun):
     """
 
-    Combine the simulated sample variance errors with our estimate of N(z).
-    Only currently have this for pzrun 12
+    Combined plot of the simulated sample variance errors with our estimate of
+    N(z).  Only currently have this for pzrun 12
 
     """
     # first read the weights data
@@ -1075,7 +1075,7 @@ def combine_nofz_and_simulated(pzrun):
     eu.io.write(outf, out)
 
     # plot with N(z) and sample variance errors
-    width=2
+    width=3
     aspect_ratio=0.7
 
     epsfile=simf.replace('.rec', '-nofz-errors.eps')
@@ -1688,7 +1688,7 @@ class CompareWeighting:
         self.photo_data_loaded = False
 
 
-        self.line_width=2
+        self.line_width=3
 
     def zhist(self, dopng=True):
 
@@ -1730,13 +1730,14 @@ class CompareWeighting:
         htrain = eu.stat.histogram(self.wtrain['z'], 
                                    min=self.zmin, 
                                    max=self.zmax, 
-                                   binsize=zbin )
+                                   binsize=zbin)
         htrain = htrain/float(htrain.sum())
         p_htrain = biggles.Histogram(htrain, 
                                      x0=self.zmin, 
                                      binsize=zbin,
                                      width=self.line_width, 
-                                     color='darkgreen')
+                                     color='black',
+                                     type='shortdashed')
         p_htrain.label = 'train'
 
         # weighted histogram of z from training set
@@ -1750,7 +1751,7 @@ class CompareWeighting:
         p_whtrain = biggles.Histogram(whtrain, 
                                       x0=self.zmin, 
                                       binsize=zbin, 
-                                      color='red',
+                                      color='blue',
                                       width=self.line_width)
         p_whtrain.label = 'weighted train'
 
@@ -1771,7 +1772,7 @@ class CompareWeighting:
                                            x0=fine_zmin, 
                                            binsize=fine_zbin, 
                                            color='red',
-                                           width=self.line_width)
+                                           width=self.line_width*2)
 
         z_plt_inset = FramedPlot()
         z_plt_inset.xlabel = 'z'
@@ -1825,13 +1826,15 @@ class CompareWeighting:
             p_hsum = biggles.Histogram(pzhist, 
                                        x0=0.0, 
                                        binsize=binsize, 
-                                       color='blue',
-                                       width=self.line_width)
+                                       color='grey',
+                                       width=self.line_width,
+                                       type='solid')
             p_hsum.label = 'summed p(z)'
             pk = biggles.PlotKey(keyx,keyy,[p_htrain,p_whtrain,p_hsum])
 
             z_plt.add( biggles.Inset(inset_lowleft, inset_upright, z_plt_inset) )
-            z_plt.add(p_htrain, p_whtrain, p_hsum, pk)
+            #z_plt.add(p_htrain, p_whtrain, p_hsum, pk)
+            z_plt.add(p_htrain, p_hsum, p_whtrain, pk)
             psfile = self.psfile('zhist-withorig-withsum-%s' % self.pzrun)
             print("writing epsfile:",psfile)
             z_plt.write_eps(psfile)
@@ -1894,6 +1897,10 @@ class CompareWeighting:
         biggles.configure('fontsize_min',0.1)
 
     def whist(self):
+
+        biggles.configure('_HalfAxis','ticks_size',2)
+        biggles.configure('_HalfAxis','subticks_size',1)
+
         whist = eu.stat.histogram(self.wtrain['weight'], 
                                   min=self.wmin, 
                                   max=self.wmax, 
@@ -1903,7 +1910,7 @@ class CompareWeighting:
         pwhist = biggles.Histogram(whist, 
                                    x0=self.wmin/self.wmax, 
                                    binsize=self.wbin/self.wmax, 
-                                   width=self.line_width)
+                                   width=self.line_width*1.5)
         plt = FramedPlot()
         plt.add(pwhist)
         plt.xlabel = 'weight'
@@ -1911,6 +1918,8 @@ class CompareWeighting:
 
     def varhist1(self, tagname, xlabel, xmin, xmax, binsize, dokey=False, keyx=0.1):
 
+        biggles.configure('_HalfAxis','ticks_size',2)
+        biggles.configure('_HalfAxis','subticks_size',1)
         th = eu.stat.histogram(self.wtrain[tagname],
                                min=xmin,
                                max=xmax,
@@ -1930,10 +1939,12 @@ class CompareWeighting:
         wh=wdict['whist']/float(wdict['whist'].sum())
         ph=ph/float(ph.sum())
 
-        width=2
+        width=self.line_width*1.5
         p_ph = biggles.Histogram(ph, x0=xmin, binsize=binsize,width=width)
-        p_th = biggles.Histogram(th, x0=xmin, color='blue', binsize=binsize,width=width)
-        p_wh = biggles.Histogram(wh, x0=xmin, color='red', binsize=binsize,width=width )
+        p_th = biggles.Histogram(th, x0=xmin, color='blue',type='dotted', 
+                                 binsize=binsize,width=width)
+        p_wh = biggles.Histogram(wh, x0=xmin, color='red', 
+                                 binsize=binsize,width=width )
         plt = FramedPlot()
         plt.add(p_ph,p_th,p_wh)
         plt.xlabel = xlabel
@@ -2203,7 +2214,7 @@ def get_frac_lowz(wrun):
         stdout.write("Fraction with z < %s: %s\n" % (zlow, fraclow))
 
 
-def make_pofz_correction(pzrun):
+def make_pofz_correction(pzrun, plot_only=False):
     """
     Get the "correction", the ratio of recovered weighted
     N(z) to the summed p(z)
@@ -2252,9 +2263,10 @@ def make_pofz_correction(pzrun):
     sumpofz = sumpofz_struct['pofz']
     wnofz = bs['whist']
 
-    sumpofz_h = Histogram(sumpofz/sumpofz.sum(), x0=zmin, binsize=binsize, width=2, color='red')
+    width=3
+    sumpofz_h = Histogram(sumpofz/sumpofz.sum(), x0=zmin, binsize=binsize, width=width, color='red')
     sumpofz_h.label = 'summed p(z)'
-    wnofz_h = Histogram(wnofz/wnofz.sum(), x0=zmin, binsize=binsize, width=2, color='blue')
+    wnofz_h = Histogram(wnofz/wnofz.sum(), x0=zmin, binsize=binsize, width=width, color='blue', type='shortdashed')
     wnofz_h.label = 'Weighted N(z)'
 
 
@@ -2301,7 +2313,8 @@ def make_pofz_correction(pzrun):
     output['zmax'] = sumpofz_struct['zmax']
     output['corr'] = corr
 
-    outfile = pofz_correction_file(pzrun)
-    print("writing correction to:",outfile)
-    eu.io.write(outfile, output, delim=' ')
+    if not plot_only:
+        outfile = pofz_correction_file(pzrun)
+        print("writing correction to:",outfile)
+        eu.io.write(outfile, output, delim=' ')
 
