@@ -140,7 +140,8 @@ import es_sdsspy
 import sdsspy
 
 import biggles
-from biggles import FramedPlot, FramedArray, PlotKey, Histogram, SymmetricErrorBarsY, PlotLabel, Curve
+from biggles import FramedPlot, FramedArray, PlotKey, Histogram, \
+        SymmetricErrorBarsY, PlotLabel, Curve, Points
 import converter
 
 import copy
@@ -258,14 +259,23 @@ def pofz_dir(pzrun):
     dir = weights_basedir()
     return path_join(dir, 'pofz-%s' % pzrun)
 
-def pofz_file(pzrun, chunk=None):
+def pofz_file(pzrun, chunk=None, with_rmag=False):
     dir = pofz_dir(pzrun)
     f = 'pofz-%s' % pzrun
     if chunk is not None:
-        if chunk == '*':
-            f = f+'-chunk*'
+        if isinstance(chunk,basestring):
+            if chunk == '*':
+                f = f+'-chunk*'
+            elif chunk == 'rand':
+                f = f + '-'+chunk
+            else:
+                raise ValueError("Expected string chunk of '*' or 'rand', "
+                                 "got '%s'" % chunk)
         else:
             f = f + '-chunk%03i' % chunk
+    
+    if with_rmag:
+        f += '-withrmag'
     f = f+'.dat'
     return path_join(dir, f)
 
@@ -417,13 +427,13 @@ def pofz_dtype(nz, with_rmag=False):
 def read_pofz(pzrun, chunk, with_rmag=False):
     conf = zphot.read_config('pofz',pzrun)
     nz = conf['nz']
-    filename = pofz_file(pzrun, chunk)
+    filename = pofz_file(pzrun, chunk, with_rmag=with_rmag)
     return read_pofz_file(filename, nz, with_rmag=with_rmag)
 
 def read_corrected_pofz(pzrun, chunk, with_rmag=False):
     conf = zphot.read_config('pofz',pzrun)
     nz = conf['nz']
-    filename = corrected_pofz_file(pzrun, chunk)
+    filename = corrected_pofz_file(pzrun, chunk, with_rmag=with_rmag)
     return read_pofz_file(filename, nz, with_rmag=with_rmag)
 
 
@@ -1035,6 +1045,7 @@ def combine_nofz_and_simulated(pzrun):
     Combined plot of the simulated sample variance errors with our estimate of
     N(z).  Only currently have this for pzrun 12
 
+    Note we use pzrun, but that is just a marker.  We actually plot N(z)
     """
     # first read the weights data
     conf = zphot.read_config('pofz',pzrun)
@@ -1072,10 +1083,11 @@ def combine_nofz_and_simulated(pzrun):
     whist = wdict['whist'][0:-1]/wnorm
     
     out = numpy.zeros(simdata['zmin'].size,
-                      dtype=[('zmin','f8'),('zmax','f8'),
+                      dtype=[('zmin','f8'),('zmax','f8'),('zmid','f8'),
                              ('nofz','f8'),('sample_variance','f8')])
     out['zmin'] = simdata['zmin']
     out['zmax'] = simdata['zmax']
+    out['zmid'] = (out['zmax']+out['zmin'])/2.
     out['nofz'] = whist
     out['sample_variance'] = sample_variance
     simf = simulated_nofz_file(pzrun)
@@ -1096,7 +1108,7 @@ def combine_nofz_and_simulated(pzrun):
     wH = Histogram(whist, x0=out['zmin'][0], binsize=out['zmax'][0]-out['zmin'][0],
                    width=width)
     wH.label = 'N(z)'
-    wHerr = SymmetricErrorBarsY((out['zmin']+out['zmax'])/2., 
+    wHerr = SymmetricErrorBarsY(out['zmid'],
                                 out['nofz'], 
                                 out['sample_variance'], width=width)
     nzerrlab = PlotLabel(0.9,0.9,'Sample Variance Errors', halign='right')
@@ -1114,9 +1126,16 @@ def combine_nofz_and_simulated(pzrun):
     plt.xlabel = 'z'
     plt.aspect_ratio=aspect_ratio
 
+    simH = Points(out['zmid'], simhist, color='blue',type='filled circle',size=2)
+    """
+    simH = Curve(out['zmid'], simhist, color='blue',type='shortdashed',
+                 width=width)
+    """
+    """
     simH = Histogram(simhist, x0=out['zmin'][0], 
                      binsize=out['zmax'][0]-out['zmin'][0],
-                     color='blue', width=width)
+                     color='blue', width=width, type='dotted')
+    """
     simHerr = SymmetricErrorBarsY((out['zmin']+out['zmax'])/2., 
                                   simhist,
                                   out['sample_variance'], 
@@ -1209,11 +1228,8 @@ def plot_6rand_pofz(pzstruct, zmin, binsize, seed=25):
     """
     
     biggles.configure('fontsize_min', 1.5)
-    dormag=False
-    if 'rmag' in pzstruct.dtype.names:
-        dormag=True
 
-    width=3
+    width=5
     w1=where1(pzstruct['rmag'] < 18.)
     w2=where1((pzstruct['rmag'] > 18.) & (pzstruct['rmag'] < 19) )
     w3=where1((pzstruct['rmag'] > 19.) & (pzstruct['rmag'] < 20) )
@@ -1306,12 +1322,6 @@ def plot_6rand_pofz(pzstruct, zmin, binsize, seed=25):
                 os.makedirs(outdir)
             epsfile=path_join(outdir, 'seed%d-%d-6pofz.eps' % (seed,iloop))
 
-            """
-            epsfile=path_join(outdir, '%d' % pzstruct['photoid'][i])
-            if dormag:
-                epsfile += '-%0.2f' % pzstruct['rmag'][i]
-            epsfile += '.eps'
-            """
             print("plotting to:",epsfile)
             tab.write_eps(epsfile)
 
@@ -1745,8 +1755,7 @@ class CompareWeighting:
                                      x0=self.zmin, 
                                      binsize=zbin,
                                      width=self.line_width, 
-                                     color='black',
-                                     type='shortdashed')
+                                     color='blue')
         p_htrain.label = 'train'
 
         # weighted histogram of z from training set
@@ -1760,7 +1769,7 @@ class CompareWeighting:
         p_whtrain = biggles.Histogram(whtrain, 
                                       x0=self.zmin, 
                                       binsize=zbin, 
-                                      color='blue',
+                                      color='black',
                                       width=self.line_width)
         p_whtrain.label = 'weighted train'
 
@@ -1830,14 +1839,19 @@ class CompareWeighting:
             stdout.write("Reading summed zhist file: '%s'\n" % pzfile)
             pzdata = eu.io.read(pzfile)
             binsize = pzdata['zmax'][1]-pzdata['zmin'][1]
+            sum_zvals = (pzdata['zmax']+pzdata['zmin'])/2
 
             pzhist = pzdata['pofz']/pzdata['pofz'].sum()
+            p_hsum = Points(sum_zvals, pzhist, type='filled circle',
+                            color='red', size=2)
+            """
             p_hsum = biggles.Histogram(pzhist, 
                                        x0=0.0, 
                                        binsize=binsize, 
                                        color='grey',
                                        width=self.line_width,
                                        type='solid')
+            """
             p_hsum.label = 'summed p(z)'
             pk = biggles.PlotKey(keyx,keyy,[p_htrain,p_whtrain,p_hsum])
 
@@ -2303,11 +2317,14 @@ def make_pofz_correction(pzrun, plot_only=False):
     zmin = bs['low'][0]
     sumpofz = sumpofz_struct['pofz']
     wnofz = bs['whist']
-
+    sum_zvals = (sumpofz_struct['zmin']+sumpofz_struct['zmax'])/2
     width=3
-    sumpofz_h = Histogram(sumpofz/sumpofz.sum(), x0=zmin, binsize=binsize, width=width, color='red')
+    #sumpofz_h = Histogram(sumpofz/sumpofz.sum(), x0=zmin, binsize=binsize, width=width, color='red')
+    sumpofz_h = Points(sum_zvals, sumpofz/sumpofz.sum(),
+                       type='filled circle',size=2, color='red')
     sumpofz_h.label = 'summed p(z)'
-    wnofz_h = Histogram(wnofz/wnofz.sum(), x0=zmin, binsize=binsize, width=width, color='blue', type='shortdashed')
+    #wnofz_h = Histogram(wnofz/wnofz.sum(), x0=zmin, binsize=binsize, width=width, color='blue', type='shortdashed')
+    wnofz_h = Histogram(wnofz/wnofz.sum(), x0=zmin, binsize=binsize, width=width)
     wnofz_h.label = 'Weighted N(z)'
 
 
@@ -2328,10 +2345,18 @@ def make_pofz_correction(pzrun, plot_only=False):
     hplt.ylabel = 'N(z)'
     hplt.add(sumpofz_h, wnofz_h, key)
 
+    size=3
     cplt = FramedPlot()
-    cplt.add( Curve(bs['center'], corrall) )
-    cplt.add( Points(bs['center'], corrall, type='filled circle') )
-    cplt.add( Points(bs['center'], corr, color='blue', type='filled circle') )
+    c_corrall = Curve(bs['center'], corrall, type='shortdashed', width=width)
+    p_corrall = Points(bs['center'], corrall, type='circle',size=size)
+    c_corr = Curve(bs['center'], corr, color='blue', width=width)
+    p_corr = Points(bs['center'], corr, color='blue', type='filled diamond',
+                    size=size)
+    c_corrall.label = 'ratio'
+    c_corr.label = 'applied correction'
+    key = PlotKey(0.1,0.9,[c_corrall,c_corr])
+    cplt.add(c_corrall, p_corrall, c_corr, p_corr, key)
+    cplt.add( )
     cplt.xlabel = 'z'
     cplt.ylabel = r'$N(z)/\Sigma p(z)$'
 

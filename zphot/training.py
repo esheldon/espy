@@ -752,7 +752,8 @@ Carlos
         #if yrange is None:
         #    yrange = [0.0, 0.45]
         #yrange = [0.0, 1]
-        #plt.yrange = yrange
+        if yrange is not None:
+            plt.yrange = yrange
         plt.xlabel = 'seeing FWHM [arcsec]'
         plt.aspect_ratio=0.7
         plt.show()
