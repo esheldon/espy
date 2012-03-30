@@ -134,12 +134,13 @@ from esutil.ostools import path_join, expand_path
 from esutil.numpy_util import ahelp
 from esutil.numpy_util import where1
 from esutil.stat import histogram
+from esutil.plotting import make_hist_curve
 
 import es_sdsspy
 import sdsspy
 
 import biggles
-from biggles import FramedPlot, FramedArray, PlotKey, Histogram, SymmetricErrorBarsY, PlotLabel
+from biggles import FramedPlot, FramedArray, PlotKey, Histogram, SymmetricErrorBarsY, PlotLabel, Curve
 import converter
 
 import copy
@@ -197,10 +198,18 @@ def read_photo(photo_sample,rows=None):
     dt=photo_dtype(photo_sample)
     zs = zphot.select.ColumnSelector(photo_sample)
     filename = zs.filename()
-    stdout.write("Reading weighting photo file: '%s'\n" % filename)
-    r=eu.recfile.Open(filename,dtype=dt,delim=' ')
-    data = r.read(rows=rows)
-    r.close()
+    rec_filename=filename.replace('.dat','.rec')
+    if not os.path.exists(rec_filename):
+        print("Reading weighting photo file:",filename)
+        r=eu.recfile.Open(filename,dtype=dt,delim=' ')
+        data = r.read(rows=rows)
+        r.close()
+
+        print("caching binary version:",rec_filename)
+        eu.io.write(rec_filename, data)
+    else:
+        print("Reading weighting photo rec file:",rec_filename)
+        data = eu.io.read(rec_filename) 
     return data
 
 
@@ -1880,13 +1889,15 @@ class CompareWeighting:
                                #dokey=True)
 
         if extra_colname is None:
+            print("whist")
             a[2,1] = self.whist()
         else:
             if extra_colname == 'psf_fwhm_r':
                 xmin=0.7
                 xmax=2.5
                 binsize=0.02
-                a[2,1] = self.varhist1(extra_colname,r'$seeing_{r}$',xmin,xmax,binsize)
+                a[2,1] = self.varhist1(extra_colname,r'$seeing_{r}$',xmin,xmax,
+                                       binsize)
             else:
                 raise ValueError("only support psf_fwhm_r for extra column for now")
 
@@ -1901,50 +1912,79 @@ class CompareWeighting:
         biggles.configure('_HalfAxis','ticks_size',2)
         biggles.configure('_HalfAxis','subticks_size',1)
 
-        whist = eu.stat.histogram(self.wtrain['weight'], 
-                                  min=self.wmin, 
-                                  max=self.wmax, 
-                                  binsize=self.wbin)
-        whist = whist/float( whist.sum() )
+        whdict = eu.stat.histogram(self.wtrain['weight'], 
+                                   min=self.wmin, 
+                                   max=self.wmax, 
+                                   binsize=self.wbin,
+                                   more=True)
+        #whist = whist/float( whist.sum() )
+        whist = whdict['hist']/float( whdict['hist'].sum() )
 
+        #x0 = self.wmin/self.wmax
+        #binsize = self.wbin/self.wmax
+        #x0 = self.wmin/1.e-7
+        #binsize = self.wbin/1.e-7
+
+        pwhist = Curve(whdict['center']/1.e-7, whist, 
+                       width=self.line_width*1.5)
+        """
         pwhist = biggles.Histogram(whist, 
-                                   x0=self.wmin/self.wmax, 
-                                   binsize=self.wbin/self.wmax, 
+                                   x0=x0, 
+                                   binsize=binsize, 
                                    width=self.line_width*1.5)
+        """
+
         plt = FramedPlot()
         plt.add(pwhist)
-        plt.xlabel = 'weight'
+        plt.xlabel = r'weight/$10^{-7}$'
         return plt
 
     def varhist1(self, tagname, xlabel, xmin, xmax, binsize, dokey=False, keyx=0.1):
 
+        print("varhist:",tagname)
         biggles.configure('_HalfAxis','ticks_size',2)
         biggles.configure('_HalfAxis','subticks_size',1)
-        th = eu.stat.histogram(self.wtrain[tagname],
-                               min=xmin,
-                               max=xmax,
-                               binsize=binsize)
+        thdict = eu.stat.histogram(self.wtrain[tagname],
+                                   min=xmin,
+                                   max=xmax,
+                                   binsize=binsize,
+                                   more=True)
 
         wdict = eu.stat.histogram(self.wtrain[tagname],
                                   min=xmin,
                                   max=xmax,
                                   binsize=binsize,
                                   weights=self.wtrain['weight'])
-        ph = eu.stat.histogram(self.photo[tagname],
-                               min=xmin,
-                               max=xmax,
-                               binsize=binsize)
+        phdict = eu.stat.histogram(self.photo[tagname],
+                                   min=xmin,
+                                   max=xmax,
+                                   binsize=binsize,
+                                   more=True)
 
-        th=th/float(th.sum())
+        th=thdict['hist']/float(thdict['hist'].sum())
         wh=wdict['whist']/float(wdict['whist'].sum())
-        ph=ph/float(ph.sum())
+        ph=phdict['hist']/float(phdict['hist'].sum())
 
         width=self.line_width*1.5
-        p_ph = biggles.Histogram(ph, x0=xmin, binsize=binsize,width=width)
-        p_th = biggles.Histogram(th, x0=xmin, color='blue',type='dotted', 
+        """
+        p_ph = biggles.Histogram(ph, x0=xmin, binsize=binsize,
+                                 width=width)
+        p_th = biggles.Histogram(th, x0=xmin, color='blue',type='longdashed', 
                                  binsize=binsize,width=width)
         p_wh = biggles.Histogram(wh, x0=xmin, color='red', 
                                  binsize=binsize,width=width )
+        """
+        """
+        p_ph = make_hist_curve(phdict['low'],phdict['high'],ph,
+                               width=width)
+        p_th = make_hist_curve(thdict['low'],thdict['high'],th,
+                               width=width,color='blue',type='longdashed')
+        p_wh = make_hist_curve(wdict['low'],wdict['high'],wh,
+                               width=width,color='red')
+        """
+        p_ph = Curve(phdict['center'],ph,width=width,type='solid')
+        p_th = Curve(thdict['center'],th,width=width,type='longdashed',color='blue')
+        p_wh = Curve(wdict['center'],wh,width=width,type='solid',color='red')
         plt = FramedPlot()
         plt.add(p_ph,p_th,p_wh)
         plt.xlabel = xlabel
@@ -1982,6 +2022,7 @@ class CompareWeighting:
         tconf = zphot.read_config('train',train_sample)
         photo_sample = tconf['photo_sample']
         photo = read_photo(photo_sample,rows=subphoto) 
+        print("trimming")
         self.photo = photo[w]
 
         self.photo_data_loaded=True
