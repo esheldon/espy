@@ -1,3 +1,5 @@
+This stuff is mostly obsolete, see ../compare_serun_merun.py
+
 no prep needed
     Plot average as a function of x.  Works on both me and se runs
         col-binplot.py run x y1 y2 ...

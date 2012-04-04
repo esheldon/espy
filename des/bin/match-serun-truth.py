@@ -60,12 +60,6 @@ def make_inputs(run, mock_catalog, remake=False):
         c=des.collate.open_columns(run)
         ra = c['ra'][:]
         dec = c['dec'][:]
-        """
-        start=100000
-        n=1000000
-        ra = c['ra'][start:start+n]
-        dec = c['dec'][start:start+n]
-        """
 
         print 'writing run radec:',fd['runf']
         eu.misc.colprint(ra, dec, format='%.16g', file=fd['runf'])

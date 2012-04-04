@@ -1,30 +1,51 @@
 import os
+import sys
 from sys import stderr
-import numpy
+import deswl
+import des
+
+import lensing
 import esutil as eu
 from esutil.numpy_util import where1
-import lensing
-import deswl
+import numpy
+
 import converter
+import recfile
 
-from . import collate
+def get_match_dir(serun,merun):
+    sedir=deswl.files.collated_dir(serun)
+    match_dir=os.path.join(sedir, 'match-%s' % merun)
+    return match_dir
+def get_match_files(serun, merun):
+    """
+    Matches go in the se collated dir
+    """
+    sedir=deswl.files.collated_dir(serun)
+    medir=deswl.files.collated_dir(merun)
+    se_radec=os.path.join(sedir,'%s-radec.dat' % serun)
+    me_radec=os.path.join(medir,'%s-radec.dat' % merun)
 
+    match_dir=get_match_dir(serun,merun)
+    matchf = 'matches-%s-%s.dat' % (serun,merun)
+    matchf = os.path.join(match_dir, matchf)
 
-def get_match_dir(run, mock_catalog):
-    d=deswl.files.collated_dir(run)
-    d=os.path.join(d,'match-%s' % mock_catalog)
-    if not os.path.exists(d):
-        os.makedirs(d)
-    return d
+    scriptf=os.path.join(match_dir,'domatch.sh')
 
-def get_plot_dir(run, mock_catalog):
-    d=get_match_dir(run, mock_catalog)
+    return {'dir':match_dir,
+            'sef':se_radec,
+            'mef':me_radec,
+            'matchf':matchf,
+            'scriptf':scriptf}
+
+def get_plot_dir(serun, merun):
+    d=get_match_dir(serun, merun)
     d=os.path.join(d,'plots')
     return d
 
-def get_shear_compare_plot_url(run, mock_catalog, num=None):
-    d=get_plot_dir(run, mock_catalog)
-    fname='shearcmp-%s-%s' % (run,mock_catalog)
+
+def get_shear_compare_plot_url(serun, merun, num=None):
+    d=get_plot_dir(serun,merun)
+    fname='shearcmp-%s-%s' % (serun,merun)
     if num is not None:
         fname = fname+'-%02d' % num
     fname += '.eps'
@@ -32,32 +53,15 @@ def get_shear_compare_plot_url(run, mock_catalog, num=None):
     eu.ostools.makedirs_fromfile(fname)
     return fname
 
-def get_match_files(run,mock_catalog):
-    cdir=deswl.files.collated_dir(run)
-    runf=os.path.join(cdir,'%s-radec.dat' % run)
 
-    d=get_match_dir(run, mock_catalog)
-    mockf=os.path.join(d,'%s-radec.dat' % mock_catalog)
-    matchf='matches-%s-%s.dat' % (run,mock_catalog)
-    matchf=os.path.join(d,matchf)
-    scriptf=os.path.join(d,'domatch.sh')
-
-    return {'dir':d,
-            'runf':runf,
-            'mockf':mockf,
-            'matchf':matchf,
-            'scriptf':scriptf}
-
-def match_colname(mock_catalog):
-    colname = 'match_%s' % mock_catalog
-    colname = colname.replace('.','_')
-    colname = colname.replace('-','_')
+def get_match_colname(merun):
+    colname = 'match_%s' % merun
     return colname
 
 class Comparator(dict):
-    def __init__(self, run, mock_catalog):
-        self['run'] = run
-        self['mock_catalog'] = mock_catalog
+    def __init__(self, serun, merun):
+        self['serun'] = serun
+        self['merun'] = merun
 
     def plot_sheardiff(self, nperbin, indices=None, label=None,
                        show=False, num=None):
@@ -66,23 +70,23 @@ class Comparator(dict):
 
         # will use cache on successive calls
         data=self.get_sheardiff_data()
-        epsfile=get_shear_compare_plot_url(self['run'],self['mock_catalog'],
+        epsfile=get_shear_compare_plot_url(self['serun'],self['merun'],
                                            num=num)
         print >>stderr,'will write to file:',epsfile
 
         if indices is None:
-            b1=eu.stat.Binner(data['shear1_true'],
+            b1=eu.stat.Binner(data['shear1me'],
                               data['shear1'],
                               weights=data['weight'])
-            b2=eu.stat.Binner(data['shear2_true'],
+            b2=eu.stat.Binner(data['shear2me'],
                               data['shear2'],
                               weights=data['weight'])
         else:
             w=indices # alias
-            b1=eu.stat.Binner(data['shear1_true'][w],
+            b1=eu.stat.Binner(data['shear1me'][w],
                               data['shear1'][w],
                               weights=data['weight'][w])
-            b2=eu.stat.Binner(data['shear2_true'][w],
+            b2=eu.stat.Binner(data['shear2me'][w],
                               data['shear2'][w],
                               weights=data['weight'][w])
 
@@ -93,13 +97,13 @@ class Comparator(dict):
         b1.dohist(nperbin=nperbin)
         print >>stderr,'    calc_stats'
         b1.calc_stats()
-        xlabel=r'$\gamma_1^{true}$'
-        ylabel=r'$\gamma_1^{meas}$'
+        xlabel=r'$\gamma_1^{ME}$'
+        ylabel=r'$\gamma_1^{SE}$'
         plt1=eu.plotting.bscatter(b1['wxmean'],b1['wymean'],yerr=b1['wyerr'],
                                   show=False, xlabel=xlabel, ylabel=ylabel)
         
         if label is not None:
-            lab1=PlotLabel(0.9,0.9,label,halign='right')
+            lab1=PlotLabel(0.1,0.9,label,halign='left')
             plt1.add(lab1)
 
         coeff1 = numpy.polyfit(b1['wxmean'], b1['wymean'], 1)
@@ -109,7 +113,7 @@ class Comparator(dict):
         plt1.add(ps1)
 
         flabt1='m: %0.2f b: %0.3f' % (coeff1[0],coeff1[1])
-        flab1=PlotLabel(0.1,0.2,flabt1,halign='left')
+        flab1=PlotLabel(0.9,0.2,flabt1,halign='right')
         plt1.add(flab1)
 
         plt1.aspect_ratio=1
@@ -119,13 +123,13 @@ class Comparator(dict):
         b2.dohist(nperbin=nperbin)
         print >>stderr,'    calc_stats'
         b2.calc_stats()
-        xlabel=r'$\gamma_2^{true}$'
-        ylabel=r'$\gamma_2^{meas}$'
+        xlabel=r'$\gamma_2^{ME}$'
+        ylabel=r'$\gamma_2^{SE}$'
         plt2=eu.plotting.bscatter(b2['wxmean'],b2['wymean'],yerr=b2['wyerr'],
                                   show=False, xlabel=xlabel, ylabel=ylabel)
 
         if label is not None:
-            lab2=PlotLabel(0.9,0.9,label,halign='right')
+            lab2=PlotLabel(0.1,0.9,label,halign='left')
             plt2.add(lab2)
 
         coeff2 = numpy.polyfit(b2['wxmean'], b2['wymean'], 1)
@@ -135,7 +139,7 @@ class Comparator(dict):
         plt2.add(ps2)
 
         flabt2='m: %0.2f b: %0.3f' % (coeff2[0],coeff2[1])
-        flab2=PlotLabel(0.1,0.2,flabt2,halign='left')
+        flab2=PlotLabel(0.9,0.2,flabt2,halign='right')
         plt2.add(flab2)
 
         plt2.aspect_ratio=1
@@ -150,13 +154,14 @@ class Comparator(dict):
 
         return {'coeff1':coeff1,'coeff2':coeff2,'plt1':plt1,'plt2':plt2}
 
+
     def plot_sheardiff_bys2n(self, nperbin, nperbin_sub, show=False):
         import biggles
         from biggles import FramedPlot,PlotLabel, Curve, Points, Table, PlotKey
 
         data=self.get_sheardiff_data()
         
-        epsfile=get_shear_compare_plot_url(self['run'],self['mock_catalog'])
+        epsfile=get_shear_compare_plot_url(self['serun'],self['merun'])
         print >>stderr,'Will write summary plot:',epsfile
 
         print >>stderr,'histogramming shear_s2n',nperbin
@@ -223,34 +228,43 @@ class Comparator(dict):
         tab.write_eps(epsfile)
         converter.convert(epsfile,dpi=90,verbose=True)
 
+
     def get_sheardiff_data(self):
         if not hasattr(self,'_data'):
-            dmc=lensing.scat.DESMockCatalog(self['mock_catalog'])
-            mock=dmc.read()
-
-            c=collate.open_columns(self['run'])
-            colname = match_colname(self['mock_catalog'])
+            sec=des.collate.open_columns(self['serun'])
+            mec=des.collate.open_columns(self['merun'])
+            colname = get_match_colname(self['merun'])
 
             print >>stderr,'Reading match column'
-            matches=c[colname][:]
-            print >>stderr,'Reading flags'
-            flags=c['shear_flags'][:]
-            print >>stderr,'Getting good matches and flags'
+            matches=sec[colname][:]
+            print >>stderr,'Reading se flags'
+            flags=sec['shear_flags'][:]
+            print >>stderr,'Getting good matches and se flags'
             w=where1( (matches >= 0) & (flags==0) )
+            matches=matches[w]
+
+            print >>stderr,'Getting good me flags'
+            meflags=mec['shear_flags'][:]
+            meflags = meflags[matches]
+            
+            wm=where1(meflags == 0)
+            matches=matches[wm]
+            w=w[wm]
 
             d={}
             for k in ['shear1','shear2','shear_cov11','shear_cov22','shear_s2n']:
                 print >>stderr,'Reading',k
-                tmp = c[k][:]
+                tmp = sec[k][:]
                 tmp = tmp[w]
                 d[k] = tmp
                 
-            matches=matches[w]
-
-            d['shear1_true'] = mock['gamma1'][matches]
-            d['shear2_true'] = mock['gamma2'][matches]
+            # could be dups, need to extract all first
+            shear1me = mec['shear1'][:]
+            shear2me = mec['shear2'][:]
+            d['shear1me'] = shear1me[matches]
+            d['shear2me'] = shear2me[matches]
             d['matches'] = matches
-            d['mock'] = mock
             d['weight'] = 1.0/(0.32 + d['shear_cov11']+d['shear_cov22'])
             self._data = d
         return self._data
+
