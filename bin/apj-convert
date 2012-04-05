@@ -147,7 +147,7 @@ def ProcessTexFile(texfname):
             line = line.replace('\\bibliography{','%\\bibliography{')
 
         if dclass_grep.match(line):
-            line = line.replace('\\documentclass{','%\\documentclass{')
+            line = line.replace('\documentclass','%\documentclass')
 
         if newpage_grep.match(line):
             line = line.replace('\\newpage','%\\newpage')

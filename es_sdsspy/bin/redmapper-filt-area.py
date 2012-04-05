@@ -74,15 +74,14 @@ class RandomCap:
             radius in degrees
 
         outputs:
-            ra,dec in degrees
+            ra,dec,dist in degrees
         """
 
         rad = numpy.deg2rad(rad_deg)
         A = numpy.pi*rad**2
         nrand = self.get_nrand(A)
 
-        ra_rand, dec_rand, dist = randcap(nrand,ra,dec,rad_deg,units=['deg','deg'], 
-                                            get_radius=True)
+        ra_rand, dec_rand, dist = randcap(nrand,ra,dec,rad_deg, get_radius=True)
         return ra_rand, dec_rand, dist
 
     def get_nrand(self,A):
