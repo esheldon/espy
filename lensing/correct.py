@@ -62,12 +62,17 @@ def add_corrections(datain,
     data = eu.numpy_util.add_fields(datain,
                                     [('dsig_orig','f8',nrad),
                                      ('dsigerr_orig','f8',nrad),
+                                     ('dsigcov_orig','f8',(nrad,nrad)),
                                      ('wsum_mean_rand','f8',nrad),
                                      ('wsum_mean_rand_err','f8',nrad),
                                      ('dsig_rand','f8',nrad),
                                      ('dsigerr_rand','f8',nrad),
                                      ('clust_corr','f8',nrad),
                                      ('clust_corr_err','f8',nrad)])
+
+    data['dsig_orig'] = datain['dsig']
+    data['dsigerr_orig'] = datain['dsigerr']
+    data['dsigcov_orig'] = datain['dsigcov']
 
     # note copying over ssh that is there already
     data['ssh']            = ssh
@@ -92,6 +97,10 @@ def add_corrections(datain,
     corr_clipped = corr.clip(1.0, corr.max())
     data['dsig'] *= corr_clipped
     data['dsigerr'] *= corr_clipped
+
+    # for now, just rescale the correlation matrix.
+    for i in xrange(data.size):
+        data['dsigcov'][i] = eu.stat.cor2cov(data['dsigcor'][i],data['dsigerr'][i])
 
     return data
 

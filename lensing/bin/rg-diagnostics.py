@@ -36,7 +36,8 @@ parser.add_option("-r","--run", default='any',
                         "'any' means combine all runs.  'all' means doall "
                         "individual runs.  default %default"))
 parser.add_option("-c","--camcol", default='any', 
-                  help=("Only plot the input camcol. 'any' means combine all camcols.  'all' means "
+                  help=("Only plot the input camcol. 'any' means combine "
+                        "all camcols.  'all' means "
                         "do all individual camcols.  default %default"))
 parser.add_option("-d","--coldir", default=None, help="Use this columns dir location")
 parser.add_option("--rmag-max", default=None, help="Max mag in r")
@@ -76,7 +77,7 @@ def main():
     if camcols != 'any':
         if camcols != 'all':
             camcols=camcols.split(',')
-            camcols=int(camcols)
+            camcols=[int(c) for c in camcols]
         else:
             camcols=[1,2,3,4,5,6]
     else:
@@ -87,7 +88,8 @@ def main():
             runs=runs.split(',')
             runs = [int(r) for r in runs]
         else:
-            tmp = lensing.regauss_test.Tester(procrun, sweeptype, filter, run='any', coldir=options.coldir)
+            tmp = lensing.regauss_test.Tester(procrun, sweeptype, filter, 
+                                              run='any', coldir=options.coldir)
             c=tmp.open_columns()
             runs = c['run'][:]
             runs = numpy.unique(runs)
@@ -102,7 +104,7 @@ def main():
         runs=['any']
         if nperbin is None:
             if camcols[0] != 'any':
-                nperbin = 100000
+                nperbin = 200000
             else:
                 nperbin = 500000
 
@@ -114,8 +116,12 @@ def main():
         if plot_type == 'residual':
             yrng = [-0.004,0.004]
         else:
-            if run == 'any':
-                yrng=[-0.016,0.016]
+            if runs[0] == 'any':
+                if filter == 'r':
+                    #yrng=[-0.03,0.03]
+                    yrng=[-0.03,0.06]
+                else:
+                    yrng=[-0.03,0.06]
             else:
                 yrng = [-0.02,0.02]
     else:
@@ -139,12 +145,14 @@ def main():
             raise ValueError("You must enter -f filter for regauss runs")
 
     
-        print runs
+        print 'runs:',runs
+        print 'camcols:',camcols
         for run in runs:
             # note camcol could be 'any'
             for camcol in camcols:
                 t = lensing.regauss_test.Tester(procrun, sweeptype, filter, 
-                                                run=run, camcol=camcol, coldir=options.coldir)
+                                                run=run, camcol=camcol, 
+                                                coldir=options.coldir)
 
                 for field in fields:
                     t.plot_vs_field(field, plot_type, nperbin=nperbin, 

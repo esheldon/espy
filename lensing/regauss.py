@@ -243,12 +243,16 @@ class RegaussSweep:
         self.verbosity = keys.get('verbosity',1)
 
     def select(self):
+        """
+        """
+        raise RuntimeError("use mangle mask")
         print("Selecting objects")
         s = es_sdsspy.select.Selector(self.objs)
         print("  getting resolve logic")
         resolve_logic = s.resolve_logic()
-        print("  getting tycho logic")
-        tycho_logic = s.mask_logic('tycho')
+
+        print("  getting mask logic")
+        mask_logic = s.mask_logic('basic')
 
         print("  getting flag logic")
         flag_logic = s.flag_logic()
@@ -259,8 +263,10 @@ class RegaussSweep:
         else:
             rmag_logic = s.modelmag_logic("r", self.rmax)
 
-        logic = \
-            resolve_logic & tycho_logic & flag_logic & rmag_logic
+        #logic = \
+        #    resolve_logic & mask_logic & flag_logic & rmag_logic
+        #logic = \
+        #    resolve_logic & flag_logic & rmag_logic
 
         keep = where1(logic)
         print("  keeping %i/%i" % (keep.size, self.objs.size))
@@ -936,7 +942,10 @@ class Collator:
         return e1,e2
 
 
-    def add_rotated_e1e2(self, filters=['u','g','r','i','z'], system='eq'):
+    def add_rotated_e1e2(self, filters=['u','g','r','i','z'], 
+                         system='eq', 
+                         detrend=False,
+                         rmag_max=21.8):
         from . import rotation
         rotator = rotation.SDSSRotator(system)
         c=self.open_columns()
@@ -946,9 +955,18 @@ class Collator:
         fields  = c['field'][:]
 
         if self.sweeptype == 'gal':
-            e1name = 'e1_rg'
-            e2name = 'e2_rg'
-            flagname = 'corrflags_rg'
+            if detrend:
+                rmstr='%0.1f' % rmag_max
+                rmstr = rmstr.replace('.','')
+                e1name = 'e1_rg_dt'+rmstr
+                e2name = 'e2_rg_dt'+rmstr
+                flagname = 'dt'+rmstr+'_flag'
+                rotname='rot_dt'+rmstr
+            else:
+                e1name = 'e1_rg'
+                e2name = 'e2_rg'
+                flagname = 'corrflags_rg'
+                rotname='rot'
         else:
             e1name = 'e1'
             e2name = 'e2'
@@ -959,7 +977,7 @@ class Collator:
 
             e1col=e1name + '_'+system+'_'+filter
             e2col=e2name + '_'+system+'_'+filter
-            rotcol='rot_'+system+'_'+filter
+            rotcol=rotname+'_'+system+'_'+filter
 
             print("  Reading flags,e1,e2")
 

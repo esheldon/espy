@@ -12,7 +12,7 @@ from esutil.numpy_util import where1, to_big_endian
 import es_sdsspy
 import sdssgal
 
-import maxbcg
+from . import files
 
 from columns import Columns
 
@@ -36,22 +36,21 @@ def do_radcut(cat, rmpc=1.3):
     print("Kept %s/%s" % (w.size,cat.size))
     return w
 
-# select the maxbcg input data from a columns database
+# select the input data from a columns database
 # and into a columns database
 class Selector:
     """
-
     mcs = Selector()
     mcs.select()
     mcs.write_columns()
-
     """
-    def __init__(self, rmax=22.0):
+    def __init__(self, name, version, rmax=22.0):
         """
-        E.g.  procrun='prim03'
+        E.g.  Selector('rm','dr8-v2')
         """
 
-        self.basedir = os.environ['MAXBCG_INPUT']
+        self.version = version
+        self.name=name
         self.rmax=rmax
 
         self.cols = es_sdsspy.sweeps_collate.open_columns('primgal')
@@ -61,7 +60,7 @@ class Selector:
 
     def write_columns(self):
 
-        d = maxbcg.files.input_coldir()
+        d = files.input_coldir(self.name, self.version)
         if os.path.exists(d):
             raise ValueError("coldir exists, start fresh: '%s'" % d)
         outcols = Columns(d)
@@ -80,7 +79,8 @@ class Selector:
                     'objc_flags',
                     'objc_flags2',
                     'ingood',
-                    'intycho']
+                    'instar',
+                    'inbadfield']
 
         for col in colnames:
             print('Creating:',col)
@@ -120,19 +120,35 @@ class Selector:
         outcols.write_column('keep', keep)
 
 
+    def add_inbadfield(self):
+        import es_sdsspy
+        m=es_sdsspy.mangle_masks.load('boss','badfield')
+        d = files.input_coldir(self.name, self.version)
+        c = Columns(d)
+
+        print("reading ra")
+        ra=c['ra'][:]
+        print("reading dec")
+        dec=c['dec'][:]
  
+        print("checking mask")
+        cont = m.contains(ra,dec).astype('i1')
+
+        c.write_column('inbadfield', cont)
 
     def select(self):
         # for shorthand notation
         c = self.cols
 
         mask_colname = 'inbasic'
-        print("Reading",mask_colname)
+        print("Reading mask info:",mask_colname)
         inmask = c[mask_colname][:]
+        ntot = inmask.size
+
         print("Getting mask logic")
         mask_logic = (inmask == 1)
         w=where1(mask_logic)
-        print("    %s/%s passed" % (w.size,c[mask_colname].size))
+        print("    %s/%s passed" % (w.size,ntot))
 
 
         # now read columns needed for binned_logic, object1_logic
@@ -147,7 +163,7 @@ class Selector:
         binned_logic = selector.binned_logic()
 
         w=where1(binned_logic)
-        print("    %s/%s passed" % (w.size,c[mask_colname].size))
+        print("    %s/%s passed" % (w.size,ntot))
 
         print("object1 logic")
         object1_logic = selector.object1_logic()
@@ -160,15 +176,15 @@ class Selector:
         print('mag logic')
         cmag_r_logic = (cmag_r < self.rmax)
         w=where1(mask_logic & cmag_r_logic)
-        print("    %s/%s passed" % (w.size,c[mask_colname].size))
+        print("    %s/%s passed" % (w.size,ntot))
 
         w=where1(cmag_r_logic)
-        print("    %s/%s passed mag+mask" % (w.size,c[mask_colname].size))
+        print("    %s/%s passed mag+mask" % (w.size,ntot))
 
         logic = binned_logic & object1_logic & cmag_r_logic & mask_logic
         
         w=where1(logic)
-        print("A total of %s/%s passed" % (w.size,c[mask_colname].size))
+        print("A total of %s/%s passed" % (w.size,ntot))
 
         self.logic = logic
         self.mag_and_mask_logic = cmag_r_logic & mask_logic

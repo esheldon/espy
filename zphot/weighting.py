@@ -23,20 +23,19 @@ weights and the smaller ones for the individual p(z) calculations, which can be
 done in parallel.
 
 Create the config file in 
-    ${ESPY_DIR}/zphot/config/zinput-{photo_sample}.json
+    ${ESPY_DIR}/zphot/config/zinput-{photo_sample}.yaml
 e.g.
-{
- "sample":"01",
- "proctype":"sdssgal",
- "procrun":"prim04",
- "cmodel_rmin":15.0,
- "cmodel_rmax":21.5,
- "modelmag_min":15.0,
- "modelmag_max":29.0,
- "weighting":true,
- "masktype":"tycho",
- "filetype":"rec"
-}
+
+photo_sample:   "06"
+source:         dr8_final
+primary:        true
+cmodel_rmin:    15.0
+cmodel_rmax:    21.8
+modelmag_min:   15.0
+modelmag_max:   29.0
+weighting:      true
+masktype:       [good,star]
+filetype:       rec
 
 Then run these scripts
 
@@ -45,17 +44,16 @@ Then run these scripts
 
 Then match the training samples.  You'll need to create a config file under 
 
-    ${ESPY_DIR}/zphot/config/train-{train_sample}.json
+    ${ESPY_DIR}/zphot/config/train-{train_sample}.yaml
 
 e.g.
-{
-    "train_sample":"09",
-    "photo_sample":"01",
-    "sdss_rmax":19.6,
-    "zmin":0.01,
-    "zmax":2.0,
-    "comment":"some comment"
-}
+
+train_sample:   "13"
+photo_sample:   "06"
+sdss_rmax:      19.6
+zmin:           -0.001
+zmax:           2.0
+comment:        photo sample 06, r < 21.8
 
 NOTE: photo_sample is specified here, so train_sample is the only identifier
 you'll need after this.
@@ -67,17 +65,17 @@ First do a match and then make the versions formatted for input to weighting:
     
 
 
-Then run to get the overall weights.  Create the pbs file.  
+Then run to get the overall weights.  Create the wq file.  
 
-    /bin/create_pbs.py weights wrun
+    /bin/create-wq.py weights wrun
 
-For that you'll need to create a weights-{wrun}.json file:
-{
-    "wrun":"02",
-    "train_sample":"02",
-    "n_near1":5,
-    "n_near2":100
-}
+For that you'll need to create a weights-{wrun}.yaml file:
+
+wrun: "13"
+train_sample: "13"
+n_near1: 5
+n_near2: 100
+
 
 Then make some plots comparing the distributions of the variables:
     /bin/weighting-qaplots.py train_sample
@@ -85,26 +83,40 @@ Then make some plots comparing the distributions of the variables:
 To just do the z hist since varhist is slow:
     /bin/weighting-qaplots.py -z train_sample
 
-Add the p(z) from summed individual (see below)
-    /bin/weighting-qaplots.py -z --pzrun pzrun wrun
 
 To make p(z) for each object
-    /bin/create_pbs.py -n 50 pofz pzrun
+    /bin/create-wq.py -n 50 pofz pzrun
 
-Which will require a pofz run defined in pofz-{pzrun}.json in the
+Which will require a pofz run defined in pofz-{pzrun}.yaml in the
 config directory, e.g.
-{
-    "pzrun":"04",
-    "wrun":"02",
-    "nz": 35,
-    "zmin":0.0,
-    "zmax":1.1
-}
+
+pzrun:  15
+wrun:   13
+nz:     35
+zmin:   0.0
+zmax:   1.1
+
 
 Then you can sum up the p(z) to get an overall histogram
     /bin/sum-pofz.py {pzrun}
 
-Which can be overplotted as shown above:
+
+Plot with the p(z) from summed individual overplotted
+    /bin/weighting-qaplots.py -z --pzrun pzrun wrun
+
+You can correct the individual p(z) using the ratio
+of N(z) to summed p(z)
+
+    /bin/correct-pofz.py pzrun
+
+You can make a columns database after the corrected p(z) are created
+
+    /bin/make-pofz-columns.py pzrun
+
+Finally, after the columns db is made, you can make an official release split
+up by run,camcol
+
+    /bin/make-release.py pzrun
 """
 from __future__ import print_function
 
@@ -122,12 +134,14 @@ from esutil.ostools import path_join, expand_path
 from esutil.numpy_util import ahelp
 from esutil.numpy_util import where1
 from esutil.stat import histogram
+from esutil.plotting import make_hist_curve
 
 import es_sdsspy
 import sdsspy
 
 import biggles
-from biggles import FramedPlot, FramedArray, PlotKey, Histogram, SymmetricErrorBarsY, PlotLabel
+from biggles import FramedPlot, FramedArray, PlotKey, Histogram, \
+        SymmetricErrorBarsY, PlotLabel, Curve, Points
 import converter
 
 import copy
@@ -185,10 +199,18 @@ def read_photo(photo_sample,rows=None):
     dt=photo_dtype(photo_sample)
     zs = zphot.select.ColumnSelector(photo_sample)
     filename = zs.filename()
-    stdout.write("Reading weighting photo file: '%s'\n" % filename)
-    r=eu.recfile.Open(filename,dtype=dt,delim=' ')
-    data = r.read(rows=rows)
-    r.close()
+    rec_filename=filename.replace('.dat','.rec')
+    if not os.path.exists(rec_filename):
+        print("Reading weighting photo file:",filename)
+        r=eu.recfile.Open(filename,dtype=dt,delim=' ')
+        data = r.read(rows=rows)
+        r.close()
+
+        print("caching binary version:",rec_filename)
+        eu.io.write(rec_filename, data)
+    else:
+        print("Reading weighting photo rec file:",rec_filename)
+        data = eu.io.read(rec_filename) 
     return data
 
 
@@ -237,14 +259,23 @@ def pofz_dir(pzrun):
     dir = weights_basedir()
     return path_join(dir, 'pofz-%s' % pzrun)
 
-def pofz_file(pzrun, chunk=None):
+def pofz_file(pzrun, chunk=None, with_rmag=False):
     dir = pofz_dir(pzrun)
     f = 'pofz-%s' % pzrun
     if chunk is not None:
-        if chunk == '*':
-            f = f+'-chunk*'
+        if isinstance(chunk,basestring):
+            if chunk == '*':
+                f = f+'-chunk*'
+            elif chunk == 'rand':
+                f = f + '-'+chunk
+            else:
+                raise ValueError("Expected string chunk of '*' or 'rand', "
+                                 "got '%s'" % chunk)
         else:
             f = f + '-chunk%03i' % chunk
+    
+    if with_rmag:
+        f += '-withrmag'
     f = f+'.dat'
     return path_join(dir, f)
 
@@ -396,13 +427,13 @@ def pofz_dtype(nz, with_rmag=False):
 def read_pofz(pzrun, chunk, with_rmag=False):
     conf = zphot.read_config('pofz',pzrun)
     nz = conf['nz']
-    filename = pofz_file(pzrun, chunk)
+    filename = pofz_file(pzrun, chunk, with_rmag=with_rmag)
     return read_pofz_file(filename, nz, with_rmag=with_rmag)
 
 def read_corrected_pofz(pzrun, chunk, with_rmag=False):
     conf = zphot.read_config('pofz',pzrun)
     nz = conf['nz']
-    filename = corrected_pofz_file(pzrun, chunk)
+    filename = corrected_pofz_file(pzrun, chunk, with_rmag=with_rmag)
     return read_pofz_file(filename, nz, with_rmag=with_rmag)
 
 
@@ -418,7 +449,242 @@ def read_pofz_file(filename, nz, with_rmag=False):
     stdout.write("    read %s\n" % data.size)
     return data
 
-   
+def wq_dir(type, runid):
+    dir = path_join(zphot.photoz_dir(), 'wq')
+    dir = path_join(dir, '%s-%s' % (type,runid))
+    return dir
+
+def wq_file(type, runid, chunk=None):
+    dir = wq_dir(type, runid)
+
+    if type == 'weights':
+        fname = 'weights-%s.yaml' % runid
+        fname = path_join(dir,fname)
+    elif type == 'pofz':
+        if chunk is None:
+            raise ValueError("for pofz send chunk")
+        fname = 'pofz-%s-%03i.yaml' % (runid,chunk)
+        fname = path_join(dir, fname)
+    else:
+        raise ValueError("'weights' or 'pofz'")
+
+    return fname
+
+def create_weights_wq(wrun):
+
+    conf = zphot.read_config('weights',wrun)
+    pprint.pprint(conf)
+
+    train_sample = conf['train_sample']
+
+    # get the input training file
+    wt = WeightedTraining(train_sample)
+    train_file = wt.filename('all')
+    photo_sample = wt.conf['photo_sample']
+
+    # get the photo input file
+    zs = zphot.select.ColumnSelector(photo_sample)
+
+    ndim = 5
+    if 'extra_columns' in zs.conf:
+        ndim += len(zs.conf['extra_columns'])
+
+    photo_file = zs.filename()
+
+
+    setups = 'setup weighting -r ~esheldon/exports/weighting-work'
+
+
+
+    script = """
+mode: bynode
+group: [new,new2]
+job_name: {job_name}
+command: |
+    source ~/.bashrc
+
+    logf="{logf}"
+    photo_file="{photo_file}"
+    train_file="{train_file}"
+
+    n_near1={n_near1}
+    n_near2={n_near2}
+
+    weights_file1="{weights_file1}"
+    weights_file_nozero1="{weights_file_nozero1}"
+    weights_file2="{weights_file2}"
+
+    num_file1="{num_file1}"
+    num_file2="{num_file2}"
+
+    # first run
+
+    echo "
+    Running calcweights
+
+    First run with n_near=$n_near1
+    " > "$logf"
+
+    calcweights{ndim}         \\
+        "$train_file"    \\
+        "$photo_file"    \\
+        "$n_near1"       \\
+        "$weights_file1" \\
+        "$num_file1"  >> "$logf" 2>&1
+
+    if [ "$?" != "0" ]; then
+        echo Halting >> "$logf"
+        exit 45
+    fi
+
+
+    # remove training set objects with zero weight at first
+    # n_near
+    echo "
+    removing zero weight training objects to
+        "$weights_file_nozero1"
+    " >> "$logf"
+    awk '$3>0' < "$weights_file1" 1> "$weights_file_nozero1" 2>> "$logf"
+
+    if [ "$?" != "0" ]; then
+        echo Error running awk.  Halting >> "$logf"
+        exit 45
+    fi
+
+    # second run
+    echo "
+    Second run with n_near=$n_near2
+    " >> "$logf"
+
+    calcweights{ndim}                \\
+        "$weights_file_nozero1" \\
+        "$photo_file"           \\
+        "$n_near2"              \\
+        "$weights_file2"        \\
+        "$num_file2" >>"$logf" 2>&1
+
+    if [ "$?" != "0" ]; then
+        echo Halting >> "$logf"
+        exit 45
+    fi
+    """.format(job_name             = 'weights-%s' % wrun,
+               ndim                 = ndim,
+               logf                 = wq_file('weights',wrun).replace('yaml','log'),
+               train_file           = train_file,
+               photo_file           = photo_file,
+               n_near1              = conf['n_near1'],
+               n_near2              = conf['n_near2'],
+               weights_file1        = weights_file(wrun,1),
+               num_file1            = num_file(wrun,1),
+               weights_file_nozero1 = weights_file(wrun,1,nozero=True),
+               weights_file2        = weights_file(wrun,2),
+               num_file2            = num_file(wrun,2))
+
+    # make output dir for calcweights
+    wdir = weights_dir(wrun)
+    if not os.path.exists(wdir):
+        os.makedirs(wdir)
+
+    fname=wq_file('weights',wrun)
+    eu.ostools.makedirs_fromfile(fname)
+    print("Writing wq config:",fname)
+    with open(fname,'w') as fobj:
+        fobj.write(script)
+    
+
+def create_pofz_wq(pzrun, nchunk):
+    """
+    For calculating the individual p(z)
+    """
+
+    pzdir = pofz_dir(pzrun)
+    if not os.path.exists(pzdir):
+        os.makedirs(pzdir)
+
+    conf = zphot.read_config('pofz',pzrun)
+    pprint.pprint(conf)
+
+    # get output weights file from last round.
+    wrun = conf['wrun']
+    iteration = 2
+    wfile = weights_file(wrun,iteration)
+
+    # to get the photo input file
+    wconf = zphot.read_config('weights',wrun)
+    train_sample = wconf['train_sample']
+    tconf = zphot.read_config('train',train_sample)
+    photo_sample = tconf['photo_sample']
+    zs = zphot.select.ColumnSelector(photo_sample, nchunk=nchunk)
+
+    ndim = 5
+    if 'extra_columns' in zs.conf:
+        ndim += len(zs.conf['extra_columns'])
+
+ 
+    template="""
+group: [new,new2]
+job_name: {job_name}
+
+command: |
+    source ~/.bashrc
+
+    logf="{logf}"
+    weights_file="{weights_file}"
+    photo_file="{photo_file}"
+
+    n_near={n_near}
+    nz={nz}
+    zmin={zmin}
+    zmax={zmax}
+    pofz_file="{pofz_file}"
+    z_file="{z_file}"
+
+    echo "
+    Running calcpofz
+    " > "$logf"
+
+    calcpofz{ndim}           \\
+        "$weights_file" \\
+        "$photo_file"   \\
+        "$n_near"       \\
+        "$nz"           \\
+        "$zmin"         \\
+        "$zmax"         \\
+        "$pofz_file"    \\
+        "$z_file"  >>"$logf" 2>&1
+
+    if [ "$?" != "0" ]; then
+        echo Halting >> "$logf"
+        exit 45
+    fi
+    """
+    setups = 'setup weighting -r ~esheldon/exports/weighting-work'
+
+    for chunk in xrange(nchunk):
+
+
+        script=template.format(job_name = 'pofz-%s-%03i' % (pzrun,chunk),
+                               ndim=ndim,
+                               logf = wq_file('pofz',pzrun,chunk=chunk).replace('yaml','log'),
+                               weights_file=wfile,
+                               photo_file=zs.filename(chunk),
+                               n_near=wconf['n_near2'],
+                               nz=conf['nz'],
+                               zmin=conf['zmin'],
+                               zmax=conf['zmax'],
+                               pofz_file=pofz_file(pzrun,chunk),
+                               z_file=z_file(pzrun,chunk))
+
+
+
+        fname = wq_file('pofz',pzrun,chunk=chunk)
+        eu.ostools.makedirs_fromfile(fname)
+        print("Writing wq file:",fname)
+        with open(fname,'w') as fobj:
+            fobj.write(script)
+
+
+  
 def pbs_dir(type, runid, create=False):
     dir = path_join(zphot.photoz_dir(), 'pbs')
     dir = path_join(dir, '%s-%s' % (type,runid))
@@ -776,9 +1042,10 @@ def read_simulated_nofz(pzrun):
 def combine_nofz_and_simulated(pzrun):
     """
 
-    Combine the simulated sample variance errors with our estimate of N(z).
-    Only currently have this for pzrun 12
+    Combined plot of the simulated sample variance errors with our estimate of
+    N(z).  Only currently have this for pzrun 12
 
+    Note we use pzrun, but that is just a marker.  We actually plot N(z)
     """
     # first read the weights data
     conf = zphot.read_config('pofz',pzrun)
@@ -816,10 +1083,11 @@ def combine_nofz_and_simulated(pzrun):
     whist = wdict['whist'][0:-1]/wnorm
     
     out = numpy.zeros(simdata['zmin'].size,
-                      dtype=[('zmin','f8'),('zmax','f8'),
+                      dtype=[('zmin','f8'),('zmax','f8'),('zmid','f8'),
                              ('nofz','f8'),('sample_variance','f8')])
     out['zmin'] = simdata['zmin']
     out['zmax'] = simdata['zmax']
+    out['zmid'] = (out['zmax']+out['zmin'])/2.
     out['nofz'] = whist
     out['sample_variance'] = sample_variance
     simf = simulated_nofz_file(pzrun)
@@ -828,7 +1096,7 @@ def combine_nofz_and_simulated(pzrun):
     eu.io.write(outf, out)
 
     # plot with N(z) and sample variance errors
-    width=2
+    width=3
     aspect_ratio=0.7
 
     epsfile=simf.replace('.rec', '-nofz-errors.eps')
@@ -840,7 +1108,7 @@ def combine_nofz_and_simulated(pzrun):
     wH = Histogram(whist, x0=out['zmin'][0], binsize=out['zmax'][0]-out['zmin'][0],
                    width=width)
     wH.label = 'N(z)'
-    wHerr = SymmetricErrorBarsY((out['zmin']+out['zmax'])/2., 
+    wHerr = SymmetricErrorBarsY(out['zmid'],
                                 out['nofz'], 
                                 out['sample_variance'], width=width)
     nzerrlab = PlotLabel(0.9,0.9,'Sample Variance Errors', halign='right')
@@ -858,9 +1126,16 @@ def combine_nofz_and_simulated(pzrun):
     plt.xlabel = 'z'
     plt.aspect_ratio=aspect_ratio
 
+    simH = Points(out['zmid'], simhist, color='blue',type='filled circle',size=2)
+    """
+    simH = Curve(out['zmid'], simhist, color='blue',type='shortdashed',
+                 width=width)
+    """
+    """
     simH = Histogram(simhist, x0=out['zmin'][0], 
                      binsize=out['zmax'][0]-out['zmin'][0],
-                     color='blue', width=width)
+                     color='blue', width=width, type='dotted')
+    """
     simHerr = SymmetricErrorBarsY((out['zmin']+out['zmax'])/2., 
                                   simhist,
                                   out['sample_variance'], 
@@ -953,11 +1228,8 @@ def plot_6rand_pofz(pzstruct, zmin, binsize, seed=25):
     """
     
     biggles.configure('fontsize_min', 1.5)
-    dormag=False
-    if 'rmag' in pzstruct.dtype.names:
-        dormag=True
 
-    width=3
+    width=5
     w1=where1(pzstruct['rmag'] < 18.)
     w2=where1((pzstruct['rmag'] > 18.) & (pzstruct['rmag'] < 19) )
     w3=where1((pzstruct['rmag'] > 19.) & (pzstruct['rmag'] < 20) )
@@ -1050,12 +1322,6 @@ def plot_6rand_pofz(pzstruct, zmin, binsize, seed=25):
                 os.makedirs(outdir)
             epsfile=path_join(outdir, 'seed%d-%d-6pofz.eps' % (seed,iloop))
 
-            """
-            epsfile=path_join(outdir, '%d' % pzstruct['photoid'][i])
-            if dormag:
-                epsfile += '-%0.2f' % pzstruct['rmag'][i]
-            epsfile += '.eps'
-            """
             print("plotting to:",epsfile)
             tab.write_eps(epsfile)
 
@@ -1124,12 +1390,10 @@ class WeightedOutputs:
         if ntot == 0:
             raise ValueError("No files matched pattern: '%s'" % pattern)
 
-        flist.sort()
-
         # ii keeps track of location in the overall num file
         ii = 0
         zhist=None
-        for f in flist:
+        for f in sorted(flist):
             print(f)
             r=eu.recfile.Open(f,'r',delim=' ',dtype=pofz_dt)
             data = r.read()
@@ -1158,10 +1422,13 @@ class WeightedOutputs:
         Add columns to the collated photoz table
         """
 
-        newcols = ['run','rerun','camcol','field','id',
-                   'cmodelmag_dered_r','ra','dec']
-
+        print("Adding columns\n")
         cols = open_pofz_columns(pzrun)
+
+        # we will also do colors and objid below
+        newcols = ['run','rerun','camcol','field','id',
+                   'cmodelmag_dered_r','ra','dec','inbadfield']
+
         print("reading pofz photoid")
         photoid = cols['photoid'][:]
 
@@ -1174,6 +1441,11 @@ class WeightedOutputs:
         if mcols.size != photoid.size:
             raise ValueError("Some did not match: %d/%d" % (mcols.size,photoid.size))
 
+        # first write the index into the primgal sweeps
+        matchcol='primgal_id'
+        print("    writing",matchcol)
+        cols.write_column(matchcol,mscols)
+
         for col in newcols:
             print("Reading data for: ",col)
             data = scols[col][mscols]
@@ -1181,6 +1453,7 @@ class WeightedOutputs:
             if col == 'cmodelmag_dered_r':
                 col = 'cmodelmag_r'
             cols.write_column(col, data, create=True)
+
 
         print("creating umg")
         u=scols['modelmag_dered_u'][mscols]
@@ -1245,6 +1518,7 @@ class WeightedOutputs:
         columns=['objid',
                  'run','rerun','camcol','field','id',
                  'ra','dec',
+                 'inbadfield',
                  'cmodelmag_r',
                  'modelmag_umg',
                  'modelmag_gmr',
@@ -1433,7 +1707,7 @@ class CompareWeighting:
         self.photo_data_loaded = False
 
 
-        self.line_width=2
+        self.line_width=3
 
     def zhist(self, dopng=True):
 
@@ -1475,13 +1749,13 @@ class CompareWeighting:
         htrain = eu.stat.histogram(self.wtrain['z'], 
                                    min=self.zmin, 
                                    max=self.zmax, 
-                                   binsize=zbin )
+                                   binsize=zbin)
         htrain = htrain/float(htrain.sum())
         p_htrain = biggles.Histogram(htrain, 
                                      x0=self.zmin, 
                                      binsize=zbin,
                                      width=self.line_width, 
-                                     color='darkgreen')
+                                     color='blue')
         p_htrain.label = 'train'
 
         # weighted histogram of z from training set
@@ -1495,7 +1769,7 @@ class CompareWeighting:
         p_whtrain = biggles.Histogram(whtrain, 
                                       x0=self.zmin, 
                                       binsize=zbin, 
-                                      color='red',
+                                      color='black',
                                       width=self.line_width)
         p_whtrain.label = 'weighted train'
 
@@ -1516,7 +1790,7 @@ class CompareWeighting:
                                            x0=fine_zmin, 
                                            binsize=fine_zbin, 
                                            color='red',
-                                           width=self.line_width)
+                                           width=self.line_width*2)
 
         z_plt_inset = FramedPlot()
         z_plt_inset.xlabel = 'z'
@@ -1565,18 +1839,25 @@ class CompareWeighting:
             stdout.write("Reading summed zhist file: '%s'\n" % pzfile)
             pzdata = eu.io.read(pzfile)
             binsize = pzdata['zmax'][1]-pzdata['zmin'][1]
+            sum_zvals = (pzdata['zmax']+pzdata['zmin'])/2
 
             pzhist = pzdata['pofz']/pzdata['pofz'].sum()
+            p_hsum = Points(sum_zvals, pzhist, type='filled circle',
+                            color='red', size=2)
+            """
             p_hsum = biggles.Histogram(pzhist, 
                                        x0=0.0, 
                                        binsize=binsize, 
-                                       color='blue',
-                                       width=self.line_width)
+                                       color='grey',
+                                       width=self.line_width,
+                                       type='solid')
+            """
             p_hsum.label = 'summed p(z)'
             pk = biggles.PlotKey(keyx,keyy,[p_htrain,p_whtrain,p_hsum])
 
             z_plt.add( biggles.Inset(inset_lowleft, inset_upright, z_plt_inset) )
-            z_plt.add(p_htrain, p_whtrain, p_hsum, pk)
+            #z_plt.add(p_htrain, p_whtrain, p_hsum, pk)
+            z_plt.add(p_htrain, p_hsum, p_whtrain, pk)
             psfile = self.psfile('zhist-withorig-withsum-%s' % self.pzrun)
             print("writing epsfile:",psfile)
             z_plt.write_eps(psfile)
@@ -1622,13 +1903,15 @@ class CompareWeighting:
                                #dokey=True)
 
         if extra_colname is None:
+            print("whist")
             a[2,1] = self.whist()
         else:
             if extra_colname == 'psf_fwhm_r':
                 xmin=0.7
                 xmax=2.5
                 binsize=0.02
-                a[2,1] = self.varhist1(extra_colname,r'$seeing_{r}$',xmin,xmax,binsize)
+                a[2,1] = self.varhist1(extra_colname,r'$seeing_{r}$',xmin,xmax,
+                                       binsize)
             else:
                 raise ValueError("only support psf_fwhm_r for extra column for now")
 
@@ -1639,46 +1922,83 @@ class CompareWeighting:
         biggles.configure('fontsize_min',0.1)
 
     def whist(self):
-        whist = eu.stat.histogram(self.wtrain['weight'], 
-                                  min=self.wmin, 
-                                  max=self.wmax, 
-                                  binsize=self.wbin)
-        whist = whist/float( whist.sum() )
 
+        biggles.configure('_HalfAxis','ticks_size',2)
+        biggles.configure('_HalfAxis','subticks_size',1)
+
+        whdict = eu.stat.histogram(self.wtrain['weight'], 
+                                   min=self.wmin, 
+                                   max=self.wmax, 
+                                   binsize=self.wbin,
+                                   more=True)
+        #whist = whist/float( whist.sum() )
+        whist = whdict['hist']/float( whdict['hist'].sum() )
+
+        #x0 = self.wmin/self.wmax
+        #binsize = self.wbin/self.wmax
+        #x0 = self.wmin/1.e-7
+        #binsize = self.wbin/1.e-7
+
+        pwhist = Curve(whdict['center']/1.e-7, whist, 
+                       width=self.line_width*1.5)
+        """
         pwhist = biggles.Histogram(whist, 
-                                   x0=self.wmin/self.wmax, 
-                                   binsize=self.wbin/self.wmax, 
-                                   width=self.line_width)
+                                   x0=x0, 
+                                   binsize=binsize, 
+                                   width=self.line_width*1.5)
+        """
+
         plt = FramedPlot()
         plt.add(pwhist)
-        plt.xlabel = 'weight'
+        plt.xlabel = r'weight/$10^{-7}$'
         return plt
 
     def varhist1(self, tagname, xlabel, xmin, xmax, binsize, dokey=False, keyx=0.1):
 
-        th = eu.stat.histogram(self.wtrain[tagname],
-                               min=xmin,
-                               max=xmax,
-                               binsize=binsize)
+        print("varhist:",tagname)
+        biggles.configure('_HalfAxis','ticks_size',2)
+        biggles.configure('_HalfAxis','subticks_size',1)
+        thdict = eu.stat.histogram(self.wtrain[tagname],
+                                   min=xmin,
+                                   max=xmax,
+                                   binsize=binsize,
+                                   more=True)
 
         wdict = eu.stat.histogram(self.wtrain[tagname],
                                   min=xmin,
                                   max=xmax,
                                   binsize=binsize,
                                   weights=self.wtrain['weight'])
-        ph = eu.stat.histogram(self.photo[tagname],
-                               min=xmin,
-                               max=xmax,
-                               binsize=binsize)
+        phdict = eu.stat.histogram(self.photo[tagname],
+                                   min=xmin,
+                                   max=xmax,
+                                   binsize=binsize,
+                                   more=True)
 
-        th=th/float(th.sum())
+        th=thdict['hist']/float(thdict['hist'].sum())
         wh=wdict['whist']/float(wdict['whist'].sum())
-        ph=ph/float(ph.sum())
+        ph=phdict['hist']/float(phdict['hist'].sum())
 
-        width=2
-        p_ph = biggles.Histogram(ph, x0=xmin, binsize=binsize,width=width)
-        p_th = biggles.Histogram(th, x0=xmin, color='blue', binsize=binsize,width=width)
-        p_wh = biggles.Histogram(wh, x0=xmin, color='red', binsize=binsize,width=width )
+        width=self.line_width*1.5
+        """
+        p_ph = biggles.Histogram(ph, x0=xmin, binsize=binsize,
+                                 width=width)
+        p_th = biggles.Histogram(th, x0=xmin, color='blue',type='longdashed', 
+                                 binsize=binsize,width=width)
+        p_wh = biggles.Histogram(wh, x0=xmin, color='red', 
+                                 binsize=binsize,width=width )
+        """
+        """
+        p_ph = make_hist_curve(phdict['low'],phdict['high'],ph,
+                               width=width)
+        p_th = make_hist_curve(thdict['low'],thdict['high'],th,
+                               width=width,color='blue',type='longdashed')
+        p_wh = make_hist_curve(wdict['low'],wdict['high'],wh,
+                               width=width,color='red')
+        """
+        p_ph = Curve(phdict['center'],ph,width=width,type='solid')
+        p_th = Curve(thdict['center'],th,width=width,type='longdashed',color='blue')
+        p_wh = Curve(wdict['center'],wh,width=width,type='solid',color='red')
         plt = FramedPlot()
         plt.add(p_ph,p_th,p_wh)
         plt.xlabel = xlabel
@@ -1716,6 +2036,7 @@ class CompareWeighting:
         tconf = zphot.read_config('train',train_sample)
         photo_sample = tconf['photo_sample']
         photo = read_photo(photo_sample,rows=subphoto) 
+        print("trimming")
         self.photo = photo[w]
 
         self.photo_data_loaded=True
@@ -1948,7 +2269,7 @@ def get_frac_lowz(wrun):
         stdout.write("Fraction with z < %s: %s\n" % (zlow, fraclow))
 
 
-def make_pofz_correction(pzrun):
+def make_pofz_correction(pzrun, plot_only=False):
     """
     Get the "correction", the ratio of recovered weighted
     N(z) to the summed p(z)
@@ -1996,10 +2317,14 @@ def make_pofz_correction(pzrun):
     zmin = bs['low'][0]
     sumpofz = sumpofz_struct['pofz']
     wnofz = bs['whist']
-
-    sumpofz_h = Histogram(sumpofz/sumpofz.sum(), x0=zmin, binsize=binsize, width=2, color='red')
+    sum_zvals = (sumpofz_struct['zmin']+sumpofz_struct['zmax'])/2
+    width=3
+    #sumpofz_h = Histogram(sumpofz/sumpofz.sum(), x0=zmin, binsize=binsize, width=width, color='red')
+    sumpofz_h = Points(sum_zvals, sumpofz/sumpofz.sum(),
+                       type='filled circle',size=2, color='red')
     sumpofz_h.label = 'summed p(z)'
-    wnofz_h = Histogram(wnofz/wnofz.sum(), x0=zmin, binsize=binsize, width=2, color='blue')
+    #wnofz_h = Histogram(wnofz/wnofz.sum(), x0=zmin, binsize=binsize, width=width, color='blue', type='shortdashed')
+    wnofz_h = Histogram(wnofz/wnofz.sum(), x0=zmin, binsize=binsize, width=width)
     wnofz_h.label = 'Weighted N(z)'
 
 
@@ -2020,10 +2345,18 @@ def make_pofz_correction(pzrun):
     hplt.ylabel = 'N(z)'
     hplt.add(sumpofz_h, wnofz_h, key)
 
+    size=3
     cplt = FramedPlot()
-    cplt.add( Curve(bs['center'], corrall) )
-    cplt.add( Points(bs['center'], corrall, type='filled circle') )
-    cplt.add( Points(bs['center'], corr, color='blue', type='filled circle') )
+    c_corrall = Curve(bs['center'], corrall, type='shortdashed', width=width)
+    p_corrall = Points(bs['center'], corrall, type='circle',size=size)
+    c_corr = Curve(bs['center'], corr, color='blue', width=width)
+    p_corr = Points(bs['center'], corr, color='blue', type='filled diamond',
+                    size=size)
+    c_corrall.label = 'ratio'
+    c_corr.label = 'applied correction'
+    key = PlotKey(0.1,0.9,[c_corrall,c_corr])
+    cplt.add(c_corrall, p_corrall, c_corr, p_corr, key)
+    cplt.add( )
     cplt.xlabel = 'z'
     cplt.ylabel = r'$N(z)/\Sigma p(z)$'
 
@@ -2046,7 +2379,8 @@ def make_pofz_correction(pzrun):
     output['zmax'] = sumpofz_struct['zmax']
     output['corr'] = corr
 
-    outfile = pofz_correction_file(pzrun)
-    print("writing correction to:",outfile)
-    eu.io.write(outfile, output, delim=' ')
+    if not plot_only:
+        outfile = pofz_correction_file(pzrun)
+        print("writing correction to:",outfile)
+        eu.io.write(outfile, output, delim=' ')
 

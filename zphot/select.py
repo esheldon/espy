@@ -54,7 +54,12 @@ class ColumnSelector:
         if self.conf['weighting']:
             self.conf['filetype'] = 'dat'
 
-    def load_cols(self, primary=True):
+        source = self.conf.get('source','dr8_final')
+        if source != 'dr8_final':
+            raise ValueError("only set up for dr8_final source")
+
+    def load_cols(self):
+        primary = self.conf.get('primary',True)
         if primary:
             self.cols = es_sdsspy.sweeps_collate.open_columns('primgal')
         else:
@@ -108,7 +113,7 @@ class ColumnSelector:
         return ind
 
 
-    def select(self, primary=True, for_training=False):
+    def select(self, for_training=False):
         """
 
         DONT USE for_training
@@ -121,7 +126,7 @@ class ColumnSelector:
             raise ValueError("run init with a photo_sample name")
 
         # for shorthand notation
-        self.load_cols(primary=primary)
+        self.load_cols()
         c = self.cols
 
         #
@@ -129,11 +134,18 @@ class ColumnSelector:
         #
 
         masktype = self.conf['masktype']
-        mask_colname = 'in'+masktype
-        print("Reading %s (and good)" % mask_colname)
-        inmask = c[mask_colname][:]
-        print("Getting %s mask logic" % masktype)
-        mask_logic = (inmask == 1)
+        if isinstance(masktype,basestring):
+            masktype=[masktype]
+        mask_logic=None
+        for m in masktype:
+            mask_colname = 'in'+m
+            print("Reading %s" % mask_colname)
+            inmask = c[mask_colname][:]
+            print("Getting mask logic")
+            if mask_logic is None:
+                mask_logic = (inmask == 1)
+            else:
+                mask_logic = mask_logic & (inmask == 1)
         wmask,=where(mask_logic)
         ntot=inmask.size
         print("    %s/%s passed (%0.2f)" % (wmask.size,ntot,wmask.size/float(ntot)))
@@ -296,9 +308,9 @@ class ColumnSelector:
                         'modelmag_dered_i',
                         'modelmag_dered_z']
 
-            if 'extra_columns' in self.conf:
-                for cdict in self.conf['extra_columns']:
-                    colnames.append(cdict['name'])
+            extra_columns = self.conf.get('extra_columns',[])
+            for cdict in extra_columns:
+                colnames.append(cdict['name'])
 
 
 
@@ -323,7 +335,7 @@ class ColumnSelector:
             data['model_imz'] = \
                 tmp['modelmag_dered_i'] - tmp['modelmag_dered_z']
 
-            for cdict in self.conf['extra_columns']:
+            for cdict in extra_columns:
                 name=cdict['name']
                 data[name] = tmp[name]
             del tmp

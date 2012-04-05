@@ -6,8 +6,25 @@ import es_sdsspy
 import esutil as eu
 from esutil.ostools import path_join
 
-import maxbcg
 
+def input_coldir(name, version):
+    """
+    version should be e.g. dr8-v2
+    """
+    basedir = os.environ['CLUSTERS_INPUT']
+
+    coldir='%s-input-%s.cols' % (name,version)
+    coldir = path_join(basedir, coldir)
+    return coldir
+
+def open_input_columns(name, version):
+    import columns
+    d=input_coldir(name, version)
+    return columns.Columns(d)
+
+
+
+# these old maxbcg things should be adapted?
 def read_catalog(type):
     f = catalog_file(type)
     return eu.io.read(f, verbose=True, lower=True)
@@ -23,29 +40,9 @@ def catalog_file(type):
 
 def catalog_dir():
     """
-    location of the public catalog and others
+    location of the old maxbcg public catalog and others
     """
     return os.environ['MAXBCG_CATDIR']
-
-def open_input_columns():
-    import columns
-    d=input_coldir()
-    return columns.Columns(d)
-
-def input_coldir():
-    basedir = os.environ['MAXBCG_INPUT']
-    prefix = maxbcg_prefix()
-
-    coldir='maxbcg-input-%s.cols' % prefix
-    coldir = path_join(basedir, coldir)
-    return coldir
-    
-def maxbcg_prefix():
-    photo_sweep = os.environ['PHOTO_SWEEP']
-    if photo_sweep.find('dr8') != -1:
-        return 'dr8'
-    else:
-        raise ValueError("currently only know prefix for dr8 sweeps")
 
 
 def compare_public_catalog_to_input(data=None):

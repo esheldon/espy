@@ -8,4 +8,5 @@ if len(sys.argv) < 2:
 pzrun=sys.argv[1]
 
 wc=zphot.weighting.WeightedOutputs()
-wc.make_columns(pzrun)
+#wc.make_columns(pzrun)
+wc.add_columns(pzrun)

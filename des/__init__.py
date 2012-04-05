@@ -7,3 +7,6 @@ from . import archive
 from . import flags
 
 from . import wqutil
+
+from . import compare_truth
+from . import compare_serun_merun

@@ -4,7 +4,9 @@
 Description:
 
     Create an input catalog for objshear.  type must be 'scat' or 'lcat'.  The
-    sample id implies a config file in ${ESPY_DIR}/lensing/config. 
+    sample id implies a config file 
+
+        ${ESPY_DIR}/lensing/config/lcat-{sample}.yaml. 
 
     You can send -n to tell how many randoms to generate for random lcat
     catalogs.  Also required in that case is an extra name to add.
@@ -30,6 +32,7 @@ if len(args) < 2:
 type = args[0]
 sample = args[1]
 if type == 'scat':
+    # this will also run split() on the sample
     lensing.scat.create_input(sample)
 elif type == 'lcat':
     if options.nrand is not None:

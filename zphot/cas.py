@@ -11,7 +11,6 @@ from esutil.ostools import path_join, expand_path
 from esutil import numpy_util
 
 import sdssgal
-import maxbcg
 
 
 # this is imported into __init__

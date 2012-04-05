@@ -37,6 +37,8 @@ import numpy
 import esutil as eu
 from esutil.ostools import path_join, expand_path
 from esutil.numpy_util import where1
+from . import sigmacrit
+import recfile
 
 
 finfo={}
@@ -311,7 +313,6 @@ def lcat_write(sample=None, data=None, extra=None, fs='hdfs', file=None):
 
     stdout.write("Writing %d to %s: '%s'\n" % (data.size, 'lcat', file))
 
-    import recfile
     with recfile.Open(file,'w',delim=' ') as rec:
         rec.fobj.write('%d\n' % data.size)
         rec.write(data)
@@ -426,7 +427,6 @@ def lcat_dtype(old=False):
 
 
 def scat_write(sample, data,split=None):
-    from . import sigmacrit
     file = sample_file('scat',sample, split=split, ext='bin')
     conf = read_config('scat', sample)
     style=conf['sigmacrit_style']
@@ -472,73 +472,51 @@ def scat_write(sample, data,split=None):
 
     fobj.close()
 
-def scat_convert_to_ascii(sample, split=None, header=False):
+def scat_convert_to_ascii(sample, split=None):
     t,zl = scat_read(sample=sample, split=split)
-    scat_write_ascii(sample, t, split=split, header=header)
+    scat_write_ascii(sample, t, split=split)
 
-def scat_write_ascii(sample, data, split=None, header=False):
-    from esutil import recfile
+def scat_write_ascii(sample, data, split=None):
     from sys import stdout
-    from . import sigmacrit
 
-    file = sample_file('scat',sample, split=split, ext='dat')
+    file = sample_file('scat',sample, split=split, ext='dat', fs='hdfs')
 
     conf = read_config('scat', sample)
     style=conf['sigmacrit_style']
     if style not in [1,2]:
         raise ValueError("sigmacrit_style should be in [1,2]")
 
+    print("Writing ascii source file:",file)
 
-    if header and style == 2:
-        if 'zlmin' not in conf or 'zlmax' not in conf or 'dzl' not in conf:
-            raise ValueError("You must have zlmin,zlmax,dzl in config")
+    with eu.hdfs.HDFSFile(file) as hdfs_file:
+        with recfile.Open(hdfs_file.localfile,'w',delim=' ') as robj:
+            robj.write(data)
+        hdfs_file.put()
 
+def scat_read_ascii(sample, split=None):
+
+    conf = read_config('scat', sample)
+    style=conf['sigmacrit_style']
+    if style not in [1,2]:
+        raise ValueError("sigmacrit_style should be in [1,2]")
+
+    if style == 2:
         zlvals=sigmacrit.make_zlvals(conf['dzl'], conf['zlmin'], conf['zlmax'])
         nzl = zlvals.size
+    else:
+        nzl=None
+    dt = scat_dtype(style, nzl=nzl)
 
-        data_nzl = data['scinv'].shape[1]
-        if nzl != data_nzl:
-            raise ValueError("Calculated nzl of %d but data has nzl of %d" % (nzl,data_nzl))
+    file = sample_file('scat',sample, split=split, fs='hdfs')
+    print("reading scat file:",file,file=stderr)
+    with eu.hdfs.HDFSFile(file) as hdfs_file:
+        hdfs_file.stage()
+        with recfile.Open(hdfs_file.localfile,'r',delim=' ',dtype=dt) as robj:
+            data = robj[:]
 
-    print("Writing ascii source file:",file)
-    make_dir_from_path(file)
+    return data
 
-    with recfile.Open(file,'w',delim=' ') as robj:
-
-        #robj = recfile.Open(file,'w',delim=' ')
-
-        if header:
-            print("Writing header\n")
-            #print("  Writing size of sources:",data.size)
-            robj.fobj.write('%-15s = %d\n' % ("size",data.size))
-            stdout.write('%-15s = %d\n' % ("size",data.size))
-
-            #print("  Writing style:",style,"to file")
-            robj.fobj.write('%-15s = %d\n' % ("sigmacrit_style",style))
-            stdout.write('%-15s = %d\n' % ("sigmacrit_style",style))
-
-            if style == 2:
-                #print("  Writing nzl:",nzl,"to file")
-                robj.fobj.write('%-15s = %d\n' % ("nzlens",nzl))
-                stdout.write('%-15s = %d\n' % ("nzlens",nzl))
-
-                #print("  Writing zl to file")
-                #robj.fobj.write("%-15s = " % "zlens")
-                stdout.write("%-15s = " % "zlens")
-                zlwrite = numpy.array(zlvals,dtype='f8',copy=False)
-                zlwrite.tofile(robj.fobj, sep=' ')
-                zlwrite.tofile(stdout, sep=' ')
-                robj.fobj.write('\n')
-                stdout.write('\n')
-
-            robj.fobj.write("END\n\n")
-            stdout.write("END\n\n")
-
-        print("Writing data")
-        robj.write(data)
-
-
-def scat_read(sample=None, file=None, split=None):
+def scat_read_binary(sample=None, file=None, split=None):
 
     if file is None and sample is None:
         raise ValueError("usage: scat_write(data, file=, sample=)")
@@ -571,10 +549,7 @@ def scat_read(sample=None, file=None, split=None):
     data = numpy.fromfile(fobj, dtype=dt, count=narr[0])
     fobj.close()
 
-    if style == 2:
-        return data, zl
-    else:
-        return data
+    return data
 
 def scat_dtype(sigmacrit_style, nzl=None):
     dt=[('ra','f8'),

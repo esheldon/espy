@@ -49,18 +49,27 @@ parser.add_option("--show",action='store_true',default=False,
 def doplot(binned_data, corr_data, rand, label, show=False):
     tab = biggles.Table(1,2)
     arr=lensing.plotting.plot2dsig(binned_data['r'], 
-                                   binned_data['dsig'], binned_data['dsigerr'],
-                                   rand['dsig'], rand['dsigerr'],
-                                   plot_label=label, label1='data', label2='random',
-                                   range4var=[0.1,100],show=False)
+                                   binned_data['dsig'], 
+                                   binned_data['dsigerr'],
+                                   rand['r'],
+                                   rand['dsig'], 
+                                   rand['dsigerr'],
+                                   plot_label=label, 
+                                   label1='data', 
+                                   label2='random',
+                                   range4var=[0.1,100],
+                                   show=False)
 
     
     tab[0,0] = arr
 
 
-    cplt = eu.plotting.bscatter(corr_data['r'], corr_data['clust_corr']-1, yerr=corr_data['clust_corr_err'],
+    cplt = eu.plotting.bscatter(corr_data['r'], 
+                                corr_data['clust_corr']-1, 
+                                yerr=corr_data['clust_corr_err'],
                                 xlabel=lensing.plotting.labels['rproj'], 
-                                ylabel='Corr-1', show=False, xlog=True, ylog=True)
+                                ylabel='Corr-1', show=False, xlog=True, ylog=True, 
+                                size=2)
 
     cplt_label = biggles.PlotLabel(0.9,0.9,label,halign='right')
     cplt.add(cplt_label)

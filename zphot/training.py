@@ -188,12 +188,7 @@ Carlos
         photo_sample = self.conf["photo_sample"]
         zcs = zphot.select.ColumnSelector(photo_sample)
 
-        # select with multi-epoch data
-        #
-        # for training means a higher cut in mag to give a smoother transition
-        #
-        #zcs.select(primary=False, for_training=True)
-        zcs.select(primary=False)
+        zcs.select()
 
         indices = zcs.keep_indices.copy()
 
@@ -210,8 +205,13 @@ Carlos
         cmag_r = zcs.cols['cmodelmag_dered_r'][indices]
         cmag_err_r = zcs.cols['cmodelmag_dered_err_r'][indices]
 
-        print("Reading survey_primary, psf_fwhm_r")
-        survey_primary = zcs.cols['survey_primary'][indices]
+        if 'survey_primary' in zcs.cols:
+            # we are doing multi-epoch matching
+            print("Reading survey_primary, psf_fwhm_r")
+            survey_primary = zcs.cols['survey_primary'][indices]
+        else:
+            survey_primary = None
+
         psf_fwhm_r = zcs.cols['psf_fwhm_r'][indices]
 
         extra_columns = None
@@ -299,7 +299,10 @@ Carlos
 
             output['psf_fwhm_r'] = psf_fwhm_r[mphot]
 
-            output['survey_primary'] = survey_primary[mphot]
+            if survey_primary is None:
+                output['survey_primary'] = numpy.ones(mphot.size,dtype='i1')
+            else:
+                output['survey_primary'] = survey_primary[mphot]
 
             for n in extra_columns:
                 output[n] = extra_columns[n][mphot]
@@ -354,7 +357,10 @@ Carlos
 
         """
 
-        maxmatch=100
+        if survey_primary is None:
+            maxmatch=1
+        else:
+            maxmatch=100
         print("Matching to %0.2f arcsec" % (matchrad*3600.,))
         h=eu.htm.HTM(10)
 
@@ -367,10 +373,11 @@ Carlos
                                   maxmatch=maxmatch)
 
         print("Matched: %s/%s" % (mspec.size,spec_ra.size))
-        if mspec.size == 0:
+        if mspec.size == 0 or survey_primary==None:
             return mspec, mphot
-        print("  unique:",numpy.unique(mspec).size)
 
+
+        print("  unique:",numpy.unique(mspec).size)
         print("  getting good flux matches")
 
         h,rev = eu.stat.histogram(mspec, binsize=1, rev=True)
@@ -535,7 +542,10 @@ Carlos
 
     def fname_matched(self, type):
         dir = self.dir_matched
-        long_type = self.types[type]
+        if type == 'all':
+            long_type='all'
+        else:
+            long_type = self.types[type]
         fname = long_type+'-match-'+self.train_sample+'.rec'
         fname = os.path.join(dir, fname)
         return fname
@@ -599,7 +609,8 @@ Carlos
         converter.convert(psfile, dpi=120, verbose=True)
 
 
-    def plot_seeing(self, types=None, yrange=None):
+    def plot_seeing(self, types=['primus','vvds','zcosmos','deep2'], 
+                    yrange=None):
         """
 
         The BOSS all is normalized to one
@@ -615,7 +626,7 @@ Carlos
 
         binsize=0.025
 
-        if types is None:
+        if types is None or types is 'all':
             name='all'
             # convert keys to a list
             types=list(self.types)
@@ -741,7 +752,8 @@ Carlos
         #if yrange is None:
         #    yrange = [0.0, 0.45]
         #yrange = [0.0, 1]
-        #plt.yrange = yrange
+        if yrange is not None:
+            plt.yrange = yrange
         plt.xlabel = 'seeing FWHM [arcsec]'
         plt.aspect_ratio=0.7
         plt.show()

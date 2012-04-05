@@ -1,0 +1,11 @@
+photo_sample:   "06"
+source:         dr8_final
+primary:        true
+cmodel_rmin:    15.0
+cmodel_rmax:    21.8
+modelmag_min:   15.0
+modelmag_max:   29.0
+weighting:      true
+masktype:       [good,star]
+filetype:       rec
+

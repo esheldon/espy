@@ -120,6 +120,8 @@ class SDSSRandom(LcatBase):
         self['mapname'] = 'boss'
         self['maptype'] = 'basic'
         self['tycho_maptype'] = 'tycho'
+        # we might want to increase this!
+        self['maxres'] = 2048
 
     def read_original(self):
         """
@@ -130,8 +132,12 @@ class SDSSRandom(LcatBase):
 
     def load_stomp_maps(self):
         if not hasattr(self, 'basic_map'):
-            self.basic_map = es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'])
-            self.tycho_map = es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'])
+            self.basic_map = \
+                es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'], 
+                                          maxres=self['maxres'])
+            self.tycho_map = \
+                es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'],
+                                          maxres=self['maxres'])
 
     def create_objshear_input(self, nrand=None, extra=None):
         """
@@ -295,12 +301,17 @@ class RedMapper(LcatBase):
         # this copies each key to self[key]
         LcatBase.__init__(self, sample, **keys)
 
-        if self['catalog'] not in ['redmapper-dr8-3.4-like','redmapper-dr8-3.4-nord','redmapper-dr8-3.14']:
+        if self['catalog'] not in ['redmapper-dr8-3.4-like',
+                                   'redmapper-dr8-3.4-nord',
+                                   'redmapper-dr8-3.14',
+                                   'redmapper-dr8-3.14-cen2']:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
         self['mapname'] = 'boss'
         self['maptype'] = 'basic'
         self['tycho_maptype'] = 'tycho'
+        # we might want to increase this!
+        self['maxres'] = 2048
 
 
     def create_objshear_input(self, **keys):
@@ -335,8 +346,10 @@ class RedMapper(LcatBase):
         md = self.get_maskflags(data['ra'], data['dec'], data[z_field])
 
         tycho_logic = (md['in_tycho'] == 1)
-        quad_logic = es_sdsspy.stomp_maps.quad_logic(md['maskflags'], strict=strict_edgecut)
-        hard_edge_logic = es_sdsspy.stomp_maps.quad_logic(md['maskflags_hard'], strict=True)
+        quad_logic = es_sdsspy.stomp_maps.quad_logic(md['maskflags'], 
+                                                     strict=strict_edgecut)
+        hard_edge_logic = es_sdsspy.stomp_maps.quad_logic(md['maskflags_hard'], 
+                                                          strict=True)
 
         good = where1(lambda_logic & tycho_logic & quad_logic & hard_edge_logic)
         print("Finally kept: %d/%d" % (good.size,data.size))
@@ -377,8 +390,12 @@ class RedMapper(LcatBase):
 
     def load_stomp_maps(self):
         if not hasattr(self, 'basic_map'):
-            self.basic_map = es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'])
-            self.tycho_map = es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'])
+            self.basic_map = \
+                es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'], 
+                                          maxres=self['maxres'])
+            self.tycho_map = \
+                es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'],
+                                          maxres=self['maxres'])
 
     def get_maskflags(self, ra, dec, z, types=['tycho','rmax','rmax_hard']):
         """

@@ -20,7 +20,7 @@ labels['dsig'] = r'$\Delta\Sigma ~[M_{sun} pc^{-2}]$'
 labels['osig'] = r'$\Delta\Sigma_\times ~ [M_{sun} pc^{-2}]$'
 
 
-def plot2dsig(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
+def plot2dsig(r1, dsig1, dsig1err, r2, dsig2, dsig2err, **keys):
     """
     Plot delta sigma and a second delta sigma in two plots the second of which
     is linear.
@@ -33,7 +33,7 @@ def plot2dsig(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
         The y range of the delta sigma plot
     yrange2: [min,max]
         The y range of the ortho-delta sigma plot
-    range2var: [min,max]
+    range4var: [min,max]
         The x range over which to calculate a osig variance
         and determine a plot range.  This is overridden by
         range2
@@ -52,24 +52,26 @@ def plot2dsig(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
 
     color2 = 'red'
     ptype1='filled circle'
-    size1=1
+    size1=2
     ptype2='filled circle'
-    size2=1
+    size2=2
 
     show = keys.get('show',True)
     yrange1 = keys.get('yrange1',None)
     yrange2 = keys.get('yrange2',None)
 
     # this is a y-log plot, use more powerful range determination
-    yrange1 = eu.plotting.get_log_plot_range(dsig1, err=dsig1err, input_range=yrange1)
+    yrange1 = eu.plotting.get_log_plot_range(dsig1, err=dsig1err, 
+                                             input_range=yrange1)
 
-    xrng = eu.plotting.get_log_plot_range(r)
+    rr=numpy.concatenate((r1,r2))
+    xrng = eu.plotting.get_log_plot_range(rr)
 
     # this over-rides
     range4var = keys.get('range4var',None)
     if yrange2 is None:
         if range4var is not None:
-            w=where1( (r >= range4var[0]) & (r <= range4var[1]))
+            w=where1( (r2 >= range4var[0]) & (r2 <= range4var[1]))
             if w.size == 0:
                 raise ValueError("no points in range [%d,%d]" % tuple(range4var))
             sdev = dsig2[w].std()
@@ -84,12 +86,12 @@ def plot2dsig(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
     label2 = keys.get('label2',None)
 
     # The points and zero curve
-    dsig1_p = Points(r, dsig1, color='black', type=ptype1, size=size1)
-    dsig1err_p = SymErrY(r, dsig1, dsig1err, color='black')
+    dsig1_p = Points(r1, dsig1, color='black', type=ptype1, size=size1)
+    dsig1err_p = SymErrY(r1, dsig1, dsig1err, color='black')
     dsig1_p.label=label1
 
-    dsig2_p = Points(r, dsig2, color=color2, type=ptype2, size=size2)
-    dsig2err_p = SymErrY(r, dsig2, dsig2err, color=color2)
+    dsig2_p = Points(r2, dsig2, color=color2, type=ptype2, size=size2)
+    dsig2err_p = SymErrY(r2, dsig2, dsig2err, color=color2)
     dsig2_p.label=label2
 
     c=Curve([1.e-5,1.e5],[0,0], type='solid')
@@ -109,8 +111,8 @@ def plot2dsig(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
 
     # biggles chokes if you give it negative data for a log plot
     arr[0,0].add(dsig1_p, dsig2_p)
-    eu.plotting.add_log_error_bars(arr[0,0],'y',r,dsig1,dsig1err,yrange1)
-    eu.plotting.add_log_error_bars(arr[0,0],'y',r,dsig2,dsig2err,yrange1,color=color2)
+    eu.plotting.add_log_error_bars(arr[0,0],'y',r1,dsig1,dsig1err,yrange1)
+    eu.plotting.add_log_error_bars(arr[0,0],'y',r2,dsig2,dsig2err,yrange1,color=color2)
 
     if label is not None:
         arr[0,0].add(PlotLabel(0.9,0.9,label,halign='right'))
@@ -131,6 +133,64 @@ def plot2dsig(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
     return arr
 
 
+def plot2dsig_over(r1,dsig1,dsig1err,r2,dsig2, dsig2err, **keys):
+    ptype1=keys.get('ptype1','filled circle')
+    ptype2=keys.get('ptype2','filled circle')
+    size1=keys.get('size1',1)
+    size2=keys.get('size2',1)
+    color1=keys.get('color1','red')
+    color2=keys.get('color2','blue')
+    label  = keys.get('label',None)
+    label1 = keys.get('label1',None)
+    label2 = keys.get('label2',None)
+    yrng = keys.get('yrange',None)
+    show = keys.get('show',True)
+   
+    plt=keys.get('plt',None)
+
+    yall=numpy.concatenate((dsig1, dsig2))
+    yerrall=numpy.concatenate((dsig1err, dsig2err))
+    yrng = eu.plotting.get_log_plot_range(yall, err=yerrall, 
+                                            input_range=yrng)
+
+    rr=numpy.concatenate((r1,r2))
+    xrng = eu.plotting.get_log_plot_range(rr)
+
+    if plt is None:
+        plt=FramedPlot()
+    plt.xlog=True
+    plt.ylog=True
+    plt.xrange=xrng
+    plt.yrange=yrng
+    plt.xlabel = labels['rproj']
+    plt.ylabel = labels['dsig']
+
+    dsig1_p = Points(r1, dsig1, color=color1, type=ptype1, size=size1)
+    dsig1err_p = SymErrY(r1, dsig1, dsig1err, color=color2)
+    dsig1_p.label=label1
+
+    dsig2_p = Points(r2, dsig2, color=color2, type=ptype2, size=size2)
+    dsig2err_p = SymErrY(r2, dsig2, dsig2err, color=color2)
+    dsig2_p.label=label2
+
+    plt.add(dsig1_p, dsig2_p)
+
+    # biggles chokes if you give it negative data for a log plot
+    eu.plotting.add_log_error_bars(plt,'y',r1,dsig1,dsig1err,yrng,
+                                   color=color1)
+    eu.plotting.add_log_error_bars(plt,'y',r2,dsig2,dsig2err,yrng,
+                                   color=color2)
+
+    if label is not None:
+        plt.add(PlotLabel(0.9,0.9,label,halign='right'))
+
+    if label1 is not None or label2 is not None:
+        key = PlotKey(0.9,0.15, [dsig1_p,dsig2_p], halign='right')
+        plt.add(key)
+
+    if show:
+        plt.show()
+    return plt
 
 def plot2dsig_old(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
     """
