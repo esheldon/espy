@@ -92,7 +92,7 @@ _shear_script="""
 command: |
     source ~esheldon/.bashrc
 
-    module load sobjshear/sdssmask-work
+    module load sobjshear/work
 
     config=%(config_file)s
     scat=%(scat)s
@@ -139,7 +139,7 @@ _reduce_script="""
 command: |
     source ~esheldon/.bashrc
 
-    module load sobjshear/sdssmask-work
+    module load sobjshear/work
 
     config=%(config_file)s
     pattern="%(pattern)s"

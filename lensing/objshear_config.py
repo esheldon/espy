@@ -69,6 +69,9 @@ class ObjshearRunConfig(dict):
                 for key in ['nside']:
                     local_file.write(fmt % (key, self[key]))
 
+                for key in ['mask_style']:
+                    local_file.write(fmt % (key,self[key]))
+
                 for key in ['sigmacrit_style']:
                     local_file.write(fmt % (key,self['src_config'][key]))
                 for key in ['nbin','rmin','rmax']:
