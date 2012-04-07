@@ -8,7 +8,7 @@
  "forcegauss":true,
  "mins2":0.05,
  "maxs2":2.5,
- "ns2":20,
+ "ns2":100,
  "mine":0.05,
  "maxe":0.8,
  "nume":20,

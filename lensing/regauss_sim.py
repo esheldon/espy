@@ -1,6 +1,7 @@
 from __future__ import print_function
 import os
 import sys
+from sys import stderr
 import numpy
 from numpy import sqrt, array
 import images
@@ -11,16 +12,20 @@ import glob
 
 import esutil as eu
 from esutil.ostools import path_join
+from esutil.misc import wlog
+from esutil import hdfs
 import biggles
 
 import pcolors
 
 from pprint import pprint
+import converter
 
 try:
     import scipy.signal
 except:
     print("Could not import scipy.signal, cannot do convolutions")
+
 
 def shear_fracdiff(e, em, deriv=1.0):
     """
@@ -70,30 +75,35 @@ class RegaussSimPlotter(dict):
 
         self.read_data()
 
-        pdir = plotdir(self['run'], self['objmodel'], self['psfmodel'])
+        pdir = get_plotdir(self['run'])
         if not os.path.exists(pdir):
             print("Making plot dir:",pdir)
             os.makedirs(pdir)
 
-    def plotfile(self, run, objmodel, psfmodel, type, alt=None, s2=None, Rmin=None, dotitle=False, yrange=None):
-        dir = plotdir(run, objmodel, psfmodel)
+    def plotfile(self, run, objmodel, psfmodel, type, alt=None, 
+                 s2=None, Rmin=None, dotitle=False, yrange=None):
+        dir = get_plotdir(run)
         f = 'rgsim-%sobj-%spsf-%s' % (objmodel, psfmodel, type)
         if alt is not None:
             f += '-alt'+alt
         if s2 is not None:
-            f += '-s2-%0.2f' % s2
+            f += '-s2-%0.3f' % s2
         if Rmin is not None:
-            f += '-Rmin%0.2f' % Rmin
+            f += '-Rmin%0.3f' % Rmin
         if dotitle:
             f += '-tit'
 
         if yrange is not None:
-            f += '-yr%0.2f-%0.2f' % tuple(yrange)
+            f += '-yr%0.3f-%0.3f' % tuple(yrange)
         f += '.eps'
         f = path_join(dir, f)
         return f
 
-    def plot(self, type, Rmin=0.0, show=True, yrange=None, dotitle=False):
+    def plot(self, type, Rmin=0.0, show=True, yrange=None, dotitle=False, 
+             reduce_plot_key=True):
+        """
+        if too many s2 use reduce_plot_key=False
+        """
         pfile = self.plotfile(self['run'],
                               self['objmodel'],
                               self['psfmodel'], 
@@ -118,7 +128,9 @@ class RegaussSimPlotter(dict):
         ndata = len(keepdata)
         colors=pcolors.rainbow(ndata, 'hex')
 
+        biggles.configure('PlotKey','key_vsep',1.0)
         plt = biggles.FramedPlot()
+        plt.aspect_ratio=1
         plt.xlabel='object ellipticity'
         plt.ylabel=r'$\Delta \gamma/\gamma$'
 
@@ -149,7 +161,7 @@ class RegaussSimPlotter(dict):
 
             Rmean = numpy.median( st[rname] )
 
-            label = 's2: %0.2f R: %0.2f' % (s2,Rmean)
+            label = 's2: %0.3f R: %0.3f' % (s2,Rmean)
 
             crg = biggles.Curve(etrue, gamma_frac_rg, color=colors[i])
             crg.label=label
@@ -169,19 +181,32 @@ class RegaussSimPlotter(dict):
 
 
         fsize=1.5
-        key = biggles.PlotKey(0.95,0.9, allplots, halign='right', fontsize=fsize)
+        if not reduce_plot_key:
+            key = biggles.PlotKey(0.9,0.9, allplots, halign='right', fontsize=fsize)
+        else:
+            # pick a few
+            nplot=len(allplots)
+            tplots = [allplots[0], 
+                      allplots[nplot*1/4], 
+                      allplots[nplot/2], 
+                      allplots[nplot*3/4], 
+                      allplots[-1]]
+            key = biggles.PlotKey(0.9,0.9, tplots, halign='right', fontsize=fsize)
+
         plt.add(key)
 
         l = biggles.PlotLabel(0.1,0.9, type, halign='left')
         plt.add(l)
 
-        plt.xrange = [0,1.2]
+        if not reduce_plot_key:
+            plt.xrange = [0,1.4]
         if yrange is not None:
             plt.yrange = yrange
         print("Writing plot file:",pfile)
-        plt.write_eps(pfile)
         if show:
             plt.show()
+        plt.write_eps(pfile)
+        converter.convert(pfile,dpi=100)
 
 
 
@@ -236,7 +261,7 @@ class RegaussSimPlotter(dict):
 
             if Rmean >= Rmin:
                 pdict={}
-                label = 's2: %0.2f R: %0.2f' % (s2,Rmean)
+                label = 's2: %0.3f R: %0.3f' % (s2,Rmean)
 
                 calt = biggles.Curve(etrue, gamma_frac_alt, color=colors[i])
                 calt.label = label 
@@ -304,16 +329,19 @@ class RegaussSimPlotter(dict):
     def read_data(self):
         c=self.config
         s2vals=sample_s2(c['mins2'],c['maxs2'],c['ns2'])
-
+        #s2vals=s2vals[1:]
         self.alldata = []
         for s2 in s2vals:
             #print('-'*72)
             #print("s2:",s2)
 
-            pattern=simfile(self['run'], self['objmodel'], self['psfmodel'],
+            pattern=get_simfile(self['run'], self['objmodel'], self['psfmodel'],
                             s2, '*', self['psf_ellip'])
             print(pattern)
-            flist = glob.glob(pattern)
+            if hdfs.is_in_hdfs(pattern):
+                flist = hdfs.ls(pattern,full=True)
+            else:
+                flist = glob.glob(pattern)
             if len(sorted(flist)) != 0:
                 st = self.struct(len(flist))
                 for i in xrange(len(flist)):
@@ -353,6 +381,7 @@ def run_many_s2(run, verbose=False):
 
     c=read_config(run)
     s2list=sample_s2(c['mins2'],c['maxs2'],c['ns2'])
+    print('s2list\n    ',s2list)
     for s2 in s2list:
         print("-"*70)
         print("s2:",s2)
@@ -385,7 +414,6 @@ class RegaussSimulatorRescontrol(dict):
 
         c = read_config(run)
         self['run']=run
-        self['s2']=s2
         self['s2']=s2
         self['objmodel']=c['objmodel']
         self['psfmodel']=c['psfmodel']
@@ -427,7 +455,7 @@ class RegaussSimulatorRescontrol(dict):
     def run_many_ellip(self):
         for ellip in self.ellipvals():
             self.run_ellip(ellip)
-        print("Done many_ellip")
+        wlog("Done many_ellip")
 
     def new_convolved_image(self, ellip):
         pcov=fimage.conversions.ellip2mom(2*self['psf_sigma']**2,e=self['psf_ellip'],theta=0)
@@ -456,13 +484,13 @@ class RegaussSimulatorRescontrol(dict):
         
     def run_ellip(self, ellip):
 
-        print("ellip:",ellip)
+        wlog("ellip:",ellip)
         outfile = self.outfile(ellip)
         print("outfile:",outfile)
 
         dir=os.path.dirname(outfile)
         if not os.path.exists(dir):
-            print("Making output dir:",dir)
+            wlog("Making output dir:",dir)
             try:
                 os.makedirs(dir)
             except:
@@ -472,7 +500,7 @@ class RegaussSimulatorRescontrol(dict):
         robj=None
 
         # get a n ew RandomConvolvedImage with this ellip
-        print("getting convolved image")
+        wlog("getting convolved image")
         ci = self.new_convolved_image(ellip)
         rgkeys = self.rgkeys
 
@@ -480,13 +508,13 @@ class RegaussSimulatorRescontrol(dict):
         rgkeys['guess_psf'] = (ci['cov_psf_admom'][0] + ci['cov_psf_admom'][2])/2
 
 
-        print("running regauss")
+        wlog("running regauss")
         rg = admom.ReGauss(ci.image, ci['cen'][0], ci['cen'][1], ci.psf, **rgkeys)
         rg.do_all()
         self.add_unweighted_truth(rg, ci.image0)
         if self['verbose']:
-            print("uwcorrstats")
-            pprint(rg['uwcorrstats'])
+            wlog("uwcorrstats")
+            wlog(rg['uwcorrstats'])
 
 
         if rg['rgstats'] == None or rg['rgcorrstats'] == None:
@@ -496,7 +524,7 @@ class RegaussSimulatorRescontrol(dict):
         # copy out the data
         output = self.copy_output(ci, rg)
 
-        eu.io.write(outfile, output)
+        eu.io.write(outfile, output, clobber=True)
 
         if self['debug']:
             self.write_images(ellip, ci)
@@ -585,22 +613,22 @@ class RegaussSimulatorRescontrol(dict):
 
     def write_images(self, ellip, ci):
         f=self.outfile(ellip, 'image')
-        print("writing image file:",f)
+        wlog("writing image file:",f)
         eu.io.write(f, ci.image, clobber=True)
 
         f=self.outfile(ellip, 'image0')
-        print("writing image0 file:",f)
+        wlog("writing image0 file:",f)
         eu.io.write(f, ci.image0, clobber=True)
 
         f=self.outfile(ellip, 'psf')
-        print("writing psf file:",f)
+        wlog("writing psf file:",f)
         eu.io.write(f, ci.psf, clobber=True)
 
     def outfile(self, ellip, type='res'):
-        return simfile(self['run'], 
-                       self['objmodel'], self['psfmodel'], 
-                       self['s2'], ellip, self['psf_ellip'],
-                       type=type)
+        return get_simfile(self['run'], 
+                           self['objmodel'], self['psfmodel'], 
+                           self['s2'], ellip, self['psf_ellip'],
+                           type=type)
 
 
 
@@ -636,21 +664,21 @@ class RandomSDSSPSF(dict):
         import sdsspy
         w=sdsspy.window.Window()
         if self.verbose:
-            print("Cacheing window flist")
+            wlog("Cacheing window flist")
         flist = w.read('flist')
         
         if self.verbose:
-            print("Extracting matching fields")
+            wlog("Extracting matching fields")
         rfwhm = flist['psf_fwhm'][ :,self['filternum'] ] 
         w,=numpy.where(  (rfwhm > self['min_seeing']) 
                        & (rfwhm < self['max_seeing']) 
                        & (flist['score'] > 0.1) 
                        & (flist['rerun'] == '301') )
         if w.size == 0:
-            raise ValueError("No runs found with seeing in [%0.2f,%0.2f]" % (min_seeing,max_seeing))
+            raise ValueError("No runs found with seeing in [%0.3f,%0.3f]" % (min_seeing,max_seeing))
 
         if self.verbose:
-            print("  Found:",w.size)
+            wlog("  Found:",w.size)
         self.flist = flist[w]
 
     def init_random(self):
@@ -787,7 +815,7 @@ class RegaussSDSSSimulator(dict):
     def run_many_ellip(self):
         for ellip in self.ellipvals():
             self.run_ellip(ellip)
-        print("Done many_ellip")
+        wlog("Done many_ellip")
     def run_ellip(self, ellip):
         """
 
@@ -796,13 +824,13 @@ class RegaussSDSSSimulator(dict):
         If convergence fails, retry ntrial times 
         """
 
-        print("ellip:",ellip)
+        wlog("ellip:",ellip)
         outfile = self.outfile(ellip)
-        print("outfile:",outfile)
+        wlog("outfile:",outfile)
 
         dir=os.path.dirname(outfile)
         if not os.path.exists(dir):
-            print("Making output dir:",dir)
+            wlog("Making output dir:",dir)
             try:
                 os.makedirs(dir)
             except:
@@ -861,10 +889,10 @@ class RegaussSDSSSimulator(dict):
         if robj is not None:
             robj.close()
 
-        print("ntrial:",trial," nfail:",trial-nrand)
-        print("randi/nrand: %s/%s" % (randi,nrand))
+        wlog("ntrial:",trial," nfail:",trial-nrand)
+        wlog("randi/nrand: %s/%s" % (randi,nrand))
         if randi != nrand:
-            print("Exceeded max trials, failed to get all",nrand," realizations")
+            wlog("Exceeded max trials, failed to get all",nrand," realizations")
 
         #sys.stdout.flush()
         
@@ -926,10 +954,10 @@ class RegaussSDSSSimulator(dict):
         return ellipvals
 
     def outfile(self, ellip):
-        return simfile(self['run'], 
-                       self['objmodel'], 
-                       self['psfmodel'], 
-                       self['s2'], ellip)
+        return get_simfile(self['run'], 
+                           self['objmodel'], 
+                           self['psfmodel'], 
+                           self['s2'], ellip)
 
     def new_random_convolved_image(self, ellip):
         p = self.rsp.get()
@@ -981,25 +1009,28 @@ def configfile(run):
 def read_config(run):
     f=configfile(run)
     return eu.io.read(f)
-def pbsdir(run):
+
+def get_wq_dir(run):
     dir=os.environ.get('REGAUSSIM_DIR')
-    dir=path_join(dir, run, 'pbs')
+    dir=path_join(dir, run, 'wq')
     return dir
+def get_wq_url(run,objmodel,psfmodel,extra):
+    dir=get_wq_dir(run)
+    f='rgsim-%s-%s-%s-%s.yaml' % (run,objmodel,psfmodel,extra)
+    f=os.path.join(dir,f)
+    return f
 
-    dir=simdir(run, objmodel, psfmodel)
-    dir = path_join(dir,'pbs')
-    return dir
 
-def simfile(run, objmodel, psfmodel, s2, ellip, psf_ellip=None, type='res'):
-    dir=simdir(run, objmodel, psfmodel)
+def get_simfile(run, objmodel, psfmodel, s2, ellip, psf_ellip=None, type='res'):
+    dir=get_simdir(run)
 
     if ellip != '*':
-        ellip = '%0.2f' % ellip
+        ellip = '%0.3f' % ellip
     
     f = 'rgsim-%sobj-%s-%spsf' % (objmodel, ellip, psfmodel)
     if psf_ellip is not None:
-        f += '-%0.2f' % psf_ellip
-    f += '-s2-%0.2f' % s2
+        f += '-%0.3f' % psf_ellip
+    f += '-s2-%0.3f' % s2
 
     if type == 'res':
         f += '.rec'
@@ -1008,19 +1039,20 @@ def simfile(run, objmodel, psfmodel, s2, ellip, psf_ellip=None, type='res'):
     else:
         raise ValueError("type must be 'rec','image','image0','psf'")
 
-    #f = 'rgsim-%sobj-%s-%spsf-%0.2f-s2-%0.2f.rec' % (objmodel, ellip, psfmodel, psf_ellip, s2)
+    #f = 'rgsim-%sobj-%s-%spsf-%0.3f-s2-%0.3f.rec' % (objmodel, ellip, psfmodel, psf_ellip, s2)
     f = path_join(dir, f)
     return f
 
 
-def plotdir(run, objmodel, psfmodel):
-    dir = simdir(run, objmodel, psfmodel)
-    dir = path_join(dir, 'plots')
+def get_plotdir(run):
+    dir=os.environ.get('REGAUSSIM_DIR')
+    dir=path_join(dir, run, 'plots')
     return dir
 
-def simdir(run, objmodel, psfmodel):
+def get_simdir(run):
+    #dir=os.environ.get('REGAUSSIM_HDFS_DIR')
     dir=os.environ.get('REGAUSSIM_DIR')
-    dir=path_join(dir, run, objmodel+'obj-'+psfmodel+'psf')
+    dir=path_join(dir, run, 'outputs')
     return dir
 
 class RandomConvolvedImage(dict):
@@ -1167,6 +1199,36 @@ class RandomConvolvedImage(dict):
     def show(self):
         self.cm.show()
 
+def create_sim_wq(run):
+    import pbs
+
+    c = read_config(run)
+    objmodel = c['objmodel']
+    psfmodel = c['psfmodel']
+
+
+    name='%s-%s' % (objmodel,psfmodel)
+    wqtemplate="""
+command: |
+    source ~/.bashrc
+    python $ESPY_DIR/lensing/bin/regauss-sim.py %(run)s %(s2)0.3f
+
+job_name: %(job_name)s
+priority: med\n"""
+
+    s2vals=sample_s2(c['mins2'],c['maxs2'],c['ns2'])
+    for s2 in s2vals:
+        extra = '%0.3f' % s2
+        job_name='%s-%s-%s' % (objmodel,psfmodel,extra)
+
+        wqurl = get_wq_url(run,objmodel,psfmodel,extra)
+
+        eu.ostools.makedirs_fromfile(wqurl,verbose=True)
+        wlog("writing wq script:",wqurl)
+        with open(wqurl,'w') as fobj:
+            wqscript=wqtemplate % {'run':run, 's2':s2,'job_name':job_name}
+            fobj.write(wqscript)
+
 
 
 def create_sim_pbs(run):
@@ -1267,11 +1329,11 @@ def psfield_compare_model(rsp=None, generator='filter', next=False):
     else:
         raise ValueError("unknown generator type: '%s'" % generator)
 
-    print("image counts:",image.sum(),"model counts:",fake.sum())
+    wlog("image counts:",image.sum(),"model counts:",fake.sum())
 
     resid = fake-image
 
-    print("summed residuals:",resid.sum())
+    wlog("summed residuals:",resid.sum())
 
     maxval = max( image.max(), fake.max() )
     minval = 0.0
@@ -1284,7 +1346,7 @@ def psfield_compare_model(rsp=None, generator='filter', next=False):
     residplt=images.view(resid, show=False, min=minval, max=maxval)
 
     #sigma = numpy.sqrt((res['Irr']+res['Icc'])/2.0)
-    #lab = biggles.PlotLabel(0.1,0.9,r'$\sigma$: %0.2f' % sigma, fontsize=4, halign='left')
+    #lab = biggles.PlotLabel(0.1,0.9,r'$\sigma$: %0.3f' % sigma, fontsize=4, halign='left')
     #fakeplt.add(lab)
 
     implt.title='original'

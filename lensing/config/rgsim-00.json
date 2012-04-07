@@ -9,6 +9,6 @@
  "ns2":20,
  "mine":0.05,
  "maxe":0.8,
- "nume":20,
+ "nume":100,
  "comments":"very high res PSF, analytic convolutions"}
 
