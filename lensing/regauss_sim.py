@@ -68,6 +68,7 @@ class RegaussSimPlotter(dict):
         self.config = c
         self['objmodel'] = c['objmodel']
         self['psfmodel'] = c['psfmodel']
+        self['psf_sigma'] = c['psf_sigma']
 
         self['psf_ellip'] = None
         if self['psfmodel'] != 'sdss':
@@ -102,6 +103,7 @@ class RegaussSimPlotter(dict):
     def plot(self, type, Rmin=0.0, show=True, yrange=None, dotitle=False, 
              reduce_plot_key=True):
         """
+        Send Rmin to limit the plotted R values
         if too many s2 use reduce_plot_key=False
         """
         pfile = self.plotfile(self['run'],
@@ -172,7 +174,8 @@ class RegaussSimPlotter(dict):
             i += 1
 
         if dotitle:
-            title='obj: %s psf: %s run: %s' % (self['objmodel'],self['psfmodel'],self['run'])
+            title='obj: %s psf: %s run: %s' \
+                    % (self['objmodel'],self['psfmodel'],self['run'])
 
             if 'forcegauss' in self.config:
                 if self.config['forcegauss']:
@@ -195,8 +198,13 @@ class RegaussSimPlotter(dict):
 
         plt.add(key)
 
-        l = biggles.PlotLabel(0.1,0.9, type, halign='left')
+        plab='%s %s %s' % (type,self['objmodel'],self['psfmodel'])
+        l = biggles.PlotLabel(0.1,0.9, plab, halign='left')
         plt.add(l)
+
+        siglab=r'$\sigma_{PSF}: %.1f$ pix' % self['psf_sigma']
+        sl = biggles.PlotLabel(0.1,0.1, siglab, halign='left')
+        plt.add(sl)
 
         if not reduce_plot_key:
             plt.xrange = [0,1.4]
@@ -276,7 +284,8 @@ class RegaussSimPlotter(dict):
 
         conv=self.config.get('sim_conv', 'analytic')
         if dotitle:
-            title='obj: %s psf: %s run: %s' % (self['objmodel'],self['psfmodel'],self['run'])
+            title='obj: %s psf: %s run: %s' \
+                    % (self['objmodel'],self['psfmodel'],self['run'])
 
             if 'forcegauss' in self.config:
                 if self.config['forcegauss']:
@@ -342,9 +351,10 @@ class RegaussSimPlotter(dict):
                 flist = hdfs.ls(pattern,full=True)
             else:
                 flist = glob.glob(pattern)
-            if len(sorted(flist)) != 0:
-                st = self.struct(len(flist))
-                for i in xrange(len(flist)):
+            nf=len(flist)
+            if nf != 0:
+                st = self.struct(nf)
+                for i in xrange(nf):
                     f=flist[i]
                     #print("    Found %s" % f)
                     t=eu.io.read(f)
@@ -458,7 +468,8 @@ class RegaussSimulatorRescontrol(dict):
         wlog("Done many_ellip")
 
     def new_convolved_image(self, ellip):
-        pcov=fimage.conversions.ellip2mom(2*self['psf_sigma']**2,e=self['psf_ellip'],theta=0)
+        pcov=fimage.conversions.ellip2mom(2*self['psf_sigma']**2,
+                                          e=self['psf_ellip'],theta=0)
         if self['psfmodel'] == 'dgauss':
             pcov1=pcov
             pcov2=pcov*self['psf_sigrat']**2
