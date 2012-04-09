@@ -3,7 +3,8 @@ import os
 import sys
 from sys import stderr
 import numpy
-from numpy import sqrt, array
+from numpy import sqrt, array, ogrid, where
+from numpy.random import standard_normal
 import images
 
 import admom
@@ -433,6 +434,9 @@ class RegaussSimulatorRescontrol(dict):
         # for dgauss PSF
         self['psf_sigrat']=c.get('psf_sigrat',2.3)
         self['psf_cenrat']=c.get('psf_cenrat',0.09)
+        
+        if 's2n' in c:
+            self['s2n'] = c['s2n']
 
         self['mine']=c.get('mine',0.05)
         self['maxe']=c.get('maxe',0.8)
@@ -491,8 +495,67 @@ class RegaussSimulatorRescontrol(dict):
         #ci = fimage.convolved.ConvolvedImage(objpars,psfpars, **self.convkeys)
         ci = fimage.convolved.ConvolvedImageFFT(objpars,psfpars, **self.convkeys)
 
+        if 's2n' in self:
+            self.add_noise(ci)
+
         return ci
         
+    def add_noise(self, ci):
+        """
+        Add noise based on requested S/N.  We only add background noise
+        so the S/N is
+
+              sum(pix)
+        -------------------   = S/N
+        sqrt(npix*skysig**2)
+
+        thus
+            
+            sum(pix)
+        ----------------   = sigsky
+        sqrt(npix)*(S/N)
+
+        
+        We use an aperture of 3sigma but if no pixels
+        are returned we increase the aperture until some
+        are returned.
+
+        """
+        s2n = self['s2n']
+        print("adding noise at S/N:",s2n)
+
+        cen = ci['cen_uw']
+        T = ci['cov_uw'][0] + ci['cov_uw'][2]
+        sigma = fimage.mom2sigma(T)
+        image = ci.image
+        shape = image.shape
+
+        row,col=ogrid[0:shape[0], 0:shape[1]]
+        rm = array(row - cen[0], dtype='f8')
+        cm = array(col - cen[1], dtype='f8')
+
+        radpix = sqrt(rm**2 + cm**2)
+        sigfac = 3.0
+        step=0.1
+        w = where(radpix <= sigfac*sigma)
+        while w.size == 0:
+            sigfac += step
+            w = where(radpix <= sigfac*sigma)
+        npix = w.size
+        signal = image[w].sum() 
+
+        sigsky = signal/sqrt(npix)/s2n
+        self['sigsky'] = sigsky
+
+        noise_image = \
+            sigsky*standard_normal(image.size).reshape(shape)
+        ci.image_nonoise = image
+        ci.image = image + noise_image
+        
+        s2n_meas = ci.image[w].sum()/sqrt(npix)/s2n
+        print("    target S/N:            ",s2n)
+        print("    meas S/N after noise:  ",s2n_meas)
+
     def run_ellip(self, ellip):
 
         wlog("ellip:",ellip)
@@ -517,7 +580,8 @@ class RegaussSimulatorRescontrol(dict):
 
         rgkeys['guess'] = (ci['cov_admom'][0] + ci['cov_admom'][2])/2
         rgkeys['guess_psf'] = (ci['cov_psf_admom'][0] + ci['cov_psf_admom'][2])/2
-
+        if 's2n' in self:
+            rgkeys['sigsky'] = self['sigsky']
 
         wlog("running regauss")
         rg = admom.ReGauss(ci.image, ci['cen'][0], ci['cen'][1], ci.psf, **rgkeys)
