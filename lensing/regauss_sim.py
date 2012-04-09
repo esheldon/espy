@@ -3,7 +3,7 @@ import os
 import sys
 from sys import stderr
 import numpy
-from numpy import sqrt, array, ogrid, where
+from numpy import sqrt, array, ogrid, where, median
 from numpy.random import standard_normal
 import images
 
@@ -204,6 +204,10 @@ class RegaussSimPlotter(dict):
         plt.add(l)
 
         siglab=r'$\sigma_{PSF}: %.1f$ pix' % self['psf_sigma']
+        if 's2n' in self.config:
+            siglab+=r'$ S/N: %(s2n)d N_{trial}: %(ntrial)d$' % self.config
+        elif 'ntrial' in self.config:
+            siglab+=r'$  N_{trial}: %(ntrial)d$' % self.config
         sl = biggles.PlotLabel(0.1,0.1, siglab, halign='left')
         plt.add(sl)
 
@@ -405,6 +409,7 @@ def sample_s2(mins2,maxs2,ns2):
     s2vals = numpy.linspace(mins2, maxs2, ns2)
     return s2vals
 
+
 class RegaussSimulatorRescontrol(dict):
     """
     Simulate objects convolved with the PSF. 
@@ -437,6 +442,11 @@ class RegaussSimulatorRescontrol(dict):
         
         if 's2n' in c:
             self['s2n'] = c['s2n']
+
+        if 'ntrial' not in c or 'itmax' not in c:
+            raise ValueError("you must send ntrial/itmax")
+        self['ntrial'] = c['ntrial']
+        self['itmax'] = c['itmax']
 
         self['mine']=c.get('mine',0.05)
         self['maxe']=c.get('maxe',0.8)
@@ -471,7 +481,110 @@ class RegaussSimulatorRescontrol(dict):
             self.run_ellip(ellip)
         wlog("Done many_ellip")
 
-    def new_convolved_image(self, ellip):
+
+    def run_ellip(self, ellip):
+
+        wlog("ellip:",ellip)
+        outfile = self.outfile(ellip)
+        wlog("outfile:",outfile)
+
+        # get a n ew RandomConvolvedImage with this ellip
+        wlog("getting convolved image")
+
+        #if 's2n' in self:
+        if True:
+            trials_file = self.outfile(ellip,type='trials')
+            #output, trials = self.do_regauss_trials(ci)
+            output, trials = self.do_regauss_trials(ellip)
+            eu.io.write(trials_file, trials, clobber=True)
+        else:
+            ci = self.new_convolved_image(ellip)
+            output = self.do_regauss(ci)
+
+        eu.io.write(outfile, output, clobber=True)
+
+        if self['debug']:
+            self.write_images(ellip, ci)
+
+
+    def do_regauss(self, ci, verbose_local=True):
+        """
+        ci is a convolved image
+        """
+        rgkeys = self.rgkeys
+
+        rgkeys['guess'] = (ci['cov_admom'][0] + ci['cov_admom'][2])/2
+        rgkeys['guess_psf'] = (ci['cov_psf_admom'][0] + ci['cov_psf_admom'][2])/2
+        if 's2n' in self:
+            rgkeys['sigsky'] = self['sigsky']
+        
+        if verbose_local:
+            wlog("running regauss")
+        rgkeys['verbose'] = verbose_local
+
+        rg = admom.ReGauss(ci.image, ci['cen'][0], ci['cen'][1], ci.psf, **rgkeys)
+        rg.do_all()
+        self.add_unweighted_truth(rg, ci.image0)
+        if self['verbose']:
+            wlog("uwcorrstats")
+            wlog(rg['uwcorrstats'])
+
+
+        if rg['rgstats'] == None or rg['rgcorrstats'] == None:
+            raise RuntimeError("Failed to run regauss")
+        if rg['rgstats']['whyflag'] != 0:
+            raise RuntimeError("regauss failed: '%s'" % rg['rgstats']['whystr'])
+
+        # copy out the data
+        output = self.copy_output(ci, rg)
+        return output
+
+    def do_regauss_trials(self, ellip):
+        """
+        Run multiple trials of the noise
+        """
+        #ci.image_nonoise = ci.image
+        ntrial = self['ntrial']
+        dotper=10
+        if 's2n' in self:
+            print("doing",self['ntrial'],"trials at S/N:",self['s2n'])
+        else:
+            print("doing",self['ntrial'],"trials")
+        print("one dot per",dotper,"trials")
+        trials = numpy.zeros(ntrial, dtype=self.out_dtype())
+        itrial = 0
+        iter=0
+        while (itrial < ntrial) and (iter < self['itmax']):
+            if ((itrial+1) % dotper) == 0:
+                stderr.write('.')
+            theta = 45.0*numpy.random.random()
+            if itrial == 0:
+                verbose_local=True
+            else:
+                verbose_local=False
+
+            ci = self.new_convolved_image(ellip, 
+                                          verbose_local=verbose_local,
+                                          theta=theta)
+            if 's2n' in self:
+                ci.image_nonoise = ci.image
+                self.add_noise(ci)
+            try:
+                trial = self.do_regauss(ci, verbose_local=False)
+                trials[itrial] = trial
+                itrial+=1
+            except RuntimeError:
+                pass
+            iter+=1
+        stderr.write('\n')
+        if iter >= self['itmax']:
+            raise ValueError("reached itmax")
+
+        print("total iterations:",iter)
+        output = self.average_trials(trials)
+        return output, trials
+
+    def new_convolved_image(self, ellip, verbose_local=True, theta=45):
         pcov=fimage.conversions.ellip2mom(2*self['psf_sigma']**2,
                                           e=self['psf_ellip'],theta=0)
         if self['psfmodel'] == 'dgauss':
@@ -487,16 +600,14 @@ class RegaussSimulatorRescontrol(dict):
                            cov = pcov)
 
         sigma = self['psf_sigma']/sqrt(self['s2'])
-        cov=fimage.conversions.ellip2mom(2*sigma**2,e=ellip,theta=45)
+        cov=fimage.conversions.ellip2mom(2*sigma**2,e=ellip,theta=theta)
         objpars = dict(model = self['objmodel'],
                        cov=cov)
 
         # default in convolved image is 16
         #ci = fimage.convolved.ConvolvedImage(objpars,psfpars, **self.convkeys)
+        self.convkeys['verbose'] = verbose_local
         ci = fimage.convolved.ConvolvedImageFFT(objpars,psfpars, **self.convkeys)
-
-        if 's2n' in self:
-            self.add_noise(ci)
 
         return ci
         
@@ -520,14 +631,16 @@ class RegaussSimulatorRescontrol(dict):
         are returned we increase the aperture until some
         are returned.
 
+        Side effects:
+            ci.image is set to the noisy image
+            self['sigsky'] is set to the noise level
         """
         s2n = self['s2n']
-        print("adding noise at S/N:",s2n)
 
         cen = ci['cen_uw']
         T = ci['cov_uw'][0] + ci['cov_uw'][2]
         sigma = fimage.mom2sigma(T)
-        image = ci.image
+        image = ci.image_nonoise
         shape = image.shape
 
         row,col=ogrid[0:shape[0], 0:shape[1]]
@@ -538,10 +651,11 @@ class RegaussSimulatorRescontrol(dict):
         sigfac = 3.0
         step=0.1
         w = where(radpix <= sigfac*sigma)
-        while w.size == 0:
+        npix = w[0].size + w[1].size
+        while npix == 0:
             sigfac += step
             w = where(radpix <= sigfac*sigma)
-        npix = w.size
+            npix = w[0].size + w[1].size
         signal = image[w].sum() 
 
         sigsky = signal/sqrt(npix)/s2n
@@ -549,61 +663,12 @@ class RegaussSimulatorRescontrol(dict):
 
         noise_image = \
             sigsky*standard_normal(image.size).reshape(shape)
-        ci.image_nonoise = image
         ci.image = image + noise_image
         
-        s2n_meas = ci.image[w].sum()/sqrt(npix)/s2n
-        print("    target S/N:            ",s2n)
-        print("    meas S/N after noise:  ",s2n_meas)
+        s2n_meas = ci.image[w].sum()/sqrt(npix)/sigsky
+        #print("    target S/N:            ",s2n)
+        #print("    meas S/N after noise:  ",s2n_meas)
 
-    def run_ellip(self, ellip):
-
-        wlog("ellip:",ellip)
-        outfile = self.outfile(ellip)
-        print("outfile:",outfile)
-
-        dir=os.path.dirname(outfile)
-        if not os.path.exists(dir):
-            wlog("Making output dir:",dir)
-            try:
-                os.makedirs(dir)
-            except:
-                # probably a race condition
-                pass
-
-        robj=None
-
-        # get a n ew RandomConvolvedImage with this ellip
-        wlog("getting convolved image")
-        ci = self.new_convolved_image(ellip)
-        rgkeys = self.rgkeys
-
-        rgkeys['guess'] = (ci['cov_admom'][0] + ci['cov_admom'][2])/2
-        rgkeys['guess_psf'] = (ci['cov_psf_admom'][0] + ci['cov_psf_admom'][2])/2
-        if 's2n' in self:
-            rgkeys['sigsky'] = self['sigsky']
-
-        wlog("running regauss")
-        rg = admom.ReGauss(ci.image, ci['cen'][0], ci['cen'][1], ci.psf, **rgkeys)
-        rg.do_all()
-        self.add_unweighted_truth(rg, ci.image0)
-        if self['verbose']:
-            wlog("uwcorrstats")
-            wlog(rg['uwcorrstats'])
-
-
-        if rg['rgstats'] == None or rg['rgcorrstats'] == None:
-            raise RuntimeError("Failed to run regauss")
-        if rg['rgstats']['whyflag'] != 0:
-            raise RuntimeError("regauss failed: '%s'" % rg['rgstats']['whystr'])
-        # copy out the data
-        output = self.copy_output(ci, rg)
-
-        eu.io.write(outfile, output, clobber=True)
-
-        if self['debug']:
-            self.write_images(ellip, ci)
-        #sys.stdout.flush()
 
     def add_unweighted_truth(self, rg, image0):
         mom0=fimage.statistics.fmom(image0)
@@ -657,6 +722,10 @@ class RegaussSimulatorRescontrol(dict):
         st['e2corr_uw'] = uwcorrs['e2']
         st['ecorr_uw'] = uwcorrs['e']
 
+        if 's2n' in self:
+            st['s2n'] = self['s2n']
+            st['ntrial'] = self['ntrial']
+            st['itmax'] = self['itmax']
         return st
 
     def out_dtype(self):
@@ -680,8 +749,15 @@ class RegaussSimulatorRescontrol(dict):
               ('e1corr_uw','f8'),
               ('e2corr_uw','f8'),
               ('ecorr_uw','f8')]
+        if 'ntrial' in self:
+            dt += [('s2n','f8'),('ntrial','i8'),('itmax','i8')]
         return dt
 
+    def average_trials(self, trials):
+        st = numpy.zeros(1, dtype=self.out_dtype())
+        for n in st.dtype.names:
+            st[n] = median(trials[n])
+        return st
     def ellipvals(self):
         ellipvals = numpy.linspace(self['mine'], self['maxe'], self['nume'])
         return ellipvals
@@ -700,12 +776,20 @@ class RegaussSimulatorRescontrol(dict):
         eu.io.write(f, ci.psf, clobber=True)
 
     def outfile(self, ellip, type='res'):
-        return get_simfile(self['run'], 
-                           self['objmodel'], self['psfmodel'], 
-                           self['s2'], ellip, self['psf_ellip'],
-                           type=type)
+        f = get_simfile(self['run'], 
+                        self['objmodel'], self['psfmodel'], 
+                        self['s2'], ellip, self['psf_ellip'],
+                        type=type)
 
-
+        dir=os.path.dirname(f)
+        if not os.path.exists(dir):
+            wlog("Making output dir:",dir)
+            try:
+                os.makedirs(dir)
+            except:
+                # probably a race condition
+                pass
+        return f
 
 
 class RandomSDSSPSF(dict):
@@ -1109,6 +1193,8 @@ def get_simfile(run, objmodel, psfmodel, s2, ellip, psf_ellip=None, type='res'):
 
     if type == 'res':
         f += '.rec'
+    elif type == 'trials':
+        f += '-%s.rec' % type
     elif type in ['image','image0','psf']:
         f += '-%s.fits' % type
     else:
@@ -1274,7 +1360,15 @@ class RandomConvolvedImage(dict):
     def show(self):
         self.cm.show()
 
-def create_sim_wq(run):
+_wqtemplate="""
+command: |
+    source ~/.bashrc
+    python $ESPY_DIR/lensing/bin/regauss-sim.py %(opts)s %(run)s
+
+job_name: %(job_name)s
+priority: med\n"""
+
+def create_sim_wq_bys2(run):
     import pbs
 
     c = read_config(run)
@@ -1282,27 +1376,42 @@ def create_sim_wq(run):
     psfmodel = c['psfmodel']
 
 
-    name='%s-%s' % (objmodel,psfmodel)
-    wqtemplate="""
-command: |
-    source ~/.bashrc
-    python $ESPY_DIR/lensing/bin/regauss-sim.py %(run)s %(s2)0.3f
-
-job_name: %(job_name)s
-priority: med\n"""
-
     s2vals=sample_s2(c['mins2'],c['maxs2'],c['ns2'])
     for s2 in s2vals:
         extra = '%0.3f' % s2
-        job_name='%s-%s-%s' % (objmodel,psfmodel,extra)
+        job_name='%s-%s-%s-%s' % (run,objmodel,psfmodel,extra)
 
         wqurl = get_wq_url(run,objmodel,psfmodel,extra)
+        opts = '-s2 %(s2)0.3f' % {'s2':s2}
 
         eu.ostools.makedirs_fromfile(wqurl,verbose=True)
         wlog("writing wq script:",wqurl)
         with open(wqurl,'w') as fobj:
-            wqscript=wqtemplate % {'run':run, 's2':s2,'job_name':job_name}
+            wqscript=_wqtemplate % {'run':run, 'job_name':job_name,'opts':opts}
             fobj.write(wqscript)
+
+def create_sim_wq_byellip(run):
+    import pbs
+
+    c = read_config(run)
+    objmodel = c['objmodel']
+    psfmodel = c['psfmodel']
+
+    s2vals=sample_s2(c['mins2'],c['maxs2'],c['ns2'])
+    evals=numpy.linspace(c['mine'],c['maxe'],c['nume'])
+    for s2 in s2vals:
+        for ellip in evals:
+            extra = '%0.3f-%0.3f' % (s2,ellip)
+            job_name='%s-%s-%s-%s' % (run,objmodel,psfmodel,extra)
+
+            wqurl = get_wq_url(run,objmodel,psfmodel,extra)
+            opts = '--s2 %(s2)0.3f -e %(ellip)0.3f' % {'s2':s2,'ellip':ellip}
+
+            eu.ostools.makedirs_fromfile(wqurl,verbose=True)
+            wlog("writing wq script:",wqurl)
+            with open(wqurl,'w') as fobj:
+                wqscript=_wqtemplate % {'run':run, 'job_name':job_name,'opts':opts}
+                fobj.write(wqscript)
 
 
 
