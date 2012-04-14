@@ -59,12 +59,22 @@ class Selector:
         self.load_mask(masktype)
 
         ra,dec=self.objs['ra'],self.objs['dec']
-        inmask = self.masks[masktype].Contains(ra,dec,'eq')
+        m = self.masks[masktype]
+        if hasattr(m, 'Contains'):
+            inmask = m.Contains(ra,dec,'eq')
+        else:
+            inmask = m.contains(ra,dec)
         return (inmask == 1)
 
+    def load_mask_stomp(self, masktype):
+        if masktype not in self.masks:
+            self.masks[masktype] = \
+                es_sdsspy.stomp_maps.load('boss',masktype,verbose=True)
     def load_mask(self, masktype):
         if masktype not in self.masks:
-            self.masks[masktype] = es_sdsspy.stomp_maps.load('boss',masktype,verbose=True)
+            self.masks[masktype] = \
+                es_sdsspy.mangle_masks.load('boss',masktype,verbose=True)
+
 
 
     def modelmag_logic(self, filter, limit, dered=True):

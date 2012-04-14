@@ -43,6 +43,10 @@ def shear_fracdiff(e, em, deriv=1.0):
     """
     return ((1-e**2)*deriv + em/e)/(2-em**2) - 1.0
 
+def shear_fracdiff_stupid(e, em):
+    return em/e-1.0
+
+
 def plot_many():
     runs=['%02i' % r for r in xrange(12)]
     for run in runs:
@@ -160,7 +164,7 @@ class RegaussSimPlotter(dict):
             else:
                 raise ValueError("type should be 'regauss','am+', or 'noweight'")
 
-            gamma_frac_rg = shear_fracdiff(etrue, emeas)
+            gamma_frac_rg = shear_fracdiff(etrue, emeas, deriv=1.0)
 
             Rmean = numpy.median( st[rname] )
 
@@ -414,17 +418,18 @@ class RegaussSimulatorRescontrol(dict):
     """
     Simulate objects convolved with the PSF. 
 
-    This is distinguished from the SDSS simulator because
-    you have precise control over the resolution effects
-    in the PSF.
+    This is distinguished from the SDSS simulator because you have precise
+    control over the resolution effects in the PSF.
 
-    Also, because the resolution will be set high, there is
-    little need to use random orientations, although each
-    realization is still random.
+    Random realizations of the orientation are used based on the ntrial
+    parameter in the config.  
+    
+    If s2n is also present, each of these realizations will get a different
+    noise realization.  Note s2n is the *unweighted* signal to noise,
+    the weighted s2n will be different!
 
-    So generally you just use run_many_ellip and a single 
-    realization of each ellip is used.
-
+    For high resolution and no noise objects, only a single trial is necessary.
+    
     """
     def __init__(self, run, s2, debug=False, verbose=False):
 
@@ -640,15 +645,16 @@ class RegaussSimulatorRescontrol(dict):
         cen = ci['cen_uw']
         T = ci['cov_uw'][0] + ci['cov_uw'][2]
         sigma = fimage.mom2sigma(T)
-        image = ci.image_nonoise
-        shape = image.shape
+        imagenn = ci.image_nonoise
+        shape = imagenn.shape
 
         row,col=ogrid[0:shape[0], 0:shape[1]]
         rm = array(row - cen[0], dtype='f8')
         cm = array(col - cen[1], dtype='f8')
 
         radpix = sqrt(rm**2 + cm**2)
-        sigfac = 3.0
+        # sigfac is 4 in admom
+        sigfac = 4.0
         step=0.1
         w = where(radpix <= sigfac*sigma)
         npix = w[0].size + w[1].size
@@ -656,19 +662,32 @@ class RegaussSimulatorRescontrol(dict):
             sigfac += step
             w = where(radpix <= sigfac*sigma)
             npix = w[0].size + w[1].size
-        signal = image[w].sum() 
 
-        sigsky = signal/sqrt(npix)/s2n
-        self['sigsky'] = sigsky
+        pix = imagenn[w]
+        wt = sqrt(pix)
+        wsignal = (wt*pix).sum()
+        wsum = wt.sum()
+
+        sigsky = wsignal/sqrt(wsum)/s2n
 
         noise_image = \
-            sigsky*standard_normal(image.size).reshape(shape)
-        ci.image = image + noise_image
-        
-        s2n_meas = ci.image[w].sum()/sqrt(npix)/sigsky
-        #print("    target S/N:            ",s2n)
-        #print("    meas S/N after noise:  ",s2n_meas)
+            sigsky*standard_normal(imagenn.size).reshape(shape)
+        ci.image = imagenn + noise_image
 
+        out = admom.admom(ci.image, cen[0], cen[1], guess=T/2., sigsky=sigsky)
+
+        # fix up sigsky based on measurement
+        sigsky = out['s2n']/s2n*sigsky
+        noise_image = \
+            sigsky*standard_normal(imagenn.size).reshape(shape)
+        ci.image = imagenn + noise_image
+        self['sigsky'] = sigsky
+
+
+        if False:
+            out = admom.admom(ci.image, cen[0], cen[1], guess=T/2., sigsky=sigsky)
+            print("    target S/N:            ",s2n)
+            print("    meas S/N after noise:  ",out['s2n'])
 
     def add_unweighted_truth(self, rg, image0):
         mom0=fimage.statistics.fmom(image0)
@@ -703,9 +722,12 @@ class RegaussSimulatorRescontrol(dict):
         st['e2true'] = ci['e2true']
         st['etrue']  = ci['etrue']
 
+        # "conv" here means "measured off the convolved image"
         st['e1conv'] = ims['e1']
         st['e2conv'] = ims['e2']
         st['econv'] = sqrt( ims['e1']**2 + ims['e2']**2 )
+        st['uncerconv'] = ims['uncer']
+        st['s2nconv'] = ims['s2n']
 
         st['R'] = corrs['R']
         st['R_rg'] = rgcorrs['R']
@@ -738,6 +760,8 @@ class RegaussSimulatorRescontrol(dict):
               ('e1conv','f8'),
               ('e2conv','f8'),
               ('econv','f8'),
+              ('uncerconv','f8'),
+              ('s2nconv','f8'),
               ('R','f8'),
               ('R_rg','f8'),
               ('e1corr','f8'),
@@ -1365,6 +1389,7 @@ command: |
     source ~/.bashrc
     python $ESPY_DIR/lensing/bin/regauss-sim.py %(opts)s %(run)s
 
+group: gen45
 job_name: %(job_name)s
 priority: med\n"""
 
@@ -1379,7 +1404,7 @@ def create_sim_wq_bys2(run):
     s2vals=sample_s2(c['mins2'],c['maxs2'],c['ns2'])
     for s2 in s2vals:
         extra = '%0.3f' % s2
-        job_name='%s-%s-%s-%s' % (run,objmodel,psfmodel,extra)
+        job_name='%s-%s' % (run,extra)
 
         wqurl = get_wq_url(run,objmodel,psfmodel,extra)
         opts = '-s2 %(s2)0.3f' % {'s2':s2}
@@ -1402,7 +1427,7 @@ def create_sim_wq_byellip(run):
     for s2 in s2vals:
         for ellip in evals:
             extra = '%0.3f-%0.3f' % (s2,ellip)
-            job_name='%s-%s-%s-%s' % (run,objmodel,psfmodel,extra)
+            job_name='%s-%s' % (run,extra)
 
             wqurl = get_wq_url(run,objmodel,psfmodel,extra)
             opts = '--s2 %(s2)0.3f -e %(ellip)0.3f' % {'s2':s2,'ellip':ellip}

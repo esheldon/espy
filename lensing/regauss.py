@@ -245,7 +245,7 @@ class RegaussSweep:
     def select(self):
         """
         """
-        raise RuntimeError("use mangle mask")
+        #raise RuntimeError("use mangle mask")
         print("Selecting objects")
         s = es_sdsspy.select.Selector(self.objs)
         print("  getting resolve logic")
@@ -263,8 +263,8 @@ class RegaussSweep:
         else:
             rmag_logic = s.modelmag_logic("r", self.rmax)
 
-        #logic = \
-        #    resolve_logic & mask_logic & flag_logic & rmag_logic
+        logic = \
+            resolve_logic & mask_logic & flag_logic & rmag_logic
         #logic = \
         #    resolve_logic & flag_logic & rmag_logic
 
@@ -341,6 +341,7 @@ class RegaussSweep:
                 data['e2'][fnum]     = s['e2']
                 data['a4'][fnum]      = s['a4']
                 data['uncer'][fnum]   = s['uncer']
+                data['s2n'][fnum]   = s['s2n']
                 data['amflags'][fnum] = s['whyflag']
                 data['amflags_str'][fnum] = s['whystr']
                 data['numiter'][fnum] = s['numiter']
@@ -398,6 +399,9 @@ class RegaussSweep:
         print("    copying from objs")
         eu.numpy_util.copy_fields(self.objs, self.output)
 
+        mm=sdsspy.nmgy2mag(self.objs['modelflux'][:,2])
+        self.output['modelmag_dered_r'] = mm-self.objs['extinction'][:,2]
+
         # set defaults
         output = self.output
 
@@ -440,6 +444,7 @@ class RegaussSweep:
             ('thing_id','i4'),
             ('ra','f8'),  # do we need these?
             ('dec','f8'),
+            ('modelmag_dered_r','f4'),
 
             ('has_atlas','i1'), # zero for no atlas
 
@@ -453,6 +458,7 @@ class RegaussSweep:
             ('e2','5f8'),
             ('a4','5f8'),
             ('uncer','5f8'),
+            ('s2n','5f8'),
             ('numiter','5i1'),
             ('amflags','5i2'),
             ('amflags_str','5S5'),

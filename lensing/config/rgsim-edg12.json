@@ -6,7 +6,7 @@
  "conv":      "fft",
  "fft_nsub":  5,
  "forcegauss":false,
- "mins2":0.01,
+ "mins2":0.05,
  "maxs2":1.75,
  "ns2":20,
  "mine":0.05,

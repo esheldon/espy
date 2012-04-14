@@ -1,10 +1,14 @@
 import os
 
-def load(type, subtype=None, veto=False):
+def load(type, subtype=None, veto=False, verbose=False, code='c'):
     #import mangle
-    import mangle_wrap
     fname = mask_name(type,subtype=subtype)
-    return mangle_wrap.Mangle(fname,veto=veto)
+    if code == 'wrap':
+        import mangle_wrap
+        return mangle_wrap.Mangle(fname,veto=veto)
+    else:
+        import mangle
+        return mangle.Mangle(fname,verbose=verbose)
 
 def mask_dir():
     mdir=os.getenv('MASK_DIR')
