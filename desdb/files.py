@@ -38,6 +38,7 @@ def get_expnames(release, band, show=False,
 
 def get_red_info(release, band, 
                  user=None,password=None,
+                 desdata=None,
                  show=True,
                  doprint=False, fmt='json'):
 
@@ -66,6 +67,9 @@ def get_red_info(release, band,
     order by 
         cat_id\n""" % {'netroot':net_rootdir,'release':release,'band':band}
 
+    if desdata is not None:
+        query=query.replace('$DESDATA',desdata)
+
     conn=desdb.Connection(user=user,password=password)
     if doprint:
         conn.quickWrite(query,fmt=fmt,show=show)
@@ -73,8 +77,30 @@ def get_red_info(release, band,
         data=conn.quick(query,show=show)
         return data
 
+def get_red_info_byexp(release, band, 
+                       user=None,password=None,
+                       desdata=None,
+                       show=True,
+                       doprint=False, fmt='json'):
 
+    infolist = get_red_info(release, band, 
+                            user=user,password=password,
+                            desdata=desdata,
+                            show=show)
 
+    d={}
+    for info in infolist:
+        expname=info['expname']
+        el=d.get(expname,None)
+        if el is None:
+            d[expname] = [info]
+        else:
+            # should modify in place
+            el.append(info)
+            if len(el) > 62:
+                pprint.pprint(el)
+                raise ValueError("%s grown beyond 62, why?" % expname)
+    return d
 
 class Red(dict):
     def __init__(self, 
