@@ -48,11 +48,16 @@ def read_image_cat(imfile, catfile):
     cat_ext = 2
     pos_offset=1
 
-    with eu.hdfs.HDFSFile(imfile,verbose=True) as fobj:
-        fobj.stage()
-        f = fitsio.FITS(fobj.localfile)
-        im = f[im_ext][:,:]
-        ivar_im = f[ivar_ext][:,:]
+    if imfile[0:5] == 'hdfs':
+        with eu.hdfs.HDFSFile(imfile,verbose=True) as fobj:
+            fobj.stage()
+            f = fitsio.FITS(fobj.localfile)
+            im = f[im_ext][:,:]
+            ivar_im = f[ivar_ext][:,:]
+    else:
+        with fitsio.FITS(imfile) as ff:
+            im = ff[im_ext][:,:]
+            ivar_im = ff[ivar_ext][:,:]
 
     cat = eu.io.read(catfile, type='fits', verbose=True, 
                      lower=True, ext=cat_ext)
