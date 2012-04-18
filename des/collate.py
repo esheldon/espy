@@ -1,23 +1,18 @@
 from __future__ import print_function
 import os
-import sys
 from sys import stderr
-from copy import copy
 
 import shutil
 
 import esutil as eu
-from esutil import json_util
 from esutil import numpy_util
 from esutil.numpy_util import replicate, where1
-from esutil.plotting import setuplot, bwhiskers
-from esutil.ostools import path_join, getenv_check, expand_path
+from esutil.ostools import path_join, expand_path
 
 import deswl
-from deswl import wlpipe
 
 import numpy
-from numpy import where, arange
+from numpy import arange
 
 import columns
 
@@ -25,8 +20,12 @@ def open_columns(run):
     coldir=deswl.files.coldir(run)
     return columns.Columns(coldir)
 
+def make_rid(expid, ccd, fid):
+    return expid*10**7 + ccd*10**5 + fid
+
 class SEColumnCollator: 
-    def __init__(self, serun, small=False, njob=None, job=None, no_cleanup=False):
+    def __init__(self, serun, small=False, njob=None, job=None, 
+                 no_cleanup=False):
         self.serun = serun
         self.small=small
 
@@ -82,7 +81,8 @@ class SEColumnCollator:
             kk=k
             data[k] = eu.io.read(fdict[kk], ensure_native=True, verbose=True)
 
-        data['idvals'] = self.uid_offset + numpy.arange(data['stars'].size,dtype='i4')
+        data['idvals'] = self.uid_offset + numpy.arange(data['stars'].size,
+                                                        dtype='i4')
         self.uid_offset += data['stars'].size
 
         return data
@@ -96,7 +96,8 @@ class SEColumnCollator:
             if self.njob is None:
                 raise ValueError("Send both job and njob")
             if self.job < 0 or self.job > (self.njob-1):
-                raise ValueError("job must be in [0,%s], got %s" % (self.njob-1,self.job))
+                raise ValueError("job must be in [0,%s], "
+                                 "got %s" % (self.njob-1,self.job))
             self.suffix = '-%03d' % self.job
         else:
             self.suffix = ''
@@ -121,9 +122,11 @@ class SEColumnCollator:
         print('Will copy to:',self.final_coldir,file=stderr)
 
         if os.path.exists(self.temp_coldir):
-            raise RuntimeError("temp coldir %s exists. Please start from scratch" % self.temp_coldir)
+            raise RuntimeError("temp coldir %s exists. Please start "
+                               "from scratch" % self.temp_coldir)
         if os.path.exists(self.final_coldir):
-            raise RuntimeError("Final coldir %s exists. Please start from scratch" % self.final_coldir)
+            raise RuntimeError("Final coldir %s exists. Please start "
+                               "from scratch" % self.final_coldir)
 
         self.cols = columns.Columns(self.temp_coldir)
         self.cols.create()
@@ -241,7 +244,8 @@ class SEColumnCollator:
         del shapelet_sigma
 
 
-        shapelets_prepsf=numpy.array(data['shear']['shapelets_prepsf'], dtype='f4')
+        shapelets_prepsf=numpy.array(data['shear']['shapelets_prepsf'], 
+                                     dtype='f4')
         if not self.small:
             cols.write_column('shapelets_prepsf',shapelets_prepsf)
 
@@ -435,10 +439,57 @@ class SEColumnCollator:
         write_se_collate_html(self.serun)
 
 
+    def add_rid(self):
+        import desdb
+
+        print("getting all expnames",file=stderr)
+        rc=deswl.files.Runconfig(self.serun)
+        all_expnames = desdb.files.get_expnames(rc['dataset'],rc['band'])
+        all_expnames = numpy.array(all_expnames)
+        all_expnames.sort()
+
+        print("reading data",file=stderr)
+        cols=open_columns(self.serun)
+        expnames    = cols['expname'][:]
+        ccds        = cols['ccd'][:]
+        ids         = cols['id'][:]
+
+        # we want this because we need to search the expname list to get and id
+        # and we don't want to do it too many times
+        print("getting expnames argsort",file=stderr)
+        s=expnames.argsort()
+        rid = numpy.zeros(ids.size, dtype='i8')
+
+        print("getting rids...",file=stderr)
+        expold=None
+        for i in xrange(ids.size):
+            if (i % 10000) == 0:
+                print('%d/%d' % (i, ids.size),file=stderr)
+            si=s[i] 
+
+            expname = expnames[si]
+            ccd = ccds[si]
+            id = ids[si]
+
+            if expname != expold:
+                expid=where1(all_expnames == expname)
+                expold = expname
+
+                if expid.size == 0:
+                    raise ValueError("expname not found: '%s'" % expname)
+                expid=expid[0]
+
+            rid[si] = make_rid(expid, ccd, id)
+
+        print("\nwriting rid",file=stderr)
+        cols.write_column('rid', rid, create=True)
+
 class CollateWQJob:
-    def __init__(self, run, njob, hosts=None):
+    def __init__(self, run, njob, hosts=None, priority='low'):
         self.run=run
         self.njob=njob
+        self.priority=priority
+
         if hosts is None:
             hosts = ['astro%04i' % i for i in xrange(1,12)]
             hosts += ['astro%04i' % i for i in xrange(21,34)]
@@ -449,20 +500,22 @@ class CollateWQJob:
         text = """
 command: |
     hostname
+    source ~esheldon/.bashrc
     source /opt/astro/SL53/bin/setup.hadoop.sh
     source ~astrodat/setup/setup.sh
     source ~/.dotfiles/bash/astro.bnl.gov/modules.sh
     {esutil_load}
     {tmv_load}
     {wl_load}
-    module load espy
+    module unload espy && module load espy/work
+    source ~esheldon/local/des-oracle/setup.sh
 
     script=$ESPY_DIR/des/bin/collate2columns.py
-    python $script -s -n {njob} -j {job} {run} &> {log}
+    python $script -s -n {njob} -j {job} {run}
 
 mode: byhost
 host: {host}
-priority: low
+priority: {priority}
 job_name: {job_name}\n""" 
         return text
 
@@ -470,7 +523,10 @@ job_name: {job_name}\n"""
 
         rc=deswl.files.Runconfig(self.run)
         wl_load = deswl.files._make_load_command('wl',rc['wlvers'])
-        tmv_load = deswl.files._make_load_command('tmv',rc['tmvvers'])
+
+        tmv_load = ''
+        if self.run[0:2] == 'se' or self.run[0:2] == 'me':
+            tmv_load = deswl.files._make_load_command('tmv',rc['tmvvers'])
         esutil_load = deswl.files._make_load_command('esutil', rc['esutilvers'])
 
         job_template=self.job_template()
@@ -483,8 +539,6 @@ job_name: {job_name}\n"""
             job_name='%s-collate-%03i' % (self.run,job)
             job_file=os.path.join(outd,job_name+'.yaml')
 
-            log=job_name+'.out'
-
             host = self.hosts[job % nh]
             text=job_template.format(esutil_load=esutil_load,
                                      tmv_load=tmv_load,
@@ -493,8 +547,8 @@ job_name: {job_name}\n"""
                                      njob=self.njob,
                                      job=job,
                                      run=self.run,
-                                     log=log,
-                                     job_name=job_name)
+                                     job_name=job_name,
+                                     priority=self.priority)
 
             print("Writing job file:",job_file,file=stderr)
             with open(job_file,'w') as fobj:
@@ -543,7 +597,8 @@ class MEColumnCollator:
 
             ntot = len(self.flist)
             uid0=0
-            cat_cols=['mag_model','magerr_model','x_image','y_image','flags_weight']
+            cat_cols=['mag_model','magerr_model','x_image','y_image',
+                      'flags_weight']
             for i,fdict in enumerate(self.flist,1):
                 print('-'*70,file=stderr)
                 print("Processing %d/%d" % (i,ntot),file=stderr)
@@ -623,9 +678,11 @@ class MEColumnCollator:
         print('Will copy to:',self.final_coldir,file=stderr)
 
         if os.path.exists(self.temp_coldir):
-            raise RuntimeError("temp coldir %s exists. Please start from scratch" % self.temp_coldir)
+            raise RuntimeError("temp coldir %s exists. Please start "
+                               "from scratch" % self.temp_coldir)
         if os.path.exists(self.final_coldir):
-            raise RuntimeError("Final coldir %s exists. Please start from scratch" % self.final_coldir)
+            raise RuntimeError("Final coldir %s exists. Please start "
+                               "from scratch" % self.final_coldir)
 
         self.cols = columns.Columns(self.temp_coldir)
         self.cols.create()
@@ -699,7 +756,8 @@ class MEColumnCollator:
             if self.njob is None:
                 raise ValueError("Send both job and njob")
             if self.job < 0 or self.job > (self.njob-1):
-                raise ValueError("job must be in [0,%s], got %s" % (self.njob-1,self.job))
+                raise ValueError("job must be in [0,%s], "
+                                 "got %s" % (self.njob-1,self.job))
             self.suffix = '-%03d' % self.job
         else:
             self.suffix = ''
@@ -717,13 +775,15 @@ class MEColumnCollator:
         for c in ['id','input_flags','shear_flags','flags_weight','mag_model',
                   'shear_s2n','ra','dec','nimages_found','nimages_gotpix']:
             if cols[c].has_index():
-                print("skipping '%s' which already has an index" % c,file=stderr)
+                print("skipping '%s' which already has an index" % c,
+                      file=stderr)
             else:
                 print("creating index for column:",c,file=stderr)
                 cols[c].create_index()
 
 
     def write_html(self):
+
         rc = deswl.files.Runconfig(self.run)
 
         collate_dir = deswl.files.collated_dir(self.run)
@@ -736,13 +796,11 @@ class MEColumnCollator:
         plotdir=path_join(collate_dir,'plots')
 
         if os.path.exists(fitsdir):
-            table_comment=('<i>* The collated FITS files do not include the large '
+            table_comment=('<i>* The collated FITS files do not '
+                           'include the large '
                            'column <code>shapelets_prepsf</code></i>')
         else:
             table_comment='<i><b>* FITS Not Yet Available</b></i>'
-
-        if not os.path.exists(coldir):
-            col_comment += ' <i><b>Columns database not yet available</b></i>'
 
         if os.path.exists(plotdir):
             qatext = """
@@ -927,13 +985,13 @@ def write_se_collate_html(serun):
         os.makedirs(html_dir)
 
     fitsdir=path_join(dir,serun+'-fits')
-    coldir=path_join(dir,serun+'.cols')
     if os.path.exists(fitsdir):
-        table_comment='<i>Note: The collated FITS files do not include the large columns <code>shapelets_prepsf</code> and <code>interp_psf_shapelets</code></i>'
+        table_comment=('<i>Note: The collated FITS files do not '
+                       'include the large columns '
+                       '<code>shapelets_prepsf</code> and <code>'
+                       'interp_psf_shapelets</code></i>')
     else:
         table_comment='<i><b>FITS Not Yet Available</b></i>'
-    if not os.path.exists(coldir):
-        col_comment += ' <i><b>Columns database not yet available</b></i>'
 
 
     collate_dir= deswl.files.collated_dir(serun)
@@ -1346,6 +1404,286 @@ table.simple td {
     fobj=open(fname,'w')
     fobj.write(table_css)
     fobj.close()
+
+
+class AMColumnCollator: 
+    def __init__(self, run, njob=None, job=None):
+        self.run = run
+
+        self.njob=None if njob is None else int(njob)
+        self.job=None if job is None else int(job)
+
+        self.ftypes = ['am']
+        self.set_suffix()
+        self.set_names()
+        self.load_expnames()
+
+    def collate(self):
+        try:
+            self.load_columns_for_writing()
+
+            self.load_flist()
+
+            ntot = len(self.flist)
+            for i,fdict in enumerate(self.flist,1):
+                print('-'*70,file=stderr)
+                print("Processing %d/%d" % (i,ntot), file=stderr)
+
+                # this will add data to the dictionary
+                data=self.load_data(fdict)
+                print('writing',file=stderr)
+                self.write_data(data)
+
+            self.copy_to_final()
+        finally:
+            self.cleanup()
+
+
+    def load_expnames(self):
+        if not hasattr(self,'expnames'):
+            import desdb
+            rc=deswl.files.Runconfig(self.run)
+            expnames = desdb.files.get_expnames(rc['dataset'],rc['band'])
+            expnames = numpy.array(expnames)
+            expnames.sort()
+            self.expnames=expnames
+
+    def load_data(self, fdict):
+        
+        data={}
+
+        #if not hasattr(self,'uid_offset'):
+        #    # start id counter
+        #    self.uid_offset = 0
+    
+        expname = fdict['expname']
+        ccd     = fdict['ccd']
+        data['expname'] = expname
+        data['ccd']     = ccd
+
+        data['am'] = eu.io.read(fdict['output_files']['am'], 
+                                ensure_native=True, 
+                                verbose=True)
+
+        #data['idvals'] = \
+        #        self.uid_offset + numpy.arange(data['am'].size,dtype='i4')
+        
+        ids = data['am']['number']
+        data['rid'] = self.make_rids(expname, ccd, ids)
+
+        return data
+
+    def make_rids(self, expname, ccd, ids):
+
+        rid = numpy.zeros(ids.size, dtype='i8')
+        expid=where1(self.expnames == expname)
+        if expid.size == 0:
+            raise ValueError("expname not found: '%s'" % expname)
+        for i in xrange(ids.size):
+            rid[i] = make_rid(expid[0], ccd, ids[i])
+
+        return rid
+
+    def set_names(self):
+        self.temp_coldir  = self.coldir(temp=True)
+        self.final_coldir = self.coldir()
+
+    def set_suffix(self):
+        if self.job is not None:
+            if self.njob is None:
+                raise ValueError("Send both job and njob")
+            if self.job < 0 or self.job > (self.njob-1):
+                raise ValueError("job must be in [0,%s], "
+                                 "got %s" % (self.njob-1,self.job))
+            self.suffix = '-%03d' % self.job
+        else:
+            self.suffix = ''
+
+
+
+    def coldir(self, fits=False, temp=False):
+        coldir = deswl.files.coldir(self.run, fits=fits, suffix=self.suffix)
+        coldir = expand_path(coldir)
+
+        if temp:
+            if fits:
+                raise ValueError("don't use temp=True for fits")
+            coldir=os.path.basename(coldir)
+            coldir=os.path.join('/data/esheldon/tmp',coldir)
+        return coldir
+
+
+    def load_columns_for_writing(self):
+
+        print('Will write to temporary coldir:',self.temp_coldir,file=stderr)
+        print('Will copy to:',self.final_coldir,file=stderr)
+
+        if os.path.exists(self.temp_coldir):
+            raise RuntimeError("temp coldir %s exists. Please start "
+                               "from scratch" % self.temp_coldir)
+        if os.path.exists(self.final_coldir):
+            raise RuntimeError("Final coldir %s exists. Please start "
+                               "from scratch" % self.final_coldir)
+
+        self.cols = columns.Columns(self.temp_coldir)
+        self.cols.create()
+
+    def copy_to_final(self):
+        print("Copying to final dest:",self.final_coldir,file=stderr)
+        shutil.copytree(self.temp_coldir, self.final_coldir)
+
+    def cleanup(self):
+        print("Cleaning up temp dir:",self.temp_coldir,file=stderr)
+        if os.path.exists(self.temp_coldir):
+            shutil.rmtree(self.temp_coldir)
+
+    def load_flist(self):
+        flistfile=deswl.files.collated_path(self.run,'goodlist')
+        flist=eu.io.read(flistfile, verbose=True)
+
+        if self.job is not None:
+
+            nf=len(flist)
+            nper=nf/self.njob
+
+            if self.job == (self.njob-1):
+                flist=flist[self.job*nper:]
+            else:
+                flist=flist[self.job*nper:(self.job+1)*nper]
+
+        self.flist=flist
+
+    def write_data(self, data):
+        cols=self.cols
+
+        # make copies of the data before writing to the columns.  This is
+        # to force the data type, including native endianness
+
+
+        f8cols = ['row','col','Irr','Irc','Icc','e1','e2',
+                  'rho4','a4','s2','uncer','s2n','wrow','wcol',
+                  'sky','sigsky']
+        for col in f8cols:
+            vals=numpy.array(data['am'][col], dtype='f8')
+            cols.write_column(col,vals)
+
+        i4cols = ['numiter','whyflag']
+        for col in i4cols:
+            vals=numpy.array(data['am'][col], dtype='i4')
+            cols.write_column(col,vals)
+
+        # our id column
+        #cols.write_column('uid', data['idvals'])
+        cols.write_column('rid', data['rid'])
+
+        # Same for all objects in this set
+        ccd_array = numpy.zeros(data['am'].size, dtype='i1')
+        ccd_array[:] = data['ccd']
+        cols.write_column('ccd',ccd_array)
+
+        exp_array = numpy.zeros(data['am'].size, dtype='S20')
+        exp_array[:] = data['expname']
+        cols.write_column('expname',exp_array)
+
+
+        del ccd_array
+        del exp_array
+
+
+        # from sextractor
+        id = numpy.array(data['am']['number'], dtype='i2')
+        cols.write_column('id',id)
+
+        mag = numpy.array(data['am']['mag_model'], dtype='f4')
+        cols.write_column('mag_model',mag)
+
+        flags = numpy.array(data['am']['flags'], dtype='i2')
+        cols.write_column('sxflags',flags)
+
+        ra = numpy.array(data['am']['alphawin_j2000'], dtype='f8')
+        cols.write_column('ra',ra)
+
+        dec = numpy.array(data['am']['deltawin_j2000'], dtype='f8')
+        cols.write_column('dec',dec)
+
+    def convert2fits(self):
+        """
+        Just make fits versions of all the files
+        """
+
+        coldir = self.coldir()
+        fitsdir = self.coldir(fits=True)
+
+        psfstars_fitsdir = os.path.join(fitsdir,'psfstars-fits')
+        if not os.path.exists(fitsdir):
+            os.makedirs(fitsdir)
+            os.makedirs(psfstars_fitsdir)
+
+        print('coldir:',coldir,file=stderr)
+        print('fitsdir:',fitsdir,file=stderr)
+        print('psfstars_fitsdir:',psfstars_fitsdir,file=stderr)
+
+        cols = columns.Columns(coldir)
+
+        print(cols,file=stderr)
+
+        for col in sorted(cols):
+            if col in ['shapelets_prepsf','interp_psf_shapelets']:
+                print("skipping large column:",col,file=stderr)
+            else:
+                print('column: ',col,file=stderr)
+
+                if col == 'psfstars':
+                    continue
+
+                fname = cols[col].filename
+
+                data = eu.sfile.read(fname)
+
+                fitsfile = os.path.join(fitsdir, col+'.fits')
+                print(fitsfile,file=stderr)
+
+                # don't make a copy!
+                eu.io.write(fitsfile, data, clobber=True,copy=False)
+
+                del data
+
+        psfstars_cols = cols['psfstars']
+        for col in sorted(psfstars_cols):
+            print('column: ',col,file=stderr)
+
+            fname = psfstars_cols[col].filename
+
+            data = eu.sfile.read(fname)
+
+            fitsfile = os.path.join(psfstars_fitsdir, col+'.fits')
+            print(fitsfile,file=stderr)
+
+            # don't make a copy!
+            eu.io.write(fitsfile, data, clobber=True,copy=False)
+
+            del data
+
+    def create_indexes(self):
+
+        coldir=self.coldir()
+        cols = columns.Columns(coldir,verbose=True)
+        if not cols.dir_exists():
+            raise RuntimeError("You haven't added the data yet")
+
+        # create some indexes
+        # after this, data automatically gets added to the index
+        cols['ccd'].create_index()
+        cols['size_flags'].create_index()
+        cols['star_flag'].create_index()
+        cols['shear_flags'].create_index()
+        cols['expname'].create_index()
+
+        cols['psfstars']['psf_flags'].create_index()
+        #cols['psfstars']['uid'].create_index()
+
+    def write_html(self):
+        write_se_collate_html(self.run)
 
 
 

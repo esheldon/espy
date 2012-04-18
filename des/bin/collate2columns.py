@@ -44,9 +44,15 @@ if run[0:2] == 'se':
     c = des.collate.SEColumnCollator(run,small=options.small,
                                      njob=options.njob,job=options.job)
 elif run[0:2] == 'me':
-    c = des.collate.MEColumnCollator(run,small=options.small,njob=options.njob,job=options.job)
+    c = des.collate.MEColumnCollator(run,
+                                     small=options.small,
+                                     njob=options.njob,job=options.job)
+elif run[0:2] == 'am':
+    c = des.collate.AMColumnCollator(run,
+                                     njob=options.njob,
+                                     job=options.job)
 else:
-    raise ValueError("Expected run 'me*' or 'se*'")
+    raise ValueError("Expected run 'me*' or 'se*' or 'am*'")
 
 if options.fits:
     c.convert2fits()

@@ -13,6 +13,8 @@ from optparse import OptionParser
 parser=OptionParser(__doc__)
 parser.add_option('--hosts',default=None,
                   help="A list of hosts")
+parser.add_option("-p","--priority", 
+                  default='low', help="priority")
 
 options, args = parser.parse_args(sys.argv[1:])
 
@@ -27,5 +29,5 @@ hosts=options.hosts
 if isinstance(hosts,basestring):
     hosts = hosts.split(',')
 
-c = des.collate.CollateWQJob(run,njob,hosts=hosts)
+c = des.collate.CollateWQJob(run,njob,hosts=hosts,priority=options.priority)
 c.write()
