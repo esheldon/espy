@@ -1,3 +1,4 @@
+import os
 import deswl
 import numpy
 from numpy import tanh, arctanh, sqrt
@@ -5,17 +6,17 @@ import fimage
 import admom
 import biggles
 
-def run_trials():
+def run_trials(nsub, rg_admom_nsub):
     n=100
-    nsub = 4
-    rg_admom_nsub = 4
-    rg_image_nsub = 4
+    rg_image_nsub = rg_admom_nsub 
     psf_order=10
     gal_shear_order = 8
 
-    gal_theta = numpy.linspace(0.01,179.1,n)
+    gal_theta = numpy.linspace(0.01843243,179.13423,n)
+    spacing = gal_theta[1]-gal_theta[0]
+    gal_theta += numpy.random.random(n)*spacing
     gal_T = 3.1+2.7
-    #gal_T = gal_T*10
+    gal_T = gal_T*10
     gal_e = 0.3
 
     # reduced shear required to make round
@@ -139,8 +140,12 @@ def run_trials():
                  am_shear['shear2meas'][i]/shear2-1)
         print s
     return wl_shear, am_shear
+
 def main():
-    wl_shear,am_shear=run_trials()
+    nsub = 4
+    admom_nsub=4
+
+    wl_shear,am_shear=run_trials(nsub, admom_nsub)
     wplt=biggles.FramedPlot()
     aplt=biggles.FramedPlot()
 
@@ -161,38 +166,18 @@ def main():
     ap = biggles.Points(am_shear['gal_theta'],
                         am_shear['shearmeas']-am_shear['shear'],
                         type='filled circle')
-    
-    """
-    wp1 = biggles.Points(wl_shear['gal_theta'],
-                         wl_shear['shear1meas']-wl_shear['shear1'],
-                         type='filled circle',color='red')
-    wp1.label = r'$\gamma_1$'
-    wp2 = biggles.Points(wl_shear['gal_theta'],
-                         wl_shear['shear2meas']-wl_shear['shear2'],
-                         type='filled circle',color='blue')
-    wp2.label = r'$\gamma_2$'
-
-    ap1 = biggles.Points(am_shear['gal_theta'],
-                        am_shear['shear1meas']-am_shear['shear1'],
-                        type='filled circle',color='red')
-    ap1.label = r'$\gamma_1$'
-    ap2 = biggles.Points(am_shear['gal_theta'],
-                        am_shear['shear2meas']-am_shear['shear2'],
-                        type='filled circle',color='blue')
-    ap2.label = r'$\gamma_2$'
-
-    wkey=biggles.PlotKey(0.1,0.2,[wp1,wp2])
-    akey=biggles.PlotKey(0.1,0.2,[ap1,ap2])
-
-    wplt.add(wp1,wp2,wkey)
-    aplt.add(ap1,ap2,akey)
-    """ 
 
     wplt.add(wp)
     aplt.add(ap)
     wplt.show()
     aplt.show()
 
-    wplt.write_eps('deswl-pixel-effect.eps')
-    aplt.write_eps('am-pixel-effect.eps')
+    d=os.path.expanduser('~/tmp')
+    
+    deswl_name = 'deswl-pixel-effect-nsub%02i.eps' % nsub
+    am_name = 'deswl-pixel-effect-nsub%02i-am%02i.eps' % (nsub,admom_nsub)
+    print deswl_name
+    wplt.write_eps(os.path.join(d,deswl_name))
+    print am_name
+    aplt.write_eps(os.path.join(d,am_name))
 main()

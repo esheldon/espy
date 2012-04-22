@@ -1,0 +1,19 @@
+name: gg01
+
+#
+# PSF parameters.
+#
+
+psfmodel: gauss
+psf_sigma: 1.4
+psf_ellip: 0.0
+
+#
+# Object model
+#
+objmodel: gauss
+
+
+comments: |
+
+    gauss obj, gauss psf, low res, analytic convolutions
