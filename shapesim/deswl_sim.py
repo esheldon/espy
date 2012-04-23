@@ -25,7 +25,7 @@ def e1e2_to_g1g2(e1, e2):
 
 class DESWLSim(dict):
     def __init__(self, run, verbose=False):
-        conf=shapesim.read_config('deswl',run)
+        conf=shapesim.read_config(run)
         for k,v in conf.iteritems():
             self[k] = v
         self.verbose = verbose
@@ -52,17 +52,14 @@ class DESWLSim(dict):
                 res = self.run_wl(ci)
                 if res['flags'][0] == 0:
                     st = self.copy_output(s2, ellip, s2n, ci, res)
-
-                    #ahelp(res)
                     out[i] = st
-                    #ahelp(out[i])
                     break
                 else:
                     iter += 1
             if iter == self['itmax']:
                 raise ValueError("itmax %d reached" % self['itmax'])
+        shapesim.write_output(self['run'], is2, ie, out)
         return out
-
     def run_wl(self, ci):
         """
         Run the psf and object through deswl
@@ -70,6 +67,7 @@ class DESWLSim(dict):
         dt = [('flags','i8'),
               ('sigma_psf','f8'),
               ('sigma','f8'),
+              ('sigma0','f8'),
               ('s2','f8'),
               ('nu','f8'),
               ('gamma1','f8'),
@@ -81,11 +79,15 @@ class DESWLSim(dict):
         out=zeros(1, dtype=dt)
 
         sky=0.0
-        skysig=ci['skysig']
-        if skysig == 0:
+        if self['s2n'] <= 0:
             skysig=1
+        else:
+            skysig=ci['skysig']
+
         psf_sigma_guess=\
             fimage.mom2sigma(ci['cov_psf_uw'][0]+ci['cov_psf_uw'][2])
+        sigma0_guess=\
+            fimage.mom2sigma(ci['cov_uw'][0]+ci['cov_uw'][2])
         psf_aperture = 4*psf_sigma_guess
         sigma_obj = fimage.mom2sigma(ci['cov_uw'][0]+ci['cov_uw'][2])
         shear_aperture = 4.*sigma_obj
@@ -111,6 +113,13 @@ class DESWLSim(dict):
             return out
         out['sigma_psf'] = wlq.get_psf_sigma()
 
+        out['flags'] += wlq.calculate_sigma0(sigma0_guess)
+        if out['flags'] != 0:
+            wlog('psf shapelets flags:',out['flags'])
+            return out
+        out['sigma0'] = wlq.get_sigma0()
+
+
         out['flags'] += wlq.calculate_psf_shapelets()
         if out['flags'] != 0:
             wlog('psf shapelets flags:',out['flags'])
@@ -123,13 +132,21 @@ class DESWLSim(dict):
 
         out['sigma'] = wlq.get_sigma()
         out['s2'] = out['sigma_psf']/out['sigma']
-        out['nu'] = wlq.get_nu()
         out['gamma1'] = wlq.get_shear1()
         out['gamma2'] = wlq.get_shear2()
         out['gamma'] = sqrt(out['gamma1']**2 + out['gamma2']**2)
-        out['gcov11'] = wlq.get_cov11()
-        out['gcov12'] = wlq.get_cov12()
-        out['gcov22'] = wlq.get_cov22()
+
+
+        if self['s2n'] > 0:
+            out['nu'] = wlq.get_nu()
+            out['gcov11'] = wlq.get_cov11()
+            out['gcov12'] = wlq.get_cov12()
+            out['gcov22'] = wlq.get_cov22()
+        else:
+            out['nu'] = -9999
+            out['gcov11'] = -9999
+            out['gcov12'] = -9999
+            out['gcov22'] = -9999
         return out
 
     def get_s2_e(self, is2, ie):
@@ -174,14 +191,15 @@ class DESWLSim(dict):
             mom2sigma(ci['cov_psf_admom'][0]+ci['cov_psf_admom'][2])
         st['sigma_admom'] = \
             mom2sigma(ci['cov_image0_admom'][0]+ci['cov_image0_admom'][2])
-        st['sigma_tot_admom'] = \
+        st['sigma0_admom'] = \
             mom2sigma(ci['cov_admom'][0]+ci['cov_admom'][2])
 
 
         st['sigma_psf_meas'] = res['sigma_psf']
-        st['sigma_meas'] = res['sigma']
+        #st['sigma_meas'] = res['sigma']
+        st['sigma0_meas'] = res['sigma0']
         # this gives almost exactly 0.5 of what it should be
-        st['s2_meas'] = res['sigma_psf']**2/(res['sigma']**2-res['sigma_psf']**2)
+        st['s2_meas'] = res['sigma_psf']**2/(res['sigma0']**2-res['sigma_psf']**2)
         #st['s2_meas'] = res['sigma_psf']**2/res['sigma']**2
         st['gamma1_meas'] = res['gamma1']
         st['gamma2_meas'] = res['gamma2']
@@ -201,7 +219,7 @@ class DESWLSim(dict):
               ('s2noweight','f8'), # unweighted s2 of object before noise
               ('sigma_psf_admom','f8'),
               ('sigma_admom','f8'),
-              ('sigma_tot_admom','f8'),
+              ('sigma0_admom','f8'),
               ('s2admom','f8'),    # s2 from admom, generally different
               ('etrue','f8'),
               ('e1true','f8'),
@@ -213,7 +231,8 @@ class DESWLSim(dict):
               ('s2_meas','f8'),
               ('s2n_meas','f8'),    # same as nu
               ('sigma_psf_meas','f8'),
-              ('sigma_meas','f8'),
+              ('sigma0_meas','f8'),
+              #('sigma_meas','f8'),
               ('gamma_meas','f8'),
               ('gamma1_meas','f8'),
               ('gamma2_meas','f8'),

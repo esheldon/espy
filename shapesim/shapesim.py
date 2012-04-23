@@ -3,7 +3,7 @@ from os.path import join as path_join
 import esutil as eu
 from esutil.misc import wlog
 import numpy
-from numpy import ogrid, array, sqrt, where
+from numpy import ogrid, array, sqrt, where, linspace, median, zeros
 from numpy.random import standard_normal
 import fimage
 import admom
@@ -11,17 +11,14 @@ import admom
 class ShapeSim(dict):
     """
     The config file defines the PSF model and size as well as the
-    galaxy model and signal to noise ratio (negative for no noise)
+    galaxy model but not it's size or ellipticity or noise
+    properties.
     
-    Then use the run(s2, ellip) method to generate
-    a single realization.
-
-    This runs a single s2 and ellip
-
-    Note there are more things in the config than we use here.
+    Then use the get_trial(s2, ellip, s2n) method to generate a single
+    realization.
     """
     def __init__(self, run, verbose=False):
-        conf=read_config('sim',run)
+        conf=read_config(run)
         for k,v in conf.iteritems():
             self[k] = v
         self.verbose = verbose
@@ -145,15 +142,124 @@ class ShapeSim(dict):
             wlog("    meas S/N after noise:  ",out['s2n'])
 
 
+
+
 def get_config_dir():
     d=os.environ['ESPY_DIR']
     return path_join(d,'shapesim','config')
-def get_config_file(type,run):
+def get_config_file(run):
     d=get_config_dir()
-    name='%s-%s.yaml' % (type,run)
+    name='%s.yaml' % run
     return path_join(d, name)
-def read_config(type,run):
-    f=get_config_file(type,run)
+def read_config(run):
+    f=get_config_file(run)
     return eu.io.read(f)
 
+def get_simdir():
+    dir=os.environ.get('LENSDIR')
+    return path_join(dir, 'shapesim')
 
+def get_run_dir(run):
+    dir=get_simdir()
+    return path_join(dir,run)
+
+
+def get_wq_dir(run):
+    dir=get_run_dir(run)
+    dir=path_join(dir, 'wq')
+    return dir
+
+def get_wq_url(run, is2, ie):
+    """
+
+    is2 and ie are the index in the list of s2 and ellip vals for a given run.
+    They should be within [0,nums2) and [0,nume)
+
+    """
+    dir=get_wq_dir(run)
+    f='%s-%03i-%03i.yaml' % (run,is2,ie)
+
+    return path_join(dir, f)
+
+def get_plot_dir(run):
+    dir=get_run_dir(run)
+    dir=path_join(dir, 'plots')
+    return dir
+
+def get_plot_file(run, s2max=None, yrange=None):
+    d=get_plot_dir(run)
+    f='%s' % run
+
+    if s2max is not None:
+        f += '-s2max%0.3f' % s2max
+
+    if yrange is not None:
+        f += '-yr%0.3f-%0.3f' % tuple(yrange)
+    f += '.eps'
+    f = path_join(d, f)
+    return f
+
+def get_output_dir(run):
+    dir=get_run_dir(run)
+    dir=path_join(dir, 'outputs')
+    return dir
+
+def get_output_url(run, is2, ie):
+    """
+
+    is2 and ie are the index in the list of s2 and ellip vals for a given run.
+    They should be within [0,nums2) and [0,nume)
+
+    """
+    dir=get_output_dir(run)
+    f='%s-%03i-%03i.rec' % (run,is2,ie)
+    return path_join(dir, f)
+
+def write_output(run, is2, ie, data):
+    f=get_output_url(run, is2, ie)
+    wlog("Writing output:",f)
+    eu.io.write(f, data)
+
+def read_output(run, is2, ie):
+    f=get_output_url(run, is2, ie)
+    #wlog("reading output:",f)
+    return eu.io.read(f)
+
+def read_all_outputs(run, average=False):
+    """
+    Data are grouped as a list by is2 and then sublists by ie
+    """
+    data=[]
+    c=read_config(run)
+    for is2 in xrange(c['nums2']):
+        s2data=[]
+        for ie in xrange(c['nume']):
+            edata = read_output(run, is2, ie)
+            s2data.append(edata)
+        data.append(s2data)
+
+    if average:
+        return average_outputs(data)
+    else:
+        return data
+
+def average_outputs(data):
+    """
+    Take the results from read_all_outputs and average the
+    trials for each ellip value.  The result will be a list
+    of arrays, one for each s2.  Each array will have one
+    entry for each ellipticity
+    """
+
+    out=[]
+    dt = data[0][0].dtype
+    for s2data in data:
+        # s2data is a list of arrays, one for each ellip.  the array has an
+        # entry for each trial.  Average over the trials
+
+        d=zeros(len(s2data),dtype=dt)
+        for i,edata in enumerate(s2data):
+            for n in d.dtype.names:
+                d[n][i] = median(edata[n])
+        out.append(d)
+    return out

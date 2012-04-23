@@ -1,7 +1,7 @@
 # s2n 20 (deswl s2n 14)
 # see sim-gg01 for psf and object details
-run: gg01r01
-sim: gg01
+run: deswl-gg01r01
+sim: sim-gg01
 
 psf_order: 10
 gal_order: 8
