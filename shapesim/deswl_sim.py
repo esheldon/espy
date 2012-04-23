@@ -7,6 +7,7 @@ import numpy
 from numpy import zeros, sqrt, tanh, arctanh
 
 import fimage
+from fimage import mom2sigma
 import deswl
 from esutil.numpy_util import ahelp
 from esutil.misc import wlog
@@ -76,12 +77,13 @@ class DESWLSim(dict):
               ('gamma','f8'),
               ('gcov11','f8'),
               ('gcov12','f8'),
-              ('gcov22','f8'),
-              ('s2n','f8')]
+              ('gcov22','f8')]
         out=zeros(1, dtype=dt)
 
         sky=0.0
         skysig=ci['skysig']
+        if skysig == 0:
+            skysig=1
         psf_sigma_guess=\
             fimage.mom2sigma(ci['cov_psf_uw'][0]+ci['cov_psf_uw'][2])
         psf_aperture = 4*psf_sigma_guess
@@ -168,6 +170,12 @@ class DESWLSim(dict):
         s2psf_am = ci['cov_psf_admom'][0]+ci['cov_psf_admom'][2]
         s2obj_am = ci['cov_image0_admom'][0]+ci['cov_image0_admom'][2]
         st['s2admom'] = s2psf_am/s2obj_am
+        st['sigma_psf_admom'] = \
+            mom2sigma(ci['cov_psf_admom'][0]+ci['cov_psf_admom'][2])
+        st['sigma_admom'] = \
+            mom2sigma(ci['cov_image0_admom'][0]+ci['cov_image0_admom'][2])
+        st['sigma_tot_admom'] = \
+            mom2sigma(ci['cov_admom'][0]+ci['cov_admom'][2])
 
 
         st['sigma_psf_meas'] = res['sigma_psf']
@@ -178,7 +186,7 @@ class DESWLSim(dict):
         st['gamma1_meas'] = res['gamma1']
         st['gamma2_meas'] = res['gamma2']
         st['gamma_meas'] = res['gamma']
-        st['nu_meas'] = res['nu']
+        st['s2n_meas'] = res['nu']
         st['gcov11'] = res['gcov11']
         st['gcov12'] = res['gcov12']
         st['gcov22'] = res['gcov22']
@@ -191,6 +199,9 @@ class DESWLSim(dict):
               
               ('s2','f8'),         # requested (spsf/sobj)**2
               ('s2noweight','f8'), # unweighted s2 of object before noise
+              ('sigma_psf_admom','f8'),
+              ('sigma_admom','f8'),
+              ('sigma_tot_admom','f8'),
               ('s2admom','f8'),    # s2 from admom, generally different
               ('etrue','f8'),
               ('e1true','f8'),
@@ -200,7 +211,7 @@ class DESWLSim(dict):
               ('gamma2','f8'),
 
               ('s2_meas','f8'),
-              ('nu_meas','f8'),    # same as s2n
+              ('s2n_meas','f8'),    # same as nu
               ('sigma_psf_meas','f8'),
               ('sigma_meas','f8'),
               ('gamma_meas','f8'),
