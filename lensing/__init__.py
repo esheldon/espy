@@ -202,7 +202,6 @@ from . import regauss
 from . import regauss_test
 from . import regauss_sim
 
-from . import deswl_sim
 
 from . import princeton
 from . import files
