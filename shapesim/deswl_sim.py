@@ -172,7 +172,9 @@ class DESWLSim(dict):
 
         st['sigma_psf_meas'] = res['sigma_psf']
         st['sigma_meas'] = res['sigma']
-        st['s2_meas'] = res['sigma_psf']**2/res['sigma']**2
+        # this gives almost exactly 0.5 of what it should be
+        st['s2_meas'] = res['sigma_psf']**2/(res['sigma']**2-res['sigma_psf']**2)
+        #st['s2_meas'] = res['sigma_psf']**2/res['sigma']**2
         st['gamma1_meas'] = res['gamma1']
         st['gamma2_meas'] = res['gamma2']
         st['gamma_meas'] = res['gamma']
@@ -186,8 +188,6 @@ class DESWLSim(dict):
     def out_dtype(self):
         dt = [('s2n','f8'),
               ('ellip','f8'),
-              ('ntrial','i8'),
-              ('itmax','i8'),
               
               ('s2','f8'),         # requested (spsf/sobj)**2
               ('s2noweight','f8'), # unweighted s2 of object before noise

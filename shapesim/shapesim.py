@@ -64,7 +64,7 @@ class ShapeSim(dict):
         else:
             psfpars = dict(model = 'gauss', cov = psf_cov)
 
-        sigma = self['psf_sigma']/s2
+        sigma = self['psf_sigma']/sqrt(s2)
         cov=fimage.ellip2mom(2*sigma**2,e=obj_ellip,theta=obj_theta)
         objpars = dict(model = self['objmodel'], cov=cov)
 
