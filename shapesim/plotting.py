@@ -2,6 +2,8 @@ import os
 from . import shapesim
 import esutil as eu
 from esutil.misc import wlog
+import numpy
+from numpy import median
 
 class SimPlotter(dict):
     def __init__(self, run):
@@ -10,19 +12,97 @@ class SimPlotter(dict):
         for k,v in c.iteritems():
             self[k] = v
 
+        self.simc = shapesim.read_config(c['sim'])
+
         d = shapesim.get_plot_dir(run)
         if not os.path.exists(d):
             os.makedirs(d)
         
         self._data=None
 
-    def doplots(self, s2max=None, yrange=None):
+    def doplots(self, s2max=None, yrange=None, reduce_key=False, show=True):
         import biggles
+        import pcolors
+        import converter
         data = self.read_data(s2max=s2max)
         epsfile = shapesim.get_plot_file(self['run'],
                                          s2max=s2max,
                                          yrange=yrange)
         wlog("will plot to:",epsfile)
+
+        colors=pcolors.rainbow(len(data), 'hex')
+
+        biggles.configure('PlotKey','key_vsep',1.0)
+        plt = biggles.FramedPlot()
+        plt.aspect_ratio=1
+        #plt.xlabel=r'$\gamma$'
+        plt.xlabel=r'ellipticity'
+        plt.ylabel=r'$\Delta \gamma/\gamma$'
+ 
+        allplots=[]
+        for i,st in enumerate(reversed(data)):
+            s2 = median(st['s2_meas'])
+
+            s = st['gamma'].argsort()
+            gamma=st['gamma'][s]
+            gamma_meas = st['gamma_meas'][s]
+
+            fdiff = gamma_meas/gamma-1
+            #label = r'$<\sigma^2_{psf}/\sigma^2_{gal}>$: %0.3f' % s2
+            label = r'%0.3f' % s2
+            cr = biggles.Curve(st['etrue'][s], fdiff, color=colors[i])
+            cr.label = label
+
+            plt.add(cr)
+            allplots.append(cr)
+
+        fsize=1.5
+        if not reduce_key:
+            key = biggles.PlotKey(0.9,0.9, allplots, halign='right', 
+                                  fontsize=fsize)
+        else:
+            # pick a few
+            nplot=len(allplots)
+            tplots = [allplots[0], 
+                      allplots[nplot*1/4], 
+                      allplots[nplot/2], 
+                      allplots[nplot*3/4], 
+                      allplots[-1]]
+            key = biggles.PlotKey(0.9,0.9, tplots, halign='right', fontsize=fsize)
+
+        plt.add(key)
+        klab = biggles.PlotLabel(0.95,0.95,
+                                 r'$<\sigma^2_{psf}/\sigma^2_{gal}>$',
+                                 fontsize=1.5,halign='right')
+        plt.add(klab)
+        objmodel = self.simc['objmodel']
+        psfmodel = self.simc['psfmodel']
+        psf_sigma = self.simc['psf_sigma']
+        plab='%s %s' % (objmodel,psfmodel)
+        l = biggles.PlotLabel(0.1,0.9, plab, halign='left')
+        plt.add(l)
+
+        siglab=r'$\sigma_{PSF}: %.1f$ pix' % psf_sigma
+        if self['s2n'] > 0:
+            siglab+=r'$ S/N: %(s2n)d N_{trial}: %(ntrial)d$' % self
+        else:
+            siglab+=r'$  N_{trial}: %(ntrial)d$' % self
+
+        sl = biggles.PlotLabel(0.1,0.1, siglab, halign='left')
+        plt.add(sl)
+
+        if not reduce_key:
+            plt.xrange = [0,1.4]
+        if yrange is not None:
+            plt.yrange = yrange
+
+        wlog("Writing plot file:",epsfile)
+        if show:
+            plt.show()
+        plt.write_eps(epsfile)
+        converter.convert(epsfile,dpi=100)
+
+
 
 
     def read_data(self, s2max=None):
@@ -36,7 +116,7 @@ class SimPlotter(dict):
         if s2max is not None:
             keepdata = []
             for st in alldata:
-                if numpy.median(st['s2_meas']) < s2max:
+                if median(st['s2_meas']) < s2max:
                     keepdata.append(st)
             nkeep = len(keepdata)
             wlog("kept %d/%d with s2 < %.3g" % (nkeep,ntot,s2max)) 

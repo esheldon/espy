@@ -3,6 +3,7 @@ Generate image simulations and process them with the
 deswl pipeline
 """
 
+from sys import stderr
 import numpy
 from numpy import zeros, sqrt, tanh, arctanh
 
@@ -46,6 +47,7 @@ class DESWLSim(dict):
         s2,ellip = self.get_s2_e(is2, ie)
 
         for i in xrange(self['ntrial']):
+            stderr.write(".")
             iter=0
             while iter < self['itmax']:
                 ci=ss.get_trial(s2,ellip,s2n)
@@ -58,6 +60,7 @@ class DESWLSim(dict):
                     iter += 1
             if iter == self['itmax']:
                 raise ValueError("itmax %d reached" % self['itmax'])
+        stderr.write("\n")
         shapesim.write_output(self['run'], is2, ie, out)
         return out
     def run_wl(self, ci):
