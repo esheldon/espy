@@ -9,6 +9,7 @@ from numpy import zeros, sqrt, tanh, arctanh
 import fimage
 import deswl
 from esutil.numpy_util import ahelp
+from esutil.misc import wlog
 from . import shapesim
 
 def e2gamma(e):
@@ -39,16 +40,27 @@ class DESWLSim(dict):
         
         out = numpy.zeros(self['ntrial'], dtype=self.out_dtype())
         ss = shapesim.ShapeSim(self['sim'])
+
+        s2n = self['s2n']
         s2,ellip = self.get_s2_e(is2, ie)
 
         for i in xrange(self['ntrial']):
-            ci=ss.get_trial(s2, ellip,self['s2n'])
-            res = self.run_wl(ci)
-            st = self.copy_output(s2, ellip, ci, res)
-            ahelp(res)
-            out[i] = st
-            ahelp(out[i])
-            return
+            iter=0
+            while iter < self['itmax']:
+                ci=ss.get_trial(s2,ellip,s2n)
+                res = self.run_wl(ci)
+                if res['flags'][0] == 0:
+                    st = self.copy_output(s2, ellip, s2n, ci, res)
+
+                    #ahelp(res)
+                    out[i] = st
+                    #ahelp(out[i])
+                    break
+                else:
+                    iter += 1
+            if iter == self['itmax']:
+                raise ValueError("itmax %d reached" % self['itmax'])
+        return out
 
     def run_wl(self, ci):
         """
@@ -64,12 +76,14 @@ class DESWLSim(dict):
               ('gamma','f8'),
               ('gcov11','f8'),
               ('gcov12','f8'),
-              ('gcov22','f8')]
+              ('gcov22','f8'),
+              ('s2n','f8')]
         out=zeros(1, dtype=dt)
 
         sky=0.0
         skysig=ci['skysig']
-        psf_sigma_guess=fimage.mom2sigma(ci['cov_psf_uw'][0]+ci['cov_psf_uw'][2])
+        psf_sigma_guess=\
+            fimage.mom2sigma(ci['cov_psf_uw'][0]+ci['cov_psf_uw'][2])
         psf_aperture = 4*psf_sigma_guess
         sigma_obj = fimage.mom2sigma(ci['cov_uw'][0]+ci['cov_uw'][2])
         shear_aperture = 4.*sigma_obj
@@ -86,23 +100,23 @@ class DESWLSim(dict):
                       float(ci['cen'][0]), 
                       float(ci['cen'][1]),
                       float(sky),
-                      float(skysig),
+                      float(skysig**2),
                       float(shear_aperture))
 
         out['flags'] += wlq.calculate_psf_sigma(psf_sigma_guess)
         if out['flags'] != 0:
-            print 'psf shapelets flags:',out['flags']
+            wlog('psf shapelets flags:',out['flags'])
             return out
         out['sigma_psf'] = wlq.get_psf_sigma()
 
         out['flags'] += wlq.calculate_psf_shapelets()
         if out['flags'] != 0:
-            print 'psf shapelets flags:',out['flags']
+            wlog('psf shapelets flags:',out['flags'])
             return out
 
         out['flags'] += wlq.calculate_shear()
         if out['flags'] != 0:
-            print 'shear flags:',out['flags']
+            wlog('shear flags:',out['flags'])
             return out
 
         out['sigma'] = wlq.get_sigma()
@@ -134,11 +148,12 @@ class DESWLSim(dict):
                              "got %d" % (max_ie,ie))
 
 
-    def copy_output(self, s2, ellip, ci, res):
+    def copy_output(self, s2, ellip, s2n, ci, res):
         st = numpy.zeros(1, dtype=self.out_dtype())
 
         # first copy inputs and data from the CI
         st['s2'] = s2
+        st['s2n'] = s2n
         st['ellip'] = ellip
         st['e1true'] = ci['e1true']
         st['e2true'] = ci['e2true']
@@ -184,8 +199,8 @@ class DESWLSim(dict):
               ('gamma1','f8'),
               ('gamma2','f8'),
 
-              ('s2_meas','f8'),    # measured (spsf/sobj)**2
-              ('nu_meas','f8'),
+              ('s2_meas','f8'),
+              ('nu_meas','f8'),    # same as s2n
               ('sigma_psf_meas','f8'),
               ('sigma_meas','f8'),
               ('gamma_meas','f8'),

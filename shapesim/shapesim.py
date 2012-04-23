@@ -1,6 +1,7 @@
 import os
 from os.path import join as path_join
 import esutil as eu
+from esutil.misc import wlog
 import numpy
 from numpy import ogrid, array, sqrt, where
 from numpy.random import standard_normal
@@ -131,7 +132,7 @@ class ShapeSim(dict):
         out = admom.admom(ci.image, cen[0], cen[1], guess=T/2., sigsky=skysig)
 
         # fix up skysig based on measurement
-        skysig = s2n/s2n*skysig
+        skysig = out['s2n']/s2n*skysig
         noise_image = \
             skysig*standard_normal(imagenn.size).reshape(shape)
         ci.image = imagenn + noise_image
@@ -140,8 +141,8 @@ class ShapeSim(dict):
 
         if False:
             out = admom.admom(ci.image, cen[0], cen[1], guess=T/2., sigsky=skysig)
-            print("    target S/N:            ",s2n)
-            print("    meas S/N after noise:  ",out['s2n'])
+            wlog("    target S/N:            ",s2n)
+            wlog("    meas S/N after noise:  ",out['s2n'])
 
 
 def get_config_dir():

@@ -1,3 +1,4 @@
+# s2n 100 (deswl s2n 80)
 # see sim-gg01 for psf and object details
 run: gg01r01
 sim: gg01
@@ -7,7 +8,7 @@ gal_order: 8
 
 # negative for no noise.  Note this is the adaptive moments S/N
 # and differs significantly from the deswl value
-s2n: -1.
+s2n: 100.
 
 # realizations of the above object will be on a grid in these ranges
 # s2 is an approximate size ratio relative to the PSF
@@ -22,7 +23,7 @@ nume:  20
 
 # number of trials at each s2 and ellip.  Orientations will be random
 # and if s2n is > 0 above, noise added to the image
-ntrial: 100
+ntrial: 1000
 
 # number of times to retry when a trial fails
 itmax: 100
