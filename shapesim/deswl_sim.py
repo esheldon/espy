@@ -63,13 +63,14 @@ class DESWLSim(dict):
         stderr.write("\n")
         shapesim.write_output(self['run'], is2, ie, out)
         return out
+
     def run_wl(self, ci):
         """
         Run the psf and object through deswl
         """
         dt = [('flags','i8'),
               ('sigma_psf','f8'),
-              ('sigma','f8'),
+              ('gal_prepsf_sigma','f8'),
               ('sigma0','f8'),
               ('s2','f8'),
               ('nu','f8'),
@@ -80,6 +81,16 @@ class DESWLSim(dict):
               ('gcov12','f8'),
               ('gcov22','f8')]
         out=zeros(1, dtype=dt)
+        out['sigma_psf'] = -9999
+        out['gal_prepsf_sigma'] = -9999
+        out['sigma0'] = -9999
+        out['s2'] = 9999
+        out['nu'] = -9999
+        out['gamma1'] = -9999
+        out['gamma2'] = -9999
+        out['gcov11'] = 9999
+        out['gcov12'] = 9999
+        out['gcov22'] = 9999
 
         sky=0.0
         if self['s2n'] <= 0:
@@ -95,61 +106,49 @@ class DESWLSim(dict):
         sigma_obj = fimage.mom2sigma(ci['cov_uw'][0]+ci['cov_uw'][2])
         shear_aperture = 4.*sigma_obj
 
-        wlq = deswl.cwl.WLQuick(self['psf_order'],
-                                self['gal_order'])
-
-        wlq.set_psf(ci.psf, 
-                    float(ci['cen'][0]),
-                    float(ci['cen'][1]), 
-                    float(sky), 
-                    float(psf_aperture))
-        wlq.set_image(ci.image,
-                      float(ci['cen'][0]), 
-                      float(ci['cen'][1]),
-                      float(sky),
-                      float(skysig**2),
-                      float(shear_aperture))
-
-        out['flags'] += wlq.calculate_psf_sigma(psf_sigma_guess)
+        wlpsfobj = deswl.cwl.WLObject(ci.psf,
+                                      float(ci['cen'][0]), 
+                                      float(ci['cen'][1]),
+                                      float(sky),
+                                      float(1),
+                                      float(psf_aperture), 
+                                      psf_sigma_guess)
+        out['flags'] = wlpsfobj.get_flags()
         if out['flags'] != 0:
-            wlog('psf shapelets flags:',out['flags'])
+            wlog('psf wlobj flags:',out['flags'])
             return out
-        out['sigma_psf'] = wlq.get_psf_sigma()
+        out['sigma_psf'] = wlpsfobj.get_sigma0()
 
-        out['flags'] += wlq.calculate_sigma0(sigma0_guess)
+        wlobj = deswl.cwl.WLObject(ci.image,
+                                   float(ci['cen'][0]), 
+                                   float(ci['cen'][1]),
+                                   float(sky),
+                                   float(skysig**2),
+                                   float(shear_aperture), 
+                                   sigma0_guess)
+        out['flags'] = wlobj.get_flags()
         if out['flags'] != 0:
-            wlog('psf shapelets flags:',out['flags'])
+            wlog('wlobj flags:',out['flags'])
             return out
-        out['sigma0'] = wlq.get_sigma0()
+        out['sigma0'] = wlobj.get_sigma0()
 
+        wlshear = deswl.cwl.WLShear(wlobj,wlpsfobj,
+                                    self['psf_order'], self['gal_order'])
 
-        out['flags'] += wlq.calculate_psf_shapelets()
-        if out['flags'] != 0:
-            wlog('psf shapelets flags:',out['flags'])
-            return out
-
-        out['flags'] += wlq.calculate_shear()
-        if out['flags'] != 0:
-            wlog('shear flags:',out['flags'])
-            return out
-
-        out['sigma'] = wlq.get_sigma()
-        out['s2'] = out['sigma_psf']/out['sigma']
-        out['gamma1'] = wlq.get_shear1()
-        out['gamma2'] = wlq.get_shear2()
+        out['flags'] = wlshear.get_flags()
+        out['s2'] = out['sigma_psf']**2/(out['sigma0']**2-out['sigma_psf']**2)
+        out['gamma1'] = wlshear.get_shear1()
+        out['gamma2'] = wlshear.get_shear2()
         out['gamma'] = sqrt(out['gamma1']**2 + out['gamma2']**2)
 
+        # usually not useful
+        out['gal_prepsf_sigma'] = wlshear.get_prepsf_sigma() 
 
         if self['s2n'] > 0:
-            out['nu'] = wlq.get_nu()
-            out['gcov11'] = wlq.get_cov11()
-            out['gcov12'] = wlq.get_cov12()
-            out['gcov22'] = wlq.get_cov22()
-        else:
-            out['nu'] = -9999
-            out['gcov11'] = -9999
-            out['gcov12'] = -9999
-            out['gcov22'] = -9999
+            out['nu'] = wlshear.get_nu()
+            out['gcov11'] = wlshear.get_cov11()
+            out['gcov12'] = wlshear.get_cov12()
+            out['gcov22'] = wlshear.get_cov22()
         return out
 
     def get_s2_e(self, is2, ie):
@@ -200,10 +199,10 @@ class DESWLSim(dict):
 
         st['sigma_psf_meas'] = res['sigma_psf']
         #st['sigma_meas'] = res['sigma']
+        st['gal_prepsf_sigma_meas'] = res['gal_prepsf_sigma']
         st['sigma0_meas'] = res['sigma0']
-        # this gives almost exactly 0.5 of what it should be
-        st['s2_meas'] = res['sigma_psf']**2/(res['sigma0']**2-res['sigma_psf']**2)
-        #st['s2_meas'] = res['sigma_psf']**2/res['sigma']**2
+        #st['s2_meas'] = res['sigma_psf']**2/(res['sigma0']**2-res['sigma_psf']**2)
+        st['s2_meas'] = res['s2']
         st['gamma1_meas'] = res['gamma1']
         st['gamma2_meas'] = res['gamma2']
         st['gamma_meas'] = res['gamma']
@@ -235,7 +234,7 @@ class DESWLSim(dict):
               ('s2n_meas','f8'),    # same as nu
               ('sigma_psf_meas','f8'),
               ('sigma0_meas','f8'),
-              #('sigma_meas','f8'),
+              ('gal_prepsf_sigma_meas','f8'),
               ('gamma_meas','f8'),
               ('gamma1_meas','f8'),
               ('gamma2_meas','f8'),
