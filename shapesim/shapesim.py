@@ -232,6 +232,7 @@ def read_all_outputs(run, average=False):
     data=[]
     c=read_config(run)
     for is2 in xrange(c['nums2']):
+    #for is2 in xrange(1,c['nums2']):
         s2data=[]
         for ie in xrange(c['nume']):
             edata = read_output(run, is2, ie)
