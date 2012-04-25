@@ -78,6 +78,7 @@ class SimPlotter(dict):
             key = biggles.PlotKey(0.9,0.9, tplots, halign='right', fontsize=fsize)
 
         plt.add(key)
+
         klabtext=r'$<\sigma^2_{psf}/\sigma^2_{gal}>$'
         if self['s2n'] > 0:
             klabtext += ' (S/N)'
@@ -97,7 +98,8 @@ class SimPlotter(dict):
         else:
             siglab+=r'$  N_{trial}: %(ntrial)d$' % self
 
-        sl = biggles.PlotLabel(0.1,0.1, siglab, halign='left')
+        sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
+                               fontsize=2.5)
         plt.add(sl)
 
         if not reduce_key:
@@ -109,7 +111,7 @@ class SimPlotter(dict):
         if show:
             plt.show()
         plt.write_eps(epsfile)
-        converter.convert(epsfile,dpi=100)
+        converter.convert(epsfile,dpi=100,verbose=True)
 
 
 

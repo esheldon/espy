@@ -9,7 +9,7 @@ from shapesim import shapesim
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
-parser.add_option('-g','--groups',default='gen45',help='groups for wq, csv')
+parser.add_option('-g','--groups',default='gen345',help='groups for wq, csv')
 
 _wqtemplate="""
 command: |

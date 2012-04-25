@@ -143,7 +143,7 @@ class RegaussSimPlotter(dict):
 
         allplots=[]
         i=0
-        for st in keepdata:
+        for st in reversed(keepdata):
             # this s2 is the value we were aiming for, could be pretty
             # far off for some models
             if 's2noweight' in st.dtype.names:
@@ -168,7 +168,7 @@ class RegaussSimPlotter(dict):
 
             Rmean = numpy.median( st[rname] )
 
-            label = 's2: %0.3f R: %0.3f' % (s2,Rmean)
+            label = '%0.3f (%0.3f)' % (s2,Rmean)
 
             crg = biggles.Curve(etrue, gamma_frac_rg, color=colors[i])
             crg.label=label
@@ -203,6 +203,12 @@ class RegaussSimPlotter(dict):
 
         plt.add(key)
 
+        klabtext=r'$<\sigma^2_{psf}/\sigma^2_{gal}> (<R>)$'
+        klab = biggles.PlotLabel(0.90,0.95,klabtext,
+                                 fontsize=1.5,halign='right')
+        plt.add(klab)
+
+
         plab='%s %s %s' % (type,self['objmodel'],self['psfmodel'])
         l = biggles.PlotLabel(0.1,0.9, plab, halign='left')
         plt.add(l)
@@ -212,7 +218,7 @@ class RegaussSimPlotter(dict):
             siglab+=r'$ S/N: %(s2n)d N_{trial}: %(ntrial)d$' % self.config
         elif 'ntrial' in self.config:
             siglab+=r'$  N_{trial}: %(ntrial)d$' % self.config
-        sl = biggles.PlotLabel(0.1,0.1, siglab, halign='left')
+        sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left',fontsize=2.5)
         plt.add(sl)
 
         if not reduce_plot_key:
@@ -223,7 +229,7 @@ class RegaussSimPlotter(dict):
         if show:
             plt.show()
         plt.write_eps(pfile)
-        converter.convert(pfile,dpi=100)
+        converter.convert(pfile,dpi=100,verbose=True)
 
 
 
@@ -1387,9 +1393,11 @@ class RandomConvolvedImage(dict):
 _wqtemplate="""
 command: |
     source ~/.bashrc
+    module unload espy && module load espy/work
+    module unload wl && module load wl/work
     python $ESPY_DIR/lensing/bin/regauss-sim.py %(opts)s %(run)s
 
-group: gen45
+group: gen345
 job_name: %(job_name)s
 priority: med\n"""
 

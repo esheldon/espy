@@ -164,6 +164,14 @@ Exponential objects
 
             Result: 
 
+        run eg10
+            objmodel: exp
+            psfmodel: gauss
+            psf_sigma: 1.4
+            s2n: 100
+
+            status: todo
+
     Exp-dgauss:
         run 10:
             objmodel:  exp
