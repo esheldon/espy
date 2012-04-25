@@ -2,12 +2,12 @@ import os
 from . import shapesim
 import esutil as eu
 from esutil.misc import wlog
+from esutil.numpy_util import where1
 import numpy
 from numpy import median
 
 class SimPlotter(dict):
     def __init__(self, run):
-        self['run'] = run
         c = shapesim.read_config(run)
         for k,v in c.iteritems():
             self[k] = v
@@ -44,12 +44,19 @@ class SimPlotter(dict):
             s2 = median(st['s2_meas'])
 
             s = st['gamma'].argsort()
+            wbad=where1(st['gamma_meas'][s] != st['gamma_meas'][s])
+            if wbad.size != 0:
+                wlog("found bad:",st['gamma'][s[wbad]])
             gamma=st['gamma'][s]
             gamma_meas = st['gamma_meas'][s]
 
             fdiff = gamma_meas/gamma-1
             #label = r'$<\sigma^2_{psf}/\sigma^2_{gal}>$: %0.3f' % s2
-            label = r'%0.3f' % s2
+            if self['s2n'] > 0:
+                meds2n = median(st['s2n_meas'])
+                label = r'%0.3f (%.0f)' % (s2,meds2n)
+            else:
+                label = r'%0.3f' % s2
             cr = biggles.Curve(st['etrue'][s], fdiff, color=colors[i])
             cr.label = label
 
@@ -71,8 +78,10 @@ class SimPlotter(dict):
             key = biggles.PlotKey(0.9,0.9, tplots, halign='right', fontsize=fsize)
 
         plt.add(key)
-        klab = biggles.PlotLabel(0.95,0.95,
-                                 r'$<\sigma^2_{psf}/\sigma^2_{gal}>$',
+        klabtext=r'$<\sigma^2_{psf}/\sigma^2_{gal}>$'
+        if self['s2n'] > 0:
+            klabtext += ' (S/N)'
+        klab = biggles.PlotLabel(0.95,0.95,klabtext,
                                  fontsize=1.5,halign='right')
         plt.add(klab)
         objmodel = self.simc['objmodel']

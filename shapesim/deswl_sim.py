@@ -40,6 +40,9 @@ class DESWLSim(dict):
             ie  is a number between 0 and self['nume']-1
         """
         
+        maxwrite_ci=1
+        nwrite_ci=0
+
         out = numpy.zeros(self['ntrial'], dtype=self.out_dtype())
         ss = shapesim.ShapeSim(self['sim'])
 
@@ -57,12 +60,35 @@ class DESWLSim(dict):
                     out[i] = st
                     break
                 else:
+                    if res['flags'][0] == -2 and nwrite_ci < maxwrite_ci:
+                        self.write_ci(ci, is2, ie)
+                        nwrite_ci += 1
                     iter += 1
             if iter == self['itmax']:
                 raise ValueError("itmax %d reached" % self['itmax'])
         stderr.write("\n")
         shapesim.write_output(self['run'], is2, ie, out)
         return out
+
+    def write_ci(self, ci, is2, ie):
+        """
+        Write the ci to a file in the outputs directory
+        """
+        import fitsio
+        import tempfile
+        rand=tempfile.mktemp(dir='')
+        url=shapesim.get_output_url(self['run'], is2, ie)
+        url = url.replace('.rec','-'+rand+'.fits')
+        h = {}
+        for k,v in self.iteritems():
+            h[k] = v
+        for k,v in ci.iteritems():
+            h[k] = v
+
+        with fitsio.FITS(url, mode='rw', clobber=True) as fobj:
+            fobj.write(ci.image, header=h, extname='image')
+            fobj.write(ci.psf, extname='psf')
+            fobj.write(ci.image0, extname='image0')
 
     def run_wl(self, ci):
         """
@@ -94,7 +120,7 @@ class DESWLSim(dict):
 
         sky=0.0
         if self['s2n'] <= 0:
-            skysig=1
+            skysig=0.001
         else:
             skysig=ci['skysig']
 
@@ -136,8 +162,17 @@ class DESWLSim(dict):
                                     self['psf_order'], self['gal_order'])
 
         out['flags'] = wlshear.get_flags()
+        if out['flags'] != 0:
+            wlog('wlshear flags:',out['flags'])
+            return out
+
         out['s2'] = out['sigma_psf']**2/(out['sigma0']**2-out['sigma_psf']**2)
         out['gamma1'] = wlshear.get_shear1()
+        if out['gamma1'] == 0:
+            wlog("found gamma==0 bug")
+            out['flags'] = -2
+            return out
+
         out['gamma2'] = wlshear.get_shear2()
         out['gamma'] = sqrt(out['gamma1']**2 + out['gamma2']**2)
 

@@ -1,6 +1,6 @@
 # s2n 40 (deswl s2n 33)
 # see sim-gg01 for psf and object details
-run: deswl-gg01r01
+run: deswl-gg01r04
 sim: sim-gg01
 
 psf_order: 10

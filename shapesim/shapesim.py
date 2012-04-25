@@ -152,9 +152,19 @@ def get_config_file(run):
     name='%s.yaml' % run
     return path_join(d, name)
 def read_config(run):
+    """
+    run could be 'name' in sim
+    """
     f=get_config_file(run)
-    return eu.io.read(f)
-
+    c = eu.io.read(f)
+    if 'run' in c:
+        n='run'
+    else:
+        n='name'
+    if c[n] != run:
+        raise ValueError("%s in config does not match "
+                         "itself: '%s' instead of '%s'" % (n,c[n],run))
+    return c
 def get_simdir():
     dir=os.environ.get('LENSDIR')
     return path_join(dir, 'shapesim')
@@ -232,7 +242,6 @@ def read_all_outputs(run, average=False):
     data=[]
     c=read_config(run)
     for is2 in xrange(c['nums2']):
-    #for is2 in xrange(1,c['nums2']):
         s2data=[]
         for ie in xrange(c['nume']):
             edata = read_output(run, is2, ie)

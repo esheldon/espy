@@ -1,6 +1,6 @@
 # s2n 100 (deswl s2n 80)
 # see sim-gg01 for psf and object details
-run: deswl-gg01r01
+run: deswl-gg01r02
 sim: sim-gg01
 
 psf_order: 10
@@ -23,7 +23,7 @@ nume:  20
 
 # number of trials at each s2 and ellip.  Orientations will be random
 # and if s2n is > 0 above, noise added to the image
-ntrial: 1000
+ntrial: 4000
 
 # number of times to retry when a trial fails
 itmax: 100
