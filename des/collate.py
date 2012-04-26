@@ -645,6 +645,15 @@ class MEColumnCollator:
             elif c == 'shapelet_sigma':
                 d=data[c]
                 c = 'shapelets_sigma'
+            elif c == 'shear_cov00':
+                d = data[c]
+                c = 'shear_cov11'
+            elif c == 'shear_cov01':
+                d = data[c]
+                c = 'shear_cov12'
+            elif c == 'shear_cov11':
+                d = data[c]
+                c = 'shear_cov22'
             else:
                 d = data[c]
 

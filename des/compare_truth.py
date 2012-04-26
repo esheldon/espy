@@ -239,10 +239,23 @@ class Comparator(dict):
             w=where1( (matches >= 0) & (flags==0) )
 
             d={}
-            for k in ['shear1','shear2','shear_cov11','shear_cov22','shear_s2n']:
+            # deal with old names in multi epoch
+            if 'shear_cov22' in c:
+                covnames = ['shear_cov11','shear_cov22']
+                fixnames=False
+            else:
+                covnames = ['shear_cov00','shear_cov11']
+                fixnames=True
+            names2read = ['shear1','shear2','shear_s2n'] + covnames
+            for k in names2read:
                 print >>stderr,'Reading',k
                 tmp = c[k][:]
                 tmp = tmp[w]
+                if fixnames:
+                    if k == 'shear_cov00':
+                        k = 'shear_cov11'
+                    elif k == 'shear_cov11':
+                        k = 'shear_cov22'
                 d[k] = tmp
                 
             matches=matches[w]
