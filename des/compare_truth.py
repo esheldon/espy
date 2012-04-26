@@ -22,9 +22,13 @@ def get_plot_dir(run, mock_catalog):
     d=os.path.join(d,'plots')
     return d
 
-def get_shear_compare_plot_url(run, mock_catalog, num=None):
+def get_shear_compare_html_url(run, mock_catalog, type):
+    f=get_shear_compare_plot_url(run, mock_catalog, type)
+    f=f.replace('.eps','.html')
+    return f
+def get_shear_compare_plot_url(run, mock_catalog, type, num=None):
     d=get_plot_dir(run, mock_catalog)
-    fname='shearcmp-%s-%s' % (run,mock_catalog)
+    fname='shearcmp-%s-%s-%s' % (run,mock_catalog,type)
     if num is not None:
         fname = fname+'-%02d' % num
     fname += '.eps'
@@ -59,14 +63,16 @@ class Comparator(dict):
         self['run'] = run
         self['mock_catalog'] = mock_catalog
 
-    def plot_sheardiff(self, nperbin, indices=None, label=None,
+    def plot_meanshear_vs_trueshear(self, nperbin, indices=None, label=None,
                        show=False, num=None):
         import biggles
         from biggles import PlotLabel, Curve
 
+        type='vs-shear'
         # will use cache on successive calls
-        data=self.get_sheardiff_data()
+        data=self.get_data()
         epsfile=get_shear_compare_plot_url(self['run'],self['mock_catalog'],
+                                           type,
                                            num=num)
         print >>stderr,'will write to file:',epsfile
 
@@ -148,15 +154,75 @@ class Comparator(dict):
         tab.write_eps(epsfile)
         converter.convert(epsfile,dpi=120,verbose=True)
 
-        return {'coeff1':coeff1,'coeff2':coeff2,'plt1':plt1,'plt2':plt2}
+        res={'coeff1':coeff1,'coeff2':coeff2,'plt1':plt1,'plt2':plt2}
+        return res,epsfile.replace('.eps','.png')
 
-    def plot_sheardiff_bys2n(self, nperbin, nperbin_sub, show=False):
+    def plot_sheardiff_vs_field(self, nperbin, field, show=False):
         import biggles
-        from biggles import FramedPlot,PlotLabel, Curve, Points, Table, PlotKey
+        biggles.configure('default','fontsize_min',1.5)
+        biggles.configure('_HalfAxis','ticks_size',2.5)
+        biggles.configure('_HalfAxis','subticks_size',1.25)
+        data=self.get_data()
+        type='vs_'+field
 
-        data=self.get_sheardiff_data()
+        epsfile=get_shear_compare_plot_url(self['run'],self['mock_catalog'],
+                                           type)
+
+        tab=biggles.Table(1,2)
+        names={'shear1_diff':r'$\gamma_1-\gamma_1^{true}',
+               'shear2_diff':r'$\gamma_2-\gamma_2^{true}'}
+        if field == 'shear_s2n':
+            xlog=True
+        else:
+            xlog=False
+        plots=eu.plotting.bhist_vs(data, field, 'shear1_diff','shear2_diff', 
+                                   nperbin=nperbin,names=names, 
+                                   size=2.5,
+                                   xlog=xlog,
+                                   show=False)
+        tab[0,0] = plots[0]
+        tab[0,1] = plots[1]
+        tab[0,0].aspect_ratio=1
+        tab[0,1].aspect_ratio=1
+        tab.write_eps(epsfile)
+        converter.convert(epsfile,dpi=120,verbose=True)
+        pngfile=epsfile.replace('.eps','.png')
+        if show:
+            tab.show()
+        return pngfile
+
+    def plot_sheardiff_vs(self, nperbin, show=False):
+        type='vs'
+        html_file = get_shear_compare_html_url(self['run'], 
+                                               self['mock_catalog'], 
+                                               type)
+        pngfiles=[]
+        fields=['shear_s2n']
+        data=self.get_data()
+        if 'mag_model' in data:
+            fields+=['mag_model']
+
+        for field in fields:
+            png=self.plot_sheardiff_vs_field(nperbin, field, show=show)
+            pngfiles.append(png)
+
+        self.write_html(pngfiles, html_file)
+
+    def plot_meanshear_vs_trueshear_bys2n(self, nperbin, nperbin_sub, 
+                                          show=False):
+        from biggles import FramedPlot, Curve, Points, Table, PlotKey
+
+        type='vs_shear'
+
+        html_file = get_shear_compare_html_url(self['run'], 
+                                               self['mock_catalog'], 
+                                               type)
+        print 'html_file:',html_file
+
+        data=self.get_data()
         
-        epsfile=get_shear_compare_plot_url(self['run'],self['mock_catalog'])
+        epsfile=get_shear_compare_plot_url(self['run'],self['mock_catalog'],
+                                           type)
         print >>stderr,'Will write summary plot:',epsfile
 
         print >>stderr,'histogramming shear_s2n',nperbin
@@ -164,16 +230,19 @@ class Comparator(dict):
                                 rev=True,more=True)
         rev=hdict['rev']
         cdlist=[]
+        pngfiles=[]
         for i in xrange(hdict['hist'].size):
             if rev[i] != rev[i+1]:
                 w=rev[ rev[i]:rev[i+1] ]
                 label=r'$%0.3g < S/N < %0.3g$' \
                     % (hdict['low'][i],hdict['high'][i])
                 print >>stderr,label,'mean:',hdict['mean'][i],'num:',w.size
-                cd=self.plot_sheardiff(nperbin_sub,indices=w,label=label,
-                                       num=i,
-                                       show=show)
+                cd,png=self.plot_meanshear_vs_trueshear(nperbin_sub,
+                                                    indices=w,label=label,
+                                                    num=i,
+                                                    show=show)
                 cdlist.append(cd)
+                pngfiles.append(png)
         
         slopes1=[cd['coeff1'][0] for cd in cdlist]
         offsets1=[cd['coeff1'][1] for cd in cdlist]
@@ -222,8 +291,12 @@ class Comparator(dict):
         print >>stderr,'Writing summary plot:',epsfile
         tab.write_eps(epsfile)
         converter.convert(epsfile,dpi=90,verbose=True)
+        png=epsfile.replace('.eps','.png')
+        pngfiles = [png] + pngfiles
+        
+        self.write_html(pngfiles, html_file)
 
-    def get_sheardiff_data(self):
+    def get_data(self):
         if not hasattr(self,'_data'):
             dmc=lensing.scat.DESMockCatalog(self['mock_catalog'])
             mock=dmc.read()
@@ -246,7 +319,13 @@ class Comparator(dict):
             else:
                 covnames = ['shear_cov00','shear_cov11']
                 fixnames=True
-            names2read = ['shear1','shear2','shear_s2n'] + covnames
+
+            names2read = \
+                ['shear1','shear2','shear_s2n'] + covnames
+
+            if self['run'][0:2] == 'me':
+                names2read+= ['mag_model']
+
             for k in names2read:
                 print >>stderr,'Reading',k
                 tmp = c[k][:]
@@ -262,8 +341,21 @@ class Comparator(dict):
 
             d['shear1_true'] = mock['gamma1'][matches]
             d['shear2_true'] = mock['gamma2'][matches]
+            d['shear1_diff'] = d['shear1']-d['shear1_true']
+            d['shear2_diff'] = d['shear2']-d['shear2_true']
             d['matches'] = matches
             d['mock'] = mock
             d['weight'] = 1.0/(0.32 + d['shear_cov11']+d['shear_cov22'])
             self._data = d
         return self._data
+
+    def write_html(self, pngfiles, html_file):
+        print 'writing html:',html_file
+        with open(html_file,'w') as fobj:
+            fobj.write("<html>\t<body>\n")
+            for png in pngfiles:
+                png = os.path.basename(png)
+                fobj.write('\t\t<img src="%s"><b>\n' % png)
+                            
+            fobj.write("\t</body>\n</html>\n")
+
