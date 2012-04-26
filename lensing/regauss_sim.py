@@ -146,10 +146,15 @@ class RegaussSimPlotter(dict):
         for st in reversed(keepdata):
             # this s2 is the value we were aiming for, could be pretty
             # far off for some models
+            """
             if 's2noweight' in st.dtype.names:
                 s2 = st['s2noweight'][0]
             else:
                 s2 = st['s2'][0]
+            """
+            s2 = numpy.median(st['s2admom'])
+            #s2 = numpy.median(st['s2noweight'])
+            #s2 = st['s2'][0]
 
             # this "etrue" is adaptive moments of pre-psf image
             s = st['etrue'].argsort()
@@ -385,6 +390,7 @@ class RegaussSimPlotter(dict):
     def struct(self, n):
         st=numpy.zeros(n, dtype=[('s2','f8'),
                                  ('s2noweight','f8'),
+                                 ('s2admom','f8'),
                                  ('etrue','f8'),
                                  ('econv','f8'),
                                  ('etrue_uw','f8'),
@@ -1397,17 +1403,21 @@ command: |
     module unload wl && module load wl/work
     python $ESPY_DIR/lensing/bin/regauss-sim.py %(opts)s %(run)s
 
-group: gen345
+%(groups)s
 job_name: %(job_name)s
 priority: med\n"""
 
-def create_sim_wq_bys2(run):
+def create_sim_wq_bys2(run, groups=None):
     import pbs
 
     c = read_config(run)
     objmodel = c['objmodel']
     psfmodel = c['psfmodel']
 
+    if groups is not None:
+        groups = 'groups: [%s]' % groups 
+    else:
+        groups=''
 
     s2vals=sample_s2(c['mins2'],c['maxs2'],c['ns2'])
     for s2 in s2vals:
@@ -1420,15 +1430,23 @@ def create_sim_wq_bys2(run):
         eu.ostools.makedirs_fromfile(wqurl,verbose=True)
         wlog("writing wq script:",wqurl)
         with open(wqurl,'w') as fobj:
-            wqscript=_wqtemplate % {'run':run, 'job_name':job_name,'opts':opts}
+            wqscript=_wqtemplate % {'run':run, 
+                                    'job_name':job_name,
+                                    'opts':opts,
+                                    'groups':groups}
             fobj.write(wqscript)
 
-def create_sim_wq_byellip(run):
+def create_sim_wq_byellip(run, groups=None):
     import pbs
 
     c = read_config(run)
     objmodel = c['objmodel']
     psfmodel = c['psfmodel']
+
+    if groups is not None:
+        groups = 'groups: [%s]' % groups 
+    else:
+        groups=''
 
     s2vals=sample_s2(c['mins2'],c['maxs2'],c['ns2'])
     evals=numpy.linspace(c['mine'],c['maxe'],c['nume'])
@@ -1443,7 +1461,10 @@ def create_sim_wq_byellip(run):
             eu.ostools.makedirs_fromfile(wqurl,verbose=True)
             wlog("writing wq script:",wqurl)
             with open(wqurl,'w') as fobj:
-                wqscript=_wqtemplate % {'run':run, 'job_name':job_name,'opts':opts}
+                wqscript=_wqtemplate % {'run':run, 
+                                        'job_name':job_name,
+                                        'opts':opts,
+                                        'groups':groups}
                 fobj.write(wqscript)
 
 

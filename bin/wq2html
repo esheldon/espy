@@ -56,8 +56,10 @@ html="""
 
             body { 
                 /*color: #00ff00; */
-                color: white; 
-                background-color: black;
+                /*color: white; */
+                color: #dcdccc;
+                /*background-color: black;*/
+                background-color: #1f1f1f;
             }
 
             table.simple {
