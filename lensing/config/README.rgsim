@@ -206,4 +206,13 @@ Exponential objects
             ntrial: 1000
             itmax: 10000
 
+        run edg13:
+            objmodel exp
+            psfmodel dgauss
+            psf_sigma=1.4
+            forcegauss=False
+            s2n: 100
+            ntrial: 1000
+            itmax: 10000
+
 

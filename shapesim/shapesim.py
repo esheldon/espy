@@ -7,6 +7,7 @@ from numpy import ogrid, array, sqrt, where, linspace, median, zeros
 from numpy.random import standard_normal
 import fimage
 import admom
+import fitsio
 
 class ShapeSim(dict):
     """
@@ -140,6 +141,127 @@ class ShapeSim(dict):
             out = admom.admom(ci.image, cen[0], cen[1], guess=T/2., sigsky=skysig)
             wlog("    target S/N:            ",s2n)
             wlog("    meas S/N after noise:  ",out['s2n'])
+
+
+class BaseSim(dict):
+    def __init__(self, run):
+        conf=shapesim.read_config(run)
+        for k,v in conf.iteritems():
+            self[k] = v
+
+    def run(self, ci):
+        """
+        Process the input convolved image.
+
+        over-ride this
+        """
+        raise RuntimeError("Override the .run() method")
+
+    def copy_output(self, s2, ellip, s2n, ci, res):
+        """
+        Copy the result structure and convolved image
+        to the array for output
+
+        over-ride this
+        """
+        raise RuntimeError("Override the .copy_output() method")
+
+    def out_dtype(self):
+        """
+        The output dtype
+
+        over-ride this
+        """
+        raise RuntimeError("Override the .out_dtype() method")
+
+    def process_trials(self, is2, ie, max_write_ci=1):
+        """
+        Generate random realizations of a particular element in the s2 and
+        ellip sequences.
+
+        parameters
+        ----------
+
+        is2: integer
+            A number between 0 and self['nums2']-1
+        ie: integer
+            A number is a number between 0 and self['nume']-1
+        max_write_ci: optional
+            Max number of failed ci to write to disk. Default 1
+        """
+        
+        nwrite_ci=0
+
+        out = numpy.zeros(self['ntrial'], dtype=self.out_dtype())
+        ss = shapesim.ShapeSim(self['sim'])
+
+        s2n = self['s2n']
+        s2,ellip = self.get_s2_e(is2, ie)
+
+        for i in xrange(self['ntrial']):
+            stderr.write(".")
+            iter=0
+            while iter < self['itmax']:
+
+                ci=ss.get_trial(s2,ellip,s2n)
+                res = self.run(ci)
+
+                if res['flags'][0] == 0:
+                    st = self.copy_output(s2, ellip, s2n, ci, res)
+                    out[i] = st
+                    break
+                else:
+                    if res['flags'][0] == -2 and nwrite_ci < max_write_ci:
+                        self.write_ci(ci, is2, ie)
+                        nwrite_ci += 1
+                    iter += 1
+            if iter == self['itmax']:
+                raise ValueError("itmax %d reached" % self['itmax'])
+        stderr.write("\n")
+        shapesim.write_output(self['run'], is2, ie, out)
+        return out
+
+    def write_ci(self, ci, is2, ie):
+        """
+        Write the ci to a file in the outputs directory
+        """
+        import tempfile
+        rand=tempfile.mktemp(dir='')
+        url=shapesim.get_output_url(self['run'], is2, ie)
+        url = url.replace('.rec','-'+rand+'.fits')
+        h = {}
+        for k,v in self.iteritems():
+            h[k] = v
+        for k,v in ci.iteritems():
+            h[k] = v
+
+        with fitsio.FITS(url, mode='rw', clobber=True) as fobj:
+            fobj.write(ci.image, header=h, extname='image')
+            fobj.write(ci.psf, extname='psf')
+            fobj.write(ci.image0, extname='image0')
+
+    def get_s2_e(self, is2, ie):
+        """
+        Extract the s2 and e corresponding to the input indices
+        """
+        self.check_is2_ie(is2, ie)
+        s2 = numpy.linspace(self['mins2'],self['maxs2'], self['nums2'])[is2]
+        ellip = numpy.linspace(self['mine'],self['maxe'], self['nume'])[ie]
+
+        return s2, ellip
+
+    def check_is2_ie(self, is2, ie):
+        """
+        Verify the is2 and ie are within range
+        """
+        max_is2 = self['nums2']-1
+        max_ie  = self['nume']-1
+        if (is2 < 0) or (is2 > max_is2):
+            raise ValueError("is2 must be within [0,%d], "
+                             "got %d" % (max_is2,is2))
+        if (ie < 0) or (ie > max_ie):
+            raise ValueError("ie must be within [0,%d], "
+                             "got %d" % (max_ie,ie))
 
 
 
