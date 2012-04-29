@@ -48,7 +48,7 @@ class GMixSim(shapesim.BaseSim):
         out={}
 
         out['psf_res'] = self.process_image(ci.psf, 
-                                            self['psf_ngauss'],
+                                            self['ngauss_psf'],
                                             ci['cen_psf_admom'],
                                             ci['cov_psf_admom'])
         out['flags'] = out['psf_res']['flags']
@@ -67,6 +67,7 @@ class GMixSim(shapesim.BaseSim):
     def process_image(self, image, ngauss, cen, cov, psf=None):
         im=image.copy()
 
+        # need no zero pixels and sky value
         im_min = im.min()
         if im_min <= 0:
             im -= im_min
@@ -85,7 +86,7 @@ class GMixSim(shapesim.BaseSim):
             guess = self.get_guess(ngauss, cen, cov)
             gm = gmix_image.GMix(im,guess,
                                  sky=sky,
-                                 maxiter=self['maxiter'],
+                                 maxiter=self['gmix_maxiter'],
                                  tol=self['tol'],
                                  psf=psf)
             flags = gm.flags
@@ -118,5 +119,35 @@ class GMixSim(shapesim.BaseSim):
         st = zeros(1, dtype=self.out_dtype())
         return st
     def out_dtype(self):
-        dt=[('s2n','f8')]
+        gmix_dt = [('p','f8'),('row','f8'),('col','f8'),
+                   ('irr','f8'),('irc','f8'),('icc','f8')]
+        dt=[('s2n','f8'),
+            ('ellip','f8'),
+
+            ('s2','f8'),         # requested (spsf/sobj)**2
+            ('s2noweight','f8'), # unweighted s2 of object before noise
+            ('sigma_psf_admom','f8'),
+            ('sigma_admom','f8'),
+            ('sigma0_admom','f8'),
+            ('s2admom','f8'),    # s2 from admom, generally different
+
+            ('etrue','f8'),
+            ('e1true','f8'),
+            ('e2true','f8'),
+            ('gamma','f8'),
+            ('gamma1','f8'),
+            ('gamma2','f8'),
+
+            ('s2_meas','f8'),
+            ('s2n_meas','f8'),    # same as nu
+            ('sigma_psf_meas','f8'),
+            ('sigma0_meas','f8'),
+            ('gal_prepsf_sigma_meas','f8'),
+            ('gamma_meas','f8'),
+            ('gamma1_meas','f8'),
+            ('gamma2_meas','f8'),
+            ('flags','i8'),
+            ('psf_gmix',gmix_dt,self['ngauss_psf']),
+            ('gmix',gmix_dt,self['ngauss'])]
+
         return dt
