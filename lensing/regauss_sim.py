@@ -28,20 +28,6 @@ except:
     print("Could not import scipy.signal, cannot do convolutions")
 
 
-def shear_fracdiff(e, em, deriv=1.0):
-    """
-    e=etrue
-    em=emeasured
-
-    Hirata & Seljak eq 27
-    putting in 1 for derivative d(emeas)/d(etrue)
-
-    e=etrue
-    em=emeas
-    deriv deriviative of measured e with true e
-
-    """
-    return ((1-e**2)*deriv + em/e)/(2-em**2) - 1.0
 
 def shear_fracdiff_stupid(e, em):
     return em/e-1.0

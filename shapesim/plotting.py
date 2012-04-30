@@ -6,6 +6,8 @@ from esutil.numpy_util import where1
 import numpy
 from numpy import median
 
+from lensing.util import shear_fracdiff
+
 class SimPlotter(dict):
     def __init__(self, run):
         c = shapesim.read_config(run)
@@ -43,14 +45,13 @@ class SimPlotter(dict):
         for i,st in enumerate(reversed(data)):
             s2 = median(st['s2_meas'])
 
-            s = st['gamma'].argsort()
-            wbad=where1(st['gamma_meas'][s] != st['gamma_meas'][s])
-            if wbad.size != 0:
-                wlog("found bad:",st['gamma'][s[wbad]])
-            gamma=st['gamma'][s]
-            gamma_meas = st['gamma_meas'][s]
+            s = st['etrue'].argsort()
 
-            fdiff = gamma_meas/gamma-1
+            wbad=where1(st['e1_meas'][s] != st['e1_meas'][s])
+            if wbad.size != 0:
+                wlog("found bad:",st['e1_meas'][s[wbad]])
+            fdiff = shear_fracdiff(st['etrue'][s],st['e_meas'][s])
+
             #label = r'$<\sigma^2_{psf}/\sigma^2_{gal}>$: %0.3f' % s2
             if self['s2n'] > 0:
                 meds2n = median(st['s2n_meas'])

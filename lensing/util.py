@@ -1,5 +1,6 @@
 from __future__ import print_function
 import esutil as eu
+from numpy import tanh, arctanh, sqrt
 
 def e2gamma(e):
     """
@@ -14,6 +15,20 @@ def e1e2_to_g1g2(e1, e2):
     g1, g2 = fac*e1, fac*e2
     return g1,g2
 
+def shear_fracdiff(e, em, deriv=1.0):
+    """
+    e=etrue
+    em=emeasured
+
+    Hirata & Seljak eq 27
+    putting in 1 for derivative d(emeas)/d(etrue)
+
+    e=etrue
+    em=emeas
+    deriv deriviative of measured e with true e
+
+    """
+    return ((1-e**2)*deriv + em/e)/(2-em**2) - 1.0
 
 
 def lens_wmom(data, tag, ind=None, sdev=False):

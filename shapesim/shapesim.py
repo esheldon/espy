@@ -1,3 +1,4 @@
+from sys import stderr
 import os
 from os.path import join as path_join
 import esutil as eu
@@ -59,10 +60,15 @@ class ShapeSim(dict):
                            cov1 = psf_cov1,
                            cov2 = psf_cov2,
                            cenrat=b)
+            psum = 1+self['psf_cenrat']
+            cov11 = (psf_cov1[0] + psf_cov2[0]*self['psf_cenrat'])/psum
+            cov22 = (psf_cov1[2] + psf_cov2[2]*self['psf_cenrat'])/psum
+            psf_sigma = sqrt( (cov11+cov22)/2)
         else:
             psfpars = dict(model = 'gauss', cov = psf_cov)
+            psf_sigma = self['psf_sigma']
 
-        sigma = self['psf_sigma']/sqrt(s2)
+        sigma = psf_sigma/sqrt(s2)
         cov=fimage.ellip2mom(2*sigma**2,e=obj_ellip,theta=obj_theta)
         objpars = dict(model = self['objmodel'], cov=cov)
 
@@ -145,7 +151,7 @@ class ShapeSim(dict):
 
 class BaseSim(dict):
     def __init__(self, run):
-        conf=shapesim.read_config(run)
+        conf=read_config(run)
         for k,v in conf.iteritems():
             self[k] = v
 
@@ -193,7 +199,7 @@ class BaseSim(dict):
         nwrite_ci=0
 
         out = numpy.zeros(self['ntrial'], dtype=self.out_dtype())
-        ss = shapesim.ShapeSim(self['sim'])
+        ss = ShapeSim(self['sim'])
 
         s2n = self['s2n']
         s2,ellip = self.get_s2_e(is2, ie)
@@ -206,19 +212,19 @@ class BaseSim(dict):
                 ci=ss.get_trial(s2,ellip,s2n)
                 res = self.run(ci)
 
-                if res['flags'][0] == 0:
+                if res['flags'] == 0:
                     st = self.copy_output(s2, ellip, s2n, ci, res)
                     out[i] = st
                     break
                 else:
-                    if res['flags'][0] == -2 and nwrite_ci < max_write_ci:
+                    if nwrite_ci < max_write_ci:
                         self.write_ci(ci, is2, ie)
                         nwrite_ci += 1
                     iter += 1
             if iter == self['itmax']:
                 raise ValueError("itmax %d reached" % self['itmax'])
         stderr.write("\n")
-        shapesim.write_output(self['run'], is2, ie, out)
+        write_output(self['run'], is2, ie, out)
         return out
 
     def write_ci(self, ci, is2, ie):
@@ -227,7 +233,7 @@ class BaseSim(dict):
         """
         import tempfile
         rand=tempfile.mktemp(dir='')
-        url=shapesim.get_output_url(self['run'], is2, ie)
+        url=get_output_url(self['run'], is2, ie)
         url = url.replace('.rec','-'+rand+'.fits')
         h = {}
         for k,v in self.iteritems():
@@ -245,8 +251,8 @@ class BaseSim(dict):
         Extract the s2 and e corresponding to the input indices
         """
         self.check_is2_ie(is2, ie)
-        s2 = numpy.linspace(self['mins2'],self['maxs2'], self['nums2'])[is2]
-        ellip = numpy.linspace(self['mine'],self['maxe'], self['nume'])[ie]
+        s2 = linspace(self['mins2'],self['maxs2'], self['nums2'])[is2]
+        ellip = linspace(self['mine'],self['maxe'], self['nume'])[ie]
 
         return s2, ellip
 
@@ -352,9 +358,10 @@ def write_output(run, is2, ie, data):
     wlog("Writing output:",f)
     eu.io.write(f, data)
 
-def read_output(run, is2, ie):
+def read_output(run, is2, ie, verbose=False):
     f=get_output_url(run, is2, ie)
-    #wlog("reading output:",f)
+    if verbose:
+        wlog("reading output:",f)
     return eu.io.read(f)
 
 def read_all_outputs(run, average=False):
@@ -382,7 +389,6 @@ def average_outputs(data):
     of arrays, one for each s2.  Each array will have one
     entry for each ellipticity
     """
-
     out=[]
     dt = data[0][0].dtype
     for s2data in data:
@@ -392,6 +398,7 @@ def average_outputs(data):
         d=zeros(len(s2data),dtype=dt)
         for i,edata in enumerate(s2data):
             for n in d.dtype.names:
-                d[n][i] = median(edata[n])
+                if edata[n].dtype.names is None:
+                    d[n][i] = median(edata[n])
         out.append(d)
     return out

@@ -24,6 +24,8 @@ def main():
 
     if run[0:5] == 'deswl':
         sim=shapesim.deswl_sim.DESWLSim(run)
+    elif run[0:4] == 'gmix':
+        sim=shapesim.gmix_sim.GMixSim(run)
     else:
         raise ValueError("Don't know about run '%s'" % run)
 
