@@ -62,7 +62,7 @@ class GMixSim(shapesim.BaseSim):
                                             ci['cov_admom'],
                                             psf=out['psf_res']['gmix'],
                                             show=False)
-
+            #stop
             out['flags'] = out['res']['flags']
 
         return out
