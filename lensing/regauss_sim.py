@@ -17,6 +17,8 @@ from esutil.misc import wlog
 from esutil import hdfs
 import biggles
 
+from lensing.util import shear_fracdiff
+
 import pcolors
 
 from pprint import pprint
@@ -26,7 +28,6 @@ try:
     import scipy.signal
 except:
     print("Could not import scipy.signal, cannot do convolutions")
-
 
 
 def shear_fracdiff_stupid(e, em):
