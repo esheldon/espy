@@ -150,8 +150,10 @@ import pbs
 
 import zphot
 
-import columns
-
+try:
+    import columns
+except:
+    pass
 
 _sample='dr8'
 _basedir = '~esheldon/photoz/weighting/%s' % _sample

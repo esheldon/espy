@@ -38,8 +38,11 @@ import esutil as eu
 from esutil.ostools import path_join, expand_path
 from esutil.numpy_util import where1
 from . import sigmacrit
-import recfile
 
+try:
+    import recfile
+except:
+    pass
 
 finfo={}
 finfo['lcat']     = {'subdir':'lcat/{sample}',  'name':'lcat-{sample}{extra}.{ext}', 'default_ext':'dat'}

@@ -19,7 +19,11 @@ from esutil.ostools import getenv_check, path_join
 import datetime
 import pprint
 
-import columns
+try:
+    import columns
+except:
+    pass
+
 import copy
 
 flagdict = {'read_failed':2**0,
