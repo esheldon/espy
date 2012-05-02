@@ -26,7 +26,6 @@ import glob
 import sdsspy
 from sdsspy.atlas.atlas import NoAtlasImageError
 import es_sdsspy
-import columns
 import numpy
 from numpy import where,sqrt
 import esutil as eu
@@ -43,6 +42,11 @@ from fimage.conversions import mom2fwhm
 import admom
 
 import zphot
+
+try:
+    import columns
+except:
+    pass
 
 def open_columns(procrun, sweeptype):
     coll = Collator(procrun, sweeptype)

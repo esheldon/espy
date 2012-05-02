@@ -32,7 +32,10 @@ from esutil.ostools import path_join
 import sdsspy
 from . import stomp_maps
 
-import columns
+try:
+    import columns
+except:
+    pass
 
 def collate_stripe82_epochs(nrunmin=10, rlim=1.0):
     se=Stripe82Epochs(nrunmin, rlim)

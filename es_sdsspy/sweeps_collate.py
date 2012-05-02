@@ -5,8 +5,12 @@ import esutil as eu
 from esutil.ostools import path_join
 from esutil.numpy_util import where1
 import os
-import columns
 import datetime
+
+try:
+    import columns
+except:
+    pass
 
 from . import mangle_masks
 from . import starmask

@@ -19,12 +19,13 @@ class ShapeSim(dict):
     Then use the get_trial(s2, ellip, s2n) method to generate a single
     realization.
     """
-    def __init__(self, run, verbose=False):
+    def __init__(self, run, **keys):
         conf=read_config(run)
         for k,v in conf.iteritems():
             self[k] = v
-        self.verbose = verbose
-    
+        for k,v in keys.iteritems():
+            self[k] = v
+
     def get_trial(self, s2, ellip, s2n):
         """
         Genereate a realization of the input size ratio squared and total
@@ -50,8 +51,31 @@ class ShapeSim(dict):
         Generate a convolved image with the input parameters and the psf and
         object models listed in the config.
         """
+        if self['psfmodel'] in ['gauss','dgauss']:
+            psfpars, psf_sigma_tot = self._get_gauss_psf_pars()
+        elif self['psfmodel'] == 'turb':
+            psfpars = {'model':'turb','psf_fwhm':self['psf_fwhm']}
+            psf_sigma_tot = self['psf_fwhm']/1.4
+        else:
+            raise ValueError("unknown psf model: '%s'" % self['psfmodel'])
+
+        sigma = psf_sigma_tot/sqrt(s2)
+        cov=fimage.ellip2mom(2*sigma**2,e=obj_ellip,theta=obj_theta)
+        objpars = dict(model = self['objmodel'], cov=cov)
+
+        if self['psfmodel'] in ['gauss','dgauss']:
+            ci = fimage.convolved.ConvolvedImageFFT(objpars,psfpars, **self)
+        else:
+            ci = fimage.convolved.ConvolvedTurbulentPSF(objpars,psfpars, **self)
+
+        return ci
+
+    def _get_gauss_psf_pars(self):
+        """
+        for gauss or double gauss psf
+        """
         psf_cov=fimage.ellip2mom(2*self['psf_sigma']**2,
-                              e=self['psf_ellip'],theta=0)
+                                 e=self['psf_ellip'],theta=0)
         if self['psfmodel'] == 'dgauss':
             psf_cov1=psf_cov
             psf_cov2=psf_cov*self['psf_sigrat']**2
@@ -63,18 +87,12 @@ class ShapeSim(dict):
             psum = 1+self['psf_cenrat']
             cov11 = (psf_cov1[0] + psf_cov2[0]*self['psf_cenrat'])/psum
             cov22 = (psf_cov1[2] + psf_cov2[2]*self['psf_cenrat'])/psum
-            psf_sigma = sqrt( (cov11+cov22)/2)
+            psf_sigma_tot = sqrt( (cov11+cov22)/2)
         else:
             psfpars = dict(model = 'gauss', cov = psf_cov)
-            psf_sigma = self['psf_sigma']
+            psf_sigma_tot = self['psf_sigma']
 
-        sigma = psf_sigma/sqrt(s2)
-        cov=fimage.ellip2mom(2*sigma**2,e=obj_ellip,theta=obj_theta)
-        objpars = dict(model = self['objmodel'], cov=cov)
-
-        ci = fimage.convolved.ConvolvedImageFFT(objpars,psfpars)
-
-        return ci
+        return psfpars, psf_sigma_tot
 
     def add_noise(self, ci, s2n):
         """

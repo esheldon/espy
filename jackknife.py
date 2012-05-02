@@ -15,7 +15,6 @@ from numpy import log10,sqrt,linspace,where,zeros
 import lensing
 import esutil as eu
 from esutil.numpy_util import where1
-import recfile
 
 def wjackknife(vsum=None, wsum=None, cleanup=True, slow=False, verbose=False):
     """
@@ -87,6 +86,7 @@ def write_wjackknife_inputs(filename, vsum, wsum):
         wsum.tofile(fobj)
 
 def read_jackknife_outputs(filename):
+    import recfile
     with open(filename,'r') as fobj:
 
         vnvar = numpy.fromfile(fobj, sep=' ', count=1, dtype='i8')

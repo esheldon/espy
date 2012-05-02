@@ -10,7 +10,11 @@ import esutil as eu
 from esutil.numpy_util import where1
 from esutil.ostools import path_join, expand_path
 
-import columns
+try:
+    import columns
+except:
+    pass
+
 import es_sdsspy
 
 import zphot

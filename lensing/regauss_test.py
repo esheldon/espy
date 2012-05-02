@@ -10,7 +10,6 @@ create a new column that is detrended.
 """
 from __future__ import print_function
 import os
-import columns
 import numpy
 from numpy import sqrt
 import esutil as eu
@@ -30,6 +29,11 @@ from fimage.conversions import mom2sigma,mom2fwhm
 from . import regauss
 
 import converter
+
+try:
+    import columns
+except:
+    pass
 
 class Tester(dict):
     """
