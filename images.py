@@ -46,6 +46,9 @@ def multiview(image, **keys):
     tab[0,0] = imp
     tab[0,1] = crossplt
 
+    title=keys.get('title',None)
+    if title:
+        tab.title=title
 
     show = keys.get('show', True)
     if show:
@@ -264,7 +267,8 @@ def expand(image, new_dims, padval=0, verbose=False):
         return image
 
 def compare_images(im1, im2, cen=None, minval=None, 
-                   label1='im1',label2='im2'):
+                   label1='im1',label2='im2',
+                   skysig=None):
     import biggles
 
     labelres='%s-%s' % (label2,label1)
@@ -292,9 +296,11 @@ def compare_images(im1, im2, cen=None, minval=None,
     im2plt=view(im2, levels=levels, show=False, min=minval, max=maxval)
     residplt=view(resid, show=False, min=minval, max=maxval)
 
-    chi2 = (resid**2).sum()
-    lab = biggles.PlotLabel(0.1,0.1,r'$\chi^2$: %0.2e' % chi2,halign='left')
-    residplt.add(lab)
+    if skysig is not None:
+        chi2perpix = (resid**2).sum()/skysig**2/im1.size
+        lab = biggles.PlotLabel(0.1,0.1,
+                    r'$\chi^2/N$: %0.2e' % chi2perpix,halign='left')
+        residplt.add(lab)
 
     im1plt.title=label1
     im2plt.title=label2
