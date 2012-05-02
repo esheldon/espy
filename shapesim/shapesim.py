@@ -373,8 +373,11 @@ def read_all_outputs(run, average=False):
     for is2 in xrange(c['nums2']):
         s2data=[]
         for ie in xrange(c['nume']):
-            edata = read_output(run, is2, ie)
-            s2data.append(edata)
+            try:
+                edata = read_output(run, is2, ie)
+                s2data.append(edata)
+            except:
+                pass
         data.append(s2data)
 
     if average:

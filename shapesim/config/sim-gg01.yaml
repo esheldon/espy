@@ -13,7 +13,6 @@ psf_ellip: 0.0
 #
 objmodel: gauss
 
-
 comments: |
 
     gauss obj, gauss psf, low res, analytic convolutions
