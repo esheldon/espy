@@ -6,7 +6,7 @@ from esutil.numpy_util import where1
 import numpy
 from numpy import median
 
-from lensing.util import shear_fracdiff
+from lensing.util import shear_fracdiff, e2gamma, gamma2e
 
 class SimPlotter(dict):
     def __init__(self, run):
@@ -47,10 +47,15 @@ class SimPlotter(dict):
 
             s = st['etrue'].argsort()
 
-            wbad=where1(st['e1_meas'][s] != st['e1_meas'][s])
+            if 'e_meas' not in st.dtype.names:
+                e_meas = gamma2e(st['gamma_meas'][s])
+            else:
+                e_meas = st['e_meas'][s]
+            wbad=where1(e_meas != e_meas)
+
             if wbad.size != 0:
-                wlog("found bad:",st['e1_meas'][s[wbad]])
-            fdiff = shear_fracdiff(st['etrue'][s],st['e_meas'][s])
+                wlog("found bad:",e_meas[wbad])
+            fdiff = shear_fracdiff(st['etrue'][s],e_meas)
 
             #label = r'$<\sigma^2_{psf}/\sigma^2_{gal}>$: %0.3f' % s2
             if self['s2n'] > 0:

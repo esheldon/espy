@@ -17,13 +17,11 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 
-prefix := ""
+prefix=~/exports/espy-work
+
+default:
 
 copy :
-ifeq ($(prefix),"")
-	@echo prefix is not set, aborting
-else
-
 	@echo "rsyncing to $(prefix)"
 	@if [ ! -e $(prefix) ]; then \
 		echo Creating directory $(prefix); \
@@ -35,7 +33,4 @@ else
 		--exclude "*swp" \
 		--exclude "*~" \
 		--exclude "*pyc" ./ $(prefix)/
-
-endif
-
 

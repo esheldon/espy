@@ -13,9 +13,6 @@ psf_ellip: 0.0
 #
 objmodel: exp
 
-conv: fft
-fft_nsub: 5
-
 comments: |
 
     exp obj, gauss psf, low res

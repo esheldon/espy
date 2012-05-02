@@ -16,9 +16,6 @@ psf_cenrat: 0.09
 #
 objmodel: exp
 
-conv: fft
-fft_nsub: 5
-
 comments: |
 
     exp obj, dgauss psf, low res

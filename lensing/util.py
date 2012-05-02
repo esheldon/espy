@@ -8,6 +8,9 @@ def e2gamma(e):
     """
     return tanh(0.5*arctanh(e))
 
+def gamma2e(gamma):
+    return tanh(2*arctanh(gamma))
+
 def e1e2_to_g1g2(e1, e2):
     e = sqrt(e1**2 + e2**2)
     g = e2gamma(e)
