@@ -93,12 +93,18 @@ class SimPlotter(dict):
         plt.add(klab)
         objmodel = self.simc['objmodel']
         psfmodel = self.simc['psfmodel']
-        psf_sigma = self.simc['psf_sigma']
+
+
         plab='%s %s' % (objmodel,psfmodel)
         l = biggles.PlotLabel(0.1,0.9, plab, halign='left')
         plt.add(l)
 
-        siglab=r'$\sigma_{PSF}: %.1f$ pix' % psf_sigma
+        if self.simc['psfmodel'] == 'turb':
+            siglab=r'$FWHM_{PSF}: %.1f$ pix' % self.simc['psf_fwhm']
+        else:
+            psf_sigma = self.simc['psf_sigma']
+            siglab=r'$\sigma_{PSF}: %.1f$ pix' % psf_sigma
+
         if self['s2n'] > 0:
             siglab+=r'$ S/N: %(s2n)d N_{trial}: %(ntrial)d$' % self
         else:

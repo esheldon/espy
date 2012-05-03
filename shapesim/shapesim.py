@@ -55,7 +55,7 @@ class ShapeSim(dict):
             psfpars, psf_sigma_tot = self._get_gauss_psf_pars()
         elif self['psfmodel'] == 'turb':
             psfpars = {'model':'turb','psf_fwhm':self['psf_fwhm']}
-            psf_sigma_tot = self['psf_fwhm']/1.4
+            psf_sigma_tot = self['psf_fwhm']/fimage.convolved.TURB_SIGMA_FAC
         else:
             raise ValueError("unknown psf model: '%s'" % self['psfmodel'])
 

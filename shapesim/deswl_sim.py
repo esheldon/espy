@@ -58,10 +58,11 @@ class DESWLSim(dict):
                 if res['flags'][0] == 0:
                     st = self.copy_output(s2, ellip, s2n, ci, res)
                     out[i] = st
+                    #self.write_ci(ci, is2, ie, res=st)
                     break
                 else:
                     if res['flags'][0] == -2 and nwrite_ci < maxwrite_ci:
-                        self.write_ci(ci, is2, ie)
+                        self.write_ci(ci, is2, ie,error=True)
                         nwrite_ci += 1
                     iter += 1
             if iter == self['itmax']:
@@ -70,13 +71,17 @@ class DESWLSim(dict):
         shapesim.write_output(self['run'], is2, ie, out)
         return out
 
-    def write_ci(self, ci, is2, ie):
+    def write_ci(self, ci, is2, ie, error=False, res=None):
         """
         Write the ci to a file in the outputs directory
         """
         import fitsio
         import tempfile
-        rand=tempfile.mktemp(dir='')
+        if error:
+            suffix='-err'
+        else:
+            suffix='-good'
+        rand=tempfile.mktemp(dir='',suffix=suffix)
         url=shapesim.get_output_url(self['run'], is2, ie)
         url = url.replace('.rec','-'+rand+'.fits')
         h = {}
@@ -89,6 +94,10 @@ class DESWLSim(dict):
             fobj.write(ci.image, header=h, extname='image')
             fobj.write(ci.psf, extname='psf')
             fobj.write(ci.image0, extname='image0')
+
+            if res is not None:
+                fobj.write(res, extname='results')
+
 
     def run_wl(self, ci):
         """
