@@ -9,6 +9,7 @@ from numpy.random import standard_normal
 import fimage
 import admom
 import fitsio
+import time
 
 class ShapeSim(dict):
     """
@@ -51,22 +52,30 @@ class ShapeSim(dict):
         Generate a convolved image with the input parameters and the psf and
         object models listed in the config.
         """
-        if self['psfmodel'] in ['gauss','dgauss']:
+        psfmodel = self['psfmodel']
+        objmodel = self['objmodel']
+
+        if psfmodel in ['gauss','dgauss']:
             psfpars, psf_sigma_tot = self._get_gauss_psf_pars()
-        elif self['psfmodel'] == 'turb':
+        elif psfmodel == 'turb':
             psfpars = {'model':'turb','psf_fwhm':self['psf_fwhm']}
             psf_sigma_tot = self['psf_fwhm']/fimage.convolved.TURB_SIGMA_FAC
         else:
-            raise ValueError("unknown psf model: '%s'" % self['psfmodel'])
+            raise ValueError("unknown psf model: '%s'" % psfmodel)
 
         sigma = psf_sigma_tot/sqrt(s2)
         cov=fimage.ellip2mom(2*sigma**2,e=obj_ellip,theta=obj_theta)
-        objpars = dict(model = self['objmodel'], cov=cov)
+        objpars = {'model':objmodel, 'cov':cov}
 
-        if self['psfmodel'] in ['gauss','dgauss']:
-            ci = fimage.convolved.ConvolvedImageFFT(objpars,psfpars, **self)
+        if psfmodel in ['gauss','dgauss']:
+            if objmodel == 'gauss':
+                ci = fimage.convolved.ConvolverAllGauss(objpars,psfpars, **self)
+            else:
+                ci = fimage.convolved.ConvolverGaussFFT(objpars,psfpars, **self)
+            #ci = fimage.convolved.ConvolvedImageFFT(objpars,psfpars, **self)
         else:
-            ci = fimage.convolved.ConvolvedTurbulentPSF(objpars,psfpars, **self)
+            ci = fimage.convolved.ConvolverTurbulence(objpars,psfpars, **self)
+            #ci = fimage.convolved.ConvolvedTurbulentPSF(objpars,psfpars, **self)
 
         return ci
 
@@ -172,6 +181,7 @@ class BaseSim(dict):
         conf=read_config(run)
         for k,v in conf.iteritems():
             self[k] = v
+        numpy.random.seed(self['seed'])
 
     def run(self, ci):
         """
@@ -213,7 +223,7 @@ class BaseSim(dict):
         max_write_ci: optional
             Max number of failed ci to write to disk. Default 1
         """
-        
+        import images 
         nwrite_ci=0
 
         out = numpy.zeros(self['ntrial'], dtype=self.out_dtype())
@@ -235,10 +245,14 @@ class BaseSim(dict):
                     out[i] = st
                     break
                 else:
+                    images.multiview(ci.image,title='image')
+                    images.multiview(ci.psf,title='psf')
+                    stop
                     if nwrite_ci < max_write_ci:
                         self.write_ci(ci, is2, ie)
                         nwrite_ci += 1
                     iter += 1
+
             if iter == self['itmax']:
                 raise ValueError("itmax %d reached" % self['itmax'])
         stderr.write("\n")

@@ -9,6 +9,7 @@ from lensing.util import e2gamma, e1e2_to_g1g2
 from . import shapesim
 from fimage import mom2sigma
 from pprint import pprint 
+import images
 
 try:
     import gmix_image
@@ -48,12 +49,32 @@ class GMixSim(shapesim.BaseSim):
         """
         out={}
 
+        """
+        pprint(ci)
+        images.multiview(ci.image0,title='image0')
+        images.multiview(ci.psf,title='psf')
+        images.multiview(ci.image,title='image')
+        stop
+        """
         out['psf_res'] = self.process_image(ci.psf, 
                                             self['ngauss_psf'],
-                                            ci['cen_psf_admom'],
-                                            ci['cov_psf_admom'],
+                                            #ci['cen_psf_admom'],
+                                            #ci['cov_psf_admom'],
+                                            ci['cen_psf_uw'],
+                                            ci['cov_psf_uw'],
                                             show=False)
         out['flags'] = out['psf_res']['flags']
+        if out['flags'] != 0:
+            print 'flags:',out['flags']
+        """
+        print 'psf flags:',out['flags']
+        print 'ngauss:',self['ngauss_psf']
+        print 'admom cen psf:',ci['cen_psf_admom']
+        print 'admom cov psf:',ci['cov_psf_admom']
+        print 'niter:',out['psf_res']['numiter']
+        print ci.psfpars['cov_uw']
+        print ci.psf.shape
+        """
         if out['flags'] == 0:
 
             out['res'] = self.process_image(ci.image, 
@@ -62,7 +83,6 @@ class GMixSim(shapesim.BaseSim):
                                             ci['cov_admom'],
                                             psf=out['psf_res']['gmix'],
                                             show=False)
-            #stop
             out['flags'] = out['res']['flags']
 
         return out
@@ -101,7 +121,6 @@ class GMixSim(shapesim.BaseSim):
              'fdiff':gm.fdiff,
              'ntry':ntry}
         if flags == 0 and show:
-            import images
             print 'psf'
             pprint(psf)
             print 'gmix'

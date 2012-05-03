@@ -15,6 +15,7 @@ _wqtemplate="""
 command: |
     source ~/.bashrc
     module unload espy && module load espy/work
+    module unload fimage && module load fimage/work
     module unload wl && module load wl/work
     python $ESPY_DIR/shapesim/bin/run-shapesim.py %(run)s %(is2)d %(ie)d
 
