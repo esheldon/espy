@@ -1,4 +1,3 @@
-# see sim-gg01 for psf and object details
 run: gmix-gt01r02
 sim: sim-gt01
 
@@ -9,7 +8,7 @@ ngauss: 1
 ngauss_psf: 3
 
 # maximum iterations inside gmix_image
-gmix_maxiter: 2000
+gmix_maxiter: 4000
 # minimum fractional diff between iterations to indicate convergence
 gmix_tol: 1.e-6
 

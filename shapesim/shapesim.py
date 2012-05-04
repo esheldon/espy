@@ -262,9 +262,9 @@ class BaseSim(dict):
                     out[i] = st
                     break
                 else:
-                    images.multiview(ci.image,title='image')
-                    images.multiview(ci.psf,title='psf')
-                    stop
+                    #images.multiview(ci.image,title='image')
+                    #images.multiview(ci.psf,title='psf')
+                    #stop
                     if nwrite_ci < max_write_ci:
                         self.write_ci(ci, is2, ie)
                         nwrite_ci += 1
