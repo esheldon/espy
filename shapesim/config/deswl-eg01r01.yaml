@@ -28,3 +28,21 @@ ntrial: 100
 itmax: 100
 
 seed: 333
+
+# deswl specifics
+
+# in number of sigma.  Applies to both objects and psf
+maxaper_nsig: 5
+
+#
+# tweaks of the simulation parameters.  These get passed
+# on to the ShapeSim object
+#
+
+# need more than the default gaussian padding since pipeline
+# will choke
+# note sim code assumes objfac is same as psffac since they are
+# both gaussians
+
+simpars:
+    psffac: 6.0
