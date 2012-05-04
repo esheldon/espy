@@ -58,7 +58,6 @@ class GMixSim(shapesim.BaseSim):
                                             show=False)
         out['flags'] = out['psf_res']['flags']
         if out['flags'] == 0:
-
             out['res'] = self.process_image(ci.image, 
                                             self['ngauss'],
                                             ci['cen_admom'],
@@ -66,6 +65,11 @@ class GMixSim(shapesim.BaseSim):
                                             psf=out['psf_res']['gmix'],
                                             show=False)
             out['flags'] = out['res']['flags']
+            if out['flags'] == 0:
+                self.show_residual(ci, out['psf_res']['gmix'], 
+                                   objmix=out['res']['gmix'])
+            else:
+                self.show_residual(ci, out['psf_res']['gmix'])
 
         if out['flags'] != 0:
             print 'flags:',out['flags']
@@ -281,3 +285,32 @@ class GMixSim(shapesim.BaseSim):
             ('gmix',gmix_dt,self['ngauss'])]
 
         return dt
+
+
+    def show_residual(self, ci, psfmix, objmix=None):
+        """
+        Show plots of the input compared with the fit gaussian mixtures.
+        """
+        
+        psfmodel = gmix_image.gmix2image(psfmix,ci.psf.shape,
+                                         counts=ci.psf.sum()) 
+        images.compare_images(ci.psf,psfmodel,
+                              label1='psf',label2='gmix')
+
+        if objmix is not None:
+            skysig=None
+            if ci['skysig'] > 0:
+                skysig=ci['skysig']
+            model0 = gmix_image.gmix2image(objmix,ci.image0.shape,
+                                           counts=ci.image0.sum()) 
+            model = gmix_image.gmix2image(objmix,ci.image.shape,
+                                          psf=psfmix,
+                                          counts=ci.image.sum()) 
+
+            images.compare_images(ci.image0,model0,
+                                  label1='object0',label2='gmix',
+                                  skysig=skysig)
+            images.compare_images(ci.image,model,
+                                  label1='object+psf',label2='gmix',
+                                  skysig=skysig)
+        stop
