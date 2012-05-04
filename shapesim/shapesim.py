@@ -7,6 +7,8 @@ import numpy
 from numpy import ogrid, array, sqrt, where, linspace, median, zeros
 from numpy.random import standard_normal
 import fimage
+from fimage.conversions import mom2sigma, cov2sigma
+
 import admom
 import fitsio
 import time
@@ -39,6 +41,9 @@ class ShapeSim(dict):
         theta = 180.0*numpy.random.random()
         ci = self.new_convolved_image(s2, ellip, theta)
 
+        if False:
+            self.show_ci(ci)
+
         if s2n > 0:
             ci.image_nonoise = ci.image
             self.add_noise(ci, s2n)
@@ -46,6 +51,15 @@ class ShapeSim(dict):
             ci['skysig'] = 0.0
 
         return ci
+
+    def show_ci(self, ci):
+        import images
+        images.multiview(ci.image0,title='pre-psf image')
+        images.multiview(ci.psf,title='psf')
+        images.multiview(ci.image,title='convolved image')
+        key=raw_input('hit a key:')
+        if key == 'q':
+            stop
 
     def new_convolved_image(self, s2, obj_ellip, obj_theta):
         """
@@ -88,17 +102,20 @@ class ShapeSim(dict):
         if self['psfmodel'] == 'dgauss':
             psf_cov1=psf_cov
             psf_cov2=psf_cov*self['psf_sigrat']**2
+
             b=self['psf_cenrat']
-            psfpars = dict(model = 'dgauss',
-                           cov1 = psf_cov1,
-                           cov2 = psf_cov2,
-                           cenrat=b)
-            psum = 1+self['psf_cenrat']
-            cov11 = (psf_cov1[0] + psf_cov2[0]*self['psf_cenrat'])/psum
-            cov22 = (psf_cov1[2] + psf_cov2[2]*self['psf_cenrat'])/psum
-            psf_sigma_tot = sqrt( (cov11+cov22)/2)
+            psfpars = {'model':'dgauss',
+                       'cov1':psf_cov1,
+                       'cov2':psf_cov2,
+                       'cenrat':b}
+
+            psf_cov = (psf_cov1 + b*psf_cov2)/(1+b)
+            #psum = 1+self['psf_cenrat']
+            #cov11 = (psf_cov1[0] + psf_cov2[0]*self['psf_cenrat'])/psum
+            #cov22 = (psf_cov1[2] + psf_cov2[2]*self['psf_cenrat'])/psum
+            psf_sigma_tot = cov2sigma(psf_cov)
         else:
-            psfpars = dict(model = 'gauss', cov = psf_cov)
+            psfpars = {'model':'gauss', 'cov':psf_cov}
             psf_sigma_tot = self['psf_sigma']
 
         return psfpars, psf_sigma_tot
@@ -130,7 +147,7 @@ class ShapeSim(dict):
 
         cen = ci['cen_uw']
         T = ci['cov_uw'][0] + ci['cov_uw'][2]
-        sigma = fimage.mom2sigma(T)
+        sigma = mom2sigma(T)
         imagenn = ci.image_nonoise
         shape = imagenn.shape
 

@@ -26,3 +26,5 @@ ntrial: 100
 
 # number of times to retry when a trial fails
 itmax: 100
+
+seed: 333

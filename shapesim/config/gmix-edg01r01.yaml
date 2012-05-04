@@ -10,7 +10,7 @@ ngauss_psf: 2
 ngauss: 3
 
 # maximum iterations inside gmix_image
-gmix_maxiter: 2000
+gmix_maxiter: 4000
 # minimum fractional diff between iterations to indicate convergence
 gmix_tol: 1.e-6
 
@@ -38,4 +38,4 @@ maxe:  0.80
 nums2: 20
 nume:  20
 
-
+seed: 445

@@ -49,32 +49,14 @@ class GMixSim(shapesim.BaseSim):
         """
         out={}
 
-        """
-        pprint(ci)
-        images.multiview(ci.image0,title='image0')
-        images.multiview(ci.psf,title='psf')
-        images.multiview(ci.image,title='image')
-        stop
-        """
         out['psf_res'] = self.process_image(ci.psf, 
                                             self['ngauss_psf'],
-                                            #ci['cen_psf_admom'],
-                                            #ci['cov_psf_admom'],
-                                            ci['cen_psf_uw'],
-                                            ci['cov_psf_uw'],
+                                            ci['cen_psf_admom'],
+                                            ci['cov_psf_admom'],
+                                            #ci['cen_psf_uw'],
+                                            #ci['cov_psf_uw'],
                                             show=False)
         out['flags'] = out['psf_res']['flags']
-        if out['flags'] != 0:
-            print 'flags:',out['flags']
-        """
-        print 'psf flags:',out['flags']
-        print 'ngauss:',self['ngauss_psf']
-        print 'admom cen psf:',ci['cen_psf_admom']
-        print 'admom cov psf:',ci['cov_psf_admom']
-        print 'niter:',out['psf_res']['numiter']
-        print ci.psfpars['cov_uw']
-        print ci.psf.shape
-        """
         if out['flags'] == 0:
 
             out['res'] = self.process_image(ci.image, 
@@ -85,6 +67,8 @@ class GMixSim(shapesim.BaseSim):
                                             show=False)
             out['flags'] = out['res']['flags']
 
+        if out['flags'] != 0:
+            print 'flags:',out['flags']
         return out
 
     def process_image(self, image, ngauss, cen, cov, psf=None,
