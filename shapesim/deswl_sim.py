@@ -14,6 +14,8 @@ from esutil.numpy_util import ahelp
 from esutil.misc import wlog
 from . import shapesim
 
+SHAPELETS_EDGE = 0x40
+
 def e2gamma(e):
     return tanh(0.5*arctanh(e))
 def e1e2_to_g1g2(e1, e2):
@@ -44,7 +46,8 @@ class DESWLSim(dict):
         nwrite_ci=0
 
         out = numpy.zeros(self['ntrial'], dtype=self.out_dtype())
-        ss = shapesim.ShapeSim(self['sim'])
+        simpars=self.get('simpars',{})
+        ss = shapesim.ShapeSim(self['sim'], **simpars)
 
         s2n = self['s2n']
         s2,ellip = self.get_s2_e(is2, ie)
@@ -137,16 +140,19 @@ class DESWLSim(dict):
             fimage.mom2sigma(ci['cov_psf_uw'][0]+ci['cov_psf_uw'][2])
         sigma0_guess=\
             fimage.mom2sigma(ci['cov_uw'][0]+ci['cov_uw'][2])
-        psf_aperture = 4*psf_sigma_guess
+
+
         sigma_obj = fimage.mom2sigma(ci['cov_uw'][0]+ci['cov_uw'][2])
-        shear_aperture = 4.*sigma_obj
+
+        psf_max_aperture = self['maxaper_nsig']*psf_sigma_guess
+        shear_max_aperture = self['maxaper_nsig']*sigma_obj
 
         wlpsfobj = deswl.cwl.WLObject(ci.psf,
                                       float(ci['cen'][0]), 
                                       float(ci['cen'][1]),
                                       float(sky),
                                       float(1),
-                                      float(psf_aperture), 
+                                      float(psf_max_aperture), 
                                       psf_sigma_guess)
         out['flags'] = wlpsfobj.get_flags()
         if out['flags'] != 0:
@@ -159,7 +165,7 @@ class DESWLSim(dict):
                                    float(ci['cen'][1]),
                                    float(sky),
                                    float(skysig**2),
-                                   float(shear_aperture), 
+                                   float(shear_max_aperture), 
                                    sigma0_guess)
         out['flags'] = wlobj.get_flags()
         if out['flags'] != 0:

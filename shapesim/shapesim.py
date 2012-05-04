@@ -86,10 +86,8 @@ class ShapeSim(dict):
                 ci = fimage.convolved.ConvolverAllGauss(objpars,psfpars, **self)
             else:
                 ci = fimage.convolved.ConvolverGaussFFT(objpars,psfpars, **self)
-            #ci = fimage.convolved.ConvolvedImageFFT(objpars,psfpars, **self)
         else:
             ci = fimage.convolved.ConvolverTurbulence(objpars,psfpars, **self)
-            #ci = fimage.convolved.ConvolvedTurbulentPSF(objpars,psfpars, **self)
 
         return ci
 
