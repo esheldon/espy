@@ -3,11 +3,11 @@ Generate image simulations and process them with the
 gmix pipeline
 """
 
-from numpy import random, zeros, sqrt
+from numpy import random, zeros, sqrt, array
 import sys
 from lensing.util import e2gamma, e1e2_to_g1g2
 from . import shapesim
-from fimage import mom2sigma
+from fimage import mom2sigma, cov2sigma
 from pprint import pprint 
 import images
 
@@ -53,8 +53,6 @@ class GMixSim(shapesim.BaseSim):
                                             self['ngauss_psf'],
                                             ci['cen_psf_admom'],
                                             ci['cov_psf_admom'],
-                                            #ci['cen_psf_uw'],
-                                            #ci['cov_psf_uw'],
                                             show=False)
         out['flags'] = out['psf_res']['flags']
         if out['flags'] == 0:
@@ -74,6 +72,24 @@ class GMixSim(shapesim.BaseSim):
         if out['flags'] != 0:
             print 'flags:',out['flags']
         return out
+
+    def trim_image(self, image, cen, cov, nsigma):
+        s=image.shape
+        sigma = cov2sigma(cov)
+        minrow,maxrow = (int(cen[0]-nsigma*sigma), int(cen[0]+nsigma*sigma))
+        mincol,maxcol = (int(cen[1]-nsigma*sigma), int(cen[1]+nsigma*sigma))
+        if minrow < 0: minrow=0
+        if maxrow > (s[0]-1): minrow=(s[0]-1)
+        if mincol < 0: mincol=0
+        if maxcol > (s[1]-1): mincol=(s[1]-1)
+
+        newcen = array(cen)
+        newcen[0] -= minrow
+        newcen[1] -= mincol
+
+        newimage = image[minrow:maxrow+1, mincol:maxcol+1]
+
+        return newimage, newcen
 
     def process_image(self, image, ngauss, cen, cov, psf=None,
                       show=False):

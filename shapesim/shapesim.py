@@ -89,6 +89,7 @@ class ShapeSim(dict):
         else:
             ci = fimage.convolved.ConvolverTurbulence(objpars,psfpars, **self)
 
+        ci['_obj_theta'] = obj_theta
         return ci
 
     def _get_gauss_psf_pars(self):
@@ -242,7 +243,9 @@ class BaseSim(dict):
         nwrite_ci=0
 
         out = numpy.zeros(self['ntrial'], dtype=self.out_dtype())
-        ss = ShapeSim(self['sim'])
+
+        simpars=self.get('simpars',{})
+        ss = ShapeSim(self['sim'], **simpars)
 
         s2n = self['s2n']
         s2,ellip = self.get_s2_e(is2, ie)
@@ -260,26 +263,32 @@ class BaseSim(dict):
                     out[i] = st
                     break
                 else:
-                    #images.multiview(ci.image,title='image')
-                    #images.multiview(ci.psf,title='psf')
-                    #stop
                     if nwrite_ci < max_write_ci:
-                        self.write_ci(ci, is2, ie)
+                        self.write_ci(ci, is2, ie, res['flags'])
                         nwrite_ci += 1
                     iter += 1
 
             if iter == self['itmax']:
+                #images.multiview(ci.image0,title='image0')
+                #images.multiview(ci.psf,title='psf')
+                #images.multiview(ci.image,title='image')
                 raise ValueError("itmax %d reached" % self['itmax'])
         stderr.write("\n")
         write_output(self['run'], is2, ie, out)
         return out
 
-    def write_ci(self, ci, is2, ie):
+    def write_ci(self, ci, is2, ie, flags, error=True):
         """
         Write the ci to a file in the outputs directory
         """
         import tempfile
-        rand=tempfile.mktemp(dir='')
+
+        if error:
+            suffix='-err'
+        else:
+            suffix='-good'
+
+        rand=tempfile.mktemp(dir='',suffix=suffix)
         url=get_output_url(self['run'], is2, ie)
         url = url.replace('.rec','-'+rand+'.fits')
         h = {}
@@ -287,6 +296,7 @@ class BaseSim(dict):
             h[k] = v
         for k,v in ci.iteritems():
             h[k] = v
+        h['flags'] = flags
 
         with fitsio.FITS(url, mode='rw', clobber=True) as fobj:
             fobj.write(ci.image, header=h, extname='image')

@@ -17,6 +17,7 @@ command: |
     module unload espy && module load espy/work
     module unload fimage && module load fimage/work
     module unload wl && module load wl/work
+    module unload gmix_image && module load gmix_image/work
     python $ESPY_DIR/shapesim/bin/run-shapesim.py %(run)s %(is2)d %(ie)d
 
 group: [%(groups)s]
