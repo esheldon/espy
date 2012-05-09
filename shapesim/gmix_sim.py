@@ -3,7 +3,7 @@ Generate image simulations and process them with the
 gmix pipeline
 """
 
-from numpy import random, zeros, sqrt, array
+from numpy import random, zeros, sqrt, array, ceil
 import sys
 from lensing.util import e2gamma, e1e2_to_g1g2
 from . import shapesim
@@ -63,12 +63,13 @@ class GMixSim(shapesim.BaseSim):
                                             psf=out['psf_res']['gmix'],
                                             show=False)
             out['flags'] = out['res']['flags']
+            """
             if out['flags'] == 0:
                 self.show_residual(ci, out['psf_res']['gmix'], 
                                    objmix=out['res']['gmix'])
             else:
                 self.show_residual(ci, out['psf_res']['gmix'])
-
+            """
         if out['flags'] != 0:
             print 'flags:',out['flags']
         return out
@@ -138,6 +139,8 @@ class GMixSim(shapesim.BaseSim):
     def get_guess(self, ngauss, cen, cov):
         # We use the input moments as guesses
         # cannot use [{...}]*ngauss, uses same objects!
+        cenoff=0.2
+        covoff=0.5
         guess=[]
         for i in xrange(ngauss):
             g={'p':1./ngauss,
@@ -149,12 +152,12 @@ class GMixSim(shapesim.BaseSim):
             guess.append(g)
         # perturb them
         for g in guess:
-            g['p'] += 0.2*g['p']*random.random()
-            g['row'] += 0.2*random.random()
-            g['col'] += 0.2*random.random()
-            g['irr'] += 0.2*random.random()
-            g['irc'] += 0.2*random.random()
-            g['icc'] += 0.2*random.random()
+            #g['p'] += 0.2*g['p']*random.random()
+            g['row'] += cenoff*random.random()
+            g['col'] += cenoff*random.random()
+            g['irr'] += covoff*random.random()
+            g['irc'] += covoff*random.random()
+            g['icc'] += covoff*random.random()
         
         return guess
 

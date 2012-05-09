@@ -9,7 +9,8 @@ from shapesim import shapesim
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
-parser.add_option('-g','--groups',default='gen345',help='groups for wq, csv')
+parser.add_option('-g','--groups',default=None,
+                  help='groups for wq, csv. Default is unconstrained')
 
 _wqtemplate="""
 command: |
@@ -20,7 +21,7 @@ command: |
     module unload gmix_image && module load gmix_image/work
     python $ESPY_DIR/shapesim/bin/run-shapesim.py %(run)s %(is2)d %(ie)d
 
-group: [%(groups)s]
+group: %(groups)s
 job_name: %(job_name)s
 priority: med\n"""
 
@@ -35,6 +36,10 @@ def main():
 
     c = shapesim.read_config(run)
     groups=options.groups
+    if groups is None:
+        groups=''
+    else:
+        groups = '[%s]' % groups
 
     wqd = shapesim.get_wq_dir(run)
     if not os.path.exists(wqd):
