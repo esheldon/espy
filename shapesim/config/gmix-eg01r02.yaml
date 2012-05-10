@@ -7,7 +7,7 @@ s2n: 100.
 # we should try with higher values to see what happens
 ngauss_psf: 1
 ngauss: 3
-#ngauss: 1
+#ngauss: 5
 
 # maximum iterations inside gmix_image
 gmix_maxiter: 4000

@@ -33,6 +33,8 @@ class GMixSim(shapesim.BaseSim):
     """
     def __init__(self, run):
         super(GMixSim,self).__init__(run)
+        if 'verbose' not in self:
+            self['verbose'] = False
 
     def run(self, ci):
         """
@@ -47,6 +49,7 @@ class GMixSim(shapesim.BaseSim):
         res:
             Result of image processing, if psf processing succeeded.
         """
+        show=False
         out={}
 
         out['psf_res'] = self.process_image(ci.psf, 
@@ -56,44 +59,27 @@ class GMixSim(shapesim.BaseSim):
                                             show=False)
         out['flags'] = out['psf_res']['flags']
         if out['flags'] == 0:
+            coellip=self.get('coellip',False)
             out['res'] = self.process_image(ci.image, 
                                             self['ngauss'],
                                             ci['cen_admom'],
                                             ci['cov_admom'],
                                             psf=out['psf_res']['gmix'],
+                                            coellip=coellip,
                                             show=False)
             out['flags'] = out['res']['flags']
-            """
-            if out['flags'] == 0:
+            if show and out['flags'] == 0:
+                pprint(out['res'])
                 self.show_residual(ci, out['psf_res']['gmix'], 
                                    objmix=out['res']['gmix'])
-            else:
+            elif show:
                 self.show_residual(ci, out['psf_res']['gmix'])
-            """
-        if out['flags'] != 0:
-            print 'flags:',out['flags']
+        if out['flags'] != 0 and self['verbose']:
+            print 'flags:',gmix_image.flagname(out['flags'])
         return out
 
-    def trim_image(self, image, cen, cov, nsigma):
-        s=image.shape
-        sigma = cov2sigma(cov)
-        minrow,maxrow = (int(cen[0]-nsigma*sigma), int(cen[0]+nsigma*sigma))
-        mincol,maxcol = (int(cen[1]-nsigma*sigma), int(cen[1]+nsigma*sigma))
-        if minrow < 0: minrow=0
-        if maxrow > (s[0]-1): minrow=(s[0]-1)
-        if mincol < 0: mincol=0
-        if maxcol > (s[1]-1): mincol=(s[1]-1)
-
-        newcen = array(cen)
-        newcen[0] -= minrow
-        newcen[1] -= mincol
-
-        newimage = image[minrow:maxrow+1, mincol:maxcol+1]
-
-        return newimage, newcen
-
     def process_image(self, image, ngauss, cen, cov, psf=None,
-                      show=False):
+                      coellip=False, show=False):
         im=image.copy()
 
         # need no zero pixels and sky value
@@ -109,6 +95,7 @@ class GMixSim(shapesim.BaseSim):
         # In the iteration, we can sometimes run into negative determinants.
         # we will retry a few times with different random offsets in that case
 
+
         flags = GMIX_ERROR_NEGATIVE_DET
         ntry=0
         while flags == GMIX_ERROR_NEGATIVE_DET and ntry < self['max_retry']:
@@ -117,7 +104,9 @@ class GMixSim(shapesim.BaseSim):
                                  sky=sky,
                                  maxiter=self['gmix_maxiter'],
                                  tol=self['gmix_tol'],
-                                 psf=psf)
+                                 coellip=coellip,
+                                 psf=psf,
+                                 verbose=self['verbose'])
             flags = gm.flags
             ntry += 1
         out={'gmix': gm.pars,

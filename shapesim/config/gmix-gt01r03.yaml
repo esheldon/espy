@@ -1,8 +1,10 @@
-run: gmix-gt01r01
+run: gmix-gt01r03
 sim: sim-gt01
 
 # negative for no noise.  Note this is the adaptive moments S/N
 s2n: -9999.
+
+coellip: true
 
 ngauss: 1
 ngauss_psf: 3

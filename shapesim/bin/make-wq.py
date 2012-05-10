@@ -21,7 +21,7 @@ command: |
     module unload gmix_image && module load gmix_image/work
     python $ESPY_DIR/shapesim/bin/run-shapesim.py %(run)s %(is2)d %(ie)d
 
-group: %(groups)s
+%(groups)s
 job_name: %(job_name)s
 priority: med\n"""
 
@@ -39,7 +39,7 @@ def main():
     if groups is None:
         groups=''
     else:
-        groups = '[%s]' % groups
+        groups = 'group: [%s]' % groups
 
     wqd = shapesim.get_wq_dir(run)
     if not os.path.exists(wqd):

@@ -39,11 +39,13 @@ class SimPlotter(dict):
         plt.aspect_ratio=1
         #plt.xlabel=r'$\gamma$'
         plt.xlabel=r'ellipticity'
-        plt.ylabel=r'$\Delta \gamma/\gamma$'
+        #plt.ylabel=r'$\Delta \gamma/\gamma$'
+        plt.ylabel=r'$\Delta \gamma$'
  
         allplots=[]
         for i,st in enumerate(reversed(data)):
-            s2 = median(st['s2_meas'])
+            #s2 = median(st['s2_meas'])
+            s2 = median(st['s2'])
 
             s = st['etrue'].argsort()
 
@@ -57,13 +59,17 @@ class SimPlotter(dict):
                 wlog("found bad:",e_meas[wbad])
             fdiff = shear_fracdiff(st['etrue'][s],e_meas)
 
+            # straight diff
+            gammadiff = fdiff*st['gamma'][s]
+
             #label = r'$<\sigma^2_{psf}/\sigma^2_{gal}>$: %0.3f' % s2
             if self['s2n'] > 0:
                 meds2n = median(st['s2n_meas'])
                 label = r'%0.3f (%.0f)' % (s2,meds2n)
             else:
                 label = r'%0.3f' % s2
-            cr = biggles.Curve(st['etrue'][s], fdiff, color=colors[i])
+            #cr = biggles.Curve(st['etrue'][s], fdiff, color=colors[i])
+            cr = biggles.Curve(st['etrue'][s], gammadiff, color=colors[i])
             cr.label = label
 
             plt.add(cr)
