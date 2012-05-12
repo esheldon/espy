@@ -5,6 +5,8 @@ sim: sim-edg01
 # negative for no noise.  Note this is the adaptive moments S/N
 s2n: 100
 
+coellip: true
+
 # we should try with higher values to see what happens
 ngauss_psf: 2
 ngauss: 3

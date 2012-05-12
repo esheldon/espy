@@ -251,11 +251,12 @@ class BaseSim(dict):
         s2,ellip = self.get_s2_e(is2, ie)
 
         for i in xrange(self['ntrial']):
-            stderr.write(".")
+            stderr.write("%d/%d " % (i+1,self['ntrial']))
             iter=0
             while iter < self['itmax']:
 
                 ci=ss.get_trial(s2,ellip,s2n)
+                if iter == 0: stderr.write("%s " % str(ci.psf.shape))
                 res = self.run(ci)
 
                 if res['flags'] == 0:
@@ -273,7 +274,8 @@ class BaseSim(dict):
                 #images.multiview(ci.psf,title='psf')
                 #images.multiview(ci.image,title='image')
                 raise ValueError("itmax %d reached" % self['itmax'])
-        stderr.write("\n")
+            stderr.write("niter: %d\n" % (iter+1))
+        #stop
         write_output(self['run'], is2, ie, out)
         return out
 

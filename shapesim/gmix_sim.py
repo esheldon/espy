@@ -5,6 +5,7 @@ gmix pipeline
 
 from numpy import random, zeros, sqrt, array, ceil
 import sys
+from sys import stderr
 from lensing.util import e2gamma, e1e2_to_g1g2
 from . import shapesim
 from fimage import mom2sigma, cov2sigma
@@ -15,12 +16,12 @@ try:
     import gmix_image
     from gmix_image import GMIX_ERROR_NEGATIVE_DET
 except ImportError:
-    sys.stderr("could not import gmix_image")
+    stderr("could not import gmix_image")
 
 try:
     import admom
 except ImportError:
-    sys.stderr("could not import admom")
+    stderr("could not import admom")
 
 class GMixSim(shapesim.BaseSim):
     """
@@ -108,7 +109,9 @@ class GMixSim(shapesim.BaseSim):
                                  psf=psf,
                                  verbose=self['verbose'])
             flags = gm.flags
+            #stderr.write("gmix niter: %d\n" % gm.numiter)
             ntry += 1
+        #stderr.write("ntry: %d " % ntry)
         out={'gmix': gm.pars,
              'flags': gm.flags,
              'numiter':gm.numiter,
