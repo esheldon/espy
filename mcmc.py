@@ -96,7 +96,7 @@ def extract_stats(data, burnin, sigma_clip=True):
 
     return means, errs
 
-class MCMC():
+class MCMC:
     """
     Class:
         MCMC
@@ -173,7 +173,7 @@ class MCMC():
 
         Inputs:
             nstep: Number of steps in the chain.
-            par_guess:  Starting point for the chain in the n-dimensional
+            parguess:  Starting point for the chain in the n-dimensional
                 parameters space.
 
         Optional Inputs:
@@ -311,13 +311,12 @@ class MCMC():
         if self.log:
             randnum = numpy.log(randnum)
 
-        # keep this step?
-        if not ( (newlike > self.oldlike) | (randnum < likeratio) ):
-            self.newpars=self.oldpars
-            self.newlike=self.oldlike
-        else:
+        if (newlike > self.oldlike) | (randnum < likeratio):
             self.newpars=newpars
             self.newlike=newlike
+        else:
+            self.newpars=self.oldpars
+            self.newlike=self.oldlike
 
 
 
