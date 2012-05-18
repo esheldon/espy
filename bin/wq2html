@@ -1,7 +1,34 @@
 #!/usr/bin/env python
+"""
+    %prog [options]
 
+description:
+
+    Writes out some wq data as a table.  You should write this to a file called
+    wqdata.txt.  You should also call this function with the -w option to write out
+    the wrapper html file that will include it and refresh.  You should use the
+    .shtml extension.
+
+        wq2html -w > index.shtml
+        while [ 1 ]; do
+            wq2html > wqdata.txt
+            sleep 30
+        done
+"""
+
+import sys
 import subprocess
 
+from optparse import OptionParser
+parser=OptionParser(__doc__)
+parser.add_option("-w","--wrapper",action='store_true',
+                  help="instead of the table data, write the "
+                  "wrapper that includes it.  You should write "
+                  "this to a file with shtml extension for "
+                  "server side includes")
+parser.add_option("-r","--refresh",default=30,
+                  help="refresh rate in seconds for the wrapper "
+                       "file.  Default %default")
 
 def get_ls():
     lscmd='wq ls'
@@ -45,52 +72,62 @@ def get_users():
     stat_stdout, stat_stderr = stat_pobj.communicate()
     return stat_stdout
 
-ls_data = get_ls()
-stat_data = get_stat()
-user_data=get_users()
-
-html="""
+def print_wrapper(refresh):
+    text="""
 <html>
-    <head>
-        <style type="text/css">
+  </head>
+    <meta http-equiv="refresh" content="%s" > 
+    <style type="text/css">
 
-            body { 
-                /*color: #00ff00; */
-                /*color: white; */
-                color: #dcdccc;
-                /*background-color: black;*/
-                background-color: #1f1f1f;
-            }
+        body { 
+            /*color: #00ff00; */
+            /*color: white; */
+            color: #dcdccc;
+            /*background-color: black;*/
+            background-color: #1f1f1f;
+        }
 
-            table.simple {
-                border-width: 1px;
-                border-collapse: collapse;
-            }
+        table.simple {
+            border-width: 1px;
+            border-collapse: collapse;
+        }
 
-            table.simple th {
-                padding: 7px;
-                border-width: 1px;
-                border-style: inset;
-            }
-            table.simple td {
-                vertical-align: top;
-                padding: 7px;
-                border-width: 1px;
-                border-style: inset;
-            }
-    
-
-            table.inside td {
-                padding: 0px;
-                border-width: 1px;
-                border-style: inset;
-            }
+        table.simple th {
+            padding: 7px;
+            border-width: 1px;
+            border-style: inset;
+        }
+        table.simple td {
+            vertical-align: top;
+            padding: 7px;
+            border-width: 1px;
+            border-style: inset;
+        }
 
 
-        </style>
-    </head>
-    <body>
+        table.inside td {
+            padding: 0px;
+            border-width: 1px;
+            border-style: inset;
+        }
 
+
+    </style>
+
+  </head>
+  <body>
+    <!--#include virtual="wqdata.txt" -->
+  </body>
+</html>
+    """ % refresh
+    print text
+
+def print_table():
+    ls_data = get_ls()
+    stat_data = get_stat()
+    user_data=get_users()
+
+    table="""
         <table class="simple">
         <tr>
             <td>
@@ -117,8 +154,17 @@ html="""
         </tr>
         </table>
 
-    </body>
-</html>
-""" % {'ls_data':ls_data,'stat_data':stat_data,'user_data':user_data}
+    """ % {'ls_data':ls_data,'stat_data':stat_data,'user_data':user_data}
 
-print html
+    print table
+
+def main():
+    options, args = parser.parse_args(sys.argv[1:])
+
+    if options.wrapper:
+        print_wrapper(options.refresh)
+    else:
+        print_table()
+
+
+main()

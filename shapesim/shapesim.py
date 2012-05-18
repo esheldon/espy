@@ -7,8 +7,11 @@ import numpy
 from numpy import ogrid, array, sqrt, where, linspace, median, zeros
 from numpy.random import standard_normal
 import fimage
+from fimage.conversions import mom2sigma, cov2sigma
+
 import admom
 import fitsio
+import time
 
 class ShapeSim(dict):
     """
@@ -36,6 +39,9 @@ class ShapeSim(dict):
         theta = 180.0*numpy.random.random()
         ci = self.new_convolved_image(s2, ellip, theta)
 
+        if False:
+            self.show_ci(ci)
+
         if s2n > 0:
             ci.image_nonoise = ci.image
             self.add_noise(ci, s2n)
@@ -44,28 +50,44 @@ class ShapeSim(dict):
 
         return ci
 
+    def show_ci(self, ci):
+        import images
+        images.multiview(ci.image0,title='pre-psf image')
+        images.multiview(ci.psf,title='psf')
+        images.multiview(ci.image,title='convolved image')
+        key=raw_input('hit a key:')
+        if key == 'q':
+            stop
+
     def new_convolved_image(self, s2, obj_ellip, obj_theta):
         """
         Generate a convolved image with the input parameters and the psf and
         object models listed in the config.
         """
-        if self['psfmodel'] in ['gauss','dgauss']:
+        psfmodel = self['psfmodel']
+        objmodel = self['objmodel']
+
+        if psfmodel in ['gauss','dgauss']:
             psfpars, psf_sigma_tot = self._get_gauss_psf_pars()
-        elif self['psfmodel'] == 'turb':
+        elif psfmodel == 'turb':
             psfpars = {'model':'turb','psf_fwhm':self['psf_fwhm']}
-            psf_sigma_tot = self['psf_fwhm']/1.4
+            psf_sigma_tot = self['psf_fwhm']/fimage.convolved.TURB_SIGMA_FAC
         else:
-            raise ValueError("unknown psf model: '%s'" % self['psfmodel'])
+            raise ValueError("unknown psf model: '%s'" % psfmodel)
 
         sigma = psf_sigma_tot/sqrt(s2)
         cov=fimage.ellip2mom(2*sigma**2,e=obj_ellip,theta=obj_theta)
-        objpars = dict(model = self['objmodel'], cov=cov)
+        objpars = {'model':objmodel, 'cov':cov}
 
-        if self['psfmodel'] in ['gauss','dgauss']:
-            ci = fimage.convolved.ConvolvedImageFFT(objpars,psfpars, **self)
+        if psfmodel in ['gauss','dgauss']:
+            if objmodel == 'gauss':
+                ci = fimage.convolved.ConvolverAllGauss(objpars,psfpars, **self)
+            else:
+                ci = fimage.convolved.ConvolverGaussFFT(objpars,psfpars, **self)
         else:
-            ci = fimage.convolved.ConvolvedTurbulentPSF(objpars,psfpars, **self)
+            ci = fimage.convolved.ConvolverTurbulence(objpars,psfpars, **self)
 
+        ci['_obj_theta'] = obj_theta
         return ci
 
     def _get_gauss_psf_pars(self):
@@ -77,17 +99,20 @@ class ShapeSim(dict):
         if self['psfmodel'] == 'dgauss':
             psf_cov1=psf_cov
             psf_cov2=psf_cov*self['psf_sigrat']**2
+
             b=self['psf_cenrat']
-            psfpars = dict(model = 'dgauss',
-                           cov1 = psf_cov1,
-                           cov2 = psf_cov2,
-                           cenrat=b)
-            psum = 1+self['psf_cenrat']
-            cov11 = (psf_cov1[0] + psf_cov2[0]*self['psf_cenrat'])/psum
-            cov22 = (psf_cov1[2] + psf_cov2[2]*self['psf_cenrat'])/psum
-            psf_sigma_tot = sqrt( (cov11+cov22)/2)
+            psfpars = {'model':'dgauss',
+                       'cov1':psf_cov1,
+                       'cov2':psf_cov2,
+                       'cenrat':b}
+
+            psf_cov = (psf_cov1 + b*psf_cov2)/(1+b)
+            #psum = 1+self['psf_cenrat']
+            #cov11 = (psf_cov1[0] + psf_cov2[0]*self['psf_cenrat'])/psum
+            #cov22 = (psf_cov1[2] + psf_cov2[2]*self['psf_cenrat'])/psum
+            psf_sigma_tot = cov2sigma(psf_cov)
         else:
-            psfpars = dict(model = 'gauss', cov = psf_cov)
+            psfpars = {'model':'gauss', 'cov':psf_cov}
             psf_sigma_tot = self['psf_sigma']
 
         return psfpars, psf_sigma_tot
@@ -119,7 +144,7 @@ class ShapeSim(dict):
 
         cen = ci['cen_uw']
         T = ci['cov_uw'][0] + ci['cov_uw'][2]
-        sigma = fimage.mom2sigma(T)
+        sigma = mom2sigma(T)
         imagenn = ci.image_nonoise
         shape = imagenn.shape
 
@@ -170,6 +195,7 @@ class BaseSim(dict):
         conf=read_config(run)
         for k,v in conf.iteritems():
             self[k] = v
+        numpy.random.seed(self['seed'])
 
     def run(self, ci):
         """
@@ -211,21 +237,24 @@ class BaseSim(dict):
         max_write_ci: optional
             Max number of failed ci to write to disk. Default 1
         """
-        
+        import images 
         nwrite_ci=0
 
         out = numpy.zeros(self['ntrial'], dtype=self.out_dtype())
-        ss = ShapeSim(self['sim'])
+
+        simpars=self.get('simpars',{})
+        ss = ShapeSim(self['sim'], **simpars)
 
         s2n = self['s2n']
         s2,ellip = self.get_s2_e(is2, ie)
 
         for i in xrange(self['ntrial']):
-            stderr.write(".")
+            stderr.write("%d/%d " % (i+1,self['ntrial']))
             iter=0
             while iter < self['itmax']:
 
                 ci=ss.get_trial(s2,ellip,s2n)
+                if iter == 0: stderr.write("%s " % str(ci.psf.shape))
                 res = self.run(ci)
 
                 if res['flags'] == 0:
@@ -234,21 +263,32 @@ class BaseSim(dict):
                     break
                 else:
                     if nwrite_ci < max_write_ci:
-                        self.write_ci(ci, is2, ie)
+                        self.write_ci(ci, is2, ie, res['flags'])
                         nwrite_ci += 1
                     iter += 1
+
             if iter == self['itmax']:
+                #images.multiview(ci.image0,title='image0')
+                #images.multiview(ci.psf,title='psf')
+                #images.multiview(ci.image,title='image')
                 raise ValueError("itmax %d reached" % self['itmax'])
-        stderr.write("\n")
+            stderr.write("niter: %d\n" % (iter+1))
+        #stop
         write_output(self['run'], is2, ie, out)
         return out
 
-    def write_ci(self, ci, is2, ie):
+    def write_ci(self, ci, is2, ie, flags, error=True):
         """
         Write the ci to a file in the outputs directory
         """
         import tempfile
-        rand=tempfile.mktemp(dir='')
+
+        if error:
+            suffix='-err'
+        else:
+            suffix='-good'
+
+        rand=tempfile.mktemp(dir='',suffix=suffix)
         url=get_output_url(self['run'], is2, ie)
         url = url.replace('.rec','-'+rand+'.fits')
         h = {}
@@ -256,6 +296,7 @@ class BaseSim(dict):
             h[k] = v
         for k,v in ci.iteritems():
             h[k] = v
+        h['flags'] = flags
 
         with fitsio.FITS(url, mode='rw', clobber=True) as fobj:
             fobj.write(ci.image, header=h, extname='image')

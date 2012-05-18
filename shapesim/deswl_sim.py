@@ -5,7 +5,7 @@ deswl pipeline
 
 from sys import stderr
 import numpy
-from numpy import zeros, sqrt, tanh, arctanh
+from numpy import zeros, sqrt, tanh, arctanh, random
 
 import fimage
 from fimage import mom2sigma
@@ -13,6 +13,10 @@ import deswl
 from esutil.numpy_util import ahelp
 from esutil.misc import wlog
 from . import shapesim
+
+import images
+
+SHAPELETS_EDGE = 0x40
 
 def e2gamma(e):
     return tanh(0.5*arctanh(e))
@@ -24,73 +28,11 @@ def e1e2_to_g1g2(e1, e2):
     return g1,g2
 
 
-class DESWLSim(dict):
-    def __init__(self, run, verbose=False):
-        conf=shapesim.read_config(run)
-        for k,v in conf.iteritems():
-            self[k] = v
-        self.verbose = verbose
- 
-    def process_trials(self, is2, ie):
-        """
-        Generate random realizations of a particular element in the s2 and
-        ellip sequences.
+class DESWLSim(shapesim.BaseSim):
+    def __init__(self, run):
+        super(DESWLSim,self).__init__(run)
 
-            is2 is a number between 0 and self['nums2']-1
-            ie  is a number between 0 and self['nume']-1
-        """
-        
-        maxwrite_ci=1
-        nwrite_ci=0
-
-        out = numpy.zeros(self['ntrial'], dtype=self.out_dtype())
-        ss = shapesim.ShapeSim(self['sim'])
-
-        s2n = self['s2n']
-        s2,ellip = self.get_s2_e(is2, ie)
-
-        for i in xrange(self['ntrial']):
-            stderr.write(".")
-            iter=0
-            while iter < self['itmax']:
-                ci=ss.get_trial(s2,ellip,s2n)
-                res = self.run_wl(ci)
-                if res['flags'][0] == 0:
-                    st = self.copy_output(s2, ellip, s2n, ci, res)
-                    out[i] = st
-                    break
-                else:
-                    if res['flags'][0] == -2 and nwrite_ci < maxwrite_ci:
-                        self.write_ci(ci, is2, ie)
-                        nwrite_ci += 1
-                    iter += 1
-            if iter == self['itmax']:
-                raise ValueError("itmax %d reached" % self['itmax'])
-        stderr.write("\n")
-        shapesim.write_output(self['run'], is2, ie, out)
-        return out
-
-    def write_ci(self, ci, is2, ie):
-        """
-        Write the ci to a file in the outputs directory
-        """
-        import fitsio
-        import tempfile
-        rand=tempfile.mktemp(dir='')
-        url=shapesim.get_output_url(self['run'], is2, ie)
-        url = url.replace('.rec','-'+rand+'.fits')
-        h = {}
-        for k,v in self.iteritems():
-            h[k] = v
-        for k,v in ci.iteritems():
-            h[k] = v
-
-        with fitsio.FITS(url, mode='rw', clobber=True) as fobj:
-            fobj.write(ci.image, header=h, extname='image')
-            fobj.write(ci.psf, extname='psf')
-            fobj.write(ci.image0, extname='image0')
-
-    def run_wl(self, ci):
+    def run(self, ci):
         """
         Run the psf and object through deswl
         """
@@ -125,19 +67,24 @@ class DESWLSim(dict):
             skysig=ci['skysig']
 
         psf_sigma_guess=\
-            fimage.mom2sigma(ci['cov_psf_uw'][0]+ci['cov_psf_uw'][2])
+            fimage.mom2sigma(ci['cov_psf_admom'][0]+ci['cov_psf_admom'][2])
+        # randomizing might help with the gamma==0 bug?
+        psf_sigma_guess += 0.1*random.random()
         sigma0_guess=\
-            fimage.mom2sigma(ci['cov_uw'][0]+ci['cov_uw'][2])
-        psf_aperture = 4*psf_sigma_guess
+            fimage.mom2sigma(ci['cov_admom'][0]+ci['cov_admom'][2])
+
+
         sigma_obj = fimage.mom2sigma(ci['cov_uw'][0]+ci['cov_uw'][2])
-        shear_aperture = 4.*sigma_obj
+
+        psf_max_aperture = self['maxaper_nsig']*psf_sigma_guess
+        shear_max_aperture = self['maxaper_nsig']*sigma_obj
 
         wlpsfobj = deswl.cwl.WLObject(ci.psf,
                                       float(ci['cen'][0]), 
                                       float(ci['cen'][1]),
                                       float(sky),
                                       float(1),
-                                      float(psf_aperture), 
+                                      float(psf_max_aperture), 
                                       psf_sigma_guess)
         out['flags'] = wlpsfobj.get_flags()
         if out['flags'] != 0:
@@ -150,7 +97,7 @@ class DESWLSim(dict):
                                    float(ci['cen'][1]),
                                    float(sky),
                                    float(skysig**2),
-                                   float(shear_aperture), 
+                                   float(shear_max_aperture), 
                                    sigma0_guess)
         out['flags'] = wlobj.get_flags()
         if out['flags'] != 0:
@@ -185,23 +132,6 @@ class DESWLSim(dict):
             out['gcov12'] = wlshear.get_cov12()
             out['gcov22'] = wlshear.get_cov22()
         return out
-
-    def get_s2_e(self, is2, ie):
-        self.check_is2_ie(is2, ie)
-        s2 = numpy.linspace(self['mins2'],self['maxs2'], self['nums2'])[is2]
-        ellip = numpy.linspace(self['mine'],self['maxe'], self['nume'])[ie]
-
-        return s2, ellip
-
-    def check_is2_ie(self, is2, ie):
-        max_is2 = self['nums2']-1
-        max_ie  = self['nume']-1
-        if (is2 < 0) or (is2 > max_is2):
-            raise ValueError("is2 must be within [0,%d], "
-                             "got %d" % (max_is2,is2))
-        if (ie < 0) or (ie > max_ie):
-            raise ValueError("ie must be within [0,%d], "
-                             "got %d" % (max_ie,ie))
 
 
     def copy_output(self, s2, ellip, s2n, ci, res):

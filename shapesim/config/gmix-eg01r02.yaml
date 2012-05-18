@@ -1,5 +1,4 @@
-# see sim-eg01 for psf and object details
-run: gmix-eg01r01
+run: gmix-eg01r02
 sim: sim-eg01
 
 # negative for no noise.  Note this is the adaptive moments S/N
@@ -8,9 +7,10 @@ s2n: 100.
 # we should try with higher values to see what happens
 ngauss_psf: 1
 ngauss: 3
+#ngauss: 5
 
 # maximum iterations inside gmix_image
-gmix_maxiter: 2000
+gmix_maxiter: 4000
 # minimum fractional diff between iterations to indicate convergence
 gmix_tol: 1.e-6
 
@@ -38,4 +38,4 @@ maxe:  0.80
 nums2: 20
 nume:  20
 
-
+seed: 512

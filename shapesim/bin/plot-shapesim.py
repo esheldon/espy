@@ -12,7 +12,7 @@ import shapesim
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
-parser.add_option('-y','--yrange',default='-0.1,0.1',
+parser.add_option('-y','--yrange',default='-0.05,0.05',
                   help='yrange, default %default')
 parser.add_option('--s2max',default=None,
                   help="Max (spsf/sobj)**2 to plot, default %default")

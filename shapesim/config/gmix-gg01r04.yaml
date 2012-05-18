@@ -1,12 +1,15 @@
-run: gmix-gg01r02
+# trying with more gauss than needed
+run: gmix-gg01r04
 sim: sim-gg01
 
 # negative for no noise.  Note this is the adaptive moments S/N
 s2n: 100
 
+coellip: true
+
 # we should try with higher values to see what happens
-ngauss_psf: 1
-ngauss: 1
+ngauss_psf: 3
+ngauss: 3
 
 # maximum iterations inside gmix_image
 gmix_maxiter: 4000

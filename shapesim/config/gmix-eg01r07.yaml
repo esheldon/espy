@@ -1,19 +1,21 @@
-run: gmix-gg01r02
-sim: sim-gg01
+# force coelliptical, with noise
+run: gmix-eg01r07
+sim: sim-eg01
 
 # negative for no noise.  Note this is the adaptive moments S/N
-s2n: 100
+s2n: 100.
+
+# this applies only to the object, not psf
+coellip: true
 
 # we should try with higher values to see what happens
 ngauss_psf: 1
-ngauss: 1
+ngauss: 3
 
 # maximum iterations inside gmix_image
-gmix_maxiter: 4000
+gmix_maxiter: 8000
 # minimum fractional diff between iterations to indicate convergence
-# 1.e-6 and 1.e-7 did about the same
-#gmix_tol: 1.e-6
-gmix_tol: 1.e-7
+gmix_tol: 1.e-6
 
 # number of times to retry with randomized guess
 max_retry: 5
@@ -39,4 +41,4 @@ maxe:  0.80
 nums2: 20
 nume:  20
 
-seed: 773
+seed: 512

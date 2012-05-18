@@ -3,23 +3,25 @@ Generate image simulations and process them with the
 gmix pipeline
 """
 
-from numpy import random, zeros, sqrt
+from numpy import random, zeros, sqrt, array, ceil
 import sys
+from sys import stderr
 from lensing.util import e2gamma, e1e2_to_g1g2
 from . import shapesim
-from fimage import mom2sigma
+from fimage import mom2sigma, cov2sigma
 from pprint import pprint 
+import images
 
 try:
     import gmix_image
     from gmix_image import GMIX_ERROR_NEGATIVE_DET
 except ImportError:
-    sys.stderr("could not import gmix_image")
+    stderr("could not import gmix_image")
 
 try:
     import admom
 except ImportError:
-    sys.stderr("could not import admom")
+    stderr("could not import admom")
 
 class GMixSim(shapesim.BaseSim):
     """
@@ -32,6 +34,8 @@ class GMixSim(shapesim.BaseSim):
     """
     def __init__(self, run):
         super(GMixSim,self).__init__(run)
+        if 'verbose' not in self:
+            self['verbose'] = False
 
     def run(self, ci):
         """
@@ -46,6 +50,7 @@ class GMixSim(shapesim.BaseSim):
         res:
             Result of image processing, if psf processing succeeded.
         """
+        show=False
         out={}
 
         out['psf_res'] = self.process_image(ci.psf, 
@@ -55,20 +60,27 @@ class GMixSim(shapesim.BaseSim):
                                             show=False)
         out['flags'] = out['psf_res']['flags']
         if out['flags'] == 0:
-
+            coellip=self.get('coellip',False)
             out['res'] = self.process_image(ci.image, 
                                             self['ngauss'],
                                             ci['cen_admom'],
                                             ci['cov_admom'],
                                             psf=out['psf_res']['gmix'],
+                                            coellip=coellip,
                                             show=False)
-            #stop
             out['flags'] = out['res']['flags']
-
+            if show and out['flags'] == 0:
+                pprint(out['res'])
+                self.show_residual(ci, out['psf_res']['gmix'], 
+                                   objmix=out['res']['gmix'])
+            elif show:
+                self.show_residual(ci, out['psf_res']['gmix'])
+        if out['flags'] != 0 and self['verbose']:
+            print 'flags:',gmix_image.flagname(out['flags'])
         return out
 
     def process_image(self, image, ngauss, cen, cov, psf=None,
-                      show=False):
+                      coellip=False, show=False):
         im=image.copy()
 
         # need no zero pixels and sky value
@@ -84,6 +96,7 @@ class GMixSim(shapesim.BaseSim):
         # In the iteration, we can sometimes run into negative determinants.
         # we will retry a few times with different random offsets in that case
 
+
         flags = GMIX_ERROR_NEGATIVE_DET
         ntry=0
         while flags == GMIX_ERROR_NEGATIVE_DET and ntry < self['max_retry']:
@@ -92,16 +105,19 @@ class GMixSim(shapesim.BaseSim):
                                  sky=sky,
                                  maxiter=self['gmix_maxiter'],
                                  tol=self['gmix_tol'],
-                                 psf=psf)
+                                 coellip=coellip,
+                                 psf=psf,
+                                 verbose=self['verbose'])
             flags = gm.flags
+            #stderr.write("gmix niter: %d\n" % gm.numiter)
             ntry += 1
+        #stderr.write("ntry: %d " % ntry)
         out={'gmix': gm.pars,
              'flags': gm.flags,
              'numiter':gm.numiter,
              'fdiff':gm.fdiff,
              'ntry':ntry}
         if flags == 0 and show:
-            import images
             print 'psf'
             pprint(psf)
             print 'gmix'
@@ -115,6 +131,8 @@ class GMixSim(shapesim.BaseSim):
     def get_guess(self, ngauss, cen, cov):
         # We use the input moments as guesses
         # cannot use [{...}]*ngauss, uses same objects!
+        cenoff=0.2
+        covoff=0.5
         guess=[]
         for i in xrange(ngauss):
             g={'p':1./ngauss,
@@ -126,12 +144,12 @@ class GMixSim(shapesim.BaseSim):
             guess.append(g)
         # perturb them
         for g in guess:
-            g['p'] += 0.2*g['p']*random.random()
-            g['row'] += 0.2*random.random()
-            g['col'] += 0.2*random.random()
-            g['irr'] += 0.2*random.random()
-            g['irc'] += 0.2*random.random()
-            g['icc'] += 0.2*random.random()
+            #g['p'] += 0.2*g['p']*random.random()
+            g['row'] += cenoff*random.random()
+            g['col'] += cenoff*random.random()
+            g['irr'] += covoff*random.random()
+            g['irc'] += covoff*random.random()
+            g['icc'] += covoff*random.random()
         
         return guess
 
@@ -278,3 +296,32 @@ class GMixSim(shapesim.BaseSim):
             ('gmix',gmix_dt,self['ngauss'])]
 
         return dt
+
+
+    def show_residual(self, ci, psfmix, objmix=None):
+        """
+        Show plots of the input compared with the fit gaussian mixtures.
+        """
+        
+        psfmodel = gmix_image.gmix2image(psfmix,ci.psf.shape,
+                                         counts=ci.psf.sum()) 
+        images.compare_images(ci.psf,psfmodel,
+                              label1='psf',label2='gmix')
+
+        if objmix is not None:
+            skysig=None
+            if ci['skysig'] > 0:
+                skysig=ci['skysig']
+            model0 = gmix_image.gmix2image(objmix,ci.image0.shape,
+                                           counts=ci.image0.sum()) 
+            model = gmix_image.gmix2image(objmix,ci.image.shape,
+                                          psf=psfmix,
+                                          counts=ci.image.sum()) 
+
+            images.compare_images(ci.image0,model0,
+                                  label1='object0',label2='gmix',
+                                  skysig=skysig)
+            images.compare_images(ci.image,model,
+                                  label1='object+psf',label2='gmix',
+                                  skysig=skysig)
+        stop

@@ -1,26 +1,25 @@
-run: gmix-gg01r02
+# same as r01 but using more gaussians than needed
+run: gmix-gg01r03
 sim: sim-gg01
 
 # negative for no noise.  Note this is the adaptive moments S/N
-s2n: 100
+s2n: -9999.
 
 # we should try with higher values to see what happens
-ngauss_psf: 1
-ngauss: 1
+ngauss_psf: 3
+ngauss: 3
 
 # maximum iterations inside gmix_image
-gmix_maxiter: 4000
+gmix_maxiter: 2000
 # minimum fractional diff between iterations to indicate convergence
-# 1.e-6 and 1.e-7 did about the same
-#gmix_tol: 1.e-6
-gmix_tol: 1.e-7
+gmix_tol: 1.e-6
 
 # number of times to retry with randomized guess
 max_retry: 5
 
 # number of trials at each s2 and ellip.  Orientations will be random
 # and if s2n is > 0 above, noise added to the image
-ntrial: 1000
+ntrial: 100
 
 # number of times to retry when a trial fails.  This generates
 # a new trial, unlike max_retry above which retries with a 
@@ -39,4 +38,4 @@ maxe:  0.80
 nums2: 20
 nume:  20
 
-seed: 773
+seed: 35

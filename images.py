@@ -268,7 +268,8 @@ def expand(image, new_dims, padval=0, verbose=False):
 
 def compare_images(im1, im2, cen=None, minval=None, 
                    label1='im1',label2='im2',
-                   skysig=None):
+                   show=True,
+                   skysig=None, **keys):
     import biggles
 
     labelres='%s-%s' % (label2,label1)
@@ -287,8 +288,10 @@ def compare_images(im1, im2, cen=None, minval=None,
     if minval is None:
         minval = min( im1.min(), im2.min() )
 
-    levels=7
+    levels=keys.get('levels',7)
     tab=biggles.Table(2,3)
+    if 'title' in keys:
+        tab.title=keys['title']
     #tab=biggles.Table(3,2)
 
     im1plt=view(im1, levels=levels, show=False, min=minval, max=maxval)
@@ -300,7 +303,11 @@ def compare_images(im1, im2, cen=None, minval=None,
         chi2perpix = (resid**2).sum()/skysig**2/im1.size
         lab = biggles.PlotLabel(0.1,0.1,
                     r'$\chi^2/N$: %0.2e' % chi2perpix,halign='left')
-        residplt.add(lab)
+    else:
+        chi2perpix = (resid**2).sum()/im1.size
+        lab = biggles.PlotLabel(0.1,0.1,
+                    r'noerr $\chi^2/N$: %0.2e' % chi2perpix,halign='left')
+    residplt.add(lab)
 
     im1plt.title=label1
     im2plt.title=label2
@@ -343,6 +350,9 @@ def compare_images(im1, im2, cen=None, minval=None,
     tab[1,0] = rplt
     tab[1,1] = cplt
 
-    tab.show()
+    if show:
+        tab.show()
 
     biggles.configure( 'default', 'fontsize_min', 1.25)
+
+    return tab

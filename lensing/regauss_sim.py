@@ -924,14 +924,14 @@ class RandomSDSSPSF(dict):
 
     def next_dgauss(self):
 
-        i = self.randind()
-        self.load_meta(i)
+        self.index = self.randind()
+        self.load_meta(self.index)
 
     def next_kl(self, meta=False):
-        i = self.randind()
+        self.index = self.randind()
 
-        self.load_meta(i)
-        self.load_kl(i)
+        self.load_meta(self.index)
+        self.load_kl(self.index)
 
     def load_kl(self, i):
         import sdsspy

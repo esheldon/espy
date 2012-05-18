@@ -1,6 +1,6 @@
 # see sim-eg01 for psf and object details
-run: deswl-edg01r02
-sim: sim-edg01
+run: deswl-gdg01r02
+sim: sim-gdg01
 
 psf_order: 10
 gal_order: 8

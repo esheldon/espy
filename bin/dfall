@@ -7,6 +7,7 @@ sorted and show totals for the entire system."""
 
 import os
 import sys
+import datetime
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
@@ -14,6 +15,8 @@ parser=OptionParser(__doc__)
 parser.add_option("-s","--sortby",default="name", dest="sortby",
     help="Specify the sort ordering.  Default is '%default'.  Possibilities are 'size','used','avail','perc','name'. The secondary sort is by name, e.g. avail-name")
 
+parser.add_option("-d","--date",action='store_true',
+                  help="print the date at the end")
 
 #
 # Some data
@@ -96,8 +99,14 @@ def dfall():
     return dflist
 
 
-def print_dfall(dflist, sortby):
+def print_dfall(dflist, sortby, dodate=False):
     from operator import itemgetter
+
+    if dodate:
+        date = str(datetime.datetime.now())
+        date=date[0:date.find('.')]
+        print date
+        print
 
     print 'Filesystem            Size  Used Avail Use%'
 
@@ -135,6 +144,7 @@ def print_dfall(dflist, sortby):
 
 
 
+
 def make_key(tdict, sortby):
     key = '%010s-%s' % (tdict[sortby], tdict['name'])
     return key
@@ -149,7 +159,7 @@ def main():
         sys.exit(45)
 
     dflist = dfall()
-    print_dfall(dflist, options.sortby)
+    print_dfall(dflist, options.sortby, dodate=options.date)
 
 
 # run the main program

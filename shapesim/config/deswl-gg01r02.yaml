@@ -23,7 +23,27 @@ nume:  20
 
 # number of trials at each s2 and ellip.  Orientations will be random
 # and if s2n is > 0 above, noise added to the image
-ntrial: 4000
+ntrial: 1000
 
 # number of times to retry when a trial fails
 itmax: 100
+
+seed: 9932
+
+# deswl specifics
+
+# in number of sigma.  Applies to both objects and psf
+maxaper_nsig: 5
+
+#
+# tweaks of the simulation parameters.  These get passed
+# on to the ShapeSim object
+#
+
+# need more than the default gaussian padding since pipeline
+# will choke
+# note sim code assumes objfac is same as psffac since they are
+# both gaussians
+
+simpars:
+    psffac: 6.0
