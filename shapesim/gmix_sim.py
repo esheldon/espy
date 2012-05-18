@@ -145,11 +145,11 @@ class GMixSim(shapesim.BaseSim):
         # perturb them
         for g in guess:
             #g['p'] += 0.2*g['p']*random.random()
-            g['row'] += cenoff*random.random()
-            g['col'] += cenoff*random.random()
-            g['irr'] += covoff*random.random()
-            g['irc'] += covoff*random.random()
-            g['icc'] += covoff*random.random()
+            g['row'] += cenoff*(random.random()-0.5)
+            g['col'] += cenoff*(random.random()-0.5)
+            g['irr'] += covoff*(random.random()-0.5)
+            g['irc'] += covoff*(random.random()-0.5)
+            g['icc'] += covoff*(random.random()-0.5)
         
         return guess
 

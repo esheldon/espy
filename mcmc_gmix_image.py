@@ -125,7 +125,8 @@ class MCMCCoellip:
             exp(-0.5*(par-prior)**2/2/sigma**2)/sqrt(2*pi*sigma**2)
         """
         sigma = self._width
-        priors = -0.5*(pars-self._prior)**2/sigma**2 - 0.5*log(2*pi*sigma**2)
+        #priors = -0.5*(pars-self._prior)**2/sigma**2 - 0.5*log(2*pi*sigma**2)
+        priors = -0.5*(pars-self._prior)**2/sigma**2
         priors = priors.sum()
         return priors
 
@@ -154,11 +155,10 @@ class MCMCCoellip:
         return self._guess
 
 
-def test_mcmc1(nstep=10000, burnin=1000, ntrial=1, s2n=35.0):
+def test_mcmc1(sigma, nstep=10000, burnin=1000, ntrial=1, s2n=35.0):
     """
     S/N is adaptive weighted S/N
     """
-    sigma = sqrt(2)
     covar=[sigma**2,0.0,sigma**2]
     ngauss=1
     dim=int(2*4*sigma)
