@@ -11,6 +11,8 @@ from optparse import OptionParser
 parser=OptionParser(__doc__)
 parser.add_option('-g','--groups',default=None,
                   help='groups for wq, csv. Default is unconstrained')
+parser.add_option('-p','--priority',default='med',
+                  help='priority for queue')
 
 _wqtemplate="""
 command: |
@@ -23,7 +25,7 @@ command: |
 
 %(groups)s
 job_name: %(job_name)s
-priority: med\n"""
+priority: %(pri)s\n"""
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -61,7 +63,8 @@ def main():
                                         'run':run, 
                                         'is2':is2,
                                         'ie':ie,
-                                        'groups':groups}
+                                        'groups':groups,
+                                        'pri':options.priority}
                 fobj.write(wqscript)
 
 

@@ -10,6 +10,7 @@ from lensing.util import e2gamma, e1e2_to_g1g2
 from . import shapesim
 from fimage import mom2sigma, cov2sigma
 from pprint import pprint 
+import copy
 import images
 
 try:
@@ -22,6 +23,11 @@ try:
     import admom
 except ImportError:
     stderr("could not import admom")
+
+def corr_e(e, R, s2n):
+    bias = 1.+4./s2n**2*(1.-3./R + 1./R**2 + e**2)
+    ecorr = e/bias
+    return ecorr
 
 class GMixSim(shapesim.BaseSim):
     """
@@ -228,8 +234,21 @@ class GMixSim(shapesim.BaseSim):
             st['numiter'] = res['res']['numiter']
             st['ntry'] = res['res']['ntry']
             st['fdiff'] = res['res']['fdiff']
-
             
+            # only makes sense for ngauss==1, need to adapt
+            if s2n > 0:
+                Tpsf = psf_moms['irr']+psf_moms['icc']
+                Tobj = moms['irr']+moms['icc']
+                R = 1.-Tpsf/(Tpsf+Tobj)
+
+                st['e1_corr'] = corr_e(st['e1_meas'], R, s2n)
+                st['e2_corr'] = corr_e(st['e2_meas'], R, s2n)
+                st['e_corr'] = sqrt(st['e1_corr']**2 + st['e2_corr']**2)
+
+                st['gamma_corr'] = e2gamma(st['e_corr'])
+                st['gamma1_corr'],st['gamma2_corr'] = \
+                        e1e2_to_g1g2(st['e1_corr'],st['e2_corr'])
+
         else:
             st['s2_meas'] = -9999
 
@@ -276,8 +295,9 @@ class GMixSim(shapesim.BaseSim):
 
             ('flags','i8'),
 
+            ('s2n_meas','f8'),    # use admom s2n
+
             ('s2_meas','f8'),
-            ('s2n_meas','f8'),    # how to do this? Just use admom for now?
             ('irr_psf_meas','f8'),
             ('irc_psf_meas','f8'),
             ('icc_psf_meas','f8'),
@@ -292,8 +312,17 @@ class GMixSim(shapesim.BaseSim):
             ('gamma_meas','f8'),
             ('gamma1_meas','f8'),
             ('gamma2_meas','f8'),
+
+            ('e_corr','f8'),
+            ('e1_corr','f8'),
+            ('e2_corr','f8'),
+            ('gamma_corr','f8'),
+            ('gamma1_corr','f8'),
+            ('gamma2_corr','f8'),
+
             ('gmix_psf',gmix_dt,self['ngauss_psf']),
-            ('gmix',gmix_dt,self['ngauss'])]
+            ('gmix',gmix_dt,self['ngauss']),
+            ('gmix_corr',gmix_dt,self['ngauss'])]
 
         return dt
 
