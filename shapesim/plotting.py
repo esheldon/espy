@@ -56,10 +56,10 @@ class SimPlotter(dict):
                 """
                 if self['s2n'] > 0 and 'e_corr' in st.dtype.names:
                     e_meas = st['e_corr'][s]
+                    print st['e_corr']/st['e_meas']
                 else:
                     e_meas = st['e_meas'][s]
                 """
-            print st['e_corr']/st['e_meas']
             wbad=where1(e_meas != e_meas)
 
             if wbad.size != 0:

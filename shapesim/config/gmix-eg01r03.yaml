@@ -2,7 +2,7 @@
 run: gmix-eg01r03
 sim: sim-eg01
 
-samecen: true
+cocenter: true
 
 # negative for no noise.  Note this is the adaptive moments S/N
 s2n: 100.

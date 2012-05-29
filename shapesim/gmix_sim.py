@@ -17,12 +17,12 @@ try:
     import gmix_image
     from gmix_image import GMIX_ERROR_NEGATIVE_DET
 except ImportError:
-    stderr("could not import gmix_image")
+    stderr.write("could not import gmix_image")
 
 try:
     import admom
 except ImportError:
-    stderr("could not import admom")
+    stderr.write("could not import admom")
 
 def corr_e(e, R, s2n):
     bias = 1.+4./s2n**2*(1.-3./R + 1./R**2 + e**2)
@@ -67,12 +67,14 @@ class GMixSim(shapesim.BaseSim):
         out['flags'] = out['psf_res']['flags']
         if out['flags'] == 0:
             coellip=self.get('coellip',False)
+            cocenter=self.get('cocenter',False)
             out['res'] = self.process_image(ci.image, 
                                             self['ngauss'],
                                             ci['cen_admom'],
                                             ci['cov_admom'],
                                             psf=out['psf_res']['gmix'],
                                             coellip=coellip,
+                                            cocenter=cocenter,
                                             show=False)
             out['flags'] = out['res']['flags']
             if show and out['flags'] == 0:
@@ -86,7 +88,7 @@ class GMixSim(shapesim.BaseSim):
         return out
 
     def process_image(self, image, ngauss, cen, cov, psf=None,
-                      coellip=False, show=False):
+                      coellip=False, cocenter=False, show=False):
         im=image.copy()
 
         # need no zero pixels and sky value
@@ -112,6 +114,7 @@ class GMixSim(shapesim.BaseSim):
                                  maxiter=self['gmix_maxiter'],
                                  tol=self['gmix_tol'],
                                  coellip=coellip,
+                                 cocenter=cocenter,
                                  psf=psf,
                                  verbose=self['verbose'])
             flags = gm.flags

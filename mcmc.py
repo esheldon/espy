@@ -20,7 +20,9 @@ See the docs for these individual classes for more details.
 Revision History:
     Created: 2010-04-02, Erin Sheldon, BNL
 """
+
 import numpy
+from numpy import zeros, sqrt, arange, isfinite, where
 from sys import stdout
 import os
 
@@ -60,7 +62,7 @@ def read_results(filename):
 
     fobj = open(filename, 'r')
 
-    npar = numpy.zeros(1, dtype='i4')
+    npar = zeros(1, dtype='i4')
     npar = numpy.fromfile(fobj, dtype='i4', count=1)
 
     # each row is par0,par1,par2,...,parN,like
@@ -80,21 +82,43 @@ def read_results(filename):
 def result_dtype(npar):
     return [('pars',('f8',npar)), ('like','f8')]
 
-def extract_stats(data, burnin, sigma_clip=True):
+def extract_stats(data, burnin):
     import esutil
     npar = data['pars'].shape[1]
 
-    means = numpy.zeros(npar,dtype='f8')
-    errs  = numpy.zeros(npar,dtype='f8')
+    means = zeros(npar,dtype='f8')
+    errs  = zeros(npar,dtype='f8')
 
+
+    w=arange(burnin,data.size)
     for i in xrange(npar):
-        if not sigma_clip:
-            means[i] = data['pars'][burnin:, i].mean()
-            errs[i] = data['pars'][burnin:, i].std()
-        else:
-            means[i], errs[i] = esutil.stat.sigma_clip(data['pars'][burnin:, i])
+        ww,=where(isfinite(data['like'][w]))
+        if ww.size == 0:
+            raise ValueError("no values are finite")
+        means[i] = data['pars'][w[ww], i].mean()
+        errs[i] = data['pars'][w[ww], i].std()
 
     return means, errs
+
+def extract_maxlike_stats(data, burnin):
+    nuse = data.size-burnin
+    npar = data['pars'].shape[1]
+
+    maxi = data['like'][burnin:].argmax()
+
+    max_like = zeros(npar,dtype='f8')
+    error    = zeros(npar,dtype='f8')
+
+    for i in xrange(npar):
+        max_like[i] = data['pars'][burnin+maxi, i]
+
+        # variance around this point
+        vi = ( (data['pars'][burnin:, i] - max_like[i])**2 ).sum()
+        vi /= (nuse-1.)
+
+        error[i] = sqrt(vi)
+
+    return max_like, error
 
 class MCMC:
     """
@@ -244,7 +268,7 @@ class MCMC:
 
     def result_struct(self, num):
         dtype = result_dtype(self.npar)
-        st = numpy.zeros(num, dtype=dtype)
+        st = zeros(num, dtype=dtype)
         return st
 
     def write_step(self):
@@ -252,32 +276,6 @@ class MCMC:
         parout.tofile(self.fobj)
         likeout = numpy.array(self.newlike, dtype='f8')
         likeout.tofile(self.fobj)
-
-
-
-    def get_results(self):
-        """
-        Class:
-            MCMC
-        Method Name:
-            get_results
-        Purpose:
-            return the parameters and likelihood for each trial
-        Calling Sequence:
-            mcmc=mcmc.MCMC(obj, log=True)
-            mcmc.run(nstep, par_guess, seed=None)
-            trials, liklihoods = mcmc.get_results()
-        Outputs:
-            trials, likelihoods:  A tuple containing trials and likelihoods.
-                trials: 
-                    an (npars, nstep) array containing the parameters at each
-                    step in the chain.
-                likelihoods: 
-                    is an (nstep) length array containing the likelihood at
-                    each step in the chain.
-        """
-        return self.pars, self.like
-
 
 
     def step(self):
@@ -311,9 +309,11 @@ class MCMC:
         if self.log:
             randnum = numpy.log(randnum)
 
-        if (newlike > self.oldlike) | (randnum < likeratio):
-            self.newpars=newpars
-            self.newlike=newlike
+        # we allow use of -infinity as a sign we are out of bounds
+        if (isfinite(newlike) 
+            and ( (newlike > self.oldlike) | (randnum < likeratio)) ):
+                self.newpars=newpars
+                self.newlike=newlike
         else:
             self.newpars=self.oldpars
             self.newlike=self.oldlike
@@ -357,11 +357,11 @@ class MCMCTester:
             self.npars = 1
 
             self.npoints = ny
-            self.y = numpy.zeros(ny, dtype='f8')
+            self.y = zeros(ny, dtype='f8')
             self.y[:] = val
             self.y[:] += sigma*numpy.random.standard_normal(ny)
 
-            self.yerr = numpy.zeros(ny, dtype='f8')
+            self.yerr = zeros(ny, dtype='f8')
             self.yerr[:] = sigma
 
             self.ivar = 1.0/self.yerr**2
@@ -410,7 +410,7 @@ class MCMCTester:
         Run multiple tests and save in self.meanvals
         Note default is fewer steps per mcmc
         """
-        self.meanvals = numpy.zeros(ntrial, dtype='f4')
+        self.meanvals = zeros(ntrial, dtype='f4')
 
         for i in xrange(ntrial):
             # create a new realization
@@ -580,6 +580,59 @@ def plot_results6(res, burnin, sigma_clip=True):
 
     tab.show()
 
+def plot_burnin(res,burnin):
+    import biggles
+    import esutil
+    w=arange(burnin,res.size)
+    ww,=where(isfinite(res['like'][w]))
+    if ww.size == 0:
+        raise ValueError("no values are finite")
+
+    w=w[ww]
+    plt = esutil.plotting.bscatter(arange(w.size),res['like'][w],show=False,
+                                   xlabel='trial #')
+
+    w2,=where(isfinite(res['like'][0:burnin]))
+    if ww.size == 0:
+        raise ValueError("no values are finite")
+    esutil.plotting.bscatter(arange(w2.size),res['like'][w2],
+                             color='red',plt=plt)
+
+
+def plot_results(res,burnin, prior=None, pwidth=None):
+    import biggles
+    import esutil
+    means,errs = extract_stats(res, burnin)
+    
+    plot_burnin(res,burnin)
+
+    npar = len(means)
+    for i in xrange(npar):
+        bsize = 0.2*errs[i]
+
+        hdict = esutil.stat.histogram(res['pars'][burnin:, i], 
+                                      binsize=bsize, 
+                                      more=True)
+        hplot = biggles.Histogram(hdict['hist'], 
+                                  x0=hdict['low'][0], 
+                                  binsize=bsize)
+        plt=biggles.FramedPlot()
+        plt.xlabel='par %s' % i
+        plt.add(hplot)
+
+        if prior is not None and pwidth is not None:
+            mn = prior[i]
+            sig = pwidth[i]
+            g = numpy.exp(-0.5*(hdict['center']-mn)**2/sig**2 )
+            g *= res[burnin:].size/g.sum()
+            pc = biggles.Curve(hdict['center'], g, color='blue')
+            plt.add(pc)
+            
+        lab = r'$<p%d> = %0.4g \pm %0.4g$' % (i,means[i],errs[i])
+        plab = biggles.PlotLabel(0.1,0.9,lab,halign='left')
+
+        plt.add(plab)
+        plt.show()
 
 def test(nstep=10000, doplot=False, hardcopy=False):
     """
@@ -767,3 +820,12 @@ def noisy_line(pars, xmin, xmax, nx, yerr):
     yerr_vals = numpy.array([yerr]*x.size, dtype='f8')
 
     return x,y,yerr_vals
+
+def gaussfunc(mean,sigma,xvals):
+
+    gnorm = 1.0/numpy.sqrt(2.0*numpy.pi*sigma**2)
+    gauss = numpy.exp(-0.5*(xvals - mean)**2/sigma**2 )
+
+    return gauss*gnorm
+
+
