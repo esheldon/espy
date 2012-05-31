@@ -221,7 +221,7 @@ def imprint(im):
     if len(im.shape) != 2:
         raise ValueError("image must be 2-dimensional")
 
-    if im.dtype.char == 'f':
+    if im.dtype.char in ['f','d']:
         f = '%+e'
     else:
         maxint = im.max()
