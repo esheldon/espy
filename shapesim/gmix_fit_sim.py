@@ -1,6 +1,6 @@
 """
 Generate image simulations and process them with the
-gmix pipeline
+gmix fitting pipeline
 """
 
 from numpy import random, zeros, sqrt, array, ceil
@@ -15,7 +15,7 @@ import images
 
 try:
     import gmix_image
-    from gmix_image import GMIXEM_ERROR_NEGATIVE_DET
+    from gmix_image import pars2gmix_coellip
 except ImportError:
     stderr.write("could not import gmix_image")
 
@@ -23,12 +23,6 @@ try:
     import admom
 except ImportError:
     stderr.write("could not import admom")
-
-def corr_e(e, R, s2n):
-    bias = 1.+4./s2n**2*(1.-3./R + 1./R**2 + e**2)
-    ecorr = e/bias
-    return ecorr
-
 
 class GMixFitSim(shapesim.BaseSim):
     """
@@ -41,21 +35,6 @@ class GMixFitSim(shapesim.BaseSim):
     """
     def __init__(self, run):
         super(GMixFitSim,self).__init__(run)
-        if 'verbose' not in self:
-            self['verbose'] = False
-
-
-class GMixEMSim(shapesim.BaseSim):
-    """
-    We only override
-
-        .run()
-        .out_dtype()
-        .copy_output()
-
-    """
-    def __init__(self, run):
-        super(GMixEMSim,self).__init__(run)
         if 'verbose' not in self:
             self['verbose'] = False
 
@@ -75,23 +54,21 @@ class GMixEMSim(shapesim.BaseSim):
         show=False
         out={}
 
+        coellip_psf=self['coellip_psf']
+        coellip_obj=self['coellip_obj']
         out['psf_res'] = self.process_image(ci.psf, 
                                             self['ngauss_psf'],
                                             ci['cen_psf_admom'],
                                             ci['cov_psf_admom'],
-                                            show=False)
+                                            coellip=coellip_psf)
         out['flags'] = out['psf_res']['flags']
         if out['flags'] == 0:
-            coellip=self.get('coellip',False)
-            cocenter=self.get('cocenter',False)
             out['res'] = self.process_image(ci.image, 
-                                            self['ngauss'],
+                                            self['ngauss_obj'],
                                             ci['cen_admom'],
                                             ci['cov_admom'],
                                             psf=out['psf_res']['gmix'],
-                                            coellip=coellip,
-                                            cocenter=cocenter,
-                                            show=False)
+                                            coellip=coellip_obj)
             out['flags'] = out['res']['flags']
             if show and out['flags'] == 0:
                 pprint(out['res'])
@@ -104,79 +81,95 @@ class GMixEMSim(shapesim.BaseSim):
         return out
 
     def process_image(self, image, ngauss, cen, cov, psf=None,
-                      coellip=False, cocenter=False, show=False):
-        im=image.copy()
+                      coellip=True):
+        if not coellip:
+            raise ValueError("must use coellip for now")
 
-        # need no zero pixels and sky value
-        im_min = im.min()
-        if im_min <= 0:
-            im -= im_min
-            sky=0.001*im.max()
-            im += sky
+        counts = image.sum()
+        guess = self.get_guess_coellip(counts, ngauss, cen, cov, psf=psf)
+        gm = gmix_image.GMixFitCoellip(image,guess,psf=psf)
+        #images.multiview(image)
+
+        if gm.ier > 4:
+            flags = gm.ier
         else:
-            sky = im_min
-
-
-        # In the iteration, we can sometimes run into negative determinants.
-        # we will retry a few times with different random offsets in that case
-
-
-        flags = GMIXEM_ERROR_NEGATIVE_DET
-        ntry=0
-        while flags == GMIXEM_ERROR_NEGATIVE_DET and ntry < self['max_retry']:
-            guess = self.get_guess(ngauss, cen, cov)
-            gm = gmix_image.GMixEM(im,guess,
-                                   sky=sky,
-                                   maxiter=self['gmix_maxiter'],
-                                   tol=self['gmix_tol'],
-                                   coellip=coellip,
-                                   cocenter=cocenter,
-                                   psf=psf,
-                                   verbose=self['verbose'])
-            flags = gm.flags
-            #stderr.write("gmix niter: %d\n" % gm.numiter)
-            ntry += 1
-        #stderr.write("ntry: %d " % ntry)
-        out={'gmix': gm.pars,
-             'flags': gm.flags,
-             'numiter':gm.numiter,
-             'fdiff':gm.fdiff,
-             'ntry':ntry}
-        if flags == 0 and show:
-            print 'psf'
-            pprint(psf)
-            print 'gmix'
-            pprint(out['gmix'])
-            imrec=gmix_image.gmix2image(out['gmix'], image.shape, 
-                                        psf=psf,counts=image.sum())
-            images.compare_images(image,imrec,
-                                  label1='image',label2='%d gauss' % ngauss)
+            flags = 0
+        out={'gmix':    gm.gmix,
+             'pcov':    gm.pcov,
+             'flags':   flags,
+             'ier':     gm.ier,
+             'numiter': gm.numiter,
+             'coellip': coellip}
         return out
 
-    def get_guess(self, ngauss, cen, cov):
-        # We use the input moments as guesses
-        # cannot use [{...}]*ngauss, uses same objects!
-        cenoff=0.2
-        covoff=0.5
-        guess=[]
-        for i in xrange(ngauss):
-            g={'p':1./ngauss,
-               'row':cen[0],
-               'col':cen[1],
-               'irr':cov[0],
-               'irc':cov[1],
-               'icc':cov[2]}
-            guess.append(g)
-        # perturb them
-        for g in guess:
-            #g['p'] += 0.2*g['p']*random.random()
-            g['row'] += cenoff*(random.random()-0.5)
-            g['col'] += cenoff*(random.random()-0.5)
-            g['irr'] += covoff*(random.random()-0.5)
-            g['irc'] += covoff*(random.random()-0.5)
-            g['icc'] += covoff*(random.random()-0.5)
+    def get_guess_coellip(self, counts, ngauss, cen, cov, psf=None):
+        npars = 2*ngauss+4
+        guess=zeros(npars)
+        guess[0] = cen[0]
+        guess[1] = cen[1]
+
+        guess[2] = cov[0]
+        guess[3] = cov[1]
+        guess[4] = cov[2]
+
+        if psf is not None:
+            psfmoms = gmix_image.total_moms(psf)
+            guess[2] -= psfmoms['irr']
+            guess[3] -= psfmoms['irc']
+            guess[4] -= psfmoms['icc']
         
+        # If psf sent, this is an object. If ngauss==3, 
+        # make guesses good for an exp disk
+        if psf is not None and ngauss == 3:
+            guess[5:5+3] = array([0.419696,0.0725887,0.499471])
+            guess[5:5+3] = counts/guess[5:5+3].sum()
+            guess[8] = 0.227659
+            guess[9] = 3.57138
+        else:
+            # generic guesses
+            guess[5:5+ngauss] = counts/ngauss
+
+            if ngauss > 1:
+                if ngauss == 2:
+                    guess[5+ngauss] = 3.0
+                elif ngauss == 3:
+                    guess[5+ngauss] = 0.5
+                    guess[5+ngauss+1] = 3.0
+                else:
+                    # 4 or mor
+                    guess[5+ngauss] = 0.5
+                    guess[5+ngauss+1] = 3.0
+                    guess[5+ngauss+2:] = 4.0
+
         return guess
+
+    def show_residual(self, ci, psfmix, objmix=None):
+        """
+        Show plots of the input compared with the fit gaussian mixtures.
+        """
+        
+        psfmodel = gmix_image.gmix2image(psfmix,ci.psf.shape,
+                                         counts=ci.psf.sum()) 
+        images.compare_images(ci.psf,psfmodel,
+                              label1='psf',label2='gmix')
+
+        if objmix is not None:
+            skysig=None
+            if ci['skysig'] > 0:
+                skysig=ci['skysig']
+            model0 = gmix_image.gmix2image(objmix,ci.image0.shape,
+                                           counts=ci.image0.sum()) 
+            model = gmix_image.gmix2image(objmix,ci.image.shape,
+                                          psf=psfmix,
+                                          counts=ci.image.sum()) 
+
+            images.compare_images(ci.image0,model0,
+                                  label1='object0',label2='gmix',
+                                  skysig=skysig)
+            images.compare_images(ci.image,model,
+                                  label1='object+psf',label2='gmix',
+                                  skysig=skysig)
+        stop
 
     def copy_output(self, s2, ellip, s2n, ci, res):
         st = zeros(1, dtype=self.out_dtype())
@@ -224,8 +217,6 @@ class GMixEMSim(shapesim.BaseSim):
             st['sigma_psf_meas'] = 0.5*(psf_moms['irr']+psf_moms['icc'])
 
             st['numiter_psf'] = res['psf_res']['numiter']
-            st['ntry_psf'] = res['psf_res']['ntry']
-            st['fdiff_psf'] = res['psf_res']['fdiff']
 
         if 'res' in res:
             for s,r in zip( st['gmix'], res['res']['gmix']):
@@ -251,22 +242,6 @@ class GMixEMSim(shapesim.BaseSim):
 
             st['flags'] = res['res']['flags']
             st['numiter'] = res['res']['numiter']
-            st['ntry'] = res['res']['ntry']
-            st['fdiff'] = res['res']['fdiff']
-            
-            # only makes sense for ngauss==1, need to adapt
-            if s2n > 0:
-                Tpsf = psf_moms['irr']+psf_moms['icc']
-                Tobj = moms['irr']+moms['icc']
-                R = 1.-Tpsf/(Tpsf+Tobj)
-
-                st['e1_corr'] = corr_e(st['e1_meas'], R, s2n)
-                st['e2_corr'] = corr_e(st['e2_meas'], R, s2n)
-                st['e_corr'] = sqrt(st['e1_corr']**2 + st['e2_corr']**2)
-
-                st['gamma_corr'] = e2gamma(st['e_corr'])
-                st['gamma1_corr'],st['gamma2_corr'] = \
-                        e1e2_to_g1g2(st['e1_corr'],st['e2_corr'])
 
         else:
             st['s2_meas'] = -9999
@@ -278,6 +253,8 @@ class GMixEMSim(shapesim.BaseSim):
 
 
         return st
+
+
     def out_dtype(self):
         gmix_dt = [('p','f8'),('row','f8'),('col','f8'),
                    ('irr','f8'),('irc','f8'),('icc','f8')]
@@ -306,11 +283,7 @@ class GMixEMSim(shapesim.BaseSim):
             ('gamma2','f8'),
 
             ('numiter','i8'),
-            ('ntry','i8'),
-            ('fdiff','f8'),
             ('numiter_psf','i8'),
-            ('ntry_psf','i8'),
-            ('fdiff_psf','f8'),
 
             ('flags','i8'),
 
@@ -332,44 +305,9 @@ class GMixEMSim(shapesim.BaseSim):
             ('gamma1_meas','f8'),
             ('gamma2_meas','f8'),
 
-            ('e_corr','f8'),
-            ('e1_corr','f8'),
-            ('e2_corr','f8'),
-            ('gamma_corr','f8'),
-            ('gamma1_corr','f8'),
-            ('gamma2_corr','f8'),
-
             ('gmix_psf',gmix_dt,self['ngauss_psf']),
-            ('gmix',gmix_dt,self['ngauss']),
-            ('gmix_corr',gmix_dt,self['ngauss'])]
+            ('gmix',gmix_dt,self['ngauss_obj'])]
 
         return dt
 
 
-    def show_residual(self, ci, psfmix, objmix=None):
-        """
-        Show plots of the input compared with the fit gaussian mixtures.
-        """
-        
-        psfmodel = gmix_image.gmix2image(psfmix,ci.psf.shape,
-                                         counts=ci.psf.sum()) 
-        images.compare_images(ci.psf,psfmodel,
-                              label1='psf',label2='gmix')
-
-        if objmix is not None:
-            skysig=None
-            if ci['skysig'] > 0:
-                skysig=ci['skysig']
-            model0 = gmix_image.gmix2image(objmix,ci.image0.shape,
-                                           counts=ci.image0.sum()) 
-            model = gmix_image.gmix2image(objmix,ci.image.shape,
-                                          psf=psfmix,
-                                          counts=ci.image.sum()) 
-
-            images.compare_images(ci.image0,model0,
-                                  label1='object0',label2='gmix',
-                                  skysig=skysig)
-            images.compare_images(ci.image,model,
-                                  label1='object+psf',label2='gmix',
-                                  skysig=skysig)
-        stop
