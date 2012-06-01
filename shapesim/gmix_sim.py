@@ -15,7 +15,7 @@ import images
 
 try:
     import gmix_image
-    from gmix_image import GMIX_ERROR_NEGATIVE_DET
+    from gmix_image import GMIXEM_ERROR_NEGATIVE_DET
 except ImportError:
     stderr.write("could not import gmix_image")
 
@@ -29,7 +29,8 @@ def corr_e(e, R, s2n):
     ecorr = e/bias
     return ecorr
 
-class GMixSim(shapesim.BaseSim):
+
+class GMixFitSim(shapesim.BaseSim):
     """
     We only override
 
@@ -39,7 +40,22 @@ class GMixSim(shapesim.BaseSim):
 
     """
     def __init__(self, run):
-        super(GMixSim,self).__init__(run)
+        super(GMixFitSim,self).__init__(run)
+        if 'verbose' not in self:
+            self['verbose'] = False
+
+
+class GMixEMSim(shapesim.BaseSim):
+    """
+    We only override
+
+        .run()
+        .out_dtype()
+        .copy_output()
+
+    """
+    def __init__(self, run):
+        super(GMixEMSim,self).__init__(run)
         if 'verbose' not in self:
             self['verbose'] = False
 
@@ -105,18 +121,18 @@ class GMixSim(shapesim.BaseSim):
         # we will retry a few times with different random offsets in that case
 
 
-        flags = GMIX_ERROR_NEGATIVE_DET
+        flags = GMIXEM_ERROR_NEGATIVE_DET
         ntry=0
-        while flags == GMIX_ERROR_NEGATIVE_DET and ntry < self['max_retry']:
+        while flags == GMIXEM_ERROR_NEGATIVE_DET and ntry < self['max_retry']:
             guess = self.get_guess(ngauss, cen, cov)
-            gm = gmix_image.GMix(im,guess,
-                                 sky=sky,
-                                 maxiter=self['gmix_maxiter'],
-                                 tol=self['gmix_tol'],
-                                 coellip=coellip,
-                                 cocenter=cocenter,
-                                 psf=psf,
-                                 verbose=self['verbose'])
+            gm = gmix_image.GMixEM(im,guess,
+                                   sky=sky,
+                                   maxiter=self['gmix_maxiter'],
+                                   tol=self['gmix_tol'],
+                                   coellip=coellip,
+                                   cocenter=cocenter,
+                                   psf=psf,
+                                   verbose=self['verbose'])
             flags = gm.flags
             #stderr.write("gmix niter: %d\n" % gm.numiter)
             ntry += 1
