@@ -3,7 +3,9 @@ Generate image simulations and process them with the
 gmix fitting pipeline
 """
 
-from numpy import random, zeros, sqrt, array, ceil
+import numpy
+from numpy import random, zeros, sqrt, array, ceil, isfinite, where, diag
+from numpy.linalg import eig
 import sys
 from sys import stderr
 from lensing.util import e2gamma, e1e2_to_g1g2
@@ -16,6 +18,9 @@ import images
 try:
     import gmix_image
     from gmix_image import pars2gmix_coellip
+    from gmix_image import GMIXFIT_SINGULAR_MATRIX
+    from gmix_image import GMIXFIT_NEG_COV_EIG
+    from gmix_image import GMIXFIT_NEG_COV_DIAG
 except ImportError:
     stderr.write("could not import gmix_image")
 
@@ -52,6 +57,7 @@ class GMixFitSim(shapesim.BaseSim):
             Result of image processing, if psf processing succeeded.
         """
         show=False
+        dostop=False
         out={}
 
         coellip_psf=self['coellip_psf']
@@ -71,11 +77,12 @@ class GMixFitSim(shapesim.BaseSim):
                                             coellip=coellip_obj)
             out['flags'] = out['res']['flags']
             if show and out['flags'] == 0:
-                pprint(out['res'])
+                #pprint(out['res'])
                 self.show_residual(ci, out['psf_res']['gmix'], 
-                                   objmix=out['res']['gmix'])
+                                   objmix=out['res']['gmix'],
+                                   dostop=dostop)
             elif show:
-                self.show_residual(ci, out['psf_res']['gmix'])
+                self.show_residual(ci, out['psf_res']['gmix'],dostop=dostop)
         if out['flags'] != 0 and self['verbose']:
             print 'flags:',gmix_image.flagname(out['flags'])
         return out
@@ -86,20 +93,42 @@ class GMixFitSim(shapesim.BaseSim):
             raise ValueError("must use coellip for now")
 
         counts = image.sum()
-        guess = self.get_guess_coellip(counts, ngauss, cen, cov, psf=psf)
-        gm = gmix_image.GMixFitCoellip(image,guess,psf=psf)
-        #images.multiview(image)
 
-        if gm.ier > 4:
-            flags = gm.ier
+        # in the real world, we should retry a few 
+        # times with randomized guesses
+        if psf:
+            maxtry=5
         else:
-            flags = 0
+            maxtry=1
+        ntry=0
+        chi2arr=zeros(maxtry) + 1.e9
+        gmlist=[]
+        #stderr.write('\n')
+        while ntry < maxtry:
+            guess = self.get_guess_coellip(counts, ngauss, cen, cov, psf=psf)
+            #gmix_image.gmix_fit.print_pars(stderr,guess,  front='guess:')
+            gm = gmix_image.GMixFitCoellip(image,guess,psf=psf,verbose=True)
+            #gmix_image.gmix_fit.print_pars(stderr,gm.popt,front='popt: ')
+
+            chi2arr[ntry] = gm.chi2(gm.popt)
+            gmlist.append(gm)
+
+            ntry += 1
+                
+        #print 'chi2arr:',chi2arr
+        w=chi2arr.argmax()
+        gm = gmlist[w]
         out={'gmix':    gm.gmix,
+             'pars':    gm.popt,
+             'perr':    gm.perr,
              'pcov':    gm.pcov,
-             'flags':   flags,
+             'flags':   gm.flags,
              'ier':     gm.ier,
              'numiter': gm.numiter,
              'coellip': coellip}
+        #if psf:
+        #    gmix_image.gmix_fit.print_pars(stderr,guess,  front='best: ')
+        #    stop
         return out
 
     def get_guess_coellip(self, counts, ngauss, cen, cov, psf=None):
@@ -112,19 +141,30 @@ class GMixFitSim(shapesim.BaseSim):
         guess[3] = cov[1]
         guess[4] = cov[2]
 
+        '''
         if psf is not None:
             psfmoms = gmix_image.total_moms(psf)
             guess[2] -= psfmoms['irr']
             guess[3] -= psfmoms['irc']
             guess[4] -= psfmoms['icc']
+        '''
         
         # If psf sent, this is an object. If ngauss==3, 
         # make guesses good for an exp disk
         if psf is not None and ngauss == 3:
-            guess[5:5+3] = array([0.419696,0.0725887,0.499471])
-            guess[5:5+3] = counts/guess[5:5+3].sum()
-            guess[8] = 0.227659
-            guess[9] = 3.57138
+            #pvals=array([0.419696,0.0725887,0.499471])
+            pvals = array([1./ngauss]*3,dtype='f8')
+            pvals += 0.1*(random.random(3)-0.5)
+            pvals *= counts/pvals.sum()
+            guess[5:5+3] = pvals
+                   
+            guess[8] = 0.3 + 0.01*(random.random()-0.5)
+            guess[9] = 3.5 + 1.*(random.random()-0.5)
+            #guess[8] = 0.5 + 0.01*(random.random()-0.5)
+            #guess[9] = 3.0 + 1.*(random.random()-0.5)
+
+            #guess[0:2] += 0.5*(random.random(2)-0.5)
+            guess[2:2+3] += 0.1*(random.random(3)-0.5)
         else:
             # generic guesses
             guess[5:5+ngauss] = counts/ngauss
@@ -143,13 +183,13 @@ class GMixFitSim(shapesim.BaseSim):
 
         return guess
 
-    def show_residual(self, ci, psfmix, objmix=None):
+    def show_residual(self, ci, psfmix, dostop=True, objmix=None):
         """
         Show plots of the input compared with the fit gaussian mixtures.
         """
         
         psfmodel = gmix_image.gmix2image(psfmix,ci.psf.shape,
-                                         counts=ci.psf.sum()) 
+                                         renorm=False) 
         images.compare_images(ci.psf,psfmodel,
                               label1='psf',label2='gmix')
 
@@ -158,10 +198,10 @@ class GMixFitSim(shapesim.BaseSim):
             if ci['skysig'] > 0:
                 skysig=ci['skysig']
             model0 = gmix_image.gmix2image(objmix,ci.image0.shape,
-                                           counts=ci.image0.sum()) 
+                                           renorm=False) 
             model = gmix_image.gmix2image(objmix,ci.image.shape,
                                           psf=psfmix,
-                                          counts=ci.image.sum()) 
+                                          renorm=False) 
 
             images.compare_images(ci.image0,model0,
                                   label1='object0',label2='gmix',
@@ -169,9 +209,17 @@ class GMixFitSim(shapesim.BaseSim):
             images.compare_images(ci.image,model,
                                   label1='object+psf',label2='gmix',
                                   skysig=skysig)
-        stop
+        if dostop:
+            stop
+        else:
+            key=raw_input('hit a key (q to quit): ')
+            if key == 'q':
+                stop
 
     def copy_output(self, s2, ellip, s2n, ci, res):
+        if not self['coellip_psf'] or not self['coellip_obj']:
+            raise ValueError("must use coellip for psf/obj for now")
+
         st = zeros(1, dtype=self.out_dtype())
 
         # first copy inputs and data from the CI
@@ -207,9 +255,18 @@ class GMixFitSim(shapesim.BaseSim):
             mom2sigma(ci['cov_admom'][0]+ci['cov_admom'][2])
 
         if 'psf_res' in res:
-            for s,r in zip( st['gmix_psf'], res['psf_res']['gmix']):
+            st['pars_psf']     = res['psf_res']['pars']
+            st['pars_psf_err'] = res['psf_res']['perr']
+            st['pars_psf_cov'] = res['psf_res']['pcov']
+
+            ng = len(res['psf_res']['gmix'])
+            for i,r in enumerate(res['psf_res']['gmix']):
                 for k in ['p','row','col','irr','irc','icc']:
-                    s[k] = r[k]
+                    if ng == 1:
+                        st['gmix_psf'][k][0] = r[k] 
+                    else:
+                        st['gmix_psf'][k][0,i] = r[k] 
+
             psf_moms = gmix_image.total_moms(res['psf_res']['gmix'])
             st['irr_psf_meas'] = psf_moms['irr']
             st['irc_psf_meas'] = psf_moms['irc']
@@ -219,9 +276,17 @@ class GMixFitSim(shapesim.BaseSim):
             st['numiter_psf'] = res['psf_res']['numiter']
 
         if 'res' in res:
-            for s,r in zip( st['gmix'], res['res']['gmix']):
+            st['pars']     = res['res']['pars']
+            st['pars_err'] = res['res']['perr']
+            st['pars_cov'] = res['res']['pcov']
+
+            ng = len(res['res']['gmix'])
+            for i,r in enumerate(res['res']['gmix']):
                 for k in ['p','row','col','irr','irc','icc']:
-                    s[k] = r[k]
+                    if ng == 1:
+                        st['gmix'][k][0] = r[k] 
+                    else:
+                        st['gmix'][k][0,i] = r[k] 
 
             moms = gmix_image.total_moms(res['res']['gmix'])
             st['irr_meas'] = moms['irr']
@@ -256,6 +321,9 @@ class GMixFitSim(shapesim.BaseSim):
 
 
     def out_dtype(self):
+        npars_psf = 2*self['ngauss_psf']+4
+        npars_obj = 2*self['ngauss_obj']+4
+
         gmix_dt = [('p','f8'),('row','f8'),('col','f8'),
                    ('irr','f8'),('irc','f8'),('icc','f8')]
         dt=[('s2n','f8'),
@@ -306,8 +374,117 @@ class GMixFitSim(shapesim.BaseSim):
             ('gamma2_meas','f8'),
 
             ('gmix_psf',gmix_dt,self['ngauss_psf']),
-            ('gmix',gmix_dt,self['ngauss_obj'])]
+            ('pars_psf','f8',npars_psf),
+            ('pars_psf_err','f8',npars_psf),
+            ('pars_psf_cov','f8',(npars_psf,npars_psf)),
+            ('gmix',gmix_dt,self['ngauss_obj']),
+            ('pars','f8',npars_obj),
+            ('pars_err','f8',npars_obj),
+            ('pars_cov','f8',(npars_obj,npars_obj)) ]
 
         return dt
 
 
+def cholesky_sample(cov, n, means=None):
+    npar = cov.shape[0]
+    if means is not None:
+        nm=len(means)
+        if nm != cov.shape[0]:
+            raise ValueError("expected %d mean values, got %d" % (npar,nm))
+
+    M = numpy.linalg.cholesky(cov)
+
+    r=random.randn(npar*n).reshape(npar,n)
+
+    V = numpy.dot(M,r)
+
+    if means is not None:
+        for i in xrange(npar):
+            V[i,:] += means[i]
+
+    return V
+def test_chilesky():
+    import esutil as eu
+    cov=array([[1.0,0.1,0.1],
+               [0.1,2.0,0.1],
+               [0.1,0.1,3.0]])
+    means = [5.0,4.0,8.0]
+
+    n = 100000
+
+    r = cholesky_sample(cov,n,means=means)
+
+    npar = len(means)
+
+    tmp=('mean: %10.6g +/- %10.6g meas: %10.6g +/- %10.6g '
+         'emean: %10.6g efrac: %10.6g')
+    print 'n:',n
+    for i in xrange(npar):
+        mtrue=means[i]
+        etrue=sqrt(cov[i,i])
+        m = r[i,:].mean()
+        e = r[i,:].std()
+        emean = e/sqrt(n)
+        efrac= emean/m
+        text = tmp % (mtrue,etrue,m,e,emean,efrac)
+        print text
+
+    # sum
+    mtrue = means[0] + means[1]
+    etrue = sqrt(cov[0,0] + cov[1,1] + 2*cov[0,1])
+    sum_0_1 = r[0,:] + r[1,:]
+    #eu.plotting.bhist(sum_0_1, binsize=0.2*etrue)
+    m_sum_0_1 = sum_0_1.mean()
+    e_sum_0_1 = sum_0_1.std()
+    emean_sum_0_1 = e_sum_0_1/sqrt(n)
+    efrac_sum_0_1 = emean_sum_0_1/m_sum_0_1 
+    
+    print 'sum 0/1'
+    text = tmp % (mtrue,etrue,m_sum_0_1,e_sum_0_1,emean_sum_0_1,efrac_sum_0_1)
+    print text
+
+    
+    mexp = (means[2]-means[0])/(means[2]+means[0])
+    eexp = -9999
+
+    ellip_01 = (r[2,:]-r[0,:])/(r[2,:]+r[0,:])
+    m_01 = ellip_01.mean()
+    e_01 = ellip_01.std()
+    emean_01 = e_01/sqrt(n)
+    efrac_01 = emean_01/m_01 
+ 
+    eu.plotting.bhist(ellip_01, binsize=0.2*e_01)
+
+    print 'ellip (mean and err can be different)'
+    text = tmp % (mexp,eexp,m_01,e_01,emean_01,efrac_01)
+    print text
+
+    m_01, e_01 = eu.stat.sigma_clip(ellip_01,nsig=5)
+    emean_01 = e_01/sqrt(n)
+    efrac_01 = emean_01/m_01 
+    print 'ellip with sigma clip 5'
+    text = tmp % (mexp,eexp,m_01,e_01,emean_01,efrac_01)
+    print text
+
+    return
+
+    # ratio
+    mexp = means[0]/means[1]
+    eexp = mexp*sqrt(cov[0,0]/means[0]**2 
+                       + cov[1,1]/means[1]**2
+                       - 2*cov[0,1]/means[0]/means[1])
+
+    w,=where( numpy.abs(r[1,:] > 1.e-2))
+    rat_0_1 = r[0,w]/r[1,w]
+    #m_rat_0_1 = rat_0_1.mean()
+    #e_rat_0_1 = rat_0_1.std()
+    ex={}
+    m_rat_0_1, e_rat_0_1 = eu.stat.sigma_clip(rat_0_1,extra=ex,nsig=5)
+    w=ex['index']
+    eu.plotting.bhist(rat_0_1[w], binsize=0.2*eexp)
+    emean_rat_0_1 = e_rat_0_1/sqrt(w.size)
+    efrac_rat_0_1 = emean_rat_0_1/m_rat_0_1 
+    
+    print 'ratio 0/1 (mean and err can be different)'
+    text = tmp % (mexp,eexp,m_rat_0_1,e_rat_0_1,emean_rat_0_1,efrac_rat_0_1)
+    print text

@@ -252,9 +252,9 @@ class BaseSim(dict):
             stderr.write("%d/%d " % (i+1,self['ntrial']))
             iter=0
             while iter < self['itmax']:
-
                 ci=ss.get_trial(s2,ellip,s2n)
                 if iter == 0: stderr.write("%s " % str(ci.psf.shape))
+                #stderr.write('.')
                 res = self.run(ci)
 
                 if res['flags'] == 0:
@@ -262,9 +262,9 @@ class BaseSim(dict):
                     out[i] = st
                     break
                 else:
-                    if nwrite_ci < max_write_ci:
-                        self.write_ci(ci, is2, ie, res['flags'])
-                        nwrite_ci += 1
+                    #if nwrite_ci < max_write_ci:
+                    #    self.write_ci(ci, is2, ie, res['flags'])
+                    #    nwrite_ci += 1
                     iter += 1
 
             if iter == self['itmax']:

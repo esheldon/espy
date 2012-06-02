@@ -200,9 +200,10 @@ class GMixEMSim(shapesim.BaseSim):
             mom2sigma(ci['cov_admom'][0]+ci['cov_admom'][2])
 
         if 'psf_res' in res:
-            for s,r in zip( st['gmix_psf'], res['psf_res']['gmix']):
+            for i,r in enumerate(res['psf_res']['gmix']):
                 for k in ['p','row','col','irr','irc','icc']:
-                    s[k] = r[k]
+                    st['gmix_psf'][k][0,i] = r[k] 
+
             psf_moms = gmix_image.total_moms(res['psf_res']['gmix'])
             st['irr_psf_meas'] = psf_moms['irr']
             st['irc_psf_meas'] = psf_moms['irc']
@@ -214,9 +215,9 @@ class GMixEMSim(shapesim.BaseSim):
             st['fdiff_psf'] = res['psf_res']['fdiff']
 
         if 'res' in res:
-            for s,r in zip( st['gmix'], res['res']['gmix']):
+            for i,r in enumerate(res['res']['gmix']):
                 for k in ['p','row','col','irr','irc','icc']:
-                    s[k] = r[k]
+                    st['gmix'][k][0,i] = r[k] 
 
             moms = gmix_image.total_moms(res['res']['gmix'])
             st['irr_meas'] = moms['irr']
