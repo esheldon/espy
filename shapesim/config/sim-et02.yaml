@@ -1,0 +1,21 @@
+name: sim-et02
+
+#
+# PSF parameters.
+#
+
+psfmodel: turb
+# this is 1.3'' SDSS or 0.9'' DES
+psf_fwhm: 3.3
+
+# try smaller images.  Works fine for gmix-fit
+psffac: 3.
+
+#
+# Object model
+#
+objmodel: exp
+
+comments: |
+
+    exp obj, turbulent psf, low res
