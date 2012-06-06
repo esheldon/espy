@@ -1,14 +1,13 @@
-# Just a redo to make sure nothing changed
-# see sim-gg01 for psf and object details
-run: gmix-fit-et01r04
-sim: sim-et02
+# trying cholesky ellip
+run: gmix-fit-gg01r03
+sim: sim-gg01
 
 # negative for no noise.  Note this is the adaptive moments S/N
 s2n: 100.
 
 # we should try with higher values to see what happens
-ngauss_psf: 3
-ngauss_obj: 3
+ngauss_psf: 1
+ngauss_obj: 1
 
 coellip_psf: true
 coellip_obj: true
@@ -16,6 +15,8 @@ coellip_obj: true
 # number of trials at each s2 and ellip.  Orientations will be random
 # and if s2n is > 0 above, noise added to the image
 ntrial: 1000
+
+maxtry: 1
 
 # number of times to retry when a trial fails.  This generates
 # a new trial, unlike max_retry above which retries with a 

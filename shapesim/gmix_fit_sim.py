@@ -14,6 +14,7 @@ from fimage import mom2sigma, cov2sigma
 from pprint import pprint 
 import copy
 import images
+import esutil as eu
 
 try:
     import gmix_image
@@ -69,11 +70,16 @@ class GMixFitSim(shapesim.BaseSim):
                                             coellip=coellip_psf)
         out['flags'] = out['psf_res']['flags']
         if out['flags'] == 0:
+            if ci['skysig'] > 0:
+                skysig=ci['skysig']
+            else:
+                skysig=None
             out['res'] = self.process_image(ci.image, 
                                             self['ngauss_obj'],
                                             ci['cen_admom'],
                                             ci['cov_admom'],
                                             psf=out['psf_res']['gmix'],
+                                            skysig=skysig,
                                             coellip=coellip_obj)
             out['flags'] = out['res']['flags']
             if show and out['flags'] == 0:
@@ -88,16 +94,20 @@ class GMixFitSim(shapesim.BaseSim):
         return out
 
     def process_image(self, image, ngauss, cen, cov, psf=None,
-                      coellip=True):
+                      skysig=None, coellip=True):
         if not coellip:
             raise ValueError("must use coellip for now")
 
         counts = image.sum()
+        method=self.get('method','lm')
 
-        # in the real world, we should retry a few 
-        # times with randomized guesses
         if psf:
-            maxtry=5
+            maxtry=self['maxtry']
+            # this is dumb
+            #if len(psf) == 3:
+            #    maxtry=10
+            #else:
+            #    maxtry=1
         else:
             maxtry=1
         ntry=0
@@ -107,15 +117,22 @@ class GMixFitSim(shapesim.BaseSim):
         while ntry < maxtry:
             guess = self.get_guess_coellip(counts, ngauss, cen, cov, psf=psf)
             #gmix_image.gmix_fit.print_pars(stderr,guess,  front='guess:')
-            gm = gmix_image.GMixFitCoellip(image,guess,psf=psf,verbose=True)
+            gm = gmix_image.GMixFitCoellip(image,guess,psf=psf,method=method,verbose=True)
             #gmix_image.gmix_fit.print_pars(stderr,gm.popt,front='popt: ')
 
-            chi2arr[ntry] = gm.chi2(gm.popt)
+            if skysig is not None:
+                chi2arr[ntry] = gm.chi2per(gm.popt,skysig)
+            else:
+                chi2arr[ntry] = gm.chi2(gm.popt)
             gmlist.append(gm)
 
             ntry += 1
                 
-        #print 'chi2arr:',chi2arr
+        print
+        print 'chi2arr:',chi2arr
+        gmix_image.gmix_fit.print_pars(stderr,gm.popt,front='popt: ')
+        #if psf:
+        #    stop
         w=chi2arr.argmax()
         gm = gmlist[w]
         out={'gmix':    gm.gmix,
@@ -152,19 +169,43 @@ class GMixFitSim(shapesim.BaseSim):
         # If psf sent, this is an object. If ngauss==3, 
         # make guesses good for an exp disk
         if psf is not None and ngauss == 3:
-            #pvals=array([0.419696,0.0725887,0.499471])
-            pvals = array([1./ngauss]*3,dtype='f8')
-            pvals += 0.1*(random.random(3)-0.5)
-            pvals *= counts/pvals.sum()
-            guess[5:5+3] = pvals
-                   
-            guess[8] = 0.3 + 0.01*(random.random()-0.5)
-            guess[9] = 3.5 + 1.*(random.random()-0.5)
-            #guess[8] = 0.5 + 0.01*(random.random()-0.5)
-            #guess[9] = 3.0 + 1.*(random.random()-0.5)
+            if len(psf) == 3:
+                #pvals=array([0.419696,0.0725887,0.499471])
+                pvals = array([1./ngauss]*3,dtype='f8')
+                pvals += 0.1*(random.random(3)-0.5)
+                pvals *= counts/pvals.sum()
+                guess[5:5+3] = pvals
+                       
+                guess[8] = 0.3 + 0.01*(random.random()-0.5)
+                guess[9] = 3.5 + 1.*(random.random()-0.5)
+                #guess[8] = 0.5 + 0.01*(random.random()-0.5)
+                #guess[9] = 3.0 + 1.*(random.random()-0.5)
 
-            #guess[0:2] += 0.5*(random.random(2)-0.5)
-            guess[2:2+3] += 0.1*(random.random(3)-0.5)
+                #guess[0:2] += 0.5*(random.random(2)-0.5)
+                guess[2:2+3] += 0.1*(random.random(3)-0.5)
+            else:
+                pvals = array([1./ngauss]*3,dtype='f8')
+                pvals *= counts/pvals.sum()
+                guess[5:5+3] = pvals
+                       
+                # try: - more trials and broader sampleing
+                #      - a cutoff on fi at the high and low end?
+                #      - priors?
+                #      - no randomizing pvals guess?
+                #      - randomize cov with single number, or not at all?
+                guess[8] = 0.7# + 0.4*(random.random()-0.5)
+                guess[9] = 3.0# + 3.*(random.random()-0.5)
+
+
+                # these (good) guesses seem to force us to go through
+                # some local (wrong) minimum
+                #guess[5] = 0.4
+                #guess[6] = 0.065
+                #guess[7] = 0.54
+                #guess[8] = 0.2
+                #guess[9] = 3.8
+
+
         else:
             # generic guesses
             guess[5:5+ngauss] = counts/ngauss
@@ -308,6 +349,16 @@ class GMixFitSim(shapesim.BaseSim):
             st['flags'] = res['res']['flags']
             st['numiter'] = res['res']['numiter']
 
+            e1, e1_err, e2, e2_err, e, e_err = \
+                get_ellip_cholesky(res['res']['pars'][2:2+3], 
+                                   res['res']['pcov'][2:2+3,2:2+3])
+            st['e1_chol'] = e1
+            st['e1_chol_err'] = e1_err
+            st['e2_chol'] = e2
+            st['e2_chol_err'] = e2_err
+            st['e_chol'] = e
+            st['e_chol_err'] = e_err
+            
         else:
             st['s2_meas'] = -9999
 
@@ -369,6 +420,14 @@ class GMixFitSim(shapesim.BaseSim):
             ('e_meas','f8'),
             ('e1_meas','f8'),
             ('e2_meas','f8'),
+
+            ('e_chol','f8'),
+            ('e_chol_err','f8'),
+            ('e1_chol','f8'),
+            ('e1_chol_err','f8'),
+            ('e2_chol','f8'),
+            ('e2_chol_err','f8'),
+
             ('gamma_meas','f8'),
             ('gamma1_meas','f8'),
             ('gamma2_meas','f8'),
@@ -385,106 +444,21 @@ class GMixFitSim(shapesim.BaseSim):
         return dt
 
 
-def cholesky_sample(cov, n, means=None):
-    npar = cov.shape[0]
-    if means is not None:
-        nm=len(means)
-        if nm != cov.shape[0]:
-            raise ValueError("expected %d mean values, got %d" % (npar,nm))
+def get_ellip_cholesky(means, cov, n=100000):
+    r = eu.stat.cholesky_sample(cov, n, means=means)
 
-    M = numpy.linalg.cholesky(cov)
+    Tr = r[2,:]+r[0,:]
+    e1r = (r[2,:]-r[0,:])/Tr
+    e2r = 2*r[1,:]/Tr
+    er = sqrt(e1r**2 + e2r**2)
 
-    r=random.randn(npar*n).reshape(npar,n)
+    e1 = e1r.mean()
+    e1_err = e1r.std()
 
-    V = numpy.dot(M,r)
+    e2 = e2r.mean()
+    e2_err = e2r.std()
 
-    if means is not None:
-        for i in xrange(npar):
-            V[i,:] += means[i]
+    e = er.mean()
+    e_err = er.std()
 
-    return V
-def test_chilesky():
-    import esutil as eu
-    cov=array([[1.0,0.1,0.1],
-               [0.1,2.0,0.1],
-               [0.1,0.1,3.0]])
-    means = [5.0,4.0,8.0]
-
-    n = 100000
-
-    r = cholesky_sample(cov,n,means=means)
-
-    npar = len(means)
-
-    tmp=('mean: %10.6g +/- %10.6g meas: %10.6g +/- %10.6g '
-         'emean: %10.6g efrac: %10.6g')
-    print 'n:',n
-    for i in xrange(npar):
-        mtrue=means[i]
-        etrue=sqrt(cov[i,i])
-        m = r[i,:].mean()
-        e = r[i,:].std()
-        emean = e/sqrt(n)
-        efrac= emean/m
-        text = tmp % (mtrue,etrue,m,e,emean,efrac)
-        print text
-
-    # sum
-    mtrue = means[0] + means[1]
-    etrue = sqrt(cov[0,0] + cov[1,1] + 2*cov[0,1])
-    sum_0_1 = r[0,:] + r[1,:]
-    #eu.plotting.bhist(sum_0_1, binsize=0.2*etrue)
-    m_sum_0_1 = sum_0_1.mean()
-    e_sum_0_1 = sum_0_1.std()
-    emean_sum_0_1 = e_sum_0_1/sqrt(n)
-    efrac_sum_0_1 = emean_sum_0_1/m_sum_0_1 
-    
-    print 'sum 0/1'
-    text = tmp % (mtrue,etrue,m_sum_0_1,e_sum_0_1,emean_sum_0_1,efrac_sum_0_1)
-    print text
-
-    
-    mexp = (means[2]-means[0])/(means[2]+means[0])
-    eexp = -9999
-
-    ellip_01 = (r[2,:]-r[0,:])/(r[2,:]+r[0,:])
-    m_01 = ellip_01.mean()
-    e_01 = ellip_01.std()
-    emean_01 = e_01/sqrt(n)
-    efrac_01 = emean_01/m_01 
- 
-    eu.plotting.bhist(ellip_01, binsize=0.2*e_01)
-
-    print 'ellip (mean and err can be different)'
-    text = tmp % (mexp,eexp,m_01,e_01,emean_01,efrac_01)
-    print text
-
-    m_01, e_01 = eu.stat.sigma_clip(ellip_01,nsig=5)
-    emean_01 = e_01/sqrt(n)
-    efrac_01 = emean_01/m_01 
-    print 'ellip with sigma clip 5'
-    text = tmp % (mexp,eexp,m_01,e_01,emean_01,efrac_01)
-    print text
-
-    return
-
-    # ratio
-    mexp = means[0]/means[1]
-    eexp = mexp*sqrt(cov[0,0]/means[0]**2 
-                       + cov[1,1]/means[1]**2
-                       - 2*cov[0,1]/means[0]/means[1])
-
-    w,=where( numpy.abs(r[1,:] > 1.e-2))
-    rat_0_1 = r[0,w]/r[1,w]
-    #m_rat_0_1 = rat_0_1.mean()
-    #e_rat_0_1 = rat_0_1.std()
-    ex={}
-    m_rat_0_1, e_rat_0_1 = eu.stat.sigma_clip(rat_0_1,extra=ex,nsig=5)
-    w=ex['index']
-    eu.plotting.bhist(rat_0_1[w], binsize=0.2*eexp)
-    emean_rat_0_1 = e_rat_0_1/sqrt(w.size)
-    efrac_rat_0_1 = emean_rat_0_1/m_rat_0_1 
-    
-    print 'ratio 0/1 (mean and err can be different)'
-    text = tmp % (mexp,eexp,m_rat_0_1,e_rat_0_1,emean_rat_0_1,efrac_rat_0_1)
-    print text
+    return e1, e1_err, e2, e2_err, e, e_err

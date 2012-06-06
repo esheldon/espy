@@ -1,13 +1,13 @@
-# Just a redo to make sure nothing changed
+# this one is for playing with priors and such
 # see sim-gg01 for psf and object details
-run: gmix-fit-et01r04
-sim: sim-et02
+run: gmix-fit-eg01r03
+sim: sim-eg01
 
 # negative for no noise.  Note this is the adaptive moments S/N
 s2n: 100.
 
 # we should try with higher values to see what happens
-ngauss_psf: 3
+ngauss_psf: 1
 ngauss_obj: 3
 
 coellip_psf: true

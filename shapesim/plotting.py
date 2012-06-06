@@ -49,7 +49,11 @@ class SimPlotter(dict):
 
             s = st['etrue'].argsort()
 
-            if 'e_meas' not in st.dtype.names:
+            #if 'e_chol' in st.dtype.names:
+            if False:
+                print 'using chol'
+                e_meas = st['e_chol'][s]
+            elif 'e_meas' not in st.dtype.names:
                 e_meas = gamma2e(st['gamma_meas'][s])
             else:
                 e_meas = st['e_meas'][s]

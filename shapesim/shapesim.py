@@ -444,21 +444,29 @@ def read_all_outputs(run, average=False):
 
 def average_outputs(data):
     """
-    Take the results from read_all_outputs and average the
-    trials for each ellip value.  The result will be a list
-    of arrays, one for each s2.  Each array will have one
-    entry for each ellipticity
+    data is a list of lists of arrays
+
+    Take the results from read_all_outputs and average the trials for each
+    ellip value.  The result will be a list of arrays, one for each s2.  Each
+    array will have one entry for each ellipticity
     """
     out=[]
     dt = data[0][0].dtype
-    for s2data in data:
-        # s2data is a list of arrays, one for each ellip.  the array has an
-        # entry for each trial.  Average over the trials
-
+    for s2data in data: # over different values of s2
         d=zeros(len(s2data),dtype=dt)
-        for i,edata in enumerate(s2data):
+        for i,edata in enumerate(s2data): # over different ellipticities
             for n in d.dtype.names:
-                if edata[n].dtype.names is None:
+                if edata[n].dtype.names is None and len(edata[n].shape) == 1:
                     d[n][i] = median(edata[n])
+                    #d[n][i] = edata[n].mean()
+
+            """
+            wts = 1./(0.32**2 + edata['e1_chol_err']**2)
+            m,e=eu.stat.wmom(edata['e_meas'],wts)
+            d['e_meas'][i] = m
+            """
+
         out.append(d)
     return out
+
+
