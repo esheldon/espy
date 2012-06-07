@@ -22,9 +22,13 @@ class ShapeSim(dict):
     Then use the get_trial(s2, ellip, s2n) method to generate a single
     realization.
     """
-    def __init__(self, run):
+    def __init__(self, run, **keys):
         conf=read_config(run)
         for k,v in conf.iteritems():
+            self[k] = v
+
+        # over-ride things
+        for k,v in keys.iteritems():
             self[k] = v
 
     def get_trial(self, s2, ellip, s2n):

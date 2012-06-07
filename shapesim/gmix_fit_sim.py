@@ -5,6 +5,7 @@ gmix fitting pipeline
 
 import numpy
 from numpy import random, zeros, sqrt, array, ceil, isfinite, where, diag
+from numpy.random import random as randu
 from numpy.linalg import eig
 import sys
 from sys import stderr
@@ -102,7 +103,7 @@ class GMixFitSim(shapesim.BaseSim):
         method=self.get('method','lm')
 
         if psf:
-            maxtry=self['maxtry']
+            maxtry=self.get('maxtry',1)
             # this is dumb
             #if len(psf) == 3:
             #    maxtry=10
@@ -117,7 +118,8 @@ class GMixFitSim(shapesim.BaseSim):
         while ntry < maxtry:
             guess = self.get_guess_coellip(counts, ngauss, cen, cov, psf=psf)
             #gmix_image.gmix_fit.print_pars(stderr,guess,  front='guess:')
-            gm = gmix_image.GMixFitCoellip(image,guess,psf=psf,method=method,verbose=True)
+            gm = gmix_image.GMixFitCoellip(image,guess,psf=psf,method=method,
+                                           verbose=True)
             #gmix_image.gmix_fit.print_pars(stderr,gm.popt,front='popt: ')
 
             if skysig is not None:
@@ -205,7 +207,15 @@ class GMixFitSim(shapesim.BaseSim):
                 #guess[8] = 0.2
                 #guess[9] = 3.8
 
+        elif ngauss == 4:
+            guess[5] = .25 + 0.1*(randu()-0.5)
+            guess[6] = .35 + 0.1*(randu()-0.5)
+            guess[7] = .25 + 0.1*(randu()-0.5)
+            guess[8] = .15 + 0.1*(randu()-0.5)
 
+            guess[9] = .10 + 0.1*(randu()-0.5) # start on "inside"
+            guess[10] = .22 + 0.1*(randu()-0.5)
+            guess[11] = 6. + 1*(randu()-0.5)
         else:
             # generic guesses
             guess[5:5+ngauss] = counts/ngauss

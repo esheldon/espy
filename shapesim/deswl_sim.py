@@ -144,6 +144,9 @@ class DESWLSim(shapesim.BaseSim):
         st['e1true'] = ci['e1true']
         st['e2true'] = ci['e2true']
         st['etrue']  = ci['etrue']
+        st['e1_uw'] = ci['e1_image0_uw']
+        st['e2_uw'] = ci['e2_image0_uw']
+        st['e_uw']  = ci['e_image0_uw']
         st['gamma'] = e2gamma(st['etrue'])
         st['gamma1'],st['gamma2'] = e1e2_to_g1g2(st['e1true'],st['e2true'])
 
@@ -191,6 +194,9 @@ class DESWLSim(shapesim.BaseSim):
               ('etrue','f8'),
               ('e1true','f8'),
               ('e2true','f8'),
+              ('e_uw','f8'),
+              ('e1_uw','f8'),
+              ('e2_uw','f8'),
               ('gamma','f8'),
               ('gamma1','f8'),
               ('gamma2','f8'),

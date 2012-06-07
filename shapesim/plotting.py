@@ -58,11 +58,14 @@ class SimPlotter(dict):
             else:
                 e_meas = st['e_meas'][s]
 
+            etrue = st['etrue'][s]
+            #etrue = st['e_uw'][s]
+
             wbad=where1(e_meas != e_meas)
 
             if wbad.size != 0:
                 wlog("found bad:",e_meas[wbad])
-            fdiff = shear_fracdiff(st['etrue'][s],e_meas)
+            fdiff = shear_fracdiff(etrue,e_meas)
 
             # straight diff
             gammadiff = fdiff*st['gamma'][s]
@@ -73,8 +76,8 @@ class SimPlotter(dict):
                 label = r'%0.3f (%.0f)' % (s2,meds2n)
             else:
                 label = r'%0.3f' % s2
-            #cr = biggles.Curve(st['etrue'][s], fdiff, color=colors[i])
-            cr = biggles.Curve(st['etrue'][s], gammadiff, color=colors[i])
+            #cr = biggles.Curve(etrue, fdiff, color=colors[i])
+            cr = biggles.Curve(etrue, gammadiff, color=colors[i])
             cr.label = label
 
             plt.add(cr)
