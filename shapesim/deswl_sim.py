@@ -3,6 +3,7 @@ Generate image simulations and process them with the
 deswl pipeline
 """
 
+import os
 from sys import stderr
 import numpy
 from numpy import zeros, sqrt, tanh, arctanh, random
@@ -31,6 +32,14 @@ def e1e2_to_g1g2(e1, e2):
 class DESWLSim(shapesim.BaseSim):
     def __init__(self, run):
         super(DESWLSim,self).__init__(run)
+
+        cf = os.environ['WL_DIR']
+        cf = os.path.join(cf,'etc','wl.config')
+        if not os.path.isfile(cf):
+            raise ValueError("config file not found: "+cf)
+
+        self.config_fname = cf
+
 
     def run(self, ci):
         """
@@ -105,8 +114,11 @@ class DESWLSim(shapesim.BaseSim):
             return out
         out['sigma0'] = wlobj.get_sigma0()
 
-        wlshear = deswl.cwl.WLShear(wlobj,wlpsfobj,
-                                    self['psf_order'], self['gal_order'])
+        wlshear = deswl.cwl.WLShear(self.config_fname,
+                                    wlobj,
+                                    wlpsfobj,
+                                    self['psf_order'], self['gal_order'],
+                                    self['maxaper_nsig'])
 
         out['flags'] = wlshear.get_flags()
         if out['flags'] != 0:

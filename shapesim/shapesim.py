@@ -251,7 +251,7 @@ class BaseSim(dict):
 
         s2n = self['s2n']
         s2,ellip = self.get_s2_e(is2, ie)
-
+        print 'ellip:',ellip
         for i in xrange(self['ntrial']):
             stderr.write("%d/%d " % (i+1,self['ntrial']))
             iter=0
@@ -263,6 +263,7 @@ class BaseSim(dict):
 
                 if res['flags'] == 0:
                     st = self.copy_output(s2, ellip, s2n, ci, res)
+                    #self.write_ci(ci, is2, ie, res['flags'])
                     out[i] = st
                     break
                 else:

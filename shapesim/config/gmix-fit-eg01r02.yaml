@@ -1,4 +1,3 @@
-# see sim-gg01 for psf and object details
 run: gmix-fit-eg01r02
 sim: sim-eg01
 

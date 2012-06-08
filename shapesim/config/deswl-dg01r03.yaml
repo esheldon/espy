@@ -1,0 +1,48 @@
+# this one with bigger maxaper_nsig
+run: deswl-dg01r03
+sim: sim-dg01
+
+psf_order: 10
+gal_order: 8
+
+# negative for no noise.  Note this is the adaptive moments S/N
+# and differs significantly from the deswl value
+s2n: -9999.
+
+# realizations of the above object will be on a grid in these ranges
+# s2 is an approximate size ratio relative to the PSF
+mins2: 0.15
+maxs2: 1.75
+mine:  0.05
+maxe:  0.80
+
+# number of the above to realize
+nums2: 20
+nume:  20
+
+# number of trials at each s2 and ellip.  Orientations will be random
+# and if s2n is > 0 above, noise added to the image
+ntrial: 100
+
+# number of times to retry when a trial fails
+itmax: 100
+
+seed: 555
+
+# deswl specifics
+
+# in number of sigma.  Applies to both objects and psf
+maxaper_nsig: 8
+
+#
+# tweaks of the simulation parameters.  These get passed
+# on to the ShapeSim object
+#
+
+# need more than the default gaussian padding since pipeline
+# will choke
+# note sim code assumes objfac is same as psffac since they are
+# both gaussians
+
+simpars:
+    psffac: 6.0

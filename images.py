@@ -1,7 +1,7 @@
 from __future__ import print_function
 import os
 import numpy
-from sys import stdout
+from sys import stdout, stderr
 import copy
 
 def multiview(image, **keys):
@@ -217,27 +217,28 @@ def asinh_scale(image, alpha=0.02, nonlinearity=8.0, dtype='f4'):
     return image_out
 
 
-def imprint(im):
+def imprint(im, stream=stdout, fmt=None):
     if len(im.shape) != 2:
         raise ValueError("image must be 2-dimensional")
 
-    if im.dtype.char in ['f','d']:
-        f = '%+e'
-    else:
-        maxint = im.max()
-        minint = im.min()
-        l = max( len(str(maxint)), len(str(minint)) )
-        f = '%'+str(l)+'d'
+    if fmt is None:
+        if im.dtype.char in ['f','d']:
+            fmt = '%+e'
+        else:
+            maxint = im.max()
+            minint = im.min()
+            l = max( len(str(maxint)), len(str(minint)) )
+            fmt = '%'+str(l)+'d'
 
     nrow = im.shape[0]
     ncol = im.shape[1]
 
     for row in xrange(nrow):
         for col in xrange(ncol):
-            stdout.write(f % im[row,col] )
+            stream.write(fmt % im[row,col] )
             if col < (ncol-1):
-                stdout.write(" ")
-        stdout.write("\n")
+                stream.write(" ")
+        stream.write("\n")
 
 
 def expand(image, new_dims, padval=0, verbose=False):

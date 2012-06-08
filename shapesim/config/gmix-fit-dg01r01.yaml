@@ -1,4 +1,3 @@
-# see sim-gg01 for psf and object details
 run: gmix-fit-dg01r01
 sim: sim-dg01
 
@@ -17,7 +16,7 @@ coellip_obj: true
 ntrial: 100
 
 # number of retries with different random guesses to make to take best fit
-maxtry: 5
+maxtry: 1
 
 # number of times to retry when a trial fails.  This generates
 # a new trial, unlike max_retry above which retries with a 
@@ -37,3 +36,6 @@ nums2: 20
 nume:  20
 
 seed: 555
+
+#simpars:
+#    image_nsub: 8

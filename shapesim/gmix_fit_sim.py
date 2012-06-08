@@ -6,7 +6,7 @@ gmix fitting pipeline
 import numpy
 from numpy import random, zeros, sqrt, array, ceil, isfinite, where, diag
 from numpy.random import random as randu
-from numpy.linalg import eig
+from numpy.linalg import eig, LinAlgError
 import sys
 from sys import stderr
 from lensing.util import e2gamma, e1e2_to_g1g2
@@ -59,7 +59,7 @@ class GMixFitSim(shapesim.BaseSim):
             Result of image processing, if psf processing succeeded.
         """
         show=False
-        dostop=False
+        dostop=True
         out={}
 
         coellip_psf=self['coellip_psf']
@@ -91,7 +91,7 @@ class GMixFitSim(shapesim.BaseSim):
             elif show:
                 self.show_residual(ci, out['psf_res']['gmix'],dostop=dostop)
         if out['flags'] != 0 and self['verbose']:
-            print 'flags:',gmix_image.flagname(out['flags'])
+            print >>stderr,'flags:',gmix_image.flagname(out['flags'])
         return out
 
     def process_image(self, image, ngauss, cen, cov, psf=None,
@@ -102,7 +102,10 @@ class GMixFitSim(shapesim.BaseSim):
         counts = image.sum()
         method=self.get('method','lm')
 
+        # will only apply when psf is present
+        randomize=self.get('randomize',False)
         if psf:
+            verbose=True
             maxtry=self.get('maxtry',1)
             # this is dumb
             #if len(psf) == 3:
@@ -110,20 +113,41 @@ class GMixFitSim(shapesim.BaseSim):
             #else:
             #    maxtry=1
         else:
+            verbose=False
             maxtry=1
         ntry=0
         chi2arr=zeros(maxtry) + 1.e9
+        chi2perarr=zeros(maxtry) + 1.e9
         gmlist=[]
         #stderr.write('\n')
         while ntry < maxtry:
-            guess = self.get_guess_coellip(counts, ngauss, cen, cov, psf=psf)
+            guess = self.get_guess_coellip(counts, ngauss, cen, cov, 
+                                           randomize=randomize,
+                                           psf=psf)
             #gmix_image.gmix_fit.print_pars(stderr,guess,  front='guess:')
             gm = gmix_image.GMixFitCoellip(image,guess,psf=psf,method=method,
-                                           verbose=True)
+                                           verbose=verbose)
             #gmix_image.gmix_fit.print_pars(stderr,gm.popt,front='popt: ')
 
+            if gm.flags == 0 and psf:
+                T = gm.popt[2]+gm.popt[4]
+                Terr = sqrt(gm.pcov[2,2]+gm.pcov[4,4]+2*gm.pcov[2,4])
+                Terr_fix = sqrt(gm.mcov_fix[0,0]+gm.mcov_fix[2,2]+2*gm.mcov_fix[0,2])
+                print >>stderr,'Terr:',Terr
+                print >>stderr,'Terr fixed:',Terr_fix
+                Ts2n = T/Terr
+                Ts2n_fix = T/Terr_fix
+                print >>stderr,'S/Nfixed on T: ',Ts2n_fix
+                if T/Terr < 1.0:
+                    print >>stderr,'S/N on T < 1: ',Ts2n
+                    gm.flags += gmix_image.GMIXFIT_LOW_S2N 
+                else:
+                    print >>stderr,'S/N on T is GOOD: ',Ts2n
+                    print >>stderr,gm.popt
+
             if skysig is not None:
-                chi2arr[ntry] = gm.chi2per(gm.popt,skysig)
+                chi2arr[ntry] = gm.chi2(gm.popt)
+                chi2perarr[ntry] = gm.chi2per(gm.popt,skysig)
             else:
                 chi2arr[ntry] = gm.chi2(gm.popt)
             gmlist.append(gm)
@@ -131,12 +155,16 @@ class GMixFitSim(shapesim.BaseSim):
             ntry += 1
                 
         print
-        print 'chi2arr:',chi2arr
+        print  >>stderr,'chi2arr:',chi2arr
+        if skysig is not None:
+            print  >>stderr,'chi2arr/perdeg:',chi2perarr
         gmix_image.gmix_fit.print_pars(stderr,gm.popt,front='popt: ')
         #if psf:
         #    stop
         w=chi2arr.argmax()
         gm = gmlist[w]
+
+
         out={'gmix':    gm.gmix,
              'pars':    gm.popt,
              'perr':    gm.perr,
@@ -146,11 +174,14 @@ class GMixFitSim(shapesim.BaseSim):
              'numiter': gm.numiter,
              'coellip': coellip}
         #if psf:
+        #    stop
+        #if psf:
         #    gmix_image.gmix_fit.print_pars(stderr,guess,  front='best: ')
         #    stop
         return out
 
-    def get_guess_coellip(self, counts, ngauss, cen, cov, psf=None):
+    def get_guess_coellip(self, counts, ngauss, cen, cov, 
+                          randomize=False, psf=None):
         npars = 2*ngauss+4
         guess=zeros(npars)
         guess[0] = cen[0]
@@ -160,33 +191,41 @@ class GMixFitSim(shapesim.BaseSim):
         guess[3] = cov[1]
         guess[4] = cov[2]
 
-        '''
+        """
         if psf is not None:
             psfmoms = gmix_image.total_moms(psf)
-            guess[2] -= psfmoms['irr']
-            guess[3] -= psfmoms['irc']
-            guess[4] -= psfmoms['icc']
-        '''
-        
+            tcov=cov.copy()
+            tcov[0] -= psfmoms['irr']
+            tcov[1] -= psfmoms['irc']
+            tcov[2] -= psfmoms['icc']
+            tdet=tcov[0]*tcov[2] - tcov[1]**2
+            T = tcov[0]+tcov[2]
+            if tdet > 0:
+                print 'tcov:',tcov
+                guess[2:2+3] = tcov
+        """ 
         # If psf sent, this is an object. If ngauss==3, 
         # make guesses good for an exp disk
         if psf is not None and ngauss == 3:
             if len(psf) == 3:
                 #pvals=array([0.419696,0.0725887,0.499471])
                 pvals = array([1./ngauss]*3,dtype='f8')
-                pvals += 0.1*(random.random(3)-0.5)
+                if randomize:
+                    pvals += 0.1*(randu(3)-0.5)
                 pvals *= counts/pvals.sum()
                 guess[5:5+3] = pvals
                        
-                guess[8] = 0.3 + 0.01*(random.random()-0.5)
-                guess[9] = 3.5 + 1.*(random.random()-0.5)
-                #guess[8] = 0.5 + 0.01*(random.random()-0.5)
-                #guess[9] = 3.0 + 1.*(random.random()-0.5)
-
-                #guess[0:2] += 0.5*(random.random(2)-0.5)
-                guess[2:2+3] += 0.1*(random.random(3)-0.5)
+                guess[8] = 0.3 + 0.01*(randu()-0.5)
+                guess[9] = 3.5 + 1.*(randu()-0.5)
+                guess[2:2+3] += 0.1*(randu(3)-0.5)
+                if randomize:
+                    guess[8] += 0.01*(randu()-0.5)
+                    guess[9] += 1.*(randu()-0.5)
+                    guess[2:2+3] += 0.1*(randu(3)-0.5)
             else:
                 pvals = array([1./ngauss]*3,dtype='f8')
+                if randomize:
+                    pvals += 0.4*(randu(3)-0.5)
                 pvals *= counts/pvals.sum()
                 guess[5:5+3] = pvals
                        
@@ -198,6 +237,9 @@ class GMixFitSim(shapesim.BaseSim):
                 guess[8] = 0.7# + 0.4*(random.random()-0.5)
                 guess[9] = 3.0# + 3.*(random.random()-0.5)
 
+                if randomize:
+                    guess[8] += .6*(randu()-0.5)
+                    guess[9] += 3.*(randu()-0.5)
 
                 # these (good) guesses seem to force us to go through
                 # some local (wrong) minimum
@@ -208,6 +250,7 @@ class GMixFitSim(shapesim.BaseSim):
                 #guess[9] = 3.8
 
         elif ngauss == 4:
+            """
             guess[5] = .25 + 0.1*(randu()-0.5)
             guess[6] = .35 + 0.1*(randu()-0.5)
             guess[7] = .25 + 0.1*(randu()-0.5)
@@ -216,6 +259,36 @@ class GMixFitSim(shapesim.BaseSim):
             guess[9] = .10 + 0.1*(randu()-0.5) # start on "inside"
             guess[10] = .22 + 0.1*(randu()-0.5)
             guess[11] = 6. + 1*(randu()-0.5)
+            """
+
+            # for low res case; this works, so the guess really
+            # does matter, even in no noise case
+            #guess[5] = .16
+            #guess[6] = .5
+            #guess[7] = .245
+            #guess[8] = .08
+            guess[5] = 1./ngauss
+            guess[6] = 1./ngauss
+            guess[7] = 1./ngauss
+            guess[8] = 1./ngauss
+
+            guess[9] = .05
+            guess[10] = .25
+            guess[11] = 5.2
+
+            if randomize:
+                # these move together
+                guess[2:2+3] += 1.*(randu()-0.5)
+
+                guess[5] += .1*(randu()-0.5)
+                guess[6] += .1*(randu()-0.5)
+                guess[7] += .1*(randu()-0.5)
+                guess[8] += .1*(randu()-0.5)
+
+                guess[9]  += .1*randu() # only upward 
+                guess[10] += .1*(randu()-0.5)
+                guess[11] += 1.*(randu()-0.5)
+
         else:
             # generic guesses
             guess[5:5+ngauss] = counts/ngauss
@@ -254,6 +327,16 @@ class GMixFitSim(shapesim.BaseSim):
                                           psf=psfmix,
                                           renorm=False) 
 
+            gmix_image.gmix_print(objmix)
+            for i,g in enumerate(objmix):
+                print 'g',i
+                tim=gmix_image.gmix2image([g],ci.image0.shape)
+                w=where(isfinite(tim) == False)
+                if w[0].size > 0:
+                    print 'found NaN'
+                print tim
+            #print model0
+            #print model
             images.compare_images(ci.image0,model0,
                                   label1='object0',label2='gmix',
                                   skysig=skysig)
@@ -290,6 +373,10 @@ class GMixFitSim(shapesim.BaseSim):
         st['irr_psf_uw'] = ci['cov_psf_uw'][0]
         st['irc_psf_uw'] = ci['cov_psf_uw'][1]
         st['icc_psf_uw'] = ci['cov_psf_uw'][2]
+
+        st['e1_uw'] = ci['e1_image0_uw']
+        st['e2_uw'] = ci['e2_image0_uw']
+        st['e_uw']  = ci['e_image0_uw']
 
         size2psf = ci['cov_psf_uw'][0]+ci['cov_psf_uw'][2]
         size2obj = ci['cov_image0_uw'][0]+ci['cov_image0_uw'][2]
@@ -359,16 +446,27 @@ class GMixFitSim(shapesim.BaseSim):
             st['flags'] = res['res']['flags']
             st['numiter'] = res['res']['numiter']
 
-            e1, e1_err, e2, e2_err, e, e_err = \
-                get_ellip_cholesky(res['res']['pars'][2:2+3], 
-                                   res['res']['pcov'][2:2+3,2:2+3])
-            st['e1_chol'] = e1
-            st['e1_chol_err'] = e1_err
-            st['e2_chol'] = e2
-            st['e2_chol_err'] = e2_err
-            st['e_chol'] = e
-            st['e_chol_err'] = e_err
-            
+            #print 'merr:',sqrt(diag(res['res']['pcov'][2:2+3,2:2+3]))
+            mcov = res['res']['pcov'][2:2+3,2:2+3]
+            #print 'mcov:',mcov
+            #print 'det mcov:',numpy.linalg.det(mcov)
+            try:
+                e1, e1_err, e2, e2_err, e, e_err = \
+                    get_ellip_cholesky(res['res']['pars'][2:2+3], 
+                                       res['res']['pcov'][2:2+3,2:2+3])
+                st['e1_chol'] = e1
+                st['e1_chol_err'] = e1_err
+                st['e2_chol'] = e2
+                st['e2_chol_err'] = e2_err
+                st['e_chol'] = e
+                st['e_chol_err'] = e_err
+            except LinAlgError as e:
+                print >>stderr,e
+                st['e1_chol_err'] = numpy.inf
+                st['e2_chol_err'] = numpy.inf
+                st['e_chol_err'] = numpy.inf
+                stop
+
         else:
             st['s2_meas'] = -9999
 
@@ -403,6 +501,9 @@ class GMixFitSim(shapesim.BaseSim):
             ('irr_psf_uw','f8'),
             ('irc_psf_uw','f8'),
             ('icc_psf_uw','f8'),
+            ('e_uw','f8'),
+            ('e1_uw','f8'),
+            ('e2_uw','f8'),
 
             ('etrue','f8'),
             ('e1true','f8'),

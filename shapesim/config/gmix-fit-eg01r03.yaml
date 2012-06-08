@@ -1,4 +1,4 @@
-# this one is for playing with priors and such
+# this one is for playing
 # see sim-gg01 for psf and object details
 run: gmix-fit-eg01r03
 sim: sim-eg01
@@ -16,6 +16,9 @@ coellip_obj: true
 # number of trials at each s2 and ellip.  Orientations will be random
 # and if s2n is > 0 above, noise added to the image
 ntrial: 1000
+
+maxtry: 20
+randomize: true
 
 # number of times to retry when a trial fails.  This generates
 # a new trial, unlike max_retry above which retries with a 
