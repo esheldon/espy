@@ -1,10 +1,15 @@
-# this one is for playing
-# see sim-gg01 for psf and object details
+# this one e1e2
 run: gmix-fit-eg01r03
 sim: sim-eg01
 
-# negative for no noise.  Note this is the adaptive moments S/N
-s2n: 100.
+# type of parametrization
+ptype: e1e2
+use_jacob: false
+
+verbose: true
+
+s2n: 10000
+s2n_psf: 10000
 
 # we should try with higher values to see what happens
 ngauss_psf: 1
@@ -15,9 +20,9 @@ coellip_obj: true
 
 # number of trials at each s2 and ellip.  Orientations will be random
 # and if s2n is > 0 above, noise added to the image
-ntrial: 1000
+ntrial: 100
 
-maxtry: 20
+maxtry: 1
 randomize: true
 
 # number of times to retry when a trial fails.  This generates
@@ -37,4 +42,7 @@ maxe:  0.80
 nums2: 20
 nume:  20
 
-seed: 3500
+seed: 87
+
+#simpars:
+#    image_nsub: 4

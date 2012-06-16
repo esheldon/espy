@@ -26,7 +26,7 @@ try:
     from gmix_image import GMIXFIT_NEG_COV_EIG
     from gmix_image import GMIXFIT_NEG_COV_DIAG
 
-    from gmix_image import ellip2eta, eta2ellip
+    from gmix_image import ellip2eta, eta2ellip, print_pars
 except ImportError:
     wlog("could not import gmix_image")
 
@@ -72,23 +72,21 @@ class GMixFitSim(shapesim.BaseSim):
 
         coellip_psf=self['coellip_psf']
         coellip_obj=self['coellip_obj']
+
         out['psf_res'] = self.process_image(ci.psf, 
                                             self['ngauss_psf'],
                                             ci['cen_psf_admom'],
                                             ci['cov_psf_admom'],
+                                            skysig=ci['skysig_psf'],
                                             coellip=coellip_psf)
         out['flags'] = out['psf_res']['flags']
         if out['flags'] == 0:
-            if ci['skysig'] > 0:
-                skysig=ci['skysig']
-            else:
-                skysig=None
             out['res'] = self.process_image(ci.image, 
                                             self['ngauss_obj'],
                                             ci['cen_admom'],
                                             ci['cov_admom'],
                                             psf=out['psf_res']['gmix'],
-                                            skysig=skysig,
+                                            skysig=ci['skysig'],
                                             coellip=coellip_obj)
             out['flags'] = out['res']['flags']
             if show and out['flags'] == 0:
@@ -116,10 +114,10 @@ class GMixFitSim(shapesim.BaseSim):
         # will only apply when psf is present
         randomize=self.get('randomize',False)
         if psf:
-            verbose=True
+            verbose=False
             maxtry=self.get('maxtry',1)
         else:
-            verbose=True
+            verbose=False
             maxtry=1
         ntry=0
         chi2arr=zeros(maxtry) + 1.e9
@@ -127,6 +125,9 @@ class GMixFitSim(shapesim.BaseSim):
         gmlist=[]
 
         ptype = self.get('ptype','cov')
+        use_jacob=self.get('use_jacob',True)
+        wlog("ptype:",ptype)
+        wlog("use_jacob:",use_jacob)
         while ntry < maxtry:
             if ptype == 'cov':
                 guess = self.get_guess_coellip_cov(counts, ngauss, cen, cov, 
@@ -136,7 +137,7 @@ class GMixFitSim(shapesim.BaseSim):
                 guess = self.get_guess_coellip_e1e2(counts, ngauss, cen, cov, 
                                                     randomize=randomize,
                                                     psf=psf)
-                wlog("guess(e1e2):",guess)
+                print_pars(guess,front="guess: ")
             else:
                 raise ValueError("ptype should be 'cov','e1e2'")
 
@@ -144,24 +145,8 @@ class GMixFitSim(shapesim.BaseSim):
                                            psf=psf,
                                            method=method,
                                            ptype=ptype,
-                                           use_jacob=True,
+                                           use_jacob=use_jacob,
                                            verbose=verbose)
-
-            if gm.flags == 0 and psf and False:
-                T = gm.popt[2]+gm.popt[4]
-                Terr = sqrt(gm.pcov[2,2]+gm.pcov[4,4]+2*gm.pcov[2,4])
-                Terr_fix = sqrt(gm.mcov_fix[0,0]+gm.mcov_fix[2,2]+2*gm.mcov_fix[0,2])
-                wlog('Terr:',Terr)
-                wlog('Terr fixed:',Terr_fix)
-                Ts2n = T/Terr
-                Ts2n_fix = T/Terr_fix
-                wlog('S/Nfixed on T: ',Ts2n_fix)
-                if T/Terr < 1.0:
-                    wlog('S/N on T < 1: ',Ts2n)
-                    gm.flags += gmix_image.GMIXFIT_LOW_S2N 
-                else:
-                    wlog('S/N on T is GOOD: ',Ts2n)
-                    wlog(gm.popt)
 
             if skysig is not None:
                 chi2arr[ntry] = gm.chi2(gm.popt)
@@ -172,10 +157,12 @@ class GMixFitSim(shapesim.BaseSim):
 
             ntry += 1
                 
-        wlog('\nchi2arr:',chi2arr)
+        print_pars(gm.popt,front='popt: ')
+        print_pars(gm.perr,front='perr: ')
+        wlog('chi2arr:',chi2arr)
         if skysig is not None:
             wlog('chi2arr/perdeg:',chi2perarr)
-        gmix_image.gmix_fit.print_pars(gm.popt,front='popt: ')
+        wlog("numiter gmix:",gm.numiter)
         #if psf:
         #    stop
         w=chi2arr.argmax()
@@ -189,12 +176,13 @@ class GMixFitSim(shapesim.BaseSim):
              'flags':   gm.flags,
              'ier':     gm.ier,
              'numiter': gm.numiter,
-             'coellip': coellip}
+             'coellip': coellip,
+             'chi2per': chi2perarr[w]}
         return out
 
     def get_guess_coellip_e1e2(self, counts, ngauss, cen, cov, 
                                randomize=False, psf=None):
-        wlog("\nusing coellip eta")
+        wlog("\nusing coellip e1e2")
         npars = 2*ngauss+4
         guess=zeros(npars)
         guess[0] = cen[0]
@@ -207,8 +195,9 @@ class GMixFitSim(shapesim.BaseSim):
         guess[2] = e1
         guess[3] = e2
 
+        wlog("Tadmom:",T)
         if ngauss==1:
-            wlog("using ngauss==1")
+            wlog("    using ngauss==1")
 
             guess[4] = 1.0
             guess[5] = T
@@ -235,6 +224,24 @@ class GMixFitSim(shapesim.BaseSim):
                     # use defaults
                     wlog("NOT USING special guesses")
                     pass
+            if randomize:
+                guess[0] += 1*(randu()-0.5)  # cen0
+                guess[1] += 1*(randu()-0.5)  # cen1
+                guess[2] += 0.2*(randu()-0.5)  # e1
+                guess[3] += 0.2*(randu()-0.5)  # e2
+                guess[4] += 0.1*(randu()-0.5)  # p
+                guess[5] += 1*(randu()-0.5)   # T
+
+        elif ngauss==3:
+              wlog("    using ngauss==3")
+              guess[2] = 0
+              guess[3] = 0
+              guess[4] = 0.62
+              guess[5] = 0.34
+              guess[6] = 0.04
+              guess[7] = T*2.7
+              guess[8] = T*0.62
+              guess[9] = T*0.09
         else:
             raise RuntimeError("implement other guesses!")
  
@@ -471,6 +478,7 @@ class GMixFitSim(shapesim.BaseSim):
 
             st['numiter_psf'] = res['psf_res']['numiter']
 
+            st['chi2per_psf'] = res['psf_res']['chi2per']
         if 'res' in res:
             st['pars']     = res['res']['pars']
             st['pars_err'] = res['res']['perr']
@@ -522,6 +530,7 @@ class GMixFitSim(shapesim.BaseSim):
                 st['e_chol_err'] = numpy.inf
                 stop
 
+            st['chi2per'] = res['res']['chi2per']
         else:
             st['s2_meas'] = -9999
 
@@ -598,10 +607,13 @@ class GMixFitSim(shapesim.BaseSim):
             ('gamma1_meas','f8'),
             ('gamma2_meas','f8'),
 
+            ('chi2per_psf','f8'),
             ('gmix_psf',gmix_dt,self['ngauss_psf']),
             ('pars_psf','f8',npars_psf),
             ('pars_psf_err','f8',npars_psf),
             ('pars_psf_cov','f8',(npars_psf,npars_psf)),
+
+            ('chi2per','f8'),
             ('gmix',gmix_dt,self['ngauss_obj']),
             ('pars','f8',npars_obj),
             ('pars_err','f8',npars_obj),

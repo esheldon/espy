@@ -7,6 +7,7 @@ import numpy
 from numpy import ogrid, array, sqrt, where, linspace, median, zeros
 from numpy.random import standard_normal
 import fimage
+from fimage import add_noise
 from fimage.conversions import mom2sigma, cov2sigma
 
 import admom
@@ -31,7 +32,7 @@ class ShapeSim(dict):
         for k,v in keys.iteritems():
             self[k] = v
 
-    def get_trial(self, s2, ellip, s2n):
+    def get_trial(self, s2, ellip, s2n, s2n_psf):
         """
         Genereate a realization of the input size ratio squared and total
         ellipticity.
@@ -46,11 +47,15 @@ class ShapeSim(dict):
         if False:
             self.show_ci(ci)
 
-        if s2n > 0:
-            ci.image_nonoise = ci.image
-            self.add_noise(ci, s2n)
-        else:
-            ci['skysig'] = 0.0
+        if s2n < 0 or s2n_psf < 0:
+            raise ValueError("You must send s2n > 0")
+
+        ci.image_nonoise = ci.image
+        ci.psf_nonoise = ci.psf
+
+        ci.image, ci['skysig'] = add_noise(ci.image, s2n)
+        ci.psf, ci['skysig_psf'] = add_noise(ci.psf, s2n_psf)
+        #self.add_noise(ci, s2n)
 
         return ci
 
@@ -250,13 +255,15 @@ class BaseSim(dict):
         ss = ShapeSim(self['sim'], **simpars)
 
         s2n = self['s2n']
+        s2n_psf = self['s2n_psf']
+
         s2,ellip = self.get_s2_e(is2, ie)
         print 'ellip:',ellip
         for i in xrange(self['ntrial']):
             stderr.write("%d/%d " % (i+1,self['ntrial']))
             iter=0
             while iter < self['itmax']:
-                ci=ss.get_trial(s2,ellip,s2n)
+                ci=ss.get_trial(s2,ellip,s2n,s2n_psf)
                 if iter == 0: stderr.write("%s " % str(ci.psf.shape))
                 #stderr.write('.')
                 res = self.run(ci)

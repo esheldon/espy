@@ -2,10 +2,15 @@
 run: gmix-fit-gg01r03
 sim: sim-gg01
 
+# type of parametrization
+ptype: e1e2
+use_jacob: false
+
 verbose: true
 
 # negative for no noise.  Note this is the adaptive moments S/N
-s2n: -9999
+s2n: 10000
+s2n_psf: 10000
 
 # we should try with higher values to see what happens
 ngauss_psf: 1
@@ -13,9 +18,6 @@ ngauss_obj: 1
 
 coellip_psf: true
 coellip_obj: true
-
-# type of parametrization
-ptype: e1e2
 
 # number of trials at each s2 and ellip.  Orientations will be random
 # and if s2n is > 0 above, noise added to the image
