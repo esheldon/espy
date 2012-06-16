@@ -30,6 +30,11 @@ s2max=options.s2max
 if s2max is not None:
     s2max=float(s2max)
 
+if options.noshow:
+    show=False
+else:
+    show=True
+
 yrng=options.yrange
 if yrng is not None:
     yrng = yrng.split(',')
@@ -38,4 +43,4 @@ if yrng is not None:
     yrng = [float(yr) for yr in yrng]
 
 p=shapesim.plotting.SimPlotter(run)
-p.doplots(yrange=yrng,s2max=s2max)
+p.doplots(yrange=yrng,s2max=s2max,show=show)
