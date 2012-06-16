@@ -234,8 +234,16 @@ class GMixFitSim(shapesim.BaseSim):
 
         elif ngauss==3:
               wlog("    using ngauss==3")
-              guess[2] = 0
-              guess[3] = 0
+              #guess[2] = 0
+              #guess[3] = 0
+
+              guess[2] = e1 + 0.05*(randu()-0.5)
+              while abs(guess[2]) > 0.95:
+                guess[2] = e1 + 0.05*(randu()-0.5)
+              guess[3] = e2 + 0.05*(randu()-0.5)
+              while abs(guess[3]) > 0.95:
+                guess[3] = e2 + 0.05*(randu()-0.5)
+
               guess[4] = 0.62
               guess[5] = 0.34
               guess[6] = 0.04

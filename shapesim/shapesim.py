@@ -55,7 +55,8 @@ class ShapeSim(dict):
 
         ci.image, ci['skysig'] = add_noise(ci.image, s2n)
         ci.psf, ci['skysig_psf'] = add_noise(ci.psf, s2n_psf)
-        #self.add_noise(ci, s2n)
+
+        #self.show_ci(ci)
 
         return ci
 
