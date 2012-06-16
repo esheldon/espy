@@ -98,7 +98,8 @@ class GMixFitSim(shapesim.BaseSim):
                 self.show_residual(ci, out['psf_res']['gmix'],dostop=dostop)
         else:
             if self['verbose']:
-                wlog('failed PSF flags:',gmix_image.flagname(ptype,out['flags']))
+                wlog('failed PSF flags:')
+                gmix_image.printflags(ptype,out['flags'])
 
         if out['flags'] != 0 and self['verbose']:
             wlog('flags:',gmix_image.flagname(ptype,out['flags']))
