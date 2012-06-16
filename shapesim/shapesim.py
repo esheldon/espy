@@ -263,7 +263,7 @@ class BaseSim(dict):
 
                 if res['flags'] == 0:
                     st = self.copy_output(s2, ellip, s2n, ci, res)
-                    #self.write_ci(ci, is2, ie, res['flags'])
+                    #self.write_ci(ci, is2, ie, res['flags'], data=st,error=False)
                     out[i] = st
                     break
                 else:
@@ -282,7 +282,7 @@ class BaseSim(dict):
         write_output(self['run'], is2, ie, out)
         return out
 
-    def write_ci(self, ci, is2, ie, flags, error=True):
+    def write_ci(self, ci, is2, ie, flags, error=True, data=None):
         """
         Write the ci to a file in the outputs directory
         """
@@ -301,8 +301,15 @@ class BaseSim(dict):
             h[k] = v
         for k,v in ci.iteritems():
             h[k] = v
+        if isinstance(data,numpy.ndarray):
+            if 'gamma1' in data.dtype.names:
+                h['g1_meas'] = data['gamma1_meas'][0]
+                h['g2_meas'] = data['gamma2_meas'][0]
+                h['e1_meas'] = data['e1_meas'][0]
+                h['e2_meas'] = data['e2_meas'][0]
         h['flags'] = flags
 
+        wlog(url)
         with fitsio.FITS(url, mode='rw', clobber=True) as fobj:
             fobj.write(ci.image, header=h, extname='image')
             fobj.write(ci.psf, extname='psf')
@@ -426,7 +433,7 @@ def read_output(run, is2, ie, verbose=False):
         wlog("reading output:",f)
     return eu.io.read(f)
 
-def read_all_outputs(run, average=False):
+def read_all_outputs(run, average=False, verbose=False):
     """
     Data are grouped as a list by is2 and then sublists by ie
     """
@@ -436,7 +443,7 @@ def read_all_outputs(run, average=False):
         s2data=[]
         for ie in xrange(c['nume']):
             try:
-                edata = read_output(run, is2, ie)
+                edata = read_output(run, is2, ie,verbose=verbose)
                 s2data.append(edata)
             except:
                 pass

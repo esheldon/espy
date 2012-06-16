@@ -41,8 +41,7 @@ maxaper_nsig: 5
 
 # need more than the default gaussian padding since pipeline
 # will choke
-# note sim code assumes objfac is same as psffac since they are
-# both gaussians
 
 simpars:
-    psffac: 6.0
+    #psffac: 6.0
+    image_nsub: 4

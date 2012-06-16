@@ -13,21 +13,13 @@ from fimage import mom2sigma
 import deswl
 from esutil.numpy_util import ahelp
 from esutil.misc import wlog
+
+from lensing.util import e2gamma, gamma2e, e1e2_to_g1g2, g1g2_to_e1e2
 from . import shapesim
 
 import images
 
 SHAPELETS_EDGE = 0x40
-
-def e2gamma(e):
-    return tanh(0.5*arctanh(e))
-def e1e2_to_g1g2(e1, e2):
-    e = sqrt(e1**2 + e2**2)
-    g = e2gamma(e)
-    fac = g/e
-    g1, g2 = fac*e1, fac*e2
-    return g1,g2
-
 
 class DESWLSim(shapesim.BaseSim):
     def __init__(self, run):
@@ -85,8 +77,10 @@ class DESWLSim(shapesim.BaseSim):
 
         sigma_obj = fimage.mom2sigma(ci['cov_uw'][0]+ci['cov_uw'][2])
 
-        psf_max_aperture = self['maxaper_nsig']*psf_sigma_guess
-        shear_max_aperture = self['maxaper_nsig']*sigma_obj
+        #psf_max_aperture = self['maxaper_nsig']*psf_sigma_guess
+        #shear_max_aperture = self['maxaper_nsig']*sigma_obj
+        psf_max_aperture = ci.psf.shape[0]
+        shear_max_aperture = ci.image.shape[0]
 
         wlpsfobj = deswl.cwl.WLObject(ci.psf,
                                       float(ci['cen'][0]), 
@@ -186,6 +180,12 @@ class DESWLSim(shapesim.BaseSim):
         st['gamma1_meas'] = res['gamma1']
         st['gamma2_meas'] = res['gamma2']
         st['gamma_meas'] = res['gamma']
+        e = gamma2e(res['gamma'])
+        e1,e2 = g1g2_to_e1e2(res['gamma1'],res['gamma2'])
+        st['e1_meas'] = e1
+        st['e2_meas'] = e2
+        st['e_meas'] = e
+
         st['s2n_meas'] = res['nu']
         st['gcov11'] = res['gcov11']
         st['gcov12'] = res['gcov12']
@@ -221,6 +221,9 @@ class DESWLSim(shapesim.BaseSim):
               ('gamma_meas','f8'),
               ('gamma1_meas','f8'),
               ('gamma2_meas','f8'),
+              ('e_meas','f8'),
+              ('e1_meas','f8'),
+              ('e2_meas','f8'),
               ('gcov11','f8'),
               ('gcov12','f8'),
               ('gcov22','f8'),

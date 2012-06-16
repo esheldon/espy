@@ -145,7 +145,8 @@ class SimPlotter(dict):
     def read_data(self, s2max=None):
         if self._data is None:
             wlog("reading data")
-            self._data = shapesim.read_all_outputs(self['run'],average=True)
+            self._data = shapesim.read_all_outputs(self['run'],
+                                                   average=True,verbose=True)
         
         alldata = self._data
         ntot=len(alldata)
