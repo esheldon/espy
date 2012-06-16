@@ -16,6 +16,8 @@ parser.add_option('-y','--yrange',default='-0.05,0.05',
                   help='yrange, default %default')
 parser.add_option('--s2max',default=None,
                   help="Max (spsf/sobj)**2 to plot, default %default")
+parser.add_option('--noshow',action="store_true",
+                  help="don't show")
 options,args = parser.parse_args(sys.argv[1:])
 
 if len(args) < 1:
