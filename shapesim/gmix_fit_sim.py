@@ -73,6 +73,7 @@ class GMixFitSim(shapesim.BaseSim):
         coellip_psf=self['coellip_psf']
         coellip_obj=self['coellip_obj']
 
+        wlog("\ne1true:",ci['e1true'],"e2true:",ci['e2true'])
         out['psf_res'] = self.process_image(ci.psf, 
                                             self['ngauss_psf'],
                                             ci['cen_psf_admom'],
@@ -234,15 +235,17 @@ class GMixFitSim(shapesim.BaseSim):
 
         elif ngauss==3:
               wlog("    using ngauss==3")
-              #guess[2] = 0
-              #guess[3] = 0
+              guess[2] = 0 + 0.1*(randu()-0.5)
+              guess[3] = 0 + 0.1*(randu()-0.5)
 
+              ''' 
               guess[2] = e1 + 0.05*(randu()-0.5)
               while abs(guess[2]) > 0.95:
                 guess[2] = e1 + 0.05*(randu()-0.5)
               guess[3] = e2 + 0.05*(randu()-0.5)
               while abs(guess[3]) > 0.95:
                 guess[3] = e2 + 0.05*(randu()-0.5)
+              '''
 
               guess[4] = 0.62
               guess[5] = 0.34
@@ -521,6 +524,10 @@ class GMixFitSim(shapesim.BaseSim):
             st['numiter'] = res['res']['numiter']
 
             mcov = res['res']['pcov'][2:2+3,2:2+3]
+            st['e1_chol_err'] = numpy.inf
+            st['e2_chol_err'] = numpy.inf
+            st['e_chol_err'] = numpy.inf
+            """
             try:
                 e1, e1_err, e2, e2_err, e, e_err = \
                     get_ellip_cholesky(res['res']['pars'][2:2+3], 
@@ -537,7 +544,7 @@ class GMixFitSim(shapesim.BaseSim):
                 st['e2_chol_err'] = numpy.inf
                 st['e_chol_err'] = numpy.inf
                 stop
-
+            """
             st['chi2per'] = res['res']['chi2per']
         else:
             st['s2_meas'] = -9999
