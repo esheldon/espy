@@ -102,7 +102,8 @@ class GMixFitSim(shapesim.BaseSim):
                 gmix_image.printflags(ptype,out['flags'])
 
         if out['flags'] != 0 and self['verbose']:
-            wlog('flags:',gmix_image.flagname(ptype,out['flags']))
+            wlog('flags:')
+            gmix_image.printflags(ptype,out['flags'])
         return out
 
     def process_image(self, image, ngauss, cen, cov, psf=None,
