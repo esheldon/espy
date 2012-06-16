@@ -135,9 +135,14 @@ class GMixFitSim(shapesim.BaseSim):
                                                    randomize=randomize,
                                                    psf=psf)
             elif ptype == 'e1e2':
+                if ntry == 1:
+                    start_round=False
+                else:
+                    start_round=True
                 guess = self.get_guess_coellip_e1e2(counts, ngauss, cen, cov, 
                                                     randomize=randomize,
-                                                    psf=psf)
+                                                    psf=psf,
+                                                    start_round=start_round)
                 print_pars(guess,front="guess: ")
             else:
                 raise ValueError("ptype should be 'cov','e1e2'")
@@ -182,7 +187,9 @@ class GMixFitSim(shapesim.BaseSim):
         return out
 
     def get_guess_coellip_e1e2(self, counts, ngauss, cen, cov, 
-                               randomize=False, psf=None):
+                               randomize=False, 
+                               start_round=True,
+                               psf=None):
         wlog("\nusing coellip e1e2")
         npars = 2*ngauss+4
         guess=zeros(npars)
@@ -235,17 +242,21 @@ class GMixFitSim(shapesim.BaseSim):
 
         elif ngauss==3:
               wlog("    using ngauss==3")
-              guess[2] = 0 + 0.1*(randu()-0.5)
-              guess[3] = 0 + 0.1*(randu()-0.5)
 
-              ''' 
-              guess[2] = e1 + 0.05*(randu()-0.5)
-              while abs(guess[2]) > 0.95:
-                guess[2] = e1 + 0.05*(randu()-0.5)
-              guess[3] = e2 + 0.05*(randu()-0.5)
-              while abs(guess[3]) > 0.95:
-                guess[3] = e2 + 0.05*(randu()-0.5)
-              '''
+              if start_round:
+                  wlog("    starting round")
+                  guess[2] = 0 # + 0.1*(randu()-0.5)
+                  guess[3] = 0 # + 0.1*(randu()-0.5)
+              else:
+                  wlog("    starting at admom ellip")
+                  guess[2] = e1# + 0.05*(randu()-0.5)
+                  guess[3] = e2# + 0.05*(randu()-0.5)
+                  """
+                  while abs(guess[2]) > 0.95:
+                    guess[2] = e1 + 0.05*(randu()-0.5)
+                  while abs(guess[3]) > 0.95:
+                    guess[3] = e2 + 0.05*(randu()-0.5)
+                """
 
               guess[4] = 0.62
               guess[5] = 0.34

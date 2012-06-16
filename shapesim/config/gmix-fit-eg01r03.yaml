@@ -22,7 +22,7 @@ coellip_obj: true
 # and if s2n is > 0 above, noise added to the image
 ntrial: 100
 
-maxtry: 1
+maxtry: 2
 randomize: true
 
 # number of times to retry when a trial fails.  This generates
