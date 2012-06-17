@@ -173,7 +173,7 @@ class GMixFitSim(shapesim.BaseSim):
         wlog("numiter gmix:",gm.numiter)
         #if psf:
         #    stop
-        w=chi2arr.argmax()
+        w=chi2arr.argmin()
         gm = gmlist[w]
 
 
