@@ -266,6 +266,41 @@ class GMixFitSim(shapesim.BaseSim):
               guess[7] = T*2.7
               guess[8] = T*0.62
               guess[9] = T*0.09
+
+        elif ngauss==4:
+              wlog("    using ngauss==4")
+
+              if start_round:
+                  wlog("    starting round")
+                  guess[2] = 0 # + 0.1*(randu()-0.5)
+                  guess[3] = 0 # + 0.1*(randu()-0.5)
+              else:
+                  wlog("    starting at admom ellip")
+                  guess[2] = e1# + 0.05*(randu()-0.5)
+                  guess[3] = e2# + 0.05*(randu()-0.5)
+                  """
+                  while abs(guess[2]) > 0.95:
+                    guess[2] = e1 + 0.05*(randu()-0.5)
+                  while abs(guess[3]) > 0.95:
+                    guess[3] = e2 + 0.05*(randu()-0.5)
+                  """
+
+              guess[4] = 0.21
+              guess[5] = 0.27
+              guess[6] = 0.25
+              guess[7] = 0.24
+
+              guess[8] = T*4.5
+              guess[9] = T*.8
+              guess[10] = T*.18
+              guess[11] = T*.04
+
+              """
+              guess[8] = T*3.0
+              guess[9] = T*.4
+              guess[10] = T*.08
+              guess[11] = T*.015
+              """
         else:
             raise RuntimeError("implement other guesses!")
  
