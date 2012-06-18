@@ -22,12 +22,15 @@ class SimPlotter(dict):
         
         self._data=None
 
-    def doplots(self, s2max=None, yrange=None, reduce_key=False, show=True):
+    def doplots(self, 
+                type='diff',
+                s2max=None, yrange=None, reduce_key=False, 
+                show=True):
         import biggles
         import pcolors
         import converter
         data = self.read_data(s2max=s2max)
-        epsfile = shapesim.get_plot_file(self['run'],
+        epsfile = shapesim.get_plot_file(self['run'],type,
                                          s2max=s2max,
                                          yrange=yrange)
         wlog("will plot to:",epsfile)
@@ -39,8 +42,13 @@ class SimPlotter(dict):
         plt.aspect_ratio=1
         #plt.xlabel=r'$\gamma$'
         plt.xlabel=r'ellipticity'
-        #plt.ylabel=r'$\Delta \gamma/\gamma$'
-        plt.ylabel=r'$\Delta \gamma$'
+
+        if type == 'diff':
+            plt.ylabel=r'$\Delta \gamma$'
+        elif type == 'fdiff':
+            plt.ylabel=r'$\Delta \gamma/\gamma$'
+        else:
+            raise ValueError("type should be 'diff or 'fdiff'")
  
         allplots=[]
         for i,st in enumerate(reversed(data)):
@@ -65,19 +73,20 @@ class SimPlotter(dict):
 
             if wbad.size != 0:
                 wlog("found bad:",e_meas[wbad])
-            fdiff = shear_fracdiff(etrue,e_meas)
 
+            fdiff = shear_fracdiff(etrue,e_meas)
             # straight diff
             gammadiff = fdiff*st['gamma'][s]
 
-            #label = r'$<\sigma^2_{psf}/\sigma^2_{gal}>$: %0.3f' % s2
-            if self['s2n'] > 0:
-                meds2n = median(st['s2n_meas'])
-                label = r'%0.3f (%.0f)' % (s2,meds2n)
+            if type == 'diff':
+                yplot=gammadiff
+            elif type == 'fdiff':
+                yplot=fdiff
             else:
-                label = r'%0.3f' % s2
-            #cr = biggles.Curve(etrue, fdiff, color=colors[i])
-            cr = biggles.Curve(etrue, gammadiff, color=colors[i])
+                raise ValueError("type should be 'diff or 'fdiff'")
+
+            label = r'%0.3f' % s2
+            cr = biggles.Curve(etrue, yplot, color=colors[i])
             cr.label = label
 
             plt.add(cr)
@@ -119,10 +128,18 @@ class SimPlotter(dict):
             psf_sigma = self.simc['psf_sigma']
             siglab=r'$\sigma_{PSF}: %.1f$ pix' % psf_sigma
 
-        if self['s2n'] > 0:
-            siglab+=r'$ S/N: %(s2n)d N_{trial}: %(ntrial)d$' % self
-        else:
-            siglab+=r'$  N_{trial}: %(ntrial)d$' % self
+        s2n=self['s2n']
+        if s2n > 0:
+            if s2n > 1000:
+                ls2n = numpy.log10(s2n)
+                ls2n = r'$10^{%.1f}$' % ls2n
+            else:
+                ls2n = '%.0f' % s2n
+
+            #siglab+=r'$ S/N: %(s2n)d N_{trial}: %(ntrial)d$' % self
+            siglab+=' S/N: %s' % ls2n
+        #else:
+        #    siglab+=r'$  N_{trial}: %(ntrial)d$' % self
 
         sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
                                fontsize=2.5)

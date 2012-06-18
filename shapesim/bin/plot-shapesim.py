@@ -14,6 +14,8 @@ from optparse import OptionParser
 parser=OptionParser(__doc__)
 parser.add_option('-y','--yrange',default='-0.05,0.05',
                   help='yrange, default %default')
+parser.add_option('-t','--type',default='diff',
+                  help='yrange, default %default')
 parser.add_option('--s2max',default=None,
                   help="Max (spsf/sobj)**2 to plot, default %default")
 parser.add_option('--noshow',action="store_true",
@@ -43,4 +45,4 @@ if yrng is not None:
     yrng = [float(yr) for yr in yrng]
 
 p=shapesim.plotting.SimPlotter(run)
-p.doplots(yrange=yrng,s2max=s2max,show=show)
+p.doplots(yrange=yrng,s2max=s2max,show=show,type=options.type)

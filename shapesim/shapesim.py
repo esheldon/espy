@@ -401,7 +401,7 @@ def get_plot_dir(run):
     dir=path_join(dir, 'plots')
     return dir
 
-def get_plot_file(run, s2max=None, yrange=None):
+def get_plot_file(run, type, s2max=None, yrange=None):
     d=get_plot_dir(run)
     f='%s' % run
 
@@ -410,7 +410,7 @@ def get_plot_file(run, s2max=None, yrange=None):
 
     if yrange is not None:
         f += '-yr%0.3f-%0.3f' % tuple(yrange)
-    f += '.eps'
+    f += '-%s.eps' % type
     f = path_join(d, f)
     return f
 
