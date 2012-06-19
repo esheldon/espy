@@ -73,7 +73,6 @@ class GMixFitSim(shapesim.BaseSim):
         coellip_psf=self['coellip_psf']
         coellip_obj=self['coellip_obj']
 
-        wlog("\ne1true:",ci['e1true'],"e2true:",ci['e2true'])
         out['psf_res'] = self.process_image(ci.psf, 
                                             self['ngauss_psf'],
                                             ci['cen_psf_admom'],
@@ -96,6 +95,8 @@ class GMixFitSim(shapesim.BaseSim):
                                    dostop=dostop)
             elif show:
                 self.show_residual(ci, out['psf_res']['gmix'],dostop=dostop)
+
+            wlog("\ne1true:",ci['e1true'],"e2true:",ci['e2true'])
         else:
             if self['verbose']:
                 wlog('failed PSF flags:')
@@ -137,14 +138,41 @@ class GMixFitSim(shapesim.BaseSim):
                                                    randomize=randomize,
                                                    psf=psf)
             elif ptype == 'e1e2':
+                Tfac=1.
+                eguess=None
+
+                # first try we guess the admom ellip
                 if ntry == 1:
-                    start_round=False
+                    eguess=[0,0]
+                elif ntry == 2:
+                    Tfac = 5.
+                elif ntry == 3:
+                    eguess=[0.,0.]
+                    Tfac = 5.
+                elif ntry == 4:
+                    eguess=[0.3,0.3]
+                    Tfac = 5.
+                elif ntry == 5:
+                    eguess=[-0.3,-0.3]
+                    Tfac = 5.
+                elif ntry == 6:
+                    Tfac = .2
+                elif ntry == 7:
+                    eguess=[0.,0.]
+                    Tfac = .2
+                elif ntry == 8:
+                    eguess=[0.3,0.3]
+                    Tfac = .2
+                elif ntry == 9:
+                    eguess=[-0.3,-0.3]
+                    Tfac = .2
                 else:
-                    start_round=True
+                    eguess=None
                 guess = self.get_guess_coellip_e1e2(counts, ngauss, cen, cov, 
                                                     randomize=randomize,
                                                     psf=psf,
-                                                    start_round=start_round)
+                                                    eguess=eguess,
+                                                    Tfac=Tfac)
                 print_pars(guess,front="guess: ")
             else:
                 raise ValueError("ptype should be 'cov','e1e2'")
@@ -165,17 +193,18 @@ class GMixFitSim(shapesim.BaseSim):
 
             ntry += 1
                 
+        #if psf:
+        #    stop
+        w=chi2arr.argmin()
+        gm = gmlist[w]
+
         print_pars(gm.popt,front='popt: ')
         print_pars(gm.perr,front='perr: ')
         wlog('chi2arr:',chi2arr)
         if skysig is not None:
             wlog('chi2arr/perdeg:',chi2perarr)
         wlog("numiter gmix:",gm.numiter)
-        #if psf:
-        #    stop
-        w=chi2arr.argmin()
-        gm = gmlist[w]
-
+        wlog("poptT/Tguess:",gm.popt[ngauss+4:]/guess[ngauss+4:])
 
         out={'gmix':    gm.gmix,
              'pars':    gm.popt,
@@ -190,7 +219,8 @@ class GMixFitSim(shapesim.BaseSim):
 
     def get_guess_coellip_e1e2(self, counts, ngauss, cen, cov, 
                                randomize=False, 
-                               start_round=True,
+                               eguess=None,
+                               Tfac=1.,
                                psf=None):
         wlog("\nusing coellip e1e2")
         npars = 2*ngauss+4
@@ -245,12 +275,9 @@ class GMixFitSim(shapesim.BaseSim):
         elif ngauss==3:
               wlog("    using ngauss==3")
 
-              if start_round:
-                  wlog("    starting round")
-                  guess[2] = 0 # + 0.1*(randu()-0.5)
-                  guess[3] = 0 # + 0.1*(randu()-0.5)
+              if eguess is not None:
+                  guess[2],guess[3] = eguess
               else:
-                  wlog("    starting at admom ellip")
                   guess[2] = e1# + 0.05*(randu()-0.5)
                   guess[3] = e2# + 0.05*(randu()-0.5)
                   """
@@ -260,6 +287,7 @@ class GMixFitSim(shapesim.BaseSim):
                     guess[3] = e2 + 0.05*(randu()-0.5)
                 """
 
+              wlog("    starting e1,e2:",guess[2],guess[3])
               guess[4] = 0.62
               guess[5] = 0.34
               guess[6] = 0.04
@@ -270,37 +298,40 @@ class GMixFitSim(shapesim.BaseSim):
         elif ngauss==4:
               wlog("    using ngauss==4")
 
-              if start_round:
-                  wlog("    starting round")
-                  guess[2] = 0 # + 0.1*(randu()-0.5)
-                  guess[3] = 0 # + 0.1*(randu()-0.5)
+              guess[4] = 1./ngauss
+              guess[5] = 1./ngauss
+              guess[6] = 1./ngauss
+              guess[7] = 1./ngauss
+
+              if eguess is not None:
+                  guess[2],guess[3] = eguess
               else:
-                  wlog("    starting at admom ellip")
                   guess[2] = e1# + 0.05*(randu()-0.5)
                   guess[3] = e2# + 0.05*(randu()-0.5)
-                  """
-                  while abs(guess[2]) > 0.95:
-                    guess[2] = e1 + 0.05*(randu()-0.5)
-                  while abs(guess[3]) > 0.95:
-                    guess[3] = e2 + 0.05*(randu()-0.5)
-                  """
 
-              guess[4] = 0.21
-              guess[5] = 0.27
-              guess[6] = 0.25
-              guess[7] = 0.24
+              wlog("    starting e1,e2:",guess[2],guess[3])
 
-              guess[8] = T*4.5
-              guess[9] = T*.8
-              guess[10] = T*.18
-              guess[11] = T*.04
+              # Tfac is to help cover the cases where
+              # the object is much smaller or much larger
+              # than the PSF
 
               """
-              guess[8] = T*3.0
-              guess[9] = T*.4
-              guess[10] = T*.08
-              guess[11] = T*.015
+              guess[4] = 0.21*Tfac
+              guess[5] = 0.27*Tfac
+              guess[6] = 0.25*Tfac
+              guess[7] = 0.24*Tfac
               """
+              """
+              guess[8] = T*4.5*Tfac
+              guess[9] = T*.8*Tfac
+              guess[10] = T*.18*Tfac
+              guess[11] = T*.04*Tfac
+              """
+              guess[8] = T*2.6*Tfac
+              guess[9] = T*.38*Tfac
+              guess[10] = T*.076*Tfac
+              guess[11] = T*.015*Tfac
+
         else:
             raise RuntimeError("implement other guesses!")
  
