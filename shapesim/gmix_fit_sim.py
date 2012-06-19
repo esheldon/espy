@@ -478,8 +478,8 @@ class GMixFitSim(shapesim.BaseSim):
             skysig=None
             if ci['skysig'] > 0:
                 skysig=ci['skysig']
-            model0 = gmix_image.gmix2image(objmix,ci.image0.shape,
-                                           renorm=False) 
+            #model0 = gmix_image.gmix2image(objmix,ci.image0.shape,
+            #                               renorm=False) 
             model = gmix_image.gmix2image(objmix,ci.image.shape,
                                           psf=psfmix,
                                           renorm=False) 
@@ -492,9 +492,9 @@ class GMixFitSim(shapesim.BaseSim):
                 if w[0].size > 0:
                     wlog('found NaN')
                 wlog(tim)
-            images.compare_images(ci.image0,model0,
-                                  label1='object0',label2='gmix',
-                                  skysig=skysig)
+            #images.compare_images(ci.image0,model0,
+            #                      label1='object0',label2='gmix',
+            #                      skysig=skysig)
             images.compare_images(ci.image,model,
                                   label1='object+psf',label2='gmix',
                                   skysig=skysig)
