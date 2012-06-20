@@ -337,9 +337,11 @@ def compare_images(im1, im2, cen=None, minval=None,
 
     rplt=biggles.FramedPlot()
     rplt.add( him1rows, him2rows, hresrows,key )
+    rplt.xlabel = 'Center Rows'
 
     cplt=biggles.FramedPlot()
     cplt.add( him1cols, him2cols, hrescols )
+    cplt.xlabel = 'Center Columns'
 
     rplt.aspect_ratio=1
     cplt.aspect_ratio=1

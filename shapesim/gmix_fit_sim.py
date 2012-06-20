@@ -86,15 +86,15 @@ class GMixFitSim(shapesim.BaseSim):
             cov_psf_admom = ci['cov_psf_admom']
             Tadmom=cov_admom[0]+cov_admom[2]
             Tpsf_admom = cov_psf_admom[0]+cov_psf_admom[2]
-            T0admom = Tadmom-Tpsf_admom
-            Radmom = T0admom/Tadmom
+            pfrac_am = Tpsf_admom/Tadmom
+
             out['res'] = self.process_image(ci.image, 
                                             self['ngauss_obj'],
                                             ci['cen_admom'],
                                             cov_admom,
                                             psf=out['psf_res']['gmix'],
                                             skysig=ci['skysig'],
-                                            Radmom=Radmom,
+                                            pfrac_am=pfrac_am,
                                             coellip=coellip_obj)
             out['flags'] = out['res']['flags']
             if show and out['flags'] == 0:
@@ -116,7 +116,7 @@ class GMixFitSim(shapesim.BaseSim):
         return out
 
     def process_image(self, image, ngauss, cen, cov, psf=None,
-                      Radmom=None,
+                      pfrac_am=None,
                       skysig=None, coellip=True):
         if not coellip:
             raise ValueError("must use coellip for now")
@@ -147,7 +147,7 @@ class GMixFitSim(shapesim.BaseSim):
                                                    randomize=randomize,
                                                    psf=psf)
             elif ptype == 'e1e2':
-                if Radmom is not None:
+                if pfrac_am is not None:
                     Tfac=None
                     if ntry==0:
                         eguess=None
@@ -199,7 +199,7 @@ class GMixFitSim(shapesim.BaseSim):
                 guess = self.get_guess_coellip_e1e2(counts, ngauss, cen, cov, 
                                                     randomize=randomize,
                                                     psf=psf,
-                                                    Radmom=Radmom,
+                                                    pfrac_am=pfrac_am,
                                                     eguess=eguess,
                                                     Tfac=Tfac)
                 #if psf:
@@ -257,7 +257,7 @@ class GMixFitSim(shapesim.BaseSim):
     def get_guess_coellip_e1e2(self, counts, ngauss, cen, cov, 
                                randomize=False, 
                                eguess=None,
-                               Radmom=None,
+                               pfrac_am=None,
                                Tfac=1.,
                                psf=None):
         wlog("\nusing coellip e1e2")
@@ -349,11 +349,12 @@ class GMixFitSim(shapesim.BaseSim):
 
                 wlog("    starting e1,e2:",guess[2],guess[3])
 
-                if Tfac is None and Radmom > 0.01:
+                if Tfac is None and pfrac_am is not None:
                     # from gmix_fit_sim.plot_admom_max_tratio
-                    wlog("Using Radmom fit")
-                    ply=numpy.poly1d([ 72.51258096,   4.14321833])
-                    tratio = ply(Radmom)
+                    wlog("Using pfrac_am fit")
+                    #ply=numpy.poly1d([ 72.51258096,   4.14321833])
+                    ply=numpy.poly1d([-72.51258096,  76.65579929])
+                    tratio = ply(pfrac_am)
 
                     # this T is Tadmom
                     Tmax = tratio*T
@@ -802,7 +803,7 @@ def plot_admom_max_tratio(run, ei=0):
     flist = glob.glob(pattern)
     nf=len(flist)
 
-    Radmoms = zeros(nf)
+    Pfrac_admoms = zeros(nf)
     Tratios = zeros(nf)
 
     for j,f in enumerate(flist):
@@ -817,17 +818,19 @@ def plot_admom_max_tratio(run, ei=0):
         for i in xrange(len(t)):
             Tmax[i] = t['pars'][i,8:].max()
         
-        Radmoms[j] = median((Tam-Tam_psf)/Tam)
+        pfrac_admoms[j] = median(Tam_psf/Tam)
+        #pfrac_admoms[j] = median((Tam-Tam_psf)/Tam)
         Tratios[j] = median(Tmax/Tam)
 
     w,=where(Tratios > 10)
-    pfit = numpy.polyfit(Radmoms[w], Tratios[w], 1)
+    pfit = numpy.polyfit(pfrac_admoms[w], Tratios[w], 1)
     p = numpy.poly1d(pfit)
     print pfit
 
-    plt=eu.plotting.bscatter(Radmoms,Tratios,show=False,
+    plt=eu.plotting.bscatter(pfrac_admoms,Tratios,show=False,
                              xlabel=r'$R_{AM}$',
-                             ylabel=r'$T/T_{AM}$')
-    eu.plotting.bscatter(Radmoms[w],p(Radmoms[w]),type='solid',color='red',
+                             ylabel=r'$T_{MAX}^{guess}/T_{AM}$')
+    eu.plotting.bscatter(pfrac_admoms[w],p(pfrac_admoms[w]),
+                         type='solid',color='red',
                          plt=plt)
 
