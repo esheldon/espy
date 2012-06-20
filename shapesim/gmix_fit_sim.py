@@ -3,9 +3,10 @@ Generate image simulations and process them with the
 gmix fitting pipeline
 """
 
+import os
 import numpy
 from numpy import random, zeros, sqrt, array, ceil, isfinite, \
-        where, diag, arctan2
+        where, diag, arctan2, median
 from numpy.random import random as randu
 from numpy.linalg import eig, LinAlgError
 import sys
@@ -81,12 +82,19 @@ class GMixFitSim(shapesim.BaseSim):
                                             coellip=coellip_psf)
         out['flags'] = out['psf_res']['flags']
         if out['flags'] == 0:
+            cov_admom = ci['cov_admom']
+            cov_psf_admom = ci['cov_psf_admom']
+            Tadmom=cov_admom[0]+cov_admom[2]
+            Tpsf_admom = cov_psf_admom[0]+cov_psf_admom[2]
+            T0admom = Tadmom-Tpsf_admom
+            Radmom = T0admom/Tadmom
             out['res'] = self.process_image(ci.image, 
                                             self['ngauss_obj'],
                                             ci['cen_admom'],
-                                            ci['cov_admom'],
+                                            cov_admom,
                                             psf=out['psf_res']['gmix'],
                                             skysig=ci['skysig'],
+                                            Radmom=Radmom,
                                             coellip=coellip_obj)
             out['flags'] = out['res']['flags']
             if show and out['flags'] == 0:
@@ -108,6 +116,7 @@ class GMixFitSim(shapesim.BaseSim):
         return out
 
     def process_image(self, image, ngauss, cen, cov, psf=None,
+                      Radmom=None,
                       skysig=None, coellip=True):
         if not coellip:
             raise ValueError("must use coellip for now")
@@ -138,42 +147,64 @@ class GMixFitSim(shapesim.BaseSim):
                                                    randomize=randomize,
                                                    psf=psf)
             elif ptype == 'e1e2':
-                Tfac=1.
-                eguess=None
-
-                # first try we guess the admom ellip
-                if ntry == 1:
-                    eguess=[0,0]
-                elif ntry == 2:
-                    Tfac = 5.
-                elif ntry == 3:
-                    eguess=[0.,0.]
-                    Tfac = 5.
-                elif ntry == 4:
-                    eguess=[0.3,0.3]
-                    Tfac = 5.
-                elif ntry == 5:
-                    eguess=[-0.3,-0.3]
-                    Tfac = 5.
-                elif ntry == 6:
-                    Tfac = .2
-                elif ntry == 7:
-                    eguess=[0.,0.]
-                    Tfac = .2
-                elif ntry == 8:
-                    eguess=[0.3,0.3]
-                    Tfac = .2
-                elif ntry == 9:
-                    eguess=[-0.3,-0.3]
-                    Tfac = .2
+                if Radmom is not None:
+                    Tfac=None
+                    if ntry==0:
+                        eguess=None
+                    if ntry == 1:
+                        eguess=[0,0]
                 else:
+                    #Tfac=1.
+                    Tfac=None
                     eguess=None
+
+                    # first try we guess the admom ellip
+                    if ntry == 1:
+                        eguess=[0,0]
+                    elif ntry == 2:
+                        Tfac = 5.
+                    elif ntry == 3:
+                        eguess=[0.,0.]
+                        Tfac = 5.
+                    elif ntry == 4:
+                        eguess=[0.3,0.3]
+                        Tfac = 5.
+                    elif ntry == 5:
+                        eguess=[-0.3,-0.3]
+                        Tfac = 5.
+
+                    elif ntry == 6:
+                        Tfac = .2
+                    elif ntry == 7:
+                        eguess=[0.,0.]
+                        Tfac = .2
+                    elif ntry == 8:
+                        eguess=[0.3,0.3]
+                        Tfac = .2
+                    elif ntry == 9:
+                        eguess=[-0.3,-0.3]
+                        Tfac = .2
+
+                    elif ntry == 10:
+                        eguess=[0.0,0.0]
+                        Tfac = .05  
+                    elif ntry == 11:
+                        eguess=[0.3,0.3]
+                        Tfac = .05  
+                    elif ntry == 12:
+                        eguess=[-0.3,-0.3]
+                        Tfac = .05
+                    else:
+                        eguess=None
                 guess = self.get_guess_coellip_e1e2(counts, ngauss, cen, cov, 
                                                     randomize=randomize,
                                                     psf=psf,
+                                                    Radmom=Radmom,
                                                     eguess=eguess,
                                                     Tfac=Tfac)
-                print_pars(guess,front="guess: ")
+                #if psf:
+                #    print_pars(guess,front="guess: ")
+                #    stop
             else:
                 raise ValueError("ptype should be 'cov','e1e2'")
 
@@ -184,11 +215,14 @@ class GMixFitSim(shapesim.BaseSim):
                                            use_jacob=use_jacob,
                                            verbose=verbose)
 
+            print_pars(gm.popt,front="pars:  ")
             if skysig is not None:
                 chi2arr[ntry] = gm.chi2(gm.popt)
                 chi2perarr[ntry] = gm.chi2per(gm.popt,skysig)
+                wlog("chi2/pdeg:",chi2perarr[ntry])
             else:
                 chi2arr[ntry] = gm.chi2(gm.popt)
+                wlog("chi2:",chi2arr[ntry])
             gmlist.append(gm)
 
             ntry += 1
@@ -200,9 +234,12 @@ class GMixFitSim(shapesim.BaseSim):
 
         print_pars(gm.popt,front='popt: ')
         print_pars(gm.perr,front='perr: ')
-        wlog('chi2arr:',chi2arr)
+        #wlog('chi2arr:',chi2arr)
         if skysig is not None:
-            wlog('chi2arr/perdeg:',chi2perarr)
+            #wlog('chi2arr/perdeg:',chi2perarr)
+            print_pars(chi2perarr,front='chi2/deg: ')
+        else:
+            print_pars(chi2arr,front='chi2: ')
         wlog("numiter gmix:",gm.numiter)
         wlog("poptT/Tguess:",gm.popt[ngauss+4:]/guess[ngauss+4:])
 
@@ -220,6 +257,7 @@ class GMixFitSim(shapesim.BaseSim):
     def get_guess_coellip_e1e2(self, counts, ngauss, cen, cov, 
                                randomize=False, 
                                eguess=None,
+                               Radmom=None,
                                Tfac=1.,
                                psf=None):
         wlog("\nusing coellip e1e2")
@@ -273,65 +311,81 @@ class GMixFitSim(shapesim.BaseSim):
                 guess[5] += 1*(randu()-0.5)   # T
 
         elif ngauss==3:
-              wlog("    using ngauss==3")
+                wlog("    using ngauss=3")
+            
+                if eguess is not None:
+                    guess[2],guess[3] = eguess
+                else:
+                    guess[2] = e1# + 0.05*(randu()-0.5)
+                    guess[3] = e2# + 0.05*(randu()-0.5)
+                    """
+                    while abs(guess[2]) > 0.95:
+                      guess[2] = e1 + 0.05*(randu()-0.5)
+                    while abs(guess[3]) > 0.95:
+                      guess[3] = e2 + 0.05*(randu()-0.5)
+                    """
 
-              if eguess is not None:
-                  guess[2],guess[3] = eguess
-              else:
-                  guess[2] = e1# + 0.05*(randu()-0.5)
-                  guess[3] = e2# + 0.05*(randu()-0.5)
-                  """
-                  while abs(guess[2]) > 0.95:
-                    guess[2] = e1 + 0.05*(randu()-0.5)
-                  while abs(guess[3]) > 0.95:
-                    guess[3] = e2 + 0.05*(randu()-0.5)
-                """
-
-              wlog("    starting e1,e2:",guess[2],guess[3])
-              guess[4] = 0.62
-              guess[5] = 0.34
-              guess[6] = 0.04
-              guess[7] = T*2.7
-              guess[8] = T*0.62
-              guess[9] = T*0.09
+                wlog("    starting e1,e2:",guess[2],guess[3])
+                guess[4] = 0.62
+                guess[5] = 0.34
+                guess[6] = 0.04
+                guess[7] = T*2.7
+                guess[8] = T*0.62
+                guess[9] = T*0.09
 
         elif ngauss==4:
-              wlog("    using ngauss==4")
+                wlog("    using ngauss=4")
 
-              guess[4] = 1./ngauss
-              guess[5] = 1./ngauss
-              guess[6] = 1./ngauss
-              guess[7] = 1./ngauss
+                guess[4] = 1./ngauss
+                guess[5] = 1./ngauss
+                guess[6] = 1./ngauss
+                guess[7] = 1./ngauss
 
-              if eguess is not None:
-                  guess[2],guess[3] = eguess
-              else:
-                  guess[2] = e1# + 0.05*(randu()-0.5)
-                  guess[3] = e2# + 0.05*(randu()-0.5)
+                if eguess is not None:
+                    guess[2],guess[3] = eguess
+                else:
+                    guess[2] = e1# + 0.05*(randu()-0.5)
+                    guess[3] = e2# + 0.05*(randu()-0.5)
 
-              wlog("    starting e1,e2:",guess[2],guess[3])
+                wlog("    starting e1,e2:",guess[2],guess[3])
 
-              # Tfac is to help cover the cases where
-              # the object is much smaller or much larger
-              # than the PSF
+                if Tfac is None and Radmom > 0.01:
+                    # from gmix_fit_sim.plot_admom_max_tratio
+                    wlog("Using Radmom fit")
+                    ply=numpy.poly1d([ 72.51258096,   4.14321833])
+                    tratio = ply(Radmom)
 
-              """
-              guess[4] = 0.21*Tfac
-              guess[5] = 0.27*Tfac
-              guess[6] = 0.25*Tfac
-              guess[7] = 0.24*Tfac
-              """
-              """
-              guess[8] = T*4.5*Tfac
-              guess[9] = T*.8*Tfac
-              guess[10] = T*.18*Tfac
-              guess[11] = T*.04*Tfac
-              """
-              guess[8] = T*2.6*Tfac
-              guess[9] = T*.38*Tfac
-              guess[10] = T*.076*Tfac
-              guess[11] = T*.015*Tfac
+                    # this T is Tadmom
+                    Tmax = tratio*T
 
+                    # 1.000000 0.182911 0.035527 0.002705
+                    guess[8] = Tmax
+                    guess[9] = Tmax*0.18
+                    guess[10] = Tmax*0.035
+                    guess[11] = Tmax*0.0027
+                else:
+                    if Tfac is None:
+                        Tfac=1
+                    # Tfac is to help cover the cases where
+                    # the object is much smaller or much larger
+                    # than the PSF
+
+                    """
+                    guess[4] = 0.21*Tfac
+                    guess[5] = 0.27*Tfac
+                    guess[6] = 0.25*Tfac
+                    guess[7] = 0.24*Tfac
+                    """
+                    """
+                    guess[8] = T*4.5*Tfac
+                    guess[9] = T*.8*Tfac
+                    guess[10] = T*.18*Tfac
+                    guess[11] = T*.04*Tfac
+                    """
+                    guess[8] = T*2.6*Tfac
+                    guess[9] = T*.38*Tfac
+                    guess[10] = T*.076*Tfac
+                    guess[11] = T*.015*Tfac
         else:
             raise RuntimeError("implement other guesses!")
  
@@ -540,12 +594,9 @@ class GMixFitSim(shapesim.BaseSim):
         s2psf_am = ci['cov_psf_admom'][0]+ci['cov_psf_admom'][2]
         s2obj_am = ci['cov_image0_admom'][0]+ci['cov_image0_admom'][2]
         st['s2admom'] = s2psf_am/s2obj_am
-        st['sigma_psf_admom'] = \
-            mom2sigma(ci['cov_psf_admom'][0]+ci['cov_psf_admom'][2])
-        st['sigma_admom'] = \
-            mom2sigma(ci['cov_image0_admom'][0]+ci['cov_image0_admom'][2])
-        st['sigma0_admom'] = \
-            mom2sigma(ci['cov_admom'][0]+ci['cov_admom'][2])
+        st['T_psf_admom'] = ci['cov_psf_admom'][0]+ci['cov_psf_admom'][2]
+        st['T0_admom'] = ci['cov_image0_admom'][0]+ci['cov_image0_admom'][2]
+        st['T_admom'] = ci['cov_admom'][0]+ci['cov_admom'][2]
 
         if 'psf_res' in res:
             st['pars_psf']     = res['psf_res']['pars']
@@ -648,9 +699,9 @@ class GMixFitSim(shapesim.BaseSim):
 
             ('s2','f8'),         # requested (spsf/sobj)**2
             ('s2_uw','f8'), # unweighted s2 of object before noise
-            ('sigma_psf_admom','f8'),
-            ('sigma_admom','f8'),
-            ('sigma0_admom','f8'),
+            ('T_psf_admom','f8'),
+            ('T_admom','f8'),
+            ('T0_admom','f8'),
             ('s2admom','f8'),    # s2 from admom, generally different
 
             ('irr_uw','f8'),
@@ -676,6 +727,8 @@ class GMixFitSim(shapesim.BaseSim):
             ('flags','i8'),
 
             ('s2n_meas','f8'),    # use admom s2n
+
+            ('Tadmom','f8'),      # of convolved object
 
             ('s2_meas','f8'),
             ('irr_psf_meas','f8'),
@@ -734,3 +787,47 @@ def get_ellip_cholesky(means, cov, n=100000):
     e_err = er.std()
 
     return e1, e1_err, e2, e2_err, e, e_err
+
+def plot_admom_max_tratio(run, ei=0):
+    """
+    Plot the ratio of the maximum moment to the adaptive moment
+    """
+    import glob
+
+    d=shapesim.get_output_dir(run)
+    pattern='%s-*-%03i.rec' % (run,ei)
+    pattern=os.path.join(d,pattern)
+
+    wlog(pattern)
+    flist = glob.glob(pattern)
+    nf=len(flist)
+
+    Radmoms = zeros(nf)
+    Tratios = zeros(nf)
+
+    for j,f in enumerate(flist):
+        wlog(f)
+        t=eu.io.read(f)
+
+        # had a typo!  Is fixed now, and saving T instead of sigma
+        Tam = 2*t['sigma0_admom']**2
+        Tam_psf = 2*t['sigma_psf_admom']**2
+
+        Tmax = zeros(len(t))
+        for i in xrange(len(t)):
+            Tmax[i] = t['pars'][i,8:].max()
+        
+        Radmoms[j] = median((Tam-Tam_psf)/Tam)
+        Tratios[j] = median(Tmax/Tam)
+
+    w,=where(Tratios > 10)
+    pfit = numpy.polyfit(Radmoms[w], Tratios[w], 1)
+    p = numpy.poly1d(pfit)
+    print pfit
+
+    plt=eu.plotting.bscatter(Radmoms,Tratios,show=False,
+                             xlabel=r'$R_{AM}$',
+                             ylabel=r'$T/T_{AM}$')
+    eu.plotting.bscatter(Radmoms[w],p(Radmoms[w]),type='solid',color='red',
+                         plt=plt)
+

@@ -18,6 +18,8 @@ parser.add_option('-t','--type',default='diff',
                   help='yrange, default %default')
 parser.add_option('--s2max',default=None,
                   help="Max (spsf/sobj)**2 to plot, default %default")
+parser.add_option('--s2meas',action='store_true',
+                  help="Use the measured s2")
 parser.add_option('--noshow',action="store_true",
                   help="don't show")
 options,args = parser.parse_args(sys.argv[1:])
@@ -45,4 +47,5 @@ if yrng is not None:
     yrng = [float(yr) for yr in yrng]
 
 p=shapesim.plotting.SimPlotter(run)
-p.doplots(yrange=yrng,s2max=s2max,show=show,type=options.type)
+p.doplots(yrange=yrng,s2max=s2max,s2meas=options.s2meas,
+          show=show,type=options.type)

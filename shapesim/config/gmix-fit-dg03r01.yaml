@@ -23,7 +23,8 @@ coellip_obj: true
 # and if s2n is > 0 above, noise added to the image
 ntrial: 100
 
-maxtry: 10
+maxtry: 2
+
 # this is for the PSF fit, since admom gets gaussians too perfectly
 randomize: true
 

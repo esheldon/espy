@@ -19,11 +19,11 @@ objmodel: dev
 #objfac: 30
 
 # instead of 1
-image_nsub: 4
+#image_nsub: 4
 
 # new parameter
 #expand_fac_min: 7
-expand_fac_min: 16
+#expand_fac_min: 16
 
 comments: |
 

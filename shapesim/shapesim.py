@@ -401,10 +401,12 @@ def get_plot_dir(run):
     dir=path_join(dir, 'plots')
     return dir
 
-def get_plot_file(run, type, s2max=None, yrange=None):
+def get_plot_file(run, type, s2max=None, s2meas=False, yrange=None):
     d=get_plot_dir(run)
     f='%s' % run
 
+    if s2meas:
+        f += '-s2meas'
     if s2max is not None:
         f += '-s2max%0.3f' % s2max
 

@@ -23,15 +23,21 @@ class SimPlotter(dict):
         self._data=None
 
     def doplots(self, 
+                s2meas=False,
                 type='diff',
-                s2max=None, yrange=None, reduce_key=False, 
+                s2max=None, 
+                yrange=None, 
+                reduce_key=False, 
                 show=True):
         import biggles
         import pcolors
         import converter
-        data = self.read_data(s2max=s2max)
+
+        data = self.read_data(s2meas=s2meas, s2max=s2max)
+
         epsfile = shapesim.get_plot_file(self['run'],type,
                                          s2max=s2max,
+                                         s2meas=s2meas,
                                          yrange=yrange)
         wlog("will plot to:",epsfile)
 
@@ -52,8 +58,13 @@ class SimPlotter(dict):
  
         allplots=[]
         for i,st in enumerate(reversed(data)):
+            wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
+
             #s2 = median(st['s2_meas'])
-            s2 = median(st['s2'])
+            if s2meas:
+                s2 = median(st['s2_meas'])
+            else:
+                s2 = median(st['s2'])
 
             s = st['etrue'].argsort()
 
@@ -159,7 +170,7 @@ class SimPlotter(dict):
 
 
 
-    def read_data(self, s2max=None):
+    def read_data(self, s2meas=False, s2max=None):
         if self._data is None:
             wlog("reading data")
             self._data = shapesim.read_all_outputs(self['run'],
@@ -169,10 +180,19 @@ class SimPlotter(dict):
         ntot=len(alldata)
         nkeep=ntot
         if s2max is not None:
+            if s2meas:
+                tag='s2_meas'
+            else:
+                tag='s2'
             keepdata = []
             for st in alldata:
-                if median(st['s2_meas']) < s2max:
-                    keepdata.append(st)
+                med_s2 = median(st[tag])
+                wlog("med s2:",med_s2," max:",s2max)
+                if med_s2 < s2max:
+                    wlog("keeping")
+                    keepdata.append(st.copy())
+                else:
+                    wlog("not keeping")
             nkeep = len(keepdata)
             wlog("kept %d/%d with s2 < %.3g" % (nkeep,ntot,s2max)) 
         else:
