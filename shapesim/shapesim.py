@@ -261,7 +261,8 @@ class BaseSim(dict):
         s2,ellip = self.get_s2_e(is2, ie)
         print 'ellip:',ellip
         for i in xrange(self['ntrial']):
-            stderr.write("%d/%d " % (i+1,self['ntrial']))
+            stderr.write('-'*70)
+            stderr.write("\n%d/%d " % (i+1,self['ntrial']))
             iter=0
             while iter < self['itmax']:
                 ci=ss.get_trial(s2,ellip,s2n,s2n_psf)

@@ -1,6 +1,6 @@
 # using more padding
-run: gmix-fit-dg01r01
-sim: sim-dg01
+run: gmix-fit-dg03r02
+sim: sim-dg03
 
 # type of parametrization
 ptype: e1e2
@@ -10,7 +10,7 @@ use_jacob: false
 verbose: true
 
 # you need the + or - in exponent
-s2n: 1.0e+6
+s2n: 100
 s2n_psf: 1.0e+6
 
 # we should try with higher values to see what happens
@@ -22,9 +22,10 @@ coellip_obj: true
 
 # number of trials at each s2 and ellip.  Orientations will be random
 # and if s2n is > 0 above, noise added to the image
-ntrial: 100
+ntrial: 1000
 
 maxtry: 2
+
 
 # this is for the PSF fit, since admom gets gaussians too perfectly
 randomize: true
@@ -47,3 +48,6 @@ nums2: 20
 nume:  20
 
 seed: 87
+
+#simpars:
+#    image_nsub: 4

@@ -4,16 +4,17 @@ gmix fitting pipeline
 """
 
 import os
+from math import copysign
 import numpy
 from numpy import random, zeros, sqrt, array, ceil, isfinite, \
-        where, diag, arctan2, median
+        where, diag, arctan2, median, poly1d
 from numpy.random import random as randu
 from numpy.linalg import eig, LinAlgError
 import sys
 from sys import stderr
 from lensing.util import e2gamma, e1e2_to_g1g2
 from . import shapesim
-from fimage import mom2sigma, cov2sigma
+from fimage import mom2sigma, cov2sigma, mom2ellip
 from pprint import pprint 
 import copy
 import images
@@ -88,6 +89,19 @@ class GMixFitSim(shapesim.BaseSim):
             Tpsf_admom = cov_psf_admom[0]+cov_psf_admom[2]
             pfrac_am = Tpsf_admom/Tadmom
 
+            pars_nonoise=None
+            """
+            nonoise = self.process_image(ci.image_nonoise, 
+                                         self['ngauss_obj'],
+                                         ci['cen_admom'],
+                                         cov_admom,
+                                         psf=out['psf_res']['gmix'],
+                                         skysig=ci['skysig'],
+                                         pfrac_am=pfrac_am,
+                                         coellip=coellip_obj)
+            pars_nonoise=nonoise['pars']
+            """
+
             out['res'] = self.process_image(ci.image, 
                                             self['ngauss_obj'],
                                             ci['cen_admom'],
@@ -95,7 +109,9 @@ class GMixFitSim(shapesim.BaseSim):
                                             psf=out['psf_res']['gmix'],
                                             skysig=ci['skysig'],
                                             pfrac_am=pfrac_am,
-                                            coellip=coellip_obj)
+                                            coellip=coellip_obj,
+                                            pars_nonoise=pars_nonoise)
+
             out['flags'] = out['res']['flags']
             if show and out['flags'] == 0:
                 self.show_residual(ci, out['psf_res']['gmix'], 
@@ -104,7 +120,16 @@ class GMixFitSim(shapesim.BaseSim):
             elif show:
                 self.show_residual(ci, out['psf_res']['gmix'],dostop=dostop)
 
-            wlog("\ne1true:",ci['e1true'],"e2true:",ci['e2true'])
+            if out['flags'] == 0:
+                mess=("e1true: %.6g e1: %.6g +/- %.6g\n"
+                      "e2true: %.6g e2: %.6g +/- %.6g")
+                mess = mess % (ci['e1true'], 
+                               out['res']['pars'][2],
+                               out['res']['perr'][2],
+                               ci['e2true'], 
+                               out['res']['pars'][3],
+                               out['res']['perr'][3])
+                wlog(mess)
         else:
             if self['verbose']:
                 wlog('failed PSF flags:')
@@ -117,7 +142,9 @@ class GMixFitSim(shapesim.BaseSim):
 
     def process_image(self, image, ngauss, cen, cov, psf=None,
                       pfrac_am=None,
-                      skysig=None, coellip=True):
+                      skysig=None, coellip=True,
+                      pars_nonoise=None,
+                      e1true=None, e2true=None):
         if not coellip:
             raise ValueError("must use coellip for now")
 
@@ -135,76 +162,62 @@ class GMixFitSim(shapesim.BaseSim):
         ntry=0
         chi2arr=zeros(maxtry) + 1.e9
         chi2perarr=zeros(maxtry) + 1.e9
+        guess_chi2perarr=zeros(maxtry) + 1.e9
+
         gmlist=[]
 
         ptype = self.get('ptype','cov')
         use_jacob=self.get('use_jacob',True)
-        wlog("ptype:",ptype)
-        wlog("use_jacob:",use_jacob)
+        Tmin = self.get('Tmin',0.0)
+        wlog("ptype:",ptype,"use_jacob:",use_jacob,"Tmin:",Tmin)
         while ntry < maxtry:
             if ptype == 'cov':
                 guess = self.get_guess_coellip_cov(counts, ngauss, cen, cov, 
                                                    randomize=randomize,
                                                    psf=psf)
             elif ptype == 'e1e2':
-                if pfrac_am is not None:
-                    Tfac=None
-                    if ntry==0:
-                        eguess=None
-                    if ntry == 1:
-                        eguess=[0,0]
+                if pars_nonoise is not None:
+                    guess = pars_nonoise.copy()
+                    print_pars(guess,front="nonoise guess: ")
                 else:
-                    #Tfac=1.
                     Tfac=None
                     eguess=None
 
-                    # first try we guess the admom ellip
-                    if ntry == 1:
-                        eguess=[0,0]
-                    elif ntry == 2:
-                        Tfac = 5.
-                    elif ntry == 3:
-                        eguess=[0.,0.]
-                        Tfac = 5.
-                    elif ntry == 4:
-                        eguess=[0.3,0.3]
-                        Tfac = 5.
-                    elif ntry == 5:
-                        eguess=[-0.3,-0.3]
-                        Tfac = 5.
-
-                    elif ntry == 6:
-                        Tfac = .2
-                    elif ntry == 7:
-                        eguess=[0.,0.]
-                        Tfac = .2
-                    elif ntry == 8:
-                        eguess=[0.3,0.3]
-                        Tfac = .2
-                    elif ntry == 9:
-                        eguess=[-0.3,-0.3]
-                        Tfac = .2
-
-                    elif ntry == 10:
-                        eguess=[0.0,0.0]
-                        Tfac = .05  
-                    elif ntry == 11:
-                        eguess=[0.3,0.3]
-                        Tfac = .05  
-                    elif ntry == 12:
-                        eguess=[-0.3,-0.3]
-                        Tfac = .05
+                    if ngauss==1:
+                        randomize=True
                     else:
-                        eguess=None
-                guess = self.get_guess_coellip_e1e2(counts, ngauss, cen, cov, 
-                                                    randomize=randomize,
-                                                    psf=psf,
-                                                    pfrac_am=pfrac_am,
-                                                    eguess=eguess,
-                                                    Tfac=Tfac)
-                #if psf:
-                #    print_pars(guess,front="guess: ")
-                #    stop
+                        randomize=False
+
+                    if pfrac_am is not None:
+                        #T = cov[2]+cov[0]
+                        #e1g=(cov[2]-cov[0])/T
+                        #e2g=2*cov[1]/T
+                        e1g,e2g,T = mom2ellip(cov[0],cov[1],cov[2])
+                        Tfac=None
+                        if ntry==0:
+                            eguess=None
+                        elif ntry == 1:
+                            eguess=[0,0]
+                        else:
+                            if (ntry % 2) == 0:
+                                # needed this for eg, e=0.8, very high S/N
+                                # over-ride randomize
+                                randomize=True
+                                eguess=None
+                            else:
+                                # needed this for eg, e=0.8, very high S/N
+                                # over-ride randomize
+                                randomize=True
+                                eguess=[0,0]
+                                #eguess=[copysign(0.4,e1g),copysign(0.4,e2g)]
+                    guess = self.get_guess_coellip_e1e2(counts, 
+                                                        ngauss, cen, cov, 
+                                                        randomize=randomize,
+                                                        psf=psf,
+                                                        pfrac_am=pfrac_am,
+                                                        eguess=eguess,
+                                                        Tfac=Tfac)
+                    print_pars(guess,front="guess: ")
             else:
                 raise ValueError("ptype should be 'cov','e1e2'")
 
@@ -212,6 +225,7 @@ class GMixFitSim(shapesim.BaseSim):
                                            psf=psf,
                                            method=method,
                                            ptype=ptype,
+                                           Tmin=Tmin,
                                            use_jacob=use_jacob,
                                            verbose=verbose)
 
@@ -219,6 +233,7 @@ class GMixFitSim(shapesim.BaseSim):
             if skysig is not None:
                 chi2arr[ntry] = gm.chi2(gm.popt)
                 chi2perarr[ntry] = gm.chi2per(gm.popt,skysig)
+                guess_chi2perarr[ntry] = gm.chi2per(guess,skysig)
                 wlog("chi2/pdeg:",chi2perarr[ntry])
             else:
                 chi2arr[ntry] = gm.chi2(gm.popt)
@@ -232,12 +247,14 @@ class GMixFitSim(shapesim.BaseSim):
         w=chi2arr.argmin()
         gm = gmlist[w]
 
+        wlog("\n")
         print_pars(gm.popt,front='popt: ')
         print_pars(gm.perr,front='perr: ')
         #wlog('chi2arr:',chi2arr)
         if skysig is not None:
             #wlog('chi2arr/perdeg:',chi2perarr)
             print_pars(chi2perarr,front='chi2/deg: ')
+            print_pars(guess_chi2perarr,front='guess chi2/deg: ')
         else:
             print_pars(chi2arr,front='chi2: ')
         wlog("numiter gmix:",gm.numiter)
@@ -277,7 +294,7 @@ class GMixFitSim(shapesim.BaseSim):
         if ngauss==1:
             wlog("    using ngauss==1")
 
-            guess[4] = 1.0
+            guess[4] = counts
             guess[5] = T
 
             if psf is not None:
@@ -311,35 +328,79 @@ class GMixFitSim(shapesim.BaseSim):
                 guess[5] += 1*(randu()-0.5)   # T
 
         elif ngauss==3:
-                wlog("    using ngauss=3")
-            
-                if eguess is not None:
-                    guess[2],guess[3] = eguess
+            wlog("    using ngauss=3")
+        
+            if eguess is not None:
+                guess[2],guess[3] = eguess
+            else:
+                guess[2] = e1# + 0.05*(randu()-0.5)
+                guess[3] = e2# + 0.05*(randu()-0.5)
+                """
+                while abs(guess[2]) > 0.95:
+                  guess[2] = e1 + 0.05*(randu()-0.5)
+                while abs(guess[3]) > 0.95:
+                  guess[3] = e2 + 0.05*(randu()-0.5)
+                """
+
+            wlog("    starting e1,e2:",guess[2],guess[3])
+
+            if psf:
+                guess[4] = counts*0.62
+                guess[5] = counts*0.34
+                guess[6] = counts*0.04
+                if pfrac_am is not None:
+                    wlog("Using pfrac_am fit:",pfrac_am)
+                    # need to do this at higher S/N
+                    ply=poly1d([-3.20824373,  3.40727954])
+                    tratio = ply(pfrac_am)
+
+                    # this T is Tadmom
+                    Tmax = tratio*T
+
+                    guess[7] = Tmax
+                    guess[8] = Tmax*0.35
+                    guess[9] = Tmax*0.07
+
+                    # these ratios are important when there is noise
+                    guess[4] = counts*0.14
+                    guess[5] = counts*0.53
+                    guess[6] = counts*0.33
+                    #0.13999945  0.52742499  0.33407491
+
+                    if randomize:
+                        # vary uniformly within +/- 10%
+                        while True:
+                            guess[2] += 0.2*guess[2]*(randu()-0.5)
+                            guess[3] += 0.2*guess[3]*(randu()-0.5)
+                            if sqrt(guess[2]**2 + guess[3]**2) < 0.95:
+                                break
+                        while True:
+                            guess[4] += 0.2*guess[4]*(randu()-0.5)
+                            guess[5] += 0.2*guess[5]*(randu()-0.5)
+                            guess[6] += 0.2*guess[6]*(randu()-0.5)
+                            if guess[4] > 0 and guess[5] > 0 and guess[6] > 0:
+                                break
+
+                        guess[7] += 0.2*guess[7]*(randu()-0.5)
+                        guess[8] += 0.2*guess[8]*(randu()-0.5)
+                        guess[9] += 0.2*guess[9]*(randu()-0.5)
+
                 else:
-                    guess[2] = e1# + 0.05*(randu()-0.5)
-                    guess[3] = e2# + 0.05*(randu()-0.5)
-                    """
-                    while abs(guess[2]) > 0.95:
-                      guess[2] = e1 + 0.05*(randu()-0.5)
-                    while abs(guess[3]) > 0.95:
-                      guess[3] = e2 + 0.05*(randu()-0.5)
-                    """
-
-                wlog("    starting e1,e2:",guess[2],guess[3])
-                guess[4] = 0.62
-                guess[5] = 0.34
-                guess[6] = 0.04
-                guess[7] = T*2.7
-                guess[8] = T*0.62
-                guess[9] = T*0.09
-
+                    guess[7] = T*2.7
+                    guess[8] = T*0.62
+                    guess[9] = T*0.09
+            else:
+                guess[4:4+ngauss] = counts/ngauss    
+                guess[7] = T*3.0
+                guess[8] = T
+                guess[9] = T*.5
         elif ngauss==4:
                 wlog("    using ngauss=4")
 
-                guess[4] = 1./ngauss
-                guess[5] = 1./ngauss
-                guess[6] = 1./ngauss
-                guess[7] = 1./ngauss
+                guess[4] = counts/ngauss
+                guess[5] = counts/ngauss
+                guess[6] = counts/ngauss
+                guess[7] = counts/ngauss
 
                 if eguess is not None:
                     guess[2],guess[3] = eguess
@@ -351,10 +412,47 @@ class GMixFitSim(shapesim.BaseSim):
 
                 if Tfac is None and pfrac_am is not None:
                     # from gmix_fit_sim.plot_admom_max_tratio
-                    wlog("Using pfrac_am fit")
-                    #ply=numpy.poly1d([ 72.51258096,   4.14321833])
-                    ply=numpy.poly1d([-72.51258096,  76.65579929])
-                    tratio = ply(pfrac_am)
+                    wlog("Using pfrac_am fit:",pfrac_am)
+                    Tply=poly1d([-72.51258096,  76.65579929])
+
+                    """
+                    if pfrac_am > 0.8:
+                        pfrac_am_psf = 0.8
+                    else:
+                        pfrac_am_psf = pfrac_am
+                    """
+                    pfrac_am_psf = pfrac_am
+
+                    # from low ellip
+                    p0_poly = poly1d([-0.24772161,  0.22211086])
+                    p1_poly = poly1d([-0.50867256,  0.48633848])
+                    p2_poly = poly1d([-0.50787093,  0.6208675 ])
+                    p3_poly = poly1d([ 1.28199182, -0.34435804])
+
+                    
+                    # from high ellip
+                    """
+                    p0_poly = poly1d([-0.25917109,  0.23568394])
+                    p1_poly = poly1d([-0.52025075,  0.51105923])
+                    p2_poly = poly1d([-0.44028671,  0.5890214])
+                    p3_poly = poly1d([1.2392543,  -0.35254647])
+                    T0_poly = poly1d([1.1559449e-16,  1])
+                    T1_poly = poly1d([0.15519577,  0.067887437])
+                    T2_poly = poly1d([0.042111311,  0.0032187106])
+                    T3_poly = poly1d([0.00083959131,  0.0018759731])
+                    """
+
+
+                    tratio = Tply(pfrac_am)
+                    p0 = p0_poly(pfrac_am_psf)
+                    p1 = p1_poly(pfrac_am_psf)
+                    p2 = p2_poly(pfrac_am_psf)
+                    p3 = p3_poly(pfrac_am_psf)
+  
+                    #  p0 poly: [-0.24772161  0.22211086]
+                    #  p1 poly: [-0.50867256  0.48633848]
+                    #  p2 poly: [-0.50787093  0.6208675 ]
+                    #  p3 poly: [ 1.28199182 -0.34435804]
 
                     # this T is Tadmom
                     Tmax = tratio*T
@@ -364,6 +462,23 @@ class GMixFitSim(shapesim.BaseSim):
                     guess[9] = Tmax*0.18
                     guess[10] = Tmax*0.035
                     guess[11] = Tmax*0.0027
+
+                    # these ratios are important when there is noise
+                    #0.03982061  0.11440515  0.25216625  0.59183215
+                    guess[4] = counts*p0
+                    guess[5] = counts*p1
+                    guess[6] = counts*p2
+                    guess[7] = counts*p3
+
+                    # old
+                    #guess[4] = counts*0.04
+                    #guess[5] = counts*0.11
+                    #guess[6] = counts*0.25
+                    #guess[7] = counts*0.60
+
+                    if randomize:
+                        d=guess[5]-guess[4]
+                        guess[4] += 0.2*d + 0.2*d*randu()
                 else:
                     if Tfac is None:
                         Tfac=1
@@ -803,34 +918,131 @@ def plot_admom_max_tratio(run, ei=0):
     flist = glob.glob(pattern)
     nf=len(flist)
 
-    Pfrac_admoms = zeros(nf)
+
+    t=eu.io.read(flist[0])
+    ngauss = (t['pars'][0,:].size-4)/2
+
+    pfrac_admoms = zeros(nf)
     Tratios = zeros(nf)
+    TbyTmaxs = zeros((nf,ngauss))
+    Ps = zeros((nf,ngauss))
 
     for j,f in enumerate(flist):
+
         wlog(f)
         t=eu.io.read(f)
 
-        # had a typo!  Is fixed now, and saving T instead of sigma
-        Tam = 2*t['sigma0_admom']**2
-        Tam_psf = 2*t['sigma_psf_admom']**2
+        if 'sigma0_admom' in t.dtype.names:
+            # had a typo!  Is fixed now, and saving T instead of sigma
+            Tam = 2*t['sigma0_admom']**2
+            Tam_psf = 2*t['sigma_psf_admom']**2
+        else:
+            Tam = t['T_admom']
+            Tam_psf = t['T_psf_admom']
 
         Tmax = zeros(len(t))
+        TbyTmax = TbyTmax = zeros((len(t),ngauss))
+
+        Pmax = zeros(len(t))
+        P = zeros((len(t),ngauss))
         for i in xrange(len(t)):
-            Tmax[i] = t['pars'][i,8:].max()
+            Tmax[i] = t['pars'][i,4+ngauss:].max()
+            Pmax[i] = t['pars'][i,4:4+ngauss].max()
+
+            tvals = t['pars'][i,4+ngauss:]
+            s = tvals.argsort()
+            tvals=array(list(reversed(tvals[s])))
+            #wlog("T/Tmax:",)
+            print_pars(tvals/Tmax[i], front="T/Tmax: ")
+
+            TbyTmax[i,:] = tvals/Tmax[i]
+
+            pvals = t['pars'][i,4:4+ngauss]
+            pvals=array(list(reversed(pvals[s])))
+
+            P[i,:] = pvals
         
         pfrac_admoms[j] = median(Tam_psf/Tam)
         #pfrac_admoms[j] = median((Tam-Tam_psf)/Tam)
         Tratios[j] = median(Tmax/Tam)
+        for i in xrange(ngauss):
+            TbyTmaxs[j,i] = median(TbyTmax[:,i])
+            Ps[j,i] = median(P[:,i])
 
-    w,=where(Tratios > 10)
-    pfit = numpy.polyfit(pfrac_admoms[w], Tratios[w], 1)
-    p = numpy.poly1d(pfit)
-    print pfit
+        print Tratios[j]
+
+    if ngauss == 4:
+        w,=where(Tratios > 10)
+    else:
+        w,=where(Tratios > 0)
+
+    Tpfit = numpy.polyfit(pfrac_admoms[w], Tratios[w], 1)
+    Tp = numpy.poly1d(Tpfit)
 
     plt=eu.plotting.bscatter(pfrac_admoms,Tratios,show=False,
                              xlabel=r'$R_{AM}$',
                              ylabel=r'$T_{MAX}^{guess}/T_{AM}$')
-    eu.plotting.bscatter(pfrac_admoms[w],p(pfrac_admoms[w]),
+    eu.plotting.bscatter(pfrac_admoms[w],Tp(pfrac_admoms[w]),
                          type='solid',color='red',
                          plt=plt)
 
+    ppfit_list = []
+    pply_list = []
+
+    Trelfit_list = []
+    Trelply_list = []
+    colors=['magenta','blue','red','orange']
+    pplt=None
+    Trelplt=None
+    for i in xrange(ngauss):
+        pfit = numpy.polyfit(pfrac_admoms[w], Ps[w,i], 1)
+        ply = numpy.poly1d(pfit)
+
+        ppfit_list.append(pfit)
+        pply_list.append(ply)
+
+        pfit = numpy.polyfit(pfrac_admoms[w], TbyTmaxs[w,i], 1)
+        ply = numpy.poly1d(pfit)
+
+        Trelfit_list.append(pfit)
+        Trelply_list.append(ply)
+
+        pply=pply_list[i]
+        Trelply=Trelply_list[i]
+
+        pplt=eu.plotting.bscatter(pfrac_admoms,
+                                 Ps[w,i],show=False,plt=pplt,
+                                 color=colors[i],
+                                 xlabel=r'$R_{AM}$',
+                                 ylabel=r'$P_%d$' % i)
+        pplt=eu.plotting.bscatter(pfrac_admoms[w],pply(pfrac_admoms[w]),
+                                 type='solid',color=colors[i],
+                                 show=False, plt=pplt)
+
+        Trelplt=eu.plotting.bscatter(pfrac_admoms,
+                                     TbyTmaxs[w,i],show=False,plt=Trelplt,
+                                     color=colors[i],
+                                     xlabel=r'$R_{AM}$',
+                                     ylabel=r'$T_%d/T_{max}$' % i)
+        Trelplt=eu.plotting.bscatter(pfrac_admoms[w],Trelply(pfrac_admoms[w]),
+                                     type='solid',color=colors[i],
+                                     show=False, plt=Trelplt)
+
+    pplt.show()
+    Trelplt.show()
+
+   
+    wlog("P")
+    wlog(Ps[w])
+    wlog("T/Tmax")
+    wlog(TbyTmaxs[w])
+    print 'T poly:',Tpfit
+    print 'p0_poly = poly1d([%.8g,  %.8g])' % tuple(ppfit_list[0])
+    print 'p1_poly = poly1d([%.8g,  %.8g])' % tuple(ppfit_list[1])
+    print 'p2_poly = poly1d([%.8g,  %.8g])' % tuple(ppfit_list[2])
+    print 'p3_poly = poly1d([%.8g,  %.8g])' % tuple(ppfit_list[3])
+
+    print 'T0_poly = poly1d([%.8g,  %.8g])' % tuple(Trelfit_list[0])
+    print 'T1_poly = poly1d([%.8g,  %.8g])' % tuple(Trelfit_list[1])
+    print 'T2_poly = poly1d([%.8g,  %.8g])' % tuple(Trelfit_list[2])
+    print 'T3_poly = poly1d([%.8g,  %.8g])' % tuple(Trelfit_list[3])

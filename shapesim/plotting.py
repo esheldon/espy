@@ -96,6 +96,11 @@ class SimPlotter(dict):
             else:
                 raise ValueError("type should be 'diff or 'fdiff'")
 
+            fdiff_abs = numpy.abs(fdiff)
+            wf = fdiff_abs.argmax()
+            if fdiff_abs[wf] > 0.05:
+                wlog("  large fdiff %g for s2: "
+                     "%g(%d) e: %g:" % (fdiff[wf],s2,i,etrue[wf]))
             label = r'%0.3f' % s2
             cr = biggles.Curve(etrue, yplot, color=colors[i])
             cr.label = label
