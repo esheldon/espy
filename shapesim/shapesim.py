@@ -7,7 +7,7 @@ import numpy
 from numpy import ogrid, array, sqrt, where, linspace, median, zeros
 from numpy.random import standard_normal
 import fimage
-from fimage import add_noise
+from fimage import add_noise_admom, add_noise_dev, add_noise_uw
 from fimage.conversions import mom2sigma, cov2sigma
 
 import admom
@@ -53,8 +53,21 @@ class ShapeSim(dict):
         ci.image_nonoise = ci.image
         ci.psf_nonoise = ci.psf
 
-        ci.image, ci['skysig'] = add_noise(ci.image, s2n)
-        ci.psf, ci['skysig_psf'] = add_noise(ci.psf, s2n_psf)
+        """
+        if self['objmodel'] == 'dev':
+            T = (ci.objpars['cov'][0] + ci.objpars['cov'][2])
+            sigma = sqrt(T/2)
+            re = sigma/sqrt(10.83)
+            ci.image, ci['skysig'] = add_noise_dev(ci.image, 
+                                                   ci['cen'],
+                                                   re,
+                                                   s2n,fluxfrac=0.85)
+        else:
+            ci.image, ci['skysig'] = add_noise_admom(ci.image, s2n)
+        """
+        ci.image, ci['skysig'] = add_noise_uw(ci.image, s2n)
+        #ci.psf, ci['skysig_psf'] = add_noise_admom(ci.psf, s2n_psf)
+        ci.psf, ci['skysig_psf'] = add_noise_uw(ci.psf, s2n_psf)
 
         #self.show_ci(ci)
 
@@ -272,7 +285,7 @@ class BaseSim(dict):
 
                 if res['flags'] == 0:
                     st = self.copy_output(s2, ellip, s2n, ci, res)
-                    self.write_ci(ci, is2, ie, res['flags'], data=st,error=False)
+                    #self.write_ci(ci, is2, ie, res['flags'], data=st,error=False)
                     out[i] = st
                     break
                 else:
@@ -385,7 +398,7 @@ def get_wq_dir(run):
     dir=path_join(dir, 'wq')
     return dir
 
-def get_wq_url(run, is2, ie):
+def get_wq_url(run, is2n, is2, ie):
     """
 
     is2 and ie are the index in the list of s2 and ellip vals for a given run.
