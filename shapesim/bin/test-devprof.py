@@ -120,6 +120,7 @@ def test_flux_ap():
     for ir,radius in enumerate(radii):
         w=where(radm <= radius)
         if w[0].size > 0:
+            print w[0].size,w[1].size,im[w].size
             #color=colors[ir]
             cnts[ir] = im[w].sum()
 
@@ -136,6 +137,14 @@ def test_flux_ap():
                              xlog=True,ylog=True,show=False)
     #plt.add(biggles.Point(r50,0.5,color='red'))
     #plt.add(biggles.Point(r90,0.9,color='blue'))
+
+    fname='~/tmp/dev-fluxfrac.rec'
+    dt=[('r_over_re','f8'),
+        ('fluxfrac','f8')]
+    data=zeros(radii.size, dtype=dt)
+    data['r_over_re'] = radii/re
+    data['fluxfrac'] = cnts/cnts.max()
+    eu.io.write(fname,data,clobber=True,verbose=True)
     plt.show()
 
 
