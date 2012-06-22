@@ -272,7 +272,7 @@ class BaseSim(dict):
 
                 if res['flags'] == 0:
                     st = self.copy_output(s2, ellip, s2n, ci, res)
-                    #self.write_ci(ci, is2, ie, res['flags'], data=st,error=False)
+                    self.write_ci(ci, is2, ie, res['flags'], data=st,error=False)
                     out[i] = st
                     break
                 else:
