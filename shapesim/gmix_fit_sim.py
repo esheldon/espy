@@ -189,10 +189,6 @@ class GMixFitSim(shapesim.BaseSim):
                         randomize=False
 
                     if pfrac_am is not None:
-                        #T = cov[2]+cov[0]
-                        #e1g=(cov[2]-cov[0])/T
-                        #e2g=2*cov[1]/T
-                        e1g,e2g,T = mom2ellip(cov[0],cov[1],cov[2])
                         Tfac=None
                         if ntry==0:
                             eguess=None
@@ -209,7 +205,6 @@ class GMixFitSim(shapesim.BaseSim):
                                 # over-ride randomize
                                 randomize=True
                                 eguess=[0,0]
-                                #eguess=[copysign(0.4,e1g),copysign(0.4,e2g)]
                     guess = self.get_guess_coellip_e1e2(counts, 
                                                         ngauss, cen, cov, 
                                                         randomize=randomize,
@@ -231,12 +226,12 @@ class GMixFitSim(shapesim.BaseSim):
 
             print_pars(gm.popt,front="pars:  ")
             if skysig is not None:
-                chi2arr[ntry] = gm.chi2(gm.popt)
-                chi2perarr[ntry] = gm.chi2per(gm.popt,skysig)
-                guess_chi2perarr[ntry] = gm.chi2per(guess,skysig)
+                chi2arr[ntry] = gm.get_chi2(gm.popt)
+                chi2perarr[ntry] = gm.get_chi2per(gm.popt,skysig)
+                guess_chi2perarr[ntry] = gm.get_chi2per(guess,skysig)
                 wlog("chi2/pdeg:",chi2perarr[ntry])
             else:
-                chi2arr[ntry] = gm.chi2(gm.popt)
+                chi2arr[ntry] = gm.get_chi2(gm.popt)
                 wlog("chi2:",chi2arr[ntry])
             gmlist.append(gm)
 
@@ -255,8 +250,11 @@ class GMixFitSim(shapesim.BaseSim):
             #wlog('chi2arr/perdeg:',chi2perarr)
             print_pars(chi2perarr,front='chi2/deg: ')
             print_pars(guess_chi2perarr,front='guess chi2/deg: ')
+            s2n = gm.get_s2n(gm.popt, skysig)
         else:
             print_pars(chi2arr,front='chi2: ')
+            s2n = -9999
+        wlog("s2n:",s2n)
         wlog("numiter gmix:",gm.numiter)
         wlog("poptT/Tguess:",gm.popt[ngauss+4:]/guess[ngauss+4:])
 
@@ -268,6 +266,7 @@ class GMixFitSim(shapesim.BaseSim):
              'ier':     gm.ier,
              'numiter': gm.numiter,
              'coellip': coellip,
+             's2n': s2n,
              'chi2per': chi2perarr[w]}
         return out
 
@@ -766,14 +765,14 @@ class GMixFitSim(shapesim.BaseSim):
             st['gamma1_meas'],st['gamma2_meas'] = \
                     e1e2_to_g1g2(st['e1_meas'],st['e2_meas'])
 
+            st['s2n_meas'] = res['res']['s2n']
             st['flags'] = res['res']['flags']
             st['numiter'] = res['res']['numiter']
 
-            mcov = res['res']['pcov'][2:2+3,2:2+3]
+            """
             st['e1_chol_err'] = numpy.inf
             st['e2_chol_err'] = numpy.inf
             st['e_chol_err'] = numpy.inf
-            """
             try:
                 e1, e1_err, e2, e2_err, e, e_err = \
                     get_ellip_cholesky(res['res']['pars'][2:2+3], 
@@ -797,8 +796,6 @@ class GMixFitSim(shapesim.BaseSim):
 
 
 
-        # figure out how to measure this
-        st['s2n_meas'] = st['s2n']
 
 
         return st
@@ -859,12 +856,12 @@ class GMixFitSim(shapesim.BaseSim):
             ('e1_meas','f8'),
             ('e2_meas','f8'),
 
-            ('e_chol','f8'),
-            ('e_chol_err','f8'),
-            ('e1_chol','f8'),
-            ('e1_chol_err','f8'),
-            ('e2_chol','f8'),
-            ('e2_chol_err','f8'),
+            #('e_chol','f8'),
+            #('e_chol_err','f8'),
+            #('e1_chol','f8'),
+            #('e1_chol_err','f8'),
+            #('e2_chol','f8'),
+            #('e2_chol_err','f8'),
 
             ('gamma_meas','f8'),
             ('gamma1_meas','f8'),
