@@ -45,6 +45,10 @@ class ShapeSim(dict):
         ci_full = self.new_convolved_image(s2, ellip, theta)
         ci = fimage.convolved.TrimmedConvolvedImage(ci_full)
 
+        #plot_signal_vs_rad(ci_full.image, ci_full['cen'])
+        #plot_signal_vs_rad(ci.image, ci['cen'])
+        #stop
+
         if False:
             self.show_ci(ci)
 
@@ -448,7 +452,7 @@ def plot_signal_vs_rad(im, cen):
                              xlog=xlog,ylog=ylog,
                              show=False)
 
-    w,=where(cnts > 0.99)
+    w,=where(cnts > 0.999937)
     if w.size > 0:
         plt.add(biggles.Point(radii[w[0]], cnts[w[0]], 
                               type='filled circle', color='red'))

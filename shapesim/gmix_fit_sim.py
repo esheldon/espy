@@ -157,8 +157,9 @@ class GMixFitSim(shapesim.BaseSim):
             verbose=False
             maxtry=self.get('maxtry',1)
         else:
+            maxtry=self.get('maxtry_psf',1)
+            # this is a psf
             verbose=False
-            maxtry=1
         ntry=0
         chi2arr=zeros(maxtry) + 1.e9
         chi2perarr=zeros(maxtry) + 1.e9
@@ -183,7 +184,7 @@ class GMixFitSim(shapesim.BaseSim):
                     Tfac=None
                     eguess=None
 
-                    if ngauss==1:
+                    if ngauss==1 or psf is None:
                         randomize=True
                     else:
                         randomize=False
@@ -205,6 +206,10 @@ class GMixFitSim(shapesim.BaseSim):
                                 # over-ride randomize
                                 randomize=True
                                 eguess=[0,0]
+                    else:
+                        if ngauss==3 and psf is None:
+                            eguess=[0,0]
+
                     guess = self.get_guess_coellip_e1e2(counts, 
                                                         ngauss, cen, cov, 
                                                         randomize=randomize,
@@ -225,6 +230,7 @@ class GMixFitSim(shapesim.BaseSim):
                                            verbose=verbose)
 
             print_pars(gm.popt,front="pars:  ")
+            print_pars(gm.perr,front="perr:  ")
             if skysig is not None:
                 chi2arr[ntry] = gm.get_chi2(gm.popt)
                 chi2perarr[ntry] = gm.get_chi2per(gm.popt,skysig)
@@ -256,7 +262,7 @@ class GMixFitSim(shapesim.BaseSim):
             s2n = -9999
         wlog("s2n:",s2n)
         wlog("numiter gmix:",gm.numiter)
-        wlog("poptT/Tguess:",gm.popt[ngauss+4:]/guess[ngauss+4:])
+        wlog("Topt/Tguess:",gm.popt[ngauss+4:]/guess[ngauss+4:])
 
         out={'gmix':    gm.gmix,
              'pars':    gm.popt,
@@ -326,8 +332,52 @@ class GMixFitSim(shapesim.BaseSim):
                 guess[4] += 0.1*(randu()-0.5)  # p
                 guess[5] += 1*(randu()-0.5)   # T
 
-        elif ngauss==3:
+        elif ngauss==3 and psf is None:
+            # these are for turbulent
             wlog("    using ngauss=3")
+
+            if eguess is not None:
+                guess[2],guess[3] = eguess
+            else:
+                guess[2] = e1# + 0.05*(randu()-0.5)
+                guess[3] = e2# + 0.05*(randu()-0.5)
+
+            guess[4] = counts*0.08
+            guess[5] = counts*0.38
+            guess[6] = counts*0.53
+            guess[7] = T*8.3
+            guess[8] = T*1.7
+            guess[9] = T*0.8
+            if randomize:
+                wlog("    randomizing")
+                e1start=guess[2]
+                e2start=guess[3]
+                if e1start == 0:
+                    doabs=True
+                else:
+                    doabs=False
+                while True:
+                    if not doabs:
+                        guess[2] += 0.2*e1start*(randu()-0.5)
+                        guess[3] += 0.2*e2start*(randu()-0.5)
+                    else:
+                        guess[2] = 0.05*(randu()-0.5)
+                        guess[3] = 0.05*(randu()-0.5)
+                    if sqrt(guess[2]**2 + guess[3]**2) < 0.95:
+                        break
+                while True:
+                    guess[4] += 0.2*guess[4]*(randu()-0.5)
+                    guess[5] += 0.2*guess[5]*(randu()-0.5)
+                    guess[6] += 0.2*guess[6]*(randu()-0.5)
+                    if guess[4] > 0 and guess[5] > 0 and guess[6] > 0:
+                        break
+
+                guess[7] += 0.2*guess[7]*(randu()-0.5)
+                guess[8] += 0.2*guess[8]*(randu()-0.5)
+                guess[9] += 0.2*guess[9]*(randu()-0.5)
+
+        elif ngauss==3 and psf:
+            wlog("    using psf ngauss=3")
         
             if eguess is not None:
                 guess[2],guess[3] = eguess
@@ -367,10 +417,19 @@ class GMixFitSim(shapesim.BaseSim):
                     #0.13999945  0.52742499  0.33407491
 
                     if randomize:
-                        # vary uniformly within +/- 10%
+                        e1start=guess[2]
+                        e2start=guess[3]
+                        if e1start == 0:
+                            doabs=True
+                        else:
+                            doabs=False
                         while True:
-                            guess[2] += 0.2*guess[2]*(randu()-0.5)
-                            guess[3] += 0.2*guess[3]*(randu()-0.5)
+                            if not doabs:
+                                guess[2] += 0.2*e1start*(randu()-0.5)
+                                guess[3] += 0.2*e2start*(randu()-0.5)
+                            else:
+                                guess[2] = 0.05*(randu()-0.5)
+                                guess[3] = 0.05*(randu()-0.5)
                             if sqrt(guess[2]**2 + guess[3]**2) < 0.95:
                                 break
                         while True:
