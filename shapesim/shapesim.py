@@ -42,7 +42,8 @@ class ShapeSim(dict):
 
         """
         theta = 180.0*numpy.random.random()
-        ci = self.new_convolved_image(s2, ellip, theta)
+        ci_full = self.new_convolved_image(s2, ellip, theta)
+        ci = fimage.convolved.TrimmedConvolvedImage(ci_full)
 
         if False:
             self.show_ci(ci)
@@ -53,18 +54,6 @@ class ShapeSim(dict):
         ci.image_nonoise = ci.image
         ci.psf_nonoise = ci.psf
 
-        """
-        if self['objmodel'] == 'dev':
-            T = (ci.objpars['cov'][0] + ci.objpars['cov'][2])
-            sigma = sqrt(T/2)
-            re = sigma/sqrt(10.83)
-            ci.image, ci['skysig'] = add_noise_dev(ci.image, 
-                                                   ci['cen'],
-                                                   re,
-                                                   s2n,fluxfrac=0.85)
-        else:
-            ci.image, ci['skysig'] = add_noise_admom(ci.image, s2n)
-        """
         ci.image, ci['skysig'] = add_noise_uw(ci.image, s2n)
         #ci.psf, ci['skysig_psf'] = add_noise_admom(ci.psf, s2n_psf)
         ci.psf, ci['skysig_psf'] = add_noise_uw(ci.psf, s2n_psf)
@@ -140,77 +129,6 @@ class ShapeSim(dict):
 
         return psfpars, psf_sigma_tot
 
-    def add_noise(self, ci, s2n):
-        """
-        Add noise to a convolved image based on requested S/N.  We only add
-        background noise so the S/N is
-
-              sum(pix)
-        -------------------   = S/N
-        sqrt(npix*skysig**2)
-
-        thus
-            
-            sum(pix)
-        ----------------   = skysig
-        sqrt(npix)*(S/N)
-
-        
-        We use an aperture of 3sigma but if no pixels
-        are returned we increase the aperture until some
-        are returned.
-
-        Side effects:
-            ci.image is set to the noisy image
-            ci['skysig'] is set to the noise level
-        """
-
-        cen = ci['cen_uw']
-        T = ci['cov_uw'][0] + ci['cov_uw'][2]
-        sigma = mom2sigma(T)
-        imagenn = ci.image_nonoise
-        shape = imagenn.shape
-
-        row,col=ogrid[0:shape[0], 0:shape[1]]
-        rm = array(row - cen[0], dtype='f8')
-        cm = array(col - cen[1], dtype='f8')
-
-        radpix = sqrt(rm**2 + cm**2)
-        # sigfac is 4 in admom
-        sigfac = 4.0
-        step=0.1
-        w = where(radpix <= sigfac*sigma)
-        npix = w[0].size + w[1].size
-        while npix == 0:
-            sigfac += step
-            w = where(radpix <= sigfac*sigma)
-            npix = w[0].size + w[1].size
-
-        pix = imagenn[w]
-        wt = sqrt(pix)
-        wsignal = (wt*pix).sum()
-        wsum = wt.sum()
-
-        skysig = wsignal/sqrt(wsum)/s2n
-
-        noise_image = \
-            skysig*standard_normal(imagenn.size).reshape(shape)
-        ci.image = imagenn + noise_image
-
-        out = admom.admom(ci.image, cen[0], cen[1], guess=T/2., sigsky=skysig)
-
-        # fix up skysig based on measurement
-        skysig = out['s2n']/s2n*skysig
-        noise_image = \
-            skysig*standard_normal(imagenn.size).reshape(shape)
-        ci.image = imagenn + noise_image
-        ci['skysig'] = skysig
-
-
-        if False:
-            out = admom.admom(ci.image, cen[0], cen[1], guess=T/2., sigsky=skysig)
-            wlog("    target S/N:            ",s2n)
-            wlog("    meas S/N after noise:  ",out['s2n'])
 
 
 class BaseSim(dict):
@@ -279,6 +197,7 @@ class BaseSim(dict):
             iter=0
             while iter < self['itmax']:
                 ci=ss.get_trial(s2,ellip,s2n,s2n_psf)
+
                 if iter == 0: stderr.write("%s " % str(ci.psf.shape))
                 #stderr.write('.')
                 res = self.run(ci)
@@ -398,7 +317,7 @@ def get_wq_dir(run):
     dir=path_join(dir, 'wq')
     return dir
 
-def get_wq_url(run, is2n, is2, ie):
+def get_wq_url(run, is2, ie):
     """
 
     is2 and ie are the index in the list of s2 and ellip vals for a given run.
@@ -506,3 +425,32 @@ def average_outputs(data):
     return out
 
 
+def plot_signal_vs_rad(im, cen):
+    import biggles
+    row,col=ogrid[0:im.shape[0], 0:im.shape[1]]
+    rm = array(row - cen[0], dtype='f8')
+    cm = array(col - cen[1], dtype='f8')
+    radm = sqrt(rm**2 + cm**2)
+
+    radii = numpy.arange(0,im.shape[0]/2)
+    cnts=numpy.zeros(radii.size)
+    for ir,r in enumerate(radii):
+        w=where(radm <= r)
+        if w[0].size > 0:
+            cnts[ir] = im[w].sum()
+
+    xlog=True
+    ylog=True
+    cnts /= cnts.max()
+    plt=eu.plotting.bscatter(radii, cnts,
+                             xlabel=r'$r [pix]$',
+                             ylabel='counts/max',
+                             xlog=xlog,ylog=ylog,
+                             show=False)
+
+    w,=where(cnts > 0.99)
+    if w.size > 0:
+        plt.add(biggles.Point(radii[w[0]], cnts[w[0]], 
+                              type='filled circle', color='red'))
+
+    plt.show()
