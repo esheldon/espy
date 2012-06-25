@@ -45,9 +45,10 @@ class ShapeSim(dict):
         ci_full = self.new_convolved_image(s2, ellip, theta)
         ci = fimage.convolved.TrimmedConvolvedImage(ci_full)
 
-        #plot_signal_vs_rad(ci_full.image, ci_full['cen'])
-        #plot_signal_vs_rad(ci.image, ci['cen'])
-        #stop
+        if False:
+            plot_signal_vs_rad(ci_full.image, ci_full['cen'])
+            plot_signal_vs_rad(ci.image, ci['cen'])
+            stop
 
         if False:
             self.show_ci(ci)
@@ -59,10 +60,7 @@ class ShapeSim(dict):
         ci.psf_nonoise = ci.psf
 
         ci.image, ci['skysig'] = add_noise_uw(ci.image, s2n)
-        #ci.psf, ci['skysig_psf'] = add_noise_admom(ci.psf, s2n_psf)
         ci.psf, ci['skysig_psf'] = add_noise_uw(ci.psf, s2n_psf)
-
-        #self.show_ci(ci)
 
         return ci
 
@@ -92,6 +90,9 @@ class ShapeSim(dict):
             raise ValueError("unknown psf model: '%s'" % psfmodel)
 
         sigma = psf_sigma_tot/sqrt(s2)
+        if psfmodel == 'turb' and objmodel == 'dev':
+            sigma *= 1.75
+
         cov=fimage.ellip2mom(2*sigma**2,e=obj_ellip,theta=obj_theta)
         objpars = {'model':objmodel, 'cov':cov}
 
