@@ -305,7 +305,7 @@ class GMixFitSim(shapesim.BaseSim):
              'ier':     gm.ier,
              'numiter': gm.numiter,
              'coellip': coellip,
-             's2n': s2n,
+             's2n':     s2n,
              'chi2per': chi2perarr[w]}
         return out
 
@@ -414,13 +414,16 @@ class GMixFitSim(shapesim.BaseSim):
             prior[11] = p3
 
             if len(psf)==3:
-                width[4] = 5                # informative
                 if tight_priors:
                     width[4] = .01                # informative
+                    #width[4] = 1.e-5                # informative
+                else:
+                    width[4] = 5                # informative
             else:
                 width[4] = 100              # uninformative
             if tight_priors:
-                wfac=0.01
+                wfac=.01
+                #wfac=1.e-5
             else:
                 wfac=0.2
             width[5] = prior[5]*wfac
@@ -1274,6 +1277,10 @@ def plot_admom_max_tratio(run, ei=0, only_good=False, tfrac=False):
     import glob
     import biggles
 
+    title='ei: %d' % ei
+    if tfrac:
+        title += ' Tfrac'
+
     d=shapesim.get_output_dir(run)
     pattern='%s-*-%03i.rec' % (run,ei)
     pattern=os.path.join(d,pattern)
@@ -1469,6 +1476,9 @@ def plot_admom_max_tratio(run, ei=0, only_good=False, tfrac=False):
     print Tfmt % ( (2,) + tuple(Trelfit_list[2]) )
     print Tfmt % ( (3,) + tuple(Trelfit_list[3]) )
 
+    plt.title=title
+    pplt.title=title
+    tab.title=title
     plt.show()
     pplt.show()
     tab.show()

@@ -41,9 +41,14 @@ class ShapeSim(dict):
             - if s2n is > 0 in the config, appropriate noise is also added.
 
         """
+        dotrim=self.get('dotrim',True)
+
         theta = 180.0*numpy.random.random()
         ci_full = self.new_convolved_image(s2, ellip, theta)
-        ci = fimage.convolved.TrimmedConvolvedImage(ci_full)
+        if dotrim:
+            ci = fimage.convolved.TrimmedConvolvedImage(ci_full)
+        else:
+            ci=ci_full
 
         if False:
             plot_signal_vs_rad(ci_full.image, ci_full['cen'])

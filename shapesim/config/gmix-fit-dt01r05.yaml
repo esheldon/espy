@@ -1,6 +1,6 @@
-# same as dt01r01 but turned off trimming
-# it didn't help
-run: gmix-fit-dt01r04
+# weak priors and no trimming
+# need to try with trimming as well
+run: gmix-fit-dt01r05
 sim: sim-dt01
 
 # type of parametrization
@@ -14,7 +14,7 @@ s2n: 1.0e+6
 s2n_psf: 1.0e+6
 
 # high S/N needs tight priors for 4 gaussians
-tight_priors: true
+tight_priors: false
 
 # we should try with higher values to see what happens
 ngauss_psf: 3
