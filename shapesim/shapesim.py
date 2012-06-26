@@ -96,7 +96,8 @@ class ShapeSim(dict):
 
         sigma = psf_sigma_tot/sqrt(s2)
         if psfmodel == 'turb' and objmodel == 'dev':
-            sigma *= 1.75
+            pass
+            #sigma *= 1.75
             # might want to try this, but really seems we need something 
             # size dependent.  Why?
             #sigma *= 1.5

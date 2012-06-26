@@ -54,10 +54,16 @@ nume:  20
 
 seed: 9432
 
-simpars:
+#simpars:
     # looks like it might be expand_fac/image_nsub after all!
     # learn this lesson, always use a large expansion factor
-    expand_fac_min: 16
+    # looks like we can actually do with expand fac 24 and
+    # not sigma *= 1.75, but we can surely use an expand fac
+    # that is s2 dependent.  The minres we are employing works
+    # for exp but not for dev apparently.
+    #expand_fac_min: 16
+
+    #expand_fac_min: 24
+    #expand_fac_min: 32
     #dotrim: false
-    #expand_fac_min: 11
     #image_nsub: 4

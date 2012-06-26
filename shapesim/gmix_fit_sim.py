@@ -125,14 +125,16 @@ class GMixFitSim(shapesim.BaseSim):
                 self.show_residual(ci, out['psf_res']['gmix'],dostop=dostop)
 
             if out['flags'] == 0:
-                mess=("e1true: %.6g e1: %.6g +/- %.6g\n"
-                      "e2true: %.6g e2: %.6g +/- %.6g")
+                mess=("e1true: %.6g e1: %.6g +/- %.6g diff: %.6g\n"
+                      "e2true: %.6g e2: %.6g +/- %.6g diff: %.6g")
                 mess = mess % (ci['e1true'], 
                                out['res']['pars'][2],
                                out['res']['perr'][2],
+                               out['res']['pars'][2]-ci['e1true'],
                                ci['e2true'], 
                                out['res']['pars'][3],
-                               out['res']['perr'][3])
+                               out['res']['perr'][3],
+                               out['res']['pars'][3]-ci['e2true'])
                 wlog(mess)
         else:
             if self['verbose']:
@@ -1062,6 +1064,7 @@ class GMixFitSim(shapesim.BaseSim):
         st['irc_uw'] = ci['cov_uw'][1]
         st['icc_uw'] = ci['cov_uw'][2]
 
+
         st['irr_psf_uw'] = ci['cov_psf_uw'][0]
         st['irc_psf_uw'] = ci['cov_psf_uw'][1]
         st['icc_psf_uw'] = ci['cov_psf_uw'][2]
@@ -1073,6 +1076,7 @@ class GMixFitSim(shapesim.BaseSim):
         size2psf = ci['cov_psf_uw'][0]+ci['cov_psf_uw'][2]
         size2obj = ci['cov_image0_uw'][0]+ci['cov_image0_uw'][2]
         st['s2_uw'] = size2psf/size2obj
+        #wlog(" -- s2_uw:",st['s2_uw'],"goal:",st['s2'])
 
         s2psf_am = ci['cov_psf_admom'][0]+ci['cov_psf_admom'][2]
         s2obj_am = ci['cov_image0_admom'][0]+ci['cov_image0_admom'][2]
@@ -1098,7 +1102,7 @@ class GMixFitSim(shapesim.BaseSim):
             st['irr_psf_meas'] = psf_moms['irr']
             st['irc_psf_meas'] = psf_moms['irc']
             st['icc_psf_meas'] = psf_moms['icc']
-            st['sigma_psf_meas'] = 0.5*(psf_moms['irr']+psf_moms['icc'])
+            st['sigma_psf_meas'] = sqrt(0.5*(psf_moms['irr']+psf_moms['icc']))
 
             st['numiter_psf'] = res['psf_res']['numiter']
 
@@ -1122,8 +1126,12 @@ class GMixFitSim(shapesim.BaseSim):
             st['icc_meas'] = moms['icc']
             st['s2_meas'] = \
                 (psf_moms['irr']+psf_moms['icc'])/(moms['irr']+moms['icc'])
+
             wlog(" -- s2_meas:",st['s2_meas'],"goal:",st['s2'])
-            st['sigma_meas'] = 0.5*(moms['irr']+moms['icc'])
+            wlog(" -- psf sigma:",sqrt((psf_moms['irr']+psf_moms['icc'])/2))
+            wlog(" -- obj sigma:",sqrt((moms['irr']+moms['icc'])/2))
+
+            st['sigma_meas'] = sqrt(0.5*(moms['irr']+moms['icc']))
 
             st['e1_meas'] = (moms['icc']-moms['irr'])/(moms['icc']+moms['irr']) 
             st['e2_meas'] = 2*moms['irc']/(moms['icc']+moms['irr']) 
