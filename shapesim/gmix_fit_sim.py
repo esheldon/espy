@@ -182,8 +182,10 @@ class GMixFitSim(shapesim.BaseSim):
                 guess = self.get_guess_dev(counts, cen, cov, pfrac_am,
                                            randomize=randomize)
             if psf and ptype=='Tfrac':
-                eguess=None
+                #eguess=None
                 eguess=[0,0]
+                if ntry > 0:
+                    randomize=True
                 guess,width = self.get_prior_Tfrac(ngauss,
                                                    counts, cen, cov, pfrac_am,
                                                    eguess=eguess,
@@ -379,10 +381,25 @@ class GMixFitSim(shapesim.BaseSim):
 
                     # test forcing it
                     force=55
-                    wlog("forcing",force)
-                    Tmax = T*force
+                    if False:
+                        # try the single gauss psf case
+                        #Tply=poly1d([-72.51258096,  76.65579929])
+                        #tratio = Tply(pfrac_am)
+                        #p0_poly = poly1d([-0.24772161,  0.22211086])
+                        #p1_poly = poly1d([-0.50867256,  0.48633848])
+                        #p2_poly = poly1d([-0.50787093,  0.6208675 ])
+                        #p3_poly = poly1d([ 1.28199182, -0.34435804])
+                        tratio=55
+                        p0,p1,p2,p3=0.0838067,0.146986,0.201162,0.558154
+                        Tmax = tratio*T
+                        Tfrac1 = .18
+                        Tfrac2 = .035
+                        Tfrac3 = .0027
+                    else:
+                        wlog("forcing",force)
+                        Tmax = T*force
                 elif len(psf) == 1:
-                    # this works quite well for a single gaussian
+                    # this works quite well for a single gaussian psf
                     Tply=poly1d([-72.51258096,  76.65579929])
                     # from low ellip
                     p0_poly = poly1d([-0.24772161,  0.22211086])
@@ -435,18 +452,28 @@ class GMixFitSim(shapesim.BaseSim):
             width[10] = prior[10]*wfac
             width[11] = prior[11]*wfac
 
-            """
-            prior[2] += 0.05*(randu()-0.5)
-            prior[3] += 0.05*(randu()-0.5)
-            prior[4] += prior[4]*0.05*(randu()-0.5)
-            prior[5] += prior[5]*0.05*(randu()-0.5)
-            prior[6] += prior[6]*0.05*(randu()-0.5)
-            prior[7] += prior[7]*0.05*(randu()-0.5)
-            prior[8] += prior[8]*0.05*(randu()-0.5)
-            prior[9] += prior[9]*0.05*(randu()-0.5)
-            prior[10] += prior[10]*0.05*(randu()-0.5)
-            prior[11] += prior[11]*0.05*(randu()-0.5)
-            """
+            if randomize:
+                e1start=prior[2]
+                e2start=prior[3]
+                if e1start == 0 and e2start==0:
+                    prior[2] = 0.05*(randu()-0.5)
+                    prior[3] = 0.05*(randu()-0.5)
+                else:
+                    while True:
+                        prior[2] += 0.2*e1start*(randu()-0.5)
+                        prior[3] += 0.2*e2start*(randu()-0.5)
+                        etot = sqrt(prior[2]**2 + prior[3]**2)
+                        if etot < 0.95:
+                            break
+
+                prior[4] += prior[4]*0.05*(randu()-0.5)
+                prior[5] += prior[5]*0.05*(randu()-0.5)
+                prior[6] += prior[6]*0.05*(randu()-0.5)
+                prior[7] += prior[7]*0.05*(randu()-0.5)
+                prior[8] += prior[8]*0.05*(randu()-0.5)
+                prior[9] += prior[9]*0.05*(randu()-0.5)
+                prior[10] += prior[10]*0.05*(randu()-0.5)
+                prior[11] += prior[11]*0.05*(randu()-0.5)
         else:
             raise ValueError("implement other guesses")
 

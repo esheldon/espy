@@ -13,6 +13,8 @@ parser.add_option('-g','--groups',default=None,
                   help='groups for wq, csv. Default is unconstrained')
 parser.add_option('-p','--priority',default='med',
                   help='priority for queue')
+parser.add_option('--bynode',action='store_true',
+                  help='select full nodes')
 
 _wqtemplate="""
 command: |
@@ -23,6 +25,7 @@ command: |
     module unload gmix_image && module load gmix_image/work
     python $ESPY_DIR/shapesim/bin/run-shapesim.py %(run)s %(is2)d %(ie)d
 
+%(extra)s
 %(groups)s
 job_name: %(job_name)s
 priority: %(pri)s\n"""
@@ -51,6 +54,10 @@ def main():
     if not os.path.exists(od):
         os.makedirs(od)
 
+    extra=''
+    if options.bynode:
+        extra='mode: bynode\nN: 1'
+
     for is2 in xrange(c['nums2']):
         for ie in xrange(c['nume']):
             job_name='%s-%i-%i' % (run,is2,ie)
@@ -64,6 +71,7 @@ def main():
                                         'is2':is2,
                                         'ie':ie,
                                         'groups':groups,
+                                        'extra':extra,
                                         'pri':options.priority}
                 fobj.write(wqscript)
 

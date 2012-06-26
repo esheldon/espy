@@ -97,6 +97,9 @@ class ShapeSim(dict):
         sigma = psf_sigma_tot/sqrt(s2)
         if psfmodel == 'turb' and objmodel == 'dev':
             sigma *= 1.75
+            # might want to try this, but really seems we need something 
+            # size dependent.  Why?
+            #sigma *= 1.5
 
         cov=fimage.ellip2mom(2*sigma**2,e=obj_ellip,theta=obj_theta)
         objpars = {'model':objmodel, 'cov':cov}

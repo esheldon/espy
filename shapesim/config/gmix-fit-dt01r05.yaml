@@ -1,5 +1,6 @@
 # weak priors and no trimming
 # need to try with trimming as well
+# maybe try sigma *=1.5 or something to fix sizes?  Or are sized right?
 run: gmix-fit-dt01r05
 sim: sim-dt01
 
@@ -54,4 +55,9 @@ nume:  20
 seed: 9432
 
 simpars:
-    dotrim: false
+    # looks like it might be expand_fac/image_nsub after all!
+    # learn this lesson, always use a large expansion factor
+    expand_fac_min: 16
+    #dotrim: false
+    #expand_fac_min: 11
+    #image_nsub: 4
