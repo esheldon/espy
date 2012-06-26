@@ -9,6 +9,7 @@ from numpy.random import standard_normal
 import fimage
 from fimage import add_noise_admom, add_noise_dev, add_noise_uw
 from fimage.conversions import mom2sigma, cov2sigma
+from fimage.convolved import NoisyConvolvedImage
 
 import admom
 import fitsio
@@ -20,8 +21,6 @@ class ShapeSim(dict):
     galaxy model but not it's size or ellipticity or noise
     properties.
     
-    Then use the get_trial(s2, ellip, s2n) method to generate a single
-    realization.
     """
     def __init__(self, run, **keys):
         conf=read_config(run)
@@ -32,15 +31,61 @@ class ShapeSim(dict):
         for k,v in keys.iteritems():
             self[k] = v
 
-    def get_trial(self, s2, ellip, s2n, s2n_psf):
+        self.cache_list={}
+
+    def write_trial(self, is2, ie):
+        """
+        Write simulate image/psf to the cache, to be used later.
+
+        A random orientation is chosen.  A pickle of the entire
+        convolved image object is written as well as a fits
+        file with the images.
+
+        parameters
+        ----------
+        is2: integer
+            A number between 0 and self['nums2']-1
+        ie: integer
+            A number is a number between 0 and self['nume']-1
+
+        All keys are written
+        """
+
+        d=get_cache_output_dir(self['name'])
+        if not os.path.exists(d):
+            wlog(d)
+            raise ValueError("make directory in wq script maker")
+
+        s2,ellip = self.get_s2_e(is2, ie)
+        ci=self.get_trial(s2,ellip)
+
+        wlog("dims: [%s,%s]" % ci.image.shape)
+
+        fits_file = get_random_cache_url(self['name'], is2, ie)
+        wlog("writing cache file:",fits_file)
+        ci.write_fits(fits_file)
+        return fits_file
+
+
+    def get_trial(self, s2, ellip):
         """
         Genereate a realization of the input size ratio squared and total
         ellipticity.
 
             - a random orientation is chosen
-            - if s2n is > 0 in the config, appropriate noise is also added.
 
+            - Unless dotrim is false, The image is trimmed to where 0.999937 is
+            contained that is 4-sigma for a gaussian, but will have a different
+            meaning for other profiles.
+
+        parameters
+        ----------
+        s2: s2 value
+        ellip: ellipticity value
+        s2n: S/N ratio for object after convolution
+        s2n_psf: S/N ratio for psf
         """
+
         dotrim=self.get('dotrim',True)
 
         theta = 180.0*numpy.random.random()
@@ -50,24 +95,33 @@ class ShapeSim(dict):
         else:
             ci=ci_full
 
-        if False:
-            plot_signal_vs_rad(ci_full.image, ci_full['cen'])
-            plot_signal_vs_rad(ci.image, ci['cen'])
-            stop
-
-        if False:
-            self.show_ci(ci)
-
-        if s2n < 0 or s2n_psf < 0:
-            raise ValueError("You must send s2n > 0")
-
-        ci.image_nonoise = ci.image
-        ci.psf_nonoise = ci.psf
-
-        ci.image, ci['skysig'] = add_noise_uw(ci.image, s2n)
-        ci.psf, ci['skysig_psf'] = add_noise_uw(ci.psf, s2n_psf)
-
         return ci
+
+    def read_random_cache(self, is2, ie):
+        """
+        Read data from a random cache file
+        """
+        f=self.get_random_cache_file(is2,ie)
+        wlog("reading from cache:",f)
+        return fimage.convolved.ConvolvedImageFromFits(f)
+
+    def get_random_cache_file(self, is2, ie):
+        """
+        Get random file from cache, with replacement.
+        """
+        import glob
+        key = '%s-%03i-%03i' % (self['name'],is2,ie)
+        flist = self.cache_list.get(key,None)
+        if flist is None:
+            pattern=get_cache_pattern(self['name'],is2,ie)
+            flist=glob.glob(pattern)
+            self.cache_list[key] = flist
+
+        if len(flist) < 100:
+            raise ValueError("less than 100 files in cache for "
+                             "%s %s %s" % (self['name'],is2,ie))
+        i=eu.numpy_util.randind(len(flist),1)
+        return flist[i]
 
     def show_ci(self, ci):
         import images
@@ -113,7 +167,7 @@ class ShapeSim(dict):
         else:
             ci = fimage.convolved.ConvolverTurbulence(objpars,psfpars, **self)
 
-        ci['_obj_theta'] = obj_theta
+        ci['obj_theta'] = obj_theta
         return ci
 
     def _get_gauss_psf_pars(self):
@@ -142,6 +196,29 @@ class ShapeSim(dict):
             psf_sigma_tot = self['psf_sigma']
 
         return psfpars, psf_sigma_tot
+
+    def get_s2_e(self, is2, ie):
+        """
+        Extract the s2 and e corresponding to the input indices
+        """
+        self.check_is2_ie(is2, ie)
+        s2 = linspace(self['mins2'],self['maxs2'], self['nums2'])[is2]
+        ellip = linspace(self['mine'],self['maxe'], self['nume'])[ie]
+
+        return s2, ellip
+
+    def check_is2_ie(self, is2, ie):
+        """
+        Verify the is2 and ie are within range
+        """
+        max_is2 = self['nums2']-1
+        max_ie  = self['nume']-1
+        if (is2 < 0) or (is2 > max_is2):
+            raise ValueError("is2 must be within [0,%d], "
+                             "got %d" % (max_is2,is2))
+        if (ie < 0) or (ie > max_ie):
+            raise ValueError("ie must be within [0,%d], "
+                             "got %d" % (max_ie,ie))
 
 
 
@@ -177,6 +254,9 @@ class BaseSim(dict):
         """
         raise RuntimeError("Override the .out_dtype() method")
 
+
+
+
     def process_trials(self, is2, ie, max_write_ci=1):
         """
         Generate random realizations of a particular element in the s2 and
@@ -184,7 +264,6 @@ class BaseSim(dict):
 
         parameters
         ----------
-
         is2: integer
             A number between 0 and self['nums2']-1
         ie: integer
@@ -205,15 +284,17 @@ class BaseSim(dict):
 
         s2,ellip = self.get_s2_e(is2, ie)
         print 'ellip:',ellip
+
         for i in xrange(self['ntrial']):
             stderr.write('-'*70)
             stderr.write("\n%d/%d " % (i+1,self['ntrial']))
             iter=0
             while iter < self['itmax']:
-                ci=ss.get_trial(s2,ellip,s2n,s2n_psf)
+                ci = self.get_a_trial(ss, is2, ie)
+                if s2n > 0 or s2n_psf > 0:
+                    ci = NoisyConvolvedImage(ci, s2n, s2n_psf)
 
                 if iter == 0: stderr.write("%s " % str(ci.psf.shape))
-                #stderr.write('.')
                 res = self.run(ci)
 
                 if res['flags'] == 0:
@@ -236,6 +317,24 @@ class BaseSim(dict):
         #stop
         write_output(self['run'], is2, ie, out)
         return out
+
+    def get_a_trial(self, ss, is2, ie):
+        """
+        Get a trial.
+
+        If not using the cache, a new image is created. If adding to the cache,
+        the fits file is also written.
+        """
+        if self['use_cache']:
+            ci=ss.read_random_cache(is2,ie)
+        else:
+            if self['add_to_cache']:
+                f=ss.write_trial(is2, ie)
+                ci=fimage.convolved.ConvolvedImageFromFits(f)
+            else:
+                s2,ellip = self.get_s2_e(is2, ie)
+                ci=ss.get_trial(s2,ellip)
+        return ci
 
     def write_ci(self, ci, is2, ie, flags, error=True, data=None):
         """
@@ -378,6 +477,44 @@ def get_output_url(run, is2, ie):
     dir=get_output_dir(run)
     f='%s-%03i-%03i.rec' % (run,is2,ie)
     return path_join(dir, f)
+
+def get_cache_output_dir(simname):
+    d=get_simdir()
+    d=os.path.join(d, 'cache', simname,'outputs')
+    return d
+
+def get_cache_wq_dir(simname):
+    d=get_simdir()
+    d=os.path.join(d, 'cache', simname,'wq')
+    return d
+
+def get_cache_wq_url(simname, is2, ie):
+    """
+
+    is2 and ie are the index in the list of s2 and ellip vals for a given run.
+    They should be within [0,nums2) and [0,nume)
+
+    """
+    dir=get_cache_wq_dir(simname)
+    f='%s-%03i-%03i.yaml' % (simname,is2,ie)
+
+    return path_join(dir, f)
+
+
+
+def get_random_cache_url(simname, is2, ie):
+    import tempfile
+    d=get_cache_output_dir(simname)
+    f='%s-%03i-%03i-' % (simname,is2,ie)
+    fname=tempfile.mktemp(dir=d, prefix=f,suffix='.fits')
+    return fname
+
+def get_cache_pattern(simname, is2, ie):
+    import tempfile
+    d=get_cache_output_dir(simname)
+    pattern='%s-%03i-%03i-*.fits' % (simname,is2,ie)
+    return os.path.join(d,pattern)
+
 
 def write_output(run, is2, ie, data):
     f=get_output_url(run, is2, ie)

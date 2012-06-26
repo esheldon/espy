@@ -4,6 +4,10 @@
 run: gmix-fit-dt01r05
 sim: sim-dt01
 
+#use_cache: true
+use_cache: false
+add_to_cache: true
+
 # type of parametrization
 ptype: Tfrac
 use_jacob: false

@@ -67,8 +67,6 @@ class GMixFitSim(shapesim.BaseSim):
         dostop=True
         out={}
 
-        #images.multiview(ci.psf)
-        #stop
         ptype=self.get('ptype','e1e2')
 
         coellip_psf=self['coellip_psf']
@@ -90,22 +88,6 @@ class GMixFitSim(shapesim.BaseSim):
 
             pfrac_am2 = get_admom_pfrac(ci)
 
-            #wlog(pfrac_am, pfrac_am2)
-            #stop
-
-            pars_nonoise=None
-            """
-            nonoise = self.process_image(ci.image_nonoise, 
-                                         self['ngauss_obj'],
-                                         ci['cen_admom'],
-                                         cov_admom,
-                                         psf=out['psf_res']['gmix'],
-                                         skysig=ci['skysig'],
-                                         pfrac_am=pfrac_am,
-                                         coellip=coellip_obj)
-            pars_nonoise=nonoise['pars']
-            """
-
             out['res'] = self.process_image(ci.image, 
                                             self['ngauss_obj'],
                                             ci['cen_admom'],
@@ -113,8 +95,7 @@ class GMixFitSim(shapesim.BaseSim):
                                             psf=out['psf_res']['gmix'],
                                             skysig=ci['skysig'],
                                             pfrac_am=pfrac_am,
-                                            coellip=coellip_obj,
-                                            pars_nonoise=pars_nonoise)
+                                            coellip=coellip_obj)
 
             out['flags'] = out['res']['flags']
             if show and out['flags'] == 0:
@@ -149,7 +130,6 @@ class GMixFitSim(shapesim.BaseSim):
     def process_image(self, image, ngauss, cen, cov, psf=None,
                       pfrac_am=None,
                       skysig=None, coellip=True,
-                      pars_nonoise=None,
                       e1true=None, e2true=None):
         if not coellip:
             raise ValueError("must use coellip for now")
@@ -195,46 +175,42 @@ class GMixFitSim(shapesim.BaseSim):
                                                    randomize=randomize)
             elif (psf is None) or (ptype == 'e1e2'):
                 # we always go here for psf measurement
-                if pars_nonoise is not None:
-                    guess = pars_nonoise.copy()
-                    print_pars(guess,front="nonoise guess: ")
+                Tfac=None
+                eguess=None
+
+                if ngauss==1 or psf is None:
+                    randomize=True
                 else:
+                    randomize=False
+
+                if pfrac_am is not None:
                     Tfac=None
-                    eguess=None
-
-                    if ngauss==1 or psf is None:
-                        randomize=True
+                    if ntry==0:
+                        eguess=None
+                    elif ntry == 1:
+                        eguess=[0,0]
                     else:
-                        randomize=False
-
-                    if pfrac_am is not None:
-                        Tfac=None
-                        if ntry==0:
+                        if (ntry % 2) == 0:
+                            # needed this for eg, e=0.8, very high S/N
+                            # over-ride randomize
+                            randomize=True
                             eguess=None
-                        elif ntry == 1:
-                            eguess=[0,0]
                         else:
-                            if (ntry % 2) == 0:
-                                # needed this for eg, e=0.8, very high S/N
-                                # over-ride randomize
-                                randomize=True
-                                eguess=None
-                            else:
-                                # needed this for eg, e=0.8, very high S/N
-                                # over-ride randomize
-                                randomize=True
-                                eguess=[0,0]
-                    else:
-                        if ngauss==3 and psf is None:
+                            # needed this for eg, e=0.8, very high S/N
+                            # over-ride randomize
+                            randomize=True
                             eguess=[0,0]
+                else:
+                    if ngauss==3 and psf is None:
+                        eguess=[0,0]
 
-                    guess = self.get_guess_coellip_e1e2(counts, 
-                                                        ngauss, cen, cov, 
-                                                        randomize=randomize,
-                                                        psf=psf,
-                                                        pfrac_am=pfrac_am,
-                                                        eguess=eguess,
-                                                        Tfac=Tfac)
+                guess = self.get_guess_coellip_e1e2(counts, 
+                                                    ngauss, cen, cov, 
+                                                    randomize=randomize,
+                                                    psf=psf,
+                                                    pfrac_am=pfrac_am,
+                                                    eguess=eguess,
+                                                    Tfac=Tfac)
             else:
                 raise ValueError("ptype should be 'e1e2' or 'dev'")
 

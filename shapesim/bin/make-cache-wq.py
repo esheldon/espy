@@ -1,5 +1,5 @@
 """
-    %prog run
+    %prog simname numper
 """
 
 import sys
@@ -25,7 +25,7 @@ command: |
     module unload fimage && module load fimage/work
     module unload wl && module load wl/work
     module unload gmix_image && module load gmix_image/work
-    python $ESPY_DIR/shapesim/bin/run-shapesim.py %(run)s %(is2)d %(ie)d
+    python $ESPY_DIR/shapesim/bin/cache-sim.py %(simname)s %(is2)d %(ie)d %(numper)d
 
 %(extra)s
 %(groups)s
@@ -35,26 +35,30 @@ priority: %(pri)s\n"""
 def main():
     options,args = parser.parse_args(sys.argv[1:])
 
-    if len(args) < 1:
+    if len(args) < 2:
         parser.print_help()
         sys.exit(45)
 
-    run=args[0]
+    simname=args[0]
+    numper=int(args[1])
 
-    c = shapesim.read_config(run)
+    ss=shapesim.ShapeSim(simname)
+
+    c = shapesim.read_config(simname)
+
     groups=options.groups
     if groups is None:
         groups=''
     else:
         groups = 'group: [%s]' % groups
 
-    wqd = shapesim.get_wq_dir(run)
-    if not os.path.exists(wqd):
-        os.makedirs(wqd)
     # make this to avoid race conditions later
-    od = shapesim.get_output_dir(run)
+    od = shapesim.get_cache_output_dir(simname)
     if not os.path.exists(od):
         os.makedirs(od)
+    wqd = shapesim.get_cache_wq_dir(simname)
+    if not os.path.exists(wqd):
+        os.makedirs(wqd)
 
     extra=''
     if options.bynode:
@@ -63,19 +67,19 @@ def main():
         ncores=int(options.ncores)
         extra='mode: bycore1\nN: %d' % ncores
 
-
     for is2 in xrange(c['nums2']):
         for ie in xrange(c['nume']):
-            job_name='%s-%i-%i' % (run,is2,ie)
+            job_name='%s-%i-%i' % (simname,is2,ie)
 
-            wqurl = shapesim.get_wq_url(run,is2,ie)
+            wqurl = shapesim.get_cache_wq_url(simname,is2,ie)
 
             wlog("writing wq script:",wqurl)
             with open(wqurl,'w') as fobj:
                 wqscript=_wqtemplate % {'job_name':job_name,
-                                        'run':run, 
+                                        'simname':simname, 
                                         'is2':is2,
                                         'ie':ie,
+                                        'numper':numper,
                                         'groups':groups,
                                         'extra':extra,
                                         'pri':options.priority}
