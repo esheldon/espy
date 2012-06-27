@@ -6,6 +6,7 @@ import sys
 import os
 from esutil.misc import wlog
 from shapesim import shapesim
+import esutil as eu
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
@@ -53,9 +54,12 @@ def main():
         groups = 'group: [%s]' % groups
 
     # make this to avoid race conditions later
-    od = shapesim.get_cache_output_dir(simname)
-    if not os.path.exists(od):
-        os.makedirs(od)
+    od = shapesim.get_cache_output_dir(simname,fs=ss.fs)
+    if ss.fs != 'hdfs':
+        # we only need to do this for nfs
+        if not os.path.exists(od):
+            os.makedirs(od)
+
     wqd = shapesim.get_cache_wq_dir(simname)
     if not os.path.exists(wqd):
         os.makedirs(wqd)

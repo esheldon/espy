@@ -31,6 +31,7 @@ class ShapeSim(dict):
         for k,v in keys.iteritems():
             self[k] = v
 
+        self.fs = 'hdfs'
         self.cache_list={}
 
     def write_trial(self, is2, ie):
@@ -52,19 +53,23 @@ class ShapeSim(dict):
         """
 
         d=get_cache_output_dir(self['name'])
+        """
         if not os.path.exists(d):
             wlog(d)
             raise ValueError("make directory in wq script maker")
+        """
 
         s2,ellip = self.get_s2_e(is2, ie)
         ci=self.get_trial(s2,ellip)
 
         wlog("dims: [%s,%s]" % ci.image.shape)
 
-        fits_file = get_random_cache_url(self['name'], is2, ie)
+        fits_file = get_random_cache_url(self['name'], is2, ie, fs=self.fs)
         wlog("writing cache file:",fits_file)
-        ci.write_fits(fits_file)
-        return fits_file
+        with eu.hdfs.HDFSFile(fits_file,verbose=True) as hdfs_file:
+            ci.write_fits(hdfs_file.localfile)
+            hdfs_file.put()
+        return ci
 
 
     def get_trial(self, s2, ellip):
@@ -91,6 +96,7 @@ class ShapeSim(dict):
         theta = 180.0*numpy.random.random()
         ci_full = self.new_convolved_image(s2, ellip, theta)
         if dotrim:
+            wlog("trimming")
             ci = fimage.convolved.TrimmedConvolvedImage(ci_full)
         else:
             ci=ci_full
@@ -103,19 +109,28 @@ class ShapeSim(dict):
         """
         f=self.get_random_cache_file(is2,ie)
         wlog("reading from cache:",f)
-        return fimage.convolved.ConvolvedImageFromFits(f)
+
+        with eu.hdfs.HDFSFile(f,verbose=True) as hdfs_file:
+            hdfs_file.stage()
+            ci = fimage.convolved.ConvolvedImageFromFits(hdfs_file.localfile)
+        return ci
 
     def get_random_cache_file(self, is2, ie):
         """
         Get random file from cache, with replacement.
         """
-        import glob
         key = '%s-%03i-%03i' % (self['name'],is2,ie)
         flist = self.cache_list.get(key,None)
+
+        pattern=get_cache_pattern(self['name'],is2,ie,fs=self.fs)
+
         if flist is None:
-            pattern=get_cache_pattern(self['name'],is2,ie)
-            flist=glob.glob(pattern)
-            self.cache_list[key] = flist
+            if self.fs == 'hdfs':
+                flist=eu.hdfs.ls(pattern)
+            else:
+                import glob
+                flist=glob.glob(pattern)
+        self.cache_list[key] = flist
 
         if len(flist) < 100:
             raise ValueError("less than 100 files in cache for "
@@ -229,6 +244,8 @@ class BaseSim(dict):
             self[k] = v
         numpy.random.seed(self['seed'])
 
+        self.fs='hdfs'
+
     def run(self, ci):
         """
         Process the input convolved image.
@@ -257,7 +274,7 @@ class BaseSim(dict):
 
 
 
-    def process_trials(self, is2, ie, max_write_ci=1):
+    def process_trials(self, is2, ie):
         """
         Generate random realizations of a particular element in the s2 and
         ellip sequences.
@@ -268,11 +285,8 @@ class BaseSim(dict):
             A number between 0 and self['nums2']-1
         ie: integer
             A number is a number between 0 and self['nume']-1
-        max_write_ci: optional
-            Max number of failed ci to write to disk. Default 1
         """
         import images 
-        nwrite_ci=0
 
         out = numpy.zeros(self['ntrial'], dtype=self.out_dtype())
 
@@ -299,23 +313,15 @@ class BaseSim(dict):
 
                 if res['flags'] == 0:
                     st = self.copy_output(s2, ellip, s2n, ci, res)
-                    #self.write_ci(ci, is2, ie, res['flags'], data=st,error=False)
                     out[i] = st
                     break
                 else:
-                    #if nwrite_ci < max_write_ci:
-                    #    self.write_ci(ci, is2, ie, res['flags'])
-                    #    nwrite_ci += 1
                     iter += 1
 
             if iter == self['itmax']:
-                #images.multiview(ci.image0,title='image0')
-                #images.multiview(ci.psf,title='psf')
-                #images.multiview(ci.image,title='image')
                 raise ValueError("itmax %d reached" % self['itmax'])
             stderr.write("niter: %d\n" % (iter+1))
-        #stop
-        write_output(self['run'], is2, ie, out)
+        write_output(self['run'], is2, ie, out, fs=self.fs)
         return out
 
     def get_a_trial(self, ss, is2, ie):
@@ -329,45 +335,12 @@ class BaseSim(dict):
             ci=ss.read_random_cache(is2,ie)
         else:
             if self['add_to_cache']:
-                f=ss.write_trial(is2, ie)
-                ci=fimage.convolved.ConvolvedImageFromFits(f)
+                ci=ss.write_trial(is2, ie)
             else:
                 s2,ellip = self.get_s2_e(is2, ie)
                 ci=ss.get_trial(s2,ellip)
         return ci
 
-    def write_ci(self, ci, is2, ie, flags, error=True, data=None):
-        """
-        Write the ci to a file in the outputs directory
-        """
-        import tempfile
-
-        if error:
-            suffix='-err'
-        else:
-            suffix='-good'
-
-        rand=tempfile.mktemp(dir='',suffix=suffix)
-        url=get_output_url(self['run'], is2, ie)
-        url = url.replace('.rec','-'+rand+'.fits')
-        h = {}
-        for k,v in self.iteritems():
-            h[k] = v
-        for k,v in ci.iteritems():
-            h[k] = v
-        if isinstance(data,numpy.ndarray):
-            if 'gamma1' in data.dtype.names:
-                h['g1_meas'] = data['gamma1_meas'][0]
-                h['g2_meas'] = data['gamma2_meas'][0]
-                h['e1_meas'] = data['e1_meas'][0]
-                h['e2_meas'] = data['e2_meas'][0]
-        h['flags'] = flags
-
-        wlog(url)
-        with fitsio.FITS(url, mode='rw', clobber=True) as fobj:
-            fobj.write(ci.image, header=h, extname='image')
-            fobj.write(ci.psf, extname='psf')
-            fobj.write(ci.image0, extname='image0')
 
     def get_s2_e(self, is2, ie):
         """
@@ -416,12 +389,16 @@ def read_config(run):
         raise ValueError("%s in config does not match "
                          "itself: '%s' instead of '%s'" % (n,c[n],run))
     return c
-def get_simdir():
-    dir=os.environ.get('LENSDIR')
+
+def get_simdir(fs=None):
+    if fs=='hdfs':
+        dir=os.environ.get('LENSDIR_HDFS')
+    else:
+        dir=os.environ.get('LENSDIR')
     return path_join(dir, 'shapesim')
 
-def get_run_dir(run):
-    dir=get_simdir()
+def get_run_dir(run, fs=None):
+    dir=get_simdir(fs=fs)
     return path_join(dir,run)
 
 
@@ -462,24 +439,24 @@ def get_plot_file(run, type, s2max=None, s2meas=False, yrange=None):
     f = path_join(d, f)
     return f
 
-def get_output_dir(run):
-    dir=get_run_dir(run)
+def get_output_dir(run, fs=None):
+    dir=get_run_dir(run, fs=fs)
     dir=path_join(dir, 'outputs')
     return dir
 
-def get_output_url(run, is2, ie):
+def get_output_url(run, is2, ie, fs=None):
     """
 
     is2 and ie are the index in the list of s2 and ellip vals for a given run.
     They should be within [0,nums2) and [0,nume)
 
     """
-    dir=get_output_dir(run)
+    dir=get_output_dir(run, fs=fs)
     f='%s-%03i-%03i.rec' % (run,is2,ie)
     return path_join(dir, f)
 
-def get_cache_output_dir(simname):
-    d=get_simdir()
+def get_cache_output_dir(simname, fs=None):
+    d=get_simdir(fs=fs)
     d=os.path.join(d, 'cache', simname,'outputs')
     return d
 
@@ -502,32 +479,32 @@ def get_cache_wq_url(simname, is2, ie):
 
 
 
-def get_random_cache_url(simname, is2, ie):
+def get_random_cache_url(simname, is2, ie, fs=None):
     import tempfile
-    d=get_cache_output_dir(simname)
+    d=get_cache_output_dir(simname, fs=fs)
     f='%s-%03i-%03i-' % (simname,is2,ie)
     fname=tempfile.mktemp(dir=d, prefix=f,suffix='.fits')
     return fname
 
-def get_cache_pattern(simname, is2, ie):
+def get_cache_pattern(simname, is2, ie, fs=None):
     import tempfile
-    d=get_cache_output_dir(simname)
+    d=get_cache_output_dir(simname, fs=fs)
     pattern='%s-%03i-%03i-*.fits' % (simname,is2,ie)
     return os.path.join(d,pattern)
 
 
-def write_output(run, is2, ie, data):
-    f=get_output_url(run, is2, ie)
+def write_output(run, is2, ie, data, fs=None):
+    f=get_output_url(run, is2, ie, fs=fs)
     wlog("Writing output:",f)
-    eu.io.write(f, data)
+    eu.io.write(f, data, clobber=True)
 
-def read_output(run, is2, ie, verbose=False):
-    f=get_output_url(run, is2, ie)
+def read_output(run, is2, ie, verbose=False, fs=None):
+    f=get_output_url(run, is2, ie, fs=fs)
     if verbose:
         wlog("reading output:",f)
     return eu.io.read(f)
 
-def read_all_outputs(run, average=False, verbose=False):
+def read_all_outputs(run, average=False, verbose=False, fs=None):
     """
     Data are grouped as a list by is2 and then sublists by ie
     """
@@ -537,7 +514,7 @@ def read_all_outputs(run, average=False, verbose=False):
         s2data=[]
         for ie in xrange(c['nume']):
             try:
-                edata = read_output(run, is2, ie,verbose=verbose)
+                edata = read_output(run, is2, ie,verbose=verbose,fs=fs)
                 s2data.append(edata)
             except:
                 pass
