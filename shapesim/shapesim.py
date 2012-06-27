@@ -52,13 +52,6 @@ class ShapeSim(dict):
         All keys are written
         """
 
-        d=get_cache_output_dir(self['name'])
-        """
-        if not os.path.exists(d):
-            wlog(d)
-            raise ValueError("make directory in wq script maker")
-        """
-
         s2,ellip = self.get_s2_e(is2, ie)
         ci=self.get_trial(s2,ellip)
 
@@ -455,9 +448,10 @@ def get_output_url(run, is2, ie, fs=None):
     f='%s-%03i-%03i.rec' % (run,is2,ie)
     return path_join(dir, f)
 
-def get_cache_output_dir(simname, fs=None):
+def get_cache_output_dir(simname, is2, ie, fs=None):
     d=get_simdir(fs=fs)
-    d=os.path.join(d, 'cache', simname,'outputs')
+    subd='%03i-%03i' % (is2,ie)
+    d=os.path.join(d, 'cache', simname,'outputs',subd)
     return d
 
 def get_cache_wq_dir(simname):
@@ -477,18 +471,16 @@ def get_cache_wq_url(simname, is2, ie):
 
     return path_join(dir, f)
 
-
-
 def get_random_cache_url(simname, is2, ie, fs=None):
     import tempfile
-    d=get_cache_output_dir(simname, fs=fs)
+    d=get_cache_output_dir(simname, is2, ie, fs=fs)
     f='%s-%03i-%03i-' % (simname,is2,ie)
     fname=tempfile.mktemp(dir=d, prefix=f,suffix='.fits')
     return fname
 
 def get_cache_pattern(simname, is2, ie, fs=None):
     import tempfile
-    d=get_cache_output_dir(simname, fs=fs)
+    d=get_cache_output_dir(simname, is2, ie, fs=fs)
     pattern='%s-%03i-%03i-*.fits' % (simname,is2,ie)
     return os.path.join(d,pattern)
 
@@ -534,14 +526,31 @@ def average_outputs(data):
     array will have one entry for each ellipticity
     """
     out=[]
-    dt = data[0][0].dtype
+    dt = data[0][0].dtype.descr
+
+    if 'e1_meas' in data[0][0].dtype.names:
+        do_ediff=True
+        dt += [('e1diff','f8'),('e2diff','f8')]
+    else:
+        do_ediff=False
+        print 'DEAL WITH e1meas missing'
+
     for s2data in data: # over different values of s2
         d=zeros(len(s2data),dtype=dt)
         for i,edata in enumerate(s2data): # over different ellipticities
             for n in d.dtype.names:
-                if edata[n].dtype.names is None and len(edata[n].shape) == 1:
-                    d[n][i] = median(edata[n])
-                    #d[n][i] = edata[n].mean()
+                if n == 'e1diff' or n=='e2diff':
+                    if do_ediff:
+                        #d['e1diff'][i] = median(edata['e1_meas']-edata['e1true'])
+                        #d['e2diff'][i] = median(edata['e2_meas']-edata['e2true'])
+                        d['e1diff'][i] = (edata['e1_meas']-edata['e1true']).mean()
+                        d['e2diff'][i] = (edata['e2_meas']-edata['e2true']).mean()
+                    else:
+                        print 'DEAL WITH e1meas missing'
+                else:
+                    if edata[n].dtype.names is None and len(edata[n].shape) == 1:
+                        #d[n][i] = median(edata[n])
+                        d[n][i] = edata[n].mean()
 
             """
             wts = 1./(0.32**2 + edata['e1_chol_err']**2)

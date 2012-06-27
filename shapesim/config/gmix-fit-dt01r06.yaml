@@ -54,4 +54,5 @@ maxe:  0.80
 nums2: 20
 nume:  20
 
-seed: 9
+# set to null for new seed each time. Good when adding to the cache
+seed: null

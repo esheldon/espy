@@ -1,6 +1,3 @@
-# weak priors and no trimming
-# need to try with trimming as well
-# maybe try sigma *=1.5 or something to fix sizes?  Or are sized right?
 run: gmix-fit-dt01r05
 sim: sim-dt01
 
@@ -57,18 +54,5 @@ maxe:  0.80
 nums2: 20
 nume:  20
 
-seed: 9432
-
-#simpars:
-    # looks like it might be expand_fac/image_nsub after all!
-    # learn this lesson, always use a large expansion factor
-    # looks like we can actually do with expand fac 24 and
-    # not sigma *= 1.75, but we can surely use an expand fac
-    # that is s2 dependent.  The minres we are employing works
-    # for exp but not for dev apparently.
-    #expand_fac_min: 16
-
-    #expand_fac_min: 24
-    #expand_fac_min: 32
-    #dotrim: false
-    #image_nsub: 4
+# set to null for new seed each time. Good when adding to the cache
+seed: null

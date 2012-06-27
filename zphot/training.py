@@ -554,9 +554,12 @@ Carlos
         dir = self.dir_matched
         return path_join(dir, 'plots')
 
-    def seeing_plotfile(self, name):
+    def seeing_plotfile(self, name, greyscale=False):
         dir = self.plotdir()
-        fname = '%s-match-seeing-%s.eps' % (name,self.train_sample)
+        s=self.train_sample
+        if greyscale:
+            s+='-bw'
+        fname = '%s-match-seeing-%s.eps' % (name,s)
         fname=path_join(dir, fname)
         return fname
 
@@ -610,7 +613,9 @@ Carlos
 
 
     def plot_seeing(self, types=['primus','vvds','zcosmos','deep2'], 
-                    yrange=None):
+                    greyscale=False, colors=None, ptypes=None,
+                    yrange=None,
+                    data=None):
         """
 
         The BOSS all is normalized to one
@@ -637,21 +642,28 @@ Carlos
         plt=biggles.FramedPlot()
         ntype=len(types)
         #colors=pcolors.rainbow(ntype, 'hex')
-        colors=pcolors.rainbow(ntype+1, 'hex')
+        if colors is None:
+            if greyscale:
+                colors=['grey80','grey60','grey50','grey40','grey30']
+            else:
+                colors=pcolors.rainbow(ntype+1, 'hex')
+        if ptypes is None:
+            if greyscale:
+                ptypes=['longdashed','dotted','dotdashed','shortdashed', 'solid']
+            else:
+                ptypes=['solid']*len(colors)
 
         allhist=[]
         
-        c = es_sdsspy.sweeps_collate.open_columns('primgal')
-        print("Reading all psf_fwhm")
-        print("  checking window")
-        inbasic = c['inbasic'][:]
-        psf_fwhm = c['psf_fwhm_r'][:]
-        mag = c['cmodelmag_dered_r'][:]
-        print("  psf_fwhm_r shape:",psf_fwhm.shape)
+        if data is None:
+            c = es_sdsspy.sweeps_collate.open_columns('primgal')
+            print("Reading all psf_fwhm,inbasic,mag")
+            data = c.read_columns(['inbasic','psf_fwhm_r','cmodelmag_dered_r'])
 
-        w=where1((inbasic == 1) & (mag < 21.8))
-        print("  keeping: %s/%s" %(w.size,c['inbasic'].size))
-        psf_fwhm = psf_fwhm[w]
+        print("  checking window")
+        w=where1((data['inbasic'] == 1) & (data['cmodelmag_dered_r'] < 21.8))
+        print("  keeping: %s/%s" %(w.size,data.size))
+        psf_fwhm = data['psf_fwhm_r'][w]
         print("median seeing:",numpy.median(psf_fwhm))
         
         b=eu.stat.Binner(psf_fwhm)
@@ -667,7 +679,9 @@ Carlos
 
         print("  histogramming")
         # regular histogram just for the key
-        ph = biggles.Histogram(h, x0=b['low'][0], binsize=binsize, width=2)
+        xx = b['low'][0] + binsize/2 + numpy.arange(len(h))*binsize
+        ph=biggles.Curve(xx,h,width=2)
+        #ph = biggles.Histogram(h, x0=b['low'][0], binsize=binsize, width=2)
         ph.label = 'All BOSS'
 
         #allhist.append(ph)
@@ -720,7 +734,11 @@ Carlos
                     width=1
             else:
                 width=2
-            ph = biggles.Histogram(h, x0=b['low'][0], binsize=binsize, color=colors[i], width=width)
+            #ph = biggles.Histogram(h, x0=b['low'][0], binsize=binsize, 
+            #                       color=colors[i], type=ptypes[i],
+            #                       width=width)
+            xx = b['low'][0] + binsize/2 + numpy.arange(len(h))*binsize
+            ph=biggles.Curve(xx,h,color=colors[i],type=ptypes[i],width=width)
             ph.label = type
 
             allhist.append(ph)
@@ -728,7 +746,10 @@ Carlos
 
         #htot = 0.8*htot/float(htot.max())
         htot = htot/float(htot.sum())
-        ph = biggles.Histogram(htot, x0=b['low'][0], binsize=binsize, width=3, color=colors[-1])
+        xx = b['low'][0] + binsize/2 + numpy.arange(len(h))*binsize
+        ph=biggles.Curve(xx,htot,color=colors[-1],type=ptypes[-1],width=3)
+        #ph = biggles.Histogram(htot, x0=b['low'][0], binsize=binsize, 
+        #                       width=3, type=ptypes[-1],color=colors[-1])
         ph.label = 'Total'
 
         allhist.append(ph)
@@ -758,9 +779,10 @@ Carlos
         plt.aspect_ratio=0.7
         plt.show()
 
-        epsfile=self.seeing_plotfile(name)
+        epsfile=self.seeing_plotfile(name,greyscale=greyscale)
         print("Writing eps file:",epsfile)
         plt.write_eps(epsfile)
         converter.convert(epsfile, dpi=120, verbose=True)
 
 
+        return data

@@ -6,8 +6,7 @@ from esutil.numpy_util import where1
 import numpy
 from numpy import median
 
-from lensing.util import shear_fracdiff, e2gamma, gamma2e
-
+from lensing.util import shear_fracdiff, e2gamma, gamma2e, g1g2_to_e1e2
 class SimPlotter(dict):
     def __init__(self, run):
         c = shapesim.read_config(run)
@@ -27,7 +26,6 @@ class SimPlotter(dict):
                 type='diff',
                 s2max=None, 
                 yrange=None, 
-                reduce_key=False, 
                 show=True):
         import biggles
         import pcolors
@@ -44,20 +42,14 @@ class SimPlotter(dict):
         colors=pcolors.rainbow(len(data), 'hex')
 
         biggles.configure('PlotKey','key_vsep',1.0)
-        plt = biggles.FramedPlot()
-        plt.aspect_ratio=1
-        #plt.xlabel=r'$\gamma$'
-        plt.xlabel=r'ellipticity'
-
-        if type == 'diff':
-            plt.ylabel=r'$\Delta \gamma$'
-        elif type == 'fdiff':
-            plt.ylabel=r'$\Delta \gamma/\gamma$'
-        else:
-            raise ValueError("type should be 'diff or 'fdiff'")
-        #plt.ylabel=r'$\Delta e$'
+        arr=biggles.FramedArray(2,1)
+        #arr.aspect_ratio=1
+        arr.xlabel=r'ellipticity'
+        arr.ylabel = r'$\Delta e$'
 
  
+        plots1=[]
+        plots2=[]
         allplots=[]
         for i,st in enumerate(reversed(data)):
             wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
@@ -70,72 +62,47 @@ class SimPlotter(dict):
 
             s = st['etrue'].argsort()
 
-            #if 'e_chol' in st.dtype.names:
-            if False:
-                print 'using chol'
-                e_meas = st['e_chol'][s]
-            elif 'e_meas' not in st.dtype.names:
-                e_meas = gamma2e(st['gamma_meas'][s])
-            else:
-                e_meas = st['e_meas'][s]
 
             etrue = st['etrue'][s]
-            #etrue = st['e_uw'][s]
-
-            wbad=where1(e_meas != e_meas)
-
-            if wbad.size != 0:
-                wlog("found bad:",e_meas[wbad])
-
-            fdiff = shear_fracdiff(etrue,e_meas)
-            # straight diff
-            gammadiff = fdiff*st['gamma'][s]
-
-            if type == 'diff':
-                yplot=gammadiff
-            elif type == 'fdiff':
-                yplot=fdiff
-            else:
-                raise ValueError("type should be 'diff or 'fdiff'")
-
-            #yplot = e_meas-etrue
             
-            label = r'%0.3f' % s2
-            cr = biggles.Curve(etrue, yplot, color=colors[i])
-            cr.label = label
+            e1diff = st['e1diff'][s]
+            e2diff = st['e2diff'][s]
 
-            plt.add(cr)
-            allplots.append(cr)
+            label = r'%0.3f' % s2
+            cr1 = biggles.Curve(etrue, e1diff, color=colors[i])
+            cr2 = biggles.Curve(etrue, e2diff, color=colors[i])
+            cr1.label = label
+            cr2.label = label
+
+            arr[0,0].add(cr1)
+            arr[1,0].add(cr2)
+            if i < 15:
+                plots1.append(cr1)
+            else:
+                plots2.append(cr1)
 
         fsize=1.5
-        if not reduce_key:
-            key = biggles.PlotKey(0.9,0.9, allplots, halign='right', 
-                                  fontsize=fsize)
-        else:
-            # pick a few
-            nplot=len(allplots)
-            tplots = [allplots[0], 
-                      allplots[nplot*1/4], 
-                      allplots[nplot/2], 
-                      allplots[nplot*3/4], 
-                      allplots[-1]]
-            key = biggles.PlotKey(0.9,0.9, tplots, halign='right', fontsize=fsize)
-
-        plt.add(key)
+        key1 = biggles.PlotKey(0.9,0.85, plots1, halign='right', 
+                               fontsize=fsize)
+        arr[0,0].add(key1)
+        if len(plots2) > 0:
+            key2 = biggles.PlotKey(0.9,0.92, plots2, halign='right', 
+                                   fontsize=fsize)
+            arr[1,0].add(key2)
 
         klabtext=r'$<\sigma^2_{psf}/\sigma^2_{gal}>$'
         if self['s2n'] > 0:
             klabtext += ' (S/N)'
-        klab = biggles.PlotLabel(0.95,0.95,klabtext,
+        klab = biggles.PlotLabel(0.95,0.92,klabtext,
                                  fontsize=1.5,halign='right')
-        plt.add(klab)
+        arr[0,0].add(klab)
         objmodel = self.simc['objmodel']
         psfmodel = self.simc['psfmodel']
 
 
         plab='%s %s' % (objmodel,psfmodel)
-        l = biggles.PlotLabel(0.1,0.9, plab, halign='left')
-        plt.add(l)
+        l = biggles.PlotLabel(0.9,0.1, plab, halign='right')
+        arr[1,0].add(l)
 
         if self.simc['psfmodel'] == 'turb':
             siglab=r'$FWHM_{PSF}: %.1f$ pix' % self.simc['psf_fwhm']
@@ -158,17 +125,22 @@ class SimPlotter(dict):
 
         sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
                                fontsize=2.5)
-        plt.add(sl)
+        arr[1,0].add(sl)
 
-        if not reduce_key:
-            plt.xrange = [0,1.4]
+
+        e1lab = biggles.PlotLabel(0.1,0.9, r'$e_1$', halign='left')
+        e2lab = biggles.PlotLabel(0.1,0.9, r'$e_2$', halign='left')
+        arr[0,0].add(e1lab)
+        arr[1,0].add(e2lab)
+
+        arr.xrange = [0,1.4]
         if yrange is not None:
-            plt.yrange = yrange
+            arr.yrange = yrange
 
         wlog("Writing plot file:",epsfile)
         if show:
-            plt.show()
-        plt.write_eps(epsfile)
+            arr.show()
+        arr.write_eps(epsfile)
         converter.convert(epsfile,dpi=100,verbose=True)
 
 
