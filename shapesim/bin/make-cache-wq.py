@@ -44,6 +44,9 @@ def main():
     numper=int(args[1])
 
     ss=shapesim.ShapeSim(simname)
+    if ss.fs != 'hdfs':
+        raise ValueError("This only works for HDFS right now "
+                         "would need to worry about making dirs")
 
     c = shapesim.read_config(simname)
 
@@ -52,13 +55,6 @@ def main():
         groups=''
     else:
         groups = 'group: [%s]' % groups
-
-    # make this to avoid race conditions later
-    od = shapesim.get_cache_output_dir(simname,fs=ss.fs)
-    if ss.fs != 'hdfs':
-        # we only need to do this for nfs
-        if not os.path.exists(od):
-            os.makedirs(od)
 
     wqd = shapesim.get_cache_wq_dir(simname)
     if not os.path.exists(wqd):
