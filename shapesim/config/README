@@ -2,7 +2,9 @@ gmix-fit
 
     sims
         et01
+            - am running et01r05 with add to cache, 1000 per.
         dt01
+            - have about 100-200 per as of now.  Some with same seeds.
 
     low noise runs
         et01r04
@@ -10,9 +12,11 @@ gmix-fit
               great
         dt01r05
 
-    noise runs
+    noisy runs
+        S/N
         100
             et01r05
                 - with noise, we might want to interpolate the par results from
                   et01r04, let's see first.
-            dt01r06 - only 100 realizations, need more
+            dt01r06 
+                - only 100 realizations, need more
