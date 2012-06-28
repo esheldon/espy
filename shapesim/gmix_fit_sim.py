@@ -137,8 +137,8 @@ class GMixFitSim(shapesim.BaseSim):
         counts = image.sum()
         method=self.get('method','lm')
 
-        # will only apply when psf is present
         randomize=self.get('randomize',False)
+
         if psf:
             verbose=False
             maxtry=self.get('maxtry',1)
@@ -166,12 +166,14 @@ class GMixFitSim(shapesim.BaseSim):
             if psf and ptype=='Tfrac':
                 #eguess=None
                 eguess=[0,0]
+                uniform_p=False
                 if ntry > 0:
-                    randomize=True
+                    uniform_p=True
                 guess,width = self.get_prior_Tfrac(ngauss,
                                                    counts, cen, cov, pfrac_am,
                                                    eguess=eguess,
                                                    psf=psf,
+                                                   uniform_p=uniform_p,
                                                    randomize=randomize)
             elif (psf is None) or (ptype == 'e1e2'):
                 # we always go here for psf measurement
@@ -292,6 +294,7 @@ class GMixFitSim(shapesim.BaseSim):
     def get_prior_Tfrac(self, ngauss, counts, cen, cov, pfrac_am,
                         psf=None,
                         randomize=False,
+                        uniform_p=False,
                         eguess=None):
         tight_priors=self.get('tight_priors',False)
         npars=2*ngauss+4
@@ -301,23 +304,24 @@ class GMixFitSim(shapesim.BaseSim):
         prior[1] = cen[1]
         width[0] = 1
         width[1] = 1
+
+        T = cov[2]+cov[0]
+        e1=(cov[2]-cov[0])/T
+        e2=2*cov[1]/T
+
+        wlog("pfrac_am:",pfrac_am)
+
         if ngauss==4:
-            wlog("pfrac_am:",pfrac_am)
-            #wlog("len(psf):",len(psf))
 
-            T = cov[2]+cov[0]
             if eguess:
-                e1,e2 = eguess
+                prior[2],prior[3]=eguess
             else:
-                e1=(cov[2]-cov[0])/T
-                e2=2*cov[1]/T
+                prior[2],prior[3]=e1,e2
 
-            prior[2] = e1
-            prior[3] = e2
             width[2] = 10
             width[3] = 10
 
-            if psf is not None:
+            if psf:
                 if len(psf)==3:
                     #Tmax = T*55
                     #p0,p1,p2,p3=(0.0251877,0.0381688,0.0979805,0.835861)
@@ -403,10 +407,17 @@ class GMixFitSim(shapesim.BaseSim):
             prior[6] = Tfrac2
             prior[7] = Tfrac3
 
-            prior[8] = p0
-            prior[9] = p1
-            prior[10] = p2
-            prior[11] = p3
+            if uniform_p:
+                wlog("    uniform p")
+                prior[8] = counts/ngauss
+                prior[9] = counts/ngauss
+                prior[10] = counts/ngauss
+                prior[11] = counts/ngauss
+            else:
+                prior[8] = p0
+                prior[9] = p1
+                prior[10] = p2
+                prior[11] = p3
 
             if len(psf)==3:
                 if tight_priors:
@@ -433,16 +444,7 @@ class GMixFitSim(shapesim.BaseSim):
             if randomize:
                 e1start=prior[2]
                 e2start=prior[3]
-                if e1start == 0 and e2start==0:
-                    prior[2] = 0.05*(randu()-0.5)
-                    prior[3] = 0.05*(randu()-0.5)
-                else:
-                    while True:
-                        prior[2] += 0.2*e1start*(randu()-0.5)
-                        prior[3] += 0.2*e2start*(randu()-0.5)
-                        etot = sqrt(prior[2]**2 + prior[3]**2)
-                        if etot < 0.95:
-                            break
+                prior[2],prior[3] = randomize_e1e2(e1start,e2start)
 
                 prior[4] += prior[4]*0.05*(randu()-0.5)
                 prior[5] += prior[5]*0.05*(randu()-0.5)
@@ -452,6 +454,156 @@ class GMixFitSim(shapesim.BaseSim):
                 prior[9] += prior[9]*0.05*(randu()-0.5)
                 prior[10] += prior[10]*0.05*(randu()-0.5)
                 prior[11] += prior[11]*0.05*(randu()-0.5)
+
+        elif ngauss==3 and psf is None:
+            # these guesses are for turbulent
+            wlog("    using ngauss=3")
+
+            if eguess is not None:
+                prior[2],prior[3] = eguess
+            else:
+                prior[2] = e1# + 0.05*(randu()-0.5)
+                prior[3] = e2# + 0.05*(randu()-0.5)
+
+            Tmax = T*8.3
+            Tfrac1 = 1.7/8.3
+            Tfrac2 = 0.8/8.3
+            prior[4] = Tmax
+            prior[5] = Tfrac1
+            prior[6] = Tfrac2
+
+            prior[7] = counts*0.08
+            prior[8] = counts*0.38
+            prior[9] = counts*0.53
+
+            # uninformative priors for PSF, might want to revisit for real stars
+            width[2] = 10
+            width[3] = 10
+            width[4] = 100
+            width[5:] = 10
+
+            if randomize:
+                wlog("    randomizing")
+                e1start=prior[2]
+                e2start=prior[3]
+                prior[2],prior[3] = randomize_e1e2(e1start,e2start)
+
+                prior[4] += prior[4]*0.05*(randu()-0.5)
+                prior[5] += prior[5]*0.05*(randu()-0.5)
+                prior[6] += prior[6]*0.05*(randu()-0.5)
+                prior[7] += prior[7]*0.05*(randu()-0.5)
+                prior[8] += prior[8]*0.05*(randu()-0.5)
+                prior[9] += prior[9]*0.05*(randu()-0.5)
+
+        elif ngauss==3 and psf:
+            wlog("    using psf ngauss=3")
+        
+            if eguess is not None:
+                prior[2],prior[3] = eguess 
+            else:
+                prior[2] = e1
+                prior[3] = e2
+
+            wlog("    starting e1,e2:",prior[2],prior[3])
+
+
+            wlog("Using pfrac_am fit:",pfrac_am)
+            # need to do this at higher S/N
+            #ply=poly1d([-3.20824373,  3.40727954])
+            #tratio = ply(pfrac_am)
+
+            # this T is Tadmom
+            #Tmax = tratio*T
+            #Tfrac1 = 0.35
+            #Tfrac2 = 0.07
+            
+            Tmax = T*5
+            #Tmax = T*8
+            Tfrac1 = .3
+            Tfrac2 = .06
+            prior[4] = Tmax
+            prior[5] = Tfrac1
+            prior[6] = Tfrac2
+
+            # these ratios are important when there is noise
+            #prior[7] = counts*0.14
+            #prior[8] = counts*0.53
+            #prior[9] = counts*0.33
+
+            if uniform_p:
+                wlog("    uniform p")
+                prior[7] = counts/ngauss
+                prior[8] = counts/ngauss
+                prior[9] = counts/ngauss
+            else:
+                prior[7] = counts*0.26
+                prior[8] = counts*0.55
+                prior[9] = counts*0.18
+
+
+            # uninformative
+            width[2] = 10
+            width[3] = 10
+            width[4] = 100 # Tmax
+            width[5:] = 10 # Ti/pi
+
+            if randomize:
+                wlog("    randomizing")
+                e1start=prior[2]
+                e2start=prior[3]
+                prior[2],prior[3] = randomize_e1e2(e1start,e2start)
+
+                prior[4] += prior[4]*0.05*(randu()-0.5)
+                prior[5] += prior[5]*0.05*(randu()-0.5)
+                prior[6] += prior[6]*0.05*(randu()-0.5)
+                prior[7] += prior[7]*0.05*(randu()-0.5)
+                prior[8] += prior[8]*0.05*(randu()-0.5)
+                prior[9] += prior[9]*0.05*(randu()-0.5)
+
+
+        elif ngauss==1:
+            wlog("    using ngauss==1")
+
+            prior[4] = counts
+            prior[5] = T
+
+            # uninformative
+            width[2] = 10
+            width[3] = 10
+            width[4] = 100 # Tmax
+            width[5] = 10  # p
+
+
+            if psf is not None:
+                wlog("======> with psf")
+                psfmoms = gmix_image.total_moms(psf)
+                tcov=cov.copy()
+                tcov[0] -= psfmoms['irr']
+                tcov[1] -= psfmoms['irc']
+                tcov[2] -= psfmoms['icc']
+                tdet=tcov[0]*tcov[2] - tcov[1]**2
+                if tdet > 1.e-5:
+                    wlog("using special guesses")
+                    tT = tcov[0]+tcov[2]
+                    te1=(tcov[2]-tcov[0])/tT
+                    te2=2*tcov[1]/tT
+
+                    prior[2] = te1
+                    prior[3] = te2
+                    prior[4] = 1.0
+                    prior[5] = tT
+                else:
+                    # use defaults
+                    wlog("NOT USING special guesses")
+                    pass
+            if randomize:
+                prior[0] += 1*(randu()-0.5)  # cen0
+                prior[1] += 1*(randu()-0.5)  # cen1
+                prior[2] += 0.2*(randu()-0.5)  # e1
+                prior[3] += 0.2*(randu()-0.5)  # e2
+                prior[4] += 0.1*(randu()-0.5)  # p
+                prior[5] += 1*(randu()-0.5)   # T
+
         else:
             raise ValueError("implement other guesses")
 
@@ -1239,6 +1391,19 @@ class GMixFitSim(shapesim.BaseSim):
 
         return dt
 
+def randomize_e1e2(e1start,e2start):
+    if e1start == 0 and e2start==0:
+        e1rand = 0.05*(randu()-0.5)
+        e2rand = 0.05*(randu()-0.5)
+    else:
+        while True:
+            e1rand = e1start*(1 + 0.2*(randu()-0.5))
+            e2rand = e2start*(1 + 0.2*(randu()-0.5))
+            etot = sqrt(e1rand**2 + e2rand**2)
+            if etot < 0.95:
+                break
+
+    return e1rand, e2rand
 
 def get_ellip_cholesky(means, cov, n=100000):
     r = eu.stat.cholesky_sample(cov, n, means=means)
@@ -1279,7 +1444,7 @@ def get_admom_pfrac(ci):
     pfrac = 1-R
     return pfrac
 
-def plot_admom_max_tratio(run, ei=0, only_good=False, tfrac=False):
+def plot_admom_max_tratio(run, ei=0, tfrac=False, pfrac_am_max=None):
     """
     Plot the ratio of the maximum moment to the adaptive moment
 
@@ -1314,13 +1479,6 @@ def plot_admom_max_tratio(run, ei=0, only_good=False, tfrac=False):
         wlog(f)
         t=eu.io.read(f)
 
-        if only_good:
-            w,=where( (numpy.abs(t['e1_meas']-t['e1true']) < 0.001)
-                      & (numpy.abs(t['e2_meas']-t['e2true']) < 0.001) )
-            if w.size == 0:
-                wlog("no good ones")
-                continue
-            t=t[w]
 
         if 'sigma0_admom' in t.dtype.names:
             # had a typo!  Is fixed now, and saving T instead of sigma
@@ -1380,11 +1538,11 @@ def plot_admom_max_tratio(run, ei=0, only_good=False, tfrac=False):
         w,=where(Tratios[s] > 0)
     w=s[w]
 
-    if only_good:
-        pfrac_admoms=pfrac_admoms[w]
-        Tratios=Tratios[w]
-        Ps = Ps[w,:]
-        w=numpy.arange(w.size)
+    if pfrac_am_max is not None:
+        ww,=where(pfrac_admoms[w] < pfrac_am_max)
+        if ww.size == 0:
+            raise ValueError("none with pfrac_admoms < %s" % pfrac_am_max)
+        w=w[ww]
 
     wlog("pfrac_admoms:",pfrac_admoms)
     Trat_order=2
@@ -1415,8 +1573,11 @@ def plot_admom_max_tratio(run, ei=0, only_good=False, tfrac=False):
     Trelfit_list = []
     Trelply_list = []
     colors=['magenta','blue','red','orange']
-    pplt=None
-    Trelplt=None
+    pplt=biggles.FramedPlot()
+
+    pplt.xlabel=r'$pfrac_{AM}$'
+    pplt.ylabel='P'
+    pplts=[]
 
     porder=2
     Torder=3
@@ -1439,6 +1600,14 @@ def plot_admom_max_tratio(run, ei=0, only_good=False, tfrac=False):
         pply=pply_list[i]
         Trelply=Trelply_list[i]
 
+        p=biggles.Points(pfrac_admoms[w], Ps[w,i], 
+                         type='filled circle',color=colors[i])
+        p.label=r'$P_{%d}$' % i
+        c=biggles.Curve(tmp,pply(tmp),color=colors[i])
+
+        pplt.add(c,p)
+        pplts.append(p)
+        """
         pplt=eu.plotting.bscatter(pfrac_admoms[w],
                                  Ps[w,i],show=False,plt=pplt,
                                  color=colors[i],
@@ -1448,20 +1617,22 @@ def plot_admom_max_tratio(run, ei=0, only_good=False, tfrac=False):
                                   pply(tmp),
                                  type='solid',color=colors[i],
                                  show=False, plt=pplt)
-
+        """
         if i > 0:
-            Trelplt=eu.plotting.bscatter(pfrac_admoms[w],
-                                         TbyTmaxs[w,i],show=False,
-                                         #plt=Trelplt,
-                                         color=colors[i],
-                                         xlabel=r'$pfrac_{AM}$',
-                                         ylabel=r'$T/T_{max}$')
-            Trelplt=eu.plotting.bscatter(tmp,
-                                         Trelply(tmp),
-                                         type='solid',color=colors[i],
-                                         show=False, plt=Trelplt)
+
+            Trelplt=biggles.FramedPlot()
+            Trelplt.xlabel=r'$pfrac_{AM}$'
+            Trelplt.ylabel=r'$T/T_{max}$'
+            Trelplt.title=r'$T_{%i}$' % i
+
+            p=biggles.Points(pfrac_admoms[w], TbyTmaxs[w,i], 
+                             type='filled circle',color=colors[i])
+            c=biggles.Curve(tmp,Trelply(tmp),color=colors[i])
+            Trelplt.add(p,c)
             tab[i-1,0] = Trelplt
 
+    key=biggles.PlotKey(0.1,0.2,pplts,halign='left')
+    pplt.add(key)
 
    
     wlog("P")
@@ -1479,13 +1650,15 @@ def plot_admom_max_tratio(run, ei=0, only_good=False, tfrac=False):
     print pfmt % ((0,) + tuple(ppfit_list[0]))
     print pfmt % ((1,) + tuple(ppfit_list[1]))
     print pfmt % ((2,) + tuple(ppfit_list[2]))
-    print pfmt % ((3,) + tuple(ppfit_list[3]))
+    if ngauss == 4:
+        print pfmt % ((3,) + tuple(ppfit_list[3]))
 
     Tfmt=', '.join(['%.8g']*(Torder+1))
     Tfmt = 'T%d_poly = poly1d(['+Tfmt+'])'
     print Tfmt % ( (1,) + tuple(Trelfit_list[1]) )
     print Tfmt % ( (2,) + tuple(Trelfit_list[2]) )
-    print Tfmt % ( (3,) + tuple(Trelfit_list[3]) )
+    if ngauss == 4:
+        print Tfmt % ( (3,) + tuple(Trelfit_list[3]) )
 
     plt.title=title
     pplt.title=title

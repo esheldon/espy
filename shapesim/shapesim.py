@@ -471,12 +471,20 @@ def get_cache_wq_url(simname, is2, ie):
 
     return path_join(dir, f)
 
+def random_cache_url_exists(url):
+    if url[0:4] == 'hdfs':
+        return eu.hdfs.exists(url)
+    else:
+        return os.path.exists(url)
+
 def get_random_cache_url(simname, is2, ie, fs=None):
     import tempfile
     d=get_cache_output_dir(simname, is2, ie, fs=fs)
     f='%s-%03i-%03i-' % (simname,is2,ie)
-    fname=tempfile.mktemp(dir=d, prefix=f,suffix='.fits')
-    return fname
+    url=tempfile.mktemp(dir=d, prefix=f,suffix='.fits')
+    while random_cache_url_exists(url):
+        url=tempfile.mktemp(dir=d, prefix=f,suffix='.fits')
+    return url
 
 def get_cache_pattern(simname, is2, ie, fs=None):
     import tempfile

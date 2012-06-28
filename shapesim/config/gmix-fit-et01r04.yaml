@@ -1,10 +1,23 @@
-# Just a redo to make sure nothing changed
-# see sim-gg01 for psf and object details
 run: gmix-fit-et01r04
-sim: sim-et02
+sim: sim-et01
 
-# negative for no noise.  Note this is the adaptive moments S/N
-s2n: 100.
+#use_cache: true
+use_cache: false
+add_to_cache: true
+#add_to_cache: false
+
+# type of parametrization
+ptype: Tfrac
+use_jacob: false
+
+verbose: true
+
+# you need the + or - in exponent
+s2n: 1.0e+6
+s2n_psf: 1.0e+6
+
+# high S/N needs tight priors for 4 gaussians
+tight_priors: false
 
 # we should try with higher values to see what happens
 ngauss_psf: 3
@@ -15,7 +28,14 @@ coellip_obj: true
 
 # number of trials at each s2 and ellip.  Orientations will be random
 # and if s2n is > 0 above, noise added to the image
-ntrial: 1000
+ntrial: 100
+
+maxtry: 2
+maxtry_psf: 2
+
+# this is for the gaussian PSF fit, since admom gets gaussians too perfectly
+# trying out doing this automatically as needed
+randomize: true
 
 # number of times to retry when a trial fails.  This generates
 # a new trial, unlike max_retry above which retries with a 
@@ -34,4 +54,5 @@ maxe:  0.80
 nums2: 20
 nume:  20
 
-seed: 3500
+# set to null for new seed each time. Good when adding to the cache
+seed: null
