@@ -1,5 +1,7 @@
 """
-    %prog simname numper
+    %prog simname [numper]
+
+If not a ring test, send numper
 """
 
 import sys
@@ -26,7 +28,7 @@ command: |
     module unload fimage && module load fimage/work
     module unload wl && module load wl/work
     module unload gmix_image && module load gmix_image/work
-    python $ESPY_DIR/shapesim/bin/cache-sim.py %(simname)s %(is2)d %(ie)d %(numper)d
+    python $ESPY_DIR/shapesim/bin/cache-sim.py %(simname)s %(is2)d %(ie)d %(numper)s
 
 %(extra)s
 %(groups)s
@@ -36,14 +38,23 @@ priority: %(pri)s\n"""
 def main():
     options,args = parser.parse_args(sys.argv[1:])
 
-    if len(args) < 2:
+    if len(args) < 1:
         parser.print_help()
         sys.exit(45)
 
     simname=args[0]
-    numper=int(args[1])
-
     ss=shapesim.ShapeSim(simname)
+
+    orient=ss.get('orient','rand')
+    if orient == 'ring':
+        numper_str=''
+    else:
+        if len(args) < 2:
+            parser.print_help()
+            sys.exit(45)
+        numper_str=args[1]
+
+
     if ss.fs != 'hdfs':
         raise ValueError("This only works for HDFS right now "
                          "would need to worry about making dirs")
@@ -79,7 +90,7 @@ def main():
                                         'simname':simname, 
                                         'is2':is2,
                                         'ie':ie,
-                                        'numper':numper,
+                                        'numper':numper_str,
                                         'groups':groups,
                                         'extra':extra,
                                         'pri':options.priority}
