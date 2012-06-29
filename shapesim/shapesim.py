@@ -8,8 +8,9 @@ from numpy import ogrid, array, sqrt, where, linspace, median, zeros
 from numpy.random import standard_normal
 import fimage
 from fimage import add_noise_admom, add_noise_dev, add_noise_uw
-from fimage.conversions import mom2sigma, cov2sigma
+from fimage.conversions import mom2sigma, cov2sigma, etheta2e1e2, ellip2mom
 from fimage.convolved import NoisyConvolvedImage
+import lensing
 
 import admom
 import fitsio
@@ -22,8 +23,8 @@ class ShapeSim(dict):
     properties.
     
     """
-    def __init__(self, run, **keys):
-        conf=read_config(run)
+    def __init__(self, simname, **keys):
+        conf=read_config(simname)
         for k,v in conf.iteritems():
             self[k] = v
 
@@ -34,13 +35,13 @@ class ShapeSim(dict):
         self.fs = 'hdfs'
         self.cache_list={}
 
-    def write_trial(self, is2, ie):
+    def write_trial(self, is2, ie, itheta=None):
         """
         Write simulate image/psf to the cache, to be used later.
 
-        A random orientation is chosen.  A pickle of the entire
-        convolved image object is written as well as a fits
-        file with the images.
+        Unless this is a ring test, q random orientation is chosen.  A pickle
+        of the entire convolved image object is written as well as a fits file
+        with the images.
 
         parameters
         ----------
@@ -53,24 +54,38 @@ class ShapeSim(dict):
         """
 
         s2,ellip = self.get_s2_e(is2, ie)
-        ci=self.get_trial(s2,ellip)
+        theta = self.get_theta(itheta=itheta)
+
+        ci=self.get_trial(s2,ellip,theta)
 
         wlog("dims: [%s,%s]" % ci.image.shape)
+        wlog("theta:",theta)
 
-        fits_file = get_random_cache_url(self['name'], is2, ie, fs=self.fs)
+        if itheta is not None:
+            fits_file = get_theta_cache_url(self['name'],is2,ie,itheta,fs=self.fs)
+            clobber=True
+        else:
+            fits_file = get_random_cache_url(self['name'], is2, ie, fs=self.fs)
+            clobber=False
+
         wlog("writing cache file:",fits_file)
+        shear=self.get_shear()
+        if shear:
+            h={'delta1':shear.e1,'delta2':shear.e2,
+               'shear1':shear.g1,'shear2':shear.g2}
+        else:
+            h=None
+
         with eu.hdfs.HDFSFile(fits_file,verbose=True) as hdfs_file:
-            ci.write_fits(hdfs_file.localfile)
-            hdfs_file.put()
+            ci.write_fits(hdfs_file.localfile, extra_keys=h)
+            hdfs_file.put(clobber=clobber)
         return ci
 
 
-    def get_trial(self, s2, ellip):
+    def get_trial(self, s2, ellip, theta):
         """
         Genereate a realization of the input size ratio squared and total
         ellipticity.
-
-            - a random orientation is chosen
 
             - Unless dotrim is false, The image is trimmed to where 0.999937 is
             contained that is 4-sigma for a gaussian, but will have a different
@@ -86,7 +101,6 @@ class ShapeSim(dict):
 
         dotrim=self.get('dotrim',True)
 
-        theta = 180.0*numpy.random.random()
         ci_full = self.new_convolved_image(s2, ellip, theta)
         if dotrim:
             wlog("trimming")
@@ -107,6 +121,19 @@ class ShapeSim(dict):
             hdfs_file.stage()
             ci = fimage.convolved.ConvolvedImageFromFits(hdfs_file.localfile)
         return ci
+
+    def read_theta_cache(self, is2, ie, itheta):
+        """
+        Read data from a random cache file
+        """
+        f=get_theta_cache_url(self['name'],is2,ie,itheta,fs=self.fs)
+        wlog("reading from cache:",f)
+
+        with eu.hdfs.HDFSFile(f,verbose=True) as hdfs_file:
+            hdfs_file.stage()
+            ci = fimage.convolved.ConvolvedImageFromFits(hdfs_file.localfile)
+        return ci
+
 
     def get_random_cache_file(self, is2, ie):
         """
@@ -164,7 +191,8 @@ class ShapeSim(dict):
             # size dependent.  Why?
             #sigma *= 1.5
 
-        cov=fimage.ellip2mom(2*sigma**2,e=obj_ellip,theta=obj_theta)
+        shear=self.get_shear()
+        cov=self.get_cov(sigma, obj_ellip, obj_theta, shear=shear)
         objpars = {'model':objmodel, 'cov':cov}
 
         if psfmodel in ['gauss','dgauss']:
@@ -177,6 +205,29 @@ class ShapeSim(dict):
 
         ci['obj_theta'] = obj_theta
         return ci
+
+    def get_shear(self):
+        sh = self.get('shear',None)
+        if sh is not None:
+            if len(sh) != 2:
+                raise ValueError("shear in config should have the "
+                                 "form [g1,g2]")
+            shear=lensing.Shear(g1=sh[0],g2=sh[1])
+        else:
+            shear=None
+        return shear
+
+    def get_cov(self, sigma, e, theta, shear=None):
+        if shear:
+            e1,e2 = etheta2e1e2(e, theta)
+            shape=lensing.Shear(e1=e1,e2=e2)
+            sheared_shape = shape + shear
+            cov = ellip2mom(e1=sheared_shape.e1,
+                            e2=sheared_shape.e2,
+                            T=2*sigma**2)
+        else:
+            cov=ellip2mom(2*sigma**2,e=e,theta=obj_theta)
+        return cov
 
     def _get_gauss_psf_pars(self):
         """
@@ -215,6 +266,26 @@ class ShapeSim(dict):
 
         return s2, ellip
 
+    def get_theta(self, itheta=None):
+        orient=self.get('orient','rand')
+        if itheta is None:
+            if orient == 'ring':
+                raise ValueError("you must send itheta for ring orientation")
+            theta = 180.0*numpy.random.random()
+        else:
+            if orient != 'ring':
+                raise ValueError("itheta only makes sense for ring test "
+                                 "simulation types")
+            if (self['nring'] % 2) != 0:
+                raise ValueError("ring sims must have nring even")
+
+            thetas = zeros(self['nring'])
+            nhalf = self['nring']/2
+            thetas[0:nhalf] = linspace(0,90,nhalf)
+            thetas[nhalf:] = thetas[0:nhalf] + 90
+
+            theta = thetas[itheta]
+        return theta
     def check_is2_ie(self, is2, ie):
         """
         Verify the is2 and ie are within range
@@ -236,6 +307,8 @@ class BaseSim(dict):
         for k,v in conf.iteritems():
             self[k] = v
         numpy.random.seed(self['seed'])
+
+        self.simc = read_config(self['sim'])
 
         self.fs='hdfs'
 
@@ -281,7 +354,13 @@ class BaseSim(dict):
         """
         import images 
 
-        out = numpy.zeros(self['ntrial'], dtype=self.out_dtype())
+        orient=self.simc.get('orient','rand')
+        if orient == 'ring':
+            ntrial = self.simc['nring']
+        else:
+            ntrial = self['ntrial']
+
+        out = numpy.zeros(ntrial, dtype=self.out_dtype())
 
         simpars=self.get('simpars',{})
         ss = ShapeSim(self['sim'], **simpars)
@@ -292,12 +371,19 @@ class BaseSim(dict):
         s2,ellip = self.get_s2_e(is2, ie)
         print 'ellip:',ellip
 
-        for i in xrange(self['ntrial']):
+        for i in xrange(ntrial):
             stderr.write('-'*70)
-            stderr.write("\n%d/%d " % (i+1,self['ntrial']))
+            stderr.write("\n%d/%d " % (i+1,ntrial))
             iter=0
             while iter < self['itmax']:
-                ci = self.get_a_trial(ss, is2, ie)
+                if orient == 'ring':
+                    itheta=i
+                else:
+                    itheta=None
+
+                # for a ring test, this will be the same image
+                # but we'll add different noise
+                ci = self.get_a_trial(ss, is2, ie, itheta=itheta)
                 if s2n > 0 or s2n_psf > 0:
                     ci = NoisyConvolvedImage(ci, s2n, s2n_psf)
 
@@ -317,21 +403,28 @@ class BaseSim(dict):
         write_output(self['run'], is2, ie, out, fs=self.fs)
         return out
 
-    def get_a_trial(self, ss, is2, ie):
+    def get_a_trial(self, ss, is2, ie, itheta=None):
         """
         Get a trial.
 
         If not using the cache, a new image is created. If adding to the cache,
         the fits file is also written.
         """
+        orient=self.simc.get('orient','rand')
         if self['use_cache']:
-            ci=ss.read_random_cache(is2,ie)
+            if itheta is not None:
+                ci=ss.read_theta_cache(is2,ie,itheta)
+            else:
+                ci=ss.read_random_cache(is2,ie)
         else:
+            if orient == 'ring':
+                raise ValueError("use a cache for ring tests")
             if self['add_to_cache']:
-                ci=ss.write_trial(is2, ie)
+                ci=ss.write_trial(is2, ie, itheta=itheta)
             else:
                 s2,ellip = self.get_s2_e(is2, ie)
-                ci=ss.get_trial(s2,ellip)
+                theta = self.get_theta(itheta=itheta)
+                ci=ss.get_trial(s2,ellip,theta)
         return ci
 
 
@@ -476,6 +569,13 @@ def random_cache_url_exists(url):
         return eu.hdfs.exists(url)
     else:
         return os.path.exists(url)
+
+def get_theta_cache_url(simname, is2, ie, itheta, fs=None):
+    import tempfile
+    d=get_cache_output_dir(simname, is2, ie, fs=fs)
+    f='%s-%03i-%03i-%05i.fits' % (simname,is2,ie, itheta)
+    url=os.path.join(d,f)
+    return url
 
 def get_random_cache_url(simname, is2, ie, fs=None):
     import tempfile
