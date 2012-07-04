@@ -53,8 +53,8 @@ class ShapeSim(dict):
         All keys are written
         """
 
-        s2,ellip = self.get_s2_e(is2, ie)
-        theta = self.get_theta(itheta=itheta)
+        s2,ellip = get_s2_e(self, is2, ie)
+        theta = get_theta(self, itheta=itheta)
 
         ci=self.get_trial(s2,ellip,theta)
 
@@ -80,6 +80,114 @@ class ShapeSim(dict):
             ci.write_fits(hdfs_file.localfile, extra_keys=h)
             hdfs_file.put(clobber=clobber)
         return ci
+
+    def write_ring_trial(self, is2, ie):
+        """
+        Write a simulated image pair, plus psf to the cache, to be used later.
+
+        A random angle is chosen, and paired with one at theta+90
+
+        parameters
+        ----------
+        is2: integer
+            A number between 0 and self['nums2']-1
+        ie: integer
+            A number is a number between 0 and self['nume']-1
+
+        All keys are written
+        """
+
+        s2,ellip = get_s2_e(self, is2, ie)
+        theta1 = get_theta(self)
+        theta2 = theta1+90
+
+        ci1=self.get_trial(s2,ellip,theta1)
+        ci2=self.get_trial(s2,ellip,theta2)
+
+        wlog("dims: [%s,%s]" % ci1.image.shape)
+        wlog("theta1:",theta1)
+        wlog("theta2:",theta2)
+
+        fits_file = get_random_cache_url(self['name'], is2, ie, fs=self.fs)
+
+        wlog("writing cache file:",fits_file)
+        shear=self.get_shear()
+        if shear:
+            h={'delta1':shear.e1,'delta2':shear.e2,
+               'shear1':shear.g1,'shear2':shear.g2}
+        else:
+            h=None
+
+        with eu.hdfs.HDFSFile(fits_file,verbose=True) as hdfs_file:
+            self.write_ring_fits(hdfs_file.localfile, ci1, ci2, extra_keys=h)
+            hdfs_file.put()
+
+    def write_ring_fits(self, fits_file, ci1, ci2, extra_keys=None):
+        """
+        Write the images and metadata to a fits file
+
+        The images are in separate extensions 
+            'image1','image1_0'
+            'image2','image2_0',
+            'psf'
+        the metadata are in a binary tables 'table1','table2'
+
+        parameters
+        ----------
+        fits_file: string
+            Name of the file to write
+        ci1: child of ConvolverBase
+        ci2: child of ConvolverBase
+        """
+        import fitsio
+
+        shear=self.get_shear()
+        cilist = [ci1,ci2]
+        with fitsio.FITS(fits_file,mode='rw',clobber=True) as fitsobj:
+            for i in [1,2]:
+                ci = cilist[i-1]
+                dt=[]
+                if shear is not None:
+                    dt+=[('delta1','f8'),('delta2','f8'),
+                         ('shear1','f8'),('shear2','f8')]
+                for k,v in ci.iteritems():
+                    if isinstance(v,int) or isinstance(v,long):
+                        dt.append( (k, 'i8') )
+                    elif isinstance(v,float):
+                        dt.append( (k, 'f8') )
+                    elif isinstance(v,numpy.ndarray):
+                        this_t = v.dtype.descr[0][1]
+                        this_n = v.size
+                        if this_n > 1:
+                            this_dt = (k,this_t,this_n)
+                        else:
+                            this_dt = (k,this_t)
+                        dt.append(this_dt)
+                    else:
+                        raise ValueError("unsupported type: %s" % type(v))
+                table = numpy.zeros(1, dtype=dt)
+                for k,v in ci.iteritems():
+                    table[k][0] = v
+                if shear is not None:
+                    table['delta1'],table['delta2'] = shear.e1,shear.e2
+                    table['shear1'],table['shear2'] = shear.g1,shear.g2
+
+                h={}
+                # note not all items will be written, only basic types,
+                # so this is not for feeding to the sim code.  The full
+                # metadata are in the table
+                for k,v in ci.iteritems():
+                    h[k] = v
+                if extra_keys:
+                    for k,v in extra_keys.iteritems():
+                        h[k] = v
+
+                fitsobj.write(ci.image, header=h, extname='image%d' % i)
+                fitsobj.write(ci.psf, extname='psf%d' % i)
+                fitsobj.write(ci.image0, extname='image%d_0' % i)
+                fitsobj.write(table, extname='table%d' % i)
+
+
 
 
     def get_trial(self, s2, ellip, theta):
@@ -121,6 +229,23 @@ class ShapeSim(dict):
             hdfs_file.stage()
             ci = fimage.convolved.ConvolvedImageFromFits(hdfs_file.localfile)
         return ci
+
+    def read_random_ring_cache(self, is2, ie):
+        """
+        Read data from a random cache file
+        """
+        f=self.get_random_cache_file(is2,ie)
+        wlog("reading from cache:",f)
+
+        with eu.hdfs.HDFSFile(f,verbose=True) as hdfs_file:
+            hdfs_file.stage()
+            ci1 = fimage.convolved.ConvolvedImageFromFits(hdfs_file.localfile,
+                                                          hid=1)
+            ci2 = fimage.convolved.ConvolvedImageFromFits(hdfs_file.localfile,
+                                                          hid=2)
+        return ci1, ci2
+
+
 
     def read_theta_cache(self, is2, ie, itheta):
         """
@@ -256,48 +381,6 @@ class ShapeSim(dict):
 
         return psfpars, psf_sigma_tot
 
-    def get_s2_e(self, is2, ie):
-        """
-        Extract the s2 and e corresponding to the input indices
-        """
-        self.check_is2_ie(is2, ie)
-        s2 = linspace(self['mins2'],self['maxs2'], self['nums2'])[is2]
-        ellip = linspace(self['mine'],self['maxe'], self['nume'])[ie]
-
-        return s2, ellip
-
-    def get_theta(self, itheta=None):
-        orient=self.get('orient','rand')
-        if itheta is None:
-            if orient == 'ring':
-                raise ValueError("you must send itheta for ring orientation")
-            theta = 180.0*numpy.random.random()
-        else:
-            if orient != 'ring':
-                raise ValueError("itheta only makes sense for ring test "
-                                 "simulation types")
-            if (self['nring'] % 2) != 0:
-                raise ValueError("ring sims must have nring even")
-
-            thetas = zeros(self['nring'])
-            nhalf = self['nring']/2
-            thetas[0:nhalf] = linspace(0,90,nhalf)
-            thetas[nhalf:] = thetas[0:nhalf] + 90
-
-            theta = thetas[itheta]
-        return theta
-    def check_is2_ie(self, is2, ie):
-        """
-        Verify the is2 and ie are within range
-        """
-        max_is2 = self['nums2']-1
-        max_ie  = self['nume']-1
-        if (is2 < 0) or (is2 > max_is2):
-            raise ValueError("is2 must be within [0,%d], "
-                             "got %d" % (max_is2,is2))
-        if (ie < 0) or (ie > max_ie):
-            raise ValueError("ie must be within [0,%d], "
-                             "got %d" % (max_ie,ie))
 
 
 
@@ -357,10 +440,12 @@ class BaseSim(dict):
         orient=self.simc.get('orient','rand')
         if orient == 'ring':
             ntrial = self.simc['nring']
+            nrepeat = self['nrepeat']
         else:
             ntrial = self['ntrial']
+            nrepeat=1
 
-        out = numpy.zeros(ntrial, dtype=self.out_dtype())
+        out = numpy.zeros(ntrial*nrepeat, dtype=self.out_dtype())
 
         simpars=self.get('simpars',{})
         ss = ShapeSim(self['sim'], **simpars)
@@ -368,40 +453,118 @@ class BaseSim(dict):
         s2n = self['s2n']
         s2n_psf = self['s2n_psf']
 
-        s2,ellip = self.get_s2_e(is2, ie)
+        s2,ellip = get_s2_e(self.simc, is2, ie)
         print 'ellip:',ellip
 
+        ii = 0
         for i in xrange(ntrial):
             stderr.write('-'*70)
             stderr.write("\n%d/%d " % (i+1,ntrial))
             iter=0
-            while iter < self['itmax']:
-                if orient == 'ring':
-                    itheta=i
-                else:
-                    itheta=None
 
-                # for a ring test, this will be the same image
-                # but we'll add different noise
-                ci = self.get_a_trial(ss, is2, ie, itheta=itheta)
-                if s2n > 0 or s2n_psf > 0:
-                    ci = NoisyConvolvedImage(ci, s2n, s2n_psf)
+            if orient == 'ring':
+                itheta=i
+            else:
+                itheta=None
 
-                if iter == 0: stderr.write("%s " % str(ci.psf.shape))
-                res = self.run(ci)
+            # for ring, we can do multiple noise realizations
+            # of each image
+            for irepeat in xrange(nrepeat):
+                while iter < self['itmax']:
 
-                if res['flags'] == 0:
-                    st = self.copy_output(s2, ellip, s2n, ci, res)
-                    out[i] = st
-                    break
-                else:
-                    iter += 1
+                    # for a ring test, this will be the same image
+                    # but we'll add different noise when repeating
+                    # or if the last try failed
+                    ci = self.get_a_trial(ss, is2, ie, itheta=itheta)
+                    if s2n > 0 or s2n_psf > 0:
+                        ci = NoisyConvolvedImage(ci, s2n, s2n_psf)
 
-            if iter == self['itmax']:
-                raise ValueError("itmax %d reached" % self['itmax'])
+                    if iter == 0: stderr.write("%s " % str(ci.psf.shape))
+                    res = self.run(ci)
+
+                    if res['flags'] == 0:
+                        st = self.copy_output(s2, ellip, s2n, ci, res)
+                        out[ii] = st
+                        ii += 1
+                        break
+                    else:
+                        iter += 1
+
+                if iter == self['itmax']:
+                    raise ValueError("itmax %d reached" % self['itmax'])
             stderr.write("niter: %d\n" % (iter+1))
         write_output(self['run'], is2, ie, out, fs=self.fs)
         return out
+
+    def process_ring_trials(self, is2, ie):
+        """
+        Generate random realizations of a particular element in the s2 and
+        ellip sequences.
+
+        parameters
+        ----------
+        is2: integer
+            A number between 0 and self['nums2']-1
+        ie: integer
+            A number is a number between 0 and self['nume']-1
+        """
+        import images 
+
+        orient=self.simc.get('orient','rand')
+        ntrial = self['ntrial']
+
+        out = numpy.zeros(ntrial*2, dtype=self.out_dtype())
+
+        simpars=self.get('simpars',{})
+        ss = ShapeSim(self['sim'], **simpars)
+
+        s2n = self['s2n']
+        s2n_psf = self['s2n_psf']
+
+        s2,ellip = get_s2_e(self.simc, is2, ie)
+        print 'ellip:',ellip
+
+        ii = 0
+        for i in xrange(ntrial):
+            stderr.write('-'*70)
+            stderr.write("\n%d/%d " % (i+1,ntrial))
+            iter=0
+
+
+            # for ring, we can do multiple noise realizations
+            # of each image
+            while iter < self['itmax']:
+
+                ci1,ci2 = self.get_a_ring_trial(ss, is2, ie)
+                if s2n > 0 or s2n_psf > 0:
+                    ci1 = NoisyConvolvedImage(ci1, s2n, s2n_psf)
+                    ci2 = NoisyConvolvedImage(ci2, s2n, s2n_psf)
+
+                if iter == 0: stderr.write("%s " % str(ci1.psf.shape))
+                res1 = self.run(ci1)
+                if res1['flags'] == 0:
+                    res2 = self.run(ci2)
+                    if res2['flags'] == 0:
+                        st1 = self.copy_output(s2, ellip, s2n, ci1, res1)
+                        out[ii] = st1
+                        ii += 1
+                        st2 = self.copy_output(s2, ellip, s2n, ci2, res2)
+                        out[ii] = st2
+                        ii += 1
+                        break
+                    else:
+                        iter+=1
+                        continue
+                else:
+                    iter+=1
+                    continue
+
+            if iter == self['itmax']:
+                raise ValueError("itmax %d reached" % self['itmax'])
+        stderr.write("niter: %d\n" % (iter+1))
+        write_output(self['run'], is2, ie, out, fs=self.fs)
+        return out
+
 
     def get_a_trial(self, ss, is2, ie, itheta=None):
         """
@@ -422,35 +585,69 @@ class BaseSim(dict):
             if self['add_to_cache']:
                 ci=ss.write_trial(is2, ie, itheta=itheta)
             else:
-                s2,ellip = self.get_s2_e(is2, ie)
-                theta = self.get_theta(itheta=itheta)
+                s2,ellip = get_s2_e(self.simc, is2, ie)
+                theta = get_theta(self.simc, itheta=itheta)
                 ci=ss.get_trial(s2,ellip,theta)
         return ci
 
-
-    def get_s2_e(self, is2, ie):
+    def get_a_ring_trial(self, ss, is2, ie):
         """
-        Extract the s2 and e corresponding to the input indices
-        """
-        self.check_is2_ie(is2, ie)
-        s2 = linspace(self['mins2'],self['maxs2'], self['nums2'])[is2]
-        ellip = linspace(self['mine'],self['maxe'], self['nume'])[ie]
+        Get a trial.
 
-        return s2, ellip
-
-    def check_is2_ie(self, is2, ie):
+        If not using the cache, a new image is created. If adding to the cache,
+        the fits file is also written.
         """
-        Verify the is2 and ie are within range
-        """
-        max_is2 = self['nums2']-1
-        max_ie  = self['nume']-1
-        if (is2 < 0) or (is2 > max_is2):
-            raise ValueError("is2 must be within [0,%d], "
-                             "got %d" % (max_is2,is2))
-        if (ie < 0) or (ie > max_ie):
-            raise ValueError("ie must be within [0,%d], "
-                             "got %d" % (max_ie,ie))
+        orient=self.simc.get('orient','rand')
+        ci1,ci2=ss.read_random_ring_cache(is2,ie)
+        return ci1, ci2
 
+
+
+
+def get_s2_e(conf, is2, ie):
+    """
+    Extract the s2 and e corresponding to the input indices
+    """
+    check_is2_ie(conf, is2, ie)
+    s2 = linspace(conf['mins2'],conf['maxs2'], conf['nums2'])[is2]
+    ellip = linspace(conf['mine'],conf['maxe'], conf['nume'])[ie]
+
+    return s2, ellip
+
+def check_is2_ie(conf, is2, ie):
+    """
+    Verify the is2 and ie are within range
+    """
+    max_is2 = conf['nums2']-1
+    max_ie  = conf['nume']-1
+    if (is2 < 0) or (is2 > max_is2):
+        raise ValueError("is2 must be within [0,%d], "
+                         "got %d" % (max_is2,is2))
+    if (ie < 0) or (ie > max_ie):
+        raise ValueError("ie must be within [0,%d], "
+                         "got %d" % (max_ie,ie))
+
+
+def get_theta(conf, itheta=None):
+    orient=conf.get('orient','rand')
+    if itheta is None:
+        if orient == 'ring':
+            raise ValueError("you must send itheta for ring orientation")
+        theta = 180.0*numpy.random.random()
+    else:
+        if orient != 'ring':
+            raise ValueError("itheta only makes sense for ring test "
+                             "simulation types")
+        if (conf['nring'] % 2) != 0:
+            raise ValueError("ring sims must have nring even")
+
+        thetas = zeros(conf['nring'])
+        nhalf = conf['nring']/2
+        thetas[0:nhalf] = linspace(0,90,nhalf)
+        thetas[nhalf:] = thetas[0:nhalf] + 90
+
+        theta = thetas[itheta]
+    return theta
 
 
 

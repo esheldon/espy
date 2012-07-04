@@ -7,7 +7,7 @@ gmix-fit
             - have about 100-200 per as of now.  Some with same seeds.
 
         dt02
-            - added shear g1=0.01
+            - ring, shear g1=0.01
     low noise runs
         et01r04
             - very glad I reran the 03 run with better guesses, this one looks

@@ -1,21 +1,20 @@
-name: sim-dt02
+# this one is pairs of 90 degree separated images together in samefile
+name: sim-gg04
 
 #
 # type must be rand or ring
 # default current rand
 # If ring, the ntrial must be even in the run config
 
-orient: ring
-
-# we need to specify the number in the ring here
+#orient: "ring-rand"
+orient: "ring"
 nring: 100
 
-psfmodel: turb
-# this is 1.3'' SDSS or 0.9'' DES
-# sigma for gmix fit seems to be about 3.3/1.68 = ~2
-psf_fwhm: 3.3
+psfmodel: gauss
+psf_sigma: 1.4
+psf_ellip: 0.0
 
-objmodel: dev
+objmodel: gauss
 
 #
 # an applied shear!
@@ -32,5 +31,5 @@ nume:  20
 
 comments: |
 
-    dev obj, turb psf
+    gauss obj, gauss psf, low res, analytic convolutions
     applied shear in e1 direction

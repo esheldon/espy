@@ -3,38 +3,47 @@ import esutil as eu
 from numpy import tanh, arctanh, sqrt
 import copy
 
-def add_distortion(e1_1, e2_1, e1_2, e2_2):
+def shear_response_correct(e1, e2, weights=None, doerr=False):
     """
-    Add distortions delta_1 + delta2.  The order matters.
+    Calculate the mean shear
 
-    Note 1,2 reversed from BJ02
+    parameters
+    ----------
+    e1: array
+        e1 values
+    e2: array
+        e2 values
+    weights: array, optional
+    doerr: bool, optional
+        Calculate the error. Not meaningful in ring tests where the
+        orientations are not random.
+
+    notes
+    -----
+    The formula used takes the average of the e_i^2
+    compoments for the responsivity
     """
 
-    esq_1 = e1_1**2 + e2_1**2
-    esq_2 = e1_2**2 + e2_2**2
-    if esq_1 > 1 or esq_2 > 1:
-        raise ValueError("ellipticities must be <= 1")
-    if esq_2 == 0:
-        # no distortion
-        return copy.copy(e1_1), copy.copy(e2_1)
-    if esq_1 == 0:
-        # first one is round, just return second
-        return copy.copy(e1_2), copy.copy(e2_2)
+    if weights is not None:
+        raise ValueError("implemented weighted")
 
-    edot = e1_1*e1_2 + e2_1*e2_2
-    oneplusedot = 1. + edot
+    mesq = (e1**2 + e2**2).mean()
+    R = 1-.5*mesq
+    me1 = e1.mean()
+    me2 = e2.mean()
 
-    if oneplusedot == 0:
-        return 0., 0.
+    g1 = 0.5*me1/R
+    g2 = 0.5*me2/R
 
-    fac = (1.-sqrt(1.-esq_1) )/esq_1
-    
-    e1o = e1_1 + e1_2 + (e1_1 * e2_2 - e2_1 * e1_2)*fac*e2_1
-    e2o = e2_1 + e2_2 + (e2_1 * e1_2 - e1_1 * e2_2)*fac*e1_1
-    e1o /= oneplusedot
-    e2o /= oneplusedot
+    if doerr:
+        err_e1 = e1.std()/sqrt(e1.size)
+        err_e2 = e2.std()/sqrt(e2.size)
+        err_g1 =0.5*err_e1/R
+        err_g2 =0.5*err_e2/R
+        return g1,g2,err_g1,err_g2
+    else:
+        return g1,g2
 
-    return e1o, e2o
 
 def e2gamma(e):
     """

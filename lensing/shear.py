@@ -1,4 +1,8 @@
+import esutil as eu
+from numpy import sqrt
+import copy
 from . import util
+
 
 class Shear:
     """
@@ -81,11 +85,28 @@ class Shear:
     def __add__(self, s):
         if not isinstance(s,Shear):
             raise ValueError("Only Shear objects can be added")
-        e1o,e2o = util.add_distortion(self._e1, self._e2,
-                                      s._e1, s._e2)
-        sout = Shear()
-        sout.set_e1e2(e1o,e2o)
+
+        if s._e1 == 0 and s._e2 == 0:
+            return copy.deepcopy(self)
+
+        oneplusedot = 1.0 + self._e1*s._e1 + self._e2*s._e2
+        if oneplusedot == 0:
+            return Shear(e1=0, e2=0)
+
+        se1sq = s._e1**2 + s._e2**2
+
+        fac = (1.0 - sqrt(1.0-se1sq))/se1sq
+
+        e1 = (self._e1 + s._e1 + s._e2*fac*(self._e2*s._e1 - self._e1*s._e2))
+        e2 = (self._e2 + s._e2 + s._e1*fac*(self._e1*s._e2 - self._e2*s._e1))
+
+        e1 /= oneplusedot
+        e2 /= oneplusedot
+
+        sout = Shear(e1=e1,e2=e2)
         return sout
+
+
     def __sub__(self, s):
         return self.__add__(-s)
     def __repr__(self):

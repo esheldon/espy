@@ -31,7 +31,11 @@ def main():
     else:
         raise ValueError("Don't know about run '%s'" % run)
 
-    sim.process_trials(is2, ie)
+    orient=sim.simc.get('orient','rand')
+    if orient=='ring-rand':
+        sim.process_ring_trials(is2, ie)
+    else:
+        sim.process_trials(is2, ie)
 
 
 main()
