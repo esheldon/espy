@@ -1,5 +1,5 @@
 # gg03 is a ring test
-run: gmix-fit-gg03r01
+run: gmix-fit-gg03r02
 sim: sim-gg03
 
 # for ring, can use a pre-cached set of images
@@ -16,7 +16,9 @@ use_jacob: false
 verbose: true
 
 # you need the + or - in exponent
-s2n: 1.0e+6
+# log spaced sequence   5   11   22    47   100
+# in andres' estimator 14.5 31.9 63.8 136.3 290
+s2n: 100
 s2n_psf: 1.0e+6
 
 # we should try with higher values to see what happens

@@ -3,9 +3,9 @@ import esutil as eu
 from numpy import tanh, arctanh, sqrt
 import copy
 
-def shear_response_correct(e1, e2, weights=None, doerr=False):
+def average_shear(e1, e2, weights=None, doerr=False):
     """
-    Calculate the mean shear
+    Calculate the mean shear from shapes.
 
     parameters
     ----------
@@ -27,7 +27,12 @@ def shear_response_correct(e1, e2, weights=None, doerr=False):
     if weights is not None:
         raise ValueError("implemented weighted")
 
-    mesq = (e1**2 + e2**2).mean()
+    num=e1.size
+    if e2.size != num:
+        raise ValueError("e1 and e2 must be same size")
+
+    esq = e1**2 + e2**2
+    mesq = esq.mean()
     R = 1-.5*mesq
     me1 = e1.mean()
     me2 = e2.mean()
@@ -36,13 +41,15 @@ def shear_response_correct(e1, e2, weights=None, doerr=False):
     g2 = 0.5*me2/R
 
     if doerr:
-        err_e1 = e1.std()/sqrt(e1.size)
-        err_e2 = e2.std()/sqrt(e2.size)
-        err_g1 =0.5*err_e1/R
-        err_g2 =0.5*err_e2/R
-        return g1,g2,err_g1,err_g2
+        mesq_err = esq.std()/sqrt(num)
+        e1err = e1.std()/sqrt(num)
+        e2err = e2.std()/sqrt(num)
+        
+        g1err = g1*sqrt( (mesq_err/mesq)**2 + (e1err/me1)**2 )
+        g2err = g2*sqrt( (mesq_err/mesq)**2 + (e1err/me2)**2 )
+        return g1,g2,R,g1err,g2err
     else:
-        return g1,g2
+        return g1,g2, R
 
 
 def e2gamma(e):

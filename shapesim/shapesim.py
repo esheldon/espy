@@ -351,7 +351,7 @@ class ShapeSim(dict):
                             e2=sheared_shape.e2,
                             T=2*sigma**2)
         else:
-            cov=ellip2mom(2*sigma**2,e=e,theta=obj_theta)
+            cov=ellip2mom(2*sigma**2,e=e,theta=theta)
         return cov
 
     def _get_gauss_psf_pars(self):
@@ -468,16 +468,21 @@ class BaseSim(dict):
                 itheta=None
 
             # for ring, we can do multiple noise realizations
-            # of each image
+            # of each image, so only get nonoise image once
+            if orient == 'ring':
+                ci_nonoise = self.get_a_trial(ss, is2, ie, itheta=itheta)
+
             for irepeat in xrange(nrepeat):
                 while iter < self['itmax']:
 
-                    # for a ring test, this will be the same image
-                    # but we'll add different noise when repeating
-                    # or if the last try failed
-                    ci = self.get_a_trial(ss, is2, ie, itheta=itheta)
+                    if orient != 'ring':
+                        # for not ring, we always grab a new angle/image
+                        ci_nonoise = self.get_a_trial(ss, is2, ie)
+
                     if s2n > 0 or s2n_psf > 0:
-                        ci = NoisyConvolvedImage(ci, s2n, s2n_psf)
+                        ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf)
+                    else:
+                        ci = ci_nonoise
 
                     if iter == 0: stderr.write("%s " % str(ci.psf.shape))
                     res = self.run(ci)
@@ -580,8 +585,8 @@ class BaseSim(dict):
             else:
                 ci=ss.read_random_cache(is2,ie)
         else:
-            if orient == 'ring':
-                raise ValueError("use a cache for ring tests")
+            #if orient == 'ring':
+            #    raise ValueError("use a cache for ring tests")
             if self['add_to_cache']:
                 ci=ss.write_trial(is2, ie, itheta=itheta)
             else:
@@ -589,6 +594,7 @@ class BaseSim(dict):
                 theta = get_theta(self.simc, itheta=itheta)
                 ci=ss.get_trial(s2,ellip,theta)
         return ci
+
 
     def get_a_ring_trial(self, ss, is2, ie):
         """
@@ -834,34 +840,25 @@ def average_outputs(data):
     dt = data[0][0].dtype.descr
 
     if 'e1_meas' in data[0][0].dtype.names:
-        do_ediff=True
-        dt += [('e1diff','f8'),('e2diff','f8')]
+        dt += [('shear1','f8'),('shear2','f8'),('Rshear','f8')]
     else:
-        do_ediff=False
-        print 'DEAL WITH e1meas missing'
+        raise ValueError('DEAL WITH e1meas missing')
 
     for s2data in data: # over different values of s2
         d=zeros(len(s2data),dtype=dt)
         for i,edata in enumerate(s2data): # over different ellipticities
+            shear1,shear2,R = lensing.util.average_shear(edata['e1_meas'],edata['e2_meas'])
             for n in d.dtype.names:
-                if n == 'e1diff' or n=='e2diff':
-                    if do_ediff:
-                        #d['e1diff'][i] = median(edata['e1_meas']-edata['e1true'])
-                        #d['e2diff'][i] = median(edata['e2_meas']-edata['e2true'])
-                        d['e1diff'][i] = (edata['e1_meas']-edata['e1true']).mean()
-                        d['e2diff'][i] = (edata['e2_meas']-edata['e2true']).mean()
-                    else:
-                        print 'DEAL WITH e1meas missing'
+                if n == 'Rshear':
+                    d['Rshear'][i] = R
+                elif n == 'shear1':
+                    d['shear1'][i] = shear1
+                elif n == 'shear2':
+                    d['shear2'][i] = shear2
                 else:
                     if edata[n].dtype.names is None and len(edata[n].shape) == 1:
                         #d[n][i] = median(edata[n])
                         d[n][i] = edata[n].mean()
-
-            """
-            wts = 1./(0.32**2 + edata['e1_chol_err']**2)
-            m,e=eu.stat.wmom(edata['e_meas'],wts)
-            d['e_meas'][i] = m
-            """
 
         out.append(d)
     return out

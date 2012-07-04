@@ -42,6 +42,7 @@ def main():
     run=args[0]
 
     c = shapesim.read_config(run)
+    cs = shapesim.read_config(c['sim'])
     groups=options.groups
     if groups is None:
         groups=''
@@ -64,8 +65,8 @@ def main():
         extra='mode: bycore1\nN: %d' % ncores
 
 
-    for is2 in xrange(c['nums2']):
-        for ie in xrange(c['nume']):
+    for is2 in xrange(cs['nums2']):
+        for ie in xrange(cs['nume']):
             job_name='%s-%i-%i' % (run,is2,ie)
 
             wqurl = shapesim.get_wq_url(run,is2,ie)

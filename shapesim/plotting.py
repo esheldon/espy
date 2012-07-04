@@ -1,5 +1,6 @@
 import os
 from . import shapesim
+import lensing
 import esutil as eu
 from esutil.misc import wlog
 from esutil.numpy_util import where1
@@ -31,6 +32,9 @@ class SimPlotter(dict):
         import pcolors
         import converter
 
+        slist=self.simc['shear']
+        shear_true = lensing.shear.Shear(g1=slist[0],g2=slist[1])
+
         data = self.read_data(s2meas=s2meas, s2max=s2max)
 
         epsfile = shapesim.get_plot_file(self['run'],type,
@@ -45,7 +49,7 @@ class SimPlotter(dict):
         arr=biggles.FramedArray(2,1)
         #arr.aspect_ratio=1
         arr.xlabel=r'ellipticity'
-        arr.ylabel = r'$\Delta e$'
+        arr.ylabel = r'$\Delta \gamma$'
 
  
         plots1=[]
@@ -54,7 +58,6 @@ class SimPlotter(dict):
         for i,st in enumerate(reversed(data)):
             wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
 
-            #s2 = median(st['s2_meas'])
             if s2meas:
                 s2 = median(st['s2_meas'])
             else:
@@ -62,15 +65,14 @@ class SimPlotter(dict):
 
             s = st['etrue'].argsort()
 
-
             etrue = st['etrue'][s]
             
-            e1diff = st['e1diff'][s]
-            e2diff = st['e2diff'][s]
+            shear1diff = st['shear1'][s] - shear_true.g1
+            shear2diff = st['shear2'][s] - shear_true.g2
 
             label = r'%0.3f' % s2
-            cr1 = biggles.Curve(etrue, e1diff, color=colors[i])
-            cr2 = biggles.Curve(etrue, e2diff, color=colors[i])
+            cr1 = biggles.Curve(etrue, shear1diff, color=colors[i])
+            cr2 = biggles.Curve(etrue, shear2diff, color=colors[i])
             cr1.label = label
             cr2.label = label
 
@@ -128,10 +130,10 @@ class SimPlotter(dict):
         arr[1,0].add(sl)
 
 
-        e1lab = biggles.PlotLabel(0.1,0.9, r'$e_1$', halign='left')
-        e2lab = biggles.PlotLabel(0.1,0.9, r'$e_2$', halign='left')
-        arr[0,0].add(e1lab)
-        arr[1,0].add(e2lab)
+        g1lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_1$ = %.2g' % shear_true.g1, halign='left')
+        g2lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_2$ = %.2g' % shear_true.g2, halign='left')
+        arr[0,0].add(g1lab)
+        arr[1,0].add(g2lab)
 
         arr.xrange = [0,1.4]
         if yrange is not None:
