@@ -47,5 +47,5 @@ if yrng is not None:
     yrng = [float(yr) for yr in yrng]
 
 p=shapesim.plotting.SimPlotter(run)
-p.doplots(yrange=yrng,s2max=s2max,s2meas=options.s2meas,
-          show=show,type=options.type)
+p.doplots_vs_e(yrange=yrng,s2max=s2max,s2meas=options.s2meas,
+               show=show,type=options.type)

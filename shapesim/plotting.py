@@ -22,7 +22,7 @@ class SimPlotter(dict):
         
         self._data=None
 
-    def doplots(self, 
+    def doplots_vs_e(self, 
                 s2meas=False,
                 type='diff',
                 s2max=None, 
