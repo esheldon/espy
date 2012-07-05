@@ -1180,9 +1180,10 @@ class GMixFitSim(shapesim.BaseSim):
 
         # first copy inputs and data from the CI
         st['s2'] = s2
-        st['s2n'] = s2n
-        st['s2n_andres'] = ci['s2n_andres']
-        st['s2n_andres_psf'] = ci['s2n_andres_psf']
+        st['s2n_uw'] = ci['s2n_uw']
+        st['s2n_matched'] = ci['s2n_matched']
+        st['s2n_uw_psf'] = ci['s2n_uw_psf']
+        st['s2n_matched_psf'] = ci['s2n_matched_psf']
         st['ellip'] = ellip
         st['e1true'] = ci['e1true']
         st['e2true'] = ci['e2true']
@@ -1321,9 +1322,10 @@ class GMixFitSim(shapesim.BaseSim):
 
         gmix_dt = [('p','f8'),('row','f8'),('col','f8'),
                    ('irr','f8'),('irc','f8'),('icc','f8')]
-        dt=[('s2n','f8'),
-            ('s2n_andres','f8'),
-            ('s2n_andres_psf','f8'),
+        dt=[('s2n_uw','f8'),
+            ('s2n_uw_psf','f8'),
+            ('s2n_matched','f8'),
+            ('s2n_matched_psf','f8'),
             ('ellip','f8'),
 
             ('s2','f8'),         # requested (spsf/sobj)**2

@@ -46,8 +46,7 @@ class SimPlotter(dict):
         data = self.read_data(s2meas=s2meas, s2max=s2max,
                               skip1=skip1,skip2=skip2)
 
-        epsfile = shapesim.get_plot_file(self['run'],type,
-                                         yrange=yrange)
+        epsfile = shapesim.get_plot_file(self['run'],type,yrange=yrange)
         wlog("will plot to:",epsfile)
 
         colors=pcolors.rainbow(len(data), 'hex')
@@ -55,8 +54,6 @@ class SimPlotter(dict):
         biggles.configure('PlotKey','key_vsep',1.0)
         arr=biggles.FramedArray(2,1)
         #arr.aspect_ratio=1
-        arr.xlabel=r'S/N'
-        arr.ylabel = r'$\Delta \gamma$'
 
  
         plots1=[]
@@ -74,19 +71,26 @@ class SimPlotter(dict):
 
             s2n = st['s2n'][s]
             
-            shear1diff = st['shear1'][s] - shear_true.g1
-            shear2diff = st['shear2'][s] - shear_true.g2
+            if type == 'diff':
+                yvals1 = st['shear1'][s] - shear_true.g1
+                yvals2 = st['shear2'][s] - shear_true.g2
+            elif type == 'val':
+                yvals1 = st['shear1'][s]
+                yvals2 = st['shear2'][s]
+
+            else:
+                raise ValueError("bad plot type: '%s'" % type)
 
             shear1err=st['shear1err'][s]
             shear2err=st['shear2err'][s]
 
             label = r'%0.3f' % s2
-            #pr1 = biggles.Points(s2n, shear1diff, color=colors[i],type='filled circle')
-            #pr2 = biggles.Points(s2n, shear2diff, color=colors[i],type='filled circle')
-            pr1 = biggles.Curve(s2n, shear1diff, color=colors[i])
-            pr2 = biggles.Curve(s2n, shear2diff, color=colors[i])
+            pr1 = biggles.Curve(s2n, yvals1, color=colors[i])
+            pr2 = biggles.Curve(s2n, yvals2, color=colors[i])
             pr1.label = label
             pr2.label = label
+
+
 
             #err1 = biggles.SymmetricErrorBarsY(s2n, shear1diff, shear1err)
             #err2 = biggles.SymmetricErrorBarsY(s2n, shear2diff, shear2err)
@@ -132,17 +136,35 @@ class SimPlotter(dict):
                                fontsize=2.5)
         arr[1,0].add(sl)
 
+        arr.xlabel=r'S/N'
+
+        if type == 'val':
+            arr.ylabel = r'$\gamma$'
+            expect1 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()],
+                                    [shear_true.g1,shear_true.g1])
+            expect1.label = r'$\gamma_1$ = %.2g' % shear_true.g1
+            expect2 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()],
+                                    [shear_true.g2,shear_true.g2])
+            expect2.label = r'$\gamma_2$ = %.2g' % shear_true.g2
+
+            ekey1 = biggles.PlotKey(0.1,0.9, [expect1], halign='left', 
+                                   fontsize=3)
+            ekey2 = biggles.PlotKey(0.1,0.9, [expect2], halign='left', 
+                                   fontsize=3)
+
+            arr[0,0].add(expect1,ekey1)
+            arr[1,0].add(expect2,ekey2)
+
+        else:
+            arr.ylabel = r'$\Delta \gamma$'
+            g1lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_1$ = %.2g' % shear_true.g1, halign='left')
+            g2lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_2$ = %.2g' % shear_true.g2, halign='left')
+
+            arr[0,0].add(g1lab)
+            arr[1,0].add(g2lab)
 
 
-        g1lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_1$ = %.2g' % shear_true.g1, halign='left')
-        g2lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_2$ = %.2g' % shear_true.g2, halign='left')
-
-
-        arr[0,0].add(g1lab)
-        arr[1,0].add(g2lab)
-
-
-        arr.xrange = [0.8*s2n.min(),s2n.max()*1.4]
+        arr.xrange = [0.1*s2n.min(),s2n.max()*1.4]
         if yrange is not None:
             arr.yrange = yrange
 
@@ -223,7 +245,7 @@ class SimPlotter(dict):
             else:
                 plots2.append(cr1)
 
-        fsize=1.5
+        fsize=2
         key1 = biggles.PlotKey(0.9,0.85, plots1, halign='right', 
                                fontsize=fsize)
         arr[0,0].add(key1)
@@ -233,10 +255,10 @@ class SimPlotter(dict):
             arr[1,0].add(key2)
 
         klabtext=r'$<\sigma^2_{psf}/\sigma^2_{gal}>$'
-        if self['s2n'] > 0:
-            klabtext += ' (S/N)'
-        klab = biggles.PlotLabel(0.95,0.92,klabtext,
-                                 fontsize=1.5,halign='right')
+        #if self['s2n'] > 0:
+        #    klabtext += ' (S/N)'
+        klab = biggles.PlotLabel(0.9,0.92,klabtext,
+                                 fontsize=fsize,halign='right')
         arr[0,0].add(klab)
         objmodel = self.simc['objmodel']
         psfmodel = self.simc['psfmodel']

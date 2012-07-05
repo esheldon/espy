@@ -1,6 +1,6 @@
-# et02 is a ring test
-run: gmix-fit-et02r07
-sim: sim-et02
+# dt02 is a ring test
+run: gmix-fit-dt02r02
+sim: sim-dt02
 
 # we will use all the s2 values from the sim, a set of s/n values and a single
 # ellip value
@@ -28,7 +28,7 @@ verbose: true
 
 # we should try with higher values to see what happens
 ngauss_psf: 3
-ngauss_obj: 3
+ngauss_obj: 4
 
 coellip_psf: true
 coellip_obj: true

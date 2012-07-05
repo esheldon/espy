@@ -1,12 +1,12 @@
 # et02 is a ring test
-run: gmix-fit-et02r07
+run: gmix-fit-et02r08
 sim: sim-et02
 
 # we will use all the s2 values from the sim, a set of s/n values and a single
 # ellip value
 runtype: bys2n
 
-ie: 0
+ie: 7 # 0.32
 mins2n: 5
 maxs2n: 100
 nums2n: 20  # still 20*20=400

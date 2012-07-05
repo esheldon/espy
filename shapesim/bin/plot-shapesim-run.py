@@ -73,4 +73,5 @@ if runtype == 'byellip':
     p.doplots_vs_e(yrange=yrng,s2max=s2max,s2meas=options.s2meas,
                    show=show,type=options.type,skip1=skip1,skip2=skip2)
 else:
-    p.doplots_vs_s2n(yrange=yrng, show=show, skip1=skip1,skip2=skip2)
+    p.doplots_vs_s2n(yrange=yrng, type=options.type, 
+                     show=show, skip1=skip1,skip2=skip2)

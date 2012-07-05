@@ -453,7 +453,8 @@ class BaseSim(dict):
 
         s2n_psf = self['s2n_psf']
 
-        print 'ellip:',ellip
+        s2n_method = self.get('s2n_method','uw')
+        wlog('ellip:',ellip,'s2n:',s2n,'s2n_method:',s2n_method)
 
         ii = 0
         for i in xrange(nring):
@@ -469,7 +470,8 @@ class BaseSim(dict):
                 stderr.write("\n%d/%d %d%% done\n" % (ii+1,ntot,100.*(ii+1)/float(ntot)))
                 while iter < self['itmax']:
 
-                    ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf)
+                    ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf,
+                                             s2n_method=s2n_method)
 
                     if iter == 0: stderr.write("%s " % str(ci.psf.shape))
                     res = self.run(ci)
@@ -520,7 +522,8 @@ class BaseSim(dict):
         s2n_psf = self['s2n_psf']
 
         s2,ellip = get_s2_e(self.simc, is2, ie)
-        print 'ellip:',ellip
+        wlog('ellip:',ellip)
+        s2n_method = self.get('s2n_method','uw')
 
         ii = 0
         for i in xrange(ntrial):
@@ -546,7 +549,8 @@ class BaseSim(dict):
                         ci_nonoise = self.get_a_trial(ss, is2, ie)
 
                     if s2n > 0 or s2n_psf > 0:
-                        ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf)
+                        ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf,
+                                                 s2n_method=s2n_method)
                     else:
                         ci = ci_nonoise
 
@@ -593,7 +597,8 @@ class BaseSim(dict):
         s2n_psf = self['s2n_psf']
 
         s2,ellip = get_s2_e(self.simc, is2, ie)
-        print 'ellip:',ellip
+        wlog('ellip:',ellip)
+        s2n_method = self.get('s2n_method','uw')
 
         ii = 0
         for i in xrange(ntrial):
@@ -608,8 +613,10 @@ class BaseSim(dict):
 
                 ci1,ci2 = self.get_a_ring_trial(ss, is2, ie)
                 if s2n > 0 or s2n_psf > 0:
-                    ci1 = NoisyConvolvedImage(ci1, s2n, s2n_psf)
-                    ci2 = NoisyConvolvedImage(ci2, s2n, s2n_psf)
+                    ci1 = NoisyConvolvedImage(ci1, s2n, s2n_psf,
+                                              s2n_method=s2n_method)
+                    ci2 = NoisyConvolvedImage(ci2, s2n, s2n_psf,
+                                              s2n_method=s2n_method)
 
                 if iter == 0: stderr.write("%s " % str(ci1.psf.shape))
                 res1 = self.run(ci1)

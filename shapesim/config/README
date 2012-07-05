@@ -28,6 +28,11 @@ gmix-fit
             et02r05 - 11          40       
             et02r06 - 5          160       
 
+            et02r07 - by s2n, ie=0, e=0.05
+            et02r08 - by s2n, ie=7, e=0.32
+
+            et02r09 - by s2n, ie=7, e=0.32, s2n_method=matched
+
         dt02
             - ring, shear g1=0.01, 100 in ring
                 - running cache
