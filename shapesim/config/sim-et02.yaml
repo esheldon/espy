@@ -1,7 +1,6 @@
 # ring
 name: sim-et02
 
-#
 # type must be rand or ring
 # default current rand
 # If ring, the ntrial must be even in the run config

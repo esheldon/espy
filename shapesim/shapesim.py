@@ -421,9 +421,75 @@ class BaseSim(dict):
         raise RuntimeError("Override the .out_dtype() method")
 
 
+    def process_trials(self, is2, ie_or_is2n):
+        runtype=self.get('runtype','byellip')
+        if runtype == 'byellip':
+            self.process_trials_by_e(is2, ie_or_is2n)
+        else:
+            self.process_trials_by_s2n(is2, ie_or_is2n)
+
+    def process_trials_by_s2n(self, is2, is2n):
+        """
+        This only works for ring tests
+        """
+        orient=self.simc.get('orient','rand')
+        if orient != 'ring':
+            raise ValueError("by s2n only works for ring tests")
+
+        # fixed ie
+        ie = self['ie']
+        s2,ellip = get_s2_e(self.simc, is2, ie)
+        s2n = get_s2n(self, is2n)
 
 
-    def process_trials(self, is2, ie):
+        nring = self.simc['nring']
+        nrepeat = get_s2n_nrepeat(s2n)
+
+        ntot = nring*nrepeat
+        out = numpy.zeros(ntot, dtype=self.out_dtype())
+
+        simpars=self.get('simpars',{})
+        ss = ShapeSim(self['sim'], **simpars)
+
+        s2n_psf = self['s2n_psf']
+
+        print 'ellip:',ellip
+
+        ii = 0
+        for i in xrange(nring):
+            iter=0
+
+            itheta=i
+
+            ci_nonoise = self.get_a_trial(ss, is2, ie, itheta=itheta)
+
+            for irepeat in xrange(nrepeat):
+                
+                stderr.write('-'*70)
+                stderr.write("\n%d/%d %d%% done\n" % (ii+1,ntot,100.*(ii+1)/float(ntot)))
+                while iter < self['itmax']:
+
+                    ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf)
+
+                    if iter == 0: stderr.write("%s " % str(ci.psf.shape))
+                    res = self.run(ci)
+
+                    if res['flags'] == 0:
+                        st = self.copy_output(s2, ellip, s2n, ci, res)
+                        out[ii] = st
+                        ii += 1
+                        break
+                    else:
+                        iter += 1
+
+                if iter == self['itmax']:
+                    raise ValueError("itmax %d reached" % self['itmax'])
+            stderr.write("niter: %d\n" % (iter+1))
+        write_output(self['run'], is2, is2n, out, fs=self.fs)
+        return out
+
+ 
+    def process_trials_by_e(self, is2, ie):
         """
         Generate random realizations of a particular element in the s2 and
         ellip sequences.
@@ -620,6 +686,24 @@ def get_s2_e(conf, is2, ie):
 
     return s2, ellip
 
+def get_s2n(conf, is2n):
+    """
+    Extract the s2n corresponding to index
+    """
+
+    s2n = linspace(conf['mins2n'],conf['maxs2n'], conf['nums2n'])[is2n]
+    return s2n
+
+def get_s2n_nrepeat(s2n):
+    """
+    Number of repeats
+    """
+    ntrial = round( (0.4/( s2n/100. )**2) )
+    if ntrial < 1:
+        ntrial = 1
+    ntrial = int(ntrial)
+    return ntrial
+
 def check_is2_ie(conf, is2, ie):
     """
     Verify the is2 and ie are within range
@@ -713,6 +797,8 @@ def get_plot_dir(run):
     dir=path_join(dir, 'plots')
     return dir
 
+
+
 def get_plot_file(run, type, s2max=None, s2meas=False, yrange=None):
     d=get_plot_dir(run)
     f='%s' % run
@@ -738,6 +824,8 @@ def get_output_url(run, is2, ie, fs=None):
 
     is2 and ie are the index in the list of s2 and ellip vals for a given run.
     They should be within [0,nums2) and [0,nume)
+
+    Note ie might actually be is2n
 
     """
     dir=get_output_dir(run, fs=fs)
@@ -807,26 +895,38 @@ def read_output(run, is2, ie, verbose=False, fs=None):
         wlog("reading output:",f)
     return eu.io.read(f)
 
-def read_all_outputs(run, average=False, verbose=False, fs=None):
+def read_all_outputs(run, average=False, verbose=False, skip1=[], skip2=[], fs=None):
     """
-    Data are grouped as a list by is2 and then sublists by ie
+    Data are grouped as a list by is2 and then sublists by ie/is2n
     """
     data=[]
     c=read_config(run)
     cs=read_config(c['sim'])
+    runtype=c.get('runtype','byellip')
+
+    numi1 = cs['nums2']
+    if runtype == 'byellip':
+        numi2 = cs['nume']
+    else:
+        numi2 = c['nums2n']
+
     orient=cs.get('orient','rand')
-    for is2 in xrange(cs['nums2']):
+    for i1 in xrange(numi1):
+        if i1 in skip1:
+            continue
         s2data=[]
-        for ie in xrange(cs['nume']):
+        for i2 in xrange(numi2):
+            if i2 in skip2:
+                continue
             if orient != 'ring':
                 try:
-                    edata = read_output(run, is2, ie,verbose=verbose,fs=fs)
+                    edata = read_output(run, i1, i2, verbose=verbose,fs=fs)
                     s2data.append(edata)
                 except:
                     pass
             else:
                 # we require all for ring for cancellation
-                edata = read_output(run, is2, ie,verbose=verbose,fs=fs)
+                edata = read_output(run, i1, i2, verbose=verbose,fs=fs)
                 s2data.append(edata)
         data.append(s2data)
 
@@ -847,14 +947,18 @@ def average_outputs(data):
     dt = data[0][0].dtype.descr
 
     if 'e1_meas' in data[0][0].dtype.names:
-        dt += [('shear1','f8'),('shear2','f8'),('Rshear','f8')]
+        dt += [('shear1','f8'),('shear1err','f8'),
+               ('shear2','f8'),('shear2err','f8'),
+               ('Rshear','f8')]
     else:
         raise ValueError('DEAL WITH e1meas missing')
 
     for s2data in data: # over different values of s2
         d=zeros(len(s2data),dtype=dt)
         for i,edata in enumerate(s2data): # over different ellipticities
-            shear1,shear2,R = lensing.util.average_shear(edata['e1_meas'],edata['e2_meas'])
+            shear1,shear2,R,shear1err,shear2err \
+                = lensing.util.average_shear(edata['e1_meas'],edata['e2_meas'],
+                                             doerr=True)
             for n in d.dtype.names:
                 if n == 'Rshear':
                     d['Rshear'][i] = R
@@ -862,6 +966,10 @@ def average_outputs(data):
                     d['shear1'][i] = shear1
                 elif n == 'shear2':
                     d['shear2'][i] = shear2
+                elif n == 'shear1err':
+                    d['shear1err'][i] = shear1err
+                elif n == 'shear2err':
+                    d['shear2err'][i] = shear2err
                 else:
                     if edata[n].dtype.names is None and len(edata[n].shape) == 1:
                         #d[n][i] = median(edata[n])

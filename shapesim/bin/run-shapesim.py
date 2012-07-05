@@ -1,5 +1,6 @@
 """
-    %prog run is2 ie
+    %prog run is2 ie/is2n
+
 """
 
 import sys
@@ -20,7 +21,7 @@ def main():
 
     run=args[0]
     is2 = int(args[1])
-    ie = int(args[2])
+    ie_or_is2n = int(args[2])
 
     if run[0:5] == 'deswl':
         sim=shapesim.deswl_sim.DESWLSim(run)
@@ -31,11 +32,7 @@ def main():
     else:
         raise ValueError("Don't know about run '%s'" % run)
 
-    orient=sim.simc.get('orient','rand')
-    if orient=='ring-rand':
-        sim.process_ring_trials(is2, ie)
-    else:
-        sim.process_trials(is2, ie)
+    sim.process_trials(is2, ie_or_is2n)
 
 
 main()

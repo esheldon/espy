@@ -2,6 +2,9 @@
 run: gmix-fit-et02r01
 sim: sim-et02
 
+# we will use all the ellip and s2 values and single s/n value
+runtype: byellip
+
 # for ring, can use a pre-cached set of images
 # and just add different noise realizaions if needed
 # we are pre-generating the slow dt stuff here
