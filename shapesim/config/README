@@ -9,16 +9,25 @@ gmix-fit
         gg03
             - ring, shear g1=0.01, 1000 in ring
 
-            run       s/n   nrepeat  notes
-            gg03r01 - 1.e6    1
-            gg03r02 - 100     1
-            gg03r03 - 47      1      super noisy
-            gg03r04 - 22      10
-            gg03r05 - 11
-            gg03r06 - 5
+            run        s/n   nrepeat       notes
+            gg03r01 - 1.e6         1
+            gg03r02 - 100          1
+            gg03r03 - 47           1
+            gg03r04 - 22          10       
+            gg03r05 - 11          10       need ~40
+            gg03r06 - 5           40       need ~160
         et02
             - ring, shear g1=0.01, 100 in ring
-                - need to start
+                - Should have restricted to new,new2 had some
+                  swapping.
+            run        s/n   nrepeat       notes
+            et02r01 - 1.e6         1       running
+            et02r02 - 100          1       running
+            et02r03 - 47           1       running
+            et02r04 - 22          10       
+            et02r05 - 11          40       
+            et02r06 - 5          160       
+
         dt02
             - ring, shear g1=0.01, 100 in ring
                 - running cache

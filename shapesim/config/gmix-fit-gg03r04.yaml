@@ -41,7 +41,7 @@ randomize: true
 itmax: 100
 
 # number of noise relizations per image
-nrepeat: 1
+nrepeat: 10
 
 # set to null for new seed each time. Good when adding to the cache
 seed: null

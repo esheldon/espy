@@ -223,7 +223,7 @@ class ShapeSim(dict):
         Read data from a random cache file
         """
         f=self.get_random_cache_file(is2,ie)
-        wlog("reading from cache:",f)
+        wlog("\nreading from cache:",f)
 
         with eu.hdfs.HDFSFile(f,verbose=True) as hdfs_file:
             hdfs_file.stage()
@@ -235,7 +235,7 @@ class ShapeSim(dict):
         Read data from a random cache file
         """
         f=self.get_random_cache_file(is2,ie)
-        wlog("reading from cache:",f)
+        wlog("\nreading from cache:",f)
 
         with eu.hdfs.HDFSFile(f,verbose=True) as hdfs_file:
             hdfs_file.stage()
@@ -252,7 +252,7 @@ class ShapeSim(dict):
         Read data from a random cache file
         """
         f=get_theta_cache_url(self['name'],is2,ie,itheta,fs=self.fs)
-        wlog("reading from cache:",f)
+        wlog("\nreading from cache:",f)
 
         with eu.hdfs.HDFSFile(f,verbose=True) as hdfs_file:
             hdfs_file.stage()
@@ -813,14 +813,21 @@ def read_all_outputs(run, average=False, verbose=False, fs=None):
     """
     data=[]
     c=read_config(run)
-    for is2 in xrange(c['nums2']):
+    cs=read_config(c['sim'])
+    orient=cs.get('orient','rand')
+    for is2 in xrange(cs['nums2']):
         s2data=[]
-        for ie in xrange(c['nume']):
-            try:
+        for ie in xrange(cs['nume']):
+            if orient != 'ring':
+                try:
+                    edata = read_output(run, is2, ie,verbose=verbose,fs=fs)
+                    s2data.append(edata)
+                except:
+                    pass
+            else:
+                # we require all for ring for cancellation
                 edata = read_output(run, is2, ie,verbose=verbose,fs=fs)
                 s2data.append(edata)
-            except:
-                pass
         data.append(s2data)
 
     if average:

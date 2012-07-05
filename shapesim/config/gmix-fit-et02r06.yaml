@@ -1,5 +1,5 @@
 # et02 is a ring test
-run: gmix-fit-et02r02
+run: gmix-fit-et02r06
 sim: sim-et02
 
 # for ring, can use a pre-cached set of images
@@ -41,7 +41,7 @@ randomize: true
 itmax: 100
 
 # number of noise relizations per image
-nrepeat: 1
+nrepeat: 160
 
 # set to null for new seed each time. Good when adding to the cache
 seed: null
