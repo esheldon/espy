@@ -5,7 +5,7 @@ import esutil as eu
 from esutil.misc import wlog
 from esutil.numpy_util import where1
 import numpy
-from numpy import median
+from numpy import median, zeros
 
 from lensing.util import shear_fracdiff, e2gamma, gamma2e, g1g2_to_e1e2
 
@@ -59,6 +59,9 @@ class SimPlotter(dict):
         plots1=[]
         plots2=[]
         allplots=[]
+        # looping over s2
+        ns2n = data[0].size
+        avg=zeros(ns2n, dtype=[('s2n','f8'),('shear1','f8'),('shear2','f8'),('n','i8')])
         for i,st in enumerate(reversed(data)):
             wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
 
@@ -110,6 +113,23 @@ class SimPlotter(dict):
             else:
                 plots2.append(pr1)
 
+            avg['n'] += 1
+            avg['s2n'] += s2n
+            avg['shear1'] += yvals1
+            avg['shear2'] += yvals2
+
+        avg['s2n'] = avg['s2n']/avg['n']
+        avg['shear1'] = avg['shear1']/avg['n']
+        avg['shear2'] = avg['shear2']/avg['n']
+        avg1 = biggles.Points(avg['s2n'],avg['shear1'],type='filled circle',size=2)
+        avg2 = biggles.Points(avg['s2n'],avg['shear2'],type='filled circle',size=2)
+        avg1.label = 'average'
+
+        if len(plots2) > 0:
+            plots2.append(avg1)
+        else:
+            plots1.append(avg1)
+
         fsize=2
         key1 = biggles.PlotKey(0.9,0.85, plots1, halign='right', 
                                fontsize=fsize)
@@ -144,6 +164,11 @@ class SimPlotter(dict):
 
         arr.xlabel=xlabel
 
+
+        # might be a diff
+        arr[0,0].add(avg1)
+        arr[1,0].add(avg2)
+
         if type == 'val':
             arr.ylabel = r'$\gamma$'
             expect1 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()],
@@ -168,6 +193,13 @@ class SimPlotter(dict):
 
             arr[0,0].add(g1lab)
             arr[1,0].add(g2lab)
+
+            expect1 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()], [0,0])
+            expect2 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()], [0,0])
+
+            arr[0,0].add(expect1)
+            arr[1,0].add(expect2)
+
 
 
         arr.xrange = [0.1*s2n.min(),s2n.max()*1.4]
