@@ -120,8 +120,8 @@ class SimPlotter(dict):
             arr[1,0].add(key2)
 
         klabtext=r'$<\sigma^2_{psf}/\sigma^2_{gal}>$'
-        klab = biggles.PlotLabel(0.95,0.92,klabtext,
-                                 fontsize=2,halign='right')
+        klab = biggles.PlotLabel(0.89,0.92,klabtext,
+                                 fontsize=2.5,halign='right')
         arr[0,0].add(klab)
         objmodel = self.simc['objmodel']
         psfmodel = self.simc['psfmodel']

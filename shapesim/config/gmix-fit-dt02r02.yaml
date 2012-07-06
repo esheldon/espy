@@ -6,18 +6,24 @@ sim: sim-dt02
 # ellip value
 runtype: bys2n
 
-ie: 0
+s2n_method: matched
+s2n_fac: 4
+
+# this cuts size in half
+retrim: true
+retrim_fluxfrac: 0.9973
+# when calculating s/n for adding noise, use an aperture
+# corresponding to this integrated flux value
+#s2ncalc_fluxfrac: 0.95
+
+ie: 7 # 0.32
 mins2n: 5
 maxs2n: 100
 nums2n: 20  # still 20*20=400
 
-s2n_psf: 1.0e+6
+s2n_psf: 1.0e+8
 
-# for ring, can use a pre-cached set of images
-# and just add different noise realizaions if needed
-# we are pre-generating the slow dt stuff here
 use_cache: true
-#use_cache: false
 add_to_cache: false
 
 # type of parametrization

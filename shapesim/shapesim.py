@@ -443,7 +443,8 @@ class BaseSim(dict):
 
 
         nring = self.simc['nring']
-        nrepeat = get_s2n_nrepeat(s2n)
+        s2n_fac = self.get('s2n_fac',0.4)
+        nrepeat = get_s2n_nrepeat(s2n, fac=s2n_fac)
 
         ntot = nring*nrepeat
         out = numpy.zeros(ntot, dtype=self.out_dtype())
@@ -454,11 +455,12 @@ class BaseSim(dict):
         s2n_psf = self['s2n_psf']
 
         s2n_method = self.get('s2n_method','uw')
+        s2ncalc_fluxfrac =self.get('s2ncalc_fluxfrac',None)
+
         wlog('ellip:',ellip,'s2n:',s2n,'s2n_psf:',s2n_psf,'s2n_method:',s2n_method)
 
         ii = 0
         for i in xrange(nring):
-            iter=0
 
             itheta=i
 
@@ -468,11 +470,14 @@ class BaseSim(dict):
                 
                 stderr.write('-'*70)
                 stderr.write("\n%d/%d %d%% done\n" % (ii+1,ntot,100.*(ii+1)/float(ntot)))
+                iter=0
                 while iter < self['itmax']:
 
                     ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf,
-                                             s2n_method=s2n_method)
+                                             s2n_method=s2n_method,
+                                             fluxfrac=s2ncalc_fluxfrac)
                     wlog("s2n_uw:",ci['s2n_uw'],"s2n_uw_psf:",ci['s2n_uw_psf'])
+                    stop
 
                     if iter == 0: stderr.write("%s " % str(ci.psf.shape))
                     res = self.run(ci)
@@ -667,6 +672,16 @@ class BaseSim(dict):
                 s2,ellip = get_s2_e(self.simc, is2, ie)
                 theta = get_theta(self.simc, itheta=itheta)
                 ci=ss.get_trial(s2,ellip,theta)
+
+        retrim = self.get('retrim',False)
+        if retrim:
+            if 'retrim_fluxfrac' not in self:
+                raise ValueError("you must set fluxfrac for a retrim")
+            retrim_fluxfrac = self['retrim_fluxfrac']
+            wlog("re-trimming with fluxfrac: %.12g" % retrim_fluxfrac)
+            ci_full = ci
+            ci = fimage.convolved.TrimmedConvolvedImage(ci_full, fluxfrac=retrim_fluxfrac)
+            wlog("old dims:",str(ci_full.image.shape),"new dims:",str(ci.image.shape))
         return ci
 
 
@@ -702,16 +717,19 @@ def get_s2n(conf, is2n):
     s2n = linspace(conf['mins2n'],conf['maxs2n'], conf['nums2n'])[is2n]
     return s2n
 
-def get_s2n_nrepeat(s2n):
+def get_s2n_nrepeat(s2n, fac=0.4):
     """
     Number of repeats.  This is not enough now that I'm using the
     matched s/n
+
+    The 0.4 gives rather noisy results for exp but can run less than a day.
+    It gives *very* noisy results for dev, need to increase.
     """
-    ntrial = round( (0.4/( s2n/100. )**2) )
-    if ntrial < 1:
-        ntrial = 1
-    ntrial = int(ntrial)
-    return ntrial
+    nrep = round( (fac/( s2n/100. )**2) )
+    if nrep < 1:
+        nrep = 1
+    nrep = int(nrep)
+    return nrep
 
 def check_is2_ie(conf, is2, ie):
     """
@@ -927,16 +945,11 @@ def read_all_outputs(run, average=False, verbose=False, skip1=[], skip2=[], fs=N
         for i2 in xrange(numi2):
             if i2 in skip2:
                 continue
-            if orient != 'ring':
-                try:
-                    edata = read_output(run, i1, i2, verbose=verbose,fs=fs)
-                    s2data.append(edata)
-                except:
-                    pass
-            else:
-                # we require all for ring for cancellation
+            try:
                 edata = read_output(run, i1, i2, verbose=verbose,fs=fs)
                 s2data.append(edata)
+            except:
+                pass
         data.append(s2data)
 
     if average:
