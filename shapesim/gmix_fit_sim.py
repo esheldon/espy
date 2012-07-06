@@ -163,7 +163,8 @@ class GMixFitSim(shapesim.BaseSim):
                     raise ValueError("Must have pfrac_am for dev fit")
                 guess = self.get_guess_dev(counts, cen, cov, pfrac_am,
                                            randomize=randomize)
-            if psf and ptype=='Tfrac':
+            elif psf and ptype=='Tfrac':
+            #elif ptype=='Tfrac':
                 #eguess=None
                 eguess=[0,0]
                 uniform_p=False
@@ -214,7 +215,7 @@ class GMixFitSim(shapesim.BaseSim):
                                                     eguess=eguess,
                                                     Tfac=Tfac)
             else:
-                raise ValueError("ptype should be 'e1e2' or 'dev'")
+                raise ValueError("ptype should be 'Tfrac' or 'e1e2' or 'dev'")
 
             print_pars(guess,front="guess: ")
             if psf and ptype=='dev':
@@ -472,9 +473,15 @@ class GMixFitSim(shapesim.BaseSim):
             prior[5] = Tfrac1
             prior[6] = Tfrac2
 
-            prior[7] = counts*0.08
-            prior[8] = counts*0.38
-            prior[9] = counts*0.53
+            if uniform_p:
+                wlog("    uniform p")
+                prior[7] = counts/ngauss
+                prior[8] = counts/ngauss
+                prior[9] = counts/ngauss
+            else:
+                prior[7] = counts*0.08
+                prior[8] = counts*0.38
+                prior[9] = counts*0.53
 
             # uninformative priors for PSF, might want to revisit for real stars
             width[2] = 10
@@ -754,29 +761,14 @@ class GMixFitSim(shapesim.BaseSim):
                 wlog("    randomizing")
                 e1start=guess[2]
                 e2start=guess[3]
-                if e1start == 0:
-                    doabs=True
-                else:
-                    doabs=False
-                while True:
-                    if not doabs:
-                        guess[2] += 0.2*e1start*(randu()-0.5)
-                        guess[3] += 0.2*e2start*(randu()-0.5)
-                    else:
-                        guess[2] = 0.05*(randu()-0.5)
-                        guess[3] = 0.05*(randu()-0.5)
-                    if sqrt(guess[2]**2 + guess[3]**2) < 0.95:
-                        break
-                while True:
-                    guess[4] += 0.2*guess[4]*(randu()-0.5)
-                    guess[5] += 0.2*guess[5]*(randu()-0.5)
-                    guess[6] += 0.2*guess[6]*(randu()-0.5)
-                    if guess[4] > 0 and guess[5] > 0 and guess[6] > 0:
-                        break
+                guess[2],guess[3] = randomize_e1e2(e1start,e2start)
 
-                guess[7] += 0.2*guess[7]*(randu()-0.5)
-                guess[8] += 0.2*guess[8]*(randu()-0.5)
-                guess[9] += 0.2*guess[9]*(randu()-0.5)
+                guess[4] += 0.05*guess[4]*(randu()-0.5)
+                guess[5] += 0.05*guess[5]*(randu()-0.5)
+                guess[6] += 0.05*guess[6]*(randu()-0.5)
+                guess[7] += 0.05*guess[7]*(randu()-0.5)
+                guess[8] += 0.05*guess[8]*(randu()-0.5)
+                guess[9] += 0.05*guess[9]*(randu()-0.5)
 
         elif ngauss==3 and psf:
             wlog("    using psf ngauss=3")
@@ -1402,12 +1394,20 @@ def randomize_e1e2(e1start,e2start):
         e1rand = 0.05*(randu()-0.5)
         e2rand = 0.05*(randu()-0.5)
     else:
+        nmax=100
+        ii=0
         while True:
             e1rand = e1start*(1 + 0.2*(randu()-0.5))
             e2rand = e2start*(1 + 0.2*(randu()-0.5))
             etot = sqrt(e1rand**2 + e2rand**2)
             if etot < 0.95:
                 break
+            ii += 1
+            if ii==nmax:
+                wlog("---- hit max try on randomize e1e2, setting zero and restart")
+                e1start=0
+                e2start=0
+                ii=0
 
     return e1rand, e2rand
 

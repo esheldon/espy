@@ -67,9 +67,15 @@ class SimPlotter(dict):
             else:
                 s2 = median(st['s2'])
 
-            s = st['s2n'].argsort()
+            if 's2n_matched' in st.dtype.names:
+                s2n_name='s2n_matched'
+                xlabel = r'$S/N_{matched}$'
+            else:
+                s2n_name='s2n_uw'
+                xlabel = r'$S/N_{uw}$'
+            s = st[s2n_name].argsort()
 
-            s2n = st['s2n'][s]
+            s2n = st[s2n_name][s]
             
             if type == 'diff':
                 yvals1 = st['shear1'][s] - shear_true.g1
@@ -136,7 +142,7 @@ class SimPlotter(dict):
                                fontsize=2.5)
         arr[1,0].add(sl)
 
-        arr.xlabel=r'S/N'
+        arr.xlabel=xlabel
 
         if type == 'val':
             arr.ylabel = r'$\gamma$'

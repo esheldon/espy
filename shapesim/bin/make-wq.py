@@ -53,9 +53,9 @@ def main():
     if not os.path.exists(wqd):
         os.makedirs(wqd)
     # make this to avoid race conditions later
-    od = shapesim.get_output_dir(run)
-    if not os.path.exists(od):
-        os.makedirs(od)
+    #od = shapesim.get_output_dir(run)
+    #if not os.path.exists(od):
+    #    os.makedirs(od)
 
     extra=''
     if options.bynode:

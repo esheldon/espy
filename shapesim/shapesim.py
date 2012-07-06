@@ -454,7 +454,7 @@ class BaseSim(dict):
         s2n_psf = self['s2n_psf']
 
         s2n_method = self.get('s2n_method','uw')
-        wlog('ellip:',ellip,'s2n:',s2n,'s2n_method:',s2n_method)
+        wlog('ellip:',ellip,'s2n:',s2n,'s2n_psf:',s2n_psf,'s2n_method:',s2n_method)
 
         ii = 0
         for i in xrange(nring):
@@ -472,6 +472,7 @@ class BaseSim(dict):
 
                     ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf,
                                              s2n_method=s2n_method)
+                    wlog("s2n_uw:",ci['s2n_uw'],"s2n_uw_psf:",ci['s2n_uw_psf'])
 
                     if iter == 0: stderr.write("%s " % str(ci.psf.shape))
                     res = self.run(ci)
@@ -703,7 +704,8 @@ def get_s2n(conf, is2n):
 
 def get_s2n_nrepeat(s2n):
     """
-    Number of repeats
+    Number of repeats.  This is not enough now that I'm using the
+    matched s/n
     """
     ntrial = round( (0.4/( s2n/100. )**2) )
     if ntrial < 1:
