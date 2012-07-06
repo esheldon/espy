@@ -59,9 +59,13 @@ class SimPlotter(dict):
         plots1=[]
         plots2=[]
         allplots=[]
+        max_s2n_len=0
+        for st in data:
+            if st['s2'].size > max_s2n_len:
+                max_s2n_len = st['s2'].size
+        avg=zeros(max_s2n_len, dtype=[('s2n','f8'),('shear1','f8'),('shear2','f8'),('n','i8')])
+
         # looping over s2
-        ns2n = data[0].size
-        avg=zeros(ns2n, dtype=[('s2n','f8'),('shear1','f8'),('shear2','f8'),('n','i8')])
         for i,st in enumerate(reversed(data)):
             wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
 
@@ -113,10 +117,11 @@ class SimPlotter(dict):
             else:
                 plots2.append(pr1)
 
-            avg['n'] += 1
-            avg['s2n'] += s2n
-            avg['shear1'] += yvals1
-            avg['shear2'] += yvals2
+            if st['s2'].size == avg['n'].size:
+                avg['n'] += 1
+                avg['s2n'] += s2n
+                avg['shear1'] += yvals1
+                avg['shear2'] += yvals2
 
         avg['s2n'] = avg['s2n']/avg['n']
         avg['shear1'] = avg['shear1']/avg['n']

@@ -16,7 +16,6 @@ nums2n: 20  # still 20*20=400
 s2n_psf: 1.0e+8
 
 use_cache: true
-#use_cache: false
 add_to_cache: false
 
 # type of parametrization

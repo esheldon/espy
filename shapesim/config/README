@@ -6,6 +6,8 @@ gmix-fit
         dt01
             - have about 100-200 per as of now.  Some with same seeds.
 
+    ring sims
+
         gg03
             - ring, shear g1=0.01, 1000 in ring
 
@@ -20,30 +22,32 @@ gmix-fit
             - ring, shear g1=0.01, 100 in ring
                 - Should have restricted to new,new2 had some
                   swapping.
-            run       s/n   nrepeat       notes
-            et02r01  1.e6         1       running
-            et02r02   100         1       running
-            et02r03    47         1       running
-            et02r04    22        10       
-            et02r05    11        40       
-            et02r06     5        160       
+            byellip
+                run       s/n   nrepeat       notes
+                et02r01  1.e6         1       running
+                et02r02   100         1       running
+                et02r03    47         1       running
+                et02r04    22        10       
+                et02r05    11        40       
+                et02r06     5        160       
 
 
             by s/n
-            run      ie    e  s2n_method   notes
-            et02r07   0 0.05      uw       need to rerun as matched
-            et02r08   7 0.32      uw       need to rerun as matched
-            et02r09   7 0.32     matched   running
+                run      ie    e  s2n_method   notes
+                et02r07   0 0.05     matched   running
+                et02r08  19 0.80     matched   running
+                et02r09   7 0.32     matched   running
 
         dt02
             - ring, shear g1=0.01, 100 in ring
          
-            run        s/n   nrepeat  s2n_method      notes
-            dt02r01  1.e8       1         uw 
+            byellip
+                run        s/n   nrepeat  s2n_method      notes
+                dt02r01  1.e8       1         uw 
 
             by s/n
-            run      ie    e  s2n_method   notes
-            dt02r02   7 0.32      uw       running
+                run      ie    e  s2n_method   notes
+                dt02r02   7 0.32      uw       running
  
     low noise runs
         et01r04

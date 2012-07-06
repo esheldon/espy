@@ -477,7 +477,6 @@ class BaseSim(dict):
                                              s2n_method=s2n_method,
                                              fluxfrac=s2ncalc_fluxfrac)
                     wlog("s2n_uw:",ci['s2n_uw'],"s2n_uw_psf:",ci['s2n_uw_psf'])
-                    stop
 
                     if iter == 0: stderr.write("%s " % str(ci.psf.shape))
                     res = self.run(ci)
