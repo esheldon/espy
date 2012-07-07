@@ -62,10 +62,8 @@ class DESWLSim(shapesim.BaseSim):
         out['gcov22'] = 9999
 
         sky=0.0
-        if self['s2n'] <= 0:
-            skysig=0.001
-        else:
-            skysig=ci['skysig']
+        skysig=ci['skysig']
+        skysig_psf=ci['skysig_psf']
 
         psf_sigma_guess=\
             fimage.mom2sigma(ci['cov_psf_admom'][0]+ci['cov_psf_admom'][2])
@@ -86,7 +84,7 @@ class DESWLSim(shapesim.BaseSim):
                                       float(ci['cen'][0]), 
                                       float(ci['cen'][1]),
                                       float(sky),
-                                      float(1),
+                                      float(skysig_psf**2),
                                       float(psf_max_aperture), 
                                       psf_sigma_guess)
         out['flags'] = wlpsfobj.get_flags()
@@ -132,11 +130,10 @@ class DESWLSim(shapesim.BaseSim):
         # usually not useful
         out['gal_prepsf_sigma'] = wlshear.get_prepsf_sigma() 
 
-        if self['s2n'] > 0:
-            out['nu'] = wlshear.get_nu()
-            out['gcov11'] = wlshear.get_cov11()
-            out['gcov12'] = wlshear.get_cov12()
-            out['gcov22'] = wlshear.get_cov22()
+        out['nu'] = wlshear.get_nu()
+        out['gcov11'] = wlshear.get_cov11()
+        out['gcov12'] = wlshear.get_cov12()
+        out['gcov22'] = wlshear.get_cov22()
         return out
 
 

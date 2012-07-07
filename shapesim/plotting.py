@@ -77,25 +77,36 @@ class SimPlotter(dict):
             if 's2n_matched' in st.dtype.names:
                 s2n_name='s2n_matched'
                 xlabel = r'$S/N_{matched}$'
-            else:
+            elif 's2n_uw' in st.dtype.names:
                 s2n_name='s2n_uw'
                 xlabel = r'$S/N_{uw}$'
+            else:
+                # assuming matched
+                s2n_name='s2n'
+                xlabel = r'$S/N_{matched}$'
             s = st[s2n_name].argsort()
 
             s2n = st[s2n_name][s]
-            
+
+            if self['run'][0:5] == 'deswl':
+                tag1='gamma1_meas'
+                tag2='gamma2_meas'
+                # convention
+                st[tag1] = -st[tag1]
+            else:
+                tag1='shear1'
+                tag2='shear2'
+           
             if type == 'diff':
-                yvals1 = st['shear1'][s] - shear_true.g1
-                yvals2 = st['shear2'][s] - shear_true.g2
+                yvals1 = st[tag1][s] - shear_true.g1
+                yvals2 = st[tag2][s] - shear_true.g2
             elif type == 'val':
-                yvals1 = st['shear1'][s]
-                yvals2 = st['shear2'][s]
+                yvals1 = st[tag1][s]
+                yvals2 = st[tag2][s]
 
             else:
                 raise ValueError("bad plot type: '%s'" % type)
 
-            shear1err=st['shear1err'][s]
-            shear2err=st['shear2err'][s]
 
             label = r'%0.3f' % s2
             pr1 = biggles.Curve(s2n, yvals1, color=colors[i])
@@ -103,10 +114,6 @@ class SimPlotter(dict):
             pr1.label = label
             pr2.label = label
 
-
-
-            #err1 = biggles.SymmetricErrorBarsY(s2n, shear1diff, shear1err)
-            #err2 = biggles.SymmetricErrorBarsY(s2n, shear2diff, shear2err)
 
             arr[0,0].add(pr1)
             arr[1,0].add(pr2)

@@ -11,43 +11,52 @@ gmix-fit
         gg03
             - ring, shear g1=0.01, 1000 in ring
 
-            run        s/n   nrepeat       notes
-            gg03r01 - 1.e6         1
-            gg03r02 - 100          1
-            gg03r03 - 47           1
-            gg03r04 - 22          10       
-            gg03r05 - 11          10       need ~40
-            gg03r06 - 5           40       need ~160
+            gmix
+                run        s/n   nrepeat       notes
+                gg03r01 - 1.e6         1
+                gg03r02 - 100          1
+                gg03r03 - 47           1
+                gg03r04 - 22          10       
+                gg03r05 - 11          10       need ~40
+                gg03r06 - 5           40       need ~160
         et02
             - ring, shear g1=0.01, 100 in ring
                 - Should have restricted to new,new2 had some
                   swapping.
-            byellip
-                run       s/n   nrepeat       notes
-                et02r01  1.e6         1       running
-                et02r02   100         1       running
-                et02r03    47         1       running
-                et02r04    22        10       
-                et02r05    11        40       
-                et02r06     5        160       
+            gmix
+                byellip
+                    run       s/n   nrepeat       notes
+                    et02r01  1.e6         1       running
+                    et02r02   100         1       running
+                    et02r03    47         1       running
+                    et02r04    22        10       
+                    et02r05    11        40       
+                    et02r06     5        160       
 
 
-            by s/n
-                run      ie    e  s2n_method   notes
-                et02r07   0 0.05     matched   running
-                et02r08  19 0.80     matched   running
-                et02r09   7 0.32     matched   running
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    et02r07   0 0.05     matched   running
+                    et02r08  19 0.80     matched   running
+                    et02r09   7 0.32     matched   running
+            deswl
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    et02r01   0  .05     matched   running
+                    et02r02  19  .80     matched   running
+                    et02r03   7  .33     matched   running
 
         dt02
             - ring, shear g1=0.01, 100 in ring
          
-            byellip
-                run        s/n   nrepeat  s2n_method      notes
-                dt02r01  1.e8       1         uw 
+            gmix
+                byellip
+                    run        s/n   nrepeat  s2n_method      notes
+                    dt02r01  1.e8       1         uw 
 
-            by s/n
-                run      ie    e  s2n_method   notes
-                dt02r02   7 0.32      uw       running
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    dt02r02   7 0.32      uw       running
  
     low noise runs
         et01r04
