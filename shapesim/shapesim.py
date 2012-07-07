@@ -518,7 +518,8 @@ class BaseSim(dict):
             ntrial = self['ntrial']
             nrepeat=1
 
-        out = numpy.zeros(ntrial*nrepeat, dtype=self.out_dtype())
+        ntot = ntrial*nrepeat
+        out = numpy.zeros(ntot, dtype=self.out_dtype())
 
         simpars=self.get('simpars',{})
         ss = ShapeSim(self['sim'], **simpars)
@@ -532,9 +533,6 @@ class BaseSim(dict):
 
         ii = 0
         for i in xrange(ntrial):
-            stderr.write('-'*70)
-            stderr.write("\n%d/%d " % (i+1,ntrial))
-            iter=0
 
             if orient == 'ring':
                 itheta=i
@@ -547,6 +545,9 @@ class BaseSim(dict):
                 ci_nonoise = self.get_a_trial(ss, is2, ie, itheta=itheta)
 
             for irepeat in xrange(nrepeat):
+                iter=0
+                stderr.write('-'*70)
+                stderr.write("\n%d/%d %d%% done\n" % (ii+1,ntot,100.*(ii+1)/float(ntot)))
                 while iter < self['itmax']:
 
                     if orient != 'ring':

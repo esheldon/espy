@@ -4,21 +4,22 @@ sim: sim-dt02
 
 runtype: byellip
 
-# for ring, can use a pre-cached set of images
-# and just add different noise realizaions if needed
-# we are pre-generating the slow dt stuff here
 use_cache: true
 add_to_cache: false
+
+
+# you need the + or - in exponent
+s2n: 1.0e+6
+s2n_psf: 1.0e+6
+
+# number of noise relizations per image
+nrepeat: 1
 
 # type of parametrization
 ptype: Tfrac
 use_jacob: false
 
 verbose: true
-
-# you need the + or - in exponent
-s2n: 1.0e+6
-s2n_psf: 1.0e+6
 
 # we should try with higher values to see what happens
 ngauss_psf: 3
@@ -39,8 +40,6 @@ randomize: true
 # randomized guess
 itmax: 100
 
-# number of noise relizations per image
-nrepeat: 1
 
 # set to null for new seed each time. Good when adding to the cache
 seed: null

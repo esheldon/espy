@@ -56,8 +56,17 @@ gmix-fit
 
                 by s/n
                     run      ie    e  s2n_method   notes
-                    dt02r02   7 0.32      uw       running
+                    dt02r02   7 0.32    matched    running
  
+            deswl
+                by ellip
+                    run        s/n   nrepeat  s2n_method      notes
+                    dt02r02    1.e8     1      matched        running
+                    
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    dt02r01  19 0.80   matched     running
+
     low noise runs
         et01r04
             - very glad I reran the 03 run with better guesses, this one looks
