@@ -116,15 +116,16 @@ class GMixFitSim(shapesim.BaseSim):
                                out['res']['pars'][3],
                                out['res']['perr'][3],
                                out['res']['pars'][3]-ci['e2true'])
-                wlog(mess)
+                self.wlog(mess)
         else:
+            self.wlog('failed PSF flags:')
             if self['verbose']:
-                wlog('failed PSF flags:')
                 gmix_image.printflags(ptype,out['flags'])
 
         if out['flags'] != 0 and self['verbose']:
-            wlog('flags:')
-            gmix_image.printflags(ptype,out['flags'])
+            self.wlog('flags:')
+            if self['verbose']:
+                gmix_image.printflags(ptype,out['flags'])
         return out
 
     def process_image(self, image, ngauss, cen, cov, psf=None,
@@ -156,7 +157,7 @@ class GMixFitSim(shapesim.BaseSim):
         ptype = self.get('ptype','e1e2')
         use_jacob=self.get('use_jacob',False)
         Tmin = self.get('Tmin',0.0)
-        wlog("ptype:",ptype,"use_jacob:",use_jacob,"Tmin:",Tmin)
+        self.wlog("ptype:",ptype,"use_jacob:",use_jacob,"Tmin:",Tmin)
         while ntry < maxtry:
             if psf and ptype == 'dev':
                 if pfrac_am is None:
@@ -217,7 +218,8 @@ class GMixFitSim(shapesim.BaseSim):
             else:
                 raise ValueError("ptype should be 'Tfrac' or 'e1e2' or 'dev'")
 
-            print_pars(guess,front="guess: ")
+            if self['verbose']:
+                print_pars(guess,front="guess: ")
             if psf and ptype=='dev':
                 gm = gmix_image.GMixFitDev(image,guess,
                                            psf=psf,
@@ -242,18 +244,19 @@ class GMixFitSim(shapesim.BaseSim):
                                                use_jacob=use_jacob,
                                                verbose=verbose)
 
-            print_pars(gm.popt,front="pars:  ")
-            print_pars(gm.perr,front="perr:  ")
+            if self['verbose']:
+                print_pars(gm.popt,front="pars:  ")
+                print_pars(gm.perr,front="perr:  ")
             if skysig is not None:
                 chi2arr[ntry] = gm.get_chi2(gm.popt)
                 if ptype=='Tfrac' and psf is not None:
                     chi2perarr[ntry] = gm.get_chi2per(gm.popt)
                 else:
                     chi2perarr[ntry] = gm.get_chi2per(gm.popt,skysig)
-                wlog("chi2/pdeg:",chi2perarr[ntry])
+                self.wlog("chi2/pdeg:",chi2perarr[ntry])
             else:
                 chi2arr[ntry] = gm.get_chi2(gm.popt)
-                wlog("chi2:",chi2arr[ntry])
+                self.wlog("chi2:",chi2arr[ntry])
             gmlist.append(gm)
 
             ntry += 1
@@ -262,23 +265,25 @@ class GMixFitSim(shapesim.BaseSim):
         #    stop
         w=chi2arr.argmin()
         gm = gmlist[w]
-
-        wlog("\n")
-        print_pars(gm.popt,front='popt: ')
-        print_pars(gm.perr,front='perr: ')
-        #wlog('chi2arr:',chi2arr)
         if skysig is not None:
-            print_pars(chi2perarr,front='chi2/deg: ')
+            if self['verbose']:
+                print_pars(chi2perarr,front='chi2/deg: ')
             if ptype=='Tfrac' and psf is not None:
                 s2n = gm.get_s2n(gm.popt)
             else:
                 s2n = gm.get_s2n(gm.popt, skysig)
         else:
-            print_pars(chi2arr,front='chi2: ')
+            if self['verbose']:
+                print_pars(chi2arr,front='chi2: ')
             s2n = -9999
-        wlog("s2n:",s2n)
-        wlog("numiter gmix:",gm.numiter)
-        wlog("Topt/Tguess:",gm.popt[ngauss+4:]/guess[ngauss+4:])
+        if self['verbose']:
+            wlog("\n")
+
+            print_pars(gm.popt,front='popt: ')
+            print_pars(gm.perr,front='perr: ')
+            wlog("s2n:",s2n)
+            wlog("numiter gmix:",gm.numiter)
+            wlog("Topt/Tguess:",gm.popt[ngauss+4:]/guess[ngauss+4:])
 
         out={'gmix':    gm.gmix,
              'pars':    gm.popt,
@@ -310,7 +315,7 @@ class GMixFitSim(shapesim.BaseSim):
         e1=(cov[2]-cov[0])/T
         e2=2*cov[1]/T
 
-        wlog("pfrac_am:",pfrac_am)
+        self.wlog("pfrac_am:",pfrac_am)
 
         if ngauss==4:
 
@@ -352,15 +357,6 @@ class GMixFitSim(shapesim.BaseSim):
                     Tfrac1 = T1_poly(pfrac_am)
                     Tfrac2 = T2_poly(pfrac_am)
                     Tfrac3 = T3_poly(pfrac_am)
-                    """
-                    if pfrac_am > 0.8:
-                        Trat = Trat_poly(pfrac_am)
-                        Tmax = Trat*T
-                    else:
-                        Trat = Trat_poly(pfrac_am)
-                        Tmax=T*55
-                    wlog("Trat:",Trat)
-                    """
 
                     # test forcing it
                     force=55
@@ -379,7 +375,7 @@ class GMixFitSim(shapesim.BaseSim):
                         Tfrac2 = .035
                         Tfrac3 = .0027
                     else:
-                        wlog("forcing",force)
+                        self.wlog("forcing",force)
                         Tmax = T*force
                 elif len(psf) == 1:
                     # this works quite well for a single gaussian psf
@@ -409,7 +405,7 @@ class GMixFitSim(shapesim.BaseSim):
             prior[7] = Tfrac3
 
             if uniform_p:
-                wlog("    uniform p")
+                self.wlog("    uniform p")
                 prior[8] = counts/ngauss
                 prior[9] = counts/ngauss
                 prior[10] = counts/ngauss
@@ -458,7 +454,7 @@ class GMixFitSim(shapesim.BaseSim):
 
         elif ngauss==3 and psf is None:
             # these guesses are for turbulent
-            wlog("    using ngauss=3")
+            self.wlog("    using ngauss=3")
 
             if eguess is not None:
                 prior[2],prior[3] = eguess
@@ -474,7 +470,7 @@ class GMixFitSim(shapesim.BaseSim):
             prior[6] = Tfrac2
 
             if uniform_p:
-                wlog("    uniform p")
+                self.wlog("    uniform p")
                 prior[7] = counts/ngauss
                 prior[8] = counts/ngauss
                 prior[9] = counts/ngauss
@@ -490,7 +486,7 @@ class GMixFitSim(shapesim.BaseSim):
             width[5:] = 10
 
             if randomize:
-                wlog("    randomizing")
+                self.wlog("    randomizing")
                 e1start=prior[2]
                 e2start=prior[3]
                 prior[2],prior[3] = randomize_e1e2(e1start,e2start)
@@ -503,7 +499,7 @@ class GMixFitSim(shapesim.BaseSim):
                 prior[9] += prior[9]*0.05*(randu()-0.5)
 
         elif ngauss==3 and psf:
-            wlog("    using psf ngauss=3")
+            self.wlog("    using psf ngauss=3")
         
             if eguess is not None:
                 prior[2],prior[3] = eguess 
@@ -511,10 +507,10 @@ class GMixFitSim(shapesim.BaseSim):
                 prior[2] = e1
                 prior[3] = e2
 
-            wlog("    starting e1,e2:",prior[2],prior[3])
+            self.wlog("    starting e1,e2:",prior[2],prior[3])
 
 
-            wlog("Using pfrac_am fit:",pfrac_am)
+            self.wlog("Using pfrac_am fit:",pfrac_am)
             # need to do this at higher S/N
             #ply=poly1d([-3.20824373,  3.40727954])
             #tratio = ply(pfrac_am)
@@ -538,7 +534,7 @@ class GMixFitSim(shapesim.BaseSim):
             #prior[9] = counts*0.33
 
             if uniform_p:
-                wlog("    uniform p")
+                self.wlog("    uniform p")
                 prior[7] = counts/ngauss
                 prior[8] = counts/ngauss
                 prior[9] = counts/ngauss
@@ -555,7 +551,7 @@ class GMixFitSim(shapesim.BaseSim):
             width[5:] = 10 # Ti/pi
 
             if randomize:
-                wlog("    randomizing")
+                self.wlog("    randomizing")
                 e1start=prior[2]
                 e2start=prior[3]
                 prior[2],prior[3] = randomize_e1e2(e1start,e2start)
@@ -569,7 +565,7 @@ class GMixFitSim(shapesim.BaseSim):
 
 
         elif ngauss==1:
-            wlog("    using ngauss==1")
+            self.wlog("    using ngauss==1")
 
             prior[4] = counts
             prior[5] = T
@@ -582,7 +578,7 @@ class GMixFitSim(shapesim.BaseSim):
 
 
             if psf is not None:
-                wlog("======> with psf")
+                self.wlog("======> with psf")
                 psfmoms = gmix_image.total_moms(psf)
                 tcov=cov.copy()
                 tcov[0] -= psfmoms['irr']
@@ -590,7 +586,7 @@ class GMixFitSim(shapesim.BaseSim):
                 tcov[2] -= psfmoms['icc']
                 tdet=tcov[0]*tcov[2] - tcov[1]**2
                 if tdet > 1.e-5:
-                    wlog("using special guesses")
+                    self.wlog("using special guesses")
                     tT = tcov[0]+tcov[2]
                     te1=(tcov[2]-tcov[0])/tT
                     te2=2*tcov[1]/tT
@@ -601,7 +597,7 @@ class GMixFitSim(shapesim.BaseSim):
                     prior[5] = tT
                 else:
                     # use defaults
-                    wlog("NOT USING special guesses")
+                    self.wlog("NOT USING special guesses")
                     pass
             if randomize:
                 prior[0] += 1*(randu()-0.5)  # cen0
@@ -660,7 +656,7 @@ class GMixFitSim(shapesim.BaseSim):
         guess[8] = Tmax
 
         if randomize:
-            wlog("    randomizing")
+            self.wlog("    randomizing")
             e1start=guess[2]
             e2start=guess[3]
             if e1start == 0:
@@ -691,7 +687,7 @@ class GMixFitSim(shapesim.BaseSim):
                                pfrac_am=None,
                                Tfac=1.,
                                psf=None):
-        wlog("\nusing coellip e1e2")
+        self.wlog("\nusing coellip e1e2")
         npars = 2*ngauss+4
         guess=zeros(npars)
         guess[0] = cen[0]
@@ -704,15 +700,15 @@ class GMixFitSim(shapesim.BaseSim):
         guess[2] = e1
         guess[3] = e2
 
-        wlog("Tadmom:",T)
+        self.wlog("Tadmom:",T)
         if ngauss==1:
-            wlog("    using ngauss==1")
+            self.wlog("    using ngauss==1")
 
             guess[4] = counts
             guess[5] = T
 
             if psf is not None:
-                wlog("======> with psf")
+                self.wlog("======> with psf")
                 psfmoms = gmix_image.total_moms(psf)
                 tcov=cov.copy()
                 tcov[0] -= psfmoms['irr']
@@ -720,7 +716,7 @@ class GMixFitSim(shapesim.BaseSim):
                 tcov[2] -= psfmoms['icc']
                 tdet=tcov[0]*tcov[2] - tcov[1]**2
                 if tdet > 1.e-5:
-                    wlog("using special guesses")
+                    self.wlog("using special guesses")
                     tT = tcov[0]+tcov[2]
                     te1=(tcov[2]-tcov[0])/tT
                     te2=2*tcov[1]/tT
@@ -731,7 +727,7 @@ class GMixFitSim(shapesim.BaseSim):
                     guess[5] = tT
                 else:
                     # use defaults
-                    wlog("NOT USING special guesses")
+                    self.wlog("NOT USING special guesses")
                     pass
             if randomize:
                 guess[0] += 1*(randu()-0.5)  # cen0
@@ -743,7 +739,7 @@ class GMixFitSim(shapesim.BaseSim):
 
         elif ngauss==3 and psf is None:
             # these are for turbulent
-            wlog("    using ngauss=3")
+            self.wlog("    using ngauss=3")
 
             if eguess is not None:
                 guess[2],guess[3] = eguess
@@ -758,7 +754,7 @@ class GMixFitSim(shapesim.BaseSim):
             guess[8] = T*1.7
             guess[9] = T*0.8
             if randomize:
-                wlog("    randomizing")
+                self.wlog("    randomizing")
                 e1start=guess[2]
                 e2start=guess[3]
                 guess[2],guess[3] = randomize_e1e2(e1start,e2start)
@@ -771,7 +767,7 @@ class GMixFitSim(shapesim.BaseSim):
                 guess[9] += 0.05*guess[9]*(randu()-0.5)
 
         elif ngauss==3 and psf:
-            wlog("    using psf ngauss=3")
+            self.wlog("    using psf ngauss=3")
         
             if eguess is not None:
                 guess[2],guess[3] = eguess
@@ -785,14 +781,14 @@ class GMixFitSim(shapesim.BaseSim):
                   guess[3] = e2 + 0.05*(randu()-0.5)
                 """
 
-            wlog("    starting e1,e2:",guess[2],guess[3])
+            self.wlog("    starting e1,e2:",guess[2],guess[3])
 
             if psf:
                 guess[4] = counts*0.62
                 guess[5] = counts*0.34
                 guess[6] = counts*0.04
                 if pfrac_am is not None:
-                    wlog("Using pfrac_am fit:",pfrac_am)
+                    self.wlog("Using pfrac_am fit:",pfrac_am)
                     # need to do this at higher S/N
                     ply=poly1d([-3.20824373,  3.40727954])
                     tratio = ply(pfrac_am)
@@ -847,7 +843,7 @@ class GMixFitSim(shapesim.BaseSim):
                 guess[8] = T
                 guess[9] = T*.5
         elif ngauss==4:
-                wlog("    using ngauss=4")
+                self.wlog("    using ngauss=4")
 
                 guess[4] = counts/ngauss
                 guess[5] = counts/ngauss
@@ -860,11 +856,11 @@ class GMixFitSim(shapesim.BaseSim):
                     guess[2] = e1# + 0.05*(randu()-0.5)
                     guess[3] = e2# + 0.05*(randu()-0.5)
 
-                wlog("    starting e1,e2:",guess[2],guess[3])
+                self.wlog("    starting e1,e2:",guess[2],guess[3])
 
                 if Tfac is None and pfrac_am is not None:
                     # from gmix_fit_sim.plot_admom_max_tratio
-                    wlog("Using pfrac_am fit:",pfrac_am)
+                    self.wlog("Using pfrac_am fit:",pfrac_am)
                     Tply=poly1d([-72.51258096,  76.65579929])
 
                     if pfrac_am > 0.8:
@@ -931,7 +927,7 @@ class GMixFitSim(shapesim.BaseSim):
                     #guess[7] = counts*0.60
 
                     if randomize:
-                        wlog("    randomizing")
+                        self.wlog("    randomizing")
                         e1start=guess[2]
                         e2start=guess[3]
                         if e1start == 0:
@@ -981,7 +977,7 @@ class GMixFitSim(shapesim.BaseSim):
                     guess[10] = T*.076*Tfac
                     guess[11] = T*.015*Tfac
         elif ngauss==2:
-            wlog("    using ngauss==1")
+            self.wlog("    using ngauss==1")
             # generic guesses
             guess[4]= counts/ngauss
             guess[5]= counts/ngauss
@@ -1142,12 +1138,12 @@ class GMixFitSim(shapesim.BaseSim):
 
             gmix_image.gmix_print(objmix)
             for i,g in enumerate(objmix):
-                wlog('g',i)
+                self.wlog('g',i)
                 tim=gmix_image.gmix2image([g],ci.image0.shape)
                 w=where(isfinite(tim) == False)
                 if w[0].size > 0:
-                    wlog('found NaN')
-                wlog(tim)
+                    self.wlog('found NaN')
+                self.wlog(tim)
             #images.compare_images(ci.image0,model0,
             #                      label1='object0',label2='gmix',
             #                      skysig=skysig)
@@ -1250,9 +1246,9 @@ class GMixFitSim(shapesim.BaseSim):
             st['s2_meas'] = \
                 (psf_moms['irr']+psf_moms['icc'])/(moms['irr']+moms['icc'])
 
-            wlog(" -- s2_meas:",st['s2_meas'],"goal:",st['s2'])
-            wlog(" -- psf sigma:",sqrt((psf_moms['irr']+psf_moms['icc'])/2))
-            wlog(" -- obj sigma:",sqrt((moms['irr']+moms['icc'])/2))
+            self.wlog(" -- s2_meas:",st['s2_meas'],"goal:",st['s2'])
+            self.wlog(" -- psf sigma:",sqrt((psf_moms['irr']+psf_moms['icc'])/2))
+            self.wlog(" -- obj sigma:",sqrt((moms['irr']+moms['icc'])/2))
 
             st['sigma_meas'] = sqrt(0.5*(moms['irr']+moms['icc']))
 

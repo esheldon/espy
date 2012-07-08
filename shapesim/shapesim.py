@@ -35,6 +35,8 @@ class ShapeSim(dict):
         self.fs = 'hdfs'
         self.cache_list={}
 
+        self['verbose'] = self.get('verbose',False)
+
     def write_trial(self, is2, ie, itheta=None):
         """
         Write simulate image/psf to the cache, to be used later.
@@ -83,6 +85,8 @@ class ShapeSim(dict):
 
     def write_ring_trial(self, is2, ie):
         """
+        This is deprecated
+
         Write a simulated image pair, plus psf to the cache, to be used later.
 
         A random angle is chosen, and paired with one at theta+90
@@ -124,6 +128,8 @@ class ShapeSim(dict):
 
     def write_ring_fits(self, fits_file, ci1, ci2, extra_keys=None):
         """
+        deprecated
+
         Write the images and metadata to a fits file
 
         The images are in separate extensions 
@@ -211,7 +217,8 @@ class ShapeSim(dict):
 
         ci_full = self.new_convolved_image(s2, ellip, theta)
         if dotrim:
-            wlog("trimming")
+            if self['verbose']:
+                wlog("trimming")
             ci = fimage.convolved.TrimmedConvolvedImage(ci_full)
         else:
             ci=ci_full
@@ -223,9 +230,10 @@ class ShapeSim(dict):
         Read data from a random cache file
         """
         f=self.get_random_cache_file(is2,ie)
-        wlog("\nreading from cache:",f)
+        if self['verbose']:
+            wlog("\nreading from cache:",f)
 
-        with eu.hdfs.HDFSFile(f,verbose=True) as hdfs_file:
+        with eu.hdfs.HDFSFile(f,verbose=self['verbose']) as hdfs_file:
             hdfs_file.stage()
             ci = fimage.convolved.ConvolvedImageFromFits(hdfs_file.localfile)
         return ci
@@ -235,9 +243,10 @@ class ShapeSim(dict):
         Read data from a random cache file
         """
         f=self.get_random_cache_file(is2,ie)
-        wlog("\nreading from cache:",f)
+        if self['verbose']:
+            wlog("\nreading from cache:",f)
 
-        with eu.hdfs.HDFSFile(f,verbose=True) as hdfs_file:
+        with eu.hdfs.HDFSFile(f,verbose=self['verbose']) as hdfs_file:
             hdfs_file.stage()
             ci1 = fimage.convolved.ConvolvedImageFromFits(hdfs_file.localfile,
                                                           hid=1)
@@ -252,9 +261,10 @@ class ShapeSim(dict):
         Read data from a random cache file
         """
         f=get_theta_cache_url(self['name'],is2,ie,itheta,fs=self.fs)
-        wlog("\nreading from cache:",f)
+        if self['verbose']:
+            wlog("\nreading from cache:",f)
 
-        with eu.hdfs.HDFSFile(f,verbose=True) as hdfs_file:
+        with eu.hdfs.HDFSFile(f,verbose=self['verbose']) as hdfs_file:
             hdfs_file.stage()
             ci = fimage.convolved.ConvolvedImageFromFits(hdfs_file.localfile)
         return ci
@@ -395,6 +405,13 @@ class BaseSim(dict):
 
         self.fs='hdfs'
 
+        self['verbose'] = self.get('verbose',False)
+
+    
+    def wlog(self, *args):
+        if self['verbose']:
+            wlog(*args)
+
     def run(self, ci):
         """
         Process the input convolved image.
@@ -450,6 +467,7 @@ class BaseSim(dict):
         out = numpy.zeros(ntot, dtype=self.out_dtype())
 
         simpars=self.get('simpars',{})
+        simpars['verbose'] = self['verbose']
         ss = ShapeSim(self['sim'], **simpars)
 
         s2n_psf = self['s2n_psf']
@@ -468,17 +486,22 @@ class BaseSim(dict):
 
             for irepeat in xrange(nrepeat):
                 
-                stderr.write('-'*70)
-                stderr.write("\n%d/%d %d%% done\n" % (ii+1,ntot,100.*(ii+1)/float(ntot)))
+                if self['verbose']:
+                    stderr.write('-'*70)
+                    stderr.write('\n')
+                # we always write this, although slower when not verbose
+                if self['verbose'] or ((ii % 10) == 0):
+                    stderr.write("%d/%d %d%% done\n" % (ii+1,ntot,100.*(ii+1)/float(ntot)))
+
                 iter=0
                 while iter < self['itmax']:
 
                     ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf,
                                              s2n_method=s2n_method,
                                              fluxfrac=s2ncalc_fluxfrac)
-                    wlog("s2n_uw:",ci['s2n_uw'],"s2n_uw_psf:",ci['s2n_uw_psf'])
-
-                    if iter == 0: stderr.write("%s " % str(ci.psf.shape))
+                    if self['verbose']:
+                        wlog("s2n_uw:",ci['s2n_uw'],"s2n_uw_psf:",ci['s2n_uw_psf'])
+                        if iter == 0: stderr.write("%s " % str(ci.psf.shape))
                     res = self.run(ci)
 
                     if res['flags'] == 0:
@@ -491,7 +514,8 @@ class BaseSim(dict):
 
                 if iter == self['itmax']:
                     raise ValueError("itmax %d reached" % self['itmax'])
-            stderr.write("niter: %d\n" % (iter+1))
+            if self['verbose']:
+                stderr.write("niter: %d\n" % (iter+1))
         write_output(self['run'], is2, is2n, out, fs=self.fs)
         return out
 
@@ -546,8 +570,12 @@ class BaseSim(dict):
 
             for irepeat in xrange(nrepeat):
                 iter=0
-                stderr.write('-'*70)
-                stderr.write("\n%d/%d %d%% done\n" % (ii+1,ntot,100.*(ii+1)/float(ntot)))
+                if self['verbose']:
+                    stderr.write('-'*70)
+                    stderr.write('\n')
+                # always write this, a bit slower if not verbose
+                if self['verbose'] or ((ii % 10) == 0):
+                    stderr.write("%d/%d %d%% done\n" % (ii+1,ntot,100.*(ii+1)/float(ntot)))
                 while iter < self['itmax']:
 
                     if orient != 'ring':
@@ -560,7 +588,7 @@ class BaseSim(dict):
                     else:
                         ci = ci_nonoise
 
-                    if iter == 0: stderr.write("%s " % str(ci.psf.shape))
+                    if self['verbose'] and iter == 0: stderr.write("%s " % str(ci.psf.shape))
                     res = self.run(ci)
 
                     if res['flags'] == 0:
@@ -573,12 +601,15 @@ class BaseSim(dict):
 
                 if iter == self['itmax']:
                     raise ValueError("itmax %d reached" % self['itmax'])
-            stderr.write("niter: %d\n" % (iter+1))
+            if self['verbose']:
+                stderr.write("niter: %d\n" % (iter+1))
         write_output(self['run'], is2, ie, out, fs=self.fs)
         return out
 
     def process_ring_trials(self, is2, ie):
         """
+        deprecated 
+
         Generate random realizations of a particular element in the s2 and
         ellip sequences.
 
@@ -678,10 +709,12 @@ class BaseSim(dict):
             if 'retrim_fluxfrac' not in self:
                 raise ValueError("you must set fluxfrac for a retrim")
             retrim_fluxfrac = self['retrim_fluxfrac']
-            wlog("re-trimming with fluxfrac: %.12g" % retrim_fluxfrac)
             ci_full = ci
             ci = fimage.convolved.TrimmedConvolvedImage(ci_full, fluxfrac=retrim_fluxfrac)
-            wlog("old dims:",str(ci_full.image.shape),"new dims:",str(ci.image.shape))
+
+            if self['verbose']:
+                wlog("re-trimming with fluxfrac: %.12g" % retrim_fluxfrac)
+                wlog("old dims:",str(ci_full.image.shape),"new dims:",str(ci.image.shape))
         return ci
 
 

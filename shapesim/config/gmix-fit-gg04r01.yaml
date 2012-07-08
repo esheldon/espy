@@ -23,7 +23,7 @@ add_to_cache: false
 ptype: Tfrac
 use_jacob: false
 
-verbose: true
+verbose: false
 
 # we should try with higher values to see what happens
 ngauss_psf: 1

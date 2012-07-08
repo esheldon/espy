@@ -13,7 +13,7 @@ objmodel: gauss
 #
 # an applied shear!
 #
-shear: [0.01,-0.1]
+shear: [0.01,-0.01]
 
 mins2: 0.15
 maxs2: 1.75
