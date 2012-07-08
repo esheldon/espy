@@ -9,16 +9,22 @@ gmix-fit
     ring sims
 
         gg03
-            - ring, shear g1=0.01, 1000 in ring
+            - ring, shear g1=0.01, 1000 in ring, but ring/s2 ratios seem
+            incomplete?
 
             gmix
-                run        s/n   nrepeat       notes
-                gg03r01 - 1.e6         1
-                gg03r02 - 100          1
-                gg03r03 - 47           1
-                gg03r04 - 22          10       
-                gg03r05 - 11          10       need ~40
-                gg03r06 - 5           40       need ~160
+                byellip
+                    run        s/n   nrepeat       notes
+                    gg03r01 - 1.e6         1
+                    gg03r02 - 100          1
+                    gg03r03 - 47           1
+                    gg03r04 - 22          10       
+                    gg03r05 - 11          10
+                    gg03r06 - 5           40
+                byswn
+                    gg03r07
+        gg04 
+            - ring, g1=0.01,g2=-0.01, 100 in ring
         et02
             - ring, shear g1=0.01, 100 in ring
                 - Should have restricted to new,new2 had some

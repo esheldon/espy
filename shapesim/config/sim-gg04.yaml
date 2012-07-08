@@ -1,13 +1,7 @@
-# this one is pairs of 90 degree separated images together in samefile
+# I cached this but didn't need to: faster to generate on the fly
 name: sim-gg04
 
-#
-# type must be rand or ring
-# default current rand
-# If ring, the ntrial must be even in the run config
-
-#orient: "ring-rand"
-orient: "ring"
+orient: ring
 nring: 100
 
 psfmodel: gauss
@@ -19,7 +13,7 @@ objmodel: gauss
 #
 # an applied shear!
 #
-shear: [0.01,0.0]
+shear: [0.01,-0.1]
 
 mins2: 0.15
 maxs2: 1.75

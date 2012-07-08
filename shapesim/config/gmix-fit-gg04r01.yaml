@@ -1,20 +1,29 @@
-# gg04 is a ring test, random oriented pairs at 90 degree sep
+# gg04
 run: gmix-fit-gg04r01
 sim: sim-gg04
 
-# for ring, always use a pre-cached set of images
-# and just add different noise realizaions if needed
-use_cache: true
+# we will use all the s2 values from the sim, a set of s/n values and a single
+# ellip value
+runtype: bys2n
+
+s2n_method: matched
+s2n_fac: 4 # we can afford it
+
+ie: 7 # 0.33
+mins2n: 5
+maxs2n: 100
+nums2n: 20  # still 20*20=400
+
+s2n_psf: 1.0e+8
+
+use_cache: false
+add_to_cache: false
 
 # type of parametrization
 ptype: Tfrac
 use_jacob: false
 
 verbose: true
-
-# you need the + or - in exponent
-s2n: 1.0e+6
-s2n_psf: 1.0e+6
 
 # we should try with higher values to see what happens
 ngauss_psf: 1
@@ -29,10 +38,6 @@ maxtry_psf: 1
 # this is for the gaussian PSF fit, since admom gets gaussians too perfectly
 # trying out doing this automatically as needed
 randomize: true
-
-# number of trials, which are pairs of images at 90 degree sep
-#ntrial: 100
-nrepeat: 10
 
 # number of times to retry when a trial fails.  This generates
 # a new trial, unlike max_retry above which retries with a 

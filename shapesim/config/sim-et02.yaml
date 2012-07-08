@@ -1,13 +1,7 @@
 # ring
 name: sim-et02
 
-# type must be rand or ring
-# default current rand
-# If ring, the ntrial must be even in the run config
-
 orient: ring
-
-# we need to specify the number in the ring here
 nring: 100
 
 psfmodel: turb
