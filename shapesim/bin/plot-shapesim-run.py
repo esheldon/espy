@@ -23,6 +23,11 @@ parser.add_option('--s2meas',action='store_true',
                   help="Use the measured s2")
 parser.add_option('--noshow',action="store_true",
                   help="don't show")
+parser.add_option('--etot',action='store_true',
+                  help=('plot the difference between average '
+                        'measured total ellip and true total ellip. '
+                        'only for "byellip"'))
+
 
 parser.add_option('--skip1',default=None,
                   help="elements in index 1 to skip")
@@ -70,8 +75,13 @@ runtype=c.get('runtype','byellip')
 p=shapesim.plotting.SimPlotter(run)
 
 if runtype == 'byellip':
-    p.doplots_vs_e(yrange=yrng,s2max=s2max,s2meas=options.s2meas,
-                   show=show,type=options.type,skip1=skip1,skip2=skip2)
+    if options.etot:
+        p.plot_ediff_vs_e(yrange=yrng, show=show,
+                          s2max=s2max,s2meas=options.s2meas,
+                          skip1=skip1,skip2=skip2)
+    else:
+        p.plots_shear_vs_e(yrange=yrng,s2max=s2max,s2meas=options.s2meas,
+                           show=show,type=options.type,skip1=skip1,skip2=skip2)
 else:
-    p.doplots_vs_s2n(yrange=yrng, type=options.type, 
-                     show=show, skip1=skip1,skip2=skip2)
+    p.plots_shear_vs_s2n(yrange=yrng, type=options.type, 
+                         show=show, skip1=skip1,skip2=skip2)

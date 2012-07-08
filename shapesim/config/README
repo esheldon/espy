@@ -38,7 +38,7 @@ gmix-fit
                     run      ie    e  s2n_method   notes
                     et02r07   0 0.05     matched   running
                     et02r08  19 0.80     matched   running
-                    et02r09   7 0.32     matched   running
+                    et02r09   7 0.33     matched   running
             deswl
                 by s/n
                     run      ie    e  s2n_method   notes
@@ -56,7 +56,7 @@ gmix-fit
 
                 by s/n
                     run      ie    e  s2n_method   notes
-                    dt02r02   7 0.32    matched    running
+                    dt02r02   7 0.33    matched    running
  
             deswl
                 by ellip
@@ -66,6 +66,7 @@ gmix-fit
                 by s/n
                     run      ie    e  s2n_method   notes
                     dt02r01  19 0.80   matched     running
+                    dt02r03   7 0.33   matched     running
 
     low noise runs
         et01r04

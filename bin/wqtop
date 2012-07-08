@@ -68,6 +68,7 @@ class WQWatcher:
         
         self.ls_command='wq ls'
         self.stat_command='wq stat'
+        self.users_command='wq users'
 
         if self.user != None:
             self.ls_command = self.ls_command + ' -u ' + self.user
@@ -99,7 +100,10 @@ class WQWatcher:
 
             if self.split:
                 stat_data = self.get_wq_stat_output()
-                stat_statline, stat_lines = self.extract_stat_lines(stat_data)
+                users_data = self.get_wq_users_output()
+
+                stat_statline, stat_lines = self.extract_stat_lines(stat_data, users=users_data)
+
                 self.write_statline(self.win2, self.maxx2, stat_statline)
                 self.write_listing(self.win2, self.maxx2, stat_lines)
 
@@ -156,6 +160,15 @@ class WQWatcher:
         stdout_ret, stderr_ret = pobj.communicate()
         return stdout_ret
 
+    def get_wq_users_output(self):
+
+        pobj=subprocess.Popen(self.users_command, 
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              shell=True)
+        stdout_ret, stderr_ret = pobj.communicate()
+        return stdout_ret
+
+
     def extract_ls_lines(self, data):
         statline=''
 
@@ -172,7 +185,7 @@ class WQWatcher:
 
         return statline, lines
 
-    def extract_stat_lines(self, data):
+    def extract_stat_lines(self, data, users=None):
         statline=''
 
         lines = data.split('\n')
@@ -202,10 +215,11 @@ class WQWatcher:
         if len(lines) == 0:
             return statline,lines
 
+        lines += [''] + users.split('\n')
+
         lines = lines[0:self.maxy2-2-1]
 
         return statline, lines
-
 
 
     def setup_windows(self, stdscr):

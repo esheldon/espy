@@ -24,14 +24,14 @@ class SimPlotter(dict):
         self._data=None
 
 
-    def doplots_vs_s2n(self, 
-                     skip1=[],
-                     skip2=[],
-                     s2meas=False,
-                     type='diff',
-                     s2max=None, 
-                     yrange=None, 
-                     show=True):
+    def plots_shear_vs_s2n(self, 
+                           skip1=[],
+                           skip2=[],
+                           s2meas=False,
+                           type='diff',
+                           s2max=None, 
+                           yrange=None, 
+                           show=True):
         import biggles
         import pcolors
         import converter
@@ -227,14 +227,14 @@ class SimPlotter(dict):
 
 
 
-    def doplots_vs_e(self, 
-                     skip1=[],
-                     skip2=[],
-                     s2meas=False,
-                     type='diff',
-                     s2max=None, 
-                     yrange=None, 
-                     show=True):
+    def plot_shear_vs_e(self, 
+                        skip1=[],
+                        skip2=[],
+                        s2meas=False,
+                        type='diff',
+                        s2max=None, 
+                        yrange=None, 
+                        show=True):
         import biggles
         import pcolors
         import converter
@@ -355,6 +355,117 @@ class SimPlotter(dict):
         if show:
             arr.show()
         arr.write_eps(epsfile)
+        converter.convert(epsfile,dpi=100,verbose=True)
+
+
+    def plot_ediff_vs_e(self, 
+                        skip1=[],
+                        skip2=[],
+                        s2meas=False,
+                        type='diff',
+                        s2max=None, 
+                        yrange=None, 
+                        show=True):
+        """
+        Plot the measured ellipticity minus true vs true
+        """
+        import biggles
+        import pcolors
+        import converter
+
+        runtype = self.get('runtype','byellip')
+        if runtype != 'byellip':
+            raise ValueError("Can only make plots vs e for 'byellip' runs")
+
+        data = self.read_data(s2meas=s2meas, s2max=s2max,
+                              skip1=skip1,skip2=skip2)
+
+        epsfile = shapesim.get_plot_file(self['run'],'etot-'+type,
+                                         s2max=s2max,
+                                         s2meas=s2meas,
+                                         yrange=yrange)
+        wlog("will plot to:",epsfile)
+
+        colors=pcolors.rainbow(len(data), 'hex')
+
+        biggles.configure('PlotKey','key_vsep',1.0)
+        plt=biggles.FramedPlot()
+        plt.xlabel=r'e_{tot}'
+        plt.ylabel = r'$\Delta e_{tot}$'
+
+ 
+        plots=[]
+        for i,st in enumerate(reversed(data)):
+            wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
+
+            if s2meas:
+                s2 = median(st['s2_meas'])
+            else:
+                s2 = median(st['s2'])
+
+            s = st['etrue'].argsort()
+
+            etrue = st['etrue'][s]
+            ediff = st['e_meas'][s] - etrue
+
+            label = r'%0.3f' % s2
+            cr = biggles.Curve(etrue, ediff, color=colors[i])
+            cr.label = label
+
+            plt.add(cr)
+            plots.append(cr)
+
+        fsize=2
+        key = biggles.PlotKey(0.9,0.87, plots, halign='right', 
+                              fontsize=fsize)
+        plt.add(key)
+
+        klabtext=r'$<\sigma^2_{psf}/\sigma^2_{gal}>$'
+        #if self['s2n'] > 0:
+        #    klabtext += ' (S/N)'
+        klab = biggles.PlotLabel(0.86,0.94,klabtext,
+                                 fontsize=fsize,halign='right')
+        plt.add(klab)
+        objmodel = self.simc['objmodel']
+        psfmodel = self.simc['psfmodel']
+
+
+        plab='%s %s' % (objmodel,psfmodel)
+        l = biggles.PlotLabel(0.1,0.9, plab, halign='left')
+        plt.add(l)
+
+        if self.simc['psfmodel'] == 'turb':
+            siglab=r'$FWHM_{PSF}: %.1f$ pix' % self.simc['psf_fwhm']
+        else:
+            psf_sigma = self.simc['psf_sigma']
+            siglab=r'$\sigma_{PSF}: %.1f$ pix' % psf_sigma
+
+        s2n=self['s2n']
+        if s2n > 0:
+            if s2n > 1000:
+                ls2n = numpy.log10(s2n)
+                ls2n = r'$10^{%.1f}$' % ls2n
+            else:
+                ls2n = '%.0f' % s2n
+
+            #siglab+=r'$ S/N: %(s2n)d N_{trial}: %(ntrial)d$' % self
+            siglab+=' S/N: %s' % ls2n
+        #else:
+        #    siglab+=r'$  N_{trial}: %(ntrial)d$' % self
+
+        sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
+                               fontsize=2.5)
+        plt.add(sl)
+        plt.aspect_ratio=1
+
+        plt.xrange = [0,1.4]
+        if yrange is not None:
+            plt.yrange = yrange
+
+        wlog("Writing plot file:",epsfile)
+        if show:
+            plt.show()
+        plt.write_eps(epsfile)
         converter.convert(epsfile,dpi=100,verbose=True)
 
 
