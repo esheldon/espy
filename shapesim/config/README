@@ -57,6 +57,7 @@ gmix-fit
                 by s/n
                     run      ie    e  s2n_method   notes
                     dt02r02   7 0.33    matched    running
+                    dt02r03  19 0.80    matched    running
  
             deswl
                 by ellip
