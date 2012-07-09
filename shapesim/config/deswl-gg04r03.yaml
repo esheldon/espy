@@ -1,5 +1,5 @@
 # gg04 is a ring test
-run: deswl-gg04r01
+run: deswl-gg04r03
 sim: sim-gg04
 
 # we will use all the s2 values from the sim, a set of s/n values and a single
@@ -14,7 +14,7 @@ retrim: true
 retrim_fluxfrac: 0.9973
 
 
-ie: 7 # 0.33
+ie: 0 # 0.05
 mins2n: 5
 maxs2n: 100
 nums2n: 20  # still 20*20=400

@@ -89,7 +89,7 @@ class DESWLSim(shapesim.BaseSim):
                                       psf_sigma_guess)
         out['flags'] = wlpsfobj.get_flags()
         if out['flags'] != 0:
-            wlog('psf wlobj flags:',out['flags'])
+            self.wlog('psf wlobj flags:',out['flags'])
             return out
         out['sigma_psf'] = wlpsfobj.get_sigma0()
 
@@ -102,7 +102,7 @@ class DESWLSim(shapesim.BaseSim):
                                    sigma0_guess)
         out['flags'] = wlobj.get_flags()
         if out['flags'] != 0:
-            wlog('wlobj flags:',out['flags'])
+            self.wlog('wlobj flags:',out['flags'])
             return out
         out['sigma0'] = wlobj.get_sigma0()
 
@@ -114,13 +114,13 @@ class DESWLSim(shapesim.BaseSim):
 
         out['flags'] = wlshear.get_flags()
         if out['flags'] != 0:
-            wlog('wlshear flags:',out['flags'])
+            self.wlog('wlshear flags:',out['flags'])
             return out
 
         out['s2'] = out['sigma_psf']**2/(out['sigma0']**2-out['sigma_psf']**2)
         out['gamma1'] = wlshear.get_shear1()
         if out['gamma1'] == 0:
-            wlog("found gamma==0 bug")
+            self.wlog("found gamma==0 bug")
             out['flags'] = -2
             return out
 

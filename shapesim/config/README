@@ -1,5 +1,9 @@
 gmix-fit
 
+    todo:
+        ring tests with dg psf
+        elliptical psfs
+
     sims
         et01
             - am running et01r05 with add to cache, 1000 per.
@@ -21,20 +25,22 @@ gmix-fit
                     gg03r04 - 22          10       
                     gg03r05 - 11          10
                     gg03r06 - 5           40
-                byswn
+                bys2n
                     gg03r07
         gg04 
             - ring, g1=0.01,g2=-0.01, 100 in ring
             gmix
                 by s/n
                     run      ie    e  s2n_method   notes
-                    gg04r01   7 .33     matched   running
-                    gg04r02  19 .80     matched   running
-                    gg04r03   0 .05     matched   running
+                    gg04r01   7 .33     matched   done
+                    gg04r02  19 .80     matched   done
+                    gg04r03   0 .05     matched   done
             deswl
                 by s/n
                     run      ie    e  s2n_method   notes
                     gg04r01   7 .33     matched   running
+                    gg04r02  19 .80     matched   running
+                    gg04r03   0 .05     matched   running
 
         et02
             - ring, shear g1=0.01, 100 in ring
@@ -43,9 +49,9 @@ gmix-fit
             gmix
                 byellip
                     run       s/n   nrepeat       notes
-                    et02r01  1.e6         1       running
-                    et02r02   100         1       running
-                    et02r03    47         1       running
+                    et02r01  1.e6         1       
+                    et02r02   100         1       
+                    et02r03    47         1       
                     et02r04    22        10       
                     et02r05    11        40       
                     et02r06     5        160       
