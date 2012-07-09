@@ -3,6 +3,7 @@ gmix-fit
     todo:
         ring tests with dg psf
         elliptical psfs
+        et cache run with g1=0.01,g2=-0.01
 
     sims
         et01
@@ -44,8 +45,9 @@ gmix-fit
 
         et02
             - ring, shear g1=0.01, 100 in ring
-                - Should have restricted to new,new2 had some
-                  swapping.
+                - Should have restricted to gen3,gen5 for first ~5 s2 values,
+                  had some swapping.
+
             gmix
                 byellip
                     run       s/n   nrepeat       notes
@@ -68,6 +70,9 @@ gmix-fit
                     et02r01   0  .05     matched   running
                     et02r02  19  .80     matched   running
                     et02r03   7  .33     matched   running
+
+        et03
+            - ring, shear g1=0.01, g2=-0.01, 100 in ring
 
         dt02
             - ring, shear g1=0.01, 100 in ring
