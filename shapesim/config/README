@@ -25,6 +25,17 @@ gmix-fit
                     gg03r07
         gg04 
             - ring, g1=0.01,g2=-0.01, 100 in ring
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    gg04r01   7 .33     matched   running
+                    gg04r02  19 .80     matched   running
+                    gg04r03   0 .05     matched   running
+            deswl
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    gg04r01   7 .33     matched   running
+
         et02
             - ring, shear g1=0.01, 100 in ring
                 - Should have restricted to new,new2 had some
