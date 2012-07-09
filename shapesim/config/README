@@ -13,6 +13,7 @@ gmix-fit
 
     ring sims
 
+        Something weird with gg03
         gg03
             - ring, shear g1=0.01, 1000 in ring, but ring/s2 ratios seem
             incomplete?
@@ -31,6 +32,12 @@ gmix-fit
         gg04 
             - ring, g1=0.01,g2=-0.01, 100 in ring
             gmix
+                by ellip
+                    run     S/N  nrepeat  notes
+                    gg04r04 100   algo    using algorithmic nrepeat
+                    gg04r05  47   algo    
+                    gg04r06  22   algo    
+
                 by s/n
                     run      ie    e  s2n_method   notes
                     gg04r01   7 .33     matched   done
@@ -41,7 +48,7 @@ gmix-fit
                     run      ie    e  s2n_method   notes
                     gg04r01   7 .33     matched   running
                     gg04r02  19 .80     matched   running
-                    gg04r03   0 .05     matched   running
+                    gg04r03   0 .05     matched   done
 
         et02
             - ring, shear g1=0.01, 100 in ring
@@ -61,9 +68,9 @@ gmix-fit
 
                 by s/n
                     run      ie    e  s2n_method   notes
-                    et02r07   0 0.05     matched   running
-                    et02r08  19 0.80     matched   running
-                    et02r09   7 0.33     matched   running
+                    et02r07   0 0.05     matched
+                    et02r08  19 0.80     matched
+                    et02r09   7 0.33     matched
             deswl
                 by s/n
                     run      ie    e  s2n_method   notes
@@ -73,6 +80,11 @@ gmix-fit
 
         et03
             - ring, shear g1=0.01, g2=-0.01, 100 in ring
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    et03r01   7  .33     matched   running
+                    et03r02  19  .80     matched   todo
+                    et03r03   0  .05     matched   todo
 
         dt02
             - ring, shear g1=0.01, 100 in ring

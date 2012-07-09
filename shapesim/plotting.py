@@ -358,14 +358,14 @@ class SimPlotter(dict):
         converter.convert(epsfile,dpi=100,verbose=True)
 
 
-    def plot_ediff_vs_e(self, 
-                        skip1=[],
-                        skip2=[],
-                        s2meas=False,
-                        type='diff',
-                        s2max=None, 
-                        yrange=None, 
-                        show=True):
+    def plot_ediff_Rshear_vs_e(self, 
+                               skip1=[],
+                               skip2=[],
+                               s2meas=False,
+                               s2max=None, 
+                               yrange=None, 
+                               yrange2=None,
+                               show=True):
         """
         Plot the measured ellipticity minus true vs true
         """
@@ -380,21 +380,38 @@ class SimPlotter(dict):
         data = self.read_data(s2meas=s2meas, s2max=s2max,
                               skip1=skip1,skip2=skip2)
 
-        epsfile = shapesim.get_plot_file(self['run'],'etot-'+type,
-                                         s2max=s2max,
-                                         s2meas=s2meas,
-                                         yrange=yrange)
-        wlog("will plot to:",epsfile)
+        epsfile_etot = shapesim.get_plot_file(self['run'],'etot',
+                                              s2max=s2max,
+                                              s2meas=s2meas,
+                                              yrange=yrange)
+        epsfile_R = shapesim.get_plot_file(self['run'],'Rshear',
+                                              s2max=s2max,
+                                              s2meas=s2meas,
+                                              yrange=yrange)
+        wlog("will plot to:",epsfile_etot)
+        wlog("will plot to:",epsfile_R)
 
         colors=pcolors.rainbow(len(data), 'hex')
 
         biggles.configure('PlotKey','key_vsep',1.0)
-        plt=biggles.FramedPlot()
-        plt.xlabel=r'e_{tot}'
-        plt.ylabel = r'$\Delta e_{tot}$'
+        biggles.configure('screen','width',1200)
 
+        #tab=biggles.Table(1,2)
+
+        plt1=biggles.FramedPlot()
+        plt1.xlabel=r'e'
+        plt1.ylabel = r'$\Delta e$'
+        #plt1.x1.draw_ticklabels = 0
+
+        plt2=biggles.FramedPlot()
+        plt2.xlabel=r'e'
+        plt2.ylabel = r'$\Delta R/R$'
+
+        plt1.aspect_ratio=1
+        plt2.aspect_ratio=1
  
-        plots=[]
+        plots1=[]
+        plots2=[]
         for i,st in enumerate(reversed(data)):
             wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
 
@@ -406,33 +423,55 @@ class SimPlotter(dict):
             s = st['etrue'].argsort()
 
             etrue = st['etrue'][s]
-            ediff = st['e_meas'][s] - etrue
+            emeas = st['e_meas'][s]
+            ediff = emeas  - etrue
 
             label = r'%0.3f' % s2
             cr = biggles.Curve(etrue, ediff, color=colors[i])
             cr.label = label
 
-            plt.add(cr)
-            plots.append(cr)
+            #R_true = 1-.5*etrue**2
+            R_true = st['Rshear_true'][s]
+            R_meas = st['Rshear'][s]
+            R_fdiff = R_meas/R_true-1
+
+            Rp = biggles.Curve(etrue, R_fdiff, color=colors[i])
+
+            plt1.add(cr)
+            plt2.add(Rp)
+            plots1.append(cr)
+            #if i < 15:
+            #    plots1.append(cr)
+            #else:
+            #    plots2.append(cr)
+
 
         fsize=2
-        key = biggles.PlotKey(0.9,0.87, plots, halign='right', 
+        key1 = biggles.PlotKey(0.9,0.87, plots1, halign='right', 
                               fontsize=fsize)
-        plt.add(key)
-
+        plt1.add(key1)
+        plt2.add(key1)
+        """
+        if len(plots2) > 0:
+            key2 = biggles.PlotKey(0.9,0.92, plots2, halign='right', 
+                                   ontsize=fsize)
+            plt2.add(key2)
+        """
         klabtext=r'$<\sigma^2_{psf}/\sigma^2_{gal}>$'
         #if self['s2n'] > 0:
         #    klabtext += ' (S/N)'
         klab = biggles.PlotLabel(0.86,0.94,klabtext,
                                  fontsize=fsize,halign='right')
-        plt.add(klab)
+        plt1.add(klab)
+        plt2.add(klab)
         objmodel = self.simc['objmodel']
         psfmodel = self.simc['psfmodel']
 
 
         plab='%s %s' % (objmodel,psfmodel)
         l = biggles.PlotLabel(0.1,0.9, plab, halign='left')
-        plt.add(l)
+        plt1.add(l)
+        plt2.add(l)
 
         if self.simc['psfmodel'] == 'turb':
             siglab=r'$FWHM_{PSF}: %.1f$ pix' % self.simc['psf_fwhm']
@@ -455,18 +494,31 @@ class SimPlotter(dict):
 
         sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
                                fontsize=2.5)
-        plt.add(sl)
-        plt.aspect_ratio=1
+        plt1.add(sl)
+        plt2.add(sl)
+        #plt1.aspect_ratio=1
+        #plt2.aspect_ratio=1
 
-        plt.xrange = [0,1.4]
+        plt1.xrange = [0,1.4]
+        plt2.xrange = [0,1.4]
         if yrange is not None:
-            plt.yrange = yrange
+            plt1.yrange = yrange
+        if yrange2 is not None:
+            plt2.yrange = yrange2
 
-        wlog("Writing plot file:",epsfile)
+        #tab[0,0] = plt1
+        #tab[0,1] = plt2
+        wlog("plot to:",epsfile_etot)
+        wlog("plot to:",epsfile_R)
         if show:
-            plt.show()
-        plt.write_eps(epsfile)
-        converter.convert(epsfile,dpi=100,verbose=True)
+            plt1.show()
+            plt2.show()
+            #tab.show()
+        #tab.write_eps(epsfile)
+        plt1.write_eps(epsfile_etot)
+        plt2.write_eps(epsfile_R)
+        converter.convert(epsfile_etot,dpi=100,verbose=True)
+        converter.convert(epsfile_R,dpi=100,verbose=True)
 
 
 

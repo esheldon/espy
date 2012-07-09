@@ -490,7 +490,7 @@ class BaseSim(dict):
                     stderr.write('-'*70)
                     stderr.write('\n')
                 # we always write this, although slower when not verbose
-                if self['verbose'] or ((ii % 10) == 0):
+                if self['verbose'] or (((ii+1) % 10) == 0) or (ii==0):
                     stderr.write("%d/%d %d%% done\n" % (ii+1,ntot,100.*(ii+1)/float(ntot)))
 
                 iter=0
@@ -534,13 +534,20 @@ class BaseSim(dict):
         """
         import images 
 
+        s2n = self['s2n']
+        s2n_psf = self['s2n_psf']
+
         orient=self.simc.get('orient','rand')
         if orient == 'ring':
             ntrial = self.simc['nring']
-            nrepeat = self['nrepeat']
+            nrepeat = self.get('nrepeat',None)
+            if nrepeat is None:
+                s2n_fac = self.get('s2n_fac',0.4)
+                nrepeat = get_s2n_nrepeat(s2n, fac=s2n_fac)
         else:
             ntrial = self['ntrial']
             nrepeat=1
+
 
         ntot = ntrial*nrepeat
         out = numpy.zeros(ntot, dtype=self.out_dtype())
@@ -548,8 +555,6 @@ class BaseSim(dict):
         simpars=self.get('simpars',{})
         ss = ShapeSim(self['sim'], **simpars)
 
-        s2n = self['s2n']
-        s2n_psf = self['s2n_psf']
 
         s2,ellip = get_s2_e(self.simc, is2, ie)
         wlog('ellip:',ellip)
@@ -574,7 +579,7 @@ class BaseSim(dict):
                     stderr.write('-'*70)
                     stderr.write('\n')
                 # always write this, a bit slower if not verbose
-                if self['verbose'] or ((ii % 10) == 0):
+                if self['verbose'] or (((ii+1) % 10) == 0) or (ii==0):
                     stderr.write("%d/%d %d%% done\n" % (ii+1,ntot,100.*(ii+1)/float(ntot)))
                 while iter < self['itmax']:
 
@@ -1004,7 +1009,7 @@ def average_outputs(data):
     if 'e1_meas' in data[0][0].dtype.names:
         dt += [('shear1','f8'),('shear1err','f8'),
                ('shear2','f8'),('shear2err','f8'),
-               ('Rshear','f8')]
+               ('Rshear_true','f8'),('Rshear','f8')]
     else:
         raise ValueError('DEAL WITH e1meas missing')
 
@@ -1017,6 +1022,8 @@ def average_outputs(data):
             for n in d.dtype.names:
                 if n == 'Rshear':
                     d['Rshear'][i] = R
+                elif n == 'Rshear_true':
+                    d['Rshear_true'][i] = (1-0.5*edata['etrue']**2).mean()
                 elif n == 'shear1':
                     d['shear1'][i] = shear1
                 elif n == 'shear2':

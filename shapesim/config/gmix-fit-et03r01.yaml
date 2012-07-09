@@ -1,12 +1,15 @@
-# et02 is a ring test
-run: gmix-fit-et02r09
-sim: sim-et02
+# et03 is a ring test, shear (0.01,-0.01)
+# we will try retrim to speed things up, see if any loss in accuracy
+run: gmix-fit-et03r01
+sim: sim-et03
 
-# we will use all the s2 values from the sim, a set of s/n values and a single
-# ellip value
 runtype: bys2n
 
 s2n_method: matched
+s2n_fac: 1 # default 0.4
+
+retrim: true
+retrim_fluxfrac: 0.9973
 
 ie: 7 # 0.33
 mins2n: 5
@@ -22,7 +25,7 @@ add_to_cache: false
 ptype: Tfrac
 use_jacob: false
 
-verbose: true
+verbose: false
 
 # we should try with higher values to see what happens
 ngauss_psf: 3

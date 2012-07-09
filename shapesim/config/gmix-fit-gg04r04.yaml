@@ -1,37 +1,33 @@
-# et02 is a ring test
-run: gmix-fit-et02r09
-sim: sim-et02
+# gg04 is a ring test
+run: gmix-fit-gg04r04
+sim: sim-gg04
 
-# we will use all the s2 values from the sim, a set of s/n values and a single
-# ellip value
-runtype: bys2n
-
-s2n_method: matched
-
-ie: 7 # 0.33
-mins2n: 5
-maxs2n: 100
-nums2n: 20  # still 20*20=400
-
-s2n_psf: 1.0e+8
-
-use_cache: true
+use_cache: false
 add_to_cache: false
 
 # type of parametrization
 ptype: Tfrac
 use_jacob: false
 
-verbose: true
+verbose: false
+
+# you need the + or - in exponent
+# log spaced sequence   5   11   22    47   100
+# in andres' estimator 14.5 31.9 63.8 136.3 290
+s2n: 100
+s2n_psf: 1.0e+6
+
+# default 0.4
+s2n_fac: 10
 
 # we should try with higher values to see what happens
-ngauss_psf: 3
-ngauss_obj: 3
+ngauss_psf: 1
+ngauss_obj: 1
 
 coellip_psf: true
 coellip_obj: true
 
-maxtry: 2
+maxtry: 1
 maxtry_psf: 1
 
 # this is for the gaussian PSF fit, since admom gets gaussians too perfectly

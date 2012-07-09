@@ -15,6 +15,8 @@ from optparse import OptionParser
 parser=OptionParser(__doc__)
 parser.add_option('-y','--yrange',default='-0.05,0.05',
                   help='yrange, default %default')
+parser.add_option('--yrange2',default='-0.05,0.05',
+                  help='yrange2, default %default')
 parser.add_option('-t','--type',default='diff',
                   help='yrange, default %default')
 parser.add_option('--s2max',default=None,
@@ -76,12 +78,16 @@ p=shapesim.plotting.SimPlotter(run)
 
 if runtype == 'byellip':
     if options.etot:
-        p.plot_ediff_vs_e(yrange=yrng, show=show,
-                          s2max=s2max,s2meas=options.s2meas,
-                          skip1=skip1,skip2=skip2)
+        yrng2 = options.yrange2
+        if yrng2 is not None:
+            yrng2 = yrng2.split(',')
+            yrng2 = [float(yrng2[0]),float(yrng2[1])]
+        p.plot_ediff_Rshear_vs_e(yrange=yrng, yrange2=yrng2, show=show,
+                                 s2max=s2max,s2meas=options.s2meas,
+                                 skip1=skip1,skip2=skip2)
     else:
-        p.plots_shear_vs_e(yrange=yrng,s2max=s2max,s2meas=options.s2meas,
-                           show=show,type=options.type,skip1=skip1,skip2=skip2)
+        p.plot_shear_vs_e(yrange=yrng,s2max=s2max,s2meas=options.s2meas,
+                          show=show,type=options.type,skip1=skip1,skip2=skip2)
 else:
     p.plots_shear_vs_s2n(yrange=yrng, type=options.type, 
                          show=show, skip1=skip1,skip2=skip2)
