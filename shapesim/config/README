@@ -1,9 +1,9 @@
 gmix-fit
 
     todo:
+        ring test with no shear and non-circular PSF using dg
         ring tests with dg psf
-        elliptical psfs
-        et cache run with g1=0.01,g2=-0.01
+        plotting: do cumulative s2 averages, s2 < X
 
     sims
         et01
@@ -37,8 +37,8 @@ gmix-fit
                     gg04r04 100   algo    using algorithmic nrepeat
                     gg04r05  47   algo    
                     gg04r06  22   algo    
-                    gg04r07  11   algo    running
-                    gg04r08   5   algo    
+                    gg04r07  11   algo    
+                    gg04r08   5   algo    running
                     gg04r09 1.e6  algo
 
                 by s/n
@@ -83,9 +83,16 @@ gmix-fit
 
         et03
             - ring, shear g1=0.01, g2=-0.01, 100 in ring
+            gmix
                 by s/n
                     run      ie    e  s2n_method   notes
                     et03r01   7  .33     matched   running
+                    et03r02  19  .80     matched   todo
+                    et03r03   0  .05     matched   todo
+            deswl
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    et03r01   7  .33     matched   todo
                     et03r02  19  .80     matched   todo
                     et03r03   0  .05     matched   todo
 

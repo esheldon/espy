@@ -31,10 +31,19 @@ class SimPlotter(dict):
                            type='diff',
                            s2max=None, 
                            yrange=None, 
+                           doavg=False,
+                           docum=False,
                            show=True):
         import biggles
         import pcolors
         import converter
+
+        if doavg:
+            extra='-avg'
+        else:
+            extra=''
+        if docum:
+            extra+='-cum'
 
         runtype = self.get('runtype','byellip')
         if runtype != 'bys2n':
@@ -44,9 +53,10 @@ class SimPlotter(dict):
         shear_true = lensing.shear.Shear(g1=slist[0],g2=slist[1])
 
         data = self.read_data(s2meas=s2meas, s2max=s2max,
+                              docum=docum,
                               skip1=skip1,skip2=skip2)
 
-        epsfile = shapesim.get_plot_file(self['run'],type,yrange=yrange)
+        epsfile = shapesim.get_plot_file(self['run'],type+extra,yrange=yrange)
         wlog("will plot to:",epsfile)
 
         colors=pcolors.rainbow(len(data), 'hex')
@@ -59,11 +69,13 @@ class SimPlotter(dict):
         plots1=[]
         plots2=[]
         allplots=[]
-        max_s2n_len=0
-        for st in data:
-            if st['s2'].size > max_s2n_len:
-                max_s2n_len = st['s2'].size
-        avg=zeros(max_s2n_len, dtype=[('s2n','f8'),('shear1','f8'),('shear2','f8'),('n','i8')])
+
+        if doavg:
+            max_s2n_len=0
+            for st in data:
+                if st['s2'].size > max_s2n_len:
+                    max_s2n_len = st['s2'].size
+            avg=zeros(max_s2n_len, dtype=[('s2n','f8'),('shear1','f8'),('shear2','f8'),('n','i8')])
 
         # looping over s2
         for i,st in enumerate(reversed(data)):
@@ -94,8 +106,12 @@ class SimPlotter(dict):
                 # convention
                 st[tag1] = -st[tag1]
             else:
-                tag1='shear1'
-                tag2='shear2'
+                if docum:
+                    tag1='shear1cum'
+                    tag2='shear2cum'
+                else:
+                    tag1='shear1'
+                    tag2='shear2'
            
             if type == 'diff':
                 yvals1 = st[tag1][s] - shear_true.g1
@@ -108,7 +124,10 @@ class SimPlotter(dict):
                 raise ValueError("bad plot type: '%s'" % type)
 
 
-            label = r'%0.3f' % s2
+            if docum:
+                label = r'< %0.3f' % s2
+            else:
+                label = r'%0.3f' % s2
             pr1 = biggles.Curve(s2n, yvals1, color=colors[i])
             pr2 = biggles.Curve(s2n, yvals2, color=colors[i])
             pr1.label = label
@@ -124,23 +143,25 @@ class SimPlotter(dict):
             else:
                 plots2.append(pr1)
 
-            if st['s2'].size == avg['n'].size:
-                avg['n'] += 1
-                avg['s2n'] += s2n
-                avg['shear1'] += yvals1
-                avg['shear2'] += yvals2
+            if doavg:
+                if st['s2'].size == avg['n'].size:
+                    avg['n'] += 1
+                    avg['s2n'] += s2n
+                    avg['shear1'] += yvals1
+                    avg['shear2'] += yvals2
 
-        avg['s2n'] = avg['s2n']/avg['n']
-        avg['shear1'] = avg['shear1']/avg['n']
-        avg['shear2'] = avg['shear2']/avg['n']
-        avg1 = biggles.Points(avg['s2n'],avg['shear1'],type='filled circle',size=2)
-        avg2 = biggles.Points(avg['s2n'],avg['shear2'],type='filled circle',size=2)
-        avg1.label = 'average'
+        if doavg:
+            avg['s2n'] = avg['s2n']/avg['n']
+            avg['shear1'] = avg['shear1']/avg['n']
+            avg['shear2'] = avg['shear2']/avg['n']
+            avg1 = biggles.Points(avg['s2n'],avg['shear1'],type='filled circle',size=2)
+            avg2 = biggles.Points(avg['s2n'],avg['shear2'],type='filled circle',size=2)
+            avg1.label = 'average'
 
-        if len(plots2) > 0:
-            plots2.append(avg1)
-        else:
-            plots1.append(avg1)
+            if len(plots2) > 0:
+                plots2.append(avg1)
+            else:
+                plots1.append(avg1)
 
         fsize=2
         key1 = biggles.PlotKey(0.9,0.85, plots1, halign='right', 
@@ -178,8 +199,9 @@ class SimPlotter(dict):
 
 
         # might be a diff
-        arr[0,0].add(avg1)
-        arr[1,0].add(avg2)
+        if doavg:
+            arr[0,0].add(avg1)
+            arr[1,0].add(avg2)
 
         if type == 'val':
             arr.ylabel = r'$\gamma$'
@@ -234,10 +256,16 @@ class SimPlotter(dict):
                         type='diff',
                         s2max=None, 
                         yrange=None, 
+                        doavg=False,
                         show=True):
         import biggles
         import pcolors
         import converter
+
+        if doavg:
+            extra='-avg'
+        else:
+            extra=''
 
         runtype = self.get('runtype','byellip')
         if runtype != 'byellip':
@@ -249,7 +277,7 @@ class SimPlotter(dict):
         data = self.read_data(s2meas=s2meas, s2max=s2max,
                               skip1=skip1,skip2=skip2)
 
-        epsfile = shapesim.get_plot_file(self['run'],type,
+        epsfile = shapesim.get_plot_file(self['run'],type+extra,
                                          s2max=s2max,
                                          s2meas=s2meas,
                                          yrange=yrange)
@@ -267,6 +295,14 @@ class SimPlotter(dict):
         plots1=[]
         plots2=[]
         allplots=[]
+
+        if doavg:
+            max_e_len=0
+            for st in data:
+                if st['etrue'].size > max_e_len:
+                    max_e_len = st['s2'].size
+            avg=zeros(max_e_len, dtype=[('e','f8'),('shear1','f8'),('shear2','f8'),('n','i8')])
+
         for i,st in enumerate(reversed(data)):
             wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
 
@@ -279,12 +315,30 @@ class SimPlotter(dict):
 
             etrue = st['etrue'][s]
             
-            shear1diff = st['shear1'][s] - shear_true.g1
-            shear2diff = st['shear2'][s] - shear_true.g2
+            if self['run'][0:5] == 'deswl':
+                tag1='gamma1_meas'
+                tag2='gamma2_meas'
+                # convention
+                st[tag1] = -st[tag1]
+            else:
+                tag1='shear1'
+                tag2='shear2'
+ 
+            if type == 'diff':
+                yvals1 = st[tag1][s] - shear_true.g1
+                yvals2 = st[tag2][s] - shear_true.g2
+            elif type == 'val':
+                yvals1 = st[tag1][s]
+                yvals2 = st[tag2][s]
+
+            else:
+                raise ValueError("bad plot type: '%s'" % type)
+
+
 
             label = r'%0.3f' % s2
-            cr1 = biggles.Curve(etrue, shear1diff, color=colors[i])
-            cr2 = biggles.Curve(etrue, shear2diff, color=colors[i])
+            cr1 = biggles.Curve(etrue, yvals1, color=colors[i])
+            cr2 = biggles.Curve(etrue, yvals2, color=colors[i])
             cr1.label = label
             cr2.label = label
 
@@ -294,6 +348,26 @@ class SimPlotter(dict):
                 plots1.append(cr1)
             else:
                 plots2.append(cr1)
+
+            if doavg:
+                if st['s2'].size == avg['n'].size:
+                    avg['n'] += 1
+                    avg['e'] += etrue
+                    avg['shear1'] += yvals1
+                    avg['shear2'] += yvals2
+
+        if doavg:
+            avg['e'] = avg['e']/avg['n']
+            avg['shear1'] = avg['shear1']/avg['n']
+            avg['shear2'] = avg['shear2']/avg['n']
+            avg1 = biggles.Points(avg['e'],avg['shear1'],type='filled circle',size=2)
+            avg2 = biggles.Points(avg['e'],avg['shear2'],type='filled circle',size=2)
+            avg1.label = 'average'
+
+            if len(plots2) > 0:
+                plots2.append(avg1)
+            else:
+                plots1.append(avg1)
 
         fsize=2
         key1 = biggles.PlotKey(0.9,0.85, plots1, halign='right', 
@@ -347,6 +421,11 @@ class SimPlotter(dict):
         arr[0,0].add(g1lab)
         arr[1,0].add(g2lab)
 
+        # might be a diff
+        if doavg:
+            arr[0,0].add(avg1)
+            arr[1,0].add(avg2)
+
         arr.xrange = [0,1.4]
         if yrange is not None:
             arr.yrange = yrange
@@ -387,7 +466,7 @@ class SimPlotter(dict):
         epsfile_R = shapesim.get_plot_file(self['run'],'Rshear',
                                               s2max=s2max,
                                               s2meas=s2meas,
-                                              yrange=yrange)
+                                              yrange=yrange2)
         wlog("will plot to:",epsfile_etot)
         wlog("will plot to:",epsfile_R)
 
@@ -523,12 +602,14 @@ class SimPlotter(dict):
 
 
 
-    def read_data(self, s2meas=False, s2max=None, skip1=[], skip2=[]):
+    def read_data(self, docum=False, s2meas=False, s2max=None, skip1=[], skip2=[]):
         if self._data is None:
             wlog("reading data")
             self._data = shapesim.read_all_outputs(self['run'],
                                                    skip1=skip1,skip2=skip2,
-                                                   average=True,verbose=True)
+                                                   average=True,
+                                                   docum=docum,
+                                                   verbose=True)
         
         alldata = self._data
         ntot=len(alldata)

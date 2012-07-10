@@ -29,6 +29,10 @@ parser.add_option('--etot',action='store_true',
                   help=('plot the difference between average '
                         'measured total ellip and true total ellip. '
                         'only for "byellip"'))
+parser.add_option('--avg',action='store_true',
+                  help="over plot the average over s2")
+parser.add_option('--cum',action='store_true',
+                  help="Accumulate as a function of s2")
 
 
 parser.add_option('--skip1',default=None,
@@ -87,7 +91,10 @@ if runtype == 'byellip':
                                  skip1=skip1,skip2=skip2)
     else:
         p.plot_shear_vs_e(yrange=yrng,s2max=s2max,s2meas=options.s2meas,
-                          show=show,type=options.type,skip1=skip1,skip2=skip2)
+                          show=show,type=options.type,skip1=skip1,skip2=skip2,
+                         doavg=options.avg)
 else:
     p.plots_shear_vs_s2n(yrange=yrng, type=options.type, 
+                         doavg=options.avg,
+                         docum=options.cum,
                          show=show, skip1=skip1,skip2=skip2)

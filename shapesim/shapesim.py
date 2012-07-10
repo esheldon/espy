@@ -960,9 +960,11 @@ def read_output(run, is2, ie, verbose=False, fs=None):
         wlog("reading output:",f)
     return eu.io.read(f)
 
-def read_all_outputs(run, average=False, verbose=False, skip1=[], skip2=[], fs=None):
+def read_all_outputs(run, average=False, docum=False, verbose=False, skip1=[], skip2=[], fs=None):
     """
     Data are grouped as a list by is2 and then sublists by ie/is2n
+
+    If docum=True, we accumulate the sums for s2 < s2i.
     """
     data=[]
     c=read_config(run)
@@ -988,14 +990,130 @@ def read_all_outputs(run, average=False, verbose=False, skip1=[], skip2=[], fs=N
                 s2data.append(edata)
             except:
                 pass
+        if average and len(s2data) > 0:
+            s2data = average_outputs(s2data)
         data.append(s2data)
 
-    if average:
-        return average_outputs(data)
-    else:
-        return data
+    if docum:
+        if not average:
+            raise ValueError("you must set average to set cum")
+        data = accumulate_outputs(data)
+    return data
+
+def accumulate_outputs(data):
+    """
+    Should already be summed over realizations
+    """
+
+    dt =data[0].dtype.descr
+    dt += [('shear1cum','f8'), # sums so we can do cumulative
+           ('shear2cum','f8'),
+           ('Rshearcum','f8')]
+    out=[]
+
+    num=len(data[0])
+    for i,s2data in enumerate(data):
+        nd = len(s2data)
+        if nd != num:
+            raise ValueError("when accumulating, there can be no missing values "
+                             "use skip1/skip2 to help")
+
+        d = zeros(num, dtype=dt)
+        eu.numpy_util.copy_fields(s2data, d)
+        if i > 0:
+            # add previous
+            d['e1sum']  += dold['e1sum']
+            d['e2sum']  += dold['e2sum']
+            d['esqsum'] += dold['esqsum']
+            d['nsum']   += dold['nsum']
+
+        d['Rshearcum'] = 1-0.5*d['esqsum']/d['nsum']
+        d['shear1cum'] = 0.5*d['e1sum']/d['nsum']/d['Rshearcum']
+        d['shear2cum'] = 0.5*d['e2sum']/d['nsum']/d['Rshearcum']
+        out.append(d)
+        dold = d.copy()
+
+    return out
 
 def average_outputs(data):
+    """
+    Input should be a list of arrays.  The output will be
+    an array with length of list, values averaged over the
+    elements
+    """
+    dt = data[0].dtype.descr
+
+    if 'e1_meas' in data[0].dtype.names:
+        dt += [('e1sum','f8'), # sums so we can do cumulative
+               ('e2sum','f8'),
+               ('esqsum','f8'),
+               ('nsum','i8'),
+               ('shear1','f8'),('shear1err','f8'),  # average in particular bin
+               ('shear2','f8'),('shear2err','f8'),
+               ('Rshear_true','f8'),('Rshear','f8')]
+    else:
+        raise ValueError('DEAL WITH e1meas missing')
+
+    d=zeros(len(data),dtype=dt)
+    for i,edata in enumerate(data): # over different ellipticities
+        #shear1,shear2,R,shear1err,shear2err \
+        #    = lensing.util.average_shear(edata['e1_meas'],edata['e2_meas'],
+        #                                 doerr=True)
+
+        e1 = edata['e1_meas']
+        e2 = edata['e2_meas']
+        esq = e1**2 + e2**2
+
+        e1sum = e1.sum()
+        e2sum = e2.sum()
+        esqsum = esq.sum()
+
+        num=e1.size
+        mesq = esqsum/num
+        me1 = e1sum/num
+        me2 = e2sum/num
+
+        R = 1-.5*mesq
+        g1 = 0.5*me1/R
+        g2 = 0.5*me2/R
+
+        mesq_err = esq.std()/sqrt(num)
+        e1err = e1.std()/sqrt(num)
+        e2err = e2.std()/sqrt(num)
+        
+        g1err = g1*sqrt( (mesq_err/mesq)**2 + (e1err/me1)**2 )
+        g2err = g2*sqrt( (mesq_err/mesq)**2 + (e1err/me2)**2 )
+
+        for n in d.dtype.names:
+            if n == 'Rshear':
+                d['Rshear'][i] = R
+            elif n == 'Rshear_true':
+                d['Rshear_true'][i] = (1-0.5*edata['etrue']**2).mean()
+            elif n == 'shear1':
+                d['shear1'][i] = g1
+            elif n == 'shear2':
+                d['shear2'][i] = g2
+            elif n == 'shear1err':
+                d['shear1err'][i] = g1err
+            elif n == 'shear2err':
+                d['shear2err'][i] = g2err
+            elif n == 'e1sum':
+                d['e1sum'][i] = e1sum
+            elif n == 'e2sum':
+                d['e2sum'][i] = e2sum
+            elif n == 'esqsum':
+                d['esqsum'][i] = esqsum
+            elif n == 'nsum':
+                d['nsum'][i] = num
+            else:
+                if edata[n].dtype.names is None and len(edata[n].shape) == 1:
+                    #d[n][i] = median(edata[n])
+                    d[n][i] = edata[n].mean()
+
+    return d
+
+
+def average_outputs_old(data):
     """
     data is a list of lists of arrays
 
