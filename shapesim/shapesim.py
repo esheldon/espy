@@ -864,17 +864,15 @@ def get_plot_dir(run):
 
 
 
-def get_plot_file(run, type, s2max=None, s2meas=False, yrange=None):
+def get_plot_file(run, type, s2min=None, yrng=None):
     d=get_plot_dir(run)
     f='%s' % run
 
-    if s2meas:
-        f += '-s2meas'
-    if s2max is not None:
-        f += '-s2max%0.3f' % s2max
+    if s2min:
+        f += '-s2min%0.2f' % s2min
 
-    if yrange is not None:
-        f += '-yr%0.3f-%0.3f' % tuple(yrange)
+    if yrng is not None:
+        f += '-yr%0.3f-%0.3f' % tuple(yrng)
     f += '-%s.eps' % type
     f = path_join(d, f)
     return f
@@ -896,6 +894,7 @@ def get_output_url(run, is2, ie, fs=None):
     dir=get_output_dir(run, fs=fs)
     f='%s-%03i-%03i.rec' % (run,is2,ie)
     return path_join(dir, f)
+
 
 def get_cache_output_dir(simname, is2, ie, fs=None):
     d=get_simdir(fs=fs)
@@ -960,7 +959,103 @@ def read_output(run, is2, ie, verbose=False, fs=None):
         wlog("reading output:",f)
     return eu.io.read(f)
 
-def read_all_outputs(run, average=False, docum=False, verbose=False, skip1=[], skip2=[], fs=None):
+
+def get_averaged_url(run, is2, fs=None, docum=False):
+    """
+    All the trials are averaged in a given s2 bin, and all
+    ellip/s2n bins are in a single struct.
+    """
+    dir=get_output_dir(run, fs=fs)
+    f='%s-%03i-avg' % (run,is2)
+    if docum:
+        f += '-cum'
+    f += '.rec'
+    return path_join(dir, f)
+
+def write_averaged_outputs(run, data, docum=False, skip1=[], fs=None):
+    if fs != 'hdfs':
+        d = get_output_dir(run, fs=fs)
+        if not os.path.exists(d):
+            os.makedirs(d)
+
+    c=read_config(run)
+    cs=read_config(c['sim'])
+    numi1 = cs['nums2']
+    idata=0
+    for i1 in xrange(numi1):
+        if i1 not in skip1:
+            f=get_averaged_url(run, i1, fs=fs, docum=docum)
+            wlog(f)
+            eu.io.write(f, data[idata], clobber=True)
+            idata += 1
+
+def read_averaged_outputs(run, docum=False, skip1=[], fs=None):
+    c=read_config(run)
+    cs=read_config(c['sim'])
+    numi1 = cs['nums2']
+    data=[]
+    for i1 in xrange(numi1):
+        if i1 not in skip1:
+            f=get_averaged_url(run, i1, fs=fs, docum=docum)
+            wlog(f)
+            d=eu.io.read(f)
+            data.append(d)
+    return data
+
+def make_averaged_outputs(run, docum=True, 
+                          skip1=[], 
+                          skip2=[]):
+    """
+    We write to both local and hdfs, for speed
+    """
+    data=[]
+    c=read_config(run)
+    cs=read_config(c['sim'])
+    runtype=c.get('runtype','byellip')
+
+    straight_avg=False
+    if run[0:5] == 'deswl':
+        straight_avg=True
+        wlog("Doing straight average for deswl")
+
+    numi1 = cs['nums2']
+    if runtype == 'byellip':
+        numi2 = cs['nume']
+    else:
+        numi2 = c['nums2n']
+
+    orient=cs.get('orient','rand')
+    for i1 in xrange(numi1):
+        if i1 in skip1:
+            continue
+        s2data=[]
+        for i2 in xrange(numi2):
+            if i2 in skip2:
+                continue
+            try:
+                edata = read_output(run, i1, i2, verbose=True, fs='hdfs')
+                s2data.append(edata)
+            except:
+                pass
+        s2data = average_outputs(s2data, straight_avg=straight_avg)
+        data.append(s2data)
+
+    wlog("writing averaged outputs")
+    write_averaged_outputs(run, data, skip1=skip1)
+    write_averaged_outputs(run, data, skip1=skip1,fs='hdfs')
+
+    if docum:
+        cumdata = accumulate_outputs(data)
+        wlog("writing acummulated averaged outputs")
+        write_averaged_outputs(run, cumdata, docum=docum, skip1=skip1)
+        write_averaged_outputs(run, cumdata, docum=docum, skip1=skip1,fs='hdfs')
+    return data
+
+def read_all_outputs(run, 
+                     verbose=False, 
+                     skip1=[], 
+                     skip2=[], 
+                     fs=None):
     """
     Data are grouped as a list by is2 and then sublists by ie/is2n
 
@@ -990,25 +1085,28 @@ def read_all_outputs(run, average=False, docum=False, verbose=False, skip1=[], s
                 s2data.append(edata)
             except:
                 pass
-        if average and len(s2data) > 0:
-            s2data = average_outputs(s2data)
         data.append(s2data)
 
-    if docum:
-        if not average:
-            raise ValueError("you must set average to set cum")
-        data = accumulate_outputs(data)
     return data
 
 def accumulate_outputs(data):
     """
-    Should already be summed over realizations
+    Should already be summed over realizations using
+    average_outputs
+
+    Need to implement deswl averaging
     """
+
+    if 'gamma1sum' in data[0].dtype.names:
+        straight_avg=True
+    else:
+        straight_avg=False
 
     dt =data[0].dtype.descr
     dt += [('shear1cum','f8'), # sums so we can do cumulative
-           ('shear2cum','f8'),
-           ('Rshearcum','f8')]
+           ('shear2cum','f8')]
+    if not straight_avg:
+        dt += [('Rshearcum','f8')]
     out=[]
 
     num=len(data[0])
@@ -1022,20 +1120,28 @@ def accumulate_outputs(data):
         eu.numpy_util.copy_fields(s2data, d)
         if i > 0:
             # add previous
-            d['e1sum']  += dold['e1sum']
-            d['e2sum']  += dold['e2sum']
-            d['esqsum'] += dold['esqsum']
+            if straight_avg:
+                d['gamma1sum'] += dold['gamma1sum']
+                d['gamma2sum'] += dold['gamma2sum']
+            else:
+                d['e1sum']  += dold['e1sum']
+                d['e2sum']  += dold['e2sum']
+                d['esqsum'] += dold['esqsum']
             d['nsum']   += dold['nsum']
 
-        d['Rshearcum'] = 1-0.5*d['esqsum']/d['nsum']
-        d['shear1cum'] = 0.5*d['e1sum']/d['nsum']/d['Rshearcum']
-        d['shear2cum'] = 0.5*d['e2sum']/d['nsum']/d['Rshearcum']
+        if straight_avg:
+            d['shear1cum'] = d['gamma1sum']/d['nsum']
+            d['shear2cum'] = d['gamma2sum']/d['nsum']
+        else:
+            d['Rshearcum'] = 1-0.5*d['esqsum']/d['nsum']
+            d['shear1cum'] = 0.5*d['e1sum']/d['nsum']/d['Rshearcum']
+            d['shear2cum'] = 0.5*d['e2sum']/d['nsum']/d['Rshearcum']
         out.append(d)
         dold = d.copy()
 
     return out
 
-def average_outputs(data):
+def average_outputs(data, straight_avg=False):
     """
     Input should be a list of arrays.  The output will be
     an array with length of list, values averaged over the
@@ -1044,13 +1150,19 @@ def average_outputs(data):
     dt = data[0].dtype.descr
 
     if 'e1_meas' in data[0].dtype.names:
-        dt += [('e1sum','f8'), # sums so we can do cumulative
-               ('e2sum','f8'),
-               ('esqsum','f8'),
-               ('nsum','i8'),
-               ('shear1','f8'),('shear1err','f8'),  # average in particular bin
-               ('shear2','f8'),('shear2err','f8'),
-               ('Rshear_true','f8'),('Rshear','f8')]
+        if straight_avg:
+            # deswl we can just do straight_avg sums on gamma
+            dt += [('gamma1sum','f8'),
+                   ('gamma2sum','f8'),
+                   ('nsum','i8')]
+        else:
+            dt += [('e1sum','f8'), # sums so we can do cumulative
+                   ('e2sum','f8'),
+                   ('esqsum','f8'),
+                   ('nsum','i8'),
+                   ('shear1','f8'),('shear1err','f8'),  # average in particular bin
+                   ('shear2','f8'),('shear2err','f8'),
+                   ('Rshear_true','f8'),('Rshear','f8')]
     else:
         raise ValueError('DEAL WITH e1meas missing')
 
@@ -1060,29 +1172,34 @@ def average_outputs(data):
         #    = lensing.util.average_shear(edata['e1_meas'],edata['e2_meas'],
         #                                 doerr=True)
 
-        e1 = edata['e1_meas']
-        e2 = edata['e2_meas']
-        esq = e1**2 + e2**2
+        if straight_avg:
+            g1 = edata['gamma1_meas']
+            g2 = edata['gamma2_meas']
+            num = g1.size
+        else:
+            e1 = edata['e1_meas']
+            e2 = edata['e2_meas']
+            esq = e1**2 + e2**2
 
-        e1sum = e1.sum()
-        e2sum = e2.sum()
-        esqsum = esq.sum()
+            e1sum = e1.sum()
+            e2sum = e2.sum()
+            esqsum = esq.sum()
 
-        num=e1.size
-        mesq = esqsum/num
-        me1 = e1sum/num
-        me2 = e2sum/num
+            num=e1.size
+            mesq = esqsum/num
+            me1 = e1sum/num
+            me2 = e2sum/num
 
-        R = 1-.5*mesq
-        g1 = 0.5*me1/R
-        g2 = 0.5*me2/R
+            R = 1-.5*mesq
+            g1 = 0.5*me1/R
+            g2 = 0.5*me2/R
 
-        mesq_err = esq.std()/sqrt(num)
-        e1err = e1.std()/sqrt(num)
-        e2err = e2.std()/sqrt(num)
-        
-        g1err = g1*sqrt( (mesq_err/mesq)**2 + (e1err/me1)**2 )
-        g2err = g2*sqrt( (mesq_err/mesq)**2 + (e1err/me2)**2 )
+            mesq_err = esq.std()/sqrt(num)
+            e1err = e1.std()/sqrt(num)
+            e2err = e2.std()/sqrt(num)
+            
+            g1err = g1*sqrt( (mesq_err/mesq)**2 + (e1err/me1)**2 )
+            g2err = g2*sqrt( (mesq_err/mesq)**2 + (e1err/me2)**2 )
 
         for n in d.dtype.names:
             if n == 'Rshear':
@@ -1105,6 +1222,10 @@ def average_outputs(data):
                 d['esqsum'][i] = esqsum
             elif n == 'nsum':
                 d['nsum'][i] = num
+            elif n == 'gamma1sum':
+                d['gamma1sum'][i] = g1.sum()
+            elif n == 'gamma2sum':
+                d['gamma2sum'][i] = g2.sum()
             else:
                 if edata[n].dtype.names is None and len(edata[n].shape) == 1:
                     #d[n][i] = median(edata[n])

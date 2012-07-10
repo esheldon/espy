@@ -13,16 +13,18 @@ import shapesim
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
+parser.add_option('-x','--xrange',default=None,
+                  help='xrange, default %default')
 parser.add_option('-y','--yrange',default='-0.05,0.05',
                   help='yrange, default %default')
 parser.add_option('--yrange2',default='-0.05,0.05',
                   help='yrange2, default %default')
 parser.add_option('-t','--type',default='diff',
                   help='yrange, default %default')
-parser.add_option('--s2max',default=None,
-                  help="Max (spsf/sobj)**2 to plot, default %default")
-parser.add_option('--s2meas',action='store_true',
-                  help="Use the measured s2")
+parser.add_option('--title',default=None,
+                  help='add a plot title, default %default')
+parser.add_option('--s2min',default=None,
+                  help="min value in s2")
 parser.add_option('--noshow',action="store_true",
                   help="don't show")
 parser.add_option('--etot',action='store_true',
@@ -48,9 +50,6 @@ if len(args) < 1:
 
 
 run=args[0]
-s2max=options.s2max
-if s2max is not None:
-    s2max=float(s2max)
 
 if options.noshow:
     show=False
@@ -67,6 +66,18 @@ if skip2 is None:
     skip2=[]
 else:
     skip2 = [int(v) for v in skip2.split(',')]
+
+s2min=options.s2min
+if s2min is not None:
+    s2min=float(s2min)
+
+xrng=options.xrange
+if xrng is not None:
+    xrng = xrng.split(',')
+    if len(xrng) != 2:
+        raise ValueError("expected xrange min,max")
+    xrng = [float(yr) for yr in xrng]
+
 
 yrng=options.yrange
 if yrng is not None:
@@ -87,14 +98,15 @@ if runtype == 'byellip':
             yrng2 = yrng2.split(',')
             yrng2 = [float(yrng2[0]),float(yrng2[1])]
         p.plot_ediff_Rshear_vs_e(yrange=yrng, yrange2=yrng2, show=show,
-                                 s2max=s2max,s2meas=options.s2meas,
                                  skip1=skip1,skip2=skip2)
     else:
-        p.plot_shear_vs_e(yrange=yrng,s2max=s2max,s2meas=options.s2meas,
+        p.plot_shear_vs_e(yrange=yrng,
                           show=show,type=options.type,skip1=skip1,skip2=skip2,
                          doavg=options.avg)
 else:
-    p.plots_shear_vs_s2n(yrange=yrng, type=options.type, 
+    p.plots_shear_vs_s2n(yrng=yrng, xrng=xrng, type=options.type, 
+                         s2min=s2min,
                          doavg=options.avg,
                          docum=options.cum,
+                         title=options.title,
                          show=show, skip1=skip1,skip2=skip2)

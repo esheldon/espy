@@ -1,9 +1,36 @@
 gmix-fit
 
     todo:
+        to send around today
+            gg04
+                s/n 0.33 
+                    gmix-fit-gg04r01
+                    deswl-gg04r01
+            et02
+                s/n 0.33
+                    gmix-fit-et02r09
+                    deswl-et02r03    (not finished)
+            dt02
+                NEED to tell story of how error is a function
+                of ellipticity, but we haven't run the sims 
+                for byellip with different S/N.
+
+                s/n 0.33
+                    gmix-fit-dt02r02 (not finished)
+                    gmix-fit-dt02r02 cum, no s2limit (not finished)
+                    deswl-dt02r03    (not finished)
+                    deswl-dt02r03    cum, no s2limit (not finished)
+                byellip, --etot, to show how deswl is failing
+                    use yrange -0.1,0.1
+                    gmix-fit-dt02r01
+                    deswl-dt02r02
+
         ring test with no shear and non-circular PSF using dg
         ring tests with dg psf
         plotting: do cumulative s2 averages, s2 < X
+
+        et03, which had trimming, ran much faster.  If it was also accurate, we
+        should maybe use it instead of et02, which deswl is super slow.
 
     sims
         et01
@@ -13,7 +40,6 @@ gmix-fit
 
     ring sims
 
-        Something weird with gg03
         gg03
             - ring, shear g1=0.01, 1000 in ring, but ring/s2 ratios seem
             incomplete?
@@ -38,7 +64,7 @@ gmix-fit
                     gg04r05  47   algo    
                     gg04r06  22   algo    
                     gg04r07  11   algo    
-                    gg04r08   5   algo    running
+                    gg04r08   5   algo    
                     gg04r09 1.e6  algo
 
                 by s/n
@@ -50,7 +76,7 @@ gmix-fit
                 by s/n
                     run      ie    e  s2n_method  notes
                     gg04r01   7 .33     matched   done
-                    gg04r02  19 .80     matched   running
+                    gg04r02  19 .80     matched   done
                     gg04r03   0 .05     matched   done
 
         et02
@@ -61,40 +87,47 @@ gmix-fit
             gmix
                 byellip
                     run       s/n   nrepeat       notes
-                    et02r01  1.e6         1       
-                    et02r02   100         1       
-                    et02r03    47         1       
-                    et02r04    22        10       
-                    et02r05    11        40       
-                    et02r06     5        160       
+                    et02r01  1.e6         1       done
+                    et02r02   100         1       done
+                    et02r03    47         1       done
+                    et02r04    22        10       done
+                    et02r05    11        40       todo
+                    et02r06     5        160      todo
 
 
                 by s/n
                     run      ie    e  s2n_method   notes
-                    et02r07   0 0.05     matched
-                    et02r08  19 0.80     matched
-                    et02r09   7 0.33     matched
+                    et02r07   0  .05     matched   done
+                    et02r08  19  .80     matched   done
+                    et02r09   7  .33     matched   done
             deswl
                 by s/n
                     run      ie    e  s2n_method   notes
-                    et02r01   0  .05     matched   running
-                    et02r02  19  .80     matched   running
+                    et02r01   0  .05     matched   done
+                    et02r02  19  .80     matched   done
                     et02r03   7  .33     matched   running
 
         et03
             - ring, shear g1=0.01, g2=-0.01, 100 in ring
+            with *trimming* for a big speedup.  Is it accurate?
             gmix
                 by s/n
                     run      ie    e  s2n_method   notes
-                    et03r01   7  .33     matched   running
+                    et03r01   7  .33     matched   done
                     et03r02  19  .80     matched   todo
                     et03r03   0  .05     matched   todo
+                by ellip
+                    run     S/N   nrepeat  notes
+                    et03r04 1.e6   algo    todo
             deswl
                 by s/n
                     run      ie    e  s2n_method   notes
                     et03r01   7  .33     matched   todo
                     et03r02  19  .80     matched   todo
                     et03r03   0  .05     matched   todo
+                by ellip
+                    run     S/N   nrepeat  notes
+                    et03r04 1.e6   algo    todo
 
         dt02
             - ring, shear g1=0.01, 100 in ring

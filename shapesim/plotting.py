@@ -27,12 +27,13 @@ class SimPlotter(dict):
     def plots_shear_vs_s2n(self, 
                            skip1=[],
                            skip2=[],
-                           s2meas=False,
                            type='diff',
-                           s2max=None, 
-                           yrange=None, 
+                           s2min=None,
+                           xrng=None,
+                           yrng=None, 
                            doavg=False,
                            docum=False,
+                           title=None,
                            show=True):
         import biggles
         import pcolors
@@ -52,11 +53,12 @@ class SimPlotter(dict):
         slist=self.simc['shear']
         shear_true = lensing.shear.Shear(g1=slist[0],g2=slist[1])
 
-        data = self.read_data(s2meas=s2meas, s2max=s2max,
+        data = self.read_data(s2min=s2min,
                               docum=docum,
                               skip1=skip1,skip2=skip2)
 
-        epsfile = shapesim.get_plot_file(self['run'],type+extra,yrange=yrange)
+        epsfile = shapesim.get_plot_file(self['run'],type+extra,yrng=yrng, 
+                                         s2min=s2min)
         wlog("will plot to:",epsfile)
 
         colors=pcolors.rainbow(len(data), 'hex')
@@ -65,6 +67,8 @@ class SimPlotter(dict):
         arr=biggles.FramedArray(2,1)
         #arr.aspect_ratio=1
 
+        if title:
+            arr.title=title
  
         plots1=[]
         plots2=[]
@@ -81,10 +85,7 @@ class SimPlotter(dict):
         for i,st in enumerate(reversed(data)):
             wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
 
-            if s2meas:
-                s2 = median(st['s2_meas'])
-            else:
-                s2 = median(st['s2'])
+            s2 = median(st['s2'])
 
             if 's2n_matched' in st.dtype.names:
                 s2n_name='s2n_matched'
@@ -96,13 +97,16 @@ class SimPlotter(dict):
                 # assuming matched
                 s2n_name='s2n'
                 xlabel = r'$S/N_{matched}$'
-            s = st[s2n_name].argsort()
 
-            s2n = st[s2n_name][s]
+            s2n = st[s2n_name]
 
             if self['run'][0:5] == 'deswl':
-                tag1='gamma1_meas'
-                tag2='gamma2_meas'
+                if docum:
+                    tag1='shear1cum'
+                    tag2='shear2cum'
+                else:
+                    tag1='gamma1_meas'
+                    tag2='gamma2_meas'
                 # convention
                 st[tag1] = -st[tag1]
             else:
@@ -114,15 +118,14 @@ class SimPlotter(dict):
                     tag2='shear2'
            
             if type == 'diff':
-                yvals1 = st[tag1][s] - shear_true.g1
-                yvals2 = st[tag2][s] - shear_true.g2
+                yvals1 = st[tag1] - shear_true.g1
+                yvals2 = st[tag2] - shear_true.g2
             elif type == 'val':
-                yvals1 = st[tag1][s]
-                yvals2 = st[tag2][s]
+                yvals1 = st[tag1]
+                yvals2 = st[tag2]
 
             else:
                 raise ValueError("bad plot type: '%s'" % type)
-
 
             if docum:
                 label = r'< %0.3f' % s2
@@ -236,9 +239,12 @@ class SimPlotter(dict):
 
 
 
-        arr.xrange = [0.1*s2n.min(),s2n.max()*1.4]
-        if yrange is not None:
-            arr.yrange = yrange
+        if xrng is None:
+            xrng = [0.1*s2n.min(),s2n.max()*1.4]
+        arr.xrange = xrng
+
+        if yrng is not None:
+            arr.yrange = yrng
 
         wlog("Writing plot file:",epsfile)
         if show:
@@ -252,7 +258,6 @@ class SimPlotter(dict):
     def plot_shear_vs_e(self, 
                         skip1=[],
                         skip2=[],
-                        s2meas=False,
                         type='diff',
                         s2max=None, 
                         yrange=None, 
@@ -274,12 +279,9 @@ class SimPlotter(dict):
         slist=self.simc['shear']
         shear_true = lensing.shear.Shear(g1=slist[0],g2=slist[1])
 
-        data = self.read_data(s2meas=s2meas, s2max=s2max,
-                              skip1=skip1,skip2=skip2)
+        data = self.read_data(skip1=skip1,skip2=skip2)
 
         epsfile = shapesim.get_plot_file(self['run'],type+extra,
-                                         s2max=s2max,
-                                         s2meas=s2meas,
                                          yrange=yrange)
         wlog("will plot to:",epsfile)
 
@@ -306,10 +308,7 @@ class SimPlotter(dict):
         for i,st in enumerate(reversed(data)):
             wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
 
-            if s2meas:
-                s2 = median(st['s2_meas'])
-            else:
-                s2 = median(st['s2'])
+            s2 = median(st['s2'])
 
             s = st['etrue'].argsort()
 
@@ -440,7 +439,7 @@ class SimPlotter(dict):
     def plot_ediff_Rshear_vs_e(self, 
                                skip1=[],
                                skip2=[],
-                               s2meas=False,
+                               docum=False,
                                s2max=None, 
                                yrange=None, 
                                yrange2=None,
@@ -452,20 +451,24 @@ class SimPlotter(dict):
         import pcolors
         import converter
 
+        extra=''
+        if docum:
+            extra+='-cum'
+
         runtype = self.get('runtype','byellip')
         if runtype != 'byellip':
             raise ValueError("Can only make plots vs e for 'byellip' runs")
 
-        data = self.read_data(s2meas=s2meas, s2max=s2max,
+        data = self.read_data(docum=docum,
                               skip1=skip1,skip2=skip2)
 
-        epsfile_etot = shapesim.get_plot_file(self['run'],'etot',
-                                              s2max=s2max,
-                                              s2meas=s2meas,
+        doR=True
+        if 'Rshear' not in data[0].dtype.names:
+            doR=False
+
+        epsfile_etot = shapesim.get_plot_file(self['run'],'etot'+extra,
                                               yrange=yrange)
-        epsfile_R = shapesim.get_plot_file(self['run'],'Rshear',
-                                              s2max=s2max,
-                                              s2meas=s2meas,
+        epsfile_R = shapesim.get_plot_file(self['run'],'Rshear'+extra,
                                               yrange=yrange2)
         wlog("will plot to:",epsfile_etot)
         wlog("will plot to:",epsfile_R)
@@ -494,10 +497,7 @@ class SimPlotter(dict):
         for i,st in enumerate(reversed(data)):
             wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
 
-            if s2meas:
-                s2 = median(st['s2_meas'])
-            else:
-                s2 = median(st['s2'])
+            s2 = median(st['s2'])
 
             s = st['etrue'].argsort()
 
@@ -508,17 +508,18 @@ class SimPlotter(dict):
             label = r'%0.3f' % s2
             cr = biggles.Curve(etrue, ediff, color=colors[i])
             cr.label = label
-
-            #R_true = 1-.5*etrue**2
-            R_true = st['Rshear_true'][s]
-            R_meas = st['Rshear'][s]
-            R_fdiff = R_meas/R_true-1
-
-            Rp = biggles.Curve(etrue, R_fdiff, color=colors[i])
-
             plt1.add(cr)
-            plt2.add(Rp)
             plots1.append(cr)
+
+            if doR:
+                #R_true = 1-.5*etrue**2
+                R_true = st['Rshear_true'][s]
+                R_meas = st['Rshear'][s]
+                R_fdiff = R_meas/R_true-1
+
+                Rp = biggles.Curve(etrue, R_fdiff, color=colors[i])
+
+                plt2.add(Rp)
             #if i < 15:
             #    plots1.append(cr)
             #else:
@@ -529,20 +530,13 @@ class SimPlotter(dict):
         key1 = biggles.PlotKey(0.9,0.87, plots1, halign='right', 
                               fontsize=fsize)
         plt1.add(key1)
-        plt2.add(key1)
-        """
-        if len(plots2) > 0:
-            key2 = biggles.PlotKey(0.9,0.92, plots2, halign='right', 
-                                   ontsize=fsize)
-            plt2.add(key2)
-        """
+
         klabtext=r'$<\sigma^2_{psf}/\sigma^2_{gal}>$'
         #if self['s2n'] > 0:
         #    klabtext += ' (S/N)'
         klab = biggles.PlotLabel(0.86,0.94,klabtext,
                                  fontsize=fsize,halign='right')
         plt1.add(klab)
-        plt2.add(klab)
         objmodel = self.simc['objmodel']
         psfmodel = self.simc['psfmodel']
 
@@ -550,7 +544,8 @@ class SimPlotter(dict):
         plab='%s %s' % (objmodel,psfmodel)
         l = biggles.PlotLabel(0.1,0.9, plab, halign='left')
         plt1.add(l)
-        plt2.add(l)
+
+
 
         if self.simc['psfmodel'] == 'turb':
             siglab=r'$FWHM_{PSF}: %.1f$ pix' % self.simc['psf_fwhm']
@@ -574,65 +569,61 @@ class SimPlotter(dict):
         sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
                                fontsize=2.5)
         plt1.add(sl)
-        plt2.add(sl)
-        #plt1.aspect_ratio=1
-        #plt2.aspect_ratio=1
 
         plt1.xrange = [0,1.4]
-        plt2.xrange = [0,1.4]
         if yrange is not None:
             plt1.yrange = yrange
-        if yrange2 is not None:
-            plt2.yrange = yrange2
 
-        #tab[0,0] = plt1
-        #tab[0,1] = plt2
         wlog("plot to:",epsfile_etot)
-        wlog("plot to:",epsfile_R)
         if show:
             plt1.show()
-            plt2.show()
-            #tab.show()
-        #tab.write_eps(epsfile)
         plt1.write_eps(epsfile_etot)
-        plt2.write_eps(epsfile_R)
         converter.convert(epsfile_etot,dpi=100,verbose=True)
-        converter.convert(epsfile_R,dpi=100,verbose=True)
+
+        if doR:
+            wlog("plot to:",epsfile_R)
+            plt2.add(key1)
+            plt2.add(klab)
+            plt2.add(l)
+            plt2.add(sl)
+            plt2.xrange = [0,1.4]
+
+            if yrange2 is not None:
+                plt2.yrange = yrange2
+
+            if show:
+                plt2.show()
+            plt2.write_eps(epsfile_R)
+
+            converter.convert(epsfile_R,dpi=100,verbose=True)
 
 
 
 
-    def read_data(self, docum=False, s2meas=False, s2max=None, skip1=[], skip2=[]):
+    def read_data(self, docum=False, s2min=None, skip1=[], skip2=[]):
         if self._data is None:
             wlog("reading data")
+            """
             self._data = shapesim.read_all_outputs(self['run'],
                                                    skip1=skip1,skip2=skip2,
                                                    average=True,
                                                    docum=docum,
                                                    verbose=True)
-        
-        alldata = self._data
-        ntot=len(alldata)
-        nkeep=ntot
-        if s2max is not None:
-            if s2meas:
-                tag='s2_meas'
-            else:
-                tag='s2'
-            keepdata = []
-            for st in alldata:
-                med_s2 = median(st[tag])
-                wlog("med s2:",med_s2," max:",s2max)
-                if med_s2 < s2max:
-                    wlog("keeping")
-                    keepdata.append(st.copy())
-                else:
-                    wlog("not keeping")
-            nkeep = len(keepdata)
-            wlog("kept %d/%d with s2 < %.3g" % (nkeep,ntot,s2max)) 
+            """
+            self._data = shapesim.read_averaged_outputs(self['run'], 
+                                                        docum=docum, 
+                                                        skip1=skip1) 
+        if s2min is not None:
+            keepdata = self.limit_s2(self._data, s2min, skip1=skip1)
+            return keepdata
         else:
-            keepdata = alldata
+            return self._data
 
-        return keepdata
+    def limit_s2(self, datalist, s2min, skip1=[]):
+        out=[]
+        for i,d in enumerate(datalist):
+            s2 = median(d['s2'])
+            if s2 > s2min:
+                out.append(d)
 
-
+        return out
