@@ -1,17 +1,24 @@
-# edg02 is a ring test
-run: gmix-fit-edg03r01
+# edg03 is a ring test
+run: gmix-fit-edg03r03
 sim: sim-edg03
 
-# we will use all the ellip and s2 values and single s/n value
-runtype: byellip
+# we will use all the s2 values from the sim, a set of s/n values and a single
+# ellip value
+runtype: bys2n
 
 s2n_method: matched
-s2n_fac: 1 # default 0.4
+s2n_fac: 1
 
 retrim: true
 retrim_fluxfrac: 0.9973
 
-#use_cache: true
+ie: 19 # 0.80
+mins2n: 5
+maxs2n: 100
+nums2n: 20  # still 20*20=400
+
+s2n_psf: 1.0e+8
+
 use_cache: true
 add_to_cache: false
 
@@ -20,11 +27,6 @@ ptype: Tfrac
 use_jacob: false
 
 verbose: false
-
-# you need the + or - in exponent
-s2n: 1.0e+8
-s2n_psf: 1.0e+8
-#s2n_psf: 100
 
 # we should try with higher values to see what happens
 ngauss_psf: 2
@@ -44,9 +46,6 @@ randomize: true
 # a new trial, unlike max_retry above which retries with a 
 # randomized guess
 itmax: 100
-
-# number of noise relizations per image
-nrepeat: 1
 
 # set to null for new seed each time. Good when adding to the cache
 seed: null
