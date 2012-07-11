@@ -97,11 +97,13 @@ if runtype == 'byellip':
         if yrng2 is not None:
             yrng2 = yrng2.split(',')
             yrng2 = [float(yrng2[0]),float(yrng2[1])]
-        p.plot_ediff_Rshear_vs_e(yrange=yrng, yrange2=yrng2, show=show,
+        p.plot_ediff_Rshear_vs_e(yrng=yrng, yrng2=yrng2, show=show,
+                                 title=options.title,
                                  skip1=skip1,skip2=skip2)
     else:
-        p.plot_shear_vs_e(yrange=yrng,
+        p.plot_shear_vs_e(yrng=yrng,
                           show=show,type=options.type,skip1=skip1,skip2=skip2,
+                          title=options.title,
                          doavg=options.avg)
 else:
     p.plots_shear_vs_s2n(yrng=yrng, xrng=xrng, type=options.type, 

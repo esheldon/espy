@@ -6,21 +6,30 @@ gmix-fit
                 s/n 0.33 
                     gmix-fit-gg04r01
                     deswl-gg04r01
+                byellip low noise
+                    gmix-fit-gg04r09
+                    deswl-gg04r0?
             et02
                 s/n 0.33
                     gmix-fit-et02r09
                     deswl-et02r03    (not finished)
+                    OR since these are finished
+                    gmix-fit-et02r08
+                    desw-et02r02
+                byellip low noise
+                    deswl-et02r04 running
+                    gmix-fit-et02r01
             dt02
                 NEED to tell story of how error is a function
                 of ellipticity, but we haven't run the sims 
                 for byellip with different S/N.
 
-                s/n 0.33
+                s/n e=0.33
                     gmix-fit-dt02r02 (not finished)
                     gmix-fit-dt02r02 cum, no s2limit (not finished)
                     deswl-dt02r03    (not finished)
                     deswl-dt02r03    cum, no s2limit (not finished)
-                byellip, --etot, to show how deswl is failing
+                byellip low noise
                     use yrange -0.1,0.1
                     gmix-fit-dt02r01
                     deswl-dt02r02
@@ -58,7 +67,7 @@ gmix-fit
         gg04 
             - ring, g1=0.01,g2=-0.01, 100 in ring
             gmix
-                by ellip
+                byellip
                     run     S/N  nrepeat  notes
                     gg04r04 100   algo    using algorithmic nrepeat
                     gg04r05  47   algo    
@@ -78,6 +87,9 @@ gmix-fit
                     gg04r01   7 .33     matched   done
                     gg04r02  19 .80     matched   done
                     gg04r03   0 .05     matched   done
+                byellip
+                    run     S/N  nrepeat  notes
+                    gg04r04 1.e6  algo    todo
 
         et02
             - ring, shear g1=0.01, 100 in ring
@@ -101,6 +113,10 @@ gmix-fit
                     et02r08  19  .80     matched   done
                     et02r09   7  .33     matched   done
             deswl
+                byellip
+                    run       s/n   nrepeat       notes
+                    et02r04  1.e6         1       running
+
                 by s/n
                     run      ie    e  s2n_method   notes
                     et02r01   0  .05     matched   done
@@ -116,21 +132,23 @@ gmix-fit
                     et03r01   7  .33     matched   done
                     et03r02  19  .80     matched   todo
                     et03r03   0  .05     matched   todo
-                by ellip
+                byellip
                     run     S/N   nrepeat  notes
-                    et03r04 1.e6   algo    todo
+                    et03r04 1.e6   algo    done
             deswl
                 by s/n
                     run      ie    e  s2n_method   notes
                     et03r01   7  .33     matched   todo
                     et03r02  19  .80     matched   todo
                     et03r03   0  .05     matched   todo
-                by ellip
+                byellip
                     run     S/N   nrepeat  notes
                     et03r04 1.e6   algo    todo
 
+        edg02
+            double gaussian psf with e1=0.05,e2=0.05
         dt02
-            - ring, shear g1=0.01, 100 in ring
+            - ring, shear g1=0.01, g2=0, 100 in ring
          
             gmix
                 byellip
@@ -143,7 +161,7 @@ gmix-fit
                     dt02r03  19 0.80    matched    running
  
             deswl
-                by ellip
+                byellip
                     run        s/n   nrepeat  s2n_method      notes
                     dt02r02    1.e8     1      matched        running
                     

@@ -167,7 +167,7 @@ class SimPlotter(dict):
                 plots1.append(avg1)
 
         fsize=2
-        key1 = biggles.PlotKey(0.9,0.85, plots1, halign='right', 
+        key1 = biggles.PlotKey(0.9,0.92, plots1, halign='right', 
                                fontsize=fsize)
         arr[0,0].add(key1)
         if len(plots2) > 0:
@@ -175,8 +175,8 @@ class SimPlotter(dict):
                                    fontsize=fsize)
             arr[1,0].add(key2)
 
-        klabtext=r'$<\sigma^2_{psf}/\sigma^2_{gal}>$'
-        klab = biggles.PlotLabel(0.89,0.92,klabtext,
+        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$'
+        klab = biggles.PlotLabel(0.76,0.92,klabtext,
                                  fontsize=2.5,halign='right')
         arr[0,0].add(klab)
         objmodel = self.simc['objmodel']
@@ -260,8 +260,9 @@ class SimPlotter(dict):
                         skip2=[],
                         type='diff',
                         s2max=None, 
-                        yrange=None, 
+                        yrng=None, 
                         doavg=False,
+                        title=None,
                         show=True):
         import biggles
         import pcolors
@@ -282,7 +283,7 @@ class SimPlotter(dict):
         data = self.read_data(skip1=skip1,skip2=skip2)
 
         epsfile = shapesim.get_plot_file(self['run'],type+extra,
-                                         yrange=yrange)
+                                         yrng=yrng)
         wlog("will plot to:",epsfile)
 
         colors=pcolors.rainbow(len(data), 'hex')
@@ -293,7 +294,9 @@ class SimPlotter(dict):
         arr.xlabel=r'ellipticity'
         arr.ylabel = r'$\Delta \gamma$'
 
- 
+        if title:
+            arr.title=title
+
         plots1=[]
         plots2=[]
         allplots=[]
@@ -369,7 +372,7 @@ class SimPlotter(dict):
                 plots1.append(avg1)
 
         fsize=2
-        key1 = biggles.PlotKey(0.9,0.85, plots1, halign='right', 
+        key1 = biggles.PlotKey(0.9,0.92, plots1, halign='right', 
                                fontsize=fsize)
         arr[0,0].add(key1)
         if len(plots2) > 0:
@@ -377,10 +380,10 @@ class SimPlotter(dict):
                                    fontsize=fsize)
             arr[1,0].add(key2)
 
-        klabtext=r'$<\sigma^2_{psf}/\sigma^2_{gal}>$'
+        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$'
         #if self['s2n'] > 0:
         #    klabtext += ' (S/N)'
-        klab = biggles.PlotLabel(0.9,0.92,klabtext,
+        klab = biggles.PlotLabel(0.76,0.92,klabtext,
                                  fontsize=fsize,halign='right')
         arr[0,0].add(klab)
         objmodel = self.simc['objmodel']
@@ -426,8 +429,8 @@ class SimPlotter(dict):
             arr[1,0].add(avg2)
 
         arr.xrange = [0,1.4]
-        if yrange is not None:
-            arr.yrange = yrange
+        if yrng is not None:
+            arr.yrange = yrng
 
         wlog("Writing plot file:",epsfile)
         if show:
@@ -441,8 +444,9 @@ class SimPlotter(dict):
                                skip2=[],
                                docum=False,
                                s2max=None, 
-                               yrange=None, 
-                               yrange2=None,
+                               yrng=None, 
+                               yrng2=None,
+                               title=None,
                                show=True):
         """
         Plot the measured ellipticity minus true vs true
@@ -467,9 +471,9 @@ class SimPlotter(dict):
             doR=False
 
         epsfile_etot = shapesim.get_plot_file(self['run'],'etot'+extra,
-                                              yrange=yrange)
+                                              yrng=yrng)
         epsfile_R = shapesim.get_plot_file(self['run'],'Rshear'+extra,
-                                              yrange=yrange2)
+                                              yrng=yrng2)
         wlog("will plot to:",epsfile_etot)
         wlog("will plot to:",epsfile_R)
 
@@ -492,6 +496,10 @@ class SimPlotter(dict):
         plt1.aspect_ratio=1
         plt2.aspect_ratio=1
  
+        if title:
+            plt1.title=title
+            plt2.title=title
+
         plots1=[]
         plots2=[]
         for i,st in enumerate(reversed(data)):
@@ -527,14 +535,14 @@ class SimPlotter(dict):
 
 
         fsize=2
-        key1 = biggles.PlotKey(0.9,0.87, plots1, halign='right', 
+        key1 = biggles.PlotKey(0.9,0.92, plots1, halign='right', 
                               fontsize=fsize)
         plt1.add(key1)
 
-        klabtext=r'$<\sigma^2_{psf}/\sigma^2_{gal}>$'
+        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$'
         #if self['s2n'] > 0:
         #    klabtext += ' (S/N)'
-        klab = biggles.PlotLabel(0.86,0.94,klabtext,
+        klab = biggles.PlotLabel(0.72,0.92,klabtext,
                                  fontsize=fsize,halign='right')
         plt1.add(klab)
         objmodel = self.simc['objmodel']
@@ -571,8 +579,8 @@ class SimPlotter(dict):
         plt1.add(sl)
 
         plt1.xrange = [0,1.4]
-        if yrange is not None:
-            plt1.yrange = yrange
+        if yrng is not None:
+            plt1.yrange = yrng
 
         wlog("plot to:",epsfile_etot)
         if show:
@@ -588,8 +596,8 @@ class SimPlotter(dict):
             plt2.add(sl)
             plt2.xrange = [0,1.4]
 
-            if yrange2 is not None:
-                plt2.yrange = yrange2
+            if yrng2 is not None:
+                plt2.yrange = yrng2
 
             if show:
                 plt2.show()

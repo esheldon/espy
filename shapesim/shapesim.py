@@ -368,8 +368,11 @@ class ShapeSim(dict):
         """
         for gauss or double gauss psf
         """
+        e1 = self.get('psf_e1',0.0)
+        e2 = self.get('psf_e2',0.0)
         psf_cov=fimage.ellip2mom(2*self['psf_sigma']**2,
-                                 e=self['psf_ellip'],theta=0)
+                                 e1=e1, e2=e2)
+
         if self['psfmodel'] == 'dgauss':
             psf_cov1=psf_cov
             psf_cov2=psf_cov*self['psf_sigrat']**2
