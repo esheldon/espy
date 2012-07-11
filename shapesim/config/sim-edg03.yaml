@@ -1,9 +1,8 @@
 # ring test
 name: sim-edg03
 
-#
-# PSF parameters.
-#
+orient: ring
+nring: 100
 
 psfmodel: dgauss
 psf_sigma: 1.4
@@ -18,8 +17,7 @@ psf_cenrat: 0.09
 #
 objmodel: exp
 
-# no applied shear, for testing additive
-shear: [0.0,0.0]
+shear: [0.0, 0.0]
 
 mins2: 0.15
 maxs2: 1.75

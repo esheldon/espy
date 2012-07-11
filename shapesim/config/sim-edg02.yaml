@@ -1,14 +1,13 @@
 # ring test
 name: sim-edg02
 
-#
-# PSF parameters.
-#
+orient: ring
+nring: 100
 
 psfmodel: dgauss
 psf_sigma: 1.4
-psf_e1: 0.05
-psf_e2: 0.05
+psf_e1: 0.00
+psf_e2: 0.00
 
 psf_sigrat: 2.3
 psf_cenrat: 0.09

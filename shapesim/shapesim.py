@@ -372,7 +372,9 @@ class ShapeSim(dict):
         e2 = self.get('psf_e2',0.0)
         psf_cov=fimage.ellip2mom(2*self['psf_sigma']**2,
                                  e1=e1, e2=e2)
-
+        #wlog("psf_cov:",psf_cov)
+        #wlog("psf e1:",(psf_cov[2]-psf_cov[0])/(psf_cov[2]+psf_cov[0]))
+        #wlog("psf e2:",2*psf_cov[1]/(psf_cov[2]+psf_cov[0]))
         if self['psfmodel'] == 'dgauss':
             psf_cov1=psf_cov
             psf_cov2=psf_cov*self['psf_sigrat']**2

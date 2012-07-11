@@ -179,6 +179,7 @@ class GMixFitSim(shapesim.BaseSim):
                                                    randomize=randomize)
             elif (psf is None) or (ptype == 'e1e2'):
                 # we always go here for psf measurement
+                # need to get Tfrac stuff working for psf
                 Tfac=None
                 eguess=None
 
@@ -205,7 +206,7 @@ class GMixFitSim(shapesim.BaseSim):
                             randomize=True
                             eguess=[0,0]
                 else:
-                    if ngauss==3 and psf is None:
+                    if ngauss==3:
                         eguess=[0,0]
 
                 guess = self.get_guess_coellip_e1e2(counts, 
@@ -976,13 +977,18 @@ class GMixFitSim(shapesim.BaseSim):
                     guess[9] = T*.38*Tfac
                     guess[10] = T*.076*Tfac
                     guess[11] = T*.015*Tfac
-        elif ngauss==2:
-            self.wlog("    using ngauss==1")
-            # generic guesses
-            guess[4]= counts/ngauss
-            guess[5]= counts/ngauss
-            guess[6] = T*2
-            guess[7] = T*0.5
+        elif ngauss==2 and psf is None:
+            self.wlog("    using e1e2 ngauss:",ngauss)
+            guess[4]= counts*0.1
+            guess[5]= counts*0.9
+            guess[6] = T
+            guess[7] = guess[6]/5.08
+
+            self.wlog("    using zero ellip guess with noise")
+            guess[2] = 0.05*(randu()-0.5)
+            guess[3] = 0.05*(randu()-0.5)
+            guess[6] += 0.1*guess[6]*(randu()-0.5)
+            guess[7] += 0.1*guess[7]*(randu()-0.5)
 
         else:
             raise RuntimeError("implement other guesses!")

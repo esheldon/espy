@@ -125,7 +125,8 @@ gmix-fit
 
         et03
             - ring, shear g1=0.01, g2=-0.01, 100 in ring
-            with *trimming* for a big speedup.  Is it accurate?
+            with *trimming* for a big speedup.  It is just
+            as accurate!
             gmix
                 by s/n
                     run      ie    e  s2n_method   notes
@@ -146,7 +147,23 @@ gmix-fit
                     et03r04 1.e6   algo    todo
 
         edg02
-            double gaussian psf with e1=0.05,e2=0.05
+            round double gaussian psf
+            g1=0.01,g2=-0.01
+
+            gmix
+                byellip
+                    run        s/n   nrepeat  s2n_method      notes
+                    edg02r01  1.e8      1       matched       todo
+
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg02r01  7 0.33    matched    todo
+                    edg02r02 19 0.80    matched    todo
+                    edg02r03 19 0.05    matched    todo
+
+        edg03
+            elliptical double gaussian psf, e1=0.05,e2=0.05
+            g1=0,g2=0 for additive tests
         dt02
             - ring, shear g1=0.01, g2=0, 100 in ring
          

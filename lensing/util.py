@@ -70,6 +70,8 @@ def e1e2_to_g1g2(e1, e2):
 
 def g1g2_to_e1e2(g1, g2):
     g = sqrt(g1**2 + g2**2)
+    if g == 0:
+        return 0.,0.
     e = gamma2e(g)
     fac = e/g
     e1, e2 = fac*g1, fac*g2
