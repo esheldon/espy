@@ -1,5 +1,5 @@
 # ring test
-name: sim-edg02
+name: sim-edg03
 
 #
 # PSF parameters.
@@ -18,7 +18,8 @@ psf_cenrat: 0.09
 #
 objmodel: exp
 
-shear: [0.01,-0.01]
+# no applied shear, for testing additive
+shear: [0.0,0.0]
 
 mins2: 0.15
 maxs2: 1.75
@@ -30,4 +31,4 @@ nume:  20
 
 comments: |
 
-    ring, exp obj, round dgauss psf, low res
+    ring, exp obj, elliptical dgauss psf, zero shear, low res
