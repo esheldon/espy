@@ -465,7 +465,7 @@ class BaseSim(dict):
 
 
         nring = self.simc['nring']
-        s2n_fac = self.get('s2n_fac',0.4)
+        s2n_fac = self['s2n_fac']
         nrepeat = get_s2n_nrepeat(s2n, fac=s2n_fac)
 
         ntot = nring*nrepeat
@@ -477,7 +477,7 @@ class BaseSim(dict):
 
         s2n_psf = self['s2n_psf']
 
-        s2n_method = self.get('s2n_method','uw')
+        s2n_method = self['s2n_method']
         s2ncalc_fluxfrac =self.get('s2ncalc_fluxfrac',None)
 
         wlog('ellip:',ellip,'s2n:',s2n,'s2n_psf:',s2n_psf,'s2n_method:',s2n_method)
@@ -547,7 +547,7 @@ class BaseSim(dict):
             ntrial = self.simc['nring']
             nrepeat = self.get('nrepeat',None)
             if nrepeat is None:
-                s2n_fac = self.get('s2n_fac',0.4)
+                s2n_fac = self['s2n_fac']
                 nrepeat = get_s2n_nrepeat(s2n, fac=s2n_fac)
         else:
             ntrial = self['ntrial']
@@ -563,7 +563,7 @@ class BaseSim(dict):
 
         s2,ellip = get_s2_e(self.simc, is2, ie)
         wlog('ellip:',ellip)
-        s2n_method = self.get('s2n_method','uw')
+        s2n_method = self['s2n_method']
 
         ii = 0
         for i in xrange(ntrial):

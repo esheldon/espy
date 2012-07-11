@@ -19,6 +19,7 @@ s2n_psf: 1.0e+6
 
 # default 0.4
 s2n_fac: 10
+s2n_method: matched
 
 # we should try with higher values to see what happens
 ngauss_psf: 1

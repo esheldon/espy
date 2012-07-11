@@ -259,9 +259,10 @@ class SimPlotter(dict):
                         skip1=[],
                         skip2=[],
                         type='diff',
-                        s2max=None, 
+                        s2min=None,
                         yrng=None, 
                         doavg=False,
+                        docum=False,
                         title=None,
                         show=True):
         import biggles
@@ -272,6 +273,8 @@ class SimPlotter(dict):
             extra='-avg'
         else:
             extra=''
+        if docum:
+            extra+='-cum'
 
         runtype = self.get('runtype','byellip')
         if runtype != 'byellip':
@@ -280,9 +283,12 @@ class SimPlotter(dict):
         slist=self.simc['shear']
         shear_true = lensing.shear.Shear(g1=slist[0],g2=slist[1])
 
-        data = self.read_data(skip1=skip1,skip2=skip2)
+        data = self.read_data(skip1=skip1,skip2=skip2,
+                              s2min=s2min,
+                              docum=docum)
 
         epsfile = shapesim.get_plot_file(self['run'],type+extra,
+                                         s2min=s2min,
                                          yrng=yrng)
         wlog("will plot to:",epsfile)
 
@@ -318,13 +324,22 @@ class SimPlotter(dict):
             etrue = st['etrue'][s]
             
             if self['run'][0:5] == 'deswl':
-                tag1='gamma1_meas'
-                tag2='gamma2_meas'
+                if docum:
+                    tag1='shear1cum'
+                    tag2='shear2cum'
+                else:
+                    tag1='gamma1_meas'
+                    tag2='gamma2_meas'
                 # convention
                 st[tag1] = -st[tag1]
             else:
-                tag1='shear1'
-                tag2='shear2'
+                if docum:
+                    tag1='shear1cum'
+                    tag2='shear2cum'
+                else:
+                    tag1='shear1'
+                    tag2='shear2'
+
  
             if type == 'diff':
                 yvals1 = st[tag1][s] - shear_true.g1
@@ -337,8 +352,11 @@ class SimPlotter(dict):
                 raise ValueError("bad plot type: '%s'" % type)
 
 
+            if docum:
+                label = r'< %0.3f' % s2
+            else:
+                label = r'%0.3f' % s2
 
-            label = r'%0.3f' % s2
             cr1 = biggles.Curve(etrue, yvals1, color=colors[i])
             cr2 = biggles.Curve(etrue, yvals2, color=colors[i])
             cr1.label = label
@@ -418,15 +436,51 @@ class SimPlotter(dict):
         arr[1,0].add(sl)
 
 
-        g1lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_1$ = %.2g' % shear_true.g1, halign='left')
-        g2lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_2$ = %.2g' % shear_true.g2, halign='left')
-        arr[0,0].add(g1lab)
-        arr[1,0].add(g2lab)
+        #g1lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_1$ = %.2g' % shear_true.g1, halign='left')
+        #g2lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_2$ = %.2g' % shear_true.g2, halign='left')
+        #arr[0,0].add(g1lab)
+        #arr[1,0].add(g2lab)
 
         # might be a diff
         if doavg:
             arr[0,0].add(avg1)
             arr[1,0].add(avg2)
+
+
+        if type == 'val':
+            arr.ylabel = r'$\gamma$'
+            expect1 = biggles.Curve([0,1],
+                                    [shear_true.g1,shear_true.g1])
+            expect1.label = r'$\gamma_1$ = %.2g' % shear_true.g1
+            expect2 = biggles.Curve([0,1],
+                                    [shear_true.g2,shear_true.g2])
+            expect2.label = r'$\gamma_2$ = %.2g' % shear_true.g2
+
+            ekey1 = biggles.PlotKey(0.1,0.9, [expect1], halign='left', 
+                                   fontsize=3)
+            ekey2 = biggles.PlotKey(0.1,0.9, [expect2], halign='left', 
+                                   fontsize=3)
+
+            arr[0,0].add(expect1,ekey1)
+            arr[1,0].add(expect2,ekey2)
+
+        else:
+            arr.ylabel = r'$\Delta \gamma$'
+            g1lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_1$ = %.2g' % shear_true.g1, halign='left')
+            g2lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_2$ = %.2g' % shear_true.g2, halign='left')
+
+            arr[0,0].add(g1lab)
+            arr[1,0].add(g2lab)
+
+            expect1 = biggles.Curve([0,1], [0,0])
+            expect2 = biggles.Curve([0,1], [0,0])
+
+            arr[0,0].add(expect1)
+            arr[1,0].add(expect2)
+
+
+
+
 
         arr.xrange = [0,1.4]
         if yrng is not None:

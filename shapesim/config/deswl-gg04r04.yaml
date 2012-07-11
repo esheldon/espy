@@ -7,6 +7,7 @@ runtype: byellip
 use_cache: false
 add_to_cache: false
 
+s2n_fac: 10
 s2n_method: matched
 
 s2n: 1.0e+8

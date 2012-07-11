@@ -104,7 +104,9 @@ if runtype == 'byellip':
         p.plot_shear_vs_e(yrng=yrng,
                           show=show,type=options.type,skip1=skip1,skip2=skip2,
                           title=options.title,
-                         doavg=options.avg)
+                          s2min=s2min,
+                          docum=options.cum,
+                          doavg=options.avg)
 else:
     p.plots_shear_vs_s2n(yrng=yrng, xrng=xrng, type=options.type, 
                          s2min=s2min,

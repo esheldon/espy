@@ -1,7 +1,14 @@
 gmix-fit
 
     todo:
-        to send around today
+
+        - et03, which had trimming, ran much faster.  If it was also accurate,
+          we should maybe use it instead of et02, which deswl is super slow.
+
+        - gg04r01, r02, r03 rerun with s2n_fac=10?
+        - gg04r04-09 ran with wrong s2n method!  Rerun with matched, ugh
+
+        sent around
             gg04
                 s/n 0.33 
                     gmix-fit-gg04r01
@@ -34,8 +41,6 @@ gmix-fit
                     gmix-fit-dt02r01
                     deswl-dt02r02
 
-        et03, which had trimming, ran much faster.  If it was also accurate, we
-        should maybe use it instead of et02, which deswl is super slow.
 
     sims
         et01
@@ -65,18 +70,19 @@ gmix-fit
             gmix
                 byellip
                     run     S/N  nrepeat  notes
-                    gg04r04 100   algo    using algorithmic nrepeat
-                    gg04r05  47   algo    
-                    gg04r06  22   algo    
-                    gg04r07  11   algo    
-                    gg04r08   5   algo    
-                    gg04r09 1.e6  algo
+                    gg04r04 100   algo    done  rerunning, wrong s2n_method
+                    gg04r05  47   algo    done  rerun
+                    gg04r06  22   algo    done, averaging  rerun
+                    gg04r07  11   algo    done  rerun
+                    gg04r08   5   algo    done  rerun
+                    gg04r09 1.e6  algo    done
 
                 by s/n
+                    # these we should re-run with s2n_fac=10
                     run      ie    e  s2n_method  notes
                     gg04r01   7 .33     matched   done
-                    gg04r02  19 .80     matched   done
-                    gg04r03   0 .05     matched   done
+                    gg04r02  19 .80     matched   done, need to average
+                    gg04r03   0 .05     matched   done, need to average
             deswl
                 by s/n
                     run      ie    e  s2n_method  notes
@@ -93,7 +99,7 @@ gmix-fit
                   had some swapping.
 
             gmix
-                byellip
+                byellip (I think these were unweighted S/N)
                     run       s/n   nrepeat       notes
                     et02r01  1.e6         1       done
                     et02r02   100         1       done
@@ -117,7 +123,7 @@ gmix-fit
                     run      ie    e  s2n_method   notes
                     et02r01   0  .05     matched   done
                     et02r02  19  .80     matched   done
-                    et02r03   7  .33     matched   running
+                    et02r03   7  .33     matched   done
 
         et03
             - ring, shear g1=0.01, g2=-0.01, 100 in ring
@@ -126,7 +132,7 @@ gmix-fit
             gmix
                 by s/n
                     run      ie    e  s2n_method   notes
-                    et03r01   7  .33     matched   done
+                    et03r01   7  .33     matched   done, need to average
                     et03r02  19  .80     matched   todo
                     et03r03   0  .05     matched   todo
                 byellip
