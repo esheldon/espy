@@ -12,6 +12,8 @@ from fimage.conversions import mom2sigma, cov2sigma, etheta2e1e2, ellip2mom
 from fimage.convolved import NoisyConvolvedImage
 import lensing
 
+import pprint
+
 import admom
 import fitsio
 import time
@@ -36,6 +38,9 @@ class ShapeSim(dict):
         self.cache_list={}
 
         self['verbose'] = self.get('verbose',False)
+
+        wlog("sim self:")
+        pprint.pprint(self, stream=stderr)
 
     def write_trial(self, is2, ie, itheta=None):
         """
@@ -411,6 +416,9 @@ class BaseSim(dict):
         self.fs='hdfs'
 
         self['verbose'] = self.get('verbose',False)
+
+        wlog("run self:")
+        pprint.pprint(self, stream=stderr)
 
     
     def wlog(self, *args):
