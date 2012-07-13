@@ -1118,11 +1118,7 @@ def accumulate_outputs(data):
     dt =data[0].dtype.descr
     dt += [('shear1cum','f8'), # sums so we can do cumulative
            ('shear2cum','f8'),
-           ('shear1cum_alt','f8'),
-           ('shear1cum_alt_wsum','f8'),
            ('shear1cum_alt_err','f8'),
-           ('shear2cum_alt','f8'),
-           ('shear2cum_alt_wsum','f8'),
            ('shear2cum_alt_err','f8')]
     if not straight_avg:
         dt += [('Rshearcum','f8')]
@@ -1140,11 +1136,6 @@ def accumulate_outputs(data):
 
         wt1 = 1./d['shear1err']**2
         wt2 = 1./d['shear2err']**2
-        d['shear1cum_alt'] = d['shear1']*wt1
-        d['shear2cum_alt'] = d['shear2']*wt2
-        d['shear1cum_alt_wsum'] = wt1
-        d['shear2cum_alt_wsum'] = wt2
-
 
         if i > 0:
             # add previous
@@ -1156,10 +1147,8 @@ def accumulate_outputs(data):
                 d['e2sum']  += dold['e2sum']
                 d['esqsum'] += dold['esqsum']
 
-                d['shear1cum_alt'] += dold['shear1cum_alt']
-                d['shear2cum_alt'] += dold['shear2cum_alt']
-                d['shear1cum_alt_wsum'] += dold['shear1cum_alt_wsum']
-                d['shear2cum_alt_wsum'] += dold['shear2cum_alt_wsum']
+                d['e1err2invsum']  += dold['e1err2invsum']
+                d['e2err2invsum']  += dold['e2err2invsum']
 
 
             d['nsum']   += dold['nsum']
@@ -1178,10 +1167,10 @@ def accumulate_outputs(data):
         dold = d.copy()
 
     if not straight_avg:
-        d['shear1cum_alt'] /= d['shear1cum_alt_wsum']
-        d['shear2cum_alt'] /= d['shear2cum_alt_wsum']
-        d['shear1cum_alt_err'] = sqrt(1/d['shear1cum_alt_wsum'])
-        d['shear2cum_alt_err'] = sqrt(1/d['shear2cum_alt_wsum'])
+        # this only works for ring test with no shape noise!
+        # might want 1/Rshear here
+        d['shear1cum_alt_err'] = 0.5*sqrt(1/d['e1err2invsum'])
+        d['shear2cum_alt_err'] = 0.5*sqrt(1/d['e2err2invsum'])
     return out
 
 def average_outputs(data, straight_avg=False):
@@ -1201,6 +1190,8 @@ def average_outputs(data, straight_avg=False):
         else:
             dt += [('e1sum','f8'), # sums so we can do cumulative
                    ('e2sum','f8'),
+                   ('e1err2invsum','f8'),
+                   ('e2err2invsum','f8'),
                    ('esqsum','f8'),
                    ('nsum','i8'),
                    ('shear1','f8'),('shear1err','f8'),  # average in particular bin
@@ -1244,6 +1235,8 @@ def average_outputs(data, straight_avg=False):
             g1err = g1*sqrt( (mesq_err/mesq)**2 + (e1err/me1)**2 )
             g2err = g2*sqrt( (mesq_err/mesq)**2 + (e1err/me2)**2 )
 
+            e1err2invsum = ( 1./edata['pars_err'][:,2]**2 ).sum()
+            e2err2invsum = ( 1./edata['pars_err'][:,3]**2 ).sum()
         for n in d.dtype.names:
             if n == 'Rshear':
                 d['Rshear'][i] = R
@@ -1261,6 +1254,10 @@ def average_outputs(data, straight_avg=False):
                 d['e1sum'][i] = e1sum
             elif n == 'e2sum':
                 d['e2sum'][i] = e2sum
+            elif n == 'e1err2invsum':
+                d['e1err2invsum'][i] = e1err2invsum
+            elif n == 'e2err2invsum':
+                d['e2err2invsum'][i] = e2err2invsum
             elif n == 'esqsum':
                 d['esqsum'][i] = esqsum
             elif n == 'nsum':

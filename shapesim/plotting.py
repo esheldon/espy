@@ -4,6 +4,7 @@ import lensing
 import esutil as eu
 from esutil.misc import wlog
 from esutil.numpy_util import where1
+from esutil.stat import sigma_clip
 import numpy
 from numpy import median, zeros, sqrt
 import copy
@@ -17,6 +18,12 @@ class SimPlotter(dict):
             self[k] = v
 
         self.simc = shapesim.read_config(c['sim'])
+        self.psf_e1 = self.simc.get('psf_e1',None)
+        self.psf_e2 = self.simc.get('psf_e2',None)
+
+        self.psf_estring=''
+        if self.psf_e1 is not None:
+            self.psf_estring = r'$e_{psf}$: %.2f,%.2f' % (self.psf_e1,self.psf_e2)
 
         d = shapesim.get_plot_dir(run)
         if not os.path.exists(d):
@@ -137,8 +144,14 @@ class SimPlotter(dict):
                 if type == 'diff':
                     pts1_0 -= shear_true.g1
                     pts2_0 -= shear_true.g2
-                err1_0 = [pts1_0.std()]*pts1_0.size
-                err2_0 = [pts2_0.std()]*pts2_0.size
+                #err1_0 = [pts1_0.std()]*pts1_0.size
+                #err2_0 = [pts2_0.std()]*pts2_0.size
+                n=pts1_0.size
+                start=1
+                err1_0 = pts1_0[start:].std()
+                err2_0 = pts2_0[start:].std()
+                err1_0 = [min(err1_0,err2_0)]*n
+                err2_0 = err1_0
           
             if type == 'diff':
                 yvals1 = st[tag1] - shear_true.g1
@@ -223,11 +236,12 @@ class SimPlotter(dict):
         arr[1,0].add(l)
 
         if self.simc['psfmodel'] == 'turb':
-            siglab=r'$FWHM_{PSF}: %.1f$ pix' % self.simc['psf_fwhm']
+            siglab = r'$FWHM: %.1f$ pix' % self.simc['psf_fwhm']
         else:
             psf_sigma = self.simc['psf_sigma']
-            siglab=r'$\sigma_{PSF}: %.1f$ pix' % psf_sigma
-        siglab += r'$ e_{tot}: %.2f$' % st['etrue'].mean()
+            siglab = r'$\sigma: %.1f$ pix' % psf_sigma
+        siglab += ' '+self.psf_estring
+        siglab += r'$ e_{gal}^{tot}: %.2f$' % st['etrue'].mean()
 
         sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
                                fontsize=2.5)
@@ -376,9 +390,12 @@ class SimPlotter(dict):
                 if type == 'diff':
                     pts1_0 -= shear_true.g1
                     pts2_0 -= shear_true.g2
-                err1_0 = [pts1_0.std()]*pts1_0.size
-                err2_0 = [pts2_0.std()]*pts2_0.size
- 
+                n=pts1_0.size
+                start=1
+                err1_0 = pts1_0[start:].std()
+                err2_0 = pts2_0[start:].std()
+                err1_0 = [min(err1_0,err2_0)]*n
+                err2_0 = err1_0
  
             if type == 'diff':
                 yvals1 = st[tag1] - shear_true.g1
@@ -463,6 +480,7 @@ class SimPlotter(dict):
         else:
             psf_sigma = self.simc['psf_sigma']
             siglab=r'$\sigma_{PSF}: %.1f$ pix' % psf_sigma
+        siglab += ' '+self.psf_estring
 
         s2n=self['s2n']
         if s2n > 0:
@@ -656,6 +674,7 @@ class SimPlotter(dict):
         else:
             psf_sigma = self.simc['psf_sigma']
             siglab=r'$\sigma_{PSF}: %.1f$ pix' % psf_sigma
+        siglab += ' '+self.psf_estring
 
         s2n=self['s2n']
         if s2n > 0:
