@@ -30,7 +30,7 @@ class SimPlotterVsShear(dict):
 
         # for now
         keys['docum'] = True
-        keys['s2min'] = 0.5
+        #keys['s2min'] = 0.5
 
         for k,v in keys.iteritems():
             self[k] = v
@@ -40,47 +40,81 @@ class SimPlotterVsShear(dict):
             self.plotters.append(SimPlotter(run,**keys))
 
     def doplots(self):
-        is2n = -1
-        is2 = 0
+        import biggles
+        import pcolors
 
         nrun=len(self.runs)
+
+        is2n = 19
+        is2list = [5,11,17,19]
+        n_is2 = len(is2list)
+        colors=pcolors.rainbow(n_is2, 'hex')
+
+        if self['docum']:
+            tag1='shear1cum'
+            tag2='shear2cum'
+            errtag1='shear1cum_err'
+            errtag2='shear2cum_err'
+        else:
+            tag1='shear1'
+            tag2='shear2'
+            errtag1='shear1err'
+            errtag2='shear2err'
+
+
+        td = self.plotters[0].read_data()
+        n_s2 = len(td)
+        n_s2n = td[0].size
+
+        plt=biggles.FramedPlot()
+        """
         g1true = zeros(nrun)
         g2true = zeros(nrun)
         g1meas = zeros(nrun)
         g2meas = zeros(nrun)
         g1err = zeros(nrun)
         g2err = zeros(nrun)
-        for i,plotter in enumerate(self.plotters):
+        """
+
+        dt=[('g1true','f8',nrun),
+            ('g2true','f8',nrun),
+            ('g1meas','f8',nrun),
+            ('g1err','f8',nrun),
+            ('g2meas','f8',nrun),
+            ('g2err','f8',nrun)]
+        data = zeros(n_is2,dtype=dt)
+
+        for irun,plotter in enumerate(self.plotters):
             d = plotter.read_data()
             shear = plotter.get_shear_true()
-            g1arr[i] = shear.g1
-            g2arr[i] = shear.g2
 
-            if self['docum']:
-                if self.docum:
-                    tag1='shear1cum'
-                    tag2='shear2cum'
-                    errtag1='shear1cum_err'
-                    errtag2='shear2cum_err'
-                else:
-                    tag1='shear1'
-                    tag2='shear2'
-                    errtag1='shear1err'
-                    errtag2='shear2err'
+            for i_is2 in xrange(n_is2):
+                is2 = is2list[i_is2]
 
-            g1meas[i] = d[tag1][is2][is2n]
-            g2meas[i] = d[tag2][is2][is2n]
-            g1err[i]  = d[errtag1][is2][is2n]
-            g2err[i]  = d[errtag2][is2][is2n]
+                data['g1true'][i_is2,irun] = shear.g1
+                data['g2true'][i_is2,irun] = shear.g2
+                data['g1meas'][i_is2,irun] = d[is2][tag1][is2n]
+                data['g2meas'][i_is2,irun] = d[is2][tag2][is2n]
+                data['g1err'][i_is2,irun] = d[is2][errtag1][is2n]
+                data['g2err'][i_is2,irun] = d[is2][errtag2][is2n]
 
-        diff1 = g1meas-g1true
-        diff2 = g2meas-g2true
+        for i_is2 in xrange(n_is2):
+            g1true = data['g1true'][i_is2,:]
+            diff1  = data['g1meas'][i_is2,:] - g1true
+            p1 = biggles.Points(g1true,diff1,
+                                type='filled circle', color=colors[i_is2])
+            c1 = biggles.Curve(g1true,diff1,color=colors[i_is2])
+            plt.add(p1,c1) 
 
-        plt=biggles.FramedPlot()
-        p1 = biggles.Points(g1true, diff1, type='filled circle')
-        perr1 = biggles.SymmetricErrorBarsY(g1true, diff1, g1err)
+            if i_is2 == 0:
+                g1err  = data['g1err'][i_is2,:]
+                g2err  = data['g2err'][i_is2,:]
+                perr1 = biggles.SymmetricErrorBarsY(g1true,diff1,g1err,
+                                                    color=colors[i_is2])
+                plt.add(perr1)
 
-        plt.add(p1,perr1)
+        plt.xlabel = r'$\gamma_{true}$'
+        plt.ylabel = r'$\Delta \gamma$'
         plt.show()
 
 class SimPlotter(dict):

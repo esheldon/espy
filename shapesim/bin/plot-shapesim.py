@@ -3,9 +3,13 @@
 
 Description
 
-    Make plots comparing to truth for a single run, as a function
-    of s2 and total ellipticity
+    Make plots comparing to truth.
 
+    If a run is sent, can plot vs s2n or e depending
+    on the run type.
+
+    If something like "set-edg01" is sent, then a set
+    of runs is plotted vs the shear
 """
 
 import sys
@@ -92,13 +96,15 @@ if yrng is not None:
 
 
 if run[0:3] == 'set':
-    if set == 'set-edg1':
+    if run == 'set-edg01':
         runs = ['gmix-fit-edg03r02',
                 'gmix-fit-edg04r01',
                 'gmix-fit-edg05r01',
                 'gmix-fit-edg06r01',
                 'gmix-fit-edg07r01',
                 'gmix-fit-edg08r01']
+    else:
+        raise ValueError("don't know about set-edg01")
     p=shapesim.plotting.SimPlotterVsShear(runs, maketitle=options.maketitle,
                                           s2min=s2min, skip1=skip1, skip2=skip2,
                                           docum=options.cum)
