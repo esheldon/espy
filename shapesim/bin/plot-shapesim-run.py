@@ -21,8 +21,12 @@ parser.add_option('--yrange2',default='-0.05,0.05',
                   help='yrange2, default %default')
 parser.add_option('-t','--type',default='diff',
                   help='yrange, default %default')
+
 parser.add_option('--title',default=None,
                   help='add a plot title, default %default')
+parser.add_option('--maketitle',action="store_true",
+                  help="make a title from the run")
+
 parser.add_option('--s2min',default=None,
                   help="min value in s2")
 parser.add_option('--noshow',action="store_true",
@@ -89,7 +93,8 @@ if yrng is not None:
 c=shapesim.read_config(run)
 runtype=c.get('runtype','byellip')
 
-p=shapesim.plotting.SimPlotter(run)
+p=shapesim.plotting.SimPlotter(run, maketitle=options.maketitle,
+                               s2min=s2min, skip1=skip1, skip2=skip2)
 
 if runtype == 'byellip':
     if options.etot:
@@ -98,19 +103,16 @@ if runtype == 'byellip':
             yrng2 = yrng2.split(',')
             yrng2 = [float(yrng2[0]),float(yrng2[1])]
         p.plot_ediff_Rshear_vs_e(yrng=yrng, yrng2=yrng2, show=show,
-                                 title=options.title,
-                                 skip1=skip1,skip2=skip2)
+                                 title=options.title)
     else:
         p.plot_shear_vs_e(yrng=yrng,
-                          show=show,type=options.type,skip1=skip1,skip2=skip2,
+                          show=show,type=options.type,
                           title=options.title,
-                          s2min=s2min,
                           docum=options.cum,
                           doavg=options.avg)
 else:
     p.plots_shear_vs_s2n(yrng=yrng, xrng=xrng, type=options.type, 
-                         s2min=s2min,
                          doavg=options.avg,
                          docum=options.cum,
                          title=options.title,
-                         show=show, skip1=skip1,skip2=skip2)
+                         show=show)

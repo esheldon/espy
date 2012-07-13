@@ -143,23 +143,30 @@ def plot2dsig_over(r1,dsig1,dsig1err,r2,dsig2, dsig2err, **keys):
     label  = keys.get('label',None)
     label1 = keys.get('label1',None)
     label2 = keys.get('label2',None)
+    xrng = keys.get('xrange',None)
     yrng = keys.get('yrange',None)
     show = keys.get('show',True)
+
+    ylog = keys.get('ylog',True)
    
     plt=keys.get('plt',None)
 
     yall=numpy.concatenate((dsig1, dsig2))
     yerrall=numpy.concatenate((dsig1err, dsig2err))
-    yrng = eu.plotting.get_log_plot_range(yall, err=yerrall, 
-                                            input_range=yrng)
+
+    if yrng is None:
+        if ylog:
+            yrng = eu.plotting.get_log_plot_range(yall, err=yerrall, 
+                                                  input_range=yrng)
 
     rr=numpy.concatenate((r1,r2))
-    xrng = eu.plotting.get_log_plot_range(rr)
+    if xrng is None:
+        xrng = eu.plotting.get_log_plot_range(rr)
 
     if plt is None:
         plt=FramedPlot()
     plt.xlog=True
-    plt.ylog=True
+    plt.ylog=ylog
     plt.xrange=xrng
     plt.yrange=yrng
     plt.xlabel = labels['rproj']
@@ -175,11 +182,19 @@ def plot2dsig_over(r1,dsig1,dsig1err,r2,dsig2, dsig2err, **keys):
 
     plt.add(dsig1_p, dsig2_p)
 
-    # biggles chokes if you give it negative data for a log plot
-    eu.plotting.add_log_error_bars(plt,'y',r1,dsig1,dsig1err,yrng,
-                                   color=color1)
-    eu.plotting.add_log_error_bars(plt,'y',r2,dsig2,dsig2err,yrng,
-                                   color=color2)
+    if ylog:
+        # biggles chokes if you give it negative data for a log plot
+        eu.plotting.add_log_error_bars(plt,'y',r1,dsig1,dsig1err,yrng,
+                                       color=color1)
+        eu.plotting.add_log_error_bars(plt,'y',r2,dsig2,dsig2err,yrng,
+                                       color=color2)
+    else:
+        err1 = biggles.SymmetricErrorBarsY(r1,dsig1,dsig1err,color=color1)
+        err2 = biggles.SymmetricErrorBarsY(r2,dsig2,dsig2err,color=color2)
+        plt.add(err1,err2)
+
+        zerop = biggles.Curve(xrng, [0,0])
+        plt.add(zerop)
 
     if label is not None:
         plt.add(PlotLabel(0.9,0.9,label,halign='right'))

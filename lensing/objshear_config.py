@@ -84,6 +84,11 @@ class ObjshearRunConfig(dict):
                     local_file.write('zlvals ')
                     zlvals.tofile(local_file, sep=' ')
                     local_file.write('\n')
+
+                if 'zmin' in self['lens_config']:
+                    local_file.write(fmt % ('min_zlens_interp',self['lens_config']['zmin']))
+
+
             hdfs_file.put(clobber=True)
 
       

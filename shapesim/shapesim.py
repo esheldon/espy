@@ -1117,7 +1117,13 @@ def accumulate_outputs(data):
 
     dt =data[0].dtype.descr
     dt += [('shear1cum','f8'), # sums so we can do cumulative
-           ('shear2cum','f8')]
+           ('shear2cum','f8'),
+           ('shear1cum_alt','f8'),
+           ('shear1cum_alt_wsum','f8'),
+           ('shear1cum_alt_err','f8'),
+           ('shear2cum_alt','f8'),
+           ('shear2cum_alt_wsum','f8'),
+           ('shear2cum_alt_err','f8')]
     if not straight_avg:
         dt += [('Rshearcum','f8')]
     out=[]
@@ -1131,6 +1137,15 @@ def accumulate_outputs(data):
 
         d = zeros(num, dtype=dt)
         eu.numpy_util.copy_fields(s2data, d)
+
+        wt1 = 1./d['shear1err']**2
+        wt2 = 1./d['shear2err']**2
+        d['shear1cum_alt'] = d['shear1']*wt1
+        d['shear2cum_alt'] = d['shear2']*wt2
+        d['shear1cum_alt_wsum'] = wt1
+        d['shear2cum_alt_wsum'] = wt2
+
+
         if i > 0:
             # add previous
             if straight_avg:
@@ -1140,18 +1155,33 @@ def accumulate_outputs(data):
                 d['e1sum']  += dold['e1sum']
                 d['e2sum']  += dold['e2sum']
                 d['esqsum'] += dold['esqsum']
+
+                d['shear1cum_alt'] += dold['shear1cum_alt']
+                d['shear2cum_alt'] += dold['shear2cum_alt']
+                d['shear1cum_alt_wsum'] += dold['shear1cum_alt_wsum']
+                d['shear2cum_alt_wsum'] += dold['shear2cum_alt_wsum']
+
+
             d['nsum']   += dold['nsum']
 
         if straight_avg:
             d['shear1cum'] = d['gamma1sum']/d['nsum']
             d['shear2cum'] = d['gamma2sum']/d['nsum']
+
         else:
             d['Rshearcum'] = 1-0.5*d['esqsum']/d['nsum']
             d['shear1cum'] = 0.5*d['e1sum']/d['nsum']/d['Rshearcum']
             d['shear2cum'] = 0.5*d['e2sum']/d['nsum']/d['Rshearcum']
+
+
         out.append(d)
         dold = d.copy()
 
+    if not straight_avg:
+        d['shear1cum_alt'] /= d['shear1cum_alt_wsum']
+        d['shear2cum_alt'] /= d['shear2cum_alt_wsum']
+        d['shear1cum_alt_err'] = sqrt(1/d['shear1cum_alt_wsum'])
+        d['shear2cum_alt_err'] = sqrt(1/d['shear2cum_alt_wsum'])
     return out
 
 def average_outputs(data, straight_avg=False):

@@ -99,6 +99,95 @@ command: |
     lcat=%(lcat)s
 
     outf=%(out_file)s
+
+    echo `hostname`
+
+    tmp_dir=/data/esheldon/sobjshear-$RANDOM-$RANDOM
+    mkdir -vp $tmp_dir
+
+    tmp_outf=$tmp_dir/$(basename $outf)
+    tmp_lcat=$tmp_dir/$(basename $lcat)
+    tmp_config=$tmp_dir/$(basename $config)
+
+    echo -e "staging lcat file to local disk:\\n  $lcat\\n  $tmp_lcat"
+    hadoop fs -cat $lcat > $tmp_lcat
+    echo -e "staging config file to local disk:\\n  $config\\n  $tmp_config"
+    hadoop fs -cat $config > $tmp_config
+
+    hadoop fs -cat $scat | sobjshear $tmp_config $tmp_lcat 1> $tmp_outf
+
+    err=$?
+    if [[ $err != "0" ]]; then
+        echo "Error running sobjshear: $err"
+    fi
+    if [[ -e $tmp_outf ]]; then
+        echo -e "pushing temp file to\\n  $outf"
+        hadoop fs -rm $outf 2> /dev/null 1 > /dev/null
+        hadoop fs -put $tmp_outf $outf
+    fi
+    rm -rvf $tmp_dir 2>&1
+
+    echo `date`
+
+%(groups)s
+priority: %(priority)s
+job_name: %(job_name)s
+""" 
+
+_reduce_script="""
+command: |
+    source ~esheldon/.bashrc
+
+    module load sobjshear/work
+
+    config=%(config_file)s
+    pattern="%(pattern)s"
+    outf=%(out_file)s
+
+    echo `hostname`
+
+    tmp_dir=/data/esheldon/redshear-$RANDOM-$RANDOM
+    mkdir -vp $tmp_dir
+
+    tmp_outf=$tmp_dir/$(basename $outf)
+    tmp_config=$tmp_dir/$(basename $config)
+
+    echo -e "staging config file to local disk:\\n  $config\\n  $tmp_config"
+    hadoop fs -cat $config > $tmp_config
+
+    echo "reducing files with pattern $pattern"
+    hadoop fs -cat "$pattern" | redshear $tmp_config 1> $tmp_outf
+
+    err=$?
+    if [[ $err != "0" ]]; then
+        echo "Error running redshear: $err"
+    fi
+    if [[ -e $tmp_outf ]]; then
+        echo -e "pushing temp file to\\n  $outf"
+        hadoop fs -rm $outf 2> /dev/null 1 > /dev/null
+        hadoop fs -put $tmp_outf $outf
+    fi
+    rm -rvf $tmp_dir 2>&1
+
+    echo `date`
+
+%(groups)s
+priority: %(priority)s
+job_name: %(job_name)s
+""" 
+
+
+_shear_script_old="""
+command: |
+    source ~esheldon/.bashrc
+
+    module load sobjshear/work
+
+    config=%(config_file)s
+    scat=%(scat)s
+    lcat=%(lcat)s
+
+    outf=%(out_file)s
     logf=%(log_file)s
 
     echo `hostname` > $logf
@@ -120,49 +209,6 @@ command: |
     err=$?
     if [[ $err != "0" ]]; then
         echo "Error running sobjshear: $err" >> $logf
-    fi
-    if [[ -e $tmp_outf ]]; then
-        echo -e "pushing temp file to\\n  $outf" >> $logf
-        hadoop fs -rm $outf 2> /dev/null 1 > /dev/null
-        hadoop fs -put $tmp_outf $outf
-    fi
-    rm -rvf $tmp_dir 2>&1 >> $logf
-
-    echo `date` >> $logf
-
-%(groups)s
-priority: %(priority)s
-job_name: %(job_name)s
-""" 
-
-_reduce_script="""
-command: |
-    source ~esheldon/.bashrc
-
-    module load sobjshear/work
-
-    config=%(config_file)s
-    pattern="%(pattern)s"
-    outf=%(out_file)s
-    logf=%(log_file)s
-
-    echo `hostname` > $logf
-
-    tmp_dir=/data/esheldon/redshear-$RANDOM-$RANDOM
-    mkdir -vp $tmp_dir 2>> $logf
-
-    tmp_outf=$tmp_dir/$(basename $outf)
-    tmp_config=$tmp_dir/$(basename $config)
-
-    echo -e "staging config file to local disk:\\n  $config\\n  $tmp_config" >> $logf
-    hadoop fs -cat $config > $tmp_config
-
-    echo "reducing files with pattern $pattern" >> $logf
-    hadoop fs -cat "$pattern" | redshear $tmp_config 2>> $logf 1> $tmp_outf
-
-    err=$?
-    if [[ $err != "0" ]]; then
-        echo "Error running redshear: $err" >> $logf
     fi
     if [[ -e $tmp_outf ]]; then
         echo -e "pushing temp file to\\n  $outf" >> $logf

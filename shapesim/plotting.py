@@ -5,12 +5,13 @@ import esutil as eu
 from esutil.misc import wlog
 from esutil.numpy_util import where1
 import numpy
-from numpy import median, zeros
+from numpy import median, zeros, sqrt
+import copy
 
 from lensing.util import shear_fracdiff, e2gamma, gamma2e, g1g2_to_e1e2
 
 class SimPlotter(dict):
-    def __init__(self, run):
+    def __init__(self, run, **keys):
         c = shapesim.read_config(run)
         for k,v in c.iteritems():
             self[k] = v
@@ -23,12 +24,23 @@ class SimPlotter(dict):
         
         self._data=None
 
+        title=copy.deepcopy(self['run'])
+        title = title.replace('gmix-fit','gmix')
+        self.title = title.replace('-',' ')
+        self.maketitle=keys.get('maketitle',False)
+
+        self.skip1 = keys.get('skip1',[])
+        self.skip2 = keys.get('skip2',[])
+
+        self.s2min = keys.get('s2min',None)
+
+    def get_title(self, title=None):
+        if title is None and self.maketitle:
+            title=self.title
+        return title
 
     def plots_shear_vs_s2n(self, 
-                           skip1=[],
-                           skip2=[],
                            type='diff',
-                           s2min=None,
                            xrng=None,
                            yrng=None, 
                            doavg=False,
@@ -43,7 +55,10 @@ class SimPlotter(dict):
             extra='-avg'
         else:
             extra=''
+
+        puterr=False
         if docum:
+            puterr=True
             extra+='-cum'
 
         runtype = self.get('runtype','byellip')
@@ -53,12 +68,9 @@ class SimPlotter(dict):
         slist=self.simc['shear']
         shear_true = lensing.shear.Shear(g1=slist[0],g2=slist[1])
 
-        data = self.read_data(s2min=s2min,
-                              docum=docum,
-                              skip1=skip1,skip2=skip2)
+        data = self.read_data(docum=docum)
 
-        epsfile = shapesim.get_plot_file(self['run'],type+extra,yrng=yrng, 
-                                         s2min=s2min)
+        epsfile = shapesim.get_plot_file(self['run'],type+extra,yrng=yrng)
         wlog("will plot to:",epsfile)
 
         colors=pcolors.rainbow(len(data), 'hex')
@@ -66,7 +78,8 @@ class SimPlotter(dict):
         biggles.configure('PlotKey','key_vsep',1.0)
         arr=biggles.FramedArray(2,1)
         #arr.aspect_ratio=1
-
+        
+        title=self.get_title(title=title)
         if title:
             arr.title=title
  
@@ -116,7 +129,17 @@ class SimPlotter(dict):
                 else:
                     tag1='shear1'
                     tag2='shear2'
-           
+
+            if docum and i == (len(data)-1):
+                # save for later
+                pts1_0 = st[tag1].copy()
+                pts2_0 = st[tag2].copy()
+                if type == 'diff':
+                    pts1_0 -= shear_true.g1
+                    pts2_0 -= shear_true.g2
+                err1_0 = [pts1_0.std()]*pts1_0.size
+                err2_0 = [pts2_0.std()]*pts2_0.size
+          
             if type == 'diff':
                 yvals1 = st[tag1] - shear_true.g1
                 yvals2 = st[tag2] - shear_true.g2
@@ -139,8 +162,14 @@ class SimPlotter(dict):
 
             arr[0,0].add(pr1)
             arr[1,0].add(pr2)
-            #arr[0,0].add(err1)
-            #arr[1,0].add(err2)
+            
+            if not docum and i == (len(data)-1):
+                terr1 = [yvals1.std()]*yvals1.size
+                terr2 = [yvals2.std()]*yvals2.size
+                err1p = biggles.SymmetricErrorBarsY(s2n, yvals1, terr1,width=4)
+                err2p = biggles.SymmetricErrorBarsY(s2n, yvals2, terr2,width=4)
+                arr[0,0].add(err1p)
+                arr[1,0].add(err2p)
             if i < 15:
                 plots1.append(pr1)
             else:
@@ -165,6 +194,12 @@ class SimPlotter(dict):
                 plots2.append(avg1)
             else:
                 plots1.append(avg1)
+
+        if docum:
+            err1p = biggles.SymmetricErrorBarsY(s2n, pts1_0, err1_0)
+            err2p = biggles.SymmetricErrorBarsY(s2n, pts2_0, err2_0)
+            arr[0,0].add(err1p)
+            arr[1,0].add(err2p)
 
         fsize=2
         key1 = biggles.PlotKey(0.9,0.92, plots1, halign='right', 
@@ -256,10 +291,7 @@ class SimPlotter(dict):
 
 
     def plot_shear_vs_e(self, 
-                        skip1=[],
-                        skip2=[],
                         type='diff',
-                        s2min=None,
                         yrng=None, 
                         doavg=False,
                         docum=False,
@@ -283,12 +315,10 @@ class SimPlotter(dict):
         slist=self.simc['shear']
         shear_true = lensing.shear.Shear(g1=slist[0],g2=slist[1])
 
-        data = self.read_data(skip1=skip1,skip2=skip2,
-                              s2min=s2min,
-                              docum=docum)
+        data = self.read_data(docum=docum)
 
         epsfile = shapesim.get_plot_file(self['run'],type+extra,
-                                         s2min=s2min,
+                                         s2min=self.s2min,
                                          yrng=yrng)
         wlog("will plot to:",epsfile)
 
@@ -300,6 +330,7 @@ class SimPlotter(dict):
         arr.xlabel=r'ellipticity'
         arr.ylabel = r'$\Delta \gamma$'
 
+        title=self.get_title(title=title)
         if title:
             arr.title=title
 
@@ -319,9 +350,7 @@ class SimPlotter(dict):
 
             s2 = median(st['s2'])
 
-            s = st['etrue'].argsort()
-
-            etrue = st['etrue'][s]
+            etrue = st['etrue']
             
             if self['run'][0:5] == 'deswl':
                 if docum:
@@ -340,13 +369,23 @@ class SimPlotter(dict):
                     tag1='shear1'
                     tag2='shear2'
 
+            if docum and i == (len(data)-1):
+                # save for later
+                pts1_0 = st[tag1].copy()
+                pts2_0 = st[tag2].copy()
+                if type == 'diff':
+                    pts1_0 -= shear_true.g1
+                    pts2_0 -= shear_true.g2
+                err1_0 = [pts1_0.std()]*pts1_0.size
+                err2_0 = [pts2_0.std()]*pts2_0.size
+ 
  
             if type == 'diff':
-                yvals1 = st[tag1][s] - shear_true.g1
-                yvals2 = st[tag2][s] - shear_true.g2
+                yvals1 = st[tag1] - shear_true.g1
+                yvals2 = st[tag2] - shear_true.g2
             elif type == 'val':
-                yvals1 = st[tag1][s]
-                yvals2 = st[tag2][s]
+                yvals1 = st[tag1]
+                yvals2 = st[tag2]
 
             else:
                 raise ValueError("bad plot type: '%s'" % type)
@@ -388,6 +427,13 @@ class SimPlotter(dict):
                 plots2.append(avg1)
             else:
                 plots1.append(avg1)
+
+        if docum:
+            err1p = biggles.SymmetricErrorBarsY(etrue, pts1_0, err1_0)
+            err2p = biggles.SymmetricErrorBarsY(etrue, pts2_0, err2_0)
+            arr[0,0].add(err1p)
+            arr[1,0].add(err2p)
+
 
         fsize=2
         key1 = biggles.PlotKey(0.9,0.92, plots1, halign='right', 
@@ -494,8 +540,6 @@ class SimPlotter(dict):
 
 
     def plot_ediff_Rshear_vs_e(self, 
-                               skip1=[],
-                               skip2=[],
                                docum=False,
                                s2max=None, 
                                yrng=None, 
@@ -517,8 +561,7 @@ class SimPlotter(dict):
         if runtype != 'byellip':
             raise ValueError("Can only make plots vs e for 'byellip' runs")
 
-        data = self.read_data(docum=docum,
-                              skip1=skip1,skip2=skip2)
+        data = self.read_data(docum=docum)
 
         doR=True
         if 'Rshear' not in data[0].dtype.names:
@@ -550,6 +593,7 @@ class SimPlotter(dict):
         plt1.aspect_ratio=1
         plt2.aspect_ratio=1
  
+        title=self.get_title(title=title)
         if title:
             plt1.title=title
             plt2.title=title
@@ -561,10 +605,8 @@ class SimPlotter(dict):
 
             s2 = median(st['s2'])
 
-            s = st['etrue'].argsort()
-
-            etrue = st['etrue'][s]
-            emeas = st['e_meas'][s]
+            etrue = st['etrue']
+            emeas = st['e_meas']
             ediff = emeas  - etrue
 
             label = r'%0.3f' % s2
@@ -575,8 +617,8 @@ class SimPlotter(dict):
 
             if doR:
                 #R_true = 1-.5*etrue**2
-                R_true = st['Rshear_true'][s]
-                R_meas = st['Rshear'][s]
+                R_true = st['Rshear_true']
+                R_meas = st['Rshear']
                 R_fdiff = R_meas/R_true-1
 
                 Rp = biggles.Curve(etrue, R_fdiff, color=colors[i])
@@ -662,7 +704,7 @@ class SimPlotter(dict):
 
 
 
-    def read_data(self, docum=False, s2min=None, skip1=[], skip2=[]):
+    def read_data(self, docum=False):
         if self._data is None:
             wlog("reading data")
             """
@@ -674,14 +716,14 @@ class SimPlotter(dict):
             """
             self._data = shapesim.read_averaged_outputs(self['run'], 
                                                         docum=docum, 
-                                                        skip1=skip1) 
-        if s2min is not None:
-            keepdata = self.limit_s2(self._data, s2min, skip1=skip1)
+                                                        skip1=self.skip1) 
+        if self.s2min is not None:
+            keepdata = self.limit_s2(self._data, self.s2min)
             return keepdata
         else:
             return self._data
 
-    def limit_s2(self, datalist, s2min, skip1=[]):
+    def limit_s2(self, datalist, s2min):
         out=[]
         for i,d in enumerate(datalist):
             s2 = median(d['s2'])

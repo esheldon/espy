@@ -33,6 +33,7 @@ parser.add_option("-t",dest="bintype",default=None,
 parser.add_option("-n",dest="nbin",default=None,
                   help="The number of bins, default %default")
 
+
 parser.add_option("-s",dest="subtract_rand",action='store_true',default=False,
                   help="Subtract the randoms.  default %default")
 parser.add_option("-r",dest="minrad",default=1.,

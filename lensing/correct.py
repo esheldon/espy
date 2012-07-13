@@ -8,7 +8,7 @@ from esutil.numpy_util import where1
 import lensing
 
 
-def correct(data, rand, subtract_rand=False, minrad=None):
+def correct(data, rand=None, subtract_rand=False, minrad=None):
     """
 
     Apply various corrections.
@@ -22,35 +22,58 @@ def correct(data, rand, subtract_rand=False, minrad=None):
     ----------
     data: ndarray
         This should be the result of binning the data
-    rand: ndarray
+    rand: ndarray, optional
         This should be the result of matching to the binned data
 
     """
 
     nrad = data['r'][0].size
     nbin = data.size
-    if rand.size != data.size:
-        raise ValueError("random size (%d) not same size as "
-                         "data (%d)" % (rand.size, data.size))
-
-    if subtract_rand:
-        if minrad is None:
-            raise ValueError("send minrad if you want subtraction of randoms")
-        dsig_rand, dsigerr_rand = calc_rand_to_subtract(data, rand, minrad)
-    else:
-        dsig_rand= zeros((nbin,nrad))
-        dsigerr_rand = zeros((nbin,nrad))
-
-
     ssh = calc_ssh(data)
-    clust_corr, clust_corr_err = calc_clustering_correction(data, rand)
 
-    out = add_corrections(data, ssh, 
-                          clust_corr, clust_corr_err, 
-                          rand['wsum_mean'], rand['wsum_mean_err'],
-                          dsig_rand, dsigerr_rand)
+    if rand is None:
+        out = add_ssh_correction(data, ssh)
+    else:
+        if rand.size != data.size:
+            raise ValueError("random size (%d) not same size as "
+                             "data (%d)" % (rand.size, data.size))
+
+        if subtract_rand:
+            if minrad is None:
+                raise ValueError("send minrad if you want subtraction of randoms")
+            dsig_rand, dsigerr_rand = calc_rand_to_subtract(data, rand, minrad)
+        else:
+            dsig_rand= zeros((nbin,nrad))
+            dsigerr_rand = zeros((nbin,nrad))
+
+
+        clust_corr, clust_corr_err = calc_clustering_correction(data, rand)
+
+        out = add_corrections(data, ssh, 
+                              clust_corr, clust_corr_err, 
+                              rand['wsum_mean'], rand['wsum_mean_err'],
+                              dsig_rand, dsigerr_rand)
 
     return out
+
+def add_ssh_correction(datain,ssh):
+    nrad = datain['r'][0].size
+    data = eu.numpy_util.add_fields(datain,
+                                    [('dsig_orig','f8',nrad),
+                                     ('dsigerr_orig','f8',nrad),
+                                     ('dsigcov_orig','f8',(nrad,nrad))])
+
+    data['dsig_orig'] = datain['dsig']
+    data['dsigerr_orig'] = datain['dsigerr']
+    data['dsigcov_orig'] = datain['dsigcov']
+
+    # note copying over ssh that is there already
+    data['ssh']            = ssh
+
+    data['dsig'] /= ssh
+    data['dsigerr'] /= ssh
+
+    return data
 
 def add_corrections(datain, 
                     ssh, 

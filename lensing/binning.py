@@ -45,6 +45,8 @@ def instantiate_binner(type, nbin):
         b = N200Binner(nbin)
     elif type == 'mz':
         b = MZBinner(nbin)
+    elif type == 'z':
+        b = ZBinner(nbin)
     else:
         raise ValueError("unsupported binner type: '%s'" % type)
     return b
@@ -68,7 +70,7 @@ class BinnerBase(dict):
         """
 
         name=self.name()
-        d = lensing.files.sample_read('collated',run, fs='hdfs')
+        d = lensing.files.sample_read('collated',run,fs='hdfs')
         res = self.bin(d)
 
         outdir = lensing.files.sample_dir('binned',run,name=name)
@@ -91,7 +93,7 @@ class BinnerBase(dict):
 
         return self.lowlim, self.highlim
 
-    def bin_label(binnum):
+    def bin_label(self, binnum):
         raise RuntimeError("override this method")
 
     def plot_dsig_osig_byrun_bin(self, run, type, binnum, **keys):
@@ -431,6 +433,79 @@ class BinnerBase(dict):
         converter.convert(epsfile, dpi=150, verbose=True)
 
 
+
+
+
+class ZBinner(BinnerBase):
+    range_type='()'
+
+    def name(self):
+        return 'z-%02d' % self['nbin']
+
+    def set_bin_ranges(self):
+        if self['nbin'] == 4:
+            lowlim  = [0.02,0.05, 0.098, 0.148]
+            highlim = [0.05,0.098,0.148, 0.20]
+
+        self.lowlim = lowlim
+        self.highlim = highlim
+
+    def bin(self, data):
+        """
+        call also call base method bin_byrun
+        """
+        from math import ceil
+
+        low, high = self.bin_ranges()
+
+        nrbin = data['rsum'][0].size
+        bs = lensbin_struct(nrbin, bintags=['z','radius'], n=self['nbin'])
+
+        i=0
+        for l,h in zip(low,high):
+            zrange = [l,h]
+
+            print("l,h:",l,h)
+            print('%0.2f < z < %0.2f' % tuple(zrange))
+
+            print("    reducing and jackknifing by lens")
+            comb,w = reduce_from_ranges(data,
+                                        'z',
+                                        zrange, 
+                                        range_type=self.range_type,
+                                        getind=True)
+        
+            print("    found",w.size,"in bin")
+            # first copy all common tags
+            for n in comb.dtype.names:
+                bs[n][i] = comb[n][0]
+
+            # now the things we are averaging by lens weight
+            mn,err,sdev = lens_wmom(data,'z',ind=w, sdev=True)
+            bs['z_mean'][i] = mn
+            bs['z_err'][i] = err
+            bs['z_sdev'][i] = sdev
+            bs['z_range'][i] = data['z'][w].min(), data['z'][w].max()
+
+            mn,err,sdev = lens_wmom(data,'radius',ind=w, sdev=True)
+            bs['radius_mean'][i] = mn
+            bs['radius_err'][i] = err
+            bs['radius_sdev'][i] = sdev
+            bs['radius_range'][i] = zrange
+            bs['radius_minmax'][i] = \
+                data['radius'][w].min(), data['radius'][w].max()
+
+            # fix up last one
+            #if i == (bs.size-1):
+            #    bs['lambda_range'][i,1] = ceil(bs['lambda_minmax'][i,1])
+
+            i+=1
+
+        return bs
+
+    def bin_label(self, binnum):
+        zrange = self.bin_ranges(binnum)
+        return r'$%0.2f < z < %0.2f$' % zrange
 
 
 def define_lambda_bins(sample, lastmin=58.):
