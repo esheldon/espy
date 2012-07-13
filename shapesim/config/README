@@ -172,6 +172,9 @@ gmix-fit
                     edg02r03 19 0.80    matched    todo
                     edg02r04  0 0.05    matched    todo
 
+    edg03r02,edg04r01,edg05r01,edg06r01,edg07r01,edg08r01 
+    elliptical psf and shear increasing
+    from 0 to 0.05
         edg03
             elliptical double gaussian psf, 
                 e1=0.05,e2=0.05
@@ -194,25 +197,51 @@ gmix-fit
             gmix
                 by s/n
                     run      ie    e  s2n_method   notes
-                    edg04r01  7 0.33    matched    todo
+                    edg04r01  7 0.33    matched    done
 
         edg05
             elliptical double gaussian psf, 
                 e1=0.05,e2=0.05
                 g1=0.02,g2=-0.02
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg05r01  7 0.33    matched    done
         edg06
             elliptical double gaussian psf, 
                 e1=0.05,e2=0.05
                 g1=0.03,g2=-0.03
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg06r01  7 0.33    matched    done
         edg07
             elliptical double gaussian psf, 
                 e1=0.05,e2=0.05
                 g1=0.04,g2=-0.04
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg07r01  7 0.33    matched    done
 
         edg08
             elliptical double gaussian psf, 
                 e1=0.05,e2=0.05
                 g1=0.05,g2=-0.05
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg08r01  7 0.33    matched    done
+
+
+    *round* psf and shear increasing.  See above for edg02
+    edg09,edg02,edg10,edg11,edg12,edg13
+      .00   .01   .02   .03   .04   .05
+
+        edg09
+            round double gaussian psf
+            g1=0.00,g2=-0.00
+
 
         dt02
             - ring, shear g1=0.01, g2=0, 100 in ring

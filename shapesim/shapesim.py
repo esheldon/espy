@@ -1118,8 +1118,8 @@ def accumulate_outputs(data):
     dt =data[0].dtype.descr
     dt += [('shear1cum','f8'), # sums so we can do cumulative
            ('shear2cum','f8'),
-           ('shear1cum_alt_err','f8'),
-           ('shear2cum_alt_err','f8')]
+           ('shear1cum_err','f8'),
+           ('shear2cum_err','f8')]
     if not straight_avg:
         dt += [('Rshearcum','f8')]
     out=[]
@@ -1165,8 +1165,8 @@ def accumulate_outputs(data):
         if not straight_avg:
             # this only works for ring test with no shape noise!
             # might want 1/Rshear here
-            d['shear1cum_alt_err'] = 0.5*sqrt(1/d['e1err2invsum'])
-            d['shear2cum_alt_err'] = 0.5*sqrt(1/d['e2err2invsum'])
+            d['shear1cum_err'] = 0.5*sqrt(1/d['e1err2invsum'])
+            d['shear2cum_err'] = 0.5*sqrt(1/d['e2err2invsum'])
 
         out.append(d)
 
@@ -1195,10 +1195,8 @@ def average_outputs(data, straight_avg=False):
                    ('nsum','i8'),
                    ('shear1','f8'),
                    ('shear1err','f8'),  # average in particular bin
-                   ('shear1err_alt','f8'),
                    ('shear2','f8'),
                    ('shear2err','f8'),
-                   ('shear2err_alt','f8'),
                    ('Rshear_true','f8'),('Rshear','f8')]
     else:
         raise ValueError('DEAL WITH e1meas missing')
@@ -1240,31 +1238,25 @@ def average_outputs(data, straight_avg=False):
             g1 = 0.5*me1/R
             g2 = 0.5*me2/R
 
-            mesq_err = esq.std()/sqrt(num)
-            e1err = e1.std()/sqrt(num)
-            e2err = e2.std()/sqrt(num)
-            
-            g1err = g1*sqrt( (mesq_err/mesq)**2 + (e1err/me1)**2 )
-            g2err = g2*sqrt( (mesq_err/mesq)**2 + (e1err/me2)**2 )
-
-            # for shear error, use variance relative to true sine
+            # we use the scatter from true, becuase with ring tests
             # we don't have shape noise
-            #e1err2invsum = e1.size/( (e1-edata['e1true']).var() )
-            #e2err2invsum = e2.size/( (e2-edata['e2true']).var() )
-            #e1err2invsum = 1/( (e1-edata['e1true']).var() )
-            #e2err2invsum = 1/( (e2-edata['e2true']).var() )
-            #e1scatt = (e1-edata['e1true']).var()
-            #e2scatt = (e2-edata['e2true']).var()
-            #e1err2invsum = ( 1/(e1scatt + edata['pars_err'][:,2]**2) ).sum()
-            #e2err2invsum = ( 1/(e2scatt + edata['pars_err'][:,3]**2) ).sum()
-            e1err2invsum = ( 1/edata['pars_err'][:,2]**2 ).sum()
-            e2err2invsum = ( 1/edata['pars_err'][:,3]**2 ).sum()
-            #e1err2invsum = 1/e1scatt
-            #e2err2invsum = 1/e2scatt
+            e1scatt = (e1-edata['e1true']).var()
+            e2scatt = (e2-edata['e2true']).var()
 
-            g1err_alt = 0.5*sqrt(1/e1err2invsum)
-            g2err_alt = 0.5*sqrt(1/e2err2invsum)
-            #print 'g1err_alt:',g1err_alt
+            e1err2inv = num/e1scatt
+            e2err2inv = num/e2scatt
+
+            #mesq_err = esq.std()/sqrt(num)
+            e1err = sqrt(1/e1err2inv)
+            e2err = sqrt(1/e2err2inv)
+
+            g1err = 0.5*e1err
+            g2err = 0.5*e2err
+            
+            #g1err = g1*sqrt( (mesq_err/mesq)**2 + (e1err/me1)**2 )
+            #g2err = g2*sqrt( (mesq_err/mesq)**2 + (e1err/me2)**2 )
+
+
 
             d['Rshear'][i] = R
             d['Rshear_true'][i] = (1-0.5*edata['etrue']**2).mean()
@@ -1272,13 +1264,11 @@ def average_outputs(data, straight_avg=False):
             d['shear2'][i] = g2
             d['shear1err'][i] = g1err
             d['shear2err'][i] = g2err
-            d['shear1err_alt'][i] = g1err_alt
-            d['shear2err_alt'][i] = g2err_alt
 
             d['e1sum'][i] = e1sum
             d['e2sum'][i] = e2sum
-            d['e1err2invsum'][i] = e1err2invsum
-            d['e2err2invsum'][i] = e2err2invsum
+            d['e1err2invsum'][i] = e1err2inv
+            d['e2err2invsum'][i] = e2err2inv
             d['esqsum'][i] = esqsum
             d['nsum'][i] = num
 

@@ -90,29 +90,42 @@ if yrng is not None:
         raise ValueError("expected yrange min,max")
     yrng = [float(yr) for yr in yrng]
 
-c=shapesim.read_config(run)
-runtype=c.get('runtype','byellip')
 
-p=shapesim.plotting.SimPlotter(run, maketitle=options.maketitle,
-                               s2min=s2min, skip1=skip1, skip2=skip2)
-
-if runtype == 'byellip':
-    if options.etot:
-        yrng2 = options.yrange2
-        if yrng2 is not None:
-            yrng2 = yrng2.split(',')
-            yrng2 = [float(yrng2[0]),float(yrng2[1])]
-        p.plot_ediff_Rshear_vs_e(yrng=yrng, yrng2=yrng2, show=show,
-                                 title=options.title)
-    else:
-        p.plot_shear_vs_e(yrng=yrng,
-                          show=show,type=options.type,
-                          title=options.title,
-                          docum=options.cum,
-                          doavg=options.avg)
+if run[0:3] == 'set':
+    if set == 'set-edg1':
+        runs = ['gmix-fit-edg03r02',
+                'gmix-fit-edg04r01',
+                'gmix-fit-edg05r01',
+                'gmix-fit-edg06r01',
+                'gmix-fit-edg07r01',
+                'gmix-fit-edg08r01']
+    p=shapesim.plotting.SimPlotterVsShear(runs, maketitle=options.maketitle,
+                                          s2min=s2min, skip1=skip1, skip2=skip2,
+                                          docum=options.cum)
+    p.doplots()
 else:
-    p.plots_shear_vs_s2n(yrng=yrng, xrng=xrng, type=options.type, 
-                         doavg=options.avg,
-                         docum=options.cum,
-                         title=options.title,
-                         show=show)
+
+    c=shapesim.read_config(run)
+    runtype=c.get('runtype','byellip')
+    p=shapesim.plotting.SimPlotter(run, maketitle=options.maketitle,
+                                   s2min=s2min, skip1=skip1, skip2=skip2,
+                                   docum=options.cum)
+
+    if runtype == 'byellip':
+        if options.etot:
+            yrng2 = options.yrange2
+            if yrng2 is not None:
+                yrng2 = yrng2.split(',')
+                yrng2 = [float(yrng2[0]),float(yrng2[1])]
+            p.plot_ediff_Rshear_vs_e(yrng=yrng, yrng2=yrng2, show=show,
+                                     title=options.title)
+        else:
+            p.plot_shear_vs_e(yrng=yrng,
+                              show=show,type=options.type,
+                              title=options.title,
+                              doavg=options.avg)
+    else:
+        p.plots_shear_vs_s2n(yrng=yrng, xrng=xrng, type=options.type, 
+                             doavg=options.avg,
+                             title=options.title,
+                             show=show)
