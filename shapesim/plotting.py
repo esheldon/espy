@@ -146,12 +146,17 @@ class SimPlotter(dict):
                     pts2_0 -= shear_true.g2
                 #err1_0 = [pts1_0.std()]*pts1_0.size
                 #err2_0 = [pts2_0.std()]*pts2_0.size
-                n=pts1_0.size
-                start=1
-                err1_0 = pts1_0[start:].std()
-                err2_0 = pts2_0[start:].std()
-                err1_0 = [min(err1_0,err2_0)]*n
-                err2_0 = err1_0
+
+                #n=pts1_0.size
+                #start=1
+                #err1_0 = pts1_0[start:].std()
+                #err2_0 = pts2_0[start:].std()
+                #err1_0 = [min(err1_0,err2_0)]*n
+                #err2_0 = err1_0
+
+                err1_0 = st['shear1cum_alt_err']
+                err2_0 = st['shear2cum_alt_err']
+                print err1_0
           
             if type == 'diff':
                 yvals1 = st[tag1] - shear_true.g1

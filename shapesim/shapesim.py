@@ -1134,9 +1134,6 @@ def accumulate_outputs(data):
         d = zeros(num, dtype=dt)
         eu.numpy_util.copy_fields(s2data, d)
 
-        wt1 = 1./d['shear1err']**2
-        wt2 = 1./d['shear2err']**2
-
         if i > 0:
             # add previous
             if straight_avg:
@@ -1147,8 +1144,10 @@ def accumulate_outputs(data):
                 d['e2sum']  += dold['e2sum']
                 d['esqsum'] += dold['esqsum']
 
-                d['e1err2invsum']  += dold['e1err2invsum']
-                d['e2err2invsum']  += dold['e2err2invsum']
+                #print 'this:',d['e1err2invsum']
+                #print 'adding:',dold['e1err2invsum']
+                d['e1err2invsum'] += dold['e1err2invsum']
+                d['e2err2invsum'] += dold['e2err2invsum']
 
 
             d['nsum']   += dold['nsum']
@@ -1162,15 +1161,15 @@ def accumulate_outputs(data):
             d['shear1cum'] = 0.5*d['e1sum']/d['nsum']/d['Rshearcum']
             d['shear2cum'] = 0.5*d['e2sum']/d['nsum']/d['Rshearcum']
 
+        dold = d.copy()
+        if not straight_avg:
+            # this only works for ring test with no shape noise!
+            # might want 1/Rshear here
+            d['shear1cum_alt_err'] = 0.5*sqrt(1/d['e1err2invsum'])
+            d['shear2cum_alt_err'] = 0.5*sqrt(1/d['e2err2invsum'])
 
         out.append(d)
-        dold = d.copy()
 
-    if not straight_avg:
-        # this only works for ring test with no shape noise!
-        # might want 1/Rshear here
-        d['shear1cum_alt_err'] = 0.5*sqrt(1/d['e1err2invsum'])
-        d['shear2cum_alt_err'] = 0.5*sqrt(1/d['e2err2invsum'])
     return out
 
 def average_outputs(data, straight_avg=False):
@@ -1184,21 +1183,28 @@ def average_outputs(data, straight_avg=False):
     if 'e1_meas' in data[0].dtype.names:
         if straight_avg:
             # deswl we can just do straight_avg sums on gamma
-            dt += [('gamma1sum','f8'),
+            dt_extra = [('gamma1sum','f8'),
                    ('gamma2sum','f8'),
                    ('nsum','i8')]
         else:
-            dt += [('e1sum','f8'), # sums so we can do cumulative
+            dt_extra = [('e1sum','f8'), # sums so we can do cumulative
                    ('e2sum','f8'),
                    ('e1err2invsum','f8'),
                    ('e2err2invsum','f8'),
                    ('esqsum','f8'),
                    ('nsum','i8'),
-                   ('shear1','f8'),('shear1err','f8'),  # average in particular bin
-                   ('shear2','f8'),('shear2err','f8'),
+                   ('shear1','f8'),
+                   ('shear1err','f8'),  # average in particular bin
+                   ('shear1err_alt','f8'),
+                   ('shear2','f8'),
+                   ('shear2err','f8'),
+                   ('shear2err_alt','f8'),
                    ('Rshear_true','f8'),('Rshear','f8')]
     else:
         raise ValueError('DEAL WITH e1meas missing')
+
+    dt += dt_extra
+    name_extra = [dd[0] for dd in dt_extra]
 
     d=zeros(len(data),dtype=dt)
     for i,edata in enumerate(data): # over different ellipticities
@@ -1210,6 +1216,12 @@ def average_outputs(data, straight_avg=False):
             g1 = edata['gamma1_meas']
             g2 = edata['gamma2_meas']
             num = g1.size
+
+            d['shear1'][i] = g1
+            d['shear2'][i] = g2
+            d['gamma1sum'][i] = g1.sum()
+            d['gamma2sum'][i] = g2.sum()
+            d['nsum'][i] = num
         else:
             e1 = edata['e1_meas']
             e2 = edata['e2_meas']
@@ -1235,38 +1247,43 @@ def average_outputs(data, straight_avg=False):
             g1err = g1*sqrt( (mesq_err/mesq)**2 + (e1err/me1)**2 )
             g2err = g2*sqrt( (mesq_err/mesq)**2 + (e1err/me2)**2 )
 
-            e1err2invsum = ( 1./edata['pars_err'][:,2]**2 ).sum()
-            e2err2invsum = ( 1./edata['pars_err'][:,3]**2 ).sum()
+            # for shear error, use variance relative to true sine
+            # we don't have shape noise
+            #e1err2invsum = e1.size/( (e1-edata['e1true']).var() )
+            #e2err2invsum = e2.size/( (e2-edata['e2true']).var() )
+            #e1err2invsum = 1/( (e1-edata['e1true']).var() )
+            #e2err2invsum = 1/( (e2-edata['e2true']).var() )
+            #e1scatt = (e1-edata['e1true']).var()
+            #e2scatt = (e2-edata['e2true']).var()
+            #e1err2invsum = ( 1/(e1scatt + edata['pars_err'][:,2]**2) ).sum()
+            #e2err2invsum = ( 1/(e2scatt + edata['pars_err'][:,3]**2) ).sum()
+            e1err2invsum = ( 1/edata['pars_err'][:,2]**2 ).sum()
+            e2err2invsum = ( 1/edata['pars_err'][:,3]**2 ).sum()
+            #e1err2invsum = 1/e1scatt
+            #e2err2invsum = 1/e2scatt
+
+            g1err_alt = 0.5*sqrt(1/e1err2invsum)
+            g2err_alt = 0.5*sqrt(1/e2err2invsum)
+            #print 'g1err_alt:',g1err_alt
+
+            d['Rshear'][i] = R
+            d['Rshear_true'][i] = (1-0.5*edata['etrue']**2).mean()
+            d['shear1'][i] = g1
+            d['shear2'][i] = g2
+            d['shear1err'][i] = g1err
+            d['shear2err'][i] = g2err
+            d['shear1err_alt'][i] = g1err_alt
+            d['shear2err_alt'][i] = g2err_alt
+
+            d['e1sum'][i] = e1sum
+            d['e2sum'][i] = e2sum
+            d['e1err2invsum'][i] = e1err2invsum
+            d['e2err2invsum'][i] = e2err2invsum
+            d['esqsum'][i] = esqsum
+            d['nsum'][i] = num
+
         for n in d.dtype.names:
-            if n == 'Rshear':
-                d['Rshear'][i] = R
-            elif n == 'Rshear_true':
-                d['Rshear_true'][i] = (1-0.5*edata['etrue']**2).mean()
-            elif n == 'shear1':
-                d['shear1'][i] = g1
-            elif n == 'shear2':
-                d['shear2'][i] = g2
-            elif n == 'shear1err':
-                d['shear1err'][i] = g1err
-            elif n == 'shear2err':
-                d['shear2err'][i] = g2err
-            elif n == 'e1sum':
-                d['e1sum'][i] = e1sum
-            elif n == 'e2sum':
-                d['e2sum'][i] = e2sum
-            elif n == 'e1err2invsum':
-                d['e1err2invsum'][i] = e1err2invsum
-            elif n == 'e2err2invsum':
-                d['e2err2invsum'][i] = e2err2invsum
-            elif n == 'esqsum':
-                d['esqsum'][i] = esqsum
-            elif n == 'nsum':
-                d['nsum'][i] = num
-            elif n == 'gamma1sum':
-                d['gamma1sum'][i] = g1.sum()
-            elif n == 'gamma2sum':
-                d['gamma2sum'][i] = g2.sum()
-            else:
+            if n not in name_extra:
                 if edata[n].dtype.names is None and len(edata[n].shape) == 1:
                     #d[n][i] = median(edata[n])
                     d[n][i] = edata[n].mean()
