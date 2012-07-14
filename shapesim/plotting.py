@@ -44,7 +44,8 @@ class SimPlotterVsShear(dict):
         import pcolors
 
         biggles.configure("screen","width",1100)
-        biggles.configure("default","fontsize_min",1)
+        biggles.configure("default","fontsize_min",0.9)
+        #biggles.configure('_HalfAxis','ticklabels_style',{'fontsize':2.0})
         nrun=len(self.runs)
         
         nrow=4
@@ -80,7 +81,15 @@ class SimPlotterVsShear(dict):
             ('g2meas','f8',nrun),
             ('g2err','f8',nrun)]
         
-        for i_s2n in xrange(n_s2n):
+        #for i_s2n in xrange(n_s2n):
+
+        fcurves=[]
+        for i_s2n in xrange(1,n_s2n):
+            ti_s2n=i_s2n-1
+            irow = ti_s2n / ncol
+            icol = ti_s2n % ncol
+            #irow = i_s2n / ncol
+            #icol = i_s2n % ncol
             td = self.plotters[0].read_data()
             s2n = td[0][s2n_name][i_s2n]
 
@@ -90,9 +99,13 @@ class SimPlotterVsShear(dict):
                 shear = plotter.get_shear_true()
 
                 # redundant
-
+                
+                s2vals=[]
                 for i_is2 in xrange(n_is2):
                     is2 = is2list[i_is2]
+
+                    s2,ellip = shapesim.get_s2_e(plotter.simc, is2, 0)
+                    s2vals.append(s2)
 
                     data['g1true'][i_is2,irun] = shear.g1
                     data['g2true'][i_is2,irun] = shear.g2
@@ -103,28 +116,74 @@ class SimPlotterVsShear(dict):
 
 
             for i_is2 in xrange(n_is2):
+                #s2 = data['s2'][i_is2,:].mean()
+                s2=s2vals[i_is2]
+
                 g1true = data['g1true'][i_is2,:]
                 diff1  = data['g1meas'][i_is2,:] - g1true
                 p1 = biggles.Points(g1true,diff1,
                                     type='filled circle', color=colors[i_is2])
                 c1 = biggles.Curve(g1true,diff1,color=colors[i_is2])
-                arr[i_s2n / ncol, i_s2n % ncol].add(p1,c1) 
+                if i_s2n == (n_s2n-1):
+                    cfake = biggles.Curve(g1true-1000,diff1,color=colors[i_is2])
+                    label = '%.2f' % s2
+                    if self['docum']:
+                        label = '< '+label
+                    cfake.label = label
+                    fcurves.append(cfake)
+                arr[irow,icol].add(p1,c1) 
 
                 if i_is2 == 0:
                     g1err  = data['g1err'][i_is2,:]
                     g2err  = data['g2err'][i_is2,:]
                     perr1 = biggles.SymmetricErrorBarsY(g1true,diff1,g1err,
                                                         color=colors[i_is2])
-                    arr[i_s2n / ncol, i_s2n % ncol].add(perr1)
+                    arr[irow,icol].add(perr1)
 
                     z1=biggles.Curve([data['g1true'].min(),data['g1true'].max()],
                                      [0,0])
-                    arr[i_s2n / ncol, i_s2n % ncol].add(z1)
+                    arr[irow,icol].add(z1)
 
             s2nlab = biggles.PlotLabel(0.9,0.9,'S/N: %d' % s2n,
                                      fontsize=2.5,halign='right')
-            arr[i_s2n / ncol, i_s2n % ncol].add(s2nlab)
+            arr[irow,icol].add(s2nlab)
 
+        fsize=2
+        key=biggles.PlotKey(0.9,0.9,fcurves,halign='right',fontsize=fsize)
+        arr[nrow-1,ncol-1].add(key, *fcurves)
+
+        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$'
+        klab = biggles.PlotLabel(0.55,0.9,klabtext,
+                                 fontsize=fsize,halign='right')
+        arr[nrow-1,ncol-1].add(klab)
+
+        simc = self.plotters[0].simc
+        objmodel = simc['objmodel']
+        psfmodel = simc['psfmodel']
+        plab='%s %s' % (objmodel,psfmodel)
+        l = biggles.PlotLabel(0.9,0.1, plab, halign='right')
+        arr[nrow-1,ncol-1].add(l)
+
+        if simc['psfmodel'] == 'turb':
+            siglab = r'$FWHM: %.1f$ pix' % simc['psf_fwhm']
+        else:
+            psf_sigma = simc['psf_sigma']
+            siglab = r'$\sigma: %.1f$ pix' % psf_sigma
+        siglab += ' '+self.plotters[0].psf_estring
+        elab = r'$ e_{gal}^{tot}: %.2f$' % td[0]['etrue'].mean()
+
+        sl = biggles.PlotLabel(0.075,0.3, siglab, halign='left', 
+                               fontsize=2.5)
+        el = biggles.PlotLabel(0.075,0.1, elab, halign='left', 
+                               fontsize=2.5)
+        arr[nrow-1,ncol-1].add(sl,el)
+
+
+
+        yrng=self.get('yrange',None)
+        if yrng:
+            arr.yrange = yrng
+        arr.xrange=[-0.005,0.059]
         arr.uniform_limits=1
         arr.xlabel = r'$\gamma_{true}$'
         arr.ylabel = r'$\Delta \gamma$'

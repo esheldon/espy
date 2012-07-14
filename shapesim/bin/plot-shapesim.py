@@ -107,6 +107,7 @@ if run[0:3] == 'set':
         raise ValueError("don't know about set-edg01")
     p=shapesim.plotting.SimPlotterVsShear(runs, maketitle=options.maketitle,
                                           s2min=s2min, skip1=skip1, skip2=skip2,
+                                          yrange=yrng,
                                           docum=options.cum)
     p.doplots()
 else:
