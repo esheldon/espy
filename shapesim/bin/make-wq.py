@@ -18,6 +18,9 @@ parser.add_option('--bynode',action='store_true',
 parser.add_option('--ncores',default=None,
                   help='select this many cores on single nodes')
 
+parser.add_option('--bytrial',action='store_true',
+                  help=('Write a wq script for each trial '
+                        'separately (with possible repeats)'))
 _wqtemplate="""
 command: |
     source ~/.bashrc
@@ -32,6 +35,21 @@ command: |
 job_name: %(job_name)s
 priority: %(pri)s\n"""
 
+_wqtemplate_bytrial="""
+command: |
+    source ~/.bashrc
+    module unload espy && module load espy/work
+    module unload fimage && module load fimage/work
+    module unload wl && module load wl/work
+    module unload gmix_image && module load gmix_image/work
+    python $ESPY_DIR/shapesim/bin/run-shapesim.py %(run)s %(is2)d %(ie)d %(itrial)d
+
+%(extra)s
+%(groups)s
+job_name: %(job_name)s
+priority: %(pri)s\n"""
+
+
 def main():
     options,args = parser.parse_args(sys.argv[1:])
 
@@ -43,19 +61,23 @@ def main():
 
     c = shapesim.read_config(run)
     cs = shapesim.read_config(c['sim'])
+
+    if options.bytrial:
+        orient=cs.get('orient','rand')
+        if orient == 'ring':
+            ntrial = cs['nring']
+        else:
+            ntrial = c['ntrial']
+
     groups=options.groups
     if groups is None:
         groups=''
     else:
         groups = 'group: [%s]' % groups
 
-    wqd = shapesim.get_wq_dir(run)
+    wqd = shapesim.get_wq_dir(run, bytrial=options.bytrial)
     if not os.path.exists(wqd):
         os.makedirs(wqd)
-    # make this to avoid race conditions later
-    #od = shapesim.get_output_dir(run)
-    #if not os.path.exists(od):
-    #    os.makedirs(od)
 
     extra=''
     if options.bynode:
@@ -69,18 +91,36 @@ def main():
         for ie in xrange(cs['nume']):
             job_name='%s-%i-%i' % (run,is2,ie)
 
-            wqurl = shapesim.get_wq_url(run,is2,ie)
+            if options.bytrial:
+                for itrial in xrange(ntrial):
+                    wqurl = shapesim.get_wq_url(run,is2,ie,itrial=itrial)
+                    wlog("writing wq script:",wqurl)
+                    with open(wqurl,'w') as fobj:
+                        d={'job_name':job_name,
+                           'run':run, 
+                           'is2':is2,
+                           'ie':ie,
+                           'itrial':itrial,
+                           'groups':groups,
+                           'extra':extra,
+                           'pri':options.priority}
+                        wqscript=_wqtemplate_bytrial % d
+                        fobj.write(wqscript)
 
-            wlog("writing wq script:",wqurl)
-            with open(wqurl,'w') as fobj:
-                wqscript=_wqtemplate % {'job_name':job_name,
-                                        'run':run, 
-                                        'is2':is2,
-                                        'ie':ie,
-                                        'groups':groups,
-                                        'extra':extra,
-                                        'pri':options.priority}
-                fobj.write(wqscript)
+
+            else:
+                wqurl = shapesim.get_wq_url(run,is2,ie)
+
+                wlog("writing wq script:",wqurl)
+                with open(wqurl,'w') as fobj:
+                    wqscript=_wqtemplate % {'job_name':job_name,
+                                            'run':run, 
+                                            'is2':is2,
+                                            'ie':ie,
+                                            'groups':groups,
+                                            'extra':extra,
+                                            'pri':options.priority}
+                    fobj.write(wqscript)
 
 
 main()

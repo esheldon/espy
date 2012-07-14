@@ -103,6 +103,14 @@ if run[0:3] == 'set':
                 'gmix-fit-edg06r01',
                 'gmix-fit-edg07r01',
                 'gmix-fit-edg08r01']
+    elif run == 'set-edg02':
+        runs = ['gmix-fit-edg09r01',
+                'gmix-fit-edg02r02',
+                'gmix-fit-edg10r01',
+                'gmix-fit-edg11r01',
+                'gmix-fit-edg12r01'] #,
+                #'gmix-fit-edg13r01']
+
     else:
         raise ValueError("don't know about set-edg01")
     p=shapesim.plotting.SimPlotterVsShear(runs, maketitle=options.maketitle,

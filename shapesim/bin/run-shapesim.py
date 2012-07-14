@@ -1,5 +1,5 @@
 """
-    %prog run is2 ie/is2n
+    %prog run is2 ie/is2n [itrial]
 
 """
 
@@ -19,6 +19,10 @@ def main():
         parser.print_help()
         sys.exit(45)
 
+    itrial=None
+    if len(args) > 3:
+        itrial = int(args[3])
+
     run=args[0]
     is2 = int(args[1])
     ie_or_is2n = int(args[2])
@@ -32,7 +36,7 @@ def main():
     else:
         raise ValueError("Don't know about run '%s'" % run)
 
-    sim.process_trials(is2, ie_or_is2n)
+    sim.process_trials(is2, ie_or_is2n, itrial=itrial)
 
 
 main()

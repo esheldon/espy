@@ -9,11 +9,11 @@ gmix-fit
 
         - I'm seeing some additive bias for edg03 shear=0.  Do a couple more
           sims with different g1 and map it all out?
-             - edg04 g1=0.01,g2=0
-             - edg05 g1=0.02,g2=0
-             - edg06 g1=0.03,g2=0
-             - edg07 g1=0.04,g2=0
-             - edg08 g1=0.05,g2=0
+             - edg04 g1=0.01,g2=?
+             - edg05 g1=0.02,g2=?
+             - edg06 g1=0.03,g2=?
+             - edg07 g1=0.04,g2=?
+             - edg08 g1=0.05,g2=?
 
         sent around
             gg04
@@ -258,18 +258,18 @@ gmix-fit
 
                 by s/n
                     run      ie    e  s2n_method   notes
-                    dt02r02   7 0.33    matched    running
-                    dt02r03  19 0.80    matched    running
+                    dt02r02   7 0.33    matched    running (S/N=5 died)
+                    dt02r03  19 0.80    matched    running (S/N=5 died)
  
             deswl
                 byellip
                     run        s/n   nrepeat  s2n_method      notes
-                    dt02r02    1.e8     1      matched        running
+                    dt02r02    1.e8     1      matched        (died)
                     
                 by s/n
                     run      ie    e  s2n_method   notes
-                    dt02r01  19 0.80   matched     running
-                    dt02r03   7 0.33   matched     running
+                    dt02r01  19 0.80   matched     running (died)
+                    dt02r03   7 0.33   matched     running (died)
 
     low noise runs
         et01r04

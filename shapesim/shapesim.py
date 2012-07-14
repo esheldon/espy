@@ -417,6 +417,10 @@ class BaseSim(dict):
 
         self['verbose'] = self.get('verbose',False)
 
+        simpars=self.get('simpars',{})
+        simpars['verbose'] = self['verbose']
+        self.shapesim = ShapeSim(self['sim'], **simpars)
+
         wlog("run self:")
         pprint.pprint(self, stream=stderr)
 
@@ -451,84 +455,119 @@ class BaseSim(dict):
         raise RuntimeError("Override the .out_dtype() method")
 
 
-    def process_trials(self, is2, ie_or_is2n):
+    def process_trials(self, is2, ie_or_is2n, itrial=None):
         runtype=self.get('runtype','byellip')
         if runtype == 'byellip':
+            if itrial is not None:
+                raise ValueError("implement single trial for byellip")
             self.process_trials_by_e(is2, ie_or_is2n)
         else:
-            self.process_trials_by_s2n(is2, ie_or_is2n)
+            if itrial is not None:
+                self.process_trial_by_s2n(is2, ie_or_is2n, itrial,
+                                          dowrite=True, dolog=True)
+            else:
+                self.process_trials_by_s2n(is2, ie_or_is2n)
+
+    def process_trial_by_s2n(self, is2, is2n, itheta, 
+                             dowrite=False, 
+                             dolog=False):
+        """
+        Process a singe element in the ring, with nrepeat
+        possible noise realizations
+        """
+        # fixed ie
+        ie = self['ie']
+        s2,ellip = get_s2_e(self.simc, is2, ie)
+        s2n_psf = self['s2n_psf']
+        s2n = get_s2n(self, is2n)
+        s2n_fac = self['s2n_fac']
+        s2n_method = self['s2n_method']
+        s2ncalc_fluxfrac =self.get('s2ncalc_fluxfrac',None)
+
+        nrepeat = get_s2n_nrepeat(s2n, fac=s2n_fac)
+
+        # do this once and get noise realizations.
+        ci_nonoise = self.get_a_trial(self.shapesim, is2, ie, 
+                                      itheta=itheta)
+
+        if dolog:
+            wlog("ring theta: %s/%s" % (itheta+1,self.simc['nring']))
+            wlog('ellip:',ellip,'s2n:',s2n,
+                 's2n_psf:',s2n_psf,'s2n_method:',s2n_method)
+
+        out = numpy.zeros(nrepeat, dtype=self.out_dtype())
+        for irepeat in xrange(nrepeat):
+            
+            if self['verbose']:
+                stderr.write('-'*70 + '\n')
+            # we always write this, although slower when not verbose
+            if (nrepeat > 1) and (( (irepeat+1) % 10) == 0 or irepeat == 0):
+                stderr.write("  %s/%s repeat done\n" % ((irepeat+1),nrepeat))
+
+            iter=0
+            while iter < self['itmax']:
+
+                ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf,
+                                         s2n_method=s2n_method,
+                                         fluxfrac=s2ncalc_fluxfrac)
+                if self['verbose']:
+                    wlog("s2n_uw:",ci['s2n_uw'],"s2n_uw_psf:",ci['s2n_uw_psf'])
+                    if iter == 0: stderr.write("%s " % str(ci.psf.shape))
+                res = self.run(ci)
+
+                if res['flags'] == 0:
+                    st = self.copy_output(s2, ellip, s2n, ci, res)
+                    out[irepeat] = st
+                    break
+                else:
+                    iter += 1
+
+            if iter == self['itmax']:
+                raise ValueError("itmax %d reached" % self['itmax'])
+        if self['verbose']:
+            stderr.write("niter: %d\n" % (iter+1))
+
+        if dowrite:
+            write_output(self['run'], is2, is2n, out, itrial=itheta,
+                         fs=self.fs)
+        return out
 
     def process_trials_by_s2n(self, is2, is2n):
         """
-        This only works for ring tests
+        This only works for ring tests, processing
+        all in the ring.  You can call the single one too
         """
         orient=self.simc.get('orient','rand')
         if orient != 'ring':
             raise ValueError("by s2n only works for ring tests")
 
-        # fixed ie
-        ie = self['ie']
-        s2,ellip = get_s2_e(self.simc, is2, ie)
         s2n = get_s2n(self, is2n)
-
+        s2n_fac = self['s2n_fac']
 
         nring = self.simc['nring']
-        s2n_fac = self['s2n_fac']
         nrepeat = get_s2n_nrepeat(s2n, fac=s2n_fac)
 
         ntot = nring*nrepeat
         out = numpy.zeros(ntot, dtype=self.out_dtype())
 
-        simpars=self.get('simpars',{})
-        simpars['verbose'] = self['verbose']
-        ss = ShapeSim(self['sim'], **simpars)
-
-        s2n_psf = self['s2n_psf']
-
-        s2n_method = self['s2n_method']
-        s2ncalc_fluxfrac =self.get('s2ncalc_fluxfrac',None)
-
-        wlog('ellip:',ellip,'s2n:',s2n,'s2n_psf:',s2n_psf,'s2n_method:',s2n_method)
-
         ii = 0
         for i in xrange(nring):
-
             itheta=i
 
-            ci_nonoise = self.get_a_trial(ss, is2, ie, itheta=itheta)
-
-            for irepeat in xrange(nrepeat):
-                
-                if self['verbose']:
-                    stderr.write('-'*70)
-                    stderr.write('\n')
-                # we always write this, although slower when not verbose
-                if self['verbose'] or (((ii+1) % 10) == 0) or (ii==0):
-                    stderr.write("%d/%d %d%% done\n" % (ii+1,ntot,100.*(ii+1)/float(ntot)))
-
-                iter=0
-                while iter < self['itmax']:
-
-                    ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf,
-                                             s2n_method=s2n_method,
-                                             fluxfrac=s2ncalc_fluxfrac)
-                    if self['verbose']:
-                        wlog("s2n_uw:",ci['s2n_uw'],"s2n_uw_psf:",ci['s2n_uw_psf'])
-                        if iter == 0: stderr.write("%s " % str(ci.psf.shape))
-                    res = self.run(ci)
-
-                    if res['flags'] == 0:
-                        st = self.copy_output(s2, ellip, s2n, ci, res)
-                        out[ii] = st
-                        ii += 1
-                        break
-                    else:
-                        iter += 1
-
-                if iter == self['itmax']:
-                    raise ValueError("itmax %d reached" % self['itmax'])
             if self['verbose']:
-                stderr.write("niter: %d\n" % (iter+1))
+                stderr.write('-'*70)
+                stderr.write('\n')
+            # we always write this, although slower when not verbose
+            #stderr.write("%d/%d %d%% done\n" % ((i+1),nring,
+            #                                    100.*(+1)/float(nring)))
+
+            dolog=False
+            if i==0:
+                dolog=True
+            st = self.process_trial_by_s2n(is2, is2n, itheta, dolog=dolog)
+            out[ii:ii+nrepeat] = st
+            ii += nrepeat
+
         write_output(self['run'], is2, is2n, out, fs=self.fs)
         return out
 
@@ -853,21 +892,26 @@ def get_run_dir(run, fs=None):
     return path_join(dir,run)
 
 
-def get_wq_dir(run):
+def get_wq_dir(run, bytrial=False):
     dir=get_run_dir(run)
     dir=path_join(dir, 'wq')
+    if bytrial:
+        dir = path_join(dir, 'bytrial')
     return dir
 
-def get_wq_url(run, is2, ie):
+def get_wq_url(run, is2, ie, itrial=None):
     """
 
     is2 and ie are the index in the list of s2 and ellip vals for a given run.
     They should be within [0,nums2) and [0,nume)
 
     """
-    dir=get_wq_dir(run)
-    f='%s-%03i-%03i.yaml' % (run,is2,ie)
+    dir=get_wq_dir(run, bytrial = (itrial is not None))
+    f='%s-%03i-%03i' % (run,is2,ie)
+    if itrial is not None:
+        f += '-%05d' % itrial
 
+    f+='.yaml'
     return path_join(dir, f)
 
 def get_plot_dir(run):
@@ -895,7 +939,7 @@ def get_output_dir(run, fs=None):
     dir=path_join(dir, 'outputs')
     return dir
 
-def get_output_url(run, is2, ie, fs=None):
+def get_output_url(run, is2, ie, itrial=None, fs=None):
     """
 
     is2 and ie are the index in the list of s2 and ellip vals for a given run.
@@ -905,7 +949,13 @@ def get_output_url(run, is2, ie, fs=None):
 
     """
     dir=get_output_dir(run, fs=fs)
-    f='%s-%03i-%03i.rec' % (run,is2,ie)
+    f='%s-%03i-%03i' % (run,is2,ie)
+    if itrial is not None:
+        if itrial == '*':
+            f += '-*'
+        else:
+            f += '-%05i' % itrial
+    f += '.rec'
     return path_join(dir, f)
 
 
@@ -961,13 +1011,13 @@ def get_cache_pattern(simname, is2, ie, fs=None):
     return os.path.join(d,pattern)
 
 
-def write_output(run, is2, ie, data, fs=None):
-    f=get_output_url(run, is2, ie, fs=fs)
+def write_output(run, is2, ie, data, itrial=None, fs=None):
+    f=get_output_url(run, is2, ie, itrial=itrial, fs=fs)
     wlog("Writing output:",f)
     eu.io.write(f, data, clobber=True)
 
-def read_output(run, is2, ie, verbose=False, fs=None):
-    f=get_output_url(run, is2, ie, fs=fs)
+def read_output(run, is2, ie, itrial=None, verbose=False, fs=None):
+    f=get_output_url(run, is2, ie, itrial=itrial, fs=fs)
     if verbose:
         wlog("reading output:",f)
     return eu.io.read(f)
@@ -1356,3 +1406,20 @@ def plot_signal_vs_rad(im, cen):
                               type='filled circle', color='red'))
 
     plt.show()
+
+def combine_trials(run, is2, ie):
+    pattern=get_output_url(run, is2, ie, itrial='*', fs='hdfs')
+    outfile=get_output_url(run, is2, ie, fs='hdfs')
+
+    flist = eu.hdfs.ls(pattern, full=True)
+    flist.sort()
+    datalist=[]
+    for f in flist:
+        print f
+        t=eu.io.read(f)
+        datalist.append(t)
+
+    data = eu.numpy_util.combine_arrlist(datalist)
+    print 'data.size:',data.size
+    print 'writing:',outfile
+    eu.io.write(outfile, data, clobber=True)
