@@ -240,7 +240,12 @@ gmix-fit
 
         edg09
             round double gaussian psf
-            g1=0.00,g2=-0.00
+            g1=0.00,g2=0.00
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg09r01  7 0.33    matched    todo
+
 
 
         dt02
