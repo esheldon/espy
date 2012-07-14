@@ -6,7 +6,7 @@ from esutil.misc import wlog
 from esutil.numpy_util import where1
 from esutil.stat import sigma_clip
 import numpy
-from numpy import median, zeros, sqrt
+from numpy import median, zeros, sqrt, array
 import copy
 
 from lensing.util import shear_fracdiff, e2gamma, gamma2e, g1g2_to_e1e2
@@ -39,12 +39,18 @@ class SimPlotterVsShear(dict):
         for run in runs:
             self.plotters.append(SimPlotter(run,**keys))
 
+    def get_title(self):
+        title=self.get('title',None)
+        title=title.replace('-',' ')
+        return title
+
     def doplots(self):
         import biggles
         import pcolors
-
+        
+        scale=.01
         biggles.configure("screen","width",1100)
-        biggles.configure("default","fontsize_min",0.9)
+        biggles.configure("default","fontsize_min",1.)
         #biggles.configure('_HalfAxis','ticklabels_style',{'fontsize':2.0})
         nrun=len(self.runs)
         
@@ -121,9 +127,9 @@ class SimPlotterVsShear(dict):
 
                 g1true = data['g1true'][i_is2,:]
                 diff1  = data['g1meas'][i_is2,:] - g1true
-                p1 = biggles.Points(g1true,diff1,
+                p1 = biggles.Points(g1true/scale,diff1,
                                     type='filled circle', color=colors[i_is2])
-                c1 = biggles.Curve(g1true,diff1,color=colors[i_is2])
+                c1 = biggles.Curve(g1true/scale,diff1,color=colors[i_is2])
                 if i_s2n == (n_s2n-1):
                     cfake = biggles.Curve(g1true-1000,diff1,color=colors[i_is2])
                     label = '%.2f' % s2
@@ -136,11 +142,13 @@ class SimPlotterVsShear(dict):
                 if i_is2 == 0:
                     g1err  = data['g1err'][i_is2,:]
                     g2err  = data['g2err'][i_is2,:]
-                    perr1 = biggles.SymmetricErrorBarsY(g1true,diff1,g1err,
+                    perr1 = biggles.SymmetricErrorBarsY(g1true/scale,
+                                                        diff1,g1err,
                                                         color=colors[i_is2])
                     arr[irow,icol].add(perr1)
 
-                    z1=biggles.Curve([data['g1true'].min(),data['g1true'].max()],
+                    z1=biggles.Curve([data['g1true'].min()/scale,
+                                      data['g1true'].max()/scale],
                                      [0,0])
                     arr[irow,icol].add(z1)
 
@@ -183,10 +191,14 @@ class SimPlotterVsShear(dict):
         yrng=self.get('yrange',None)
         if yrng:
             arr.yrange = yrng
-        arr.xrange=[-0.005,0.059]
+        arr.xrange=array([-0.005,0.059])/scale
         arr.uniform_limits=1
-        arr.xlabel = r'$\gamma_{true}$'
+        arr.xlabel = r'$\gamma_{true}/%.2g$' % scale
         arr.ylabel = r'$\Delta \gamma$'
+
+        title=self.get_title()
+        if title:
+            arr.title=title
         arr.show()
 
 class SimPlotter(dict):
@@ -201,7 +213,7 @@ class SimPlotter(dict):
 
         self.psf_estring=''
         if self.psf_e1 is not None:
-            self.psf_estring = r'$e_{psf}$: %.2f,%.2f' % (self.psf_e1,self.psf_e2)
+            self.psf_estring = r'$e_{psf}$: %.2g,%.2g' % (self.psf_e1,self.psf_e2)
 
         d = shapesim.get_plot_dir(run)
         if not os.path.exists(d):
