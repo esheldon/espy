@@ -82,7 +82,7 @@ gmix-fit
                     gg04r05  47   algo    done
                     gg04r06  22   algo    done
                     gg04r07  11   algo    done
-                    gg04r08   5   algo    running
+                    gg04r08   5   algo    done?
                     gg04r09 1.e6  algo    done
 
                 by s/n
@@ -147,6 +147,11 @@ gmix-fit
                 byellip
                     run     S/N   nrepeat  notes
                     et03r04 1.e6   algo    done
+                    et03r05  100   algo    done
+                    et03r06   47   algo    todo
+                    et03r07   22   algo    todo
+                    et03r08   11   algo    todo (bytrial?)
+                    et03r09    5   algo    running bytrial
             deswl
                 by s/n
                     run      ie    e  s2n_method   notes
@@ -255,21 +260,27 @@ gmix-fit
                 byellip
                     run        s/n   nrepeat  s2n_method      notes
                     dt02r01  1.e8       1         uw 
+                    dt02r04  100   algo    todo
+                    dt02r05   47   algo    todo
+                    dt02r06   22   algo    todo
+                    dt02r07   11   algo    todo
+                    dt02r08    5   algo    todo
 
                 by s/n
                     run      ie    e  s2n_method   notes
-                    dt02r02   7 0.33    matched    running (S/N=5 died)
-                    dt02r03  19 0.80    matched    running (S/N=5 died)
+                    dt02r02   7 0.33    matched    done
+                    dt02r03  19 0.80    matched    died S/N=5
  
             deswl
                 byellip
                     run        s/n   nrepeat  s2n_method      notes
-                    dt02r02    1.e8     1      matched        (died)
+                    dt02r02    1.e8     1      matched        died?
                     
                 by s/n
                     run      ie    e  s2n_method   notes
                     dt02r01  19 0.80   matched     running (died)
-                    dt02r03   7 0.33   matched     running (died)
+                    dt02r03   7 0.33   matched     running died re-running 000-000
+                                                                           001-000
 
     low noise runs
         et01r04

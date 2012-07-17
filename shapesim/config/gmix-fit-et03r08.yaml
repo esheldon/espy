@@ -1,5 +1,5 @@
 # et03 is a ring test
-run: gmix-fit-et03r04
+run: gmix-fit-et03r08
 sim: sim-et03
 
 # we will use all the ellip and s2 values and single s/n value
@@ -18,9 +18,10 @@ use_jacob: false
 verbose: false
 
 # you need the + or - in exponent
-s2n: 1.0e+6
+s2n: 11
 s2n_psf: 1.0e+6
 
+# default 0.4
 s2n_fac: 1
 s2n_method: matched
 s2ncalc_fluxfrac: null

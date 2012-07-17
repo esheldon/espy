@@ -11,7 +11,204 @@ import copy
 
 from lensing.util import shear_fracdiff, e2gamma, gamma2e, g1g2_to_e1e2
 
-class SimPlotterVsShear(dict):
+class MultiPlotterBase(dict):
+    """
+    Make plots for multiple runs.
+    """
+    def __init__(self, set, **keys):
+        self.set = set
+        self.set_runs()
+
+        # for now
+        keys['docum'] = True
+
+        for k,v in keys.iteritems():
+            self[k] = v
+
+        self.plotters=[]
+        for run in self.runs:
+            self.plotters.append(SimPlotter(run,**keys))
+
+        d = shapesim.get_plot_dir(set)
+        if not os.path.exists(d):
+            os.makedirs(d)
+
+    def set_runs(self):
+        if self.set == 'set-s2n-edg01':
+            # elliptial psfs
+            runs = ['gmix-fit-edg03r02',
+                    'gmix-fit-edg04r01',
+                    'gmix-fit-edg05r01',
+                    'gmix-fit-edg06r01',
+                    'gmix-fit-edg07r01',
+                    'gmix-fit-edg08r01']
+        elif self.set == 'set-s2n-edg02':
+            # round psfs
+            runs = ['gmix-fit-edg09r01',
+                    'gmix-fit-edg02r02',
+                    'gmix-fit-edg10r01',
+                    'gmix-fit-edg11r01',
+                    'gmix-fit-edg12r01',
+                    'gmix-fit-edg13r01']
+
+        elif self.set == 'set-e-gg01':
+            runs = ['gmix-fit-gg04r09',
+                    'gmix-fit-gg04r04',
+                    'gmix-fit-gg04r05',
+                    'gmix-fit-gg04r06',
+                    'gmix-fit-gg04r07',
+                    'gmix-fit-gg04r08']
+        else:
+            raise ValueError("don't know about set %s" % self.set)
+        self.runs = runs
+
+    def get_title(self):
+        title=self.get('title',None)
+        if title:
+            title=title.replace('-',' ')
+        return title
+
+class MultiPlotterVsE(MultiPlotterBase):
+    """
+    Make delta shear plots as a function of true e; each
+    panel will be from a different run with different S/N.
+    """
+    def __init__(self, set, **keys):
+        super(MultiPlotterVsE,self).__init__(set, **keys)
+
+    def doplots(self):
+        import biggles
+        import converter
+        import pcolors
+        
+        #biggles.configure("screen","width",1100)
+        biggles.configure("default","fontsize_min",1.5)
+        #biggles.configure('_HalfAxis','ticklabels_style',{'fontsize':2.0})
+        nrun=len(self.runs)
+        
+        nrow=2
+        ncol=3
+        arr = biggles.FramedArray(nrow,ncol)
+        is2list = [5,11,17,19]
+        n_is2 = len(is2list)
+        #colors=pcolors.rainbow(n_is2, 'hex')
+        colors = ['blue','magenta','green','red']
+
+        if self['docum']:
+            tag1='shear1cum'
+            tag2='shear2cum'
+            errtag1='shear1cum_err'
+            errtag2='shear2cum_err'
+        else:
+            tag1='shear1'
+            tag2='shear2'
+            errtag1='shear1err'
+            errtag2='shear2err'
+
+
+        n_s2n = len(self.runs)
+        td = self.plotters[0].read_data()
+        n_s2 = len(td)
+        ne = td[0].size
+
+        #plt=biggles.FramedPlot()
+
+        dt=[('g1true','f8',nrun),
+            ('g2true','f8',nrun),
+            ('g1meas','f8',nrun),
+            ('g1err','f8',nrun),
+            ('g2meas','f8',nrun),
+            ('g2err','f8',nrun)]
+        
+        kplots=[]
+        for i_s2n,plotter in enumerate(self.plotters):
+            irow = i_s2n / ncol
+            icol = i_s2n % ncol
+            td = plotter.read_data()
+            etrue = td[0]['etrue']
+
+            shear_true = plotter.get_shear_true()
+
+            s2n = plotter['s2n']
+
+            for i_is2 in xrange(n_is2):
+                st = td[is2list[i_is2]]
+                s2 = st['s2'].mean()
+
+                diff1 = st[tag1] - shear_true.g1
+                diff2 = st[tag2] - shear_true.g2
+
+                p1 = biggles.Points(etrue,diff1,
+                                    type='filled circle', 
+                                    color=colors[i_is2])
+                c1 = biggles.Curve(etrue,diff1,color=colors[i_is2])
+
+                arr[irow,icol].add(p1,c1) 
+
+                if i_s2n == 0:
+                    label = '%.2f' % s2
+                    if self['docum']:
+                        label = '< '+label
+                    c1.label = label
+                    kplots.append(c1)
+
+                if i_is2 == 0:
+                    g1err  = st[errtag1]
+                    g2err  = st[errtag2]
+                    perr1 = biggles.SymmetricErrorBarsY(etrue,
+                                                        diff1,g1err,
+                                                        color=colors[i_is2])
+                    arr[irow,icol].add(perr1)
+
+                    z1=biggles.Curve(etrue,zeros(etrue.size))
+                    arr[irow,icol].add(z1)
+
+            if i_s2n == 0:
+                g1labs = r'$\gamma_1: %.2g$' % shear_true.g1
+                g2labs = r'$\gamma_1: %.2g$' % shear_true.g2
+                g1lab = biggles.PlotLabel(0.1,0.9,g1labs,halign='left')
+                arr[irow,icol].add(g1lab)
+
+            if s2n > 1000:
+                ls2n = numpy.log10(s2n)
+                ls2n = r'$10^{%.1f}$' % ls2n
+            else:
+                ls2n = '%.0f' % s2n
+
+            s2nlab = biggles.PlotLabel(0.9,0.9,'S/N: %s' % ls2n,
+                                     fontsize=2.5,halign='right')
+            arr[irow,icol].add(s2nlab)
+
+
+        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$'
+        klab = biggles.PlotLabel(0.5,0.3,klabtext,
+                                 halign='right')
+
+        key=biggles.PlotKey(0.9,0.3,kplots,halign='right')
+        arr[0,0].add(klab,key)
+
+
+        yrng=self.get('yrange',None)
+        if yrng:
+            arr.yrange = yrng
+        arr.xrange=array([0.01,0.85])
+        arr.uniform_limits=1
+        arr.xlabel = r'$e_{true}$'
+        arr.ylabel = r'$\Delta \gamma_1$'
+        #arr.aspect_ratio=1/1.61803399
+        arr.aspect_ratio=1/1.4
+
+        title=self.get_title()
+        if title:
+            arr.title=title
+        arr.show()
+
+        epsfile = shapesim.get_plot_file(self.set,'vs-e',yrng=yrng)
+        arr.write_eps(epsfile)
+        converter.convert(epsfile,dpi=100,verbose=True)
+
+
+class MultiPlotterVsShear(MultiPlotterBase):
     """
     Make delta shear plots as a function of true shear.
     uou should feed this run with all the same models for
@@ -25,31 +222,16 @@ class SimPlotterVsShear(dict):
        
         \Delta \gamma = \gamma_{true} (m-1) + b
     """
-    def __init__(self, runs, **keys):
-        self.runs = runs
-
-        # for now
-        keys['docum'] = True
-        #keys['s2min'] = 0.5
-
-        for k,v in keys.iteritems():
-            self[k] = v
-
-        self.plotters=[]
-        for run in runs:
-            self.plotters.append(SimPlotter(run,**keys))
-
-    def get_title(self):
-        title=self.get('title',None)
-        title=title.replace('-',' ')
-        return title
+    def __init__(self, set, **keys):
+        super(MultiPlotterVsShear,self).__init__(set, **keys)
 
     def doplots(self):
         import biggles
+        import converter
         import pcolors
         
         scale=.01
-        biggles.configure("screen","width",1100)
+        #biggles.configure("screen","width",1100)
         biggles.configure("default","fontsize_min",1.)
         #biggles.configure('_HalfAxis','ticklabels_style',{'fontsize':2.0})
         nrun=len(self.runs)
@@ -59,7 +241,8 @@ class SimPlotterVsShear(dict):
         arr = biggles.FramedArray(nrow,ncol)
         is2list = [5,11,17,19]
         n_is2 = len(is2list)
-        colors=pcolors.rainbow(n_is2, 'hex')
+        #colors=pcolors.rainbow(n_is2, 'hex')
+        colors = ['blue','magenta','green','red']
 
         s2n_name='s2n_matched'
         if self['docum']:
@@ -169,7 +352,7 @@ class SimPlotterVsShear(dict):
         objmodel = simc['objmodel']
         psfmodel = simc['psfmodel']
         plab='%s %s' % (objmodel,psfmodel)
-        l = biggles.PlotLabel(0.9,0.1, plab, halign='right')
+        l = biggles.PlotLabel(0.075,0.1, plab, halign='left')
         arr[nrow-1,ncol-1].add(l)
 
         if simc['psfmodel'] == 'turb':
@@ -177,12 +360,19 @@ class SimPlotterVsShear(dict):
         else:
             psf_sigma = simc['psf_sigma']
             siglab = r'$\sigma: %.1f$ pix' % psf_sigma
-        siglab += ' '+self.plotters[0].psf_estring
-        elab = r'$ e_{gal}^{tot}: %.2f$' % td[0]['etrue'].mean()
+        #siglab += ' '+self.plotters[0].psf_estring
+        elab = r'$e_{gal}^{tot}: %.2f$' % td[0]['etrue'].mean()
 
-        sl = biggles.PlotLabel(0.075,0.3, siglab, halign='left', 
+        sl = biggles.PlotLabel(0.075,0.55, siglab, halign='left', 
                                fontsize=2.5)
-        el = biggles.PlotLabel(0.075,0.1, elab, halign='left', 
+        psf_estring=self.plotters[0].psf_estring
+        if psf_estring:
+            psfel = biggles.PlotLabel(0.075,0.4, psf_estring, 
+                                      halign='left', 
+                                      fontsize=2.5)
+            arr[nrow-1,ncol-1].add(psfel)
+
+        el = biggles.PlotLabel(0.075,0.25, elab, halign='left', 
                                fontsize=2.5)
         arr[nrow-1,ncol-1].add(sl,el)
 
@@ -195,11 +385,17 @@ class SimPlotterVsShear(dict):
         arr.uniform_limits=1
         arr.xlabel = r'$\gamma_{true}/%.2g$' % scale
         arr.ylabel = r'$\Delta \gamma$'
+        #arr.aspect_ratio=1/1.61803399
+        arr.aspect_ratio=1/1.4
 
         title=self.get_title()
         if title:
             arr.title=title
         arr.show()
+
+        epsfile = shapesim.get_plot_file(self.set,'vs-shear',yrng=yrng)
+        arr.write_eps(epsfile)
+        converter.convert(epsfile,dpi=100,verbose=True)
 
 class SimPlotter(dict):
     def __init__(self, run, **keys):
@@ -219,6 +415,7 @@ class SimPlotter(dict):
         if not os.path.exists(d):
             os.makedirs(d)
         
+        self.noerr = keys.get('noerr',False)
         self._data=None
 
         title=copy.deepcopy(self['run'])
@@ -259,9 +456,7 @@ class SimPlotter(dict):
         else:
             extra=''
 
-        puterr=False
         if self.docum:
-            puterr=True
             extra+='-cum'
 
         runtype = self.get('runtype','byellip')
@@ -278,6 +473,7 @@ class SimPlotter(dict):
         colors=pcolors.rainbow(len(data), 'hex')
 
         biggles.configure('PlotKey','key_vsep',1.0)
+        biggles.configure("default","fontsize_min",1.5)
         arr=biggles.FramedArray(2,1)
         #arr.aspect_ratio=1
         
@@ -371,8 +567,9 @@ class SimPlotter(dict):
                                                     width=4)
                 err2p = biggles.SymmetricErrorBarsY(s2n, yvals2, st['shear2err'],
                                                     width=4)
-                arr[0,0].add(err1p)
-                arr[1,0].add(err2p)
+                if not self.noerr:
+                    arr[0,0].add(err1p)
+                    arr[1,0].add(err2p)
             if i < 15:
                 plots1.append(pr1)
             else:
@@ -400,7 +597,7 @@ class SimPlotter(dict):
             else:
                 plots1.append(avg1)
 
-        if self.docum:
+        if self.docum and not self.noerr:
             err1p = biggles.SymmetricErrorBarsY(s2n, pts1_0, err1_0)
             err2p = biggles.SymmetricErrorBarsY(s2n, pts2_0, err2_0)
             arr[0,0].add(err1p)
@@ -416,7 +613,7 @@ class SimPlotter(dict):
             arr[1,0].add(key2)
 
         klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$'
-        klab = biggles.PlotLabel(0.76,0.92,klabtext,
+        klab = biggles.PlotLabel(0.715,0.92,klabtext,
                                  fontsize=2.5,halign='right')
         arr[0,0].add(klab)
         objmodel = self.simc['objmodel']
@@ -481,7 +678,7 @@ class SimPlotter(dict):
 
 
         if xrng is None:
-            xrng = [0.1*s2n.min(),s2n.max()*1.4]
+            xrng = [0,s2n.max()*1.4]
         arr.xrange = xrng
 
         if yrng is not None:
@@ -608,10 +805,10 @@ class SimPlotter(dict):
             arr[0,0].add(cr1)
             arr[1,0].add(cr2)
 
-            if not self.docum and i == (len(data)-1):
-                err1p = biggles.SymmetricErrorBarsY(s2n, yvals1, st['shear1err'], 
+            if not self.docum and i == (len(data)-1) and not self.noerr:
+                err1p = biggles.SymmetricErrorBarsY(etrue, yvals1, st['shear1err'], 
                                                     width=4)
-                err2p = biggles.SymmetricErrorBarsY(s2n, yvals2, st['shear2err'],
+                err2p = biggles.SymmetricErrorBarsY(etrue, yvals2, st['shear2err'],
                                                     width=4)
                 arr[0,0].add(err1p)
                 arr[1,0].add(err2p)
@@ -645,7 +842,7 @@ class SimPlotter(dict):
             else:
                 plots1.append(avg1)
 
-        if self.docum:
+        if self.docum and not self.noerr:
             err1p = biggles.SymmetricErrorBarsY(etrue, pts1_0, err1_0)
             err2p = biggles.SymmetricErrorBarsY(etrue, pts2_0, err2_0)
             arr[0,0].add(err1p)

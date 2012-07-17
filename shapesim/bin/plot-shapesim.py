@@ -33,8 +33,6 @@ parser.add_option('--maketitle',action="store_true",
 
 parser.add_option('--s2min',default=None,
                   help="min value in s2")
-parser.add_option('--noshow',action="store_true",
-                  help="don't show")
 parser.add_option('--etot',action='store_true',
                   help=('plot the difference between average '
                         'measured total ellip and true total ellip. '
@@ -50,6 +48,10 @@ parser.add_option('--skip1',default=None,
 parser.add_option('--skip2',default=None,
                   help="elements in index 2 to skip")
 
+parser.add_option('--noerr',action="store_true",
+                  help="don't show error bars")
+parser.add_option('--noshow',action="store_true",
+                  help="don't show")
 options,args = parser.parse_args(sys.argv[1:])
 
 if len(args) < 1:
@@ -96,30 +98,24 @@ if yrng is not None:
 
 
 if run[0:3] == 'set':
-    if run == 'set-edg01':
-        runs = ['gmix-fit-edg03r02',
-                'gmix-fit-edg04r01',
-                'gmix-fit-edg05r01',
-                'gmix-fit-edg06r01',
-                'gmix-fit-edg07r01',
-                'gmix-fit-edg08r01']
-    elif run == 'set-edg02':
-        runs = ['gmix-fit-edg09r01',
-                'gmix-fit-edg02r02',
-                'gmix-fit-edg10r01',
-                'gmix-fit-edg11r01',
-                'gmix-fit-edg12r01',
-                'gmix-fit-edg13r01']
-
-    else:
-        raise ValueError("don't know about set-edg01")
+    set=run
     title=None
     if options.maketitle:
-        title=run
-    p=shapesim.plotting.SimPlotterVsShear(runs, title=title,
-                                          s2min=s2min, skip1=skip1, skip2=skip2,
-                                          yrange=yrng,
-                                          docum=options.cum)
+        title=set
+
+    if set[0:5] == 'set-e':
+        p=shapesim.plotting.MultiPlotterVsE(set, title=title,
+                                            s2min=s2min, 
+                                            skip1=skip1, skip2=skip2,
+                                            yrange=yrng,
+                                            docum=options.cum)
+ 
+    else:
+        p=shapesim.plotting.MultiPlotterVsShear(set, title=title,
+                                                s2min=s2min, 
+                                                skip1=skip1, skip2=skip2,
+                                                yrange=yrng,
+                                                docum=options.cum)
     p.doplots()
 else:
 
@@ -127,6 +123,7 @@ else:
     runtype=c.get('runtype','byellip')
     p=shapesim.plotting.SimPlotter(run, maketitle=options.maketitle,
                                    s2min=s2min, skip1=skip1, skip2=skip2,
+                                   noerr=options.noerr,
                                    docum=options.cum)
 
     if runtype == 'byellip':
