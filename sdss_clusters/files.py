@@ -17,6 +17,20 @@ def input_coldir(name, version):
     coldir = path_join(basedir, coldir)
     return coldir
 
+def random_dir(name, version):
+    basedir = os.environ['CLUSTERS_INPUT']
+
+    subdir='%s-%s-rand' % (name,version)
+    dir = path_join(basedir, subdir)
+    return dir
+def random_file(name, version, number):
+    dir=random_dir(name,version)
+    f='%s-%s-rand-%05d.fits' % (name,version,number)
+    f=path_join(dir,f)
+    return f
+
+
+
 def open_input_columns(name, version):
     import columns
     d=input_coldir(name, version)

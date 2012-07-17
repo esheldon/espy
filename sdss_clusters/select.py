@@ -189,3 +189,4 @@ class Selector:
         self.logic = logic
         self.mag_and_mask_logic = cmag_r_logic & mask_logic
 
+

@@ -32,6 +32,7 @@ class StarMask:
                                       self.radii,
                                       maxmatch=0)
 
+        # it is a veto situation, so matches are *not* contained
         if minput.size > 0:
             cont[minput] = 0
 
