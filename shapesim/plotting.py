@@ -564,9 +564,9 @@ class SimPlotter(dict):
             
             if not self.docum and i == (len(data)-1):
                 err1p = biggles.SymmetricErrorBarsY(s2n, yvals1, st['shear1err'], 
-                                                    width=4)
+                                                    color=colors[i])
                 err2p = biggles.SymmetricErrorBarsY(s2n, yvals2, st['shear2err'],
-                                                    width=4)
+                                                    color=colors[i])
                 if not self.noerr:
                     arr[0,0].add(err1p)
                     arr[1,0].add(err2p)

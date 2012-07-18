@@ -1,5 +1,5 @@
 # ring
-name: sim-et04
+name: sim-dt03
 
 orient: ring
 nring: 100
@@ -12,7 +12,7 @@ dotrim: false
 psfmodel: turb
 psf_fwhm: 3.3
 
-objmodel: exp
+objmodel: dev
 
 shear: [0.01,-0.01]
 
@@ -23,7 +23,6 @@ nums2: 4
 mine:  0.05
 maxe:  0.80
 nume:  20
-
 
 comments: |
 

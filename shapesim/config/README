@@ -168,7 +168,7 @@ gmix-fit
             gmix
                 by s/n
                     run      ie    e  s2n_method   notes
-                    et04r01   7  .33     matched   running 
+                    et04r01   7  .33     matched   done
                                                    bytrial is2n <= 3, might 
                                                    have wanted <=4 with
                                                    s2n_fac=5
@@ -292,6 +292,16 @@ gmix-fit
                     dt02r01  19 0.80   matched     running (died)
                     dt02r03   7 0.33   matched     running died re-running 000-000
                                                                            001-000
+        dt03
+            - ring.  Fewer s2 but will do more trials per run
+
+            ncores=4 and groupes [gen3,gen5]
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    dt03r01   7  .33     matched   todo
+                                                   bytrial is2n <= 4
+
 
     low noise runs
         et01r04
