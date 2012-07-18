@@ -150,8 +150,9 @@ gmix-fit
                     et03r05  100   algo    done
                     et03r06   47   algo    done
                     et03r07   22   algo    done
-                    et03r08   11   algo    todo (bytrial?)
-                    et03r09    5   algo    running bytrial
+                    et03r08   11   algo    combining
+                        did bytrial but probably not necessary
+                    et03r09    5   algo    bytrial, combine and average
             deswl
                 by s/n
                     run      ie    e  s2n_method   notes
@@ -161,6 +162,16 @@ gmix-fit
                 byellip
                     run     S/N   nrepeat  notes
                     et03r04 1.e6   algo    todo
+
+        et04
+            - ring.  Fewer s2 but will do more trials per run
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    et04r01   7  .33     matched   running 
+                                                   bytrial is2n <= 3, might 
+                                                   have wanted <=4 with
+                                                   s2n_fac=5
 
         edg02
             round double gaussian psf

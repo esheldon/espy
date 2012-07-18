@@ -86,10 +86,14 @@ def main():
         ncores=int(options.ncores)
         extra='mode: bycore1\nN: %d' % ncores
 
+    if run[0:8] == 'gmix-fit':
+        rstr=run.replace('gmix-fit','gmix')
+    else:
+        rstr=run
 
     for is2 in xrange(cs['nums2']):
         for ie in xrange(cs['nume']):
-            job_name='%s-%i-%i' % (run,is2,ie)
+            job_name='%s-%03i-%03i' % (rstr,is2,ie)
 
             if options.bytrial:
                 for itrial in xrange(ntrial):
