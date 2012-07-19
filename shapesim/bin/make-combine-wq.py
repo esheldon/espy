@@ -40,17 +40,22 @@ def main():
     if not os.path.exists(wqd):
         os.makedirs(wqd)
 
+    if run[0:8] == 'gmix-fit':
+        rstr=run.replace('gmix-fit','gmix')
+    else:
+        rstr=run
+ 
     n1 = cs['nums2']
 
     runtype = c['runtype']
     if runtype == 'byellip':
         n2 = cs['nume']
     else:
-        n2 = c['nums2n']
+        n2 = shapesim.get_nums2n(c)
 
     for i1 in xrange(n1):
         for i2 in xrange(n2):
-            job_name='%s-combine-%03i-%03i' % (run,i1,i2)
+            job_name='%s-combine-%03i-%03i' % (rstr,i1,i2)
 
             wqurl = shapesim.get_wq_url(run,i1,i2,combine=True)
 

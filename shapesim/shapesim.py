@@ -632,12 +632,22 @@ def get_s2_e(conf, is2, ie):
 
     return s2, ellip
 
+def get_nums2n(conf):
+    if 's2nvals' in conf:
+        nums2n = len(conf['s2nvals'])
+    else:
+        nums2n = conf['nums2n']
+
+    return nums2n
 def get_s2n(conf, is2n):
     """
     Extract the s2n corresponding to index
     """
 
-    s2n = linspace(conf['mins2n'],conf['maxs2n'], conf['nums2n'])[is2n]
+    if 's2nvals' in conf:
+        s2n = conf['s2nvals'][is2n]
+    else:
+        s2n = linspace(conf['mins2n'],conf['maxs2n'], conf['nums2n'])[is2n]
     return s2n
 
 def get_s2n_nrepeat(s2n, fac=0.4):
@@ -929,7 +939,7 @@ def make_averaged_outputs(run, docum=True,
     if runtype == 'byellip':
         numi2 = cs['nume']
     else:
-        numi2 = c['nums2n']
+        numi2 = get_nums2n(c)
 
     orient=cs['orient']
     for i1 in xrange(numi1):
@@ -977,7 +987,7 @@ def read_all_outputs(run,
     if runtype == 'byellip':
         numi2 = cs['nume']
     else:
-        numi2 = c['nums2n']
+        numi2 = get_nums2n(c)
 
     orient=cs['orient']
     for i1 in xrange(numi1):

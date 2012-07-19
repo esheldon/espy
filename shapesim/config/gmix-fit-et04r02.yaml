@@ -1,23 +1,15 @@
-# dt03 is a ring test, shear (0.01,-0.01)
-run: gmix-fit-dt03r01
-sim: sim-dt03
+# et04 is a ring test, shear (0.01,-0.01)
+run: gmix-fit-et04r02
+sim: sim-et04
 
 runtype: bys2n
 
-# trim the image before adding noise
-retrim: true
-retrim_fluxfrac: 0.9973
-
-# this works in the algorithm for determining number of trials
-# default 0.4!
-s2n_fac: 20
-
-# optimal S/N estimat
+s2n_fac: 20 # default 0.4
 s2n_method: matched
-
-# don't use a smaller aperture for S/N
 s2ncalc_fluxfrac: null
 
+retrim: true
+retrim_fluxfrac: 0.9973
 
 ie: 7 # 0.33
 s2nvals: [5,10,15,20,25,30,40,60,80,100]
@@ -35,7 +27,7 @@ verbose: false
 
 # we should try with higher values to see what happens
 ngauss_psf: 3
-ngauss_obj: 4
+ngauss_obj: 3
 
 coellip_psf: true
 coellip_obj: true

@@ -28,7 +28,7 @@ command: |
     module unload fimage && module load fimage/work
     module unload wl && module load wl/work
     module unload gmix_image && module load gmix_image/work
-    python $ESPY_DIR/shapesim/bin/run-shapesim.py %(run)s %(is2)d %(ie)d
+    python $ESPY_DIR/shapesim/bin/run-shapesim.py %(run)s %(i1)d %(i2)d
 
 %(extra)s
 %(groups)s
@@ -42,7 +42,7 @@ command: |
     module unload fimage && module load fimage/work
     module unload wl && module load wl/work
     module unload gmix_image && module load gmix_image/work
-    python $ESPY_DIR/shapesim/bin/run-shapesim.py %(run)s %(is2)d %(ie)d %(itrial)d
+    python $ESPY_DIR/shapesim/bin/run-shapesim.py %(run)s %(i1)d %(i2)d %(itrial)d
 
 %(extra)s
 %(groups)s
@@ -61,6 +61,7 @@ def main():
 
     c = shapesim.read_config(run)
     cs = shapesim.read_config(c['sim'])
+
 
     if options.bytrial:
         orient=cs.get('orient','rand')
@@ -91,19 +92,29 @@ def main():
     else:
         rstr=run
 
-    for is2 in xrange(cs['nums2']):
-        for ie in xrange(cs['nume']):
-            job_name='%s-%03i-%03i' % (rstr,is2,ie)
+    n1 = cs['nums2']
+
+    runtype = c['runtype']
+    if runtype == 'byellip':
+        n2 = cs['nume']
+    else:
+        n2 = shapesim.get_nums2n(c)
+
+
+
+    for i1 in xrange(n1):
+        for i2 in xrange(n2):
 
             if options.bytrial:
                 for itrial in xrange(ntrial):
-                    wqurl = shapesim.get_wq_url(run,is2,ie,itrial=itrial)
+                    job_name='%s-%03i-%03i-%02i' % (rstr,i1,i2,itrial)
+                    wqurl = shapesim.get_wq_url(run,i1,i2,itrial=itrial)
                     wlog("writing wq script:",wqurl)
                     with open(wqurl,'w') as fobj:
                         d={'job_name':job_name,
                            'run':run, 
-                           'is2':is2,
-                           'ie':ie,
+                           'i1':i1,
+                           'i2':i2,
                            'itrial':itrial,
                            'groups':groups,
                            'extra':extra,
@@ -113,14 +124,15 @@ def main():
 
 
             else:
-                wqurl = shapesim.get_wq_url(run,is2,ie)
+                job_name='%s-%03i-%03i' % (rstr,i1,i2)
+                wqurl = shapesim.get_wq_url(run,i1,i2)
 
                 wlog("writing wq script:",wqurl)
                 with open(wqurl,'w') as fobj:
                     wqscript=_wqtemplate % {'job_name':job_name,
                                             'run':run, 
-                                            'is2':is2,
-                                            'ie':ie,
+                                            'i1':i1,
+                                            'i2':i2,
                                             'groups':groups,
                                             'extra':extra,
                                             'pri':options.priority}
