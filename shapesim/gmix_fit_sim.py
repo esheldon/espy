@@ -72,12 +72,13 @@ class GMixFitSim(shapesim.BaseSim):
         coellip_psf=self['coellip_psf']
         coellip_obj=self['coellip_obj']
 
-        out['psf_res'] = self.process_image(ci.psf, 
+        out['psf_res'] = self.process_image(ci.psf, ci['skysig_psf'],
                                             self['ngauss_psf'],
                                             ci['cen_psf_admom'],
                                             ci['cov_psf_admom'],
-                                            skysig=ci['skysig_psf'],
                                             coellip=coellip_psf)
+
+
         out['flags'] = out['psf_res']['flags']
         if out['flags'] == 0:
             cov_admom = ci['cov_admom']
@@ -88,14 +89,14 @@ class GMixFitSim(shapesim.BaseSim):
 
             pfrac_am2 = get_admom_pfrac(ci)
 
-            out['res'] = self.process_image(ci.image, 
+            out['res'] = self.process_image(ci.image, ci['skysig'],
                                             self['ngauss_obj'],
                                             ci['cen_admom'],
                                             cov_admom,
                                             psf=out['psf_res']['gmix'],
-                                            skysig=ci['skysig'],
                                             pfrac_am=pfrac_am,
                                             coellip=coellip_obj)
+
 
             out['flags'] = out['res']['flags']
             if show and out['flags'] == 0:
@@ -128,25 +129,23 @@ class GMixFitSim(shapesim.BaseSim):
                 gmix_image.printflags(ptype,out['flags'])
         return out
 
-    def process_image(self, image, ngauss, cen, cov, psf=None,
-                      pfrac_am=None,
-                      skysig=None, coellip=True,
-                      e1true=None, e2true=None):
+
+    def process_image(self, image, skysig, ngauss, cen, cov, psf=None,
+                      pfrac_am=None, coellip=True):
         if not coellip:
             raise ValueError("must use coellip for now")
 
         counts = image.sum()
-        method=self.get('method','lm')
 
-        randomize=self.get('randomize',False)
+        randomize=self['randomize']
+
+        verbose=False
 
         if psf:
-            verbose=False
-            maxtry=self.get('maxtry',1)
+            maxtry=self['maxtry']
         else:
-            maxtry=self.get('maxtry_psf',1)
-            # this is a psf
-            verbose=False
+            maxtry=self['maxtry_psf']
+
         ntry=0
         chi2arr=zeros(maxtry) + 1.e9
         chi2perarr=zeros(maxtry) + 1.e9
@@ -154,129 +153,68 @@ class GMixFitSim(shapesim.BaseSim):
 
         gmlist=[]
 
-        ptype = self.get('ptype','e1e2')
-        use_jacob=self.get('use_jacob',False)
+        ptype = self['ptype']
+        if ptype != 'Tfrac':
+            raise ValueError("only Tfrac supported")
+
+        use_jacob=self['use_jacob']
+
         Tmin = self.get('Tmin',0.0)
         self.wlog("ptype:",ptype,"use_jacob:",use_jacob,"Tmin:",Tmin)
+
         while ntry < maxtry:
-            if psf and ptype == 'dev':
-                if pfrac_am is None:
-                    raise ValueError("Must have pfrac_am for dev fit")
-                guess = self.get_guess_dev(counts, cen, cov, pfrac_am,
-                                           randomize=randomize)
-            elif psf and ptype=='Tfrac':
-            #elif ptype=='Tfrac':
-                #eguess=None
+            if psf:
                 eguess=[0,0]
                 uniform_p=False
                 if ntry > 0:
                     uniform_p=True
-                guess,width = self.get_prior_Tfrac(ngauss,
-                                                   counts, cen, cov, pfrac_am,
-                                                   eguess=eguess,
-                                                   psf=psf,
-                                                   uniform_p=uniform_p,
-                                                   randomize=randomize)
-            elif (psf is None) or (ptype == 'e1e2'):
-                # we always go here for psf measurement
-                # need to get Tfrac stuff working for psf
-                Tfac=None
+            else:
+                uniform_p=False
                 eguess=None
 
-                if ngauss==1 or psf is None:
+                # overriding, can't remember why
+                if ngauss==1:
                     randomize=True
                 else:
                     randomize=False
 
-                if pfrac_am is not None:
-                    Tfac=None
-                    if ntry==0:
-                        eguess=None
-                    elif ntry == 1:
-                        eguess=[0,0]
-                    else:
-                        if (ntry % 2) == 0:
-                            # needed this for eg, e=0.8, very high S/N
-                            # over-ride randomize
-                            randomize=True
-                            eguess=None
-                        else:
-                            # needed this for eg, e=0.8, very high S/N
-                            # over-ride randomize
-                            randomize=True
-                            eguess=[0,0]
-                else:
-                    if ngauss==3:
-                        eguess=[0,0]
+                if ngauss==3:
+                    eguess=[0,0]
 
-                guess = self.get_guess_coellip_e1e2(counts, 
-                                                    ngauss, cen, cov, 
-                                                    randomize=randomize,
-                                                    psf=psf,
-                                                    pfrac_am=pfrac_am,
-                                                    eguess=eguess,
-                                                    Tfac=Tfac)
-            else:
-                raise ValueError("ptype should be 'Tfrac' or 'e1e2' or 'dev'")
+
+            guess,width = self.get_prior(ngauss,
+                                         counts, cen, cov, pfrac_am,
+                                         eguess=eguess,
+                                         psf=psf,
+                                         uniform_p=uniform_p,
+                                         randomize=randomize)
 
             if self['verbose']:
                 print_pars(guess,front="guess: ")
-            if psf and ptype=='dev':
-                gm = gmix_image.GMixFitDev(image,guess,
+
+            gm = gmix_image.GMixFitCoellip(image, skysig,
+                                           guess,width,
                                            psf=psf,
                                            verbose=verbose)
 
-            if psf and ptype=='Tfrac':
-                #verbose=True
-                if skysig is None:
-                    raise ValueError("skysig must not be None")
-                gm = gmix_image.GMixFitCoellipTfrac(image,
-                                                    skysig,
-                                                    guess,width,
-                                                    psf=psf,
-                                                    verbose=verbose)
-
-            else:
-                gm = gmix_image.GMixFitCoellip(image,guess,
-                                               psf=psf,
-                                               method=method,
-                                               ptype='e1e2',
-                                               Tmin=Tmin,
-                                               use_jacob=use_jacob,
-                                               verbose=verbose)
 
             if self['verbose']:
                 print_pars(gm.popt,front="pars:  ")
                 print_pars(gm.perr,front="perr:  ")
-            if skysig is not None:
-                chi2arr[ntry] = gm.get_chi2(gm.popt)
-                if ptype=='Tfrac' and psf is not None:
-                    chi2perarr[ntry] = gm.get_chi2per(gm.popt)
-                else:
-                    chi2perarr[ntry] = gm.get_chi2per(gm.popt,skysig)
-                self.wlog("chi2/pdeg:",chi2perarr[ntry])
-            else:
-                chi2arr[ntry] = gm.get_chi2(gm.popt)
-                self.wlog("chi2:",chi2arr[ntry])
+
+            chi2arr[ntry] = gm.get_chi2(gm.popt)
+            chi2perarr[ntry] = gm.get_chi2per(gm.popt)
+            self.wlog("chi2/pdeg:",chi2perarr[ntry])
             gmlist.append(gm)
 
             ntry += 1
                 
-        #if psf:
-        #    stop
         w=chi2arr.argmin()
         gm = gmlist[w]
-        if skysig is not None:
-            if self['verbose']:
-                print_pars(chi2perarr,front='chi2/deg: ')
-            if ptype=='Tfrac' and psf is not None:
-                s2n = gm.get_s2n(gm.popt)
-            else:
-                s2n = gm.get_s2n(gm.popt, skysig)
-        else:
-            if self['verbose']:
-                print_pars(chi2arr,front='chi2: ')
-            s2n = -9999
+        if self['verbose']:
+            print_pars(chi2perarr,front='chi2/deg: ')
+        s2n = gm.get_s2n(gm.popt)
+
         if self['verbose']:
             wlog("\n")
 
@@ -298,11 +236,12 @@ class GMixFitSim(shapesim.BaseSim):
              'chi2per': chi2perarr[w]}
         return out
 
-    def get_prior_Tfrac(self, ngauss, counts, cen, cov, pfrac_am,
-                        psf=None,
-                        randomize=False,
-                        uniform_p=False,
-                        eguess=None):
+
+    def get_prior(self, ngauss, counts, cen, cov, pfrac_am,
+                  psf=None,
+                  randomize=False,
+                  uniform_p=False,
+                  eguess=None):
         tight_priors=self.get('tight_priors',False)
         npars=2*ngauss+4
         prior=zeros(npars)
@@ -612,6 +551,284 @@ class GMixFitSim(shapesim.BaseSim):
             raise ValueError("implement other guesses")
 
         return prior, width
+
+
+
+
+
+    def run_old(self, ci):
+        """
+        Process the input convolved image
+
+        Output will be a dict with
+        --------------------------
+        flags:
+            Flags of the last processing
+        psf_res:
+            Result of psf processing.
+        res:
+            Result of image processing, if psf processing succeeded.
+        """
+        show=False
+        dostop=True
+        out={}
+
+        ptype=self.get('ptype','e1e2')
+
+        coellip_psf=self['coellip_psf']
+        coellip_obj=self['coellip_obj']
+
+        usenew=True
+        if usenew:
+            out['psf_res'] = self.process_image(ci.psf, ci['skysig_psf'],
+                                                self['ngauss_psf'],
+                                                ci['cen_psf_admom'],
+                                                ci['cov_psf_admom'],
+                                                coellip=coellip_psf)
+
+        else:
+            out['psf_res'] = self.process_image_old(ci.psf, 
+                                                    self['ngauss_psf'],
+                                                    ci['cen_psf_admom'],
+                                                    ci['cov_psf_admom'],
+                                                    skysig=ci['skysig_psf'],
+                                                    coellip=coellip_psf)
+            out['flags'] = out['psf_res']['flags']
+        if out['flags'] == 0:
+            cov_admom = ci['cov_admom']
+            cov_psf_admom = ci['cov_psf_admom']
+            Tadmom=cov_admom[0]+cov_admom[2]
+            Tpsf_admom = cov_psf_admom[0]+cov_psf_admom[2]
+            pfrac_am = Tpsf_admom/Tadmom
+
+            pfrac_am2 = get_admom_pfrac(ci)
+
+            if usenew:
+                out['res'] = self.process_image(ci.image, ci['skysig'],
+                                                self['ngauss_obj'],
+                                                ci['cen_admom'],
+                                                cov_admom,
+                                                psf=out['psf_res']['gmix'],
+                                                pfrac_am=pfrac_am,
+                                                coellip=coellip_obj)
+
+
+            else:
+                out['res'] = self.process_image_old(ci.image, 
+                                                    self['ngauss_obj'],
+                                                    ci['cen_admom'],
+                                                    cov_admom,
+                                                    psf=out['psf_res']['gmix'],
+                                                    skysig=ci['skysig'],
+                                                    pfrac_am=pfrac_am,
+                                                    coellip=coellip_obj)
+
+            out['flags'] = out['res']['flags']
+            if show and out['flags'] == 0:
+                self.show_residual(ci, out['psf_res']['gmix'], 
+                                   objmix=out['res']['gmix'],
+                                   dostop=dostop)
+            elif show:
+                self.show_residual(ci, out['psf_res']['gmix'],dostop=dostop)
+
+            if out['flags'] == 0:
+                mess=("e1true: %.6g e1: %.6g +/- %.6g diff: %.6g\n"
+                      "e2true: %.6g e2: %.6g +/- %.6g diff: %.6g")
+                mess = mess % (ci['e1true'], 
+                               out['res']['pars'][2],
+                               out['res']['perr'][2],
+                               out['res']['pars'][2]-ci['e1true'],
+                               ci['e2true'], 
+                               out['res']['pars'][3],
+                               out['res']['perr'][3],
+                               out['res']['pars'][3]-ci['e2true'])
+                self.wlog(mess)
+        else:
+            self.wlog('failed PSF flags:')
+            if self['verbose']:
+                gmix_image.printflags(ptype,out['flags'])
+
+        if out['flags'] != 0 and self['verbose']:
+            self.wlog('flags:')
+            if self['verbose']:
+                gmix_image.printflags(ptype,out['flags'])
+        return out
+
+
+
+
+    def process_image_old(self, image, ngauss, cen, cov, psf=None,
+                          pfrac_am=None,
+                          skysig=None, coellip=True,
+                          e1true=None, e2true=None):
+        if not coellip:
+            raise ValueError("must use coellip for now")
+
+        counts = image.sum()
+        method=self.get('method','lm')
+
+        randomize=self.get('randomize',False)
+
+        if psf:
+            verbose=False
+            maxtry=self.get('maxtry',1)
+        else:
+            maxtry=self.get('maxtry_psf',1)
+            # this is a psf
+            verbose=False
+        ntry=0
+        chi2arr=zeros(maxtry) + 1.e9
+        chi2perarr=zeros(maxtry) + 1.e9
+        guess_chi2perarr=zeros(maxtry) + 1.e9
+
+        gmlist=[]
+
+        ptype = self.get('ptype','e1e2')
+        use_jacob=self.get('use_jacob',False)
+        Tmin = self.get('Tmin',0.0)
+        self.wlog("ptype:",ptype,"use_jacob:",use_jacob,"Tmin:",Tmin)
+        while ntry < maxtry:
+            if psf and ptype == 'dev':
+                if pfrac_am is None:
+                    raise ValueError("Must have pfrac_am for dev fit")
+                guess = self.get_guess_dev(counts, cen, cov, pfrac_am,
+                                           randomize=randomize)
+            elif psf and ptype=='Tfrac':
+            #elif ptype=='Tfrac':
+                #eguess=None
+                eguess=[0,0]
+                uniform_p=False
+                if ntry > 0:
+                    uniform_p=True
+                guess,width = self.get_prior(ngauss,
+                                             counts, cen, cov, pfrac_am,
+                                             eguess=eguess,
+                                             psf=psf,
+                                             uniform_p=uniform_p,
+                                             randomize=randomize)
+            elif (psf is None) or (ptype == 'e1e2'):
+                # we always go here for psf measurement
+                # need to get Tfrac stuff working for psf
+                Tfac=None
+                eguess=None
+
+                if ngauss==1 or psf is None:
+                    randomize=True
+                else:
+                    randomize=False
+
+                if pfrac_am is not None:
+                    Tfac=None
+                    if ntry==0:
+                        eguess=None
+                    elif ntry == 1:
+                        eguess=[0,0]
+                    else:
+                        if (ntry % 2) == 0:
+                            # needed this for eg, e=0.8, very high S/N
+                            # over-ride randomize
+                            randomize=True
+                            eguess=None
+                        else:
+                            # needed this for eg, e=0.8, very high S/N
+                            # over-ride randomize
+                            randomize=True
+                            eguess=[0,0]
+                else:
+                    if ngauss==3:
+                        eguess=[0,0]
+
+                guess = self.get_guess_coellip_e1e2(counts, 
+                                                    ngauss, cen, cov, 
+                                                    randomize=randomize,
+                                                    psf=psf,
+                                                    pfrac_am=pfrac_am,
+                                                    eguess=eguess,
+                                                    Tfac=Tfac)
+            else:
+                raise ValueError("ptype should be 'Tfrac' or 'e1e2' or 'dev'")
+
+            if self['verbose']:
+                print_pars(guess,front="guess: ")
+            if psf and ptype=='dev':
+                gm = gmix_image.GMixFitDev(image,guess,
+                                           psf=psf,
+                                           verbose=verbose)
+
+            if psf and ptype=='Tfrac':
+                #verbose=True
+                if skysig is None:
+                    raise ValueError("skysig must not be None")
+                gm = gmix_image.GMixFitCoellip(image,
+                                               skysig,
+                                               guess,width,
+                                               psf=psf,
+                                               verbose=verbose)
+
+            else:
+                gm = gmix_image.GMixFitCoellipTry(image,guess,
+                                               psf=psf,
+                                               method=method,
+                                               ptype='e1e2',
+                                               Tmin=Tmin,
+                                               use_jacob=use_jacob,
+                                               verbose=verbose)
+
+            if self['verbose']:
+                print_pars(gm.popt,front="pars:  ")
+                print_pars(gm.perr,front="perr:  ")
+            if skysig is not None:
+                chi2arr[ntry] = gm.get_chi2(gm.popt)
+                if ptype=='Tfrac' and psf is not None:
+                    chi2perarr[ntry] = gm.get_chi2per(gm.popt)
+                else:
+                    chi2perarr[ntry] = gm.get_chi2per(gm.popt,skysig)
+                self.wlog("chi2/pdeg:",chi2perarr[ntry])
+            else:
+                chi2arr[ntry] = gm.get_chi2(gm.popt)
+                self.wlog("chi2:",chi2arr[ntry])
+            gmlist.append(gm)
+
+            ntry += 1
+                
+        #if psf:
+        #    stop
+        w=chi2arr.argmin()
+        gm = gmlist[w]
+        if skysig is not None:
+            if self['verbose']:
+                print_pars(chi2perarr,front='chi2/deg: ')
+            if ptype=='Tfrac' and psf is not None:
+                s2n = gm.get_s2n(gm.popt)
+            else:
+                s2n = gm.get_s2n(gm.popt, skysig)
+        else:
+            if self['verbose']:
+                print_pars(chi2arr,front='chi2: ')
+            s2n = -9999
+        if self['verbose']:
+            wlog("\n")
+
+            print_pars(gm.popt,front='popt: ')
+            print_pars(gm.perr,front='perr: ')
+            wlog("s2n:",s2n)
+            wlog("numiter gmix:",gm.numiter)
+            wlog("Topt/Tguess:",gm.popt[ngauss+4:]/guess[ngauss+4:])
+
+        out={'gmix':    gm.gmix,
+             'pars':    gm.popt,
+             'perr':    gm.perr,
+             'pcov':    gm.pcov,
+             'flags':   gm.flags,
+             'ier':     gm.ier,
+             'numiter': gm.numiter,
+             'coellip': coellip,
+             's2n':     s2n,
+             'chi2per': chi2perarr[w]}
+        return out
+
+
+
 
     def get_guess_dev(self, counts, cen, cov, pfrac_am,
                       eguess=None,
@@ -1121,6 +1338,7 @@ class GMixFitSim(shapesim.BaseSim):
                     guess[5+ngauss+2:] = 4.0
 
         return guess
+
 
     def show_residual(self, ci, psfmix, dostop=True, objmix=None):
         """
