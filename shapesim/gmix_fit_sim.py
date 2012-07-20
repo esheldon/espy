@@ -93,7 +93,7 @@ class GMixFitSim(shapesim.BaseSim):
                                             self['ngauss_obj'],
                                             ci['cen_admom'],
                                             cov_admom,
-                                            psf=out['psf_res']['gmix'],
+                                            psf=out['psf_res']['pars'],
                                             pfrac_am=pfrac_am,
                                             coellip=coellip_obj)
 
@@ -141,7 +141,7 @@ class GMixFitSim(shapesim.BaseSim):
 
         verbose=False
 
-        if psf:
+        if psf is not None:
             maxtry=self['maxtry']
         else:
             maxtry=self['maxtry_psf']
@@ -163,7 +163,7 @@ class GMixFitSim(shapesim.BaseSim):
         self.wlog("ptype:",ptype,"use_jacob:",use_jacob,"Tmin:",Tmin)
 
         while ntry < maxtry:
-            if psf:
+            if psf is not None:
                 eguess=[0,0]
                 uniform_p=False
                 if ntry > 0:
@@ -195,6 +195,7 @@ class GMixFitSim(shapesim.BaseSim):
             gm = gmix_image.GMixFitCoellip(image, skysig,
                                            guess,width,
                                            psf=psf,
+                                           purepy=False,
                                            verbose=verbose)
 
 
@@ -242,6 +243,11 @@ class GMixFitSim(shapesim.BaseSim):
                   randomize=False,
                   uniform_p=False,
                   eguess=None):
+
+        npsf=0
+        if psf is not None:
+            npsf = gmix_image.get_ngauss_coellip(psf)
+
         tight_priors=self.get('tight_priors',False)
         npars=2*ngauss+4
         prior=zeros(npars)
@@ -267,8 +273,8 @@ class GMixFitSim(shapesim.BaseSim):
             width[2] = 10
             width[3] = 10
 
-            if psf:
-                if len(psf)==3:
+            if psf is not None:
+                if npsf == 3:
                     #Tmax = T*55
                     #p0,p1,p2,p3=(0.0251877,0.0381688,0.0979805,0.835861)
  
@@ -317,7 +323,7 @@ class GMixFitSim(shapesim.BaseSim):
                     else:
                         self.wlog("forcing",force)
                         Tmax = T*force
-                elif len(psf) == 1:
+                elif npsf == 1:
                     # this works quite well for a single gaussian psf
                     Tply=poly1d([-72.51258096,  76.65579929])
                     # from low ellip
@@ -356,7 +362,7 @@ class GMixFitSim(shapesim.BaseSim):
                 prior[10] = p2
                 prior[11] = p3
 
-            if len(psf)==3:
+            if npsf==3:
                 if tight_priors:
                     width[4] = .01                # informative
                     #width[4] = 1.e-5                # informative
@@ -519,7 +525,8 @@ class GMixFitSim(shapesim.BaseSim):
 
             if psf is not None:
                 self.wlog("======> with psf")
-                psfmoms = gmix_image.total_moms(psf)
+                psf_gmix = gmix_image.pars2gmix_coellip(psf, ptype='Tfrac')
+                psfmoms = gmix_image.total_moms(psf_gmix)
                 tcov=cov.copy()
                 tcov[0] -= psfmoms['irr']
                 tcov[1] -= psfmoms['irc']
@@ -669,7 +676,7 @@ class GMixFitSim(shapesim.BaseSim):
 
         randomize=self.get('randomize',False)
 
-        if psf:
+        if psf is not None:
             verbose=False
             maxtry=self.get('maxtry',1)
         else:
@@ -688,12 +695,12 @@ class GMixFitSim(shapesim.BaseSim):
         Tmin = self.get('Tmin',0.0)
         self.wlog("ptype:",ptype,"use_jacob:",use_jacob,"Tmin:",Tmin)
         while ntry < maxtry:
-            if psf and ptype == 'dev':
+            if psf is not None and ptype == 'dev':
                 if pfrac_am is None:
                     raise ValueError("Must have pfrac_am for dev fit")
                 guess = self.get_guess_dev(counts, cen, cov, pfrac_am,
                                            randomize=randomize)
-            elif psf and ptype=='Tfrac':
+            elif psf is not None and ptype=='Tfrac':
             #elif ptype=='Tfrac':
                 #eguess=None
                 eguess=[0,0]
@@ -750,12 +757,12 @@ class GMixFitSim(shapesim.BaseSim):
 
             if self['verbose']:
                 print_pars(guess,front="guess: ")
-            if psf and ptype=='dev':
+            if psf is not None and ptype=='dev':
                 gm = gmix_image.GMixFitDev(image,guess,
                                            psf=psf,
                                            verbose=verbose)
 
-            if psf and ptype=='Tfrac':
+            if psf is not None and ptype=='Tfrac':
                 #verbose=True
                 if skysig is None:
                     raise ValueError("skysig must not be None")
@@ -791,8 +798,6 @@ class GMixFitSim(shapesim.BaseSim):
 
             ntry += 1
                 
-        #if psf:
-        #    stop
         w=chi2arr.argmin()
         gm = gmlist[w]
         if skysig is not None:
@@ -1001,7 +1006,7 @@ class GMixFitSim(shapesim.BaseSim):
 
             self.wlog("    starting e1,e2:",guess[2],guess[3])
 
-            if psf:
+            if psf is not None:
                 guess[4] = counts*0.62
                 guess[5] = counts*0.34
                 guess[6] = counts*0.04
