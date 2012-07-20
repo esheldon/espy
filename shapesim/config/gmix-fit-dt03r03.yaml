@@ -6,11 +6,12 @@ runtype: bys2n
 
 # trim the image before adding noise
 retrim: true
+# !!!  I checked it works with no noise
 retrim_fluxfrac: 0.95
 
 # this works in the algorithm for determining number of trials
 # default 0.4!
-s2n_fac: 20
+s2n_fac: 80
 
 # optimal S/N estimat
 s2n_method: matched
@@ -20,8 +21,8 @@ s2n_method: matched
 s2ncalc_fluxfrac: null
 
 
-ie: 19 # 0.33
-s2nvals: [1.0e+8]
+ie: 7 # 0.33
+s2nvals: [5,10,15,20,25,30,40,50,60,70,80,90,100]
 
 s2n_psf: 1.0e+8
 
