@@ -20,6 +20,8 @@ mins2: 0.5
 maxs2: 2.0
 nums2: 4
 
+# whoops, wanted fewer
+# will need a new run
 mine:  0.05
 maxe:  0.80
 nume:  20

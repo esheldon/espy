@@ -3,6 +3,7 @@ import os
 from os.path import join as path_join
 import esutil as eu
 from esutil.misc import wlog
+from esutil.stat import wmom
 import numpy
 from numpy import ogrid, array, sqrt, where, linspace, median, zeros
 from numpy.random import standard_normal
@@ -1129,37 +1130,59 @@ def average_outputs(data, straight_avg=False):
             e2 = edata['e2_meas']
             esq = e1**2 + e2**2
 
+            num=e1.size
+
             e1sum = e1.sum()
             e2sum = e2.sum()
             esqsum = esq.sum()
 
-            num=e1.size
-            mesq = esqsum/num
-            me1 = e1sum/num
-            me2 = e2sum/num
+            atype='uw'
+            if atype=='weighted':
+                wtstot = 1/(2*0.3**2 + edata['pars_err'][:,2]**2 + edata['pars_err'][:,3]**2)
+                wts1 = 1/(0.3**2 + edata['pars_err'][:,2]**2)
+                wts2 = 1/(0.3**2 + edata['pars_err'][:,3]**2)
+                me1,e1err0 = wmom(e1, wts1, calcerr=True)
+                me2,e2err0 = wmom(e2, wts2, calcerr=True)
+
+                mcrap,e1err = wmom(e1-edata['e1true'], wts1, calcerr=True)
+                mcrap,e2err = wmom(e2-edata['e2true'], wts2, calcerr=True)
+
+                mesq,mesq_err = wmom(esq, wtstot, calcerr=True)
+
+                e1err2inv = 1/e1err**2
+                e2err2inv = 1/e2err**2
+
+                print e1err0,e1err
+                print e2err0,e2err
+            else:
+
+                mesq = esqsum/num
+                me1 = e1sum/num
+                me2 = e2sum/num
+
+                # we use the scatter from true, becuase with ring tests
+                # we don't have shape noise
+                e1scatt = (e1-edata['e1true']).var()
+                e2scatt = (e2-edata['e2true']).var()
+
+                e1err = sqrt(e1scatt/num)
+                e2err = sqrt(e2scatt/num)
+                e1err2inv = num/e1scatt
+                e2err2inv = num/e2scatt
+
+                #mesq_err = esq.std()/sqrt(num)
+                #e1err = sqrt(1/e1err2inv)
+                #e2err = sqrt(1/e2err2inv)
+                
+                #g1err = g1*sqrt( (mesq_err/mesq)**2 + (e1err/me1)**2 )
+                #g2err = g2*sqrt( (mesq_err/mesq)**2 + (e1err/me2)**2 )
 
             R = 1-.5*mesq
             g1 = 0.5*me1/R
             g2 = 0.5*me2/R
 
-            # we use the scatter from true, becuase with ring tests
-            # we don't have shape noise
-            e1scatt = (e1-edata['e1true']).var()
-            e2scatt = (e2-edata['e2true']).var()
-
-            e1err2inv = num/e1scatt
-            e2err2inv = num/e2scatt
-
-            #mesq_err = esq.std()/sqrt(num)
-            e1err = sqrt(1/e1err2inv)
-            e2err = sqrt(1/e2err2inv)
-
-            g1err = 0.5*e1err
-            g2err = 0.5*e2err
-            
-            #g1err = g1*sqrt( (mesq_err/mesq)**2 + (e1err/me1)**2 )
-            #g2err = g2*sqrt( (mesq_err/mesq)**2 + (e1err/me2)**2 )
-
+            g1err = 0.5*e1err/R
+            g2err = 0.5*e2err/R
 
 
             d['Rshear'][i] = R

@@ -451,6 +451,8 @@ class SimPlotter(dict):
         import pcolors
         import converter
 
+        biggles.configure("default","fontsize_min",2)
+
         if doavg:
             extra='-avg'
         else:
@@ -470,7 +472,12 @@ class SimPlotter(dict):
         epsfile = shapesim.get_plot_file(self['run'],type+extra,yrng=yrng)
         wlog("will plot to:",epsfile)
 
-        colors=pcolors.rainbow(len(data), 'hex')
+        if len(data) == 4:
+            colors=['red','forestgreen','NavajoWhite3','blue']
+            types=['dotted','dashed','dotdashed','solid']
+        else:
+            colors=pcolors.rainbow(len(data), 'hex')
+            types=['solid']*len(data)
 
         biggles.configure('PlotKey','key_vsep',1.0)
         biggles.configure("default","fontsize_min",1.5)
@@ -553,28 +560,33 @@ class SimPlotter(dict):
                 label = r'< %0.3f' % s2
             else:
                 label = r'%0.3f' % s2
-            pr1 = biggles.Curve(s2n, yvals1, color=colors[i])
-            pr2 = biggles.Curve(s2n, yvals2, color=colors[i])
-            pr1.label = label
-            pr2.label = label
+            pr1 = biggles.Points(s2n, yvals1, color=colors[i],type='filled circle',size=1.5)
+            pr2 = biggles.Points(s2n, yvals2, color=colors[i],type='filled circle',size=1.5)
+            cr1 = biggles.Curve(s2n, yvals1, color=colors[i],type=types[i],width=2.5)
+            cr2 = biggles.Curve(s2n, yvals2, color=colors[i],type=types[i],width=2.5)
+            cr1.label = label
+            cr2.label = label
 
 
-            arr[0,0].add(pr1)
-            arr[1,0].add(pr2)
+            arr[0,0].add(cr1,pr1)
+            arr[1,0].add(cr2,pr2)
             
             #if not self.docum and i == (len(data)-1):
             if True:
-                err1p = biggles.SymmetricErrorBarsY(s2n, yvals1, st['shear1err'], 
+                g1err = [st['shear1err'].max()]*st['shear1err'].size
+                g2err = [st['shear2err'].max()]*st['shear2err'].size
+                err1p = biggles.SymmetricErrorBarsY(s2n, yvals1, g1err,
                                                     color=colors[i])
-                err2p = biggles.SymmetricErrorBarsY(s2n, yvals2, st['shear2err'],
+                err2p = biggles.SymmetricErrorBarsY(s2n, yvals2, g2err,
                                                     color=colors[i])
                 if not self.noerr:
                     arr[0,0].add(err1p)
                     arr[1,0].add(err2p)
+
             if i < 15:
-                plots1.append(pr1)
+                plots1.append(cr1)
             else:
-                plots2.append(pr1)
+                plots2.append(cr1)
 
             if doavg:
                 if st['s2'].size == avg['n'].size:
