@@ -525,7 +525,7 @@ class GMixFitSim(shapesim.BaseSim):
 
             if psf is not None:
                 self.wlog("======> with psf")
-                psf_gmix = gmix_image.pars2gmix_coellip(psf, ptype='Tfrac')
+                psf_gmix = gmix_image.pars2gmix(psf,coellip=True)
                 psfmoms = gmix_image.total_moms(psf_gmix)
                 tcov=cov.copy()
                 tcov[0] -= psfmoms['irr']
@@ -1350,8 +1350,7 @@ class GMixFitSim(shapesim.BaseSim):
         Show plots of the input compared with the fit gaussian mixtures.
         """
         
-        psfmodel = gmix_image.gmix2image(psfmix,ci.psf.shape,
-                                         renorm=False) 
+        psfmodel = gmix_image.gmix2image(psfmix,ci.psf.shape) 
         images.compare_images(ci.psf,psfmodel,
                               label1='psf',label2='gmix')
 
@@ -1359,11 +1358,7 @@ class GMixFitSim(shapesim.BaseSim):
             skysig=None
             if ci['skysig'] > 0:
                 skysig=ci['skysig']
-            #model0 = gmix_image.gmix2image(objmix,ci.image0.shape,
-            #                               renorm=False) 
-            model = gmix_image.gmix2image(objmix,ci.image.shape,
-                                          psf=psfmix,
-                                          renorm=False) 
+            model = gmix_image.gmix2image(objmix,ci.image.shape, psf=psfmix) 
 
             gmix_image.gmix_print(objmix)
             for i,g in enumerate(objmix):

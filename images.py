@@ -128,7 +128,10 @@ def scale(image, **keys):
     # subtract so min is zero
     im -= minval
     # and make sure in [0,1]
-    im /= (maxval-minval)
+    if maxval == minval:
+        im /= maxval
+    else:
+        im /= (maxval-minval)
 
     if scaling == 'asinh':
         #alpha        = keys.get('alpha',0.02)
@@ -158,7 +161,9 @@ def scale(image, **keys):
     else:
         raise ValueError('Uknown scaling: %s' % scaling)
 
-    im /= im.max()
+    newmax = im.max()
+    if newmax > 0:
+        im /= newmax
     if setmax:
         # e.g. if we set the max to a value *higher* than our max input value, 
         # the max now will be less than one

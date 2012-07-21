@@ -325,16 +325,15 @@ gmix-fit
                     dt03r02   7  .33     matched   todo
                                                    retrim_fluxfrac: 0.95
                                                    (retrim didn't change things much but sped up)
-                                                   s2n_fac=80
+                                                   s2n_fac=20
                                                    [5,10,15,20,25,30,40,50,60,70,80,90,100]
                                                    bytrial all
 
-                    To test stricter fluxfrac.  Really need to develop a better
-                    way to choose the aperture.
-                    dt03r03  19  .80     matched   done
+                    dt03r03   7  .33     matched   same as dt03r02 with s2n_fac=80
                                                    retrim_fluxfrac: 0.95
-                                                   s2nvals
-                                                   [1.0e+8]
+                    dt03r04   7  .33     matched   Same as dt03r03 but another to average
+                                                   with it for more statistics.
+                                                   Also uses new C code for rendering
 
 
 
