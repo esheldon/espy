@@ -969,6 +969,51 @@ def make_averaged_outputs(run, docum=True,
         write_averaged_outputs(run, cumdata, docum=docum, skip1=skip1,fs='hdfs')
     return data
 
+def average_runs(runlist, new_run_name):
+    """
+    The runs must already be averaged and have the same size
+    in all indices of relevance
+    """
+
+    dir = get_output_dir(new_run_name)
+    if not os.path.exists(dir):
+        wlog("making dir:",dir)
+        os.makedirs(dir)
+ 
+    c=read_config(runlist[0])
+    cs0=read_config(c['sim'])
+
+    numi1 = cs0['nums2']
+    for i1 in xrange(numi1):
+        for irun,run in enumerate(runlist):
+            f=get_averaged_url(run, i1, fs='hdfs')
+            wlog("Reading:",f)
+            d=eu.io.read(f)
+
+            if irun == 0:
+                data = d.copy()
+            else:
+                for field in ['e1sum','e2sum',
+                              'e1err2invsum','e2err2invsum',
+                              'esqsum','nsum']:
+                    data[field] += d[field]
+            
+            # this is an array with mean for each in second index
+            mesq = data['esqsum']/data['nsum']
+            data['Rshear'] = 1.-.5*mesq
+            data['shear1'] = .5*data['e1sum']/data['nsum']/data['Rshear']
+            data['shear2'] = .5*data['e2sum']/data['nsum']/data['Rshear']
+            data['shear1err'] = 0.5*sqrt(1/data['e1err2invsum'])
+            data['shear2err'] = 0.5*sqrt(1/data['e2err2invsum'])
+
+
+        for fs in [None,'hdfs']:
+            fout=get_averaged_url(new_run_name, i1, fs=fs)
+            wlog("    writing:",fout)
+            eu.io.write(fout, data, clobber=True)
+
+
+
 def read_all_outputs(run, 
                      verbose=False, 
                      skip1=[], 
@@ -1093,16 +1138,17 @@ def average_outputs(data, straight_avg=False):
                    ('nsum','i8')]
         else:
             dt_extra = [('e1sum','f8'), # sums so we can do cumulative
-                   ('e2sum','f8'),
-                   ('e1err2invsum','f8'),
-                   ('e2err2invsum','f8'),
-                   ('esqsum','f8'),
-                   ('nsum','i8'),
-                   ('shear1','f8'),
-                   ('shear1err','f8'),  # average in particular bin
-                   ('shear2','f8'),
-                   ('shear2err','f8'),
-                   ('Rshear_true','f8'),('Rshear','f8')]
+                        ('e2sum','f8'),
+                        ('e1err2invsum','f8'),
+                        ('e2err2invsum','f8'),
+                        ('esqsum','f8'),
+                        ('nsum','i8'),
+                        ('shear1','f8'),
+                        ('shear1err','f8'),  # average in particular bin
+                        ('shear2','f8'),
+                        ('shear2err','f8'),
+                        ('Rshear_true','f8'),
+                        ('Rshear','f8')]
     else:
         raise ValueError('DEAL WITH e1meas missing')
 
