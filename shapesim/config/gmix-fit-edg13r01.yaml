@@ -1,4 +1,4 @@
-# edg13 is a ring test
+
 run: gmix-fit-edg13r01
 sim: sim-edg13
 
@@ -7,24 +7,19 @@ sim: sim-edg13
 runtype: bys2n
 
 s2n_method: matched
-s2n_fac: 1
+s2n_fac: 80
 
 retrim: true
 retrim_fluxfrac: 0.9973
+s2ncalc_fluxfrac: null
 
-ie: 7 # 0.33
-mins2n: 5
-maxs2n: 100
-nums2n: 20  # still 20*20=400
+ie: 7
+s2nvals: [5,10,15,20,25,30,40,50,60,70,80,90,100]
 
 s2n_psf: 1.0e+8
 
 use_cache: true
 add_to_cache: false
-
-# type of parametrization
-ptype: Tfrac
-use_jacob: false
 
 verbose: false
 
