@@ -1,5 +1,10 @@
 gmix-fit
 
+    for use in the paper
+        by S/N
+        gg05r01
+        et04r02 but rerun with more s2n and s2n_fac = 80
+        dt03r03r04
     todo:
 
         - et03, which had trimming, ran much faster.  If it was also accurate,
@@ -191,7 +196,7 @@ gmix-fit
                                                    bytrial for all
                                                    done
 
-        edg02
+        edg02 redoing with fewer s2
             round double gaussian psf
             g1=0.01,g2=-0.01
 
@@ -202,7 +207,7 @@ gmix-fit
 
                 by s/n
                     run      ie    e  s2n_method   notes
-                    edg02r02  7 0.33    matched    done
+                    edg02r02  7 0.33    matched    rerunning
                     edg02r03 19 0.80    matched    todo
                     edg02r04  0 0.05    matched    todo
 
@@ -334,6 +339,7 @@ gmix-fit
                     dt03r04   7  .33     matched   Same as dt03r03 but another to average
                                                    with it for more statistics.
                                                    Also uses new C code for rendering
+                    run dt03r03r04 is the average
 
 
 

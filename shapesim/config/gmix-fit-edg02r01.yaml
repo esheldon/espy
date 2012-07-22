@@ -10,21 +10,17 @@ s2n_fac: 1 # default 0.4
 
 retrim: true
 retrim_fluxfrac: 0.9973
+s2ncalc_fluxfrac: null
 
 #use_cache: true
 use_cache: true
 add_to_cache: false
 
-# type of parametrization
-ptype: Tfrac
-use_jacob: false
-
-verbose: false
+verbose: true
 
 # you need the + or - in exponent
 s2n: 1.0e+8
 s2n_psf: 1.0e+8
-#s2n_psf: 100
 
 # we should try with higher values to see what happens
 ngauss_psf: 2
@@ -34,7 +30,7 @@ coellip_psf: true
 coellip_obj: true
 
 maxtry: 2
-maxtry_psf: 1
+maxtry_psf: 2
 
 # this is for the gaussian PSF fit, since admom gets gaussians too perfectly
 # trying out doing this automatically as needed

@@ -67,8 +67,6 @@ class GMixFitSim(shapesim.BaseSim):
         dostop=True
         out={}
 
-        ptype=self.get('ptype','e1e2')
-
         coellip_psf=self['coellip_psf']
         coellip_obj=self['coellip_obj']
 
@@ -121,12 +119,12 @@ class GMixFitSim(shapesim.BaseSim):
         else:
             self.wlog('failed PSF flags:')
             if self['verbose']:
-                gmix_image.printflags(ptype,out['flags'])
+                gmix_image.printflags("flags:",out['flags'])
 
         if out['flags'] != 0 and self['verbose']:
             self.wlog('flags:')
             if self['verbose']:
-                gmix_image.printflags(ptype,out['flags'])
+                gmix_image.printflags("flags:",out['flags'])
         return out
 
 
@@ -153,14 +151,6 @@ class GMixFitSim(shapesim.BaseSim):
 
         gmlist=[]
 
-        ptype = self['ptype']
-        if ptype != 'Tfrac':
-            raise ValueError("only Tfrac supported")
-
-        use_jacob=self['use_jacob']
-
-        Tmin = self.get('Tmin',0.0)
-        self.wlog("ptype:",ptype,"use_jacob:",use_jacob,"Tmin:",Tmin)
 
         while ntry < maxtry:
             if psf is not None:
@@ -170,13 +160,16 @@ class GMixFitSim(shapesim.BaseSim):
                     uniform_p=True
             else:
                 uniform_p=False
-                eguess=None
+                if ntry == 0:
+                    eguess=[0,0]
+                else:
+                    eguess=None
 
                 # overriding, can't remember why
                 if ngauss==1:
                     randomize=True
-                else:
-                    randomize=False
+                #else:
+                #    randomize=False
 
                 if ngauss==3:
                     eguess=[0,0]
@@ -444,7 +437,7 @@ class GMixFitSim(shapesim.BaseSim):
                 prior[8] += prior[8]*0.05*(randu()-0.5)
                 prior[9] += prior[9]*0.05*(randu()-0.5)
 
-        elif ngauss==3 and psf:
+        elif ngauss==3 and psf is not None:
             self.wlog("    using psf ngauss=3")
         
             if eguess is not None:
@@ -456,7 +449,7 @@ class GMixFitSim(shapesim.BaseSim):
             self.wlog("    starting e1,e2:",prior[2],prior[3])
 
 
-            self.wlog("Using pfrac_am fit:",pfrac_am)
+            #self.wlog("Using pfrac_am fit:",pfrac_am)
             # need to do this at higher S/N
             #ply=poly1d([-3.20824373,  3.40727954])
             #tratio = ply(pfrac_am)
@@ -554,6 +547,35 @@ class GMixFitSim(shapesim.BaseSim):
                 prior[4] += 0.1*(randu()-0.5)  # p
                 prior[5] += 1*(randu()-0.5)   # T
 
+        elif ngauss==2 and psf is None:
+            self.wlog("    ngauss:",ngauss)
+
+            if eguess is not None:
+                prior[2],prior[3] = eguess
+            else:
+                prior[2] = e1# + 0.05*(randu()-0.5)
+                prior[3] = e2# + 0.05*(randu()-0.5)
+
+            e1start,e2start = prior[2],prior[3]
+            prior[2],prior[3] = randomize_e1e2(e1start,e2start)
+            prior[4] = T*5 # Tmax
+            prior[5] = 1./5.08
+            prior[6]= counts*0.1
+            prior[7]= counts*0.9
+
+            prior[4] += 0.1*prior[4]*(randu()-0.5)
+            prior[5] += 0.1*prior[5]*(randu()-0.5)
+            prior[6] += 0.1*prior[6]*(randu()-0.5)
+            prior[7] += 0.1*prior[7]*(randu()-0.5)
+
+            # uninformative
+            width[2] = 10  # e1
+            width[3] = 10  # e2
+            width[4] = 100 # Tmax
+            width[5] = 10  # Tfrac2
+            width[6] = 10  # p1
+            width[7] = 10  # p2
+ 
         else:
             raise ValueError("implement other guesses")
 
@@ -1382,11 +1404,8 @@ class GMixFitSim(shapesim.BaseSim):
                 stop
 
     def copy_output(self, s2, ellip, s2n, ci, res):
-        ptype=self['ptype']
         if not self['coellip_psf']:
             raise ValueError("must use coellip for psf for now")
-        if (ptype != 'dev') and (not self['coellip_obj']):
-            raise ValueError("must use coellip or dev for obj for now")
 
         st = zeros(1, dtype=self.out_dtype())
 
@@ -1522,15 +1541,11 @@ class GMixFitSim(shapesim.BaseSim):
 
 
     def out_dtype(self):
-        ptype=self['ptype']
 
         ngauss_psf=self['ngauss_psf']
         ngauss_obj=self['ngauss_obj']
         npars_psf = 2*ngauss_psf+4
-        if ptype == 'dev':
-            npars_obj = 9
-        else:
-            npars_obj = 2*ngauss_obj+4
+        npars_obj = 2*ngauss_obj+4
 
         gmix_dt = [('p','f8'),('row','f8'),('col','f8'),
                    ('irr','f8'),('irc','f8'),('icc','f8')]
