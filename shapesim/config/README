@@ -212,6 +212,7 @@ gmix-fit
                     edg02r04  0 0.05    matched    todo
 
     edg03r02,edg04r01,edg05r01,edg06r01,edg07r01,edg08r01 
+    0.0      0.01     0.02     0.03     0.04     0.05
     elliptical psf and shear increasing
     from 0 to 0.05
         edg03
@@ -223,12 +224,15 @@ gmix-fit
                 byellip
                     run        s/n   nrepeat  s2n_method      notes
                     edg03r01  1.e8      1       matched       done
+                    old sim
 
                 by s/n
                     run      ie    e  s2n_method   notes
                     edg03r02  7 0.33    matched    done
                     edg03r03 19 0.80    matched    done
+                    old sim
                     edg03r04  0 0.05    matched    done
+                    old sim
         edg04
             elliptical double gaussian psf, 
                 e1=0.05,e2=0.05
