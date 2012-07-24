@@ -950,11 +950,8 @@ def make_averaged_outputs(run, docum=True,
         for i2 in xrange(numi2):
             if i2 in skip2:
                 continue
-            try:
-                edata = read_output(run, i1, i2, verbose=True, fs='hdfs')
-                s2data.append(edata)
-            except:
-                pass
+            edata = read_output(run, i1, i2, verbose=True, fs='hdfs')
+            s2data.append(edata)
         s2data = average_outputs(s2data, straight_avg=straight_avg)
         data.append(s2data)
 
@@ -1043,11 +1040,8 @@ def read_all_outputs(run,
         for i2 in xrange(numi2):
             if i2 in skip2:
                 continue
-            try:
-                edata = read_output(run, i1, i2, verbose=verbose,fs=fs)
-                s2data.append(edata)
-            except:
-                pass
+            edata = read_output(run, i1, i2, verbose=verbose,fs=fs)
+            s2data.append(edata)
         data.append(s2data)
 
     return data
@@ -1331,13 +1325,21 @@ def plot_signal_vs_rad(im, cen):
     plt.show()
 
 def combine_trials(run, is2, ie):
-    pattern=get_output_url(run, is2, ie, itrial='*', fs='hdfs')
+    c = read_config(run)
+    cs = read_config(c['sim'])
+
+    orient=cs.get('orient','rand')
+    if orient == 'ring':
+        ntrial = cs['nring']
+    else:
+        ntrial = c['ntrial']
+
+
     outfile=get_output_url(run, is2, ie, fs='hdfs')
 
-    flist = eu.hdfs.ls(pattern, full=True)
-    flist.sort()
     datalist=[]
-    for f in flist:
+    for itrial in xrange(ntrial):
+        f=get_output_url(run, is2, ie, itrial=itrial, fs='hdfs')
         print f
         t=eu.io.read(f)
         datalist.append(t)
