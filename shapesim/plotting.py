@@ -27,6 +27,9 @@ class MultiPlotterBase(dict):
         for k,v in keys.iteritems():
             self[k] = v
 
+        if 'show' not in self:
+            self['show'] = True
+
         self.plotters=[]
         for run in self.runs:
             self.plotters.append(SimPlotter(run,**keys))
@@ -203,9 +206,13 @@ class MultiPlotterVsE(MultiPlotterBase):
         title=self.get_title()
         if title:
             arr.title=title
-        arr.show()
+        if self['show']:
+            arr.show()
 
-        epsfile = shapesim.get_plot_file(self.set,'vs-e',yrng=yrng)
+        extra=''
+        if self['use_rb']:
+            extra='-rb'
+        epsfile = shapesim.get_plot_file(self.set,'vs-e'+extra,yrng=yrng)
         arr.write_eps(epsfile)
         converter.convert(epsfile,dpi=100,verbose=True)
 
@@ -226,6 +233,22 @@ class MultiPlotterVsShear(MultiPlotterBase):
     """
     def __init__(self, set, **keys):
         super(MultiPlotterVsShear,self).__init__(set, **keys)
+        self.do_setup()
+
+        self['use_rb'] = keys.get('use_rb',True)
+
+    def do_setup(self):
+        import pcolors
+        td = self.plotters[0].read_data()
+        self.n_s2 = len(td)
+        self.n_s2n = td[0].size
+        if self.n_s2 != 4:
+            raise ValueError("adapt for n_s2 != 4")
+        self.colors = ['blue','magenta','green','red']
+        self.linetypes=['solid','dotdashed','dashed','dotted']
+        self.point_types=['filled circle','filled diamond','filled square','filled triangle']
+
+
 
     def doplots(self):
         import biggles
@@ -245,18 +268,15 @@ class MultiPlotterVsShear(MultiPlotterBase):
         nrun=len(self.runs)
         
         td = self.plotters[0].read_data()
-        n_s2 = len(td)
-        n_s2n = td[0].size
-        if n_s2 != 4:
-            raise ValueError("adapt for n_s2 != 4")
+        n_s2 = self.n_s2
+        n_s2n = self.n_s2n
 
         nrow=5
         ncol=3
         arr = biggles.FramedArray(nrow,ncol)
         # colors of each s2 bin
-        colors = ['blue','magenta','green','red']
-        #linetypes=['dotted','dashed','dotdashed','solid']
-        linetypes=['solid','dotdashed','dashed','dotted']
+        colors = self.colors
+        linetypes=self.linetypes
 
         s2n_name='s2n_matched'
         tag1='shear1'
@@ -331,13 +351,17 @@ class MultiPlotterVsShear(MultiPlotterBase):
                 diff1  = data['g1meas'][is2,:] - g1true
                 diff2  = data['g2meas'][is2,:] - g2true
                 p1 = biggles.Points(g1true/scale,diff1,
-                                    type='filled circle', color=colors[is2])
+                                    type=self.point_types[is2], 
+                                    color=colors[is2])
                 c1 = biggles.Curve(g1true/scale,diff1,color=colors[is2],
                                    type=linetypes[is2])
                 if i_s2n == (n_s2n-1):
                     cfake = biggles.Curve(g1true-1000,diff1,color=colors[is2],
                                           type=linetypes[is2])
-                    label = '%.2f' % s2
+                    if self['use_rb']:
+                        label = '%.2f' % sqrt(1/s2)
+                    else:
+                        label = '%.2f' % s2
                     cfake.label = label
                     fcurves.append(cfake)
                 arr[irow,icol].add(p1,c1) 
@@ -400,7 +424,10 @@ class MultiPlotterVsShear(MultiPlotterBase):
         key=biggles.PlotKey(0.85,0.9,fcurves,halign='right',fontsize=fsize)
         arr[nrow-1,ncol-1].add(key, *fcurves)
 
-        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$: '
+        if self['use_rb']:
+            klabtext=r'$\sigma_{gal}/\sigma_{psf}$: '
+        else:
+            klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$: '
         klab = biggles.PlotLabel(0.6,0.9,klabtext,
                                  fontsize=fsize,halign='right')
         arr[nrow-1,ncol-1].add(klab)
@@ -452,20 +479,44 @@ class MultiPlotterVsShear(MultiPlotterBase):
         title=self.get_title()
         if title:
             arr.title=title
-        arr.show()
+        if self['show']:
+            arr.show()
 
-        epsfile = shapesim.get_plot_file(self.set,'vs-shear',yrng=yrng)
+        extra=''
+        if self['use_rb']:
+            extra='-rb'
+        epsfile = shapesim.get_plot_file(self.set,'vs-shear'+extra,yrng=yrng)
         arr.write_eps(epsfile)
         converter.convert(epsfile,dpi=100,verbose=True)
 
-        marr = biggles.FramedArray(1,2)
-        carr = biggles.FramedArray(1,2)
+        self.do_fits(fits1, fits2)
+
+    def do_fits(self, fits1, fits2):
+        """
+        gamma2 plots look exactly the same, now only to gamma1
+        """
+        import biggles
+        import converter
+        mplt = biggles.FramedPlot()
+        cplt = biggles.FramedPlot()
+        biggles.configure("default","fontsize_min",1.5)
+        biggles.configure('PlotKey','key_vsep',1.5)
+
+        n_s2 = self.n_s2
+        n_s2n = self.n_s2n
+        colors = self.colors
+        linetypes=self.linetypes
 
         kplots=[]
         for is2 in xrange(n_s2):
+
+            s2,ellip = shapesim.get_s2_e(self.plotters[is2].simc, is2, 0)
+
             mpts1=biggles.Points(fits1['s2n'][is2,:], fits1['m'][is2,:],
+                                 type=self.point_types[is2], 
                                  color=colors[is2])
             cpts1=biggles.Points(fits1['s2n'][is2,:], fits1['c'][is2,:],
+                                 type=self.point_types[is2], 
                                  color=colors[is2])
             mcur1=biggles.Curve(fits1['s2n'][is2,:], fits1['m'][is2,:],
                                 color=colors[is2],type=linetypes[is2])
@@ -481,8 +532,10 @@ class MultiPlotterVsShear(MultiPlotterBase):
                                               fits1['cerr'][is2,:],
                                               color=colors[is2])
             mpts2=biggles.Points(fits2['s2n'][is2,:], fits2['m'][is2,:],
+                                 type=self.point_types[is2], 
                                  color=colors[is2])
             cpts2=biggles.Points(fits2['s2n'][is2,:], fits2['c'][is2,:],
+                                 type=self.point_types[is2], 
                                  color=colors[is2])
             mcur2=biggles.Curve(fits2['s2n'][is2,:], fits2['m'][is2,:],
                                 color=colors[is2],type=linetypes[is2])
@@ -500,53 +553,74 @@ class MultiPlotterVsShear(MultiPlotterBase):
                                               fits2['cerr'][is2,:],
                                               color=colors[is2])
 
-
-            label = '%.2f' % s2vals[is2]
+            
+            if self['use_rb']:
+                label = '%.2f' % sqrt(1/s2)
+            else:
+                label = '%.2f' % s2
             ccur1.label = label
             ccur2.label = label
             kplots.append(ccur1)
 
-            marr[0,0].add(mpts1,merr1,mcur1)
-            marr[0,1].add(mpts2,merr2,mcur2)
+            mplt.add(mpts1,merr1,mcur1)
+            cplt.add(cpts1,cerr1,ccur1)
 
-            carr[0,0].add(cpts1,cerr1,ccur1)
-            carr[0,1].add(cpts2,cerr2,ccur2)
-
+        """
         lab1 = biggles.PlotLabel(0.9,0.1,r'$\gamma_1$',halign='right')
         lab2 = biggles.PlotLabel(0.9,0.1,r'$\gamma_2$',halign='right')
         marr[0,0].add(lab1)
         marr[0,1].add(lab2)
         carr[0,0].add(lab1)
         carr[0,1].add(lab2)
+        """
 
         xlabel = r'$S/N_{matched}$'
-        marr.xlabel = xlabel
-        marr.ylabel = 'm (calibration bias)'
-        marr.aspect_ratio=1/GRATIO
-        carr.xlabel = xlabel
-        carr.ylabel = 'c (additive bias)'
-        carr.aspect_ratio=1/GRATIO
+        mplt.xlabel = xlabel
+        mplt.ylabel = 'm (calibration bias)'
+        mplt.aspect_ratio=1 #/GRATIO
+        cplt.xlabel = xlabel
+        cplt.ylabel = 'c (additive bias)'
+        cplt.aspect_ratio=1 #/GRATIO
 
-        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$: '
-        klab = biggles.PlotLabel(0.6,0.9,klabtext,
+        if self['use_rb']:
+            klabtext=r'$\sigma_{gal}/\sigma_{psf}$: '
+        else:
+            klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$: '
+        fsize=2
+        labypos=.25
+        klab = biggles.PlotLabel(.65,labypos,klabtext,
                                  fontsize=fsize,halign='right')
-        key=biggles.PlotKey(0.85,0.9,kplots,halign='right',fontsize=fsize)
-        carr[0,1].add(key)
-        marr[0,1].add(key)
+        key=biggles.PlotKey(.85,labypos,kplots,halign='right',fontsize=fsize)
+        cplt.add(key)
+        mplt.add(key)
+        cplt.add(klab)
+        mplt.add(klab)
 
-        carr[0,0].add(biggles.Curve([-50,500],[0,0]))
-        carr[0,1].add(biggles.Curve([-50,500],[0,0]))
-        marr[0,0].add(biggles.Curve([-50,500],[1,1]))
-        marr[0,1].add(biggles.Curve([-50,500],[1,1]))
+        cplt.add(biggles.Curve([-50,500],[0,0]))
+        mplt.add(biggles.Curve([-50,500],[1,1]))
 
-        marr.yrange=[.8,1.2]
+        mplt.yrange=[.9,1.1]
 
         xrng=[-1,110]
-        carr.xrange=xrng
-        marr.xrange=xrng
+        cplt.xrange=xrng
+        cplt.yrange=[-.002,.002]
+        mplt.xrange=xrng
 
-        marr.show()
-        carr.show()
+        if self['show']:
+            mplt.show()
+            cplt.show()
+
+        extra=''
+        if self['use_rb']:
+            extra='-rb'
+
+        c_epsfile = shapesim.get_plot_file(self.set,'c-vs-shear'+extra)
+        m_epsfile = shapesim.get_plot_file(self.set,'m-vs-shear'+extra)
+
+        cplt.write_eps(c_epsfile)
+        mplt.write_eps(m_epsfile)
+        converter.convert(c_epsfile,dpi=100,verbose=True)
+        converter.convert(m_epsfile,dpi=100,verbose=True)
 class SimPlotter(dict):
     def __init__(self, run, **keys):
         c = shapesim.read_config(run)

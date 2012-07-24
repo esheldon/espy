@@ -52,6 +52,12 @@ parser.add_option('--noerr',action="store_true",
                   help="don't show error bars")
 parser.add_option('--noshow',action="store_true",
                   help="don't show")
+
+
+parser.add_option('--use-rb',action="store_true",
+                  help=("show rb = sigmagal/sigmapsf instead of "
+                        "sigmapsf^2/sigmagal^2"))
+
 options,args = parser.parse_args(sys.argv[1:])
 
 if len(args) < 1:
@@ -108,14 +114,16 @@ if run[0:3] == 'set':
                                             s2min=s2min, 
                                             skip1=skip1, skip2=skip2,
                                             yrange=yrng,
-                                            docum=options.cum)
+                                            docum=options.cum, show=show,
+                                            use_rb=options.use_rb)
  
     else:
         p=shapesim.plotting.MultiPlotterVsShear(set, title=title,
                                                 s2min=s2min, 
                                                 skip1=skip1, skip2=skip2,
                                                 yrange=yrng,
-                                                docum=options.cum)
+                                                docum=options.cum,show=show,
+                                                use_rb=options.use_rb)
     p.doplots()
 else:
 
