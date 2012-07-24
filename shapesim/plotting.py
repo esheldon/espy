@@ -8,9 +8,11 @@ from esutil.stat import sigma_clip
 import numpy
 from numpy import median, zeros, sqrt, array
 import copy
+import fitting
 
 from lensing.util import shear_fracdiff, e2gamma, gamma2e, g1g2_to_e1e2
 
+GRATIO=1.61803399
 class MultiPlotterBase(dict):
     """
     Make plots for multiple runs.
@@ -282,6 +284,11 @@ class MultiPlotterVsShear(MultiPlotterBase):
             #arr[irow,icol].yrange = [-0.0025,0.0025]
             arr[irow,icol].yrange = [-0.035,0.035]
 
+        fdtype=[('s2','f8',n_s2n), ('s2n','f8',n_s2n),
+                ('c','f8',n_s2n), ('cerr','f8',n_s2n),
+                ('m','f8',n_s2n),('merr','f8',n_s2n)]
+        fits1 = zeros(n_s2, dtype=fdtype)
+        fits2 = zeros(n_s2, dtype=fdtype)
 
         fcurves=[]
         nplot=0
@@ -320,7 +327,9 @@ class MultiPlotterVsShear(MultiPlotterBase):
                 s2=s2vals[is2]
 
                 g1true = data['g1true'][is2,:]
+                g2true = data['g2true'][is2,:]
                 diff1  = data['g1meas'][is2,:] - g1true
+                diff2  = data['g2meas'][is2,:] - g2true
                 p1 = biggles.Points(g1true/scale,diff1,
                                     type='filled circle', color=colors[is2])
                 c1 = biggles.Curve(g1true/scale,diff1,color=colors[is2],
@@ -342,6 +351,28 @@ class MultiPlotterVsShear(MultiPlotterBase):
                 if is2 == 0:
                     z1=biggles.Curve([-50,50], [0,0])
                     arr[irow,icol].add(z1)
+
+
+                linfit1 = fitting.LineFitter(g1true, diff1, g1err)
+                linfit2 = fitting.LineFitter(g1true, diff2, g2err)
+                fits1['s2'][is2,i_s2n] = s2
+                fits1['s2n'][is2,i_s2n] = s2n
+                fits1['m'][is2,i_s2n] = linfit1.pars[0] + 1
+                fits1['merr'][is2,i_s2n] = linfit1.perr[0]
+                fits1['c'][is2,i_s2n] = linfit1.pars[1]
+                fits1['cerr'][is2,i_s2n] = linfit1.perr[1]
+                fits2['s2'][is2,i_s2n] = s2
+                fits2['s2n'][is2,i_s2n] = s2n
+                fits2['m'][is2,i_s2n] = linfit2.pars[0] +1
+                fits2['merr'][is2,i_s2n] = linfit2.perr[0]
+                fits2['c'][is2,i_s2n] = linfit2.pars[1]
+                fits2['cerr'][is2,i_s2n] = linfit2.perr[1]
+
+                if is2 == 0 and nplot==0:
+                    print '%15s %15s %15s +/- %15s %15s +/- %15s' % ('s2','s2n','m','err','c','err')
+                print '%15s %15s %15g +/- %15g %15g +/- %15g' % (s2,s2n,
+                                                                 linfit1.pars[0]+1,linfit1.perr[0],
+                                                                 linfit1.pars[1],linfit1.perr[1])
 
             s2nlab = biggles.PlotLabel(0.9,0.9,'S/N: %d' % s2n,
                                      fontsize=2.5,halign='right')
@@ -427,6 +458,92 @@ class MultiPlotterVsShear(MultiPlotterBase):
         arr.write_eps(epsfile)
         converter.convert(epsfile,dpi=100,verbose=True)
 
+        marr = biggles.FramedArray(1,2)
+        carr = biggles.FramedArray(1,2)
+
+        kplots=[]
+        for is2 in xrange(n_s2):
+            mpts1=biggles.Points(fits1['s2n'][is2,:], fits1['m'][is2,:],
+                                 color=colors[is2])
+            cpts1=biggles.Points(fits1['s2n'][is2,:], fits1['c'][is2,:],
+                                 color=colors[is2])
+            mcur1=biggles.Curve(fits1['s2n'][is2,:], fits1['m'][is2,:],
+                                color=colors[is2],type=linetypes[is2])
+            ccur1=biggles.Curve(fits1['s2n'][is2,:], fits1['c'][is2,:],
+                                color=colors[is2],type=linetypes[is2])
+
+            merr1=biggles.SymmetricErrorBarsY(fits1['s2n'][is2,:], 
+                                              fits1['m'][is2,:],
+                                              fits1['merr'][is2,:],
+                                              color=colors[is2])
+            cerr1=biggles.SymmetricErrorBarsY(fits1['s2n'][is2,:], 
+                                              fits1['c'][is2,:],
+                                              fits1['cerr'][is2,:],
+                                              color=colors[is2])
+            mpts2=biggles.Points(fits2['s2n'][is2,:], fits2['m'][is2,:],
+                                 color=colors[is2])
+            cpts2=biggles.Points(fits2['s2n'][is2,:], fits2['c'][is2,:],
+                                 color=colors[is2])
+            mcur2=biggles.Curve(fits2['s2n'][is2,:], fits2['m'][is2,:],
+                                color=colors[is2],type=linetypes[is2])
+            ccur2=biggles.Curve(fits2['s2n'][is2,:], fits2['c'][is2,:],
+                                color=colors[is2],type=linetypes[is2])
+
+
+
+            merr2=biggles.SymmetricErrorBarsY(fits2['s2n'][is2,:], 
+                                              fits2['m'][is2,:],
+                                              fits2['merr'][is2,:],
+                                              color=colors[is2])
+            cerr2=biggles.SymmetricErrorBarsY(fits2['s2n'][is2,:], 
+                                              fits2['c'][is2,:],
+                                              fits2['cerr'][is2,:],
+                                              color=colors[is2])
+
+
+            label = '%.2f' % s2vals[is2]
+            ccur1.label = label
+            ccur2.label = label
+            kplots.append(ccur1)
+
+            marr[0,0].add(mpts1,merr1,mcur1)
+            marr[0,1].add(mpts2,merr2,mcur2)
+
+            carr[0,0].add(cpts1,cerr1,ccur1)
+            carr[0,1].add(cpts2,cerr2,ccur2)
+
+        lab1 = biggles.PlotLabel(0.9,0.1,r'$\gamma_1$',halign='right')
+        lab2 = biggles.PlotLabel(0.9,0.1,r'$\gamma_2$',halign='right')
+        marr[0,0].add(lab1)
+        marr[0,1].add(lab2)
+        carr[0,0].add(lab1)
+        carr[0,1].add(lab2)
+
+        xlabel = r'$S/N_{matched}$'
+        marr.xlabel = xlabel
+        marr.ylabel = 'm (calibration bias)'
+        marr.aspect_ratio=1/GRATIO
+        carr.xlabel = xlabel
+        carr.ylabel = 'c (additive bias)'
+        carr.aspect_ratio=1/GRATIO
+
+        key=biggles.PlotKey(0.85,0.9,kplots,halign='right',fontsize=fsize)
+        carr[0,1].add(key)
+        marr[0,1].add(key)
+
+        carr[0,0].add(biggles.Curve([-50,500],[0,0]))
+        carr[0,1].add(biggles.Curve([-50,500],[0,0]))
+        marr[0,0].add(biggles.Curve([-50,500],[1,1]))
+        marr[0,1].add(biggles.Curve([-50,500],[1,1]))
+
+        marr.yrange=[.8,1.2]
+
+        xrng=[-1,110]
+        carr.xrange=xrng
+        marr.xrange=xrng
+
+        marr.show()
+        carr.show()
 class SimPlotter(dict):
     def __init__(self, run, **keys):
         c = shapesim.read_config(run)
