@@ -527,6 +527,9 @@ class MultiPlotterVsShear(MultiPlotterBase):
         carr.ylabel = 'c (additive bias)'
         carr.aspect_ratio=1/GRATIO
 
+        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$: '
+        klab = biggles.PlotLabel(0.6,0.9,klabtext,
+                                 fontsize=fsize,halign='right')
         key=biggles.PlotKey(0.85,0.9,kplots,halign='right',fontsize=fsize)
         carr[0,1].add(key)
         marr[0,1].add(key)
