@@ -1,10 +1,10 @@
 
-run: gmix-fit-edg03r02
-sim: sim-edg03
+run: gmix-fit-edg07r03
+sim: sim-edg07
 
 # we will use all the s2 values from the sim, a set of s/n values and a single
 # ellip value
-runtype: bys2n
+runtype: byellip
 
 s2n_method: matched
 s2n_fac: 80
@@ -13,9 +13,7 @@ retrim: true
 retrim_fluxfrac: 0.9973
 s2ncalc_fluxfrac: null
 
-ie: 2  # 0.26
-s2nvals: [10,20,30,50,75,100]
-
+s2n: 75
 s2n_psf: 1.0e+8
 
 use_cache: true

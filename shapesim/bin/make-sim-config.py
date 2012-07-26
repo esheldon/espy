@@ -21,6 +21,13 @@ parser.add_option('--simname',default=None,
                   help="force sim name")
 parser.add_option('--overwrite',action='store_true',
                   help="force overwrite")
+parser.add_option('--nume',default='8',
+                  help="number of e vals")
+parser.add_option('--nums2',default='4',
+                  help="number of s2 vals")
+
+parser.add_option('--dryrun',action='store_true',
+                  help="just print to the screen")
 
 dg_template="""
 name: %(simname)s
@@ -45,11 +52,11 @@ shear: [%(shear1)s,%(shear2)s]
 
 mins2: 0.5
 maxs2: 2.0
-nums2: 4
+nums2: %(nums2)s
 
 mine:  0.05
 maxe:  0.80
-nume:  20
+nume:  %(nume)s
 """
 
 shortnames={'gauss':'g',
@@ -87,8 +94,6 @@ def main():
         fname = shapesim.get_config_file(simname)
         if os.path.exists(fname) and not options.overwrite:
             raise ValueError("file already exists: %s" % fname)
-        else:
-            print 'will overwrite:',fname
     else:
         simname, fname = get_simname_and_file(objmodel, psfmodel)
 
@@ -111,12 +116,17 @@ def main():
                               'psf_e1':psf_e1,
                               'psf_e2':psf_e2,
                               'shear1':shear1,
-                              'shear2':shear2}
-        print text
+                              'shear2':shear2,
+                              'nums2':options.nums2,
+                              'nume':options.nume}
     else:
         raise ValueError("need to support more obj types")
 
-    print 'Writing config file:',fname
-    with open(fname,'w') as fobj:
-        fobj.write(text)
+    print text
+    print 'fname:',fname
+    if not options.dryrun:
+        with open(fname,'w') as fobj:
+            fobj.write(text)
+    else:
+        print 'dryrun'
 main()

@@ -212,69 +212,79 @@ gmix-fit
                     edg02r04  0 0.05    matched    todo
 
     edg03r02,edg04r01,edg05r01,edg06r01,edg07r01,edg08r01 
-    0.0      0.01     0.02     0.03     0.04     0.05
-    elliptical psf and shear increasing
+    .01      0.02     0.03     0.04     0.05     0.06
+    elliptical psf and shear zero
+    psf ellipticities given above
+    s2nvals: [10,20,30,50,75,100]
+
     from 0 to 0.05
         edg03
             elliptical double gaussian psf, 
-                e1=0.05,e2=0.05
-                g1=0,g2=0
+                e1=0.01,e2=0.00
+                shear=0,0
 
             gmix
                 byellip
-                    run        s/n   nrepeat  s2n_method      notes
-                    edg03r01  1.e8      1       matched       done
-                    old sim
+                    run       s/n   nrepeat  s2n_method      notes
+                    edg03r01  100   algo       matched       todo
 
                 by s/n
                     run      ie    e  s2n_method   notes
-                    edg03r02  7 0.33    matched    done
-                    edg03r03 19 0.80    matched    done
-                    old sim
-                    edg03r04  0 0.05    matched    done
-                    old sim
+                    edg03r02  2 0.26    matched    todo
+                    edg03r03 19 0.80    matched    done OLD SIM
+                    edg03r04  0 0.05    matched    done OLD SIM
         edg04
             elliptical double gaussian psf, 
-                e1=0.05,e2=0.05
-                g1=0.01,g2=-0.01
+                e1=0.02,e2=0.02
+                shear=0,0
             gmix
                 by s/n
                     run      ie    e  s2n_method   notes
-                    edg04r01  7 0.33    matched    done
+                    edg04r01  2 0.26    matched    done
 
         edg05
             elliptical double gaussian psf, 
-                e1=0.05,e2=0.05
-                g1=0.02,g2=-0.02
+                e1=0.03,e2=0
+                shear=0,0
             gmix
                 by s/n
                     run      ie    e  s2n_method   notes
-                    edg05r01  7 0.33    matched    done
+                    edg05r01  2 0.26    matched    done
         edg06
             elliptical double gaussian psf, 
-                e1=0.05,e2=0.05
-                g1=0.03,g2=-0.03
+                e1=0.04,e2=0
+                shear=0,0
             gmix
                 by s/n
                     run      ie    e  s2n_method   notes
-                    edg06r01  7 0.33    matched    done
+                    edg06r01  2 0.26    matched    done
         edg07
             elliptical double gaussian psf, 
-                e1=0.05,e2=0.05
-                g1=0.04,g2=-0.04
+                e1=0.05,e2=0
+                shear=0,0
+            gmix
+                by ellip
+                    run       s/n   nrepeat  s2n_method      notes
+                    edg07r02  100   algo       matched       done
+                    edg07r03   75   algo       matched       done
+                    edg07r04   50   algo       matched       todo
+                    edg07r05   30   algo       matched       todo
+                    edg07r06   20   algo       matched       todo
+                    edg07r07   10   algo       matched       todo
+
             gmix
                 by s/n
                     run      ie    e  s2n_method   notes
-                    edg07r01  7 0.33    matched    done
+                    edg07r01  2 0.26    matched    done
 
         edg08
             elliptical double gaussian psf, 
-                e1=0.05,e2=0.05
-                g1=0.05,g2=-0.05
+                e1=0.06,e2=0
+                shear=0,0
             gmix
                 by s/n
                     run      ie    e  s2n_method   notes
-                    edg08r01  7 0.33    matched    done
+                    edg08r01  2 0.26    matched    done
 
 
     *round* psf and shear increasing.  See above for edg02

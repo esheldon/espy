@@ -14,6 +14,8 @@ from optparse import OptionParser
 parser=OptionParser(__doc__)
 
 parser.add_option('--s2n-fac',default=None)
+parser.add_option('--s2n-vals',default=None)
+parser.add_option('--s2n',default=None)
 parser.add_option('--ie',default=None,
                   help="ie for bys2n runs")
 parser.add_option('--run-name',default=None,
@@ -21,13 +23,16 @@ parser.add_option('--run-name',default=None,
 parser.add_option('--overwrite',action='store_true',
                   help="force overwrite")
 
-edg_bys2n_template="""
+parser.add_option('--dryrun',action='store_true',
+                  help="just print to the screen")
+
+edg_byellip_template="""
 run: %(run_name)s
 sim: %(sim_name)s
 
 # we will use all the s2 values from the sim, a set of s/n values and a single
 # ellip value
-runtype: %(run_type)s
+runtype: byellip
 
 s2n_method: matched
 s2n_fac: %(s2n_fac)s
@@ -36,8 +41,56 @@ retrim: true
 retrim_fluxfrac: 0.9973
 s2ncalc_fluxfrac: null
 
-ie: %(ie)s
-s2nvals: [5,10,15,20,25,30,40,50,60,70,80,90,100]
+s2n: %(s2n)s
+s2n_psf: 1.0e+8
+
+use_cache: true
+add_to_cache: false
+
+verbose: false
+
+# we should try with higher values to see what happens
+ngauss_psf: 2
+ngauss_obj: 3
+
+coellip_psf: true
+coellip_obj: true
+
+maxtry: 2
+maxtry_psf: 1
+
+# this is for the gaussian PSF fit, since admom gets gaussians too perfectly
+# trying out doing this automatically as needed
+randomize: true
+
+# number of times to retry when a trial fails.  This generates
+# a new trial, unlike max_retry above which retries with a 
+# randomized guess
+itmax: 100
+
+# set to null for new seed each time. Good when adding to the cache
+seed: null
+"""
+
+
+
+edg_bys2n_template="""
+run: %(run_name)s
+sim: %(sim_name)s
+
+# we will use all the s2 values from the sim, a set of s/n values and a single
+# ellip value
+runtype: bys2n
+
+s2n_method: matched
+s2n_fac: %(s2n_fac)s
+
+retrim: true
+retrim_fluxfrac: 0.9973
+s2ncalc_fluxfrac: null
+
+ie: %(ie)s  # %(e_val)0.2f
+s2nvals: [%(s2n_vals)s]
 
 s2n_psf: 1.0e+8
 
@@ -110,30 +163,52 @@ def main():
         fname = shapesim.get_config_file(run_name)
         if os.path.exists(fname) and not options.overwrite:
             raise ValueError("file already exists: %s" % fname)
-        else:
-            print 'will overwrite:',fname
     else:
         run_name, fname = get_run_name_and_file(sim_name)
 
+    s2n_fac=options.s2n_fac
+    if s2n_fac is None:
+        raise ValueError("send --s2n-fac")
     if run_type == 'bys2n':
         ie=options.ie
-        s2n_fac=options.s2n_fac
         if ie is None:
             raise ValueError("send --ie for bys2n")
-        if s2n_fac is None:
-            raise ValueError("send --s2n-fac for bys2n")
+
+        tmps2,e_val = shapesim.get_s2_e(cs, 0, int(ie))
+
+        s2n_vals_def='5,10,15,20,25,30,40,50,60,70,80,90,100'
+        s2n_vals=options.s2n_vals
+        if s2n_vals is None:
+            s2n_vals=s2n_vals_def
         if simtype == 'edg':
             text=edg_bys2n_template % {'run_name':run_name,
                                        'sim_name':sim_name,
-                                       'run_type':run_type,
                                        's2n_fac':s2n_fac,
-                                       'ie':ie}
+                                       's2n_vals':s2n_vals,
+                                       'ie':ie,
+                                       'e_val':e_val}
         else:
             raise ValueError("support other sim types")
-    else:
-        raise ValueError("support byellip")
+    elif run_type == 'byellip':
+        s2n=options.s2n
+        if s2n is None:
+            raise ValueError("send s2n for byellip")
+        if simtype == 'edg':
+            text=edg_byellip_template % {'run_name':run_name,
+                                         'sim_name':sim_name,
+                                         's2n_fac':s2n_fac,
+                                         's2n':s2n}
+        else:
+            raise ValueError("support other sim types")
 
-    print 'Writing config file:',fname
-    with open(fname,'w') as fobj:
-        fobj.write(text)
+    else:
+        raise ValueError("support others?")
+
+    print text
+    print 'fname:',fname
+    if not options.dryrun:
+        with open(fname,'w') as fobj:
+            fobj.write(text)
+    else:
+        print 'dryrun'
 main()
