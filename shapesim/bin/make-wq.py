@@ -18,6 +18,9 @@ parser.add_option('--bynode',action='store_true',
 parser.add_option('--ncores',default=None,
                   help='select this many cores on single nodes')
 
+parser.add_option('--i2new',default=None,
+                  help='use new,new2 groups for i2 in [0,value]')
+
 parser.add_option('--bytrial',action='store_true',
                   help=('Write a wq script for each trial '
                         'separately (with possible repeats)'))
@@ -70,11 +73,6 @@ def main():
         else:
             ntrial = c['ntrial']
 
-    groups=options.groups
-    if groups is None:
-        groups=''
-    else:
-        groups = 'group: [%s]' % groups
 
     wqd = shapesim.get_wq_dir(run, bytrial=options.bytrial)
     if not os.path.exists(wqd):
@@ -104,6 +102,12 @@ def main():
 
     for i1 in xrange(n1):
         for i2 in xrange(n2):
+            groups=''
+            if options.groups is not None:
+                groups = 'group: [%s]' % groups
+            elif options.i2new is not None:
+                if i2 <= int(options.i2new):
+                    groups='group: [new,new2]'
 
             if options.bytrial:
                 for itrial in xrange(ntrial):

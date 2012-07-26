@@ -211,8 +211,8 @@ gmix-fit
                     edg02r03 19 0.80    matched    todo
                     edg02r04  0 0.05    matched    todo
 
-    edg03r02,edg04r01,edg05r01,edg06r01,edg07r01,edg08r01 
-    .01      0.02     0.03     0.04     0.05     0.06
+    edg03r02,edg04r01,edg05r01,edg06r01,edg07r01,edg08r01,edg14r01
+    .01      0.02     0.03     0.04     0.05     0.06     0.0
     elliptical psf and shear zero
     psf ellipticities given above
     s2nvals: [10,20,30,50,75,100]
@@ -285,6 +285,16 @@ gmix-fit
                 by s/n
                     run      ie    e  s2n_method   notes
                     edg08r01  2 0.26    matched    done
+
+        edg08
+            elliptical double gaussian psf, 
+                e1=0.06,e2=0
+                shear=0,0
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg14r01  2 0.26    matched    running
+
 
 
     *round* psf and shear increasing.  See above for edg02

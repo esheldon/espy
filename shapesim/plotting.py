@@ -68,6 +68,15 @@ class MultiPlotterBase(dict):
                     'gmix-fit-edg07r05',
                     'gmix-fit-edg07r06',
                     'gmix-fit-edg07r07']
+
+        elif self.set == 'set-epsf-edg01':
+            runs = ['gmix-fit-edg14r01',
+                    'gmix-fit-edg03r02',
+                    'gmix-fit-edg04r01',
+                    'gmix-fit-edg05r01',
+                    'gmix-fit-edg06r01',
+                    'gmix-fit-edg07r01',
+                    'gmix-fit-edg08r01']
         else:
             raise ValueError("don't know about set %s" % self.set)
         self.runs = runs
@@ -643,6 +652,271 @@ class MultiPlotterVsShear(MultiPlotterBase):
         mplt.write_eps(m_epsfile)
         converter.convert(c_epsfile,dpi=100,verbose=True)
         converter.convert(m_epsfile,dpi=100,verbose=True)
+
+class MultiPlotterVsEpsf(MultiPlotterBase):
+    """
+    Additive shear bias as a function of PSF ellipticity
+    in bins of S/N
+    """
+    def __init__(self, set, **keys):
+        super(MultiPlotterVsEpsf,self).__init__(set, **keys)
+        self.do_setup()
+
+        self['use_rb'] = keys.get('use_rb',True)
+
+    def do_setup(self):
+        import pcolors
+        td = self.plotters[0].read_data()
+        self.n_s2 = len(td)
+        self.n_s2n = td[0].size
+        if self.n_s2 != 4:
+            raise ValueError("adapt for n_s2 != 4")
+        self.colors = ['blue','magenta','green','red']
+        self.linetypes=['solid','dotdashed','dashed','dotted']
+        self.point_types=['filled circle','filled diamond','filled square','filled triangle']
+
+
+
+    def doplots(self):
+        import biggles
+        import converter
+        import pcolors
+        
+        scale=.01
+        #biggles.configure("screen","width",2000)
+        #biggles.configure("screen","height",1100)
+        biggles.configure("default","fontsize_min",1.2)
+        #biggles.configure('_HalfAxis','ticklabels_style',{'fontsize':2.0})
+        biggles.configure('_HalfAxis','ticks_size',2.5)
+        biggles.configure('_HalfAxis','subticks_size',2.5/2)
+        biggles.configure('PlotKey','key_vsep',3)
+        biggles.configure('PlotKey','key_width',15)
+        biggles.configure('_ErrorBar','barsize',1)
+        nrun=len(self.runs)
+        
+        td = self.plotters[0].read_data()
+        n_s2 = self.n_s2
+        n_s2n = self.n_s2n
+
+        nrow=2
+        ncol=3
+        arr = biggles.FramedArray(nrow,ncol)
+        # colors of each s2 bin
+        colors = self.colors
+        linetypes=self.linetypes
+
+        s2n_name='s2n_matched'
+        tag1='shear1'
+        tag2='shear2'
+        errtag1='shear1err'
+        errtag2='shear2err'
+
+
+
+        #plt=biggles.FramedPlot()
+
+        dt=[('psf_e1','f8',nrun),
+            ('psf_e2','f8',nrun),
+            ('g1true','f8',nrun),
+            ('g2true','f8',nrun),
+            ('g1meas','f8',nrun),
+            ('g1err','f8',nrun),
+            ('g2meas','f8',nrun),
+            ('g2err','f8',nrun)]
+        
+        #for i_s2n in xrange(n_s2n):
+
+        for i in xrange(nrow*ncol):
+            irow = i / ncol
+            icol = i % ncol
+            arr[irow,icol].add(biggles.Curve([-1000]*2,[-1000]*2))
+            #arr[irow,icol].yrange = [-0.0025,0.0025]
+            arr[irow,icol].yrange = [-0.035,0.035]
+
+        fdtype=[('s2','f8',n_s2n), ('s2n','f8',n_s2n),
+                ('c','f8',n_s2n), ('cerr','f8',n_s2n),
+                ('m','f8',n_s2n),('merr','f8',n_s2n)]
+        fits1 = zeros(n_s2, dtype=fdtype)
+        fits2 = zeros(n_s2, dtype=fdtype)
+
+        fcurves=[]
+        nplot=0
+        is2ns = list(reversed(xrange(n_s2n)))
+        #for i_s2n in xrange(n_s2n):
+        for i_s2n in is2ns:
+            #irow = i_s2n / ncol
+            #icol = i_s2n % ncol
+            irow = nplot / ncol
+            icol = nplot % ncol
+            td = self.plotters[0].read_data()
+            s2n = td[0][s2n_name][i_s2n]
+
+            data = zeros(n_s2,dtype=dt)
+            for irun,plotter in enumerate(self.plotters):
+                d = plotter.read_data()
+                shear = plotter.get_shear_true()
+
+                psf_e1=plotter.simc['psf_e1']
+                psf_e2=plotter.simc['psf_e2']
+                psfe = lensing.shear.Shear(e1=psf_e1,e2=psf_e2)
+
+                # redundant
+                
+                s2vals=[]
+                for is2 in xrange(n_s2):
+
+                    s2,ellip = shapesim.get_s2_e(plotter.simc, is2, 0)
+                    s2vals.append(s2)
+
+                    data['psf_e1'][is2,irun] = psfe.e1
+                    data['psf_e2'][is2,irun] = psfe.e2
+
+                    data['g1true'][is2,irun] = shear.g1
+                    data['g2true'][is2,irun] = shear.g2
+                    data['g1meas'][is2,irun] = d[is2][tag1][i_s2n]
+                    data['g2meas'][is2,irun] = d[is2][tag2][i_s2n]
+                    data['g1err'][is2,irun] = d[is2][errtag1][i_s2n]
+                    data['g2err'][is2,irun] = d[is2][errtag2][i_s2n]
+
+
+            for is2 in xrange(n_s2):
+                s2=s2vals[is2]
+
+                psf_e1 = data['psf_e1'][is2,:]
+                psf_e2 = data['psf_e2'][is2,:]
+
+
+                diff1  = data['g1meas'][is2,:] - data['g1true'][is2,:]
+                diff2  = data['g2meas'][is2,:] - data['g2true'][is2,:]
+                p1 = biggles.Points(psf_e1/scale,diff1,
+                                    type=self.point_types[is2], 
+                                    color=colors[is2])
+                c1 = biggles.Curve(psf_e1/scale,diff1,color=colors[is2],
+                                   type=linetypes[is2])
+                if i_s2n == (n_s2n-1):
+                    cfake = biggles.Curve(psf_e1-1000,diff1,color=colors[is2],
+                                          type=linetypes[is2])
+                    if self['use_rb']:
+                        label = '%.2f' % sqrt(1/s2)
+                    else:
+                        label = '%.2f' % s2
+                    cfake.label = label
+                    fcurves.append(cfake)
+                arr[irow,icol].add(p1,c1) 
+
+                g1err  = data['g1err'][is2,:]
+                g2err  = data['g2err'][is2,:]
+                perr1 = biggles.SymmetricErrorBarsY(psf_e1/scale,
+                                                    diff1,g1err,
+                                                    color=colors[is2])
+                arr[irow,icol].add(perr1)
+                if is2 == 0:
+                    z1=biggles.Curve([-50,50], [0,0])
+                    arr[irow,icol].add(z1)
+
+
+                """
+                linfit1 = fitting.LineFitter(psf_e1, diff1, g1err)
+                linfit2 = fitting.LineFitter(psf_e2, diff2, g2err)
+                fits1['s2'][is2,i_s2n] = s2
+                fits1['s2n'][is2,i_s2n] = s2n
+                fits1['m'][is2,i_s2n] = linfit1.pars[0] + 1
+                fits1['merr'][is2,i_s2n] = linfit1.perr[0]
+                fits1['c'][is2,i_s2n] = linfit1.pars[1]
+                fits1['cerr'][is2,i_s2n] = linfit1.perr[1]
+                fits2['s2'][is2,i_s2n] = s2
+                fits2['s2n'][is2,i_s2n] = s2n
+                fits2['m'][is2,i_s2n] = linfit2.pars[0] +1
+                fits2['merr'][is2,i_s2n] = linfit2.perr[0]
+                fits2['c'][is2,i_s2n] = linfit2.pars[1]
+                fits2['cerr'][is2,i_s2n] = linfit2.perr[1]
+
+                if is2 == 0 and nplot==0:
+                    print '%15s %15s %15s +/- %15s %15s +/- %15s' % ('s2','s2n','m','err','c','err')
+                print '%15s %15s %15g +/- %15g %15g +/- %15g' % (s2,s2n,
+                                                                 linfit1.pars[0]+1,linfit1.perr[0],
+                                                                 linfit1.pars[1],linfit1.perr[1])
+                """
+
+            s2nlab = biggles.PlotLabel(0.9,0.9,'S/N: %d' % s2n,
+                                     fontsize=2.5,halign='right')
+            arr[irow,icol].add(s2nlab)
+            if irow == 3:
+                arr[irow,icol].yrange = [-0.012,0.012]
+            elif irow == 2:
+                arr[irow,icol].yrange = [-0.005,0.005]
+            elif irow == 1:
+                arr[irow,icol].yrange = [-0.0035,0.0035]
+            elif irow == 0:
+                arr[irow,icol].yrange = [-0.0035,0.0035]
+
+            nplot+=1
+
+        """
+        nleft = nrow*ncol-nplot
+        for i in xrange(nplot,nleft):
+            irow = i / ncol
+            icol = i % ncol
+            arr[irow,icol].add(biggles.Curve([-1000]*2,[-1000]*2))
+            arr[irow,icol].yrange = [-0.0025,0.0025]
+        """
+        fsize=2
+        key=biggles.PlotKey(.6,.3,fcurves,halign='right',fontsize=fsize)
+        arr[0,0].add(key, *fcurves)
+
+        if self['use_rb']:
+            klabtext=r'$\sigma_{gal}/\sigma_{psf}$: '
+        else:
+            klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$: '
+        klab = biggles.PlotLabel(.35,.3,klabtext,
+                                 fontsize=fsize,halign='right')
+        arr[0,0].add(klab)
+
+        simc = self.plotters[0].simc
+        objmodel = simc['objmodel']
+        psfmodel = simc['psfmodel']
+        plab='%s %s' % (objmodel,psfmodel)
+
+        lowest=0.8
+        step=0.10
+        l = biggles.PlotLabel(0.075,lowest+0, plab, halign='left')
+        arr[0,0].add(l)
+
+        elab = r'$e_{gal}^{tot}: %.2f$' % td[0]['etrue'].mean()
+
+        el = biggles.PlotLabel(0.075,lowest+step, elab, halign='left', 
+                               fontsize=2.5)
+        arr[0,0].add(el)
+
+
+
+        #yrng=self.get('yrange',None)
+        #if yrng:
+        #    arr.yrange = yrng
+        yrng=None
+        arr.xrange=array([-0.005,0.069])/scale
+        #arr.uniform_limits=1
+        arr.xlabel = r'$e_{PSF}/%.2g$' % scale
+        arr.ylabel = r'c (additive bias)'
+        #arr.aspect_ratio=1/1.61803399
+        #arr.aspect_ratio=1/1.4
+        arr.aspect_ratio=1/1.45
+
+        title=self.get_title()
+        if title:
+            arr.title=title
+        if self['show']:
+            arr.show()
+
+        extra=''
+        if self['use_rb']:
+            extra='-rb'
+        epsfile = shapesim.get_plot_file(self.set,'vs-epsf'+extra,yrng=yrng)
+        arr.write_eps(epsfile)
+        converter.convert(epsfile,dpi=100,verbose=True)
+
+
+
 class SimPlotter(dict):
     def __init__(self, run, **keys):
         c = shapesim.read_config(run)

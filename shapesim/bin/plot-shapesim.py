@@ -109,7 +109,7 @@ if run[0:3] == 'set':
     if options.maketitle:
         title=set
 
-    if set[0:5] == 'set-e':
+    if set[0:6] == 'set-e-':
         p=shapesim.plotting.MultiPlotterVsE(set, title=title,
                                             s2min=s2min, 
                                             skip1=skip1, skip2=skip2,
@@ -117,13 +117,23 @@ if run[0:3] == 'set':
                                             docum=options.cum, show=show,
                                             use_rb=options.use_rb)
  
-    else:
+    elif set[0:7] == 'set-s2n':
         p=shapesim.plotting.MultiPlotterVsShear(set, title=title,
                                                 s2min=s2min, 
                                                 skip1=skip1, skip2=skip2,
                                                 yrange=yrng,
                                                 docum=options.cum,show=show,
                                                 use_rb=options.use_rb)
+    elif set[0:8] == 'set-epsf':
+        p=shapesim.plotting.MultiPlotterVsEpsf(set, title=title,
+                                               s2min=s2min, 
+                                               skip1=skip1, skip2=skip2,
+                                               yrange=yrng,
+                                               docum=options.cum,show=show,
+                                               use_rb=options.use_rb)
+
+    else:
+        raise ValueError("bad set name '%s'" % set)
     p.doplots()
 else:
 
