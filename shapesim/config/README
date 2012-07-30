@@ -113,9 +113,18 @@ gmix-fit
                     run      ie    e  s2n_method   notes
                     gg05r01   7  .33     matched   s2n_fac=40
                                                     specific S/N values
-                                                   [5,10,15,20,25,30,40,50,60,70,80,90,100]
+                                                   [5,10,15,20,25,30,40,50,
+                                                    60,70,80,90,100]
                                                    bytrial for all
-                                                   rerunning
+
+                byellip
+                    run     S/N  nrepeat  notes
+                    gg05r02 100   algo    todo
+                    gg05r03  75   algo    todo
+                    gg05r04  50   algo    todo
+                    gg05r05  30   algo    todo
+                    gg05r06  20   algo    todo
+                    gg05r07  10   algo    todo
 
 
 

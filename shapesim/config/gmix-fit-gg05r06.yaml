@@ -1,30 +1,27 @@
-# gg05 is a ring test, shear (0.01,-0.01)
-run: gmix-fit-gg05r01
+
+run: gmix-fit-gg05r06
 sim: sim-gg05
 
-runtype: bys2n
+# we will use all the s2 values from the sim, a set of s/n values and a single
+# ellip value
+runtype: byellip
 
-s2n_fac: 40 # default 0.4
 s2n_method: matched
-s2ncalc_fluxfrac: null
+s2n_fac: 80
 
 retrim: false
 retrim_fluxfrac: null
+s2ncalc_fluxfrac: null
 
-ie: 2  # 0.26
-s2nvals: [5,10,15,20,25,30,40,50,60,70,80,90,100]
-
+s2n: 20
 s2n_psf: 1.0e+8
 
 use_cache: false
 add_to_cache: false
 
-# type of parametrization
-ptype: Tfrac
-use_jacob: false
-
 verbose: false
 
+# we should try with higher values to see what happens
 ngauss_psf: 1
 ngauss_obj: 1
 

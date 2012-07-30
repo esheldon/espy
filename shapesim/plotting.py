@@ -37,6 +37,7 @@ class MultiPlotterBase(dict):
 
     def set_runs(self):
         if self.set == 'set-s2n-edg01':
+            raise ValueError("don't do this plot")
             # elliptial psfs
             runs = ['gmix-fit-edg03r02',
                     'gmix-fit-edg04r01',
@@ -890,10 +891,9 @@ class MultiPlotterVsEpsf(MultiPlotterBase):
 
 
 
-        #yrng=self.get('yrange',None)
-        #if yrng:
-        #    arr.yrange = yrng
-        yrng=None
+        yrng=self.get('yrange',None)
+        if yrng:
+            arr.yrange = yrng
         arr.xrange=array([-0.005,0.069])/scale
         #arr.uniform_limits=1
         arr.xlabel = r'$e_{PSF}/%.2g$' % scale

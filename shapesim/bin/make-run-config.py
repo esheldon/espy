@@ -1,8 +1,6 @@
 """
     %prog [options] sim_name runtype
 
-You must send shear
-You must send psf_e1 and psf_e2 for psf models gauss and dgauss
 """
 
 import sys
@@ -25,6 +23,55 @@ parser.add_option('--overwrite',action='store_true',
 
 parser.add_option('--dryrun',action='store_true',
                   help="just print to the screen")
+
+
+gg_byellip_template="""
+run: %(run_name)s
+sim: %(sim_name)s
+
+# we will use all the s2 values from the sim, a set of s/n values and a single
+# ellip value
+runtype: byellip
+
+s2n_method: matched
+s2n_fac: %(s2n_fac)s
+
+retrim: false
+retrim_fluxfrac: null
+s2ncalc_fluxfrac: null
+
+s2n: %(s2n)s
+s2n_psf: 1.0e+8
+
+use_cache: false
+add_to_cache: false
+
+verbose: false
+
+# we should try with higher values to see what happens
+ngauss_psf: 1
+ngauss_obj: 1
+
+coellip_psf: true
+coellip_obj: true
+
+maxtry: 1
+maxtry_psf: 1
+
+# this is for the gaussian PSF fit, since admom gets gaussians too perfectly
+# trying out doing this automatically as needed
+randomize: true
+
+# number of times to retry when a trial fails.  This generates
+# a new trial, unlike max_retry above which retries with a 
+# randomized guess
+itmax: 100
+
+# set to null for new seed each time. Good when adding to the cache
+seed: null
+"""
+
+
 
 edg_byellip_template="""
 run: %(run_name)s
@@ -194,12 +241,17 @@ def main():
         if s2n is None:
             raise ValueError("send s2n for byellip")
         if simtype == 'edg':
-            text=edg_byellip_template % {'run_name':run_name,
-                                         'sim_name':sim_name,
-                                         's2n_fac':s2n_fac,
-                                         's2n':s2n}
+            text=edg_byellip_template
+        elif simtype == 'gg':
+            text=gg_byellip_template
+
         else:
             raise ValueError("support other sim types")
+
+        text=text % {'run_name':run_name,
+                     'sim_name':sim_name,
+                     's2n_fac':s2n_fac,
+                     's2n':s2n}
 
     else:
         raise ValueError("support others?")
