@@ -53,15 +53,13 @@ class MultiPlotterBase(dict):
                     'gmix-fit-edg11r01',
                     'gmix-fit-edg12r01',
                     'gmix-fit-edg13r01']
-
         elif self.set == 'set-e-gg01':
-            raise ValueError("this was using cumulative")
-            runs = ['gmix-fit-gg04r09',
-                    'gmix-fit-gg04r04',
-                    'gmix-fit-gg04r05',
-                    'gmix-fit-gg04r06',
-                    'gmix-fit-gg04r07',
-                    'gmix-fit-gg04r08']
+            runs = ['gmix-fit-gg05r02',
+                    'gmix-fit-gg05r03',
+                    'gmix-fit-gg05r04',
+                    'gmix-fit-gg05r05',
+                    'gmix-fit-gg05r06',
+                    'gmix-fit-gg05r07']
         elif self.set == 'set-e-edg01':
             runs = ['gmix-fit-edg07r02',
                     'gmix-fit-edg07r03',
@@ -120,6 +118,8 @@ class MultiPlotterVsE(MultiPlotterBase):
         biggles.configure("default","fontsize_min",1.5)
         biggles.configure('PlotKey','key_vsep',3.0)
         biggles.configure('PlotKey','key_width',15)
+        biggles.configure('_HalfAxis','ticks_size',2.5)
+        biggles.configure('_HalfAxis','subticks_size',2.5/2)
         #biggles.configure('_HalfAxis','ticklabels_style',{'fontsize':2.0})
         nrun=len(self.runs)
         
@@ -167,7 +167,8 @@ class MultiPlotterVsE(MultiPlotterBase):
                                     color=self.colors[is2])
                 c1 = biggles.Curve(etrue,diff1,
                                    type=self.linetypes[is2],
-                                   color=self.colors[is2])
+                                   color=self.colors[is2],
+                                   width=3.5)
 
                 arr[irow,icol].add(p1,c1) 
 
@@ -218,10 +219,10 @@ class MultiPlotterVsE(MultiPlotterBase):
         else:
             klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$:'
 
-        klab = biggles.PlotLabel(0.5,0.3,klabtext,
+        klab = biggles.PlotLabel(0.45,0.3,klabtext,
                                  halign='right')
 
-        key=biggles.PlotKey(0.85,0.3,kplots,halign='right')
+        key=biggles.PlotKey(0.8,0.3,kplots,halign='right')
         arr[0,0].add(klab,key)
 
 
@@ -292,8 +293,8 @@ class MultiPlotterVsShear(MultiPlotterBase):
         #biggles.configure("screen","height",1100)
         biggles.configure("default","fontsize_min",1.2)
         #biggles.configure('_HalfAxis','ticklabels_style',{'fontsize':2.0})
-        biggles.configure('_HalfAxis','ticks_size',2.5)
-        biggles.configure('_HalfAxis','subticks_size',2.5/2)
+        biggles.configure('_HalfAxis','ticks_size',3.)
+        biggles.configure('_HalfAxis','subticks_size',3./2)
         biggles.configure('PlotKey','key_vsep',3)
         biggles.configure('PlotKey','key_width',15)
         biggles.configure('_ErrorBar','barsize',1)
@@ -380,16 +381,41 @@ class MultiPlotterVsShear(MultiPlotterBase):
 
                 g1true = data['g1true'][is2,:]
                 g2true = data['g2true'][is2,:]
+                g1err  = data['g1err'][is2,:]
+                g2err  = data['g2err'][is2,:]
                 diff1  = data['g1meas'][is2,:] - g1true
                 diff2  = data['g2meas'][is2,:] - g2true
+
+                linfit1 = fitting.LineFitter(g1true, diff1, g1err)
+                linfit2 = fitting.LineFitter(g1true, diff2, g2err)
+                fits1['s2'][is2,i_s2n] = s2
+                fits1['s2n'][is2,i_s2n] = s2n
+                fits1['m'][is2,i_s2n] = linfit1.pars[0]
+                fits1['merr'][is2,i_s2n] = linfit1.perr[0]
+                fits1['c'][is2,i_s2n] = linfit1.pars[1]
+                fits1['cerr'][is2,i_s2n] = linfit1.perr[1]
+                fits2['s2'][is2,i_s2n] = s2
+                fits2['s2n'][is2,i_s2n] = s2n
+                fits2['m'][is2,i_s2n] = linfit2.pars[0]
+                fits2['merr'][is2,i_s2n] = linfit2.perr[0]
+                fits2['c'][is2,i_s2n] = linfit2.pars[1]
+                fits2['cerr'][is2,i_s2n] = linfit2.perr[1]
+
+
                 p1 = biggles.Points(g1true/scale,diff1,
                                     type=self.point_types[is2], 
                                     color=colors[is2])
-                c1 = biggles.Curve(g1true/scale,diff1,color=colors[is2],
-                                   type=linetypes[is2])
+                #c1 = biggles.Curve(g1true/scale,diff1,color=colors[is2],
+                #                   type=linetypes[is2])
+                lwidth=5.
+                c1 = biggles.Curve(g1true/scale,linfit1(g1true/scale),
+                                   color=colors[is2],
+                                   type=linetypes[is2],
+                                   width=lwidth)
                 if i_s2n == (n_s2n-1):
                     cfake = biggles.Curve(g1true-1000,diff1,color=colors[is2],
-                                          type=linetypes[is2])
+                                          type=linetypes[is2],
+                                          width=lwidth)
                     if self['use_rb']:
                         label = '%.2f' % sqrt(1/s2)
                     else:
@@ -398,8 +424,6 @@ class MultiPlotterVsShear(MultiPlotterBase):
                     fcurves.append(cfake)
                 arr[irow,icol].add(p1,c1) 
 
-                g1err  = data['g1err'][is2,:]
-                g2err  = data['g2err'][is2,:]
                 perr1 = biggles.SymmetricErrorBarsY(g1true/scale,
                                                     diff1,g1err,
                                                     color=colors[is2])
@@ -409,20 +433,6 @@ class MultiPlotterVsShear(MultiPlotterBase):
                     arr[irow,icol].add(z1)
 
 
-                linfit1 = fitting.LineFitter(g1true, diff1, g1err)
-                linfit2 = fitting.LineFitter(g1true, diff2, g2err)
-                fits1['s2'][is2,i_s2n] = s2
-                fits1['s2n'][is2,i_s2n] = s2n
-                fits1['m'][is2,i_s2n] = linfit1.pars[0] + 1
-                fits1['merr'][is2,i_s2n] = linfit1.perr[0]
-                fits1['c'][is2,i_s2n] = linfit1.pars[1]
-                fits1['cerr'][is2,i_s2n] = linfit1.perr[1]
-                fits2['s2'][is2,i_s2n] = s2
-                fits2['s2n'][is2,i_s2n] = s2n
-                fits2['m'][is2,i_s2n] = linfit2.pars[0] +1
-                fits2['merr'][is2,i_s2n] = linfit2.perr[0]
-                fits2['c'][is2,i_s2n] = linfit2.pars[1]
-                fits2['cerr'][is2,i_s2n] = linfit2.perr[1]
 
                 if is2 == 0 and nplot==0:
                     print '%15s %15s %15s +/- %15s %15s +/- %15s' % ('s2','s2n','m','err','c','err')
@@ -453,14 +463,14 @@ class MultiPlotterVsShear(MultiPlotterBase):
             arr[irow,icol].yrange = [-0.0025,0.0025]
         """
         fsize=2
-        key=biggles.PlotKey(0.85,0.9,fcurves,halign='right',fontsize=fsize)
+        key=biggles.PlotKey(0.85,0.85,fcurves,halign='right',fontsize=fsize)
         arr[nrow-1,ncol-1].add(key, *fcurves)
 
         if self['use_rb']:
             klabtext=r'$\sigma_{gal}/\sigma_{psf}$: '
         else:
             klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$: '
-        klab = biggles.PlotLabel(0.6,0.9,klabtext,
+        klab = biggles.PlotLabel(0.6,0.85,klabtext,
                                  fontsize=fsize,halign='right')
         arr[nrow-1,ncol-1].add(klab)
 
@@ -473,16 +483,18 @@ class MultiPlotterVsShear(MultiPlotterBase):
         l = biggles.PlotLabel(0.075,lowest+0, plab, halign='left')
         arr[nrow-1,ncol-1].add(l)
 
+        """
         if simc['psfmodel'] == 'turb':
             siglab = r'$FWHM: %.1f$ pix' % simc['psf_fwhm']
         else:
             psf_sigma = simc['psf_sigma']
             siglab = r'$\sigma: %.1f$ pix' % psf_sigma
-        #siglab += ' '+self.plotters[0].psf_estring
-        elab = r'$e_{gal}^{tot}: %.2f$' % td[0]['etrue'].mean()
-
         sl = biggles.PlotLabel(0.075,lowest+0.45, siglab, halign='left', 
                                fontsize=2.5)
+        arr[nrow-1,ncol-1].add(sl)
+        """
+        elab = r'$e_{gal}^{tot}: %.2f$' % td[0]['etrue'].mean()
+
         psf_estring=self.plotters[0].psf_estring
         if psf_estring:
             psfel = biggles.PlotLabel(0.075,lowest+0.3, psf_estring, 
@@ -492,7 +504,7 @@ class MultiPlotterVsShear(MultiPlotterBase):
 
         el = biggles.PlotLabel(0.075,lowest+0.15, elab, halign='left', 
                                fontsize=2.5)
-        arr[nrow-1,ncol-1].add(sl,el)
+        arr[nrow-1,ncol-1].add(el)
 
 
 
@@ -521,9 +533,9 @@ class MultiPlotterVsShear(MultiPlotterBase):
         arr.write_eps(epsfile)
         converter.convert(epsfile,dpi=100,verbose=True)
 
-        self.do_fits(fits1, fits2)
+        self.do_plot_fits(fits1, fits2)
 
-    def do_fits(self, fits1, fits2):
+    def do_plot_fits(self, fits1, fits2):
         """
         gamma2 plots look exactly the same, now only to gamma1
         """
@@ -533,6 +545,18 @@ class MultiPlotterVsShear(MultiPlotterBase):
         cplt = biggles.FramedPlot()
         biggles.configure("default","fontsize_min",1.5)
         biggles.configure('PlotKey','key_vsep',1.5)
+        biggles.configure('PlotKey','key_width',12)
+        biggles.configure('_HalfAxis','ticks_size',2.5)
+        biggles.configure('_HalfAxis','subticks_size',2.5/2)
+
+        #mupper = biggles.Curve([-500,500],[0.004,0.004],color='grey')
+        #mlower = biggles.Curve([-500,500],[-0.004,-0.004],color='grey')
+        #mplt.add(mupper)
+        #mplt.add(mlower)
+        mplt.add( biggles.FillBetween([-500,500], [0.004,0.004], 
+                                      [-500,500], [-0.004,-0.004]))
+        cplt.add( biggles.FillBetween([-500,500], [0.0004,0.0004], 
+                                      [-500,500], [-0.0004,-0.0004]))
 
         n_s2 = self.n_s2
         n_s2n = self.n_s2n
@@ -606,19 +630,19 @@ class MultiPlotterVsShear(MultiPlotterBase):
         carr[0,1].add(lab2)
         """
 
-        xlabel = r'$S/N_{matched}$'
+        xlabel = r'$S/N$'
         mplt.xlabel = xlabel
-        mplt.ylabel = 'm (calibration bias)'
+        mplt.ylabel = 'Calibration error (m-1)'
         mplt.aspect_ratio=1 #/GRATIO
         cplt.xlabel = xlabel
-        cplt.ylabel = 'c (additive bias)'
+        cplt.ylabel = 'Additive error c'
         cplt.aspect_ratio=1 #/GRATIO
 
         if self['use_rb']:
             klabtext=r'$\sigma_{gal}/\sigma_{psf}$: '
         else:
             klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$: '
-        fsize=2
+        fsize=3
         labypos=.25
         klab = biggles.PlotLabel(.65,labypos,klabtext,
                                  fontsize=fsize,halign='right')
@@ -629,13 +653,13 @@ class MultiPlotterVsShear(MultiPlotterBase):
         mplt.add(klab)
 
         cplt.add(biggles.Curve([-50,500],[0,0]))
-        mplt.add(biggles.Curve([-50,500],[1,1]))
+        mplt.add(biggles.Curve([-50,500],[0,0]))
 
-        mplt.yrange=[.9,1.1]
+        mplt.yrange=[-0.1,.1]
 
         xrng=[-1,110]
         cplt.xrange=xrng
-        cplt.yrange=[-.002,.002]
+        cplt.yrange=[-.0029,.0029]
         mplt.xrange=xrng
 
         if self['show']:
@@ -686,7 +710,7 @@ class MultiPlotterVsEpsf(MultiPlotterBase):
         scale=.01
         #biggles.configure("screen","width",2000)
         #biggles.configure("screen","height",1100)
-        biggles.configure("default","fontsize_min",1.2)
+        biggles.configure("default","fontsize_min",1.5)
         #biggles.configure('_HalfAxis','ticklabels_style',{'fontsize':2.0})
         biggles.configure('_HalfAxis','ticks_size',2.5)
         biggles.configure('_HalfAxis','subticks_size',2.5/2)
@@ -733,6 +757,9 @@ class MultiPlotterVsEpsf(MultiPlotterBase):
             arr[irow,icol].add(biggles.Curve([-1000]*2,[-1000]*2))
             #arr[irow,icol].yrange = [-0.0025,0.0025]
             arr[irow,icol].yrange = [-0.035,0.035]
+
+            arr[irow,icol].add( biggles.FillBetween([-500,500], [0.0004,0.0004], 
+                                                    [-500,500], [-0.0004,-0.0004]))
 
         fdtype=[('s2','f8',n_s2n), ('s2n','f8',n_s2n),
                 ('c','f8',n_s2n), ('cerr','f8',n_s2n),
@@ -862,14 +889,15 @@ class MultiPlotterVsEpsf(MultiPlotterBase):
             arr[irow,icol].yrange = [-0.0025,0.0025]
         """
         fsize=2
-        key=biggles.PlotKey(.6,.3,fcurves,halign='right',fontsize=fsize)
+        xmin = 0.75
+        key=biggles.PlotKey(xmin,.3,fcurves,halign='right',fontsize=fsize)
         arr[0,0].add(key, *fcurves)
 
         if self['use_rb']:
             klabtext=r'$\sigma_{gal}/\sigma_{psf}$: '
         else:
             klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$: '
-        klab = biggles.PlotLabel(.35,.3,klabtext,
+        klab = biggles.PlotLabel(xmin-0.3,.3,klabtext,
                                  fontsize=fsize,halign='right')
         arr[0,0].add(klab)
 
@@ -897,7 +925,7 @@ class MultiPlotterVsEpsf(MultiPlotterBase):
         arr.xrange=array([-0.005,0.069])/scale
         #arr.uniform_limits=1
         arr.xlabel = r'$e_{PSF}/%.2g$' % scale
-        arr.ylabel = r'c (additive bias)'
+        arr.ylabel = r'Additive error c'
         #arr.aspect_ratio=1/1.61803399
         #arr.aspect_ratio=1/1.4
         arr.aspect_ratio=1/1.45
@@ -972,6 +1000,8 @@ class SimPlotter(dict):
         import converter
 
         biggles.configure("default","fontsize_min",2)
+        biggles.configure('_HalfAxis','ticks_size',2.5)
+        biggles.configure('_HalfAxis','subticks_size',2.5/2)
 
         if doavg:
             extra='-avg'
@@ -1000,7 +1030,6 @@ class SimPlotter(dict):
             types=['solid']*len(data)
 
         biggles.configure('PlotKey','key_vsep',1.0)
-        biggles.configure("default","fontsize_min",1.5)
         arr=biggles.FramedArray(2,1)
         #arr.aspect_ratio=1
         
@@ -1027,14 +1056,14 @@ class SimPlotter(dict):
 
             if 's2n_matched' in st.dtype.names:
                 s2n_name='s2n_matched'
-                xlabel = r'$S/N_{matched}$'
+                xlabel = r'$S/N$'
             elif 's2n_uw' in st.dtype.names:
                 s2n_name='s2n_uw'
                 xlabel = r'$S/N_{uw}$'
             else:
                 # assuming matched
                 s2n_name='s2n'
-                xlabel = r'$S/N_{matched}$'
+                xlabel = r'$S/N$'
 
             s2n = st[s2n_name]
 
@@ -1080,10 +1109,12 @@ class SimPlotter(dict):
                 label = r'< %0.3f' % s2
             else:
                 label = r'%0.3f' % s2
+
+            cwidth=2.5
             pr1 = biggles.Points(s2n, yvals1, color=colors[i],type='filled circle',size=1.5)
             pr2 = biggles.Points(s2n, yvals2, color=colors[i],type='filled circle',size=1.5)
-            cr1 = biggles.Curve(s2n, yvals1, color=colors[i],type=types[i],width=2.5)
-            cr2 = biggles.Curve(s2n, yvals2, color=colors[i],type=types[i],width=2.5)
+            cr1 = biggles.Curve(s2n, yvals1, color=colors[i],type=types[i],width=cwidth)
+            cr2 = biggles.Curve(s2n, yvals2, color=colors[i],type=types[i],width=cwidth)
             cr1.label = label
             cr2.label = label
 
@@ -1093,8 +1124,10 @@ class SimPlotter(dict):
             
             #if not self.docum and i == (len(data)-1):
             if True:
-                g1err = [st['shear1err'].max()]*st['shear1err'].size
-                g2err = [st['shear2err'].max()]*st['shear2err'].size
+                #g1err = [st['shear1err'].max()]*st['shear1err'].size
+                #g2err = [st['shear2err'].max()]*st['shear2err'].size
+                g1err = st['shear1err']
+                g2err = st['shear2err']
                 err1p = biggles.SymmetricErrorBarsY(s2n, yvals1, g1err,
                                                     color=colors[i])
                 err2p = biggles.SymmetricErrorBarsY(s2n, yvals2, g2err,
@@ -1145,8 +1178,8 @@ class SimPlotter(dict):
                                    fontsize=fsize)
             arr[1,0].add(key2)
 
-        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$'
-        klab = biggles.PlotLabel(0.715,0.92,klabtext,
+        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}: $'
+        klab = biggles.PlotLabel(0.75,0.92,klabtext,
                                  fontsize=2.5,halign='right')
         arr[0,0].add(klab)
         objmodel = self.simc['objmodel']
@@ -1197,7 +1230,11 @@ class SimPlotter(dict):
         else:
             arr.ylabel = r'$\Delta \gamma$'
             g1lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_1$ = %.2g' % shear_true.g1, halign='left')
-            g2lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_2$ = %.2g' % shear_true.g2, halign='left')
+            if 'dt' in self['run']:
+                g2x = 0.7
+            else:
+                g2x=0.1
+            g2lab = biggles.PlotLabel(g2x,0.9, r'$\gamma_2$ = %.2g' % shear_true.g2, halign='left')
 
             arr[0,0].add(g1lab)
             arr[1,0].add(g2lab)
@@ -1210,9 +1247,11 @@ class SimPlotter(dict):
 
 
 
+        """
         if xrng is None:
             xrng = [0,s2n.max()*1.4]
         arr.xrange = xrng
+        """
 
         if yrng is not None:
             arr.yrange = yrng
