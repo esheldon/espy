@@ -104,7 +104,8 @@ class MultiPlotterVsE(MultiPlotterBase):
         self.ne = td[0].size
         if self.n_s2 != 4:
             raise ValueError("adapt for n_s2 != 4")
-        self.colors = ['blue','magenta','green','red']
+        #self.colors = ['blue','magenta','green','red']
+        self.colors=['red','forestgreen','NavajoWhite3','blue']
         self.linetypes=['solid','dotdashed','dashed','dotted']
         self.point_types=['filled circle','filled diamond','filled square','filled triangle']
 
@@ -164,11 +165,12 @@ class MultiPlotterVsE(MultiPlotterBase):
 
                 p1 = biggles.Points(etrue,diff1,
                                     type=self.point_types[is2],
-                                    color=self.colors[is2])
+                                    color=self.colors[is2],
+                                    size=3)
                 c1 = biggles.Curve(etrue,diff1,
                                    type=self.linetypes[is2],
                                    color=self.colors[is2],
-                                   width=3.5)
+                                   width=5.)
 
                 arr[irow,icol].add(p1,c1) 
 
@@ -277,7 +279,8 @@ class MultiPlotterVsShear(MultiPlotterBase):
         self.n_s2n = td[0].size
         if self.n_s2 != 4:
             raise ValueError("adapt for n_s2 != 4")
-        self.colors = ['blue','magenta','green','red']
+        #self.colors = ['blue','magenta','green','red']
+        self.colors=list(reversed(['red','forestgreen','NavajoWhite3','blue']))
         self.linetypes=['solid','dotdashed','dashed','dotted']
         self.point_types=['filled circle','filled diamond','filled square','filled triangle']
 
@@ -335,7 +338,7 @@ class MultiPlotterVsShear(MultiPlotterBase):
             icol = i % ncol
             arr[irow,icol].add(biggles.Curve([-1000]*2,[-1000]*2))
             #arr[irow,icol].yrange = [-0.0025,0.0025]
-            arr[irow,icol].yrange = [-0.035,0.035]
+            arr[irow,icol].yrange = [-0.035,0.009]
 
         fdtype=[('s2','f8',n_s2n), ('s2n','f8',n_s2n),
                 ('c','f8',n_s2n), ('cerr','f8',n_s2n),
@@ -404,7 +407,8 @@ class MultiPlotterVsShear(MultiPlotterBase):
 
                 p1 = biggles.Points(g1true/scale,diff1,
                                     type=self.point_types[is2], 
-                                    color=colors[is2])
+                                    color=colors[is2],
+                                    size=4)
                 #c1 = biggles.Curve(g1true/scale,diff1,color=colors[is2],
                 #                   type=linetypes[is2])
                 lwidth=5.
@@ -440,17 +444,19 @@ class MultiPlotterVsShear(MultiPlotterBase):
                                                                  linfit1.pars[0]+1,linfit1.perr[0],
                                                                  linfit1.pars[1],linfit1.perr[1])
 
-            s2nlab = biggles.PlotLabel(0.9,0.9,'S/N: %d' % s2n,
-                                     fontsize=2.5,halign='right')
+            s2nlab = biggles.PlotLabel(0.1,0.9,'S/N: %d' % s2n,
+                                     fontsize=2.5,halign='left')
             arr[irow,icol].add(s2nlab)
             if irow == 3:
-                arr[irow,icol].yrange = [-0.012,0.012]
+                arr[irow,icol].yrange = [-0.019,0.007]
             elif irow == 2:
-                arr[irow,icol].yrange = [-0.005,0.005]
+                arr[irow,icol].yrange = [-0.0024,0.0039]
             elif irow == 1:
-                arr[irow,icol].yrange = [-0.0035,0.0035]
+                #arr[irow,icol].yrange = [-0.0029,0.0029]
+                arr[irow,icol].yrange = [-0.0009,0.0029]
             elif irow == 0:
-                arr[irow,icol].yrange = [-0.0035,0.0035]
+                #arr[irow,icol].yrange = [-0.0019,0.0019]
+                arr[irow,icol].yrange = [-0.0009,0.0019]
 
             nplot+=1
 
@@ -574,10 +580,13 @@ class MultiPlotterVsShear(MultiPlotterBase):
             cpts1=biggles.Points(fits1['s2n'][is2,:], fits1['c'][is2,:],
                                  type=self.point_types[is2], 
                                  color=colors[is2])
+            width=3.
             mcur1=biggles.Curve(fits1['s2n'][is2,:], fits1['m'][is2,:],
-                                color=colors[is2],type=linetypes[is2])
+                                color=colors[is2],type=linetypes[is2],
+                                width=width)
             ccur1=biggles.Curve(fits1['s2n'][is2,:], fits1['c'][is2,:],
-                                color=colors[is2],type=linetypes[is2])
+                                color=colors[is2],type=linetypes[is2],
+                                width=width)
 
             merr1=biggles.SymmetricErrorBarsY(fits1['s2n'][is2,:], 
                                               fits1['m'][is2,:],
@@ -594,9 +603,11 @@ class MultiPlotterVsShear(MultiPlotterBase):
                                  type=self.point_types[is2], 
                                  color=colors[is2])
             mcur2=biggles.Curve(fits2['s2n'][is2,:], fits2['m'][is2,:],
-                                color=colors[is2],type=linetypes[is2])
+                                color=colors[is2],type=linetypes[is2],
+                                width=width)
             ccur2=biggles.Curve(fits2['s2n'][is2,:], fits2['c'][is2,:],
-                                color=colors[is2],type=linetypes[is2])
+                                color=colors[is2],type=linetypes[is2],
+                                width=width)
 
 
 
@@ -696,7 +707,8 @@ class MultiPlotterVsEpsf(MultiPlotterBase):
         self.n_s2n = td[0].size
         if self.n_s2 != 4:
             raise ValueError("adapt for n_s2 != 4")
-        self.colors = ['blue','magenta','green','red']
+        #self.colors = ['blue','magenta','green','red']
+        self.colors=['red','forestgreen','NavajoWhite3','blue']
         self.linetypes=['solid','dotdashed','dashed','dotted']
         self.point_types=['filled circle','filled diamond','filled square','filled triangle']
 
@@ -818,12 +830,16 @@ class MultiPlotterVsEpsf(MultiPlotterBase):
                 diff2  = data['g2meas'][is2,:] - data['g2true'][is2,:]
                 p1 = biggles.Points(psf_e1/scale,diff1,
                                     type=self.point_types[is2], 
-                                    color=colors[is2])
+                                    color=colors[is2],
+                                    size=3)
+                width=5
                 c1 = biggles.Curve(psf_e1/scale,diff1,color=colors[is2],
-                                   type=linetypes[is2])
+                                   type=linetypes[is2],
+                                   width=width)
                 if i_s2n == (n_s2n-1):
                     cfake = biggles.Curve(psf_e1-1000,diff1,color=colors[is2],
-                                          type=linetypes[is2])
+                                          type=linetypes[is2],
+                                          width=width)
                     if self['use_rb']:
                         label = '%.2f' % sqrt(1/s2)
                     else:
@@ -1002,6 +1018,8 @@ class SimPlotter(dict):
         biggles.configure("default","fontsize_min",2)
         biggles.configure('_HalfAxis','ticks_size',2.5)
         biggles.configure('_HalfAxis','subticks_size',2.5/2)
+        biggles.configure('PlotKey','key_width',13)
+        biggles.configure('PlotKey','key_vsep',1.0)
 
         if doavg:
             extra='-avg'
@@ -1024,12 +1042,12 @@ class SimPlotter(dict):
 
         if len(data) == 4:
             colors=['red','forestgreen','NavajoWhite3','blue']
-            types=['dotted','dashed','dotdashed','solid']
+            linetypes=['dotted','dashed','dotdashed','solid']
         else:
             colors=pcolors.rainbow(len(data), 'hex')
-            types=['solid']*len(data)
+            linetypes=['solid']*len(data)
+        point_types=['filled circle','filled diamond','filled square','filled triangle']
 
-        biggles.configure('PlotKey','key_vsep',1.0)
         arr=biggles.FramedArray(2,1)
         #arr.aspect_ratio=1
         
@@ -1110,11 +1128,15 @@ class SimPlotter(dict):
             else:
                 label = r'%0.3f' % s2
 
-            cwidth=2.5
-            pr1 = biggles.Points(s2n, yvals1, color=colors[i],type='filled circle',size=1.5)
-            pr2 = biggles.Points(s2n, yvals2, color=colors[i],type='filled circle',size=1.5)
-            cr1 = biggles.Curve(s2n, yvals1, color=colors[i],type=types[i],width=cwidth)
-            cr2 = biggles.Curve(s2n, yvals2, color=colors[i],type=types[i],width=cwidth)
+            cwidth=5.
+            pr1 = biggles.Points(s2n, yvals1, color=colors[i],
+                                 size=2,
+                                 type=point_types[i])
+            pr2 = biggles.Points(s2n, yvals2, color=colors[i],
+                                 size=2,
+                                 type=point_types[i])
+            cr1 = biggles.Curve(s2n, yvals1, color=colors[i],type=linetypes[i],width=cwidth)
+            cr2 = biggles.Curve(s2n, yvals2, color=colors[i],type=linetypes[i],width=cwidth)
             cr1.label = label
             cr2.label = label
 
@@ -1170,16 +1192,16 @@ class SimPlotter(dict):
             arr[1,0].add(err2p)
 
         fsize=2
-        key1 = biggles.PlotKey(0.9,0.92, plots1, halign='right', 
+        key1 = biggles.PlotKey(0.85,0.92, plots1, halign='right', 
                                fontsize=fsize)
         arr[0,0].add(key1)
         if len(plots2) > 0:
-            key2 = biggles.PlotKey(0.9,0.92, plots2, halign='right', 
+            key2 = biggles.PlotKey(0.85,0.92, plots2, halign='right', 
                                    fontsize=fsize)
             arr[1,0].add(key2)
 
         klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}: $'
-        klab = biggles.PlotLabel(0.75,0.92,klabtext,
+        klab = biggles.PlotLabel(.65,.92,klabtext,
                                  fontsize=2.5,halign='right')
         arr[0,0].add(klab)
         objmodel = self.simc['objmodel']
