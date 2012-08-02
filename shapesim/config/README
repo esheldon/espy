@@ -205,6 +205,11 @@ gmix-fit
                                                    bytrial for all
                                                    done
 
+        Different shears
+        et05,et06,et07,et08,et09,et10
+        .00   .01  .02  .03  .04  .05 
+
+
         edg02 redoing with fewer s2
             round double gaussian psf
             g1=0.01,g2=-0.01

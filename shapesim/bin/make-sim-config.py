@@ -29,6 +29,30 @@ parser.add_option('--nums2',default='4',
 parser.add_option('--dryrun',action='store_true',
                   help="just print to the screen")
 
+turb_template="""
+name: %(simname)s
+
+orient: ring
+nring: 100
+
+# we can trim later
+dotrim: false
+
+psfmodel: turb
+psf_fwhm: 3.3
+
+objmodel: %(objmodel)s
+
+shear: [%(shear1)s,%(shear2)s]
+
+mins2: 0.5
+maxs2: 2.0
+nums2: %(nums2)s
+
+mine:  0.05
+maxe:  0.80
+nume:  %(nume)s
+"""
 dg_template="""
 name: %(simname)s
 
@@ -59,7 +83,8 @@ maxe:  0.80
 nume:  %(nume)s
 """
 
-shortnames={'gauss':'g',
+shortnames={'turb':'t',
+            'gauss':'g',
             'dgauss':'dg',
             'exp':'e',
             'dev':'d'}
@@ -107,18 +132,27 @@ def main():
             parser.print_help()
             sys.exit(1)
         psf_e1,psf_e2 = options.psf_ellip.split(',')
-    else:
-        raise ValueError("need to support more psf types")
 
     if objmodel == 'exp':
-        text = dg_template % {'simname':simname,
-                              'objmodel':objmodel,
-                              'psf_e1':psf_e1,
-                              'psf_e2':psf_e2,
-                              'shear1':shear1,
-                              'shear2':shear2,
-                              'nums2':options.nums2,
-                              'nume':options.nume}
+        if psfmodel == 'dgauss':
+            text = dg_template % {'simname':simname,
+                                  'objmodel':objmodel,
+                                  'psf_e1':psf_e1,
+                                  'psf_e2':psf_e2,
+                                  'shear1':shear1,
+                                  'shear2':shear2,
+                                  'nums2':options.nums2,
+                                  'nume':options.nume}
+        elif psfmodel == 'turb':
+            text = turb_template % {'simname':simname,
+                                    'objmodel':objmodel,
+                                    'shear1':shear1,
+                                    'shear2':shear2,
+                                    'nums2':options.nums2,
+                                    'nume':options.nume}
+
+        else:
+            raise ValueError("support more psf models")
     else:
         raise ValueError("need to support more obj types")
 

@@ -25,6 +25,8 @@ parser.add_option('--dryrun',action='store_true',
                   help="just print to the screen")
 
 
+
+
 gg_byellip_template="""
 run: %(run_name)s
 sim: %(sim_name)s
@@ -169,7 +171,59 @@ itmax: 100
 seed: null
 """
 
-shortnames={'gauss':'g',
+et_bys2n_template="""
+run: %(run_name)s
+sim: %(sim_name)s
+
+# we will use all the s2 values from the sim, a set of s/n values and a single
+# ellip value
+runtype: bys2n
+
+s2n_method: matched
+s2n_fac: %(s2n_fac)s
+
+retrim: true
+retrim_fluxfrac: 0.9973
+s2ncalc_fluxfrac: null
+
+ie: %(ie)s  # %(e_val)0.2f
+s2nvals: [%(s2n_vals)s]
+
+s2n_psf: 1.0e+8
+
+use_cache: true
+add_to_cache: false
+
+verbose: false
+
+# we should try with higher values to see what happens
+ngauss_psf: 3
+ngauss_obj: 3
+
+coellip_psf: true
+coellip_obj: true
+
+maxtry: 2
+maxtry_psf: 1
+
+# this is for the gaussian PSF fit, since admom gets gaussians too perfectly
+# trying out doing this automatically as needed
+randomize: true
+
+# number of times to retry when a trial fails.  This generates
+# a new trial, unlike max_retry above which retries with a 
+# randomized guess
+itmax: 100
+
+# set to null for new seed each time. Good when adding to the cache
+seed: null
+"""
+
+
+
+
+shortnames={'turb':'t',
+            'gauss':'g',
             'dgauss':'dg',
             'exp':'e',
             'dev':'d'}
@@ -234,6 +288,13 @@ def main():
                                        's2n_vals':s2n_vals,
                                        'ie':ie,
                                        'e_val':e_val}
+        elif simtype == 'et':
+            text=et_bys2n_template % {'run_name':run_name,
+                                      'sim_name':sim_name,
+                                      's2n_fac':s2n_fac,
+                                      's2n_vals':s2n_vals,
+                                      'ie':ie,
+                                      'e_val':e_val}
         else:
             raise ValueError("support other sim types")
     elif run_type == 'byellip':
