@@ -708,7 +708,7 @@ class MultiPlotterVsEpsf(MultiPlotterBase):
         if self.n_s2 != 4:
             raise ValueError("adapt for n_s2 != 4")
         #self.colors = ['blue','magenta','green','red']
-        self.colors=['red','forestgreen','NavajoWhite3','blue']
+        self.colors=list(reversed(['red','forestgreen','NavajoWhite3','blue']))
         self.linetypes=['solid','dotdashed','dashed','dotted']
         self.point_types=['filled circle','filled diamond','filled square','filled triangle']
 

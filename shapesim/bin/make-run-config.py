@@ -277,7 +277,8 @@ def main():
 
         tmps2,e_val = shapesim.get_s2_e(cs, 0, int(ie))
 
-        s2n_vals_def='5,10,15,20,25,30,40,50,60,70,80,90,100'
+        #s2n_vals_def='5,10,15,20,25,30,40,50,60,70,80,90,100'
+        s2n_vals_def='10,15,20,25,30,40,50,60,70,80,90,100'
         s2n_vals=options.s2n_vals
         if s2n_vals is None:
             s2n_vals=s2n_vals_def
