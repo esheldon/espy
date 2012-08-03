@@ -1,5 +1,5 @@
 """
-Based heavily on code in the DES trivialAccess.py
+Based partly on code in the DES trivialAccess.py
 """
 
 import os
@@ -37,6 +37,24 @@ def connect(**keys):
     return Connection(**keys)
 
 class Connection(cx_Oracle.Connection):
+    """
+    A simple wrapper to the cx_oracle connection object.
+
+    Simplifies access to DES db.
+
+    methods
+    -------
+
+    quick:
+        Execute the query and return the results.
+
+    quickWrite:
+        Execute the query and write the results to a the
+        standard output or a file.
+
+    describe:
+        Print a description of the specified table.
+    """
     def __init__(self, user=None, password=None, host=_defhost,
                  port=_defport, dbname=_defdb):
 
