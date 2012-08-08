@@ -53,6 +53,13 @@ class MultiPlotterBase(dict):
                     'gmix-fit-edg11r01',
                     'gmix-fit-edg12r01',
                     'gmix-fit-edg13r01']
+        elif self.set == 'set-s2n-et01':
+            runs = ['gmix-fit-et05r01',
+                    'gmix-fit-et06r01',
+                    'gmix-fit-et07r01',
+                    'gmix-fit-et08r01',
+                    'gmix-fit-et09r01',
+                    'gmix-fit-et10r01']
         elif self.set == 'set-e-gg01':
             runs = ['gmix-fit-gg05r02',
                     'gmix-fit-gg05r03',
@@ -274,6 +281,18 @@ class MultiPlotterVsShear(MultiPlotterBase):
 
     def do_setup(self):
         import pcolors
+
+        try:
+            ii=self.runs.index('gmix-fit-et05r01')
+            newdata = []
+            data=self.plotters[ii].read_data()
+            for d in data:
+                d=d[1:]
+                newdata.append(d)
+            self.plotters[ii]._data=newdata
+        except:
+            pass
+
         td = self.plotters[0].read_data()
         self.n_s2 = len(td)
         self.n_s2n = td[0].size
@@ -307,8 +326,12 @@ class MultiPlotterVsShear(MultiPlotterBase):
         n_s2 = self.n_s2
         n_s2n = self.n_s2n
 
-        nrow=5
-        ncol=3
+        if n_s2n == 12:
+            nrow=4
+            ncol=3
+        else:
+            nrow=5
+            ncol=3
         arr = biggles.FramedArray(nrow,ncol)
         # colors of each s2 bin
         colors = self.colors
@@ -370,6 +393,16 @@ class MultiPlotterVsShear(MultiPlotterBase):
 
                     s2,ellip = shapesim.get_s2_e(plotter.simc, is2, 0)
                     s2vals.append(s2)
+
+                    """
+                    print is2,irun,i_s2n,data['g1true'].shape,d[is2].shape
+                    print data['g1meas'].shape
+                    print len(d)
+                    print tag1
+                    print data['g1meas'][is2,irun]
+                    #print d[is2][tag1][i_s2n]
+                    print d[is2][tag1]
+                    """
 
                     data['g1true'][is2,irun] = shear.g1
                     data['g2true'][is2,irun] = shear.g2
@@ -469,16 +502,25 @@ class MultiPlotterVsShear(MultiPlotterBase):
             arr[irow,icol].yrange = [-0.0025,0.0025]
         """
         fsize=2
-        key=biggles.PlotKey(0.85,0.85,fcurves,halign='right',fontsize=fsize)
-        arr[nrow-1,ncol-1].add(key, *fcurves)
+        if self.n_s2n == 12:
+            keyrow=nrow-1
+            keycol=0
+            pos=(.80,.45)
+        else:
+            keyrow=nrow-1
+            keycol=ncol-1
+            pos=(.85,.85)
+
+        key=biggles.PlotKey(pos[0],pos[1],fcurves,halign='right',fontsize=fsize)
+        arr[keyrow,keycol].add(key, *fcurves)
 
         if self['use_rb']:
             klabtext=r'$\sigma_{gal}/\sigma_{psf}$: '
         else:
             klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$: '
-        klab = biggles.PlotLabel(0.6,0.85,klabtext,
+        klab = biggles.PlotLabel(0.5,pos[1],klabtext,
                                  fontsize=fsize,halign='right')
-        arr[nrow-1,ncol-1].add(klab)
+        arr[keyrow,keycol].add(klab)
 
         simc = self.plotters[0].simc
         objmodel = simc['objmodel']
@@ -1723,9 +1765,10 @@ class SimPlotter(dict):
                                                    docum=docum,
                                                    verbose=True)
             """
-            self._data = shapesim.read_averaged_outputs(self['run'], 
-                                                        docum=self.docum, 
-                                                        skip1=self.skip1) 
+            data = shapesim.read_averaged_outputs(self['run'], 
+                                                  docum=self.docum, 
+                                                  skip1=self.skip1) 
+            self._data=data
         if self.s2min is not None:
             keepdata = self.limit_s2(self._data, self.s2min)
             return keepdata
