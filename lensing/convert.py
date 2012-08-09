@@ -17,7 +17,7 @@ class CatalogConverter:
         self.type = type
 
     def convert(self, objclass, catalog):
-        fname = lensing.files.sample_file(self.type,catalog)
+        fname = lensing.files.sample_file(type=self.type,sample=catalog)
 
         oc = objclass(version)
         oc.create_objshear_input(fname)

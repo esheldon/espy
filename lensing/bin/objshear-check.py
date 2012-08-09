@@ -27,14 +27,14 @@ run=args[0]
 conf = files.cascade_config(run)
 nsplit=conf['src_config']['nsplit']
 
-pattern = files.sample_file('lensout',run, split=0,fs='hdfs')
+pattern = files.sample_file(type='lensout',sample=run, split=0,fs='hdfs')
 pattern = pattern.replace('-000.dat','-*.dat')
 
 dulist = eu.hdfs.du(pattern, dict=True)
 
 nlines_expected =-1
 for split in xrange(nsplit):
-    f = files.sample_file('lensout',run, split=split,fs='hdfs')
+    f = files.sample_file(type='lensout',sample=run, split=split,fs='hdfs')
     stderr.write('.')
     if f not in dulist:
         print >>stderr,'\nFile not found:',f

@@ -25,7 +25,7 @@ def plot_lens_s2n_bysample(lens_sample, pzrun, cumulative=True):
     pzs = hdict['whist']
 
     # now read the zl
-    data = lensing.files.read_original_catalog('lens',lens_sample)
+    data = lensing.files.read_original_catalog(type='lens',sample=lens_sample)
 
     return plot_lens_s2n(data['z'], hdict['low'], hdict['high'], pzs)
 

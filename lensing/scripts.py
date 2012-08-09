@@ -17,13 +17,13 @@ class Scripts(dict):
 
 
     def write_scripts(self):
-        d=files.sample_dir('script',self['run'])
+        d=files.sample_dir(type='script',sample=self['run'])
         if not os.path.exists(d):
             os.makedirs(d)
 
         nsplit=self['src_config']['nsplit']
         for split in xrange(nsplit):
-            sfile=files.sample_file('script',self['run'],split=split)
+            sfile=files.sample_file(type='script',sample=self['run'],split=split)
             text=self.script_text(split)
 
             print("writing script:",sfile)
@@ -32,13 +32,13 @@ class Scripts(dict):
             os.popen('chmod 755 '+sfile)
 
     def script_text(self, split):
-        config_file=files.sample_file('config',self['run'],split=split)
+        config_file=files.sample_file(type='config',sample=self['run'],split=split)
 
-        local_file=files.sample_file('lensout',self['run'],split=split,fs='local')
-        local_dir=files.sample_dir('lensout',self['run'],fs='local')
+        local_file=files.sample_file(type='lensout',sample=self['run'],split=split,fs='local')
+        local_dir=files.sample_dir(type='lensout',sample=self['run'],fs='local')
 
-        hadoop_file=files.sample_file('lensout',self['run'],split=split,fs='hdfs')
-        hadoop_dir=files.sample_dir('lensout',self['run'],fs='hdfs')
+        hadoop_file=files.sample_file(type='lensout',sample=self['run'],split=split,fs='hdfs')
+        hadoop_dir=files.sample_dir(type='lensout',sample=self['run'],fs='hdfs')
 
         masktype=self['lens_config'].get('masktype',None)
         if masktype == 'sdss':

@@ -26,13 +26,13 @@ def main():
 
     run = args[0]
 
-    outfile = lensing.files.sample_file('collated', run, fs='hdfs')
+    outfile = lensing.files.sample_file(type='collated', sample=run, fs='hdfs')
     print("will collate to file:",outfile)
 
     conf = lensing.files.cascade_config(run)
     lsample = conf['lens_config']['sample']
-    cat = lensing.files.read_original_catalog('lens',lsample)
-    reduced = lensing.files.reduced_read(run)
+    cat = lensing.files.read_original_catalog(type='lens',sample=lsample)
+    reduced = lensing.files.reduced_read(sample=run)
 
     # trim down to the ones we used
     print("Extracting by zindex")

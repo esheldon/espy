@@ -76,11 +76,14 @@ def main():
 
     b = lensing.binning.instantiate_binner(bintype, nbin)
 
-    binned_data = lensing.files.sample_read('binned', lensrun, name=b.name())
+    binned_data = lensing.files.sample_read(type='binned', sample=lensrun, name=b.name())
 
     alldata = lensing.correct.correct(binned_data, None)
 
-    lensing.files.sample_write(alldata,'corrected',lensrun,name=b.name()) 
+    lensing.files.sample_write(data=alldata,
+                               type='corrected',
+                               sample=lensrun,
+                               name=b.name()) 
 
     # now some plots
     biggles.configure('screen','width', 1100)
@@ -89,8 +92,8 @@ def main():
     range4var = [0.1,100]
     for binnum in xrange(nbin):
         eps_dsigcorr_extra='dsigcorr-%02d' % binnum
-        eps_dsigcorr=lensing.files.sample_file('corrected-plots',
-                                               lensrun,
+        eps_dsigcorr=lensing.files.sample_file(type='corrected-plots',
+                                               sample=lensrun,
                                                name=b.name(),
                                                extra=eps_dsigcorr_extra, ext='eps')
 

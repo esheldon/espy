@@ -292,8 +292,8 @@ def load_test_data():
     import lensing
     run='08'
     rrun='r01'
-    l=lensing.files.sample_read('collated',run)
-    r=lensing.files.sample_read('collated',rrun)
+    l=lensing.files.sample_read(type='collated',sample=run)
+    r=lensing.files.sample_read(type='collated',sample=rrun)
 
     return l,r
 

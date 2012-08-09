@@ -162,7 +162,10 @@ def invert_byrun(run, name, show=False, rmax=None):
                 print sys.exc_info()
 
             
-    lensing.files.sample_write(d, 'invert', run, name=name)
+    lensing.files.sample_write(data=d, 
+                               type='invert', 
+                               sample=run, 
+                               name=name)
 
 
 

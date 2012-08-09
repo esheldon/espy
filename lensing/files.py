@@ -48,8 +48,11 @@ finfo={}
 finfo['lcat']     = {'subdir':'lcat/{sample}',  'name':'lcat-{sample}{extra}.{ext}', 'default_ext':'dat'}
 finfo['scat']     = {'subdir':'scat/{sample}',  'name':'scat-{sample}.{ext}','default_ext':'dat'}
 
+finfo['lcat-split']  = {'subdir':'lcat/{sample}',  
+                        'name':'lcat-{sample}-{split}.{ext}', 
+                        'default_ext':'dat'}
 finfo['scat-split']  = {'subdir':'scat/{sample}',
-                            'name':'scat-{sample}-{split}.{ext}','default_ext':'dat'}
+                        'name':'scat-{sample}-{split}.{ext}','default_ext':'dat'}
 
 # usually we only have the split versions of these
 finfo['lensout']  = {'subdir':'lensout/{sample}',
@@ -135,7 +138,7 @@ def local_dir():
 
 
 
-def sample_dir(type, sample, name=None, fs='nfs'):
+def sample_dir(**keys):
     """
 
     Generic routine to get the directory for a sample of a given type, e.g.
@@ -144,6 +147,12 @@ def sample_dir(type, sample, name=None, fs='nfs'):
     See finfo for a list of types
 
     """
+
+    type=keys.get('type',None)
+    sample=keys.get('sample',None)
+    name=keys.get('name',None)
+    fs=keys.get('fs','nfs')
+
     if type not in finfo:
         if type+'-split' in finfo:
             type=type+'-split'
@@ -162,17 +171,44 @@ def sample_dir(type, sample, name=None, fs='nfs'):
     d = path_join(d,dsub)
     return d
 
-def sample_file(type, sample, split=None, name=None, extra=None, ext=None, fs='nfs'):
-    """
 
+def sample_file(**keys):
+    """
     Generic routine to get the file for a sample of a given type, e.g.  for
     lcat,scat files etc
 
+    All parameters are named keywords.
+
     See finfo for a list of types
 
+    parameters
+    ----------
+    type:
+        type name, e.g. lcat,scat
+    sample:
+        sample name
+    split:
+        split number.
+    name:
+        name for binned
+    extra:
+        extra name
+    ext:
+        extension
     """
 
-    d = sample_dir(type, sample, name=name, fs=fs)
+    type=keys.get('type',None)
+    sample=keys.get('sample',None)
+    if type is None or sample is None:
+        raise ValueError("send type= and sample=")
+
+    split=keys.get('split',None)
+    name=keys.get('name',None)
+    extra=keys.get('extra',None)
+    ext=keys.get('ext',None)
+
+    d = sample_dir(**keys)
+
     if split is not None:
         split = '%03d' % split
         type = type+'-split'
@@ -190,7 +226,7 @@ def sample_file(type, sample, split=None, name=None, extra=None, ext=None, fs='n
     return f
 
 
-def sample_read(type, sample, split=None, name=None, extra=None, fs='nfs'):
+def sample_read(**keys):
     """
 
     Generic reader.
@@ -199,32 +235,52 @@ def sample_read(type, sample, split=None, name=None, extra=None, fs='nfs'):
     combining which is done by /bin/reduce-lensout.py and doesn't work for the
     config, lcat and scat special file types.
 
+    parameters
+    -----------
+    type:
+        file type, e.g. lcat
+    sample:
+        sample name
+    split:
+        split number
+    name:
+        extra name
+    extra:
+        extra string
+    fs:
+        file system
     """
+    type=keys['sample']
     if type == 'lcat':
-        return lcat_read(sample)
+        return lcat_read(**keys)
     elif type == 'scat':
-        return scat_read(sample)
+        return scat_read_ascii(**keys)
 
-    f=sample_file(type, sample, split=split, name=name, extra=extra, fs=fs)
+    f=sample_file(**keys)
     return eu.io.read(f, verbose=True)
 
-def sample_write(data, type, sample, split=None, name=None, extra=None, fs='nfs', **keys):
+def sample_write(**keys):
     """
 
     Generic writer, just gets filename and runs eu.io.write
 
     clobber=True is default for this function.
-    """
-    f=sample_file(type, sample, split=split, name=name, extra=extra, fs=fs)
-    make_dir_from_path(f)
 
-    if 'clobber' not in keys:
-        keys['clobber'] = True
-    if keys['clobber']:
-        print("over-writing",type,"file:",f)
-    else:
-        print("writing",type,"file:",f)
-    return eu.io.write(f, data, **keys)
+    parameters
+    ----------
+    data:
+        Keyword holding the data to write
+    keys:
+        other keywords for the sample_file(**keys) function.
+    """
+
+    data=keys.get('data',None)
+
+    f=sample_file(**keys)
+    if 'hdfs://' not in f:
+        make_dir_from_path(f)
+
+    return eu.io.write(f, data, clobber=True)
 
 
 #
@@ -243,6 +299,7 @@ def catalog_dir():
     catdir = path_join(lensdir(), 'catalogs')
     return catdir
 
+'''
 def original_catalog_file(type, sample):
     """
     This is the original catalog from which we generate the objshear inputs.
@@ -265,8 +322,9 @@ def original_catalog_file(type, sample):
         return lensing.lcat.original_file(sample)
     elif type == 'source':
         return lensing.scat.original_file(sample)
+'''
 
-def read_original_catalog(type, sample):
+def read_original_catalog(**keys):
     """
     This is the original catalog from which we generate the objshear inputs.
 
@@ -279,12 +337,14 @@ def read_original_catalog(type, sample):
 
     Examples
     --------
-    data=read_original_catalog('lens','05')
-    data=read_original_catalog('lens','sdssrand01')
-    data=read_original_catalog('source','05')
+    data=read_original_catalog(type='lens',sample='05')
+    data=read_original_catalog(type='lens',sample='sdssrand01')
+    data=read_original_catalog(type='source',sample='05')
 
 
     """
+
+    type=keys.get('type',None)
     if type == 'lens':
         return lensing.lcat.read_original(sample)
     elif type == 'source':
@@ -299,76 +359,83 @@ def read_original_catalog(type, sample):
 #
 
 
-def lcat_write(sample=None, data=None, extra=None, fs='hdfs', file=None):
-    if (sample is None and file is None) or (data is None):
-        raise ValueError("usage: lcat_write(sample=, file=, data=, fs='hdfs')")
-
-    if file is None:
-        file = sample_file('lcat',sample, extra=extra,ext='dat',fs=fs)
-        if fs != 'hdfs':
-            make_dir_from_path(file)
-
-    if file[0:7] == 'hdfs://':
-        with eu.hdfs.HDFSFile(file,verbose=True) as fobj:
-            lcat_write(file=fobj.localfile, data=data)
-            fobj.put(clobber=True)
-        return
-
-    stdout.write("Writing %d to %s: '%s'\n" % (data.size, 'lcat', file))
-
-    with recfile.Open(file,'w',delim=' ') as rec:
-        rec.fobj.write('%d\n' % data.size)
-        rec.write(data)
-
-def lcat_read(sample=None, file=None, extra=None, fs='hdfs'):
+def lcat_file(**keys):
     """
     import lensing
-    d = lcat_read(sample='03')
+    lcat_file(sample='rm03')
+    """
+    keys['fs'] = 'hdfs'
+    keys['ext'] = 'dat'
+    keys['type'] = 'lcat'
+    return sample_file(**keys)
+
+def lcat_write(**keys):
+
+    sample=keys.get('sample',None)
+    data=keys.get('data',None)
+
+    if sample is None or data is None:
+        raise ValueError("usage: lcat_write(sample=, data=)")
+
+    keys['fs'] = 'hdfs'
+    keys['ext'] = 'dat'
+    keys['type'] = 'lcat'
+
+    file = lcat_file(**keys)
+
+    stdout.write("Writing %d to %s: '%s'\n" % (data.size, 'lcat', file))
+    with eu.hdfs.HDFSFile(file,verbose=True) as fobj:
+        with recfile.Open(fobj.localfile,'w',delim=' ') as rec:
+            rec.fobj.write('%d\n' % data.size)
+            rec.write(data)
+
+        fobj.put(clobber=True)
+
+
+def lcat_read(**keys):
+    """
+    import lensing
+    d = lcat_read(sample='rm03')
 
     """
-
-    if sample is None and file is None:
-        raise ValueError("usage: lcat_read(sample=, file=, fs='hdfs')")
-
-    if file is None:
-        file = sample_file('lcat', sample, extra=extra, fs=fs)
-
-    if file[0:7] == 'hdfs://':
-        with eu.hdfs.HDFSFile(file,verbose=True) as hf:
-            hf.stage()
-            data = lcat_read(file=hf.localfile)
-        return data
+    keys['fs'] = 'hdfs'
+    file = lcat_file(**keys)
 
     stdout.write('Reading lens cat: %s\n' % file)
-    fobj = open(file,'r')
+    with eu.hdfs.HDFSFile(file,verbose=True) as hf:
+        hf.stage()
 
-    nlens=int(fobj.readline())
-
-    print('Reading',nlens,'lenses',file=stderr)
-    dt = lcat_dtype()
-
-    data = eu.io.read(fobj, type='rec', dtype=dt, delim=' ')
-    fobj.close()
+        print('Reading lenses',file=stderr)
+        dt = lcat_dtype()
+        data = eu.io.read(hf.localfile, type='rec', dtype=dt, delim=' ')
 
     return data
 
-def lensout_read(run, split=None, fs='hdfs'):
-    conf = cascade_config(run)
+"""
+def lensout_read(sample=None, split=None, fs='hdfs'):
+    if sample is None:
+        raise ValueError("send sample=")
+    conf = cascade_config(sample)
     nbin = conf['lens_config']['nbin']
 
     dtype=lensout_dtype(nbin)
 
-    fname = sample_file('lensout', run, split=split, fs=fs)
+    fname = sample_file(type='lensout', sample=sample, split=split, fs=fs)
     print('Reading lensout:',fname,file=stderr)
     return eu.io.read(fname, dtype=dtype, delim=' ', type='rec')
+"""
 
-def reduced_read(run, fs='hdfs'):
-    conf = cascade_config(run)
+def reduced_read(**keys):
+    sample=keys.get('sample',None)
+    if sample is None:
+        raise ValueError("send sample=")
+
+    conf = cascade_config(sample)
     nbin = conf['lens_config']['nbin']
 
     dtype=lensout_dtype(nbin)
 
-    fname = sample_file('reduced', run, fs=fs)
+    fname = sample_file(type='reduced', **keys)
     print('Reading reduced:',fname,file=stderr)
     return eu.io.read(fname, dtype=dtype, delim=' ', type='rec')
 
@@ -398,7 +465,7 @@ def lcat_read_old(sample=None, extra=None, file=None, old=False):
         raise ValueError("usage: lcat_read(data, file=, sample=)")
 
     if file is None:
-        file = sample_file('lcat', sample, extra=extra)
+        file = sample_file(type='lcat', sample=sample, extra=extra)
 
     stdout.write('Reading lens cat: %s\n' % file)
     fobj = open(file,'r')
@@ -428,66 +495,31 @@ def lcat_dtype(old=False):
 
     return dt
 
-
-def scat_write(sample, data,split=None):
-    file = sample_file('scat',sample, split=split, ext='bin')
-    conf = read_config('scat', sample)
-    style=conf['sigmacrit_style']
-    if style not in [1,2]:
-        raise ValueError("sigmacrit_style should be in [1,2]")
-
-
-    if style == 2:
-        if 'zlmin' not in conf or 'zlmax' not in conf or 'dzl' not in conf:
-            raise ValueError("You must have zlmin,zlmax,dzl in config")
-
-        zlvals=sigmacrit.make_zlvals(conf['dzl'], conf['zlmin'], conf['zlmax'])
-        nzl = zlvals.size
-
-        data_nzl = data['scinv'].shape[1]
-        if nzl != data_nzl:
-            raise ValueError("Calculated nzl of %d but data has nzl of %d" % (nzl,data_nzl))
-
-    print("Writing binary source file:",file)
-
-    make_dir_from_path(file)
-    fobj = open(file,'w')
-
-
-    print("Writing style:",style,"to file")
-    stylewrite = numpy.array([style],dtype='i8')
-    stylewrite.tofile(fobj)
-
-    if style == 2:
-        nzlwrite = numpy.array([nzl],dtype='i8')
-        zlwrite = numpy.array(zlvals,dtype='f8',copy=False)
-
-        print("Writing nzl:",nzl,"to file")
-        nzlwrite.tofile(fobj)
-        print("Writing zl to file")
-        zlwrite.tofile(fobj)
-
-    narr =  numpy.array([data.size],dtype='i8')
-    print("Writing narr:",narr[0],"to file")
-    narr.tofile(fobj)
-
-    data.tofile(fobj)
-
-    fobj.close()
-
 def scat_convert_to_ascii(sample, split=None):
-    t,zl = scat_read(sample=sample, split=split)
+    t,zl = scat_read_binary(sample=sample, split=split)
     scat_write_ascii(sample, t, split=split)
 
-def scat_write_ascii(sample, data, split=None):
+
+def scat_file(**keys):
+    """
+    scat_file(sample=)
+    """
+    keys['fs'] = 'hdfs'
+    keys['type'] = 'scat'
+    return sample_file(**keys)
+
+def scat_write_ascii(**keys):
     from sys import stdout
 
-    file = sample_file('scat',sample, split=split, ext='dat', fs='hdfs')
+    sample=keys.get('sample',None)
+    data=keys.get('data',None)
+
+    if sample is None or data is None:
+        raise ValueError("usage: scat_write_ascii(sample=, data= [, split=]")
+
+    file=scat_file(**keys)
 
     conf = read_config('scat', sample)
-    style=conf['sigmacrit_style']
-    if style not in [1,2]:
-        raise ValueError("sigmacrit_style should be in [1,2]")
 
     print("Writing ascii source file:",file)
 
@@ -496,7 +528,12 @@ def scat_write_ascii(sample, data, split=None):
             robj.write(data)
         hdfs_file.put()
 
-def scat_read_ascii(sample, split=None):
+def scat_read_ascii(**keys):
+
+    sample=keys.get('sample',None)
+
+    if sample is None:
+        raise ValueError("usage: data=scat_read_ascii(sample=, [, split=]")
 
     conf = read_config('scat', sample)
     style=conf['sigmacrit_style']
@@ -510,7 +547,7 @@ def scat_read_ascii(sample, split=None):
         nzl=None
     dt = scat_dtype(style, nzl=nzl)
 
-    file = sample_file('scat',sample, split=split, fs='hdfs')
+    file=scat_file(**keys)
     print("reading scat file:",file,file=stderr)
     with eu.hdfs.HDFSFile(file) as hdfs_file:
         hdfs_file.stage()
@@ -519,13 +556,17 @@ def scat_read_ascii(sample, split=None):
 
     return data
 
+'''
 def scat_read_binary(sample=None, file=None, split=None):
+    """
+    Not used
+    """
 
     if file is None and sample is None:
         raise ValueError("usage: scat_write(data, file=, sample=)")
     
     if file is None:
-        file = sample_file('scat',sample, split=split)
+        file = sample_file(type='scat',sample=sample, split=split)
 
 
     stdout.write('Reading sources: %s\n' % file)
@@ -553,6 +594,7 @@ def scat_read_binary(sample=None, file=None, split=None):
     fobj.close()
 
     return data
+'''
 
 def scat_dtype(sigmacrit_style, nzl=None):
     dt=[('ra','f8'),
@@ -637,7 +679,7 @@ def lensout_read_old(file=None, run=None, split=None, silent=False, old=False):
         raise ValueError("usage: lensout_read(file=, run=)")
     if file is None:
         if split is not None:
-            file=sample_file('lensout', run, split=split)
+            file=sample_file(type='lensout', sample=run, split=split)
             return lensout_read(file=file)
 
         return lensout_read_byrun(run)

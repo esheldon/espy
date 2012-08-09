@@ -30,8 +30,8 @@ def main():
 
     b = lensing.binning.instantiate_binner(bintype, nbin)
 
-    data1 = lensing.files.sample_read('corrected', run1, name=b.name())
-    data2 = lensing.files.sample_read('corrected', run2, name=b.name())
+    data1 = lensing.files.sample_read(type='corrected', sample=run1, name=b.name())
+    data2 = lensing.files.sample_read(type='corrected', sample=run2, name=b.name())
 
     tab=Table(1,2)
     for i in xrange(nbin):

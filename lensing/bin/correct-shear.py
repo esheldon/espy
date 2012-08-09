@@ -126,17 +126,21 @@ def main():
 
     b = lensing.binning.instantiate_binner(bintype, nbin)
 
-    binned_data = lensing.files.sample_read('binned', lensrun, name=b.name())
+    binned_data = lensing.files.sample_read(type='binned', sample=lensrun, name=b.name())
     if remove:
         extra='randmatch-rm-%s' % randrun
     else:
         extra='randmatch-%s' % randrun
-    allrand = lensing.files.sample_read('binned', lensrun, name=b.name(), extra=extra)
+    allrand = lensing.files.sample_read(type='binned', sample=lensrun, name=b.name(), extra=extra)
 
     alldata = lensing.correct.correct(binned_data, allrand, 
                                       subtract_rand=subtract_rand, minrad=minrad)
 
-    lensing.files.sample_write(alldata,'corrected',lensrun,name=b.name(),extra=extra) 
+    lensing.files.sample_write(data=alldata,
+                               type='corrected',
+                               sample=lensrun,
+                               name=b.name(),
+                               extra=extra) 
 
 
 
@@ -148,24 +152,24 @@ def main():
     range4var = [0.1,100]
     for binnum in xrange(nbin):
         eps_corr_extra='correction-%02d' % binnum
-        eps_corr=lensing.files.sample_file('corrected-plots',
-                                           lensrun,
+        eps_corr=lensing.files.sample_file(type='corrected-plots',
+                                           sample=lensrun,
                                            name=b.name(),
                                            extra=eps_corr_extra, ext='eps')
         eps_rand_extra='randcomp-%02d' % binnum
-        eps_rand=lensing.files.sample_file('corrected-plots',
-                                           lensrun,
+        eps_rand=lensing.files.sample_file(type='corrected-plots',
+                                           sample=lensrun,
                                            name=b.name(),
                                            extra=eps_rand_extra, ext='eps')
         eps_dsigcorr_extra='dsigcorr-%02d' % binnum
-        eps_dsigcorr=lensing.files.sample_file('corrected-plots',
-                                               lensrun,
+        eps_dsigcorr=lensing.files.sample_file(type='corrected-plots',
+                                               sample=lensrun,
                                                name=b.name(),
                                                extra=eps_dsigcorr_extra, ext='eps')
 
         eps_all_extra='allcorr-%02d' % binnum
-        eps_all=lensing.files.sample_file('corrected-plots',
-                                          lensrun,
+        eps_all=lensing.files.sample_file(type='corrected-plots',
+                                          sample=lensrun,
                                           name=b.name(),
                                           extra=eps_all_extra, ext='eps')
 

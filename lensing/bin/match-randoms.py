@@ -70,20 +70,24 @@ def main():
     conf=lensing.files.cascade_config(lensrun)
     # this is where z is, may be a different name in the collated data
     lcat = lensing.files.lcat_read(sample=conf['lens_sample'])
-    data = lensing.files.sample_read('collated', lensrun, fs='hdfs')
-    rand = lensing.files.sample_read('collated', randrun, fs='hdfs')
+    data = lensing.files.sample_read(type='collated', sample=lensrun, fs='hdfs')
+    rand = lensing.files.sample_read(type='collated', sample=randrun, fs='hdfs')
 
     output = lensing.binning.lensbin_struct(data['rsum'][0].size, n=nbin)
 
     if not remove:
         outextra='randmatch-%s' % randrun
-        weights_file=lensing.files.sample_file('weights',lensrun,name=b.name(),extra=outextra)
+        weights_file=lensing.files.sample_file(type='weights',
+                                               sample=lensrun,
+                                               name=b.name(),
+                                               extra=outextra)
         print("opening weights file for writing:",weights_file)
         wfits=fitsio.FITS(weights_file,'rw',clobber=True)
     else:
         outextra='randmatch-rm-%s' % randrun
 
-    html_name=lensing.files.sample_file('binned-plots', lensrun, name=b.name(),
+    html_name=lensing.files.sample_file(type='binned-plots', 
+                                        sample=lensrun, name=b.name(),
                                         extra=outextra, ext='html')
     makedir_fromfile(html_name)
     html_file=open(html_name,'w')
@@ -99,8 +103,8 @@ def main():
         else:
             eps_extra='%02d-randmatch-%s' % (binnum,randrun)
 
-        epsfile=lensing.files.sample_file('binned-plots',
-                                          lensrun,
+        epsfile=lensing.files.sample_file(type='binned-plots',
+                                          sample=lensrun,
                                           name=b.name(),
                                           extra=eps_extra, ext='eps')
         pngfile=epsfile.replace('.eps','.png')
@@ -162,6 +166,6 @@ def main():
     if not remove:
         wfits.close()
 
-    lensing.files.sample_write(output,'binned',lensrun,name=b.name(),extra=outextra)
+    lensing.files.sample_write(data=output,type='binned',sample=lensrun,name=b.name(),extra=outextra)
 
 main()

@@ -328,7 +328,10 @@ def fit_nfw_dsig_byrun(run, name, rrange=None, rhofac=180):
             e=d['m200_err'][i]
             print '    m200 true: %e +/- %e' % (m,e)
         
-    lensing.files.sample_write(d, 'fit', run, name=name)
+    lensing.files.sample_write(data=d, 
+                               type='fit', 
+                               sample=run, 
+                               name=name)
 
 
 
@@ -414,7 +417,11 @@ def fit_nfw_lin_dsig_byrun(run, name, withlin=True, rmax_from_true=False,
             e=d['m200_err'][i]
             print '    m200 true: %e +/- %e' % (m,e)
         
-    lensing.files.sample_write(d, 'fit', run, name=name, extra=ex)
+    lensing.files.sample_write(data=d, 
+                               type='fit', 
+                               sample=run, 
+                               name=name, 
+                               extra=ex)
 
 
 
@@ -435,7 +442,7 @@ def plot_nfw_lin_fits_byrun(run, name, npts=100, prompt=False,
     else:
         nex=''
         ex=''
-    d = lensing.sample_read('fit',run, name=name, extra=ex)
+    d = lensing.sample_read(type='fit',sample=run, name=name, extra=ex)
 
     omega_m = conf['cosmo_config']['omega_m']
 
@@ -520,7 +527,7 @@ def plot_nfw_lin_fits_byrun(run, name, npts=100, prompt=False,
 
 def plot_nfwfits_byrun(run, name, prompt=False):
     conf = lensing.files.read_config(run)
-    d = lensing.sample_read('fit', run, name=name)
+    d = lensing.sample_read(type='fit', sample=run, name=name)
     omega_m = conf['omega_m']
 
 

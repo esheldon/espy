@@ -70,14 +70,18 @@ class BinnerBase(dict):
         """
 
         name=self.name()
-        d = lensing.files.sample_read('collated',run,fs='hdfs')
+        d = lensing.files.sample_read(type='collated',sample=run,fs='hdfs')
         res = self.bin(d)
 
-        outdir = lensing.files.sample_dir('binned',run,name=name)
+        outdir = lensing.files.sample_dir(type='binned',sample=run,name=name)
         if not os.path.exists(outdir):
             print("Making output dir:",outdir)
             os.makedirs(outdir)
-        lensing.files.sample_write(res,'binned',run,name=name,clobber=True)
+        lensing.files.sample_write(data=res,
+                                   type='binned',
+                                   sample=run,
+                                   name=name,
+                                   clobber=True)
 
     def bin(self, data):
         raise RuntimeError("override this method")
@@ -104,7 +108,7 @@ class BinnerBase(dict):
         See lensing.plotting.plot2dsig
         """
         name = self.name()
-        data=lensing.files.sample_read(type,run,name=name)
+        data=lensing.files.sample_read(type=type,sample=run,name=name)
 
         max_binnum = self['nbin']-1
         if (binnum < 0) or (binnum > max_binnum):
@@ -145,7 +149,7 @@ class BinnerBase(dict):
         """
 
         name = self.name()
-        data=lensing.files.sample_read(type,run,name=name)
+        data=lensing.files.sample_read(type=type,sample=run,name=name)
 
         # this is for the screen: currently tuned for my big screen!
         biggles.configure('screen','width', 1140)
@@ -208,7 +212,11 @@ class BinnerBase(dict):
         if show:
             pa.show()
 
-        epsfile=lensing.files.sample_file(type+'-plots',run,name=name,extra='allplot',ext='eps')
+        epsfile=lensing.files.sample_file(type=type+'-plots',
+                                          sample=run,
+                                          name=name,
+                                          extra='allplot',
+                                          ext='eps')
         d = os.path.dirname(epsfile)
         if not os.path.exists(d):
             print("making dir:",d)
@@ -236,7 +244,7 @@ class BinnerBase(dict):
         """
 
         name = self.name()
-        data=lensing.files.sample_read(type,run,name=name)
+        data=lensing.files.sample_read(type=type,sample=run,name=name)
 
         # this is for the screen: currently tuned for my big screen!
         biggles.configure('screen','width', 1140)
@@ -301,7 +309,7 @@ class BinnerBase(dict):
         if show:
             pa.show()
 
-        epsfile=lensing.files.sample_file(type+'-plots',run,name=name,extra='osig-allplot',ext='eps')
+        epsfile=lensing.files.sample_file(type=type+'-plots',sample=run,name=name,extra='osig-allplot',ext='eps')
         d = os.path.dirname(epsfile)
         if not os.path.exists(d):
             print("making dir:",d)
@@ -329,8 +337,8 @@ class BinnerBase(dict):
         """
 
         name = self.name()
-        data1=lensing.files.sample_read(type,run1,name=name)
-        data2=lensing.files.sample_read(type,run2,name=name)
+        data1=lensing.files.sample_read(type=type,sample=run1,name=name)
+        data2=lensing.files.sample_read(type=type,sample=run2,name=name)
         color1='blue'
         color2='red'
         sym1='filled circle'
@@ -423,7 +431,7 @@ class BinnerBase(dict):
         if show:
             pa.show()
 
-        epsfile=lensing.files.sample_file(type+'-plots',run1,name=name,extra='allplot-'+run2,ext='eps')
+        epsfile=lensing.files.sample_file(type=type+'-plots',sample=run1,name=name,extra='allplot-'+run2,ext='eps')
         d = os.path.dirname(epsfile)
         if not os.path.exists(d):
             print("making dir:",d)
@@ -509,7 +517,7 @@ class ZBinner(BinnerBase):
 
 
 def define_lambda_bins(sample, lastmin=58.):
-    l=lensing.files.read_original_catalog('lens',sample)
+    l=lensing.files.read_original_catalog(type='lens',sample=sample)
     w=where1(l['z_lambda'] < 0.4)
     l=l[w]
 
@@ -858,7 +866,7 @@ class N200Binner(BinnerBase):
         """
 
         name = self.name()
-        data=lensing.files.sample_read('binned',run,name=name)
+        data=lensing.files.sample_read(type='binned',sample=run,name=name)
 
         biggles.configure('screen','width', 1140)
         biggles.configure('screen','height', 1140)
@@ -912,11 +920,11 @@ class N200Binner(BinnerBase):
         if show:
             pa.show()
 
-        d = lensing.files.sample_dir('binned',run,name=name)
+        d = lensing.files.sample_dir(type='binned',sample=run,name=name)
         if not os.path.exists(d):
             print("making dir:",d)
             os.makedirs(d)
-        epsfile=lensing.files.sample_file('binned-plots',run,name=name,extra='-allplot',ext='eps')
+        epsfile=lensing.files.sample_file(type='binned-plots',sample=run,name=name,extra='-allplot',ext='eps')
         stdout.write("Plotting to file: %s\n" % epsfile)
         pa.write_eps(epsfile)
 
@@ -946,10 +954,13 @@ class MZBinner(dict):
         """
 
         name=self.name()
-        d = lensing.files.sample_read('collated',run)
+        d = lensing.files.sample_read(type='collated',sample=run)
         res = self.bin(d)
 
-        lensing.files.sample_write(res,'binned',run,name=name,clobber=True)
+        lensing.files.sample_write(data=res,
+                                   type='binned',
+                                   sample=run,
+                                   name=name)
 
     def bin(self, data):
 
@@ -1107,7 +1118,7 @@ class MZBinner(dict):
             ex=None
 
         name=self.name()
-        d = lensing.files.sample_read('fit', run, name=name, extra=ex)
+        d = lensing.files.sample_read(type='fit', sample=run, name=name, extra=ex)
 
         plt = FramedPlot()
         colors = ['blue','magenta','red']
@@ -1212,7 +1223,7 @@ class MZBinner(dict):
             Plot the residual from true value.
         """
         name=self.name()
-        d = lensing.files.sample_read('invert',run,name=name)
+        d = lensing.files.sample_read(type='invert',sample=run,name=name)
 
         plt = FramedPlot()
         colors = ['blue','magenta','red']
@@ -1536,7 +1547,7 @@ def plot_mzbin_invmass_byrun(run, nmass, nz, type='',
     """
     name=mzbin_name(nmass,nz)
     conf = lensing.files.read_config(run)
-    d = lensing.files.sample_read('invert',run,name=name)
+    d = lensing.files.sample_read(type='invert',sample=run,name=name)
 
     plt = FramedPlot()
     colors = ['blue','magenta','red']
@@ -1632,7 +1643,7 @@ def plot_mzbin_mass_byrun(run, nmass, nz,
 
     name=mzbin_name(nmass,nz)
     conf = lensing.files.read_config(run)
-    d = lensing.files.sample_read('fit', run, name=name, extra=ex)
+    d = lensing.files.sample_read(type='fit', sample=run, name=name, extra=ex)
 
     plt = FramedPlot()
     colors = ['blue','magenta','red']

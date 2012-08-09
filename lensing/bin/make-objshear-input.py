@@ -20,6 +20,14 @@ parser=OptionParser(__doc__)
 parser.add_option("-n",dest="nrand",default=None,
                   help="number of randoms to generate, default is from the config "
                        "you must send an extra name in this case")
+
+parser.add_option("--nsplit",default=None,
+                  help=("nsplit number.  For use when random ra,dec "
+                        "have been pre-generated, e.g. sdss voids"))
+parser.add_option("--split",default=None,
+                  help=("split number 0 to nsplit-1.  For use when random ra,dec "
+                        "have been pre-generated, e.g. sdss voids"))
+
 parser.add_option("-e",dest="extra_name",default=None,
                   help="an extra name to add to the output file")
 
@@ -35,7 +43,11 @@ if type == 'scat':
     # this will also run split() on the sample
     lensing.scat.create_input(sample)
 elif type == 'lcat':
-    if options.nrand is not None:
+    if options.split is not None:
+        lensing.lcat.create_input(sample 
+                                  ,nsplit=int(options.nsplit)
+                                  ,split=int(options.split))
+    elif options.nrand is not None:
         lensing.lcat.create_input(sample, 
                                   nrand=int(options.nrand), 
                                   extra=options.extra_name)

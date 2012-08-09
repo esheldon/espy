@@ -16,14 +16,15 @@ class RunPbs:
 
     def write_pbs(self):
         if self.conf['nsplit'] == 0:
-            cf = lensing.files.sample_file('config',self.conf['run'])
-            pbsf = lensing.files.sample_file('pbs',self.conf['run'])
+            cf = lensing.files.sample_file(type='config',sample=self.conf['run'])
+            pbsf = lensing.files.sample_file(type='pbs',sample=self.conf['run'])
             self._write_pbs(pbsf,cf)
         else:
             for i in xrange(self.conf['nsplit']):
-                cf = lensing.files.sample_file('config',self.conf['run'],
+                cf = lensing.files.sample_file(type='config',sample=self.conf['run'],
                                                split=i)
-                pbsf = lensing.files.sample_file('pbslens',self.conf['run'],
+                pbsf = lensing.files.sample_file(type='pbslens',
+                                                 sample=self.conf['run'],
                                                  split=i)
                 self._write_pbs(pbsf,cf,i)
     def _write_pbs(self, pbsf, conf_file,split=None):

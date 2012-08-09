@@ -121,7 +121,7 @@ class DR8Catalog(dict):
         print("  reading",scinvcol)
         output['scinv'][:] = self.rgcols[scinvcol][keep]
         
-        #lensing.files.scat_write_ascii(self['sample'], output)
+        #lensing.files.scat_write_ascii(sample=self['sample'], data=output)
         if self['nsplit'] > 0:
             self.split(data=output)
 
@@ -150,11 +150,11 @@ class DR8Catalog(dict):
                 end += nleft
             sdata = data[beg:end]
 
-            lensing.files.scat_write_ascii(self['sample'], sdata, split=i)
+            lensing.files.scat_write_ascii(sample=self['sample'], data=sdata, split=i)
 
 
     def read(self, split=None):
-        return lensing.files.scat_read_ascii(self['sample'], split=split)
+        return lensing.files.scat_read_ascii(sample=self['sample'], split=split)
 
     def select(self):
         """
@@ -400,7 +400,7 @@ class DESMockSrcCatalog(dict):
         self['cosmo'] = lensing.files.read_config('cosmo',self['cosmo_sample'])
 
     def read(self, split=None):
-        return lensing.files.scat_read_ascii(self['sample'], split=split)
+        return lensing.files.scat_read_ascii(sample=self['sample'], split=split)
 
     def add_scinv(self):
         from . import sigmacrit
@@ -491,7 +491,7 @@ class DESMockSrcCatalog(dict):
         else:
             output['scinv'] = data['scinv']
 
-        lensing.files.scat_write_ascii(self['sample'], output)
+        lensing.files.scat_write_ascii(sample=self['sample'], data=output)
 
         if self['nsplit'] > 0:
             self.split(data=output)
@@ -521,7 +521,7 @@ class DESMockSrcCatalog(dict):
                 end += nleft
             sdata = data[beg:end]
 
-            lensing.files.scat_write_ascii(self['sample'], sdata, split=i)
+            lensing.files.scat_write_ascii(sample=self['sample'], data=sdata, split=i)
 
 
     def original_file(self, scinv=False):

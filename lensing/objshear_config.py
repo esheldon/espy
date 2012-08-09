@@ -52,8 +52,8 @@ class ObjshearRunConfig(dict):
     # inputs to objshear
     def write_config(self):
         fs='hdfs'
-        lens_file = lensing.files.sample_file('lcat',self['lens_sample'],fs=fs)
-        config_file = lensing.files.sample_file('config',self['run'], fs=fs)
+        lens_file = lensing.files.sample_file(type='lcat',sample=self['lens_sample'],fs=fs)
+        config_file = lensing.files.sample_file(type='config',sample=self['run'], fs=fs)
 
         print 'Writing config file:',config_file
         # should automate this type of thing; maybe an

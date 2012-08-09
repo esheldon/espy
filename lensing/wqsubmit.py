@@ -17,14 +17,16 @@ class WQLens(dict):
             raise ValueError("mismatch between run ids: %s %s" \
                              % (run,self['run']))
 
-        d=files.sample_dir('wq',self['run'])
+        d=files.sample_dir(type='wq',sample=self['run'])
         if not os.path.exists(d):
             os.makedirs(d)
 
     def write_shear_scripts(self):
         nsplit=self['src_config']['nsplit']
         for split in xrange(nsplit):
-            fname=files.sample_file('wq',self['run'],split=split)
+            fname=files.sample_file(type='wq',
+                                    sample=self['run'],
+                                    split=split)
 
             text=self.shear_text(split)
 
@@ -34,7 +36,7 @@ class WQLens(dict):
 
 
     def write_reduce_script(self):
-        fname=files.sample_file('wq-reduce',self['run'])
+        fname=files.sample_file(type='wq-reduce',sample=self['run'])
 
         text=self.reduce_text()
 
@@ -44,13 +46,13 @@ class WQLens(dict):
 
     def shear_text(self, split):
         fs='hdfs'
-        config_file=files.sample_file('config',self['run'],fs=fs)
+        config_file=files.sample_file(type='config',sample=self['run'],fs=fs)
 
-        scat=files.sample_file('scat',self['src_config']['sample'],split=split, fs=fs)
-        lcat=files.sample_file('lcat',self['lens_config']['sample'], fs=fs)
-        out_file = files.sample_file('lensout',self['run'], split=split,fs=fs)
+        scat=files.sample_file(type='scat',sample=self['src_config']['sample'],split=split, fs=fs)
+        lcat=files.sample_file(type='lcat',sample=self['lens_config']['sample'], fs=fs)
+        out_file = files.sample_file(type='lensout',sample=self['run'], split=split,fs=fs)
 
-        log_file=files.sample_file('log',self['run'],split=split)
+        log_file=files.sample_file(type='log',sample=self['run'],split=split)
 
         groups = self['groups']
 
@@ -68,11 +70,11 @@ class WQLens(dict):
 
     def reduce_text(self):
 
-        pattern = files.sample_file('lensout', self['run'], split=0,fs='hdfs')
+        pattern = files.sample_file(type='lensout', sample=self['run'], split=0,fs='hdfs')
         pattern = pattern.replace('-000.dat','-*.dat')
-        out_file = files.sample_file('reduced', self['run'], fs='hdfs')
-        log_file=files.sample_file('log-reduce',self['run'])
-        config_file=files.sample_file('config',self['run'],fs='hdfs')
+        out_file = files.sample_file(type='reduced', sample=self['run'], fs='hdfs')
+        log_file=files.sample_file(type='log-reduce',sample=self['run'])
+        config_file=files.sample_file(type='config',sample=self['run'],fs='hdfs')
 
         groups = self['groups']
 
