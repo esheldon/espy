@@ -3,7 +3,30 @@
 
 Description:
 
-    Create config, wq submit and reduce script
+    Create config and shear/reduce wq scripts
+
+    types is by default 
+        config,shear
+
+    types can be
+    ------------
+    config:
+        Write the config file for sobjshear
+    shear:
+        Write the wq script for shear for each lens/src split
+
+
+    src_reduce:
+        Write the set of wq scripts for reducing across sources
+    lens_concat:
+        A script to concatenate all the lens splits together
+        into the final reduced file.
+
+    all_reduce:
+        Write the wq script to reduce all at once and produce
+        the reduced file
+
+If you don't have any lens splits you can just use the all_reduce script.
 
 """
 import sys
@@ -11,9 +34,9 @@ import lensing
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
-parser.add_option("-t",dest="types",default="config,wq",
+parser.add_option("-t",dest="types",default="config,shear",
                   help="types to make.  Default is %default")
-parser.add_option("-g",dest="groups",default="new,new2",
+parser.add_option("-g",dest="groups",default="",
                   help="machine groups to use.  Default is %default")
 parser.add_option("-p",dest="priority",default="med",
                   help="priority use.  Default is %default")
@@ -28,9 +51,24 @@ if len(args) < 1:
 run = args[0]
 types=options.types.split(',')
 
+
 if 'config' in types:
     lensing.objshear_config.write_configs(run)
-if 'wq' in types:
-    wql=lensing.wqsubmit.WQLens(run,options.groups,options.priority)
-    wql.write_reduce_script()
+
+wql=lensing.wqsubmit.WQLens(run,options.groups,options.priority)
+
+
+if 'shear'in types:
     wql.write_shear_scripts()
+
+
+if 'src_reduce' in types:
+    wql.write_src_reduce_scripts()
+
+if 'lens_concat' in types:
+    wql.write_lens_concat_script()
+
+
+
+if 'all_reduce' in types:
+    wql.write_all_reduce_script()

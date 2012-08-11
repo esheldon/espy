@@ -32,26 +32,36 @@ exists.
     /bin/plot-dsig-byrun.py -t binned rm03s06 lambda 12
 
     #
-    # now randoms with run r03s06
+    # now randoms with sample svrand01
     #
 
-    # generation of randoms is slow, so do it in chunks, here 100
-    /bin/make-random-chunk-scripts.py r03s06 100
+    # generation of randoms is slow, so do it in chunks.
+    # make sure to put nsplit into the lcat yaml file.
+    # for pre-generated ra/dec
+    /bin/make-random-chunk-scripts.py svrand01
+    # things are different when generating the ra/dec
+    /bin/make-random-chunk-scripts.py --gen-radec svrand01
 
-    # scripts are in the $LENSDIR/lcat/r03s06/condor
-    for f in *.condor; do echo "$f"; condor_submit "$f"; done
+    # scripts are in the $LENSDIR/lcat/{run}/wq
 
-    # then combine them: NOTE we should think of also allowing
-    # lens splits, no reason not to!  Would save memory
-    /bin/combine-random-chunks.py r03s06 100
+    # you can combine them if you want, but if you have
+    # done splits the wq scripts will work with them
+    #/bin/combine-random-chunks.py svrand01
 
-    # now make the scripts, condor
-    /bin/make-objshear-proc.py r03s06
+    # 
+    # now make the associated run and the wq scripts
+    # let's call the run simply run-svrand01s05
+    # we need to reduce across sources then concatenate
+    # the lens splits together
+    /bin/make-objshear-proc.py -t config,shear,src_reduce,lens_concat svrand01s05
 
     # submit and reduce the results as for lenses above
+    # then submit the src-reduce and finally lens-concat
+
 
     #
     # match randoms to the lens bins
+    # this can eat tons of memory
     #
 
     /bin/match-randoms.py -t lambda -n 12 rm03s06 r03s06

@@ -24,4 +24,6 @@ zmax:          0.41
 # pre-generated
 nrand: 20000000
 
+nsplit: 100
+
 masktype: sdss

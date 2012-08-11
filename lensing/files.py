@@ -49,17 +49,25 @@ finfo['lcat']     = {'subdir':'lcat/{sample}',  'name':'lcat-{sample}{extra}.{ex
 finfo['scat']     = {'subdir':'scat/{sample}',  'name':'scat-{sample}.{ext}','default_ext':'dat'}
 
 finfo['lcat-split']  = {'subdir':'lcat/{sample}',  
-                        'name':'lcat-{sample}-{split}.{ext}', 
+                        'name':'lcat-{sample}-{lens_split}.{ext}', 
                         'default_ext':'dat'}
 finfo['scat-split']  = {'subdir':'scat/{sample}',
-                        'name':'scat-{sample}-{split}.{ext}','default_ext':'dat'}
+                        'name':'scat-{sample}-{src_split}.{ext}','default_ext':'dat'}
 
 # usually we only have the split versions of these
 finfo['lensout']  = {'subdir':'lensout/{sample}',
                      'name':'lensout-{sample}.{ext}','default_ext':'dat'}
 finfo['lensout-split']  = {'subdir':'lensout/{sample}',
-                           'name':'lensout-{sample}-{split}.{ext}','default_ext':'dat'}
-# this is the reduced one over the splits
+                           'name':'lensout-{sample}-{lens_split}-{src_split}.{ext}',
+                           'default_ext':'dat'}
+
+# reduced across sources, but still split on lenses
+finfo['src-reduced-split']  = {'subdir':'lensout/{sample}',
+                               'name':'lensout-{sample}-src-reduce-{lens_split}.{ext}',
+                               'default_ext':'dat'}
+
+
+# this is the final reduced one over all lens and source splits
 finfo['reduced']  = {'subdir':'lensout/{sample}',
                      'name':'reduced-{sample}.{ext}','default_ext':'dat'}
 
@@ -100,17 +108,20 @@ finfo['fit']       = {'subdir':'lensout/{sample}/binned-{name}',
 # this config is objshear_config not the yaml files
 finfo['config']   = {'subdir':'proc/{sample}', 'name':'run-{sample}.config'}
 
-finfo['script-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.sh'}
-finfo['condor-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.condor'}
-finfo['condor']   = {'subdir':'proc/{sample}', 'name':'run-{sample}.condor'}
+finfo['wq-split']   = {'subdir':'proc/{sample}', 
+                       'name':'run-{sample}-{lens_split}-{src_split}.yaml'}
 
-finfo['wq-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.yaml'}
-finfo['log-split']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-{split}.log'}
+# reduce *all* files, even if split on both lenses and sources
+finfo['wq-reduce']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-reduce-all.yaml'}
 
-finfo['wq-reduce']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-reduce.yaml'}
-finfo['log-reduce']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-reduce.log'}
+# reduce over lenses at fixed source split
+finfo['wq-src-reduce-split']   = {'subdir':'proc/{sample}', 
+                                  'name':'run-{sample}-src-reduce-{lens_split}.yaml'}
+#finfo['wq-lens-reduce-split']   = {'subdir':'proc/{sample}', 
+#                                   'name':'run-{sample}-lens-reduce-{src_split}.yaml'}
 
-
+# concat the src-reduce outputs over the lens splits
+finfo['wq-lens-concat']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-lens-concat.yaml'}
 
 #
 # base directories
@@ -187,8 +198,10 @@ def sample_file(**keys):
         type name, e.g. lcat,scat
     sample:
         sample name
-    split:
-        split number.
+    lens_split:
+        lens split number
+    src_split:
+        src split number
     name:
         name for binned
     extra:
@@ -202,16 +215,24 @@ def sample_file(**keys):
     if type is None or sample is None:
         raise ValueError("send type= and sample=")
 
-    split=keys.get('split',None)
+    lens_split=keys.get('lens_split',None)
+    src_split=keys.get('src_split',None)
+
     name=keys.get('name',None)
     extra=keys.get('extra',None)
     ext=keys.get('ext',None)
 
     d = sample_dir(**keys)
 
-    if split is not None:
-        split = '%03d' % split
-        type = type+'-split'
+    if src_split is not None or lens_split is not None:
+        if 'split' not in type:
+            type = type+'-split'
+
+    if src_split is not None:
+        src_split = '%03d' % src_split
+
+    if lens_split is not None:
+        lens_split = '%03d' % lens_split
 
     if extra is None:
         extra=''
@@ -221,7 +242,12 @@ def sample_file(**keys):
     if ext is None:
         ext=finfo[type].get('default_ext',None)
 
-    f = finfo[type]['name'].format(sample=sample, split=split, extra=extra, ext=ext, name=name)
+    f = finfo[type]['name'].format(sample=sample, 
+                                   lens_split=lens_split, 
+                                   src_split=src_split, 
+                                   extra=extra, 
+                                   ext=ext, 
+                                   name=name)
     f = os.path.join(d,f)
     return f
 
@@ -241,8 +267,10 @@ def sample_read(**keys):
         file type, e.g. lcat
     sample:
         sample name
-    split:
-        split number
+    lens_split:
+        lens split number
+    src_split:
+        src split number
     name:
         extra name
     extra:
@@ -405,14 +433,29 @@ def lcat_read(**keys):
     with eu.hdfs.HDFSFile(file,verbose=True) as hf:
         hf.stage()
 
-        print('Reading lenses',file=stderr)
-        dt = lcat_dtype()
-        data = eu.io.read(hf.localfile, type='rec', dtype=dt, delim=' ')
+        with open(hf.localfile) as fobj:
+            import recfile
+            nlens=int(fobj.readline())
+            print('Reading',nlens,'lenses',file=stderr)
+            dt = lcat_dtype()
+            with recfile.Open(fobj, mode='r', dtype=dt, delim=' ',nrows=nlens) as robj:
+                data = robj[:]
 
     return data
 
-"""
-def lensout_read(sample=None, split=None, fs='hdfs'):
+def lensout_file(**keys):
+    """
+    import lensing
+    lcat_file(sample='rm03')
+    """
+    keys['fs'] = 'hdfs'
+    keys['ext'] = 'dat'
+    keys['type'] = 'lensout'
+    return sample_file(**keys)
+
+def lensout_read(**keys):
+
+    sample=keys.get('sample',None)
     if sample is None:
         raise ValueError("send sample=")
     conf = cascade_config(sample)
@@ -420,10 +463,9 @@ def lensout_read(sample=None, split=None, fs='hdfs'):
 
     dtype=lensout_dtype(nbin)
 
-    fname = sample_file(type='lensout', sample=sample, split=split, fs=fs)
+    fname=lensout_file(**keys)
     print('Reading lensout:',fname,file=stderr)
     return eu.io.read(fname, dtype=dtype, delim=' ', type='rec')
-"""
 
 def reduced_read(**keys):
     sample=keys.get('sample',None)
@@ -495,10 +537,6 @@ def lcat_dtype(old=False):
 
     return dt
 
-def scat_convert_to_ascii(sample, split=None):
-    t,zl = scat_read_binary(sample=sample, split=split)
-    scat_write_ascii(sample, t, split=split)
-
 
 def scat_file(**keys):
     """
@@ -515,7 +553,7 @@ def scat_write_ascii(**keys):
     data=keys.get('data',None)
 
     if sample is None or data is None:
-        raise ValueError("usage: scat_write_ascii(sample=, data= [, split=]")
+        raise ValueError("usage: scat_write_ascii(sample=, data= [, src_split=]")
 
     file=scat_file(**keys)
 
@@ -533,7 +571,7 @@ def scat_read_ascii(**keys):
     sample=keys.get('sample',None)
 
     if sample is None:
-        raise ValueError("usage: data=scat_read_ascii(sample=, [, split=]")
+        raise ValueError("usage: data=scat_read_ascii(sample=, [, src_split=]")
 
     conf = read_config('scat', sample)
     style=conf['sigmacrit_style']
@@ -557,7 +595,7 @@ def scat_read_ascii(**keys):
     return data
 
 '''
-def scat_read_binary(sample=None, file=None, split=None):
+def scat_read_binary(sample=None, file=None, lens_split=None):
     """
     Not used
     """
@@ -566,7 +604,7 @@ def scat_read_binary(sample=None, file=None, split=None):
         raise ValueError("usage: scat_write(data, file=, sample=)")
     
     if file is None:
-        file = sample_file(type='scat',sample=sample, split=split)
+        file = sample_file(type='scat',sample=sample, lens_split=lens_split)
 
 
     stdout.write('Reading sources: %s\n' % file)
@@ -671,15 +709,15 @@ def config_dir():
 #
 
 
-def lensout_read_old(file=None, run=None, split=None, silent=False, old=False):
+def lensout_read_old(file=None, run=None, lens_split=None, silent=False, old=False):
     '''
     Note old means something different here
     '''
     if file is None and run is None:
         raise ValueError("usage: lensout_read(file=, run=)")
     if file is None:
-        if split is not None:
-            file=sample_file(type='lensout', sample=run, split=split)
+        if lens_split is not None:
+            file=sample_file(type='lensout', sample=run, lens_split=lens_split)
             return lensout_read(file=file)
 
         return lensout_read_byrun(run)

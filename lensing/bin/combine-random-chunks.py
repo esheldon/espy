@@ -1,5 +1,5 @@
 """
-    %prog sample nchunk
+    %prog sample
 
 Description:
 
@@ -21,14 +21,16 @@ if len(args) < 2:
     sys.exit(1)
 
 sample = args[0]
-nchunk = int(args[1])
 
+c = lensing.lcat.instantiate_sample(sample)
+
+nsplit = c['nsplit']
 
 alldata=[]
-for i in xrange(nchunk):
-    extra_name='chunk%02d' % i
+for i in xrange(nsplit):
+    extra_name='chunk%03d' % i
 
-    t=lensing.files.lcat_read(sample,extra=extra_name)
+    t=lensing.files.lcat_read(sample=sample,split=i)
 
     alldata.append(t)
 

@@ -1,5 +1,5 @@
 """
-    %prog sample nsplit
+    %prog sample
 
 Description:
 
@@ -15,32 +15,31 @@ parser=OptionParser(__doc__)
 parser.add_option("--gen-radec", action='store_true', 
                   help=("For this sample we generate the ra,dec points"))
 
-parser.add_option("--groups", default=None, help=("Groups for wq"))
+parser.add_option("-g", "--group", default=None, help=("Groups for wq"))
 
 options,args = parser.parse_args(sys.argv[1:])
 
-if len(args) < 2:
+if len(args) < 1:
     parser.print_help()
     sys.exit(1)
 
 sample = args[0]
-nsplit = int(args[1])
 
 c = lensing.lcat.instantiate_sample(sample)
 
+nsplit = c['nsplit']
 nperchunk = c['nrand']/nsplit
 nleft = c['nrand'] % nsplit
 
-dir = lensing.files.sample_dir(type='lcat',sample=sample)
-dir=os.path.join(dir, 'wq')
+dir='/data/esheldon/lensing/lcat/%s/wq' % sample
 if not os.path.exists(dir):
     os.makedirs(dir)
 
-groups=options.groups
-if groups:
-    groups='groups: ['+groups+']'
+group=options.group
+if group:
+    group='group: ['+group+']'
 else:
-    groups=''
+    group=''
 
 for i in xrange(nsplit):
     chunk_name='chunk%03d' % i
@@ -49,14 +48,13 @@ for i in xrange(nsplit):
     print(wq_fname)
 
     if options.gen_radec:
-        opts='-n {nrand} -e {extra_name}'.format(nrand=nrand,
-                                                    extra_name=chunk_name)
-    else:
         nrand = nperchunk
         if (i == (nsplit-1)):
             nrand += nleft
-        opts='--nsplit {nsplit} --split {split}'.format(nsplit=nsplit,
-                                                           split=i)
+        opts='-n {nrand} -e {extra_name}'.format(nrand=nrand,
+                                                    extra_name=chunk_name)
+    else:
+        opts='--split {split}'.format(split=i)
 
     text="""
 command: |
@@ -66,8 +64,8 @@ command: |
     echo Done
     
 job_name: {job_name}
-{groups}
-\n""".format(sample=sample, options=opts, job_name=script_base, groups=groups)
+{group}
+\n""".format(sample=sample, options=opts, job_name=script_base, group=group)
 
 
 

@@ -507,14 +507,15 @@ class SDSSVoidsRandom(LcatBase):
         return data
 
 
-    def create_objshear_input(self, nsplit=None, split=None):
+    def create_objshear_input(self, lens_split=None):
         """
         To work in chunks, send nrand= and extra=chunknum
         """
 
-        if nsplit is None or split is None:
-            raise ValueError("send nsplit= and split=")
-        print("doing split %s: %s/%s" % (split,split+1,nsplit))
+        nsplit=self['nsplit']
+        if lens_split is None:
+            raise ValueError("send lens_split=")
+        print("doing lens_split %s: %s/%s" % (lens_split,lens_split+1,nsplit))
 
         self.load_stomp_maps()
 
@@ -531,8 +532,10 @@ class SDSSVoidsRandom(LcatBase):
         npersplit = data.size/nsplit
         nleft = data.size % nsplit
 
-        data = data[split*npersplit:(split+1)*npersplit]
-        zindex = zindex[split*npersplit:(split+1)*npersplit]
+        data = data[lens_split*npersplit:(lens_split+1)*npersplit]
+        zindex = zindex[lens_split*npersplit:(lens_split+1)*npersplit]
+        #data = data[0:100]
+        #zindex = zindex[0:100]
 
         print("Generating z in [%0.2f,%0.2f]" % (self['zmin'],self['zmax']))
         z = self.zgen.genrand(data.size)
@@ -560,7 +563,7 @@ class SDSSVoidsRandom(LcatBase):
         output['z'][:]         = z
         output['maskflags'][:] = maskflags
 
-        lensing.files.lcat_write(sample=self['sample'], data=output, split=split)
+        lensing.files.lcat_write(sample=self['sample'], data=output, lens_split=lens_split)
 
 
     def get_maskflags(self, ra, dec, z, hard=False):
