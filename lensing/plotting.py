@@ -60,6 +60,8 @@ def plot2dsig(r1, dsig1, dsig1err, r2, dsig2, dsig2err, **keys):
     yrange1 = keys.get('yrange1',None)
     yrange2 = keys.get('yrange2',None)
 
+    isortho = keys.get('ortho',False)
+
     # this is a y-log plot, use more powerful range determination
     yrange1 = eu.plotting.get_log_plot_range(dsig1, err=dsig1err, 
                                              input_range=yrange1)
@@ -101,7 +103,10 @@ def plot2dsig(r1, dsig1, dsig1err, r2, dsig2, dsig2err, **keys):
     arr.cellspacing=1
     arr.aspect_ratio=2
     arr.xlabel = labels['rproj']
-    arr.ylabel = labels['dsig']
+    if isortho:
+        arr.ylabel = labels['osig']
+    else:
+        arr.ylabel = labels['dsig']
     arr.xrange = xrng
 
 

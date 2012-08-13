@@ -81,7 +81,7 @@ def main():
     alldata = lensing.correct.correct(binned_data, None)
 
     lensing.files.sample_write(data=alldata,
-                               type='corrected',
+                               type='corrected-ssh',
                                sample=lensrun,
                                name=b.name()) 
 
@@ -92,7 +92,7 @@ def main():
     range4var = [0.1,100]
     for binnum in xrange(nbin):
         eps_dsigcorr_extra='dsigcorr-%02d' % binnum
-        eps_dsigcorr=lensing.files.sample_file(type='corrected-plots',
+        eps_dsigcorr=lensing.files.sample_file(type='corrected-ssh-plots',
                                                sample=lensrun,
                                                name=b.name(),
                                                extra=eps_dsigcorr_extra, ext='eps')
@@ -120,7 +120,7 @@ def main():
     print("chdir:",d)
     os.chdir(d)
 
-    outfile = 'dsigcorr.html'
+    outfile = 'dsigcorr-ssh.html'
     pattern = eps_dsigcorr.replace('%02d.eps' % (nbin-1,), '*.png')
     pattern=os.path.basename(pattern)
     print("making disg corr html file:",outfile)

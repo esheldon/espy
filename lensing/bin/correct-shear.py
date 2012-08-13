@@ -48,7 +48,7 @@ parser.add_option("--show",action='store_true',default=False,
                   help="Show plots on screen.  default %default")
 
 def doplot(binned_data, corr_data, rand, label, show=False):
-    tab = biggles.Table(1,2)
+    tab = biggles.Table(2,2)
     arr=lensing.plotting.plot2dsig(binned_data['r'], 
                                    binned_data['dsig'], 
                                    binned_data['dsigerr'],
@@ -61,8 +61,23 @@ def doplot(binned_data, corr_data, rand, label, show=False):
                                    range4var=[0.1,100],
                                    show=False)
 
+    arro=lensing.plotting.plot2dsig(binned_data['r'], 
+                                    binned_data['osig'], 
+                                    binned_data['dsigerr'],
+                                    rand['r'],
+                                    rand['osig'], 
+                                    rand['dsigerr'],
+                                    plot_label=label, 
+                                    label1='data', 
+                                    label2='random',
+                                    range4var=[0.1,100],
+                                    show=False,
+                                    ortho=True)
+
+
     
     tab[0,0] = arr
+    tab[1,0] = arro
 
 
     cplt = eu.plotting.bscatter(corr_data['r'], 
@@ -156,11 +171,19 @@ def main():
                                            sample=lensrun,
                                            name=b.name(),
                                            extra=eps_corr_extra, ext='eps')
+
         eps_rand_extra='randcomp-%02d' % binnum
         eps_rand=lensing.files.sample_file(type='corrected-plots',
                                            sample=lensrun,
                                            name=b.name(),
                                            extra=eps_rand_extra, ext='eps')
+        eps_rand_extra='randcomp-o-%02d' % binnum
+        eps_orand=lensing.files.sample_file(type='corrected-plots',
+                                            sample=lensrun,
+                                            name=b.name(),
+                                            extra=eps_rand_extra, ext='eps')
+
+
         eps_dsigcorr_extra='dsigcorr-%02d' % binnum
         eps_dsigcorr=lensing.files.sample_file(type='corrected-plots',
                                                sample=lensrun,
@@ -195,6 +218,11 @@ def main():
         # the rand comparison plot
         tab[0,0].write_eps(eps_rand)
         converter.convert(eps_rand, dpi=120, verbose=True)
+
+        # the rand comparison plot with ortho
+        tab[1,0].write_eps(eps_orand)
+        converter.convert(eps_orand, dpi=120, verbose=True)
+
 
         # all
         tab.write_eps(eps_all)

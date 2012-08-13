@@ -96,6 +96,14 @@ finfo['corrected']  = {'subdir':'lensout/{sample}/binned-{name}',
 finfo['corrected-plots']       = {'subdir':'lensout/{sample}/binned-{name}/plots',
                                   'name':'corrected-{sample}-{name}{extra}.{ext}'}
 
+finfo['corrected-ssh']  = {'subdir':'lensout/{sample}/binned-{name}',
+                           'name':'corrected-ssh-{sample}-{name}.fits'}
+finfo['corrected-ssh-plots']       = {'subdir':'lensout/{sample}/binned-{name}/plots',
+                                      'name':'corrected-ssh-{sample}-{name}{extra}.{ext}'}
+
+
+
+
 finfo['invert']       = {'subdir':'lensout/{sample}/binned-{name}',
                          'name':'invert-{sample}-{name}.fits'}
                          #'name':'invert-{sample}-{name}.rec'}
