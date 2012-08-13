@@ -515,6 +515,22 @@ class ZBinner(BinnerBase):
         zrange = self.bin_ranges(binnum)
         return r'$%0.2f < z < %0.2f$' % zrange
 
+    def select_bin(self, data, binnum):
+        """
+
+        Although not used by bin(), this is useful for other programs such as
+        the random hist matching and correction code
+
+        """
+        if binnum > self['nbin']:
+            raise ValueError("bin number must be in [0,%d]" % (self['nbin']-1,))
+
+        low, high = self.bin_ranges()
+        logic = get_range_logic(data, 'z', [low[binnum], high[binnum]], self.range_type)
+        return where1(logic)
+
+
+
 
 def define_lambda_bins(sample, lastmin=58.):
     l=lensing.files.read_original_catalog(type='lens',sample=sample)

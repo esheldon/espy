@@ -72,7 +72,9 @@ finfo['reduced']  = {'subdir':'lensout/{sample}',
                      'name':'reduced-{sample}.{ext}','default_ext':'dat'}
 
 finfo['collated']  = {'subdir':'lensout/{sample}',
-                                 'name':'collated-{sample}.fits'}
+                      'name':'collated-{sample}.fits'}
+finfo['collated-split']  = {'subdir':'lensout/{sample}',
+                            'name':'collated-{sample}-{lens_split}.fits'}
 
 # here {extra} is really only used for the matched random sums
 finfo['binned']       = {'subdir':'lensout/{sample}/binned-{name}',
@@ -123,6 +125,8 @@ finfo['wq-src-reduce-split']   = {'subdir':'proc/{sample}',
 # concat the src-reduce outputs over the lens splits
 finfo['wq-lens-concat']   = {'subdir':'proc/{sample}', 'name':'run-{sample}-lens-concat.yaml'}
 
+finfo['wq-collate-split']   = {'subdir':'proc/{sample}', 
+                               'name':'run-{sample}-collate-{lens_split}.yaml'}
 #
 # base directories
 #
@@ -327,59 +331,6 @@ def catalog_dir():
     catdir = path_join(lensdir(), 'catalogs')
     return catdir
 
-'''
-def original_catalog_file(type, sample):
-    """
-    This is the original catalog from which we generate the objshear inputs.
-
-    parameters
-    ----------
-    type: string
-        Either 'lens' or 'source'
-    sample: string
-        The sample id string
-
-    Examples
-    --------
-    f=original_catalog_file('lens','05')
-    f=original_catalog_file('lens','sdssrand01')
-    f=original_catalog_file('source','05')
-
-    """
-    if type == 'lens':
-        return lensing.lcat.original_file(sample)
-    elif type == 'source':
-        return lensing.scat.original_file(sample)
-'''
-
-def read_original_catalog(**keys):
-    """
-    This is the original catalog from which we generate the objshear inputs.
-
-    parameters
-    ----------
-    type: string
-        Either 'lens' or 'source'
-    sample: string
-        The sample id string
-
-    Examples
-    --------
-    data=read_original_catalog(type='lens',sample='05')
-    data=read_original_catalog(type='lens',sample='sdssrand01')
-    data=read_original_catalog(type='source',sample='05')
-
-
-    """
-
-    type=keys.get('type',None)
-    if type == 'lens':
-        return lensing.lcat.read_original(sample)
-    elif type == 'source':
-        return lensing.scat.read_original(sample)
-    else:
-        raise ValueError("send type lens or source")
- 
 
 #
 # read/write objshear lens and source input catalogs.  These are special
@@ -443,10 +394,20 @@ def lcat_read(**keys):
 
     return data
 
+def collated_file(**keys):
+    keys['fs'] = 'hdfs'
+    keys['type'] = 'collated'
+    return sample_file(**keys)
+def collated_read(**keys):
+    fname=collated_file(**keys)
+    verbose=keys.get('verbose',True)
+    print('Reading collated:',fname,file=stderr)
+    return eu.io.read(fname,verbose=verbose)
+
 def lensout_file(**keys):
     """
     import lensing
-    lcat_file(sample='rm03')
+    lensout_file(sample='rm03')
     """
     keys['fs'] = 'hdfs'
     keys['ext'] = 'dat'
@@ -467,6 +428,12 @@ def lensout_read(**keys):
     print('Reading lensout:',fname,file=stderr)
     return eu.io.read(fname, dtype=dtype, delim=' ', type='rec')
 
+def reduced_file(**keys):
+    keys['fs'] = 'hdfs'
+    keys['ext'] = 'dat'
+    keys['type'] = 'reduced'
+    return sample_file(**keys)
+
 def reduced_read(**keys):
     sample=keys.get('sample',None)
     if sample is None:
@@ -477,7 +444,7 @@ def reduced_read(**keys):
 
     dtype=lensout_dtype(nbin)
 
-    fname = sample_file(type='reduced', **keys)
+    fname = reduced_file(**keys)
     print('Reading reduced:',fname,file=stderr)
     return eu.io.read(fname, dtype=dtype, delim=' ', type='rec')
 

@@ -24,7 +24,8 @@ from . import binning
 
 import cosmology
 
-def instantiate_sample(sample, **keys):
+def instantiate_sample(**keys):
+    sample=keys['sample']
     conf = lensing.files.read_config('lcat',sample)
 
     if conf['catalog'] in ['redmapper-random','maxbcg-random']:
@@ -64,9 +65,9 @@ def original_file(sample):
     c = instantiate_sample(sample)
     return c.original_file()
 
-def read_original(sample):
-    c = instantiate_sample(sample)
-    return c.read_original()
+def read_original(**keys):
+    c = instantiate_sample(**keys)
+    return c.read_original(**keys)
 
 
 def output_array(num):
@@ -489,23 +490,18 @@ class SDSSVoidsRandom(LcatBase):
             self.tycho_map = \
                 es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'],
                                           maxres=self['maxres'])
-    def original_dir(self):
-        catdir = lensing.files.catalog_dir()
-        d = path_join(catdir, self['catalog'])
-        return str(d)
 
-    def original_file(self):
-        d = self.original_dir()
+    def read_original(self, **keys):
+        keys['sample'] = self['sample']
+        return lensing.files.lcat_read(**keys)
+
+    def read_raw(self):
+        dir = lensing.files.catalog_dir()
+        dir = path_join(dir, self['catalog'])
         f='%s.fits' % self['catalog']
-        infile = path_join(d, f)
-        return infile
-
-    def read_original(self):
-        infile = self.original_file()
-        stdout.write("Reading original catalog: %s\n" % infile)
+        infile = path_join(dir, f)
+        stdout.write("Reading raw ra,dec: %s\n" % infile)
         data = eu.io.read(infile, lower=True, ensure_native=True)
-        return data
-
 
     def create_objshear_input(self, lens_split=None):
         """
@@ -525,7 +521,7 @@ class SDSSVoidsRandom(LcatBase):
 
         n=0
 
-        data=self.read_original()
+        data=self.read_raw()
         zindex = numpy.arange(data.size,dtype='i8')
 
         # do in chunks so we can see the progress

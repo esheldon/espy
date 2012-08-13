@@ -18,9 +18,13 @@ Description:
 
     src_reduce:
         Write the set of wq scripts for reducing across sources
+    collate:
+        Write scripts to collate each of the lens splits
+
     lens_concat:
         A script to concatenate all the lens splits together
-        into the final reduced file.
+        into a final reduced file.  useful if not collating
+        in the lens splits
 
     all_reduce:
         Write the wq script to reduce all at once and produce
@@ -64,6 +68,10 @@ if 'shear'in types:
 
 if 'src_reduce' in types:
     wql.write_src_reduce_scripts()
+
+if 'collate' in types:
+    wql.write_lens_collate_scripts()
+
 
 if 'lens_concat' in types:
     wql.write_lens_concat_script()

@@ -101,6 +101,21 @@ class WQLens(dict):
             with open(fname,'w') as f:
                 f.write(text)
 
+    def write_lens_collate_scripts(self):
+        """
+        Collate each of the lens splits
+        """
+        lens_nsplit=self['src_config']['nsplit']
+
+        for i in xrange(lens_nsplit):
+            text=self.collate_text(i)
+            fname=files.sample_file(type='wq-collate-split',sample=self['run'], 
+                                    lens_split=i)
+            print("writing wq collate script:",fname)
+            with open(fname,'w') as f:
+                f.write(text)
+
+
     def write_lens_concat_script(self):
         """
         Reduce the outputs from the lens reduction across sources.
@@ -217,6 +232,9 @@ class WQLens(dict):
         return s
 
 
+    def collate_text(self, lens_split):
+        return _collate_script % {'run':self['run'],
+                                  'lens_split':lens_split}
 _shear_script="""
 command: |
     source ~esheldon/.bashrc
@@ -356,3 +374,10 @@ priority: %(priority)s
 job_name: %(job_name)s
 %(extra)s
 """ 
+
+
+_collate_script="""
+command: |
+    source ~esheldon/.bashrc
+    python ${ESPY_DIR}/lensing/bin/collate-reduced.py -s %(lens_split)s %(run)s
+"""

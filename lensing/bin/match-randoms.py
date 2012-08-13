@@ -33,9 +33,6 @@ parser.add_option("-b",dest="binsize",default=0.01,
                   help="Binsize to use in z for hist matching, default %default")
 parser.add_option("-s",dest="show",action="store_true", default=False,
                   help="Show histogram comparisons on the screen. default %default")
-parser.add_option("-r",dest="remove",action="store_true", default=False,
-                  help="Instead of using weighting, actually remove "
-                       "randoms to match z hist")
 
 
 def makedir_fromfile(path):
@@ -58,7 +55,6 @@ def main():
     nbin=int(options.nbin)
     binsize=float(options.binsize)
     show=options.show
-    remove=options.remove
 
     if bintype is None or nbin is None:
         raise ValueError("currently demand some kind of binning")
@@ -70,21 +66,19 @@ def main():
     conf=lensing.files.cascade_config(lensrun)
     # this is where z is, may be a different name in the collated data
     lcat = lensing.files.lcat_read(sample=conf['lens_sample'])
-    data = lensing.files.sample_read(type='collated', sample=lensrun, fs='hdfs')
-    rand = lensing.files.sample_read(type='collated', sample=randrun, fs='hdfs')
+    data = lensing.files.collated_read(sample=lensrun)
+    rand = lensing.files.collated_read(sample=randrun)
+    print('rand names:',rand.dtype.names)
 
     output = lensing.binning.lensbin_struct(data['rsum'][0].size, n=nbin)
 
-    if not remove:
-        outextra='randmatch-%s' % randrun
-        weights_file=lensing.files.sample_file(type='weights',
-                                               sample=lensrun,
-                                               name=b.name(),
-                                               extra=outextra)
-        print("opening weights file for writing:",weights_file)
-        wfits=fitsio.FITS(weights_file,'rw',clobber=True)
-    else:
-        outextra='randmatch-rm-%s' % randrun
+    outextra='randmatch-%s' % randrun
+    weights_file=lensing.files.sample_file(type='weights',
+                                           sample=lensrun,
+                                           name=b.name(),
+                                           extra=outextra)
+    print("opening weights file for writing:",weights_file)
+    wfits=fitsio.FITS(weights_file,'rw',clobber=True)
 
     html_name=lensing.files.sample_file(type='binned-plots', 
                                         sample=lensrun, name=b.name(),
@@ -98,10 +92,7 @@ def main():
         print("-"*70)
         print("%s/%s: " % (binnum+1,nbin), b.bin_label(binnum))
 
-        if remove:
-            eps_extra='%02d-randmatch-rm-%s' % (binnum,randrun)
-        else:
-            eps_extra='%02d-randmatch-%s' % (binnum,randrun)
+        eps_extra='%02d-randmatch-%s' % (binnum,randrun)
 
         epsfile=lensing.files.sample_file(type='binned-plots',
                                           sample=lensrun,
@@ -115,42 +106,26 @@ def main():
 
         w = b.select_bin(data, binnum)
 
-        # simple histogram matching
-        if remove:
-            print("matching hist with removal")
-            keep = weighting.hist_match_remove(rand['z'], lcat['z'][w], binsize)
-            rkeep = rand[keep]
-            perc = keep.size/(1.*rand.size)
-
-            print("used number: %d/%d = %0.2f" % (keep.size,rand.size, perc))
-
-            print("combining kept randoms")
-            comb = lensing.outputs.average_lensums(rkeep)
-
-            weights=ones(keep.size)
-            weighting.plot_results1d(rkeep['z'], lcat['z'][w], weights, binsize, 
-                                     epsfile=epsfile, title=tit, show=show)
-        else:
-            print("matching hist with weights")
-            weights = weighting.hist_match(rand['z'], lcat['z'][w], binsize)
+        print("matching hist with weights")
+        weights = weighting.hist_match(rand['z'], lcat['z'][w], binsize)
 
 
-            effnum = weights.sum()
-            effperc = effnum/rand.size
-            print("effective number: %d/%d = %0.2f" % (effnum,rand.size, effperc))
+        effnum = weights.sum()
+        effperc = effnum/rand.size
+        print("effective number: %d/%d = %0.2f" % (effnum,rand.size, effperc))
 
-            print("combining randoms with weights")
-            comb = lensing.outputs.average_lensums(rand, weights=weights)
+        print("combining randoms with weights")
+        comb = lensing.outputs.average_lensums(rand, weights=weights)
 
-            weighting.plot_results1d(rand['z'], lcat['z'][w], weights, binsize, 
-                                     epsfile=epsfile, title=tit, show=show)
+        weighting.plot_results1d(rand['z'], lcat['z'][w], weights, binsize, 
+                                 epsfile=epsfile, title=tit, show=show)
 
-            #wstruct=zeros(1, dtype=[('weights','f8',weights.size)])
-            wstruct=zeros(weights.size, dtype=[('weights','f8')])
-            wstruct['weights'] = weights
+        #wstruct=zeros(1, dtype=[('weights','f8',weights.size)])
+        wstruct=zeros(weights.size, dtype=[('weights','f8')])
+        wstruct['weights'] = weights
 
-            # a new extension for each bin
-            wfits.write(wstruct)
+        # a new extension for each bin
+        wfits.write(wstruct)
 
         converter.convert(epsfile, dpi=120, verbose=True)
         html_file.write('    <img src="%s"><p>\n' % os.path.basename(pngfile))
@@ -163,9 +138,9 @@ def main():
     html_file.write('</body>\n</html>\n')
     html_file.close()
 
-    if not remove:
-        wfits.close()
+    wfits.close()
 
-    lensing.files.sample_write(data=output,type='binned',sample=lensrun,name=b.name(),extra=outextra)
+    lensing.files.sample_write(data=output,type='binned',
+                               sample=lensrun,name=b.name(),extra=outextra)
 
 main()

@@ -55,18 +55,19 @@ exists.
     # the lens splits together
     /bin/make-objshear-proc.py -t config,shear,src_reduce,lens_concat svrand01s05
 
-    # submit and reduce the results as for lenses above
-    # then submit the src-reduce and finally lens-concat
-
+    # now
+    # - submit the shear wq scripts 
+    # - submit the src reduce wq scripts.
+    # - Optionally: submit the lens concat script
+    # - collate the results in the splits
+    # - Optionally: combine the collated splits
 
     #
-    # match randoms to the lens bins
-    # this can eat tons of memory
+    # match randoms to the lens bins this can eat tons of memory, so probably
+    # want to get an interactive job on a high mem machine, maybe 48G machine
     #
 
-    /bin/match-randoms.py -t lambda -n 12 rm03s06 r03s06
-    # old name style
-    /bin/match-randoms.py -t lambda -n 12 rm03s06 sdssrand03
+    /bin/match-randoms.py -t lambda -n 12 sv01s05 svrand01s05
 
     # correct from randoms
     /bin/correct-shear.py
