@@ -320,6 +320,7 @@ def sample_write(**keys):
     if 'hdfs://' not in f:
         make_dir_from_path(f)
 
+    print('writing file:',f)
     return eu.io.write(f, data, clobber=True)
 
 

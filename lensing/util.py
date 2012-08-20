@@ -1,6 +1,7 @@
 from __future__ import print_function
 import esutil as eu
 from numpy import tanh, arctanh, sqrt
+from numpy.random import random as randu
 import copy
 
 def average_shear(e1, e2, weights=None, doerr=False):
@@ -103,5 +104,27 @@ def lens_wmom(data, tag, ind=None, sdev=False):
         tdata = data[tag][ind]
 
     return eu.stat.wmom(tdata, wts, calcerr=True, sdev=sdev)
+
+def randomize_e1e2(e1start,e2start):
+    if e1start == 0 and e2start==0:
+        e1rand = 0.05*(randu()-0.5)
+        e2rand = 0.05*(randu()-0.5)
+    else:
+        nmax=100
+        ii=0
+        while True:
+            e1rand = e1start*(1 + 0.2*(randu()-0.5))
+            e2rand = e2start*(1 + 0.2*(randu()-0.5))
+            etot = sqrt(e1rand**2 + e2rand**2)
+            if etot < 0.95:
+                break
+            ii += 1
+            if ii==nmax:
+                wlog("---- hit max try on randomize e1e2, setting zero and restart")
+                e1start=0
+                e2start=0
+                ii=0
+
+    return e1rand, e2rand
 
 

@@ -215,6 +215,7 @@ from . import regauss
 from . import regauss_test
 from . import regauss_sim
 
+from . import gmix_sdss
 
 from . import princeton
 from . import files

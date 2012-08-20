@@ -45,8 +45,8 @@ def instantiate_binner(type, nbin):
         b = N200Binner(nbin)
     elif type == 'mz':
         b = MZBinner(nbin)
-    elif type == 'z':
-        b = ZBinner(nbin)
+    elif type == 'vz':
+        b = VoidZBinner(nbin)
     else:
         raise ValueError("unsupported binner type: '%s'" % type)
     return b
@@ -444,7 +444,7 @@ class BinnerBase(dict):
 
 
 
-class ZBinner(BinnerBase):
+class VoidZBinner(BinnerBase):
     range_type='()'
 
     def name(self):
@@ -454,6 +454,12 @@ class ZBinner(BinnerBase):
         if self['nbin'] == 4:
             lowlim  = [0.02,0.05, 0.098, 0.148]
             highlim = [0.05,0.098,0.148, 0.20]
+        elif self['nbin'] == 2:
+            lowlim  = [0.02,0.1]
+            highlim = [0.1,0.2]
+        elif self['nbin'] == 1:
+            lowlim = [0.02]
+            highlim= [0.20]
 
         self.lowlim = lowlim
         self.highlim = highlim

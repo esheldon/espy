@@ -27,7 +27,7 @@ try:
     from gmix_image import GMIXFIT_NEG_COV_EIG
     from gmix_image import GMIXFIT_NEG_COV_DIAG
 
-    from gmix_image import ellip2eta, eta2ellip, print_pars
+    from gmix_image import ellip2eta, eta2ellip, print_pars, pars2gmix, gmix2pars
 except ImportError:
     wlog("could not import gmix_image")
 
@@ -92,6 +92,7 @@ class GMixFitSim(shapesim.BaseSim):
                                             ci['cen_admom'],
                                             cov_admom,
                                             psf=out['psf_res']['pars'],
+                                            psf_gmix=out['psf_res']['gmix'],
                                             pfrac_am=pfrac_am,
                                             coellip=coellip_obj)
 
@@ -128,7 +129,8 @@ class GMixFitSim(shapesim.BaseSim):
         return out
 
 
-    def process_image(self, image, skysig, ngauss, cen, cov, psf=None,
+    def process_image(self, image, skysig, ngauss, cen, cov, 
+                      psf=None,psf_gmix=None,
                       pfrac_am=None, coellip=True):
         if not coellip:
             raise ValueError("must use coellip for now")
@@ -145,7 +147,6 @@ class GMixFitSim(shapesim.BaseSim):
             maxtry=self['maxtry_psf']
 
         ntry=0
-        chi2arr=zeros(maxtry) + 1.e9
         chi2perarr=zeros(maxtry) + 1.e9
         guess_chi2perarr=zeros(maxtry) + 1.e9
 
@@ -175,59 +176,111 @@ class GMixFitSim(shapesim.BaseSim):
                     eguess=[0,0]
 
 
-            guess,width = self.get_prior(ngauss,
-                                         counts, cen, cov, pfrac_am,
-                                         eguess=eguess,
-                                         psf=psf,
-                                         uniform_p=uniform_p,
-                                         randomize=randomize)
+            generic = self.get('generic_prior',False)
+            use_nlsolver = self.get("use_nlsolver",False)
+            if generic:
+                guess,width = self.get_prior_generic(ngauss,
+                                                     counts, cen, cov, pfrac_am,
+                                                     eguess=eguess,
+                                                     psf=psf,
+                                                     uniform_p=uniform_p,
+                                                     randomize=randomize)
+            else:
+                guess,width = self.get_prior(ngauss,
+                                             counts, cen, cov, pfrac_am,
+                                             eguess=eguess,
+                                             psf=psf,
+                                             uniform_p=uniform_p,
+                                             randomize=randomize)
 
             if self['verbose']:
                 print_pars(guess,front="guess: ")
 
-            gm = gmix_image.GMixFitCoellip(image, skysig,
-                                           guess,width,
-                                           psf=psf,
-                                           purepy=False,
-                                           verbose=verbose)
+            if use_nlsolver:
+                maxiter=2000
+                if psf is not None:
+                    # full representation 6*ngauss
+                    psf_pars=gmix2pars(psf_gmix)
+                else:
+                    psf_pars=None
+                gm = gmix_image.gmix_nlsolve.GMixCoellipSolver(image, 
+                                                               guess,
+                                                               1.,
+                                                               maxiter,
+                                                               psf_pars,
+                                                               False)
 
+
+            else:
+                gm = gmix_image.GMixFitCoellip(image, skysig,
+                                               guess,width,
+                                               psf=psf_gmix,
+                                               verbose=verbose)
+
+
+            pars=gm.get_pars()
+            perr=gm.get_perr()
+            chi2per = gm.get_chi2per()
+            if use_nlsolver:
+                perr *= skysig
+                chi2per /= skysig**2
 
             if self['verbose']:
-                print_pars(gm.popt,front="pars:  ")
-                print_pars(gm.perr,front="perr:  ")
+                print_pars(pars,front="pars:  ")
+                print_pars(perr,front="perr:  ")
 
-            chi2arr[ntry] = gm.get_chi2(gm.popt)
-            chi2perarr[ntry] = gm.get_chi2per(gm.popt)
+            chi2perarr[ntry] = chi2per
             self.wlog("chi2/pdeg:",chi2perarr[ntry])
             gmlist.append(gm)
 
             ntry += 1
                 
-        w=chi2arr.argmin()
+        w=chi2perarr.argmin()
+
         gm = gmlist[w]
         if self['verbose']:
             print_pars(chi2perarr,front='chi2/deg: ')
-        s2n = gm.get_s2n(gm.popt)
+        s2n = gm.get_s2n()
+
+        dof=gm.get_dof()
+        prob = scipy.stats.chisqprob(chi2per*dof, dof)
+
+        popt=gm.get_pars()
+        pcov=gm.get_pcov()
+        perr=gm.get_perr()
+        gmix=pars2gmix(popt, coellip=True)
+
+        if use_nlsolver:
+            perr *= skysig
+            pcov *= skysig**2
+            s2n /= skysig
 
         if self['verbose']:
             wlog("\n")
 
-            print_pars(gm.popt,front='popt: ')
-            print_pars(gm.perr,front='perr: ')
+            print_pars(popt,front='popt: ')
+            print_pars(perr,front='perr: ')
             wlog("s2n:",s2n)
-            wlog("numiter gmix:",gm.numiter)
-            wlog("Topt/Tguess:",gm.popt[ngauss+4:]/guess[ngauss+4:])
+            #wlog("numiter gmix:",gm.numiter)
+            wlog("Topt/Tguess:",popt[ngauss+4:]/guess[ngauss+4:])
 
-        out={'gmix':    gm.gmix,
-             'pars':    gm.popt,
-             'perr':    gm.perr,
-             'pcov':    gm.pcov,
-             'flags':   gm.flags,
-             'ier':     gm.ier,
-             'numiter': gm.numiter,
+        if not hasattr(gm,'ier'):
+            ier=0
+            numiter=0
+        else:
+            ier=gm.ier
+            numiter=gm.numiter
+        out={'gmix':    gmix,
+             'pars':    popt,
+             'perr':    perr,
+             'pcov':    pcov,
+             'flags':   gm.get_flags(),
+             'ier':     ier,
+             'numiter': numiter,
              'coellip': coellip,
              's2n':     s2n,
-             'chi2per': chi2perarr[w]}
+             'chi2per': chi2perarr[w],
+             'prob': prob}
         return out
 
 
@@ -581,6 +634,220 @@ class GMixFitSim(shapesim.BaseSim):
 
         return prior, width
 
+
+    def get_prior_generic(self, ngauss, counts, cen, cov, pfrac_am,
+                    psf=None,
+                    randomize=False,
+                    uniform_p=False,
+                    eguess=None):
+
+        wlog("doing generic prior")
+        npsf=0
+        if psf is not None:
+            npsf = gmix_image.get_ngauss_coellip(psf)
+
+        tight_priors=self.get('tight_priors',False)
+        npars=2*ngauss+4
+        prior=zeros(npars)
+        width=zeros(npars) + 1.e20
+        prior[0] = cen[0]
+        prior[1] = cen[1]
+
+        T = cov[2]+cov[0]
+        e1=(cov[2]-cov[0])/T
+        e2=2*cov[1]/T
+
+        if eguess:
+            prior[2],prior[3]=eguess
+        else:
+            prior[2],prior[3]=e1,e2
+
+
+        if ngauss==4:
+
+            Tmax = T*55
+            Tfrac1 = .18
+            Tfrac2 = .035
+            Tfrac3 = .0027
+
+            p0,p1,p2,p3=0.0838067,0.146986,0.201162,0.558154
+
+
+            prior[4] = Tmax
+            prior[5] = Tfrac1
+            prior[6] = Tfrac2
+            prior[7] = Tfrac3
+
+            if uniform_p:
+                self.wlog("    uniform p")
+                prior[8] = counts/ngauss
+                prior[9] = counts/ngauss
+                prior[10] = counts/ngauss
+                prior[11] = counts/ngauss
+            else:
+                prior[8] = p0
+                prior[9] = p1
+                prior[10] = p2
+                prior[11] = p3
+
+            if randomize:
+                e1start=prior[2]
+                e2start=prior[3]
+                prior[2],prior[3] = randomize_e1e2(e1start,e2start)
+
+                prior[4] += prior[4]*0.05*(randu()-0.5)
+                prior[5] += prior[5]*0.05*(randu()-0.5)
+                prior[6] += prior[6]*0.05*(randu()-0.5)
+                prior[7] += prior[7]*0.05*(randu()-0.5)
+                prior[8] += prior[8]*0.05*(randu()-0.5)
+                prior[9] += prior[9]*0.05*(randu()-0.5)
+                prior[10] += prior[10]*0.05*(randu()-0.5)
+                prior[11] += prior[11]*0.05*(randu()-0.5)
+
+        elif ngauss==3 and psf is None:
+            # these guesses are for turbulent
+            self.wlog("    using ngauss=3")
+
+            if eguess is not None:
+                prior[2],prior[3] = eguess
+            else:
+                prior[2] = e1# + 0.05*(randu()-0.5)
+                prior[3] = e2# + 0.05*(randu()-0.5)
+
+            Tmax = T*8.3
+            Tfrac1 = 1.7/8.3
+            Tfrac2 = 0.8/8.3
+            prior[4] = Tmax
+            prior[5] = Tfrac1
+            prior[6] = Tfrac2
+
+            if uniform_p:
+                self.wlog("    uniform p")
+                prior[7] = counts/ngauss
+                prior[8] = counts/ngauss
+                prior[9] = counts/ngauss
+            else:
+                prior[7] = counts*0.08
+                prior[8] = counts*0.38
+                prior[9] = counts*0.53
+
+            if randomize:
+                self.wlog("    randomizing")
+                e1start=prior[2]
+                e2start=prior[3]
+                prior[2],prior[3] = randomize_e1e2(e1start,e2start)
+
+                prior[4] += prior[4]*0.05*(randu()-0.5)
+                prior[5] += prior[5]*0.05*(randu()-0.5)
+                prior[6] += prior[6]*0.05*(randu()-0.5)
+                prior[7] += prior[7]*0.05*(randu()-0.5)
+                prior[8] += prior[8]*0.05*(randu()-0.5)
+                prior[9] += prior[9]*0.05*(randu()-0.5)
+
+        elif ngauss==3 and psf is not None:
+            self.wlog("    using psf ngauss=3")
+        
+            if eguess is not None:
+                prior[2],prior[3] = eguess 
+            else:
+                prior[2] = e1
+                prior[3] = e2
+
+            self.wlog("    starting e1,e2:",prior[2],prior[3])
+            
+            Tmax = T*5
+            Tfrac1 = .3
+            Tfrac2 = .06
+            prior[4] = Tmax
+            prior[5] = Tfrac1
+            prior[6] = Tfrac2
+
+            if uniform_p:
+                self.wlog("    uniform p")
+                prior[7] = counts/ngauss
+                prior[8] = counts/ngauss
+                prior[9] = counts/ngauss
+            else:
+                prior[7] = counts*0.26
+                prior[8] = counts*0.55
+                prior[9] = counts*0.18
+
+            if randomize:
+                self.wlog("    randomizing")
+                e1start=prior[2]
+                e2start=prior[3]
+                prior[2],prior[3] = randomize_e1e2(e1start,e2start)
+
+                prior[4] += prior[4]*0.05*(randu()-0.5)
+                prior[5] += prior[5]*0.05*(randu()-0.5)
+                prior[6] += prior[6]*0.05*(randu()-0.5)
+                prior[7] += prior[7]*0.05*(randu()-0.5)
+                prior[8] += prior[8]*0.05*(randu()-0.5)
+                prior[9] += prior[9]*0.05*(randu()-0.5)
+
+
+        elif ngauss==1:
+            self.wlog("    using ngauss==1")
+
+            prior[4] = counts
+            prior[5] = T
+
+            if psf is not None:
+                self.wlog("======> with psf")
+                psf_gmix = gmix_image.pars2gmix(psf,coellip=True)
+                psfmoms = gmix_image.total_moms(psf_gmix)
+                tcov=cov.copy()
+                tcov[0] -= psfmoms['irr']
+                tcov[1] -= psfmoms['irc']
+                tcov[2] -= psfmoms['icc']
+                tdet=tcov[0]*tcov[2] - tcov[1]**2
+                if tdet > 1.e-5:
+                    self.wlog("using special guesses")
+                    tT = tcov[0]+tcov[2]
+                    te1=(tcov[2]-tcov[0])/tT
+                    te2=2*tcov[1]/tT
+
+                    prior[2] = te1
+                    prior[3] = te2
+                    prior[4] = 1.0
+                    prior[5] = tT
+                else:
+                    # use defaults
+                    self.wlog("NOT USING special guesses")
+                    pass
+            if randomize:
+                prior[0] += 1*(randu()-0.5)  # cen0
+                prior[1] += 1*(randu()-0.5)  # cen1
+                prior[2] += 0.2*(randu()-0.5)  # e1
+                prior[3] += 0.2*(randu()-0.5)  # e2
+                prior[4] += 0.1*(randu()-0.5)  # p
+                prior[5] += 1*(randu()-0.5)   # T
+
+        elif ngauss==2 and psf is None:
+            self.wlog("    ngauss:",ngauss)
+
+            if eguess is not None:
+                prior[2],prior[3] = eguess
+            else:
+                prior[2] = e1# + 0.05*(randu()-0.5)
+                prior[3] = e2# + 0.05*(randu()-0.5)
+
+            e1start,e2start = prior[2],prior[3]
+            prior[2],prior[3] = randomize_e1e2(e1start,e2start)
+            prior[4] = T*5 # Tmax
+            prior[5] = 1./5.08
+            prior[6]= counts*0.1
+            prior[7]= counts*0.9
+
+            prior[4] += 0.1*prior[4]*(randu()-0.5)
+            prior[5] += 0.1*prior[5]*(randu()-0.5)
+            prior[6] += 0.1*prior[6]*(randu()-0.5)
+            prior[7] += 0.1*prior[7]*(randu()-0.5)
+ 
+        else:
+            raise ValueError("implement other guesses")
+
+        return prior, width
 
 
 
@@ -1413,8 +1680,10 @@ class GMixFitSim(shapesim.BaseSim):
         st['s2'] = s2
         st['s2n_uw'] = ci['s2n_uw']
         st['s2n_matched'] = ci['s2n_matched']
+        st['s2n_admom'] = ci['s2n_admom']
         st['s2n_uw_psf'] = ci['s2n_uw_psf']
         st['s2n_matched_psf'] = ci['s2n_matched_psf']
+        st['s2n_admom_psf'] = ci['s2n_admom_psf']
         st['ellip'] = ellip
         st['e1true'] = ci['e1true']
         st['e2true'] = ci['e2true']
@@ -1530,6 +1799,7 @@ class GMixFitSim(shapesim.BaseSim):
                 stop
             """
             st['chi2per'] = res['res']['chi2per']
+            st['prob'] = res['res']['prob']
         else:
             st['s2_meas'] = -9999
 
@@ -1552,7 +1822,9 @@ class GMixFitSim(shapesim.BaseSim):
         dt=[('s2n_uw','f8'),
             ('s2n_uw_psf','f8'),
             ('s2n_matched','f8'),
+            ('s2n_admom','f8'),
             ('s2n_matched_psf','f8'),
+            ('s2n_admom_psf','f8'),
             ('ellip','f8'),
 
             ('s2','f8'),         # requested (spsf/sobj)**2
@@ -1617,6 +1889,7 @@ class GMixFitSim(shapesim.BaseSim):
             ('pars_psf_cov','f8',(npars_psf,npars_psf)),
 
             ('chi2per','f8'),
+            ('prob','f8'),
             ('gmix',gmix_dt,ngauss_obj),
             ('pars','f8',npars_obj),
             ('pars_err','f8',npars_obj),
@@ -1640,9 +1913,7 @@ def randomize_e1e2(e1start,e2start):
             ii += 1
             if ii==nmax:
                 wlog("---- hit max try on randomize e1e2, setting zero and restart")
-                e1start=0
-                e2start=0
-                ii=0
+                return randomize_e1e2(0.0,0.0)
 
     return e1rand, e2rand
 
