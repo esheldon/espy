@@ -155,7 +155,7 @@ class GMixFitSim(shapesim.BaseSim):
         gmlist=[]
 
 
-        generic = self.get('generic_prior',False)
+        generic = self['generic_prior']
         use_nlsolver = self.get("use_nlsolver",False)
         while ntry < maxtry:
             if psf is not None:

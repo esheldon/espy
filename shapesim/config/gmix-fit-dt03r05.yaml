@@ -36,7 +36,6 @@ use_jacob: false
 
 verbose: false
 
-# we should try with higher values to see what happens
 ngauss_psf: 3
 ngauss_obj: 3
 

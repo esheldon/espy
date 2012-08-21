@@ -206,8 +206,13 @@ gmix-fit
                                                    done
 
         Different shears
-        et05,et06,et07,et08,et09,et10
-        .00   .01  .02  .03  .04  .05 
+        et05r01,et06r01,et07r01,et08r01,et09r01,et10r01
+            .00     .01     .02     .03     .04     .05 
+
+        TODO Same as above but using delta function and admon S/N
+        et05r02,et06r02,et07r02,et08r02,et09r02,et10r02
+            .00     .01     .02     .03     .04     .05 
+
 
 
         edg02 redoing with fewer s2

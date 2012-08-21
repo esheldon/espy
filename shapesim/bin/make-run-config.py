@@ -35,7 +35,7 @@ sim: %(sim_name)s
 # ellip value
 runtype: byellip
 
-s2n_method: matched
+s2n_method: admom
 s2n_fac: %(s2n_fac)s
 
 retrim: false
@@ -83,7 +83,7 @@ sim: %(sim_name)s
 # ellip value
 runtype: byellip
 
-s2n_method: matched
+s2n_method: admom
 s2n_fac: %(s2n_fac)s
 
 retrim: true
@@ -131,7 +131,7 @@ sim: %(sim_name)s
 # ellip value
 runtype: bys2n
 
-s2n_method: matched
+s2n_method: admom
 s2n_fac: %(s2n_fac)s
 
 retrim: true
@@ -179,7 +179,9 @@ sim: %(sim_name)s
 # ellip value
 runtype: bys2n
 
-s2n_method: matched
+generic_prior: true
+
+s2n_method: admom
 s2n_fac: %(s2n_fac)s
 
 retrim: true
@@ -196,7 +198,6 @@ add_to_cache: false
 
 verbose: false
 
-# we should try with higher values to see what happens
 ngauss_psf: 3
 ngauss_obj: 3
 
