@@ -1,5 +1,8 @@
 """
     %prog run
+
+Write wq scripts to run combine-trials.py to combine the "bytrial"
+files.
 """
 
 import sys

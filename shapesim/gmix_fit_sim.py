@@ -9,6 +9,7 @@ import numpy
 from numpy import random, zeros, sqrt, array, ceil, isfinite, \
         where, diag, arctan2, median, poly1d
 from numpy.random import random as randu
+from numpy.random import randn
 from numpy.linalg import eig, LinAlgError
 import sys
 from sys import stderr
@@ -20,6 +21,7 @@ import copy
 import images
 import esutil as eu
 from esutil.misc import wlog
+import scipy.stats
 
 try:
     import gmix_image
@@ -153,12 +155,18 @@ class GMixFitSim(shapesim.BaseSim):
         gmlist=[]
 
 
+        generic = self.get('generic_prior',False)
+        use_nlsolver = self.get("use_nlsolver",False)
         while ntry < maxtry:
             if psf is not None:
-                eguess=[0,0]
-                uniform_p=False
-                if ntry > 0:
-                    uniform_p=True
+                if generic:
+                    uniform_p=False
+                    eguess=None
+                else:
+                    eguess=[0,0]
+                    uniform_p=False
+                    if ntry > 0:
+                        uniform_p=True
             else:
                 uniform_p=False
                 if ntry == 0:
@@ -176,11 +184,10 @@ class GMixFitSim(shapesim.BaseSim):
                     eguess=[0,0]
 
 
-            generic = self.get('generic_prior',False)
-            use_nlsolver = self.get("use_nlsolver",False)
             if generic:
+                admom_mult = 4.
                 guess,width = self.get_prior_generic(ngauss,
-                                                     counts, cen, cov, pfrac_am,
+                                                     counts, cen, cov, admom_mult,
                                                      eguess=eguess,
                                                      psf=psf,
                                                      uniform_p=uniform_p,
@@ -212,10 +219,14 @@ class GMixFitSim(shapesim.BaseSim):
 
 
             else:
+                Tpositive=True
+                if psf is not None:
+                    Tpositive=False
                 gm = gmix_image.GMixFitCoellip(image, skysig,
                                                guess,width,
                                                psf=psf_gmix,
-                                               verbose=verbose)
+                                               verbose=verbose,
+                                               Tpositive=Tpositive)
 
 
             pars=gm.get_pars()
@@ -245,6 +256,8 @@ class GMixFitSim(shapesim.BaseSim):
         dof=gm.get_dof()
         prob = scipy.stats.chisqprob(chi2per*dof, dof)
 
+        chi2per=chi2perarr[w]
+
         popt=gm.get_pars()
         pcov=gm.get_pcov()
         perr=gm.get_perr()
@@ -260,6 +273,8 @@ class GMixFitSim(shapesim.BaseSim):
 
             print_pars(popt,front='popt: ')
             print_pars(perr,front='perr: ')
+            if psf is not None:
+                wlog("chi^2/deg:",chi2per,"prob:",prob)
             wlog("s2n:",s2n)
             #wlog("numiter gmix:",gm.numiter)
             wlog("Topt/Tguess:",popt[ngauss+4:]/guess[ngauss+4:])
@@ -269,7 +284,9 @@ class GMixFitSim(shapesim.BaseSim):
             numiter=0
         else:
             ier=gm.ier
-            numiter=gm.numiter
+            numiter=gm.get_numiter()
+            if self['verbose']:
+                wlog("numiter:",numiter)
         out={'gmix':    gmix,
              'pars':    popt,
              'perr':    perr,
@@ -279,7 +296,8 @@ class GMixFitSim(shapesim.BaseSim):
              'numiter': numiter,
              'coellip': coellip,
              's2n':     s2n,
-             'chi2per': chi2perarr[w],
+             'chi2per': chi2per,
+             'dof':dof,
              'prob': prob}
         return out
 
@@ -559,8 +577,8 @@ class GMixFitSim(shapesim.BaseSim):
         elif ngauss==1:
             self.wlog("    using ngauss==1")
 
-            prior[4] = counts
-            prior[5] = T
+            prior[4] = T
+            prior[5] = counts
 
             # uninformative
             width[2] = 10
@@ -586,8 +604,8 @@ class GMixFitSim(shapesim.BaseSim):
 
                     prior[2] = te1
                     prior[3] = te2
-                    prior[4] = 1.0
-                    prior[5] = tT
+                    prior[4] = tT
+                    prior[5] = counts
                 else:
                     # use defaults
                     self.wlog("NOT USING special guesses")
@@ -635,21 +653,24 @@ class GMixFitSim(shapesim.BaseSim):
         return prior, width
 
 
-    def get_prior_generic(self, ngauss, counts, cen, cov, pfrac_am,
-                    psf=None,
-                    randomize=False,
-                    uniform_p=False,
-                    eguess=None):
+    def get_prior_generic(self, ngauss, counts, cen, cov, admom_mult,
+                          psf=None,
+                          randomize=False,
+                          uniform_p=False,
+                          eguess=None):
+        """
+        admom_mult is used for the prepsf fit ngauss==3
+        """
 
-        wlog("doing generic prior")
         npsf=0
         if psf is not None:
             npsf = gmix_image.get_ngauss_coellip(psf)
 
-        tight_priors=self.get('tight_priors',False)
         npars=2*ngauss+4
+
         prior=zeros(npars)
         width=zeros(npars) + 1.e20
+
         prior[0] = cen[0]
         prior[1] = cen[1]
 
@@ -657,143 +678,34 @@ class GMixFitSim(shapesim.BaseSim):
         e1=(cov[2]-cov[0])/T
         e2=2*cov[1]/T
 
-        if eguess:
-            prior[2],prior[3]=eguess
-        else:
-            prior[2],prior[3]=e1,e2
+        if psf is not None:
+            if ngauss == 3:
+                prior[2],prior[3] = randomize_e1e2(0., 0.)
+
+                # should really be 0.08, 0.0 for dev
+                Tfracs = array([0.3, 0.0])
+
+                prior[4] = T*admom_mult
+                prior[5] = .3 # should be ~0.08 for dev galaxies
+                prior[6] = 0.
+                
+                # should be ~.4, .45, .05 or something for dev
+                prior[7] = 0.26
+                prior[8] = 0.55
+                prior[9] = 0.18
+
+                width[6] = 1.e-8
+                prior[6] = width[6]*randn()
+
+                rand_fac=0.2
+                prior[4] += prior[4]*rand_fac*(randu()-0.5)
+                prior[5] += prior[5]*rand_fac*(randu()-0.5)
+                prior[7] += prior[7]*rand_fac*(randu()-0.5)
+                prior[8] += prior[8]*rand_fac*(randu()-0.5)
+                prior[9] += prior[9]*rand_fac*(randu()-0.5)
 
 
-        if ngauss==4:
-
-            Tmax = T*55
-            Tfrac1 = .18
-            Tfrac2 = .035
-            Tfrac3 = .0027
-
-            p0,p1,p2,p3=0.0838067,0.146986,0.201162,0.558154
-
-
-            prior[4] = Tmax
-            prior[5] = Tfrac1
-            prior[6] = Tfrac2
-            prior[7] = Tfrac3
-
-            if uniform_p:
-                self.wlog("    uniform p")
-                prior[8] = counts/ngauss
-                prior[9] = counts/ngauss
-                prior[10] = counts/ngauss
-                prior[11] = counts/ngauss
-            else:
-                prior[8] = p0
-                prior[9] = p1
-                prior[10] = p2
-                prior[11] = p3
-
-            if randomize:
-                e1start=prior[2]
-                e2start=prior[3]
-                prior[2],prior[3] = randomize_e1e2(e1start,e2start)
-
-                prior[4] += prior[4]*0.05*(randu()-0.5)
-                prior[5] += prior[5]*0.05*(randu()-0.5)
-                prior[6] += prior[6]*0.05*(randu()-0.5)
-                prior[7] += prior[7]*0.05*(randu()-0.5)
-                prior[8] += prior[8]*0.05*(randu()-0.5)
-                prior[9] += prior[9]*0.05*(randu()-0.5)
-                prior[10] += prior[10]*0.05*(randu()-0.5)
-                prior[11] += prior[11]*0.05*(randu()-0.5)
-
-        elif ngauss==3 and psf is None:
-            # these guesses are for turbulent
-            self.wlog("    using ngauss=3")
-
-            if eguess is not None:
-                prior[2],prior[3] = eguess
-            else:
-                prior[2] = e1# + 0.05*(randu()-0.5)
-                prior[3] = e2# + 0.05*(randu()-0.5)
-
-            Tmax = T*8.3
-            Tfrac1 = 1.7/8.3
-            Tfrac2 = 0.8/8.3
-            prior[4] = Tmax
-            prior[5] = Tfrac1
-            prior[6] = Tfrac2
-
-            if uniform_p:
-                self.wlog("    uniform p")
-                prior[7] = counts/ngauss
-                prior[8] = counts/ngauss
-                prior[9] = counts/ngauss
-            else:
-                prior[7] = counts*0.08
-                prior[8] = counts*0.38
-                prior[9] = counts*0.53
-
-            if randomize:
-                self.wlog("    randomizing")
-                e1start=prior[2]
-                e2start=prior[3]
-                prior[2],prior[3] = randomize_e1e2(e1start,e2start)
-
-                prior[4] += prior[4]*0.05*(randu()-0.5)
-                prior[5] += prior[5]*0.05*(randu()-0.5)
-                prior[6] += prior[6]*0.05*(randu()-0.5)
-                prior[7] += prior[7]*0.05*(randu()-0.5)
-                prior[8] += prior[8]*0.05*(randu()-0.5)
-                prior[9] += prior[9]*0.05*(randu()-0.5)
-
-        elif ngauss==3 and psf is not None:
-            self.wlog("    using psf ngauss=3")
-        
-            if eguess is not None:
-                prior[2],prior[3] = eguess 
-            else:
-                prior[2] = e1
-                prior[3] = e2
-
-            self.wlog("    starting e1,e2:",prior[2],prior[3])
-            
-            Tmax = T*5
-            Tfrac1 = .3
-            Tfrac2 = .06
-            prior[4] = Tmax
-            prior[5] = Tfrac1
-            prior[6] = Tfrac2
-
-            if uniform_p:
-                self.wlog("    uniform p")
-                prior[7] = counts/ngauss
-                prior[8] = counts/ngauss
-                prior[9] = counts/ngauss
-            else:
-                prior[7] = counts*0.26
-                prior[8] = counts*0.55
-                prior[9] = counts*0.18
-
-            if randomize:
-                self.wlog("    randomizing")
-                e1start=prior[2]
-                e2start=prior[3]
-                prior[2],prior[3] = randomize_e1e2(e1start,e2start)
-
-                prior[4] += prior[4]*0.05*(randu()-0.5)
-                prior[5] += prior[5]*0.05*(randu()-0.5)
-                prior[6] += prior[6]*0.05*(randu()-0.5)
-                prior[7] += prior[7]*0.05*(randu()-0.5)
-                prior[8] += prior[8]*0.05*(randu()-0.5)
-                prior[9] += prior[9]*0.05*(randu()-0.5)
-
-
-        elif ngauss==1:
-            self.wlog("    using ngauss==1")
-
-            prior[4] = counts
-            prior[5] = T
-
-            if psf is not None:
-                self.wlog("======> with psf")
+            elif ngauss==1:
                 psf_gmix = gmix_image.pars2gmix(psf,coellip=True)
                 psfmoms = gmix_image.total_moms(psf_gmix)
                 tcov=cov.copy()
@@ -815,37 +727,89 @@ class GMixFitSim(shapesim.BaseSim):
                     # use defaults
                     self.wlog("NOT USING special guesses")
                     pass
-            if randomize:
-                prior[0] += 1*(randu()-0.5)  # cen0
-                prior[1] += 1*(randu()-0.5)  # cen1
-                prior[2] += 0.2*(randu()-0.5)  # e1
-                prior[3] += 0.2*(randu()-0.5)  # e2
-                prior[4] += 0.1*(randu()-0.5)  # p
-                prior[5] += 1*(randu()-0.5)   # T
 
-        elif ngauss==2 and psf is None:
-            self.wlog("    ngauss:",ngauss)
+                if randomize:
+                    prior[0] += 1*(randu()-0.5)  # cen0
+                    prior[1] += 1*(randu()-0.5)  # cen1
+                    prior[2] += 0.2*(randu()-0.5)  # e1
+                    prior[3] += 0.2*(randu()-0.5)  # e2
+                    prior[4] += 0.1*(randu()-0.5)  # p
+                    prior[5] += 1*(randu()-0.5)   # T
 
-            if eguess is not None:
-                prior[2],prior[3] = eguess
             else:
-                prior[2] = e1# + 0.05*(randu()-0.5)
-                prior[3] = e2# + 0.05*(randu()-0.5)
-
-            e1start,e2start = prior[2],prior[3]
-            prior[2],prior[3] = randomize_e1e2(e1start,e2start)
-            prior[4] = T*5 # Tmax
-            prior[5] = 1./5.08
-            prior[6]= counts*0.1
-            prior[7]= counts*0.9
-
-            prior[4] += 0.1*prior[4]*(randu()-0.5)
-            prior[5] += 0.1*prior[5]*(randu()-0.5)
-            prior[6] += 0.1*prior[6]*(randu()-0.5)
-            prior[7] += 0.1*prior[7]*(randu()-0.5)
- 
+                raise ValueError("only 1 or 3 gauss prepsf for now")
         else:
-            raise ValueError("implement other guesses")
+            if ngauss==1:
+                prior[4] = T
+                prior[5] = counts
+
+                prior[0] += 0.02*(randu()-0.5)  # cen0
+                prior[1] += 0.02*(randu()-0.5)  # cen1
+                prior[2],prior[3] = randomize_e1e2(e1,e2)
+                prior[4] = T + T*0.1*(randu()-0.5)
+                prior[5] = counts + counts1*0.1*(randu()-0.5)
+
+            elif ngauss==2:
+                self.wlog("    ngauss:",ngauss)
+
+                if eguess is not None:
+                    prior[2],prior[3] = eguess
+                else:
+                    prior[2] = e1# + 0.05*(randu()-0.5)
+                    prior[3] = e2# + 0.05*(randu()-0.5)
+
+                e1start,e2start = prior[2],prior[3]
+                prior[2],prior[3] = randomize_e1e2(e1start,e2start)
+                prior[4] = T*5 # Tmax
+                prior[5] = 1./5.08
+                prior[6]= counts*0.1
+                prior[7]= counts*0.9
+
+                prior[4] += 0.1*prior[4]*(randu()-0.5)
+                prior[5] += 0.1*prior[5]*(randu()-0.5)
+                prior[6] += 0.1*prior[6]*(randu()-0.5)
+                prior[7] += 0.1*prior[7]*(randu()-0.5)
+
+            elif ngauss==3:
+
+                if eguess is not None:
+                    prior[2],prior[3] = eguess
+                else:
+                    prior[2] = e1# + 0.05*(randu()-0.5)
+                    prior[3] = e2# + 0.05*(randu()-0.5)
+
+                Tmax = T*8.3
+                Tfrac1 = 1.7/8.3
+                Tfrac2 = 0.8/8.3
+                prior[4] = Tmax
+                prior[5] = Tfrac1
+                prior[6] = Tfrac2
+
+                if uniform_p:
+                    self.wlog("    uniform p")
+                    prior[7] = counts/ngauss
+                    prior[8] = counts/ngauss
+                    prior[9] = counts/ngauss
+                else:
+                    prior[7] = counts*0.08
+                    prior[8] = counts*0.38
+                    prior[9] = counts*0.53
+
+                if randomize:
+                    self.wlog("    randomizing")
+                    e1start=prior[2]
+                    e2start=prior[3]
+                    prior[2],prior[3] = randomize_e1e2(e1start,e2start)
+
+                    prior[4] += prior[4]*0.05*(randu()-0.5)
+                    prior[5] += prior[5]*0.05*(randu()-0.5)
+                    prior[6] += prior[6]*0.05*(randu()-0.5)
+                    prior[7] += prior[7]*0.05*(randu()-0.5)
+                    prior[8] += prior[8]*0.05*(randu()-0.5)
+                    prior[9] += prior[9]*0.05*(randu()-0.5)
+ 
+            else:
+                raise ValueError("implement other psf guesses")
 
         return prior, width
 
@@ -1800,6 +1764,7 @@ class GMixFitSim(shapesim.BaseSim):
             """
             st['chi2per'] = res['res']['chi2per']
             st['prob'] = res['res']['prob']
+            st['dof'] = res['res']['dof']
         else:
             st['s2_meas'] = -9999
 
@@ -1889,6 +1854,7 @@ class GMixFitSim(shapesim.BaseSim):
             ('pars_psf_cov','f8',(npars_psf,npars_psf)),
 
             ('chi2per','f8'),
+            ('dof','f8'),
             ('prob','f8'),
             ('gmix',gmix_dt,ngauss_obj),
             ('pars','f8',npars_obj),
