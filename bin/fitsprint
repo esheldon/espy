@@ -4,22 +4,19 @@
 
 Description:
 
-    Print out columns from a fits binary table.  By default, all columns are
+    Print columns from a fits binary table.  By default, all columns are
     printed.  Specify -c/--columns to print a subset.  By default, the
-    delimiter is comma "," for CSV, but this can be specified using the
-    -d/--delimiter keywords.
+    delimiter is a space but this can be specified using the -d/--delim
+    keyword.
 
-    The extension is numerical, starting from zero.
-
-Requirements:
-    Requires esutil
+    The extension can be numerical, starting from zero, or a name.
 
 """
 
 import sys
+from sys import stderr,stdout
 import numpy
 import fitsio
-import esutil as eu
 
 from optparse import OptionParser
 
@@ -27,27 +24,16 @@ parser=OptionParser(__doc__)
 
 parser.add_option("-c","--columns",default=None, 
     help="A comma-separated list of columns to print.  "
-         "Can be numerical or strings. By default all columns are printed. ")
-
-parser.add_option("-d","--delim",default=None, 
-    help="The delimiter to be used between fields.  Default is a space.")
-parser.add_option("--array-delim",default=None, 
-    help="The delimiter to be used between elements of arrays.  "
-                  "Default is a the same as --delim, except when arrays are."
-                  "bracketed when the default is a comma")
-
+         "Can be numerical or strings.")
 parser.add_option("-n","--nrows",default=None, 
-    help="The number of rows to print.  Default is all.")
+    help="The number of rows to print.")
 
-
-parser.add_option('-b','--bracket-arrays',default=False,action="store_true",
-                  help="Bracket arrays to indicate dimensions.")
-
-parser.add_option('-f','--fancy',default=False,action="store_true",
-                  help="Use fancy printing.")
-
-parser.add_option('-H','--header',default=False,action="store_true",
-                  help="For simple printing, write a header with column names")
+parser.add_option("-d","--delim",default=' ', 
+    help="The delimiter to be used between fields.  Default is a space.")
+parser.add_option('-q','--quote',action="store_true",
+                  help="quote strings")
+parser.add_option('-H','--header',action="store_true",
+                  help="Write a simple header with column names")
 
 def get_ext(extin):
     try:
@@ -55,6 +41,116 @@ def get_ext(extin):
     except:
         ext=extin
     return ext
+
+def get_columns(columns_in):
+    columns=columns_in
+    if columns is not None:
+        columns = columns.split(',')
+        try:
+            cnum=int(columns[0])
+            have_cnums=True
+        except:
+            have_cnums=False
+
+        if have_cnums:
+            columns = [int(c) for c in columns]
+        else:
+            columns = [c.lower() for c in columns]
+
+    return columns
+
+def get_colnames(hdu, columns):
+    allnames=[c.lower() for c in hdu.colnames]
+    colnames=[]
+    if isinstance(columns[0],basestring):
+        for name in columns:
+            try:
+                i=allnames.index(name)
+            except:
+                raise ValueError("column '%s' not found" % name)
+            colnames.append(allnames[i])
+    else:
+        ncols=len(allnames)
+        for cnum in columns:
+            if cnum < 0 or cnum > (ncols-1):
+                raise ValueError("column %s is out of bounds" % cnum)
+            colnames.append(allnames[cnum])
+    return colnames
+
+def format_val(val, quote_strings=False):
+    if isinstance(val, basestring):
+        if quote_strings:
+            out='"%s"' % val
+        else:
+            out='%s' % val
+    else:
+        if 'float' in val.dtype.name:
+            if val.dtype.itemsize >= 8:
+                out='%.16g' % val
+            else:
+                out='%.7g' % val
+        else:
+            out='%s' % val
+
+    return out
+
+def print_val(val, quote_strings=False):
+    if isinstance(val, basestring):
+        if quote_strings:
+            stdout.write('"%s"' % val)
+        else:
+            stdout.write('%s' % val)
+    else:
+        if 'float' in val.dtype.name:
+            if val.dtype.itemsize >= 8:
+                stdout.write('%.16g' % val)
+            else:
+                stdout.write('%.7g' % val)
+        else:
+            stdout.write('%s' % val)
+
+def print_header(data, names, delim, quote_strings=False):
+    ncol=len(names)
+    for j,n in enumerate(names):
+        if data[n][0].ndim > 0:
+            nv = data[n][0].size
+            for k in xrange(nv):
+                np = '%s%d' % (n,k)
+                print_val(np, quote_strings=quote_strings)
+                if k < (nv-1):
+                    stdout.write('%s' % delim)
+        else:
+            print_val(n, quote_strings=quote_strings)
+        if j < (ncol-1):
+            stdout.write('%s' % delim)
+    stdout.write('\n')
+
+
+def print_simple(data, names, delim, quote_strings=False, do_header=False):
+    """
+    A bit faster to generate the lines first then print
+    """
+    ncol=len(names)
+
+    if do_header:
+        print_header(data, names, delim, quote_strings=quote_strings)
+
+    for i in xrange(data.size):
+        row=[]
+        for j,n in enumerate(names):
+            if data[n][i].ndim > 0:
+                nv = len(data[n][0])
+                for v in data[n][i,:].flat:
+                    fval = format_val(v, quote_strings=quote_strings)
+                    row.append(fval)
+            else:
+                fval=format_val(data[n][i], quote_strings=quote_strings)
+                row.append(fval)
+
+        row[-1] += '\n'
+        line=delim.join(row)
+        stdout.write(line)
+
 def main():
     options, args = parser.parse_args(sys.argv[1:])
 
@@ -66,47 +162,28 @@ def main():
     ext = get_ext(args[1])
 
     columns = options.columns
-    header = options.header
+    do_header = options.header
     delim = options.delim
-    array_delim = options.array_delim
-    fancy = options.fancy
-    bracket_arrays = options.bracket_arrays
+    quote_strings = options.quote
+
     nrows2print = options.nrows
-    
-
-    keys = {}
-    if delim is not None:
-        keys['delim'] = delim
-    if array_delim is not None:
-        keys['array_delim'] = array_delim
-
-    keys['bracket_arrays'] = bracket_arrays
-    keys['fancy'] = fancy
-    aw = eu.numpy_util.ArrayWriter(**keys)
-
-    write_keys = {}
-
-    write_keys['header'] = header
-    if columns is not None:
-        columns = columns.split(',')
-        if not eu.misc.isstring(eval("'"+columns[0]+"'")):
-            columns = [int(c) for c in columns]
-        else:
-            columns = [c.lower() for c in columns]
-        write_keys['fields'] = columns
 
 
     fobj=fitsio.FITS(fname, lower=True)
     nrows = fobj[ext].info['nrows']
+
+    columns = get_columns(columns)
+    colnames=get_colnames(fobj[ext], columns)
 
     if nrows2print is not None:
         nrows2print = int(nrows2print)
         if nrows2print < nrows:
             nrows=nrows2print
 
-
     nperchunk = 1000
     nchunk = nrows/nperchunk
+    if nchunk==0:
+        nchunk=1
    
     for i in xrange(nchunk):
         i1 = i*nperchunk
@@ -118,20 +195,21 @@ def main():
         data=fobj[ext].read(rows=rows, columns=columns)
 
         if i > 0:
-            write_keys['header']=False
+            do_header=False
 
         # catch a particular type of error: broken pipe.
         # this is a python bug which occurs when sending
         # the output through a pipe
         try:
-            aw.write(data, **write_keys)
+            print_simple(data, colnames, delim, 
+                         quote_strings=quote_strings, 
+                         do_header=do_header)
         except IOError as (errno, strerror):
             if errno == 32:
                 pass
             else:
-                sys.stderr.write("Unexpected error:%s\n" % sys.exc_info()[0])
+                stderr.write("Unexpected error:%s\n" % sys.exc_info()[0])
                 sys.exit(1)
         del data
-    del aw
 
 main()
