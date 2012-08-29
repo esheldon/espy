@@ -9,6 +9,9 @@ Description:
     delimiter is a space but this can be specified using the -d/--delim
     keyword.
 
+    Complex selections can be made using the -w/--where option. e.g.
+        fitsprint -w 'ra > 27 && ra < 35' filename ext
+    
     The extension can be numerical, starting from zero, or a name.
 
 """
@@ -34,6 +37,11 @@ parser.add_option('-q','--quote',action="store_true",
                   help="quote strings")
 parser.add_option('-H','--header',action="store_true",
                   help="Write a simple header with column names")
+
+parser.add_option('-w','--where',default=None,
+                  help=("limit to rows that satisfy the input expression "
+                       "note this requires running through the entire table first "
+                       "and enough memory to hold the corresponding index array"))
 
 def get_ext(extin):
     try:
@@ -165,12 +173,19 @@ def main():
     do_header = options.header
     delim = options.delim
     quote_strings = options.quote
+    wstring = options.where
 
     nrows2print = options.nrows
 
 
     fobj=fitsio.FITS(fname, lower=True)
     nrows = fobj[ext].info['nrows']
+
+    if wstring is not None:
+        w=fobj[ext].where(wstring)
+        if w.size == 0:
+            return
+        nrows = w.size
 
     columns = get_columns(columns)
     colnames=get_colnames(fobj[ext], columns)
@@ -192,6 +207,9 @@ def main():
             i2 = nrows
 
         rows = numpy.arange(i1,i2)
+        if wstring is not None:
+            rows = w[rows]
+
         data=fobj[ext].read(rows=rows, columns=columns)
 
         if i > 0:
