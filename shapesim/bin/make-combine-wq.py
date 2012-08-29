@@ -14,8 +14,10 @@ from optparse import OptionParser
 parser=OptionParser(__doc__)
 parser.add_option('-p','--priority',default='med',
                   help='priority for queue')
-parser.add_option('--ncores',default=None,
-                  help='select this many cores on single nodes')
+parser.add_option('-g','--group',default=None,
+                  help='groups/groups')
+parser.add_option('-e','--extra',default=None,
+                  help='; separated')
 
 _wqtemplate="""
 command: |
@@ -26,7 +28,8 @@ command: |
     module unload gmix_image && module load gmix_image/work
     python $ESPY_DIR/shapesim/bin/combine-trials.py %(run)s %(i1)d %(i2)d
 
-%(extra)s
+%(group)s
+mode: bynode
 job_name: %(job_name)s
 priority: %(pri)s\n"""
 
@@ -42,10 +45,13 @@ def main():
     c = shapesim.read_config(run)
     cs = shapesim.read_config(c['sim'])
 
+    group=options.group
+    if group is not None:
+        group = 'group: ['+group+']'
+
     extra=''
-    if options.ncores is not None:
-        ncores=int(options.ncores)
-        extra='mode: bycore1\nN: %d' % ncores
+    if options.extra is not None:
+        extra='\n'.join( options.extra.split(';') )
 
     wqd = shapesim.get_wq_dir(run, combine=True)
     if not os.path.exists(wqd):
@@ -76,6 +82,7 @@ def main():
                                         'run':run, 
                                         'i1':i1,
                                         'i2':i2,
+                                        'group':group,
                                         'extra':extra,
                                         'pri':options.priority}
                 fobj.write(wqscript)

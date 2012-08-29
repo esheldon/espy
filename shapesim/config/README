@@ -209,7 +209,7 @@ gmix-fit
         et05r01,et06r01,et07r01,et08r01,et09r01,et10r01
             .00     .01     .02     .03     .04     .05 
 
-        TODO Same as above but using delta function and admon S/N
+        Same as above but using delta function and admom S/N
         et05r02,et06r02,et07r02,et08r02,et09r02,et10r02
             .00     .01     .02     .03     .04     .05 
 
@@ -230,11 +230,15 @@ gmix-fit
                     edg02r03 19 0.80    matched    todo
                     edg02r04  0 0.05    matched    todo
 
-    edg03r02,edg04r01,edg05r01,edg06r01,edg07r01,edg08r01,edg14r01
-    .01      0.02     0.03     0.04     0.05     0.06     0.0
+    edg14r01,edg03r02,edg04r01,edg05r01,edg06r01,edg07r01,edg08r01
+         0.0      .01     0.02     0.03     0.04     0.05     0.06
     elliptical psf and shear zero
     psf ellipticities given above
     s2nvals: [10,20,30,50,75,100]
+
+    # these with admom s2n and delta function
+    edg14r02,edg03r05,edg04r02,edg05r02,edg06r02,edg07r08,edg08r02
+         .00      .01     0.02     0.03     0.04     0.05     0.06
 
     from 0 to 0.05
         edg03
@@ -305,7 +309,7 @@ gmix-fit
                     run      ie    e  s2n_method   notes
                     edg08r01  2 0.26    matched    done
 
-        edg08
+        edg14
             elliptical double gaussian psf, 
                 e1=0.06,e2=0
                 shear=0,0
@@ -317,8 +321,11 @@ gmix-fit
 
 
     *round* psf and shear increasing.  See above for edg02
-    edg09,edg02,edg10,edg11,edg12,edg13
-      .00   .01   .02   .03   .04   .05
+    edg09r01,edg02r02,edg10r01,edg11r01,edg12r01,edg13r01
+         .00      .01      .02      .03      .04      .05
+    # these with admom s2n and delta function
+    edg09r02,edg02r03,edg10r02,edg11r02,edg12r02,edg13r02
+         .00      .01      .02      .03      .04      .05
 
         edg09
             round double gaussian psf

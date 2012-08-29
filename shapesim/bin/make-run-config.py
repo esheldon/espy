@@ -131,6 +131,8 @@ sim: %(sim_name)s
 # ellip value
 runtype: bys2n
 
+generic_prior: true
+
 s2n_method: admom
 s2n_fac: %(s2n_fac)s
 

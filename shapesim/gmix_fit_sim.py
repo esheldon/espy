@@ -254,9 +254,9 @@ class GMixFitSim(shapesim.BaseSim):
         s2n = gm.get_s2n()
 
         dof=gm.get_dof()
+        chi2per=chi2perarr[w]
         prob = scipy.stats.chisqprob(chi2per*dof, dof)
 
-        chi2per=chi2perarr[w]
 
         popt=gm.get_pars()
         pcov=gm.get_pcov()

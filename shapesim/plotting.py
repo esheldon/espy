@@ -60,6 +60,13 @@ class MultiPlotterBase(dict):
                     'gmix-fit-et08r01',
                     'gmix-fit-et09r01',
                     'gmix-fit-et10r01']
+        elif self.set == 'set-s2n-et02':
+            runs = ['gmix-fit-et05r02',
+                    'gmix-fit-et06r02',
+                    'gmix-fit-et07r02',
+                    'gmix-fit-et08r02',
+                    'gmix-fit-et09r02',
+                    'gmix-fit-et10r02']
         elif self.set == 'set-e-gg01':
             runs = ['gmix-fit-gg05r02',
                     'gmix-fit-gg05r03',
@@ -76,6 +83,7 @@ class MultiPlotterBase(dict):
                     'gmix-fit-edg07r07']
 
         elif self.set == 'set-epsf-edg01':
+            # elliptical psfs, matched S/N
             runs = ['gmix-fit-edg14r01',
                     'gmix-fit-edg03r02',
                     'gmix-fit-edg04r01',
@@ -83,6 +91,16 @@ class MultiPlotterBase(dict):
                     'gmix-fit-edg06r01',
                     'gmix-fit-edg07r01',
                     'gmix-fit-edg08r01']
+        elif self.set == 'set-epsf-edg02':
+            # elliptical psfs, admom S/N, delta func
+            runs = ['gmix-fit-edg14r02',
+                    'gmix-fit-edg03r05',
+                    'gmix-fit-edg04r02',
+                    'gmix-fit-edg05r02',
+                    'gmix-fit-edg06r02',
+                    'gmix-fit-edg07r08',
+                    'gmix-fit-edg08r02']
+
         else:
             raise ValueError("don't know about set %s" % self.set)
         self.runs = runs
@@ -337,7 +355,7 @@ class MultiPlotterVsShear(MultiPlotterBase):
         colors = self.colors
         linetypes=self.linetypes
 
-        s2n_name='s2n_matched'
+        s2n_name='s2n_admom'
         tag1='shear1'
         tag2='shear2'
         errtag1='shear1err'
@@ -481,7 +499,7 @@ class MultiPlotterVsShear(MultiPlotterBase):
                                      fontsize=2.5,halign='left')
             arr[irow,icol].add(s2nlab)
             if irow == 3:
-                arr[irow,icol].yrange = [-0.019,0.007]
+                arr[irow,icol].yrange = [-0.007,0.01]
             elif irow == 2:
                 arr[irow,icol].yrange = [-0.0024,0.0039]
             elif irow == 1:
@@ -505,7 +523,7 @@ class MultiPlotterVsShear(MultiPlotterBase):
         if self.n_s2n == 12:
             keyrow=nrow-1
             keycol=0
-            pos=(.80,.45)
+            pos=(.80,.30)
         else:
             keyrow=nrow-1
             keycol=ncol-1
@@ -696,7 +714,7 @@ class MultiPlotterVsShear(MultiPlotterBase):
         else:
             klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$: '
         fsize=3
-        labypos=.25
+        labypos=.9
         klab = biggles.PlotLabel(.65,labypos,klabtext,
                                  fontsize=fsize,halign='right')
         key=biggles.PlotKey(.85,labypos,kplots,halign='right',fontsize=fsize)
@@ -708,7 +726,7 @@ class MultiPlotterVsShear(MultiPlotterBase):
         cplt.add(biggles.Curve([-50,500],[0,0]))
         mplt.add(biggles.Curve([-50,500],[0,0]))
 
-        mplt.yrange=[-0.1,.1]
+        mplt.yrange=[-0.02,.2]
 
         xrng=[-1,110]
         cplt.xrange=xrng
