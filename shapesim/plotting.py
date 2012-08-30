@@ -46,6 +46,7 @@ class MultiPlotterBase(dict):
                     'gmix-fit-edg07r01',
                     'gmix-fit-edg08r01']
         elif self.set == 'set-s2n-edg02':
+            # vs s2n but also calibration error
             # round psfs
             runs = ['gmix-fit-edg09r01',
                     'gmix-fit-edg02r02',
@@ -53,7 +54,18 @@ class MultiPlotterBase(dict):
                     'gmix-fit-edg11r01',
                     'gmix-fit-edg12r01',
                     'gmix-fit-edg13r01']
+        elif self.set == 'set-s2n-edg03':
+            # vs s2n but also calibration error
+            # round psfs
+            # admom s/n and delta function
+            runs = ['gmix-fit-edg09r02',
+                    'gmix-fit-edg02r03',
+                    'gmix-fit-edg10r02',
+                    'gmix-fit-edg11r02',
+                    'gmix-fit-edg12r02',
+                    'gmix-fit-edg13r02']
         elif self.set == 'set-s2n-et01':
+            # also calibration error
             runs = ['gmix-fit-et05r01',
                     'gmix-fit-et06r01',
                     'gmix-fit-et07r01',
@@ -61,6 +73,8 @@ class MultiPlotterBase(dict):
                     'gmix-fit-et09r01',
                     'gmix-fit-et10r01']
         elif self.set == 'set-s2n-et02':
+            # also calibration error
+            # this one admom s/n and delta func
             runs = ['gmix-fit-et05r02',
                     'gmix-fit-et06r02',
                     'gmix-fit-et07r02',
