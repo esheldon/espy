@@ -1,28 +1,21 @@
-# dt03 is a ring test, shear (0.01,-0.01)
+
 run: gmix-fit-dt03r06
 sim: sim-dt03
 
-generic_prior: true
-use_nlsolver: false
-
+# we will use all the s2 values from the sim, a set of s/n values and a single
+# ellip value
 runtype: bys2n
 
-# trim the image before adding noise
+generic_prior: true
+
+s2n_method: admom
+s2n_fac: 160
+
 retrim: true
 retrim_fluxfrac: 0.9973
-
-# this works in the algorithm for determining number of trials
-# default 0.4!
-s2n_fac: 80
-
-# optimal S/N estimat
-s2n_method: admom
-
-# don't use a smaller aperture for S/N
 s2ncalc_fluxfrac: null
 
-
-ie: 7 # 0.33
+ie: 7  # 0.33
 s2nvals: [10,15,20,25,30,40,60,80,100]
 
 s2n_psf: 1.0e+8
@@ -30,13 +23,8 @@ s2n_psf: 1.0e+8
 use_cache: true
 add_to_cache: false
 
-# type of parametrization
-ptype: Tfrac
-use_jacob: false
-
 verbose: false
 
-# we should try with higher values to see what happens
 ngauss_psf: 3
 ngauss_obj: 3
 
