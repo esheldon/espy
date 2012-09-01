@@ -118,13 +118,23 @@ gmix-fit
                                                    bytrial for all
 
                 byellip
+                    s2n_fac=80
                     run     S/N  nrepeat  notes
-                    gg05r02 100   algo    todo
-                    gg05r03  75   algo    todo
-                    gg05r04  50   algo    todo
-                    gg05r05  30   algo    todo
-                    gg05r06  20   algo    todo
-                    gg05r07  10   algo    todo
+                    gg05r02 100   algo    done
+                    gg05r03  75   algo    done
+                    gg05r04  50   algo    done
+                    gg05r05  30   algo    done
+                    gg05r06  20   algo    done
+                    gg05r07  10   algo    done
+
+                    These will admom S/N.  s2n_fac=160
+                    run     S/N  nrepeat  notes
+                    gg05r08 100   algo    todo
+                    gg05r09  75   algo    todo
+                    gg05r10  50   algo    todo
+                    gg05r11  30   algo    todo
+                    gg05r12  20   algo    todo
+                    gg05r13  10   algo    todo
 
 
 

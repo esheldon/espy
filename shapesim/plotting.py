@@ -82,12 +82,22 @@ class MultiPlotterBase(dict):
                     'gmix-fit-et09r02',
                     'gmix-fit-et10r02']
         elif self.set == 'set-e-gg01':
+            # vs galaxy ellipticity
             runs = ['gmix-fit-gg05r02',
                     'gmix-fit-gg05r03',
                     'gmix-fit-gg05r04',
                     'gmix-fit-gg05r05',
                     'gmix-fit-gg05r06',
                     'gmix-fit-gg05r07']
+        elif self.set == 'set-e-gg02':
+            # vs galaxy ellipticity
+            # admom S/N
+            runs = ['gmix-fit-gg05r08',
+                    'gmix-fit-gg05r09',
+                    'gmix-fit-gg05r10',
+                    'gmix-fit-gg05r11',
+                    'gmix-fit-gg05r12',
+                    'gmix-fit-gg05r13']
         elif self.set == 'set-e-edg01':
             runs = ['gmix-fit-edg07r02',
                     'gmix-fit-edg07r03',
@@ -144,7 +154,7 @@ class MultiPlotterVsE(MultiPlotterBase):
         if self.n_s2 != 4:
             raise ValueError("adapt for n_s2 != 4")
         #self.colors = ['blue','magenta','green','red']
-        self.colors=['red','forestgreen','NavajoWhite3','blue']
+        self.colors=list(reversed(['red','forestgreen','NavajoWhite3','blue']))
         self.linetypes=['solid','dotdashed','dashed','dotted']
         self.point_types=['filled circle','filled diamond','filled square','filled triangle']
 
@@ -816,7 +826,7 @@ class MultiPlotterVsEpsf(MultiPlotterBase):
         colors = self.colors
         linetypes=self.linetypes
 
-        s2n_name='s2n_matched'
+        s2n_name='s2n_admom'
         tag1='shear1'
         tag2='shear2'
         errtag1='shear1err'
@@ -1146,9 +1156,11 @@ class SimPlotter(dict):
 
             s2 = median(st['s2'])
 
+            s2n_name='s2n_admom'
+            xlabel = 'S/N'
+            """
             if 's2n_matched' in st.dtype.names:
                 s2n_name='s2n_matched'
-                xlabel = r'$S/N$'
             elif 's2n_uw' in st.dtype.names:
                 s2n_name='s2n_uw'
                 xlabel = r'$S/N_{uw}$'
@@ -1156,6 +1168,7 @@ class SimPlotter(dict):
                 # assuming matched
                 s2n_name='s2n'
                 xlabel = r'$S/N$'
+            """
 
             s2n = st[s2n_name]
 

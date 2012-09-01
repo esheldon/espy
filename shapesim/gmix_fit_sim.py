@@ -220,7 +220,7 @@ class GMixFitSim(shapesim.BaseSim):
 
             else:
                 Tpositive=True
-                if psf is not None:
+                if psf is not None and ngauss > 1:
                     Tpositive=False
                 gm = gmix_image.GMixFitCoellip(image, skysig,
                                                guess,width,
@@ -740,15 +740,11 @@ class GMixFitSim(shapesim.BaseSim):
                 raise ValueError("only 1 or 3 gauss prepsf for now")
         else:
             if ngauss==1:
-                prior[4] = T
-                prior[5] = counts
-
                 prior[0] += 0.02*(randu()-0.5)  # cen0
                 prior[1] += 0.02*(randu()-0.5)  # cen1
                 prior[2],prior[3] = randomize_e1e2(e1,e2)
                 prior[4] = T + T*0.1*(randu()-0.5)
-                prior[5] = counts + counts1*0.1*(randu()-0.5)
-
+                prior[5] = counts + 0.1*counts*(randu()-0.5)
             elif ngauss==2:
                 self.wlog("    ngauss:",ngauss)
 

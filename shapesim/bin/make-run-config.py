@@ -35,6 +35,8 @@ sim: %(sim_name)s
 # ellip value
 runtype: byellip
 
+generic_prior: true
+
 s2n_method: admom
 s2n_fac: %(s2n_fac)s
 
@@ -72,6 +74,54 @@ itmax: 100
 # set to null for new seed each time. Good when adding to the cache
 seed: null
 """
+
+gg_bys2n_template="""
+run: %(run_name)s
+sim: %(sim_name)s
+
+runtype: bys2n
+
+generic_prior: true
+
+s2n_method: admom
+s2n_fac: %(s2n_fac)s
+
+retrim: false
+retrim_fluxfrac: null
+s2ncalc_fluxfrac: null
+
+ie: %(ie)s  # %(e_val)0.2f
+s2nvals: [%(s2n_vals)s]
+
+s2n_psf: 1.0e+8
+
+use_cache: false
+add_to_cache: false
+
+verbose: false
+
+ngauss_psf: 1
+ngauss_obj: 1
+
+coellip_psf: true
+coellip_obj: true
+
+maxtry: 1
+maxtry_psf: 1
+
+# this is for the gaussian PSF fit, since admom gets gaussians too perfectly
+# trying out doing this automatically as needed
+randomize: true
+
+# number of times to retry when a trial fails.  This generates
+# a new trial, unlike max_retry above which retries with a 
+# randomized guess
+itmax: 100
+
+# set to null for new seed each time. Good when adding to the cache
+seed: null
+"""
+
 
 
 
@@ -299,6 +349,14 @@ def main():
                                       's2n_vals':s2n_vals,
                                       'ie':ie,
                                       'e_val':e_val}
+        elif simtype == 'gg':
+            text=gg_bys2n_template % {'run_name':run_name,
+                                      'sim_name':sim_name,
+                                      's2n_fac':s2n_fac,
+                                      's2n_vals':s2n_vals,
+                                      'ie':ie,
+                                      'e_val':e_val}
+
         else:
             raise ValueError("support other sim types")
     elif run_type == 'byellip':

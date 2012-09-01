@@ -104,7 +104,7 @@ def main():
         for i2 in xrange(n2):
             groups=''
             if options.groups is not None:
-                groups = 'group: [%s]' % groups
+                groups = 'group: [%s]' % options.groups
             elif options.i2new is not None:
                 if i2 <= int(options.i2new):
                     groups='group: [new,new2]'

@@ -48,6 +48,8 @@ def main():
     group=options.group
     if group is not None:
         group = 'group: ['+group+']'
+    else:
+        group=''
 
     extra=''
     if options.extra is not None:
