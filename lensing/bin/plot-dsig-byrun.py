@@ -12,10 +12,10 @@ import lensing
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
-parser.add_option("-s",dest="show",action="store_true",default=False,
+parser.add_option("-s",'--show',action="store_true",default=False,
                   help="Show plot on screen.  Default %default")
-parser.add_option("-t",dest="type",default='corrected',
-                  help="Should be binned, corrected, jackknife.  Default %default")
+parser.add_option("-t",'--type',default='corrected',
+                  help="Should be binned, corrected, corrected-ssh, jackknife.  Default %default")
 parser.add_option("-o","--osig",action="store_true",
                   help="Make plots of osig")
 parser.add_option("--compare-osig",action="store_true",

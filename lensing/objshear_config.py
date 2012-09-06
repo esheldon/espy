@@ -52,7 +52,7 @@ class ObjshearRunConfig(dict):
     # inputs to objshear
     def write_config(self):
         fs='hdfs'
-        lens_file = lensing.files.sample_file(type='lcat',sample=self['lens_sample'],fs=fs)
+        #lens_file = lensing.files.sample_file(type='lcat',sample=self['lens_sample'],fs=fs)
         config_file = lensing.files.sample_file(type='config',sample=self['run'], fs=fs)
 
         print 'Writing config file:',config_file
@@ -62,7 +62,7 @@ class ObjshearRunConfig(dict):
         with eu.hdfs.HDFSFile(config_file) as hdfs_file:
             with open(hdfs_file.localfile,'w') as local_file:
 
-                fmt='%-17s %s\n'
+                fmt='%-17s = %s\n'
 
                 for key in ['H0','omega_m','npts']:
                     local_file.write(fmt % (key, self['cosmo_config'][key]))
@@ -79,11 +79,11 @@ class ObjshearRunConfig(dict):
 
                 if self['src_config']['sigmacrit_style'] == 2:
                     zlvals=self.make_zlvals()
-                    local_file.write(fmt % ('nzl',zlvals.size))
+                    #local_file.write(fmt % ('nzl',zlvals.size))
 
-                    local_file.write('zlvals ')
+                    local_file.write('zlvals = [')
                     zlvals.tofile(local_file, sep=' ')
-                    local_file.write('\n')
+                    local_file.write(']\n')
 
                 if 'zmin' in self['lens_config']:
                     local_file.write(fmt % ('min_zlens_interp',self['lens_config']['zmin']))

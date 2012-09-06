@@ -89,9 +89,9 @@ class WQLens(dict):
 
     def write_src_reduce_scripts(self):
         """
-        reduce across lenses at fixed source split
+        reduce across sources at fixed lens split
         """
-        lens_nsplit=self['src_config']['nsplit']
+        lens_nsplit=self['lens_config']['nsplit']
 
         for i in xrange(lens_nsplit):
             text=self.reduce_src_text(i)
@@ -105,7 +105,7 @@ class WQLens(dict):
         """
         Collate each of the lens splits
         """
-        lens_nsplit=self['src_config']['nsplit']
+        lens_nsplit=self['lens_config']['nsplit']
 
         for i in xrange(lens_nsplit):
             text=self.collate_text(i)
@@ -181,7 +181,7 @@ class WQLens(dict):
 
         groups = self['groups']
 
-        job_name = 'lens-reduce-%s' % self['run']
+        job_name = 'srcred-%s-%03i' % (self['run'],lens_split)
 
         extra=''
         s=_reduce_script % {'pattern':pattern,
@@ -233,8 +233,15 @@ class WQLens(dict):
 
 
     def collate_text(self, lens_split):
+        extra=''
+        job_name = 'collate-%s-%03i' % (self['run'],lens_split)
         return _collate_script % {'run':self['run'],
-                                  'lens_split':lens_split}
+                                  'lens_split':lens_split,
+                                  'job_name':job_name,
+                                  'groups':self['groups'],
+                                  'priority':self['priority'],
+                                  'extra':extra}
+
 _shear_script="""
 command: |
     source ~esheldon/.bashrc
@@ -380,4 +387,8 @@ _collate_script="""
 command: |
     source ~esheldon/.bashrc
     python ${ESPY_DIR}/lensing/bin/collate-reduced.py -s %(lens_split)s %(run)s
+%(groups)s
+priority: %(priority)s
+job_name: %(job_name)s
+%(extra)s
 """

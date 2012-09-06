@@ -40,6 +40,10 @@ def main():
     ntot=0
     ii=0
     for ipass in [1,2]:
+        if ipass==1:
+            print('pass 1 to get sizes')
+        else:
+            print('now copying')
         for i in xrange(nsplit):
             t=lensing.files.collated_read(sample=run,lens_split=i,
                                           verbose=False)
@@ -57,5 +61,5 @@ def main():
                 data[ii:ii+t.size] = t
                 ii += t.size
 
-    eu.io.write(outfile, data, verbose=True)
+    eu.io.write(outfile, data, clobber=True, verbose=True)
 main()

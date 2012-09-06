@@ -116,10 +116,12 @@ class BinnerBase(dict):
         data = data[binnum]
 
         keys['plot_label'] = self.bin_label(binnum)
-        lensing.plotting.plot2dsig(data['r'], 
-                                   data['dsig'], data['dsigerr'],
-                                   data['osig'], data['dsigerr'],
-                                   **keys)
+        plt=lensing.plotting.plot2dsig(data['r'], 
+                                       data['dsig'], data['dsigerr'],
+                                       data['r'],
+                                       data['osig'], data['dsigerr'],
+                                       **keys)
+        return plt
 
     def plot_dsig_osig_byrun(self, run, type, **keys):
         """
@@ -129,7 +131,16 @@ class BinnerBase(dict):
 
         """
         for binnum in xrange(self['nbin']):
-            self.plot_dsig_osig_byrun_bin(run, type, binnum, **keys)
+            plt=self.plot_dsig_osig_byrun_bin(run, type, binnum, **keys)
+            epsfile=lensing.files.sample_file(type=type+'-plots',
+                                              sample=run,
+                                              name=self.name(),
+                                              extra='-osig-comp-%02i' % binnum,
+                                              ext='eps')
+            stdout.write("Plotting to file: %s\n" % epsfile)
+            plt.write_eps(epsfile)
+            converter.convert(epsfile, dpi=120, verbose=True)
+
 
     def plot_dsig_byrun_1var(self, run, type, show=False):
         """
@@ -167,6 +178,10 @@ class BinnerBase(dict):
             nrow = 4
             ncol = 4
             aspect_ratio = 1.0
+        elif self['nbin'] == 2:
+            nrow = 2
+            ncol=1
+            aspect_ratio=1.5
         else:
             raise ValueError("Unsupported nbin: %s" % self['nbin'])
 

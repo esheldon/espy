@@ -38,16 +38,16 @@ type = args[0]
 sample = args[1]
 if type == 'scat':
     # this will also run split() on the sample
-    lensing.scat.create_input(sample)
+    lensing.scat.create_input(sample=sample)
 elif type == 'lcat':
     if options.split is not None:
-        lensing.lcat.create_input(sample, lens_split=int(options.split))
+        lensing.lcat.create_input(sample=sample, lens_split=int(options.split))
     elif options.nrand is not None:
-        lensing.lcat.create_input(sample, 
+        lensing.lcat.create_input(sample=sample, 
                                   nrand=int(options.nrand), 
                                   extra=options.extra_name)
     else:
-        lensing.lcat.create_input(sample)
+        lensing.lcat.create_input(sample=sample)
 else:
     raise ValueError("type must be 'scat' or 'lcat'")
 

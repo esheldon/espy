@@ -41,7 +41,6 @@ def main():
     lsample = conf['lens_config']['sample']
     nbin = conf['lens_config']['nbin']
 
-
     if lens_split is not None:
         lens_split=int(lens_split)
         # in this case zindex must be in the catalog, so we can match

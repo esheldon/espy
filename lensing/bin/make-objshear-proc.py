@@ -14,13 +14,12 @@ Description:
         Write the config file for sobjshear
     shear:
         Write the wq script for shear for each lens/src split
-
-
     src_reduce:
         Write the set of wq scripts for reducing across sources
     collate:
         Write scripts to collate each of the lens splits
 
+    # these are optional
     lens_concat:
         A script to concatenate all the lens splits together
         into a final reduced file.  useful if not collating
@@ -38,7 +37,7 @@ import lensing
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
-parser.add_option("-t",dest="types",default="config,shear",
+parser.add_option("-t",dest="types",default="config,shear,src_reduce,collate",
                   help="types to make.  Default is %default")
 parser.add_option("-g",dest="groups",default="",
                   help="machine groups to use.  Default is %default")

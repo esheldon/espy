@@ -7,32 +7,43 @@ I'll go through each below, but for now assume you have a lens run called rm03s0
 and a randoms run called r03s06, and the config files are set up, and scinv
 exists.
 
+Note for not randoms we will go ahead and combine the collated lens splits
+
     # if the scat are not already generated
     /bin/make-objshear-input.py scat scat_sample
 
     #
-    # now generate the lens samples and processing scripts, condor
+    # now generate the lens samples and wq scripts
     #
-    /bin/make-objshear-input.py lcat rm03s06
+
+    # note lcat are now always split
+    /bin/make-objshear-input.py lcat rm03
+
+    # creates config,shear,src_reduce,collate
     /bin/make-objshear-proc.py rm03s06
 
     # in the $LENSDIR/proc/run directory
-    incsub run-{run}-*.yaml
+    incsub run-${run}-[0-9]*.yaml
     
-    # we then need to reduce the splits
-    wq sub -b run-{run}-reduce.yaml
+    # we then need to reduce across sources at fixed lens split
+    incsub run-${run}-src-reduce-*.yaml
 
-    # and collate the results with the original catalog
-    /bin/collate-reduced.py rm03s06
+    # and then collate each of the lens splits
+    incsub run-${run}-collate-*.yaml
 
-    # bin by lambda into 12 bins, must have defined this binnign
+    # for lenses we need to combine the collations
+    python $ESPY_DIR/lensing/bin/combine-collated-chunks.py rm03s06
+
+
+    # This would bin by lambda into 12 bins, must have defined this binning
     /bin/bin-lenses.py rm03s06 lambda 12
 
     # plot the binning (not corrected, jackknife yet)
     /bin/plot-dsig-byrun.py -t binned rm03s06 lambda 12
 
     #
-    # now randoms with sample svrand01
+    # now randoms with sample svrand01. For randoms we will not do the final
+    # collation across lenses because of memory constraints
     #
 
     # generation of randoms is slow, so do it in chunks.
@@ -57,7 +68,7 @@ exists.
 
     # now
     # - submit the shear wq scripts 
-    # - submit the src reduce wq scripts.
+    # - submit the src reduce wq scripts (reduce across sources at fixed lens split)
     # - Optionally: submit the lens concat script
     # - collate the results in the splits
     # - Optionally: combine the collated splits
@@ -87,6 +98,9 @@ Then you must make sure you have source scinv in the
 sweeps_reduct/regauss/04.cols by running
 
     /bin/add-scinv.py
+
+Sometimes you can just copy a scinv{sample}.col 
+or symlink if selection criteria have not changed
 
 Then create input catalogs. 
 
@@ -215,7 +229,10 @@ from . import regauss
 from . import regauss_test
 from . import regauss_sim
 
-from . import gmix_sdss
+try:
+    from . import gmix_sdss
+except:
+    pass
 
 from . import princeton
 from . import files

@@ -47,12 +47,12 @@ def instantiate_sample(**keys):
     else:
         raise ValueError("don't know about catalog %s" % conf['catalog'])
 
-def create_input(sample, **keys):
+def create_input(**keys):
     """
-    e.g.  create_input('01')
+    e.g.  create_input(sample='sv01')
     """
 
-    c = instantiate_sample(sample, **keys)
+    c = instantiate_sample(**keys)
     c.create_objshear_input(**keys)
 
 def plot_coverage(sample):
@@ -96,7 +96,7 @@ class LcatBase(dict):
         fname = lensing.files.sample_file(type='lcat',sample=self['sample'], ext='dat')
         return fname
 
-    def read_original(self):
+    def read_original(self, **keys):
         infile = self.original_file()
         stdout.write("Reading original catalog: %s\n" % infile)
         data = eu.io.read(infile, lower=True, ensure_native=True)
@@ -132,10 +132,16 @@ class SDSSVoids(LcatBase):
             data = robj[:]
 
         print("writing:",fout)
-        eu.io.write(fout, data)
+        output = eu.numpy_util.add_fields(data, [('zindex','i8')])
+        output['zindex'] = numpy.arange(output.size)
+        eu.io.write(fout, output, clobber=True)
 
 
     def create_objshear_input(self, **keys):
+
+        nsplit=self['nsplit']
+        if nsplit != 1:
+            raise ValueError("expected nsplit=1 for SDSSVoids")
 
         data = self.read_original()
         orig_size = data.size
@@ -176,7 +182,7 @@ class SDSSVoids(LcatBase):
         output['dec']       = data['dec'][good]
         output['z']         = data['z'][good]
         output['maskflags'] = maskflags[good]
-        lensing.files.lcat_write(sample=self['sample'], data=output)
+        lensing.files.lcat_write(sample=self['sample'], data=output, lens_split=0)
 
     def get_maskflags(self, ra, dec, z):
         """
@@ -283,7 +289,7 @@ class SDSSRandom(LcatBase):
         # we might want to increase this!
         self['maxres'] = 2048
 
-    def read_original(self):
+    def read_original(self, **keys):
         """
         For randoms, the lens input is the catalog
         """
@@ -768,7 +774,7 @@ class RedMapper(LcatBase):
         infile = path_join(d, f)
         return infile
 
-    def read_original(self):
+    def read_original(self, **keys):
         infile = self.original_file()
         stdout.write("Reading original catalog: %s\n" % infile)
         data = eu.io.read(infile, lower=True, ensure_native=True)
@@ -1091,7 +1097,7 @@ class MaxBCG(LcatBase):
         infile = path_join(d, f)
         return infile
 
-    def read_original(self):
+    def read_original(self, **keys):
         infile = self.original_file()
         stdout.write("Reading original catalog: %s\n" % infile)
         data = eu.io.read(infile, lower=True, ensure_native=True)
@@ -1235,7 +1241,7 @@ class DESMockLensCatalog(dict):
         infile = path_join(d, f)
         return infile
 
-    def read_original(self):
+    def read_original(self, **keys):
         infile = self.original_file()
         if not os.path.exists(infile):
             raise ValueError("File not found: %s\n" % infile)

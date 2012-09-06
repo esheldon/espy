@@ -74,16 +74,20 @@ class DR8Catalog(dict):
             e1name = 'e1_rg_dt'+rmstr+'_eq'
             e2name = 'e2_rg_dt'+rmstr+'_eq'
             flagname = 'dt'+rmstr+'_flag'
+
         else:
             e1name = 'e1_rg_eq'
             e2name = 'e2_rg_eq'
             flagname = 'corrflags_rg'
 
+        magname='cmodelmag_dered_r'
+        Rname = 'R_rg_'+self['filter']
+
         e1name += '_'+self['filter']
         e2name += '_'+self['filter']
         errname = 'uncer_rg_'+self['filter']
         flagname += '_'+self['filter']
-        return e1name,e2name,errname,flagname
+        return e1name,e2name,errname,flagname,magname,Rname
     
     def scinv_colname(self):
         return 'scinv%s' % self['sample']
@@ -107,7 +111,7 @@ class DR8Catalog(dict):
         output['ra'][:] = self.rgcols['ra'][keep]
         output['dec'][:] = self.rgcols['dec'][keep]
 
-        e1name,e2name,errname,flagname=self.get_colnames()
+        e1name,e2name,errname,flagname,magname,Rname=self.get_colnames()
         # the code requires no minus sign for matt's simulations, but
         # does seem to require one for my shapes converted to equatorial
         print("Adding minus sign to e1")
@@ -117,13 +121,17 @@ class DR8Catalog(dict):
         output['g2'][:] =  self.rgcols[e2name][keep]/2
         output['err'][:] = self.rgcols[errname][keep]/2
 
+        output['mag'][:] = self.rgcols[magname][keep]
+        output['R'][:] = self.rgcols[Rname][keep]
+
         scinvcol = self.scinv_colname()
         print("  reading",scinvcol)
         output['scinv'][:] = self.rgcols[scinvcol][keep]
         
-        #lensing.files.scat_write_ascii(sample=self['sample'], data=output)
         if self['nsplit'] > 0:
             self.split(data=output)
+        else:
+            lensing.files.scat_write_ascii(sample=self['sample'], data=output)
 
     def split(self, data=None):
         """
@@ -133,6 +141,8 @@ class DR8Catalog(dict):
         nsplit = self['nsplit']
         if nsplit == 0:
             return
+
+        print('splitting into:',self['nsplit'])
 
         if data is None:
             data = self.read()
@@ -150,7 +160,7 @@ class DR8Catalog(dict):
                 end += nleft
             sdata = data[beg:end]
 
-            lensing.files.scat_write_ascii(sample=self['sample'], data=sdata, split=i)
+            lensing.files.scat_write_ascii(sample=self['sample'], data=sdata, src_split=i)
 
 
     def read(self, split=None):
@@ -176,13 +186,14 @@ class DR8Catalog(dict):
         if match_column not in self.rgcols:
             raise ValueError("First use regauss.zphot_match() to match zphot and regauss")
 
+        e1name,e2name,errname,flagname,magname,Rname=self.get_colnames()
+
         print("reading:",match_column)
         m = self.rgcols[match_column][:]
         print("Reading R")
-        R = self.rgcols['R_rg_'+filter][:]
+        R = self.rgcols[Rname][:]
 
 
-        e1name,e2name,errname,flagname=self.get_colnames()
         print("reading e1:",e1name)
         e1 = self.rgcols[e1name][:]
         print("reading e2:",e2name)
@@ -504,6 +515,7 @@ class DESMockSrcCatalog(dict):
         nsplit = self['nsplit']
         if nsplit == 0:
             return
+        print('splitting into:',self['nsplit'])
 
         data = self.read()
 
@@ -521,7 +533,7 @@ class DESMockSrcCatalog(dict):
                 end += nleft
             sdata = data[beg:end]
 
-            lensing.files.scat_write_ascii(sample=self['sample'], data=sdata, split=i)
+            lensing.files.scat_write_ascii(sample=self['sample'], data=sdata, src_split=i)
 
 
     def original_file(self, scinv=False):

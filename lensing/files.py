@@ -45,7 +45,7 @@ except:
     pass
 
 finfo={}
-finfo['lcat']     = {'subdir':'lcat/{sample}',  'name':'lcat-{sample}{extra}.{ext}', 'default_ext':'dat'}
+#finfo['lcat']     = {'subdir':'lcat/{sample}',  'name':'lcat-{sample}{extra}.{ext}', 'default_ext':'dat'}
 finfo['scat']     = {'subdir':'scat/{sample}',  'name':'scat-{sample}.{ext}','default_ext':'dat'}
 
 finfo['lcat-split']  = {'subdir':'lcat/{sample}',  
@@ -116,7 +116,7 @@ finfo['fit']       = {'subdir':'lensout/{sample}/binned-{name}',
 
 
 # this config is objshear_config not the yaml files
-finfo['config']   = {'subdir':'proc/{sample}', 'name':'run-{sample}.config'}
+finfo['config']   = {'subdir':'proc/{sample}', 'name':'run-{sample}.cfg'}
 
 finfo['wq-split']   = {'subdir':'proc/{sample}', 
                        'name':'run-{sample}-{lens_split}-{src_split}.yaml'}
@@ -615,7 +615,9 @@ def scat_dtype(sigmacrit_style, nzl=None):
         ('dec','f8'),
         ('g1','f8'),
         ('g2','f8'),
-        ('err','f8')]
+        ('err','f8'),
+        ('mag','f8'),
+        ('R','f8')]
         #('hpixid','i8')]
 
     if sigmacrit_style == 1:
