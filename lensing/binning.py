@@ -61,6 +61,8 @@ class BinnerBase(dict):
         self['nbin'] = nbin
         self.set_bin_ranges()
 
+        self.dpi=150
+
     def name(self):
         raise RuntimeError("override this method")
 
@@ -116,6 +118,7 @@ class BinnerBase(dict):
         data = data[binnum]
 
         keys['plot_label'] = self.bin_label(binnum)
+        keys['xmul'] = 1.1
         plt=lensing.plotting.plot2dsig(data['r'], 
                                        data['dsig'], data['dsigerr'],
                                        data['r'],
@@ -139,7 +142,7 @@ class BinnerBase(dict):
                                               ext='eps')
             stdout.write("Plotting to file: %s\n" % epsfile)
             plt.write_eps(epsfile)
-            converter.convert(epsfile, dpi=120, verbose=True)
+            converter.convert(epsfile, dpi=self.dpi, verbose=True)
 
 
     def plot_dsig_byrun_1var(self, run, type, show=False):
@@ -238,7 +241,7 @@ class BinnerBase(dict):
             os.makedirs(d)
         stdout.write("Plotting to file: %s\n" % epsfile)
         pa.write_eps(epsfile)
-        converter.convert(epsfile, dpi=120, verbose=True)
+        converter.convert(epsfile, dpi=self.dpi, verbose=True)
 
 
     def plot_osig_byrun_1var(self, run, type, show=False):
@@ -331,7 +334,7 @@ class BinnerBase(dict):
             os.makedirs(d)
         stdout.write("Plotting to file: %s\n" % epsfile)
         pa.write_eps(epsfile)
-        converter.convert(epsfile, dpi=120, verbose=True)
+        converter.convert(epsfile, dpi=self.dpi, verbose=True)
 
     def plot_dsig_2runs(self, run1, run2, type, show=False):
         """
@@ -453,7 +456,7 @@ class BinnerBase(dict):
             os.makedirs(d)
         stdout.write("Plotting to file: %s\n" % epsfile)
         pa.write_eps(epsfile)
-        converter.convert(epsfile, dpi=150, verbose=True)
+        converter.convert(epsfile, dpi=self.dpi, verbose=True)
 
 
 

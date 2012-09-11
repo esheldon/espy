@@ -8,6 +8,7 @@ from esutil.stat import sigma_clip
 import numpy
 from numpy import median, zeros, sqrt, array
 import copy
+import fitsio
 import fitting
 
 from lensing.util import shear_fracdiff, e2gamma, gamma2e, g1g2_to_e1e2
@@ -26,6 +27,8 @@ class MultiPlotterBase(dict):
 
         if 'show' not in self:
             self['show'] = True
+
+        self.fill_color='grey80'
 
         self.plotters=[]
         for run in self.runs:
@@ -64,6 +67,16 @@ class MultiPlotterBase(dict):
                     'gmix-fit-edg11r02',
                     'gmix-fit-edg12r02',
                     'gmix-fit-edg13r02']
+        elif self.set == 'set-s2n-edg04':
+            # same as set edg03 but more
+            # runs averaged in
+            runs=['gmix-fit-edg09r02r03',
+                  'gmix-fit-edg02r03r04',
+                  'gmix-fit-edg10r02r03',
+                  'gmix-fit-edg11r02r03',
+                  'gmix-fit-edg12r02r03',
+                  'gmix-fit-edg13r02r03']
+
         elif self.set == 'set-s2n-et01':
             # also calibration error
             runs = ['gmix-fit-et05r01',
@@ -81,6 +94,16 @@ class MultiPlotterBase(dict):
                     'gmix-fit-et08r02',
                     'gmix-fit-et09r02',
                     'gmix-fit-et10r02']
+        elif self.set == 'set-s2n-et03':
+            # also calibration error
+            # this one admom s/n and delta func
+            runs = ['gmix-fit-et05r02r03',
+                    'gmix-fit-et06r02r03',
+                    'gmix-fit-et07r02r03',
+                    'gmix-fit-et08r02r03',
+                    'gmix-fit-et09r02r03',
+                    'gmix-fit-et10r02r03']
+
         elif self.set == 'set-e-gg01':
             # vs galaxy ellipticity
             runs = ['gmix-fit-gg05r02',
@@ -125,8 +148,19 @@ class MultiPlotterBase(dict):
                     'gmix-fit-edg07r08',
                     'gmix-fit-edg08r02']
 
+        elif self.set == 'set-nbias01':
+            # make sure these are all admom S/N, delta
+            # function
+            runs = ['gmix-fit-et05r02r03',
+                    'gmix-fit-et06r02r03',
+                    'gmix-fit-et07r02r03',
+                    'gmix-fit-et08r02r03',
+                    'gmix-fit-et09r02r03',
+                    'gmix-fit-et10r02r03',
+                    'gmix-fit-dt03r05r06r07r08']
         else:
             raise ValueError("don't know about set %s" % self.set)
+
         self.runs = runs
 
     def get_title(self):
@@ -134,6 +168,135 @@ class MultiPlotterBase(dict):
         if title:
             title=title.replace('-',' ')
         return title
+
+class MultiPlotterNoiseBias(MultiPlotterBase):
+    def __init__(self, set, **keys):
+        super(MultiPlotterNoiseBias,self).__init__(set, **keys)
+        self.do_setup()
+
+    def do_setup(self):
+        td = self.plotters[0].read_data()
+        self.n_s2 = len(td)
+        self.n_s2n = td[0].size
+        if self.n_s2 != 4:
+            raise ValueError("adapt for n_s2 != 4")
+        #self.colors = ['blue','magenta','green','red']
+        self.colors=list(reversed(['red','forestgreen','NavajoWhite3','blue']))
+        self.linetypes=['solid','dotdashed','dashed','dotted']
+        self.point_types=['filled circle','filled diamond','filled square','filled triangle']
+
+    def doplots(self):
+        import biggles
+        import pcolors
+        s2n_name='s2n_meas'
+        s2n_lab=r'$(S/N)_{uw}$'
+        ylabel = r'$\Delta \gamma$'
+        yrange=[-0.005,0.005]
+        fsize=2
+
+        bias_file=shapesim.get_bias_file('set-s2n-et03', 'bias')
+        fits_g1=eu.io.read(bias_file,ext=1)
+        n_s2 = fits_g1.size
+        n_s2n = fits_g1['s2n_meas'].size
+
+        if n_s2 != 4:
+            raise ValueError("expected n_s2==4 for fits")
+
+        """
+        dt=[('s2n','f8',n_s2n),
+            ('s2n_meas','f8',n_s2n),
+            ('g1corr','f8',n_s2n),
+            ('g2corr','f8',n_s2n)]
+ 
+        
+        corrdata=zeros(n_s2, dtype=dt)
+        """
+
+        colors=pcolors.rainbow(len(self.runs), 'hex')
+
+
+        for i_s2 in xrange(n_s2):
+            plt=biggles.FramedPlot()
+            s2data={'s2n_meas':[],
+                    'shear1corr':[],
+                    'shear1diff':[],
+                    'shear1err':[]}
+
+            # we will only interpolate within this range
+            s2n_fit = fits_g1[s2n_name][i_s2]
+            m_fit= 1+fits_g1['m'][i_s2]
+
+            s2 = fits_g1['s2'][i_s2][0]
+
+            runlist=[]
+            for irun,plotter in enumerate(self.plotters):
+                run=plotter['run']
+                runlist.append(run)
+
+                d = plotter.read_data()
+                if len(d) != 4:
+                    raise ValueError("expected n_s2==4 for data")
+
+                shear = plotter.get_shear_true()
+
+
+                s2n = d[i_s2][s2n_name]
+                print 's2:',s2
+                print 's2vals:',d[i_s2]['s2']
+                s2n_min = s2n_fit.min() - 0.2
+                s2n_max = s2n_fit.max() + 0.2
+                w=where1(  (s2n >= s2n_min) & (s2n <= s2n_max) )
+                if w.size > 0:
+                    #m = 1+eu.stat.interplin(m_fit,s2n_fit,s2n[w])
+                    m = numpy.interp(s2n[w], s2n_fit, m_fit)
+                    print 'mvals:',m
+                    shear1corr = d[i_s2]['shear1'][w]/m
+                    shear1err = d[i_s2]['shear1err'][w]
+                    shear1diff = shear1corr-shear.g1
+
+                    pts = biggles.Points(s2n[w],shear1diff,
+                                         type='filled circle',
+                                         color=colors[irun])
+                    perr=biggles.SymmetricErrorBarsY(s2n[w],shear1diff,shear1err,
+                                                     type='filled circle',
+                                                     color=colors[irun])
+ 
+                    plt.add(pts,perr)
+
+                    s2data['s2n_meas'] += list(s2n[w])
+                    s2data['shear1corr'] += list(shear1corr)
+                    s2data['shear1diff'] += list(shear1diff)
+                    s2data['shear1err'] += list(shear1err)
+
+            if len(s2data['shear1corr']) == 0:
+                wlog(" ==> interpolated no values!!")
+            else:
+
+                s2n_pmax = 1.05*array(s2data['s2n_meas']).max()
+
+                """
+                pts = biggles.Points(s2data['s2n_meas'],
+                                     s2data['shear1diff'],
+                                     type='filled circle')
+                perr=biggles.SymmetricErrorBarsY(s2data['s2n_meas'],
+                                                 s2data['shear1diff'],
+                                                 s2data['shear1err'])
+                plt.add(pts,perr)
+                """
+                plt.xlabel = s2n_lab
+                plt.ylabel = ylabel
+                plt.yrange=yrange
+
+                plt.add(biggles.Curve([0,s2n_pmax],[0,0]))
+
+                klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}$:'
+                plab=biggles.PlotLabel(0.9,0.9,klabtext + ': %.2f' % s2,
+                                      halign='right',fontsize=fsize)
+
+                plt.add(plab)
+                if self['show']:
+                    plt.show()
+
 
 class MultiPlotterVsE(MultiPlotterBase):
     """
@@ -380,6 +543,7 @@ class MultiPlotterVsShear(MultiPlotterBase):
         linetypes=self.linetypes
 
         s2n_name='s2n_admom'
+        #s2n_name='s2n_meas'
         tag1='shear1'
         tag2='shear2'
         errtag1='shear1err'
@@ -389,15 +553,15 @@ class MultiPlotterVsShear(MultiPlotterBase):
 
         #plt=biggles.FramedPlot()
 
-        dt=[('g1true','f8',nrun),
+        dt=[('s2n','f8',nrun),
+            ('s2n_meas','f8',nrun),
+            ('g1true','f8',nrun),
             ('g2true','f8',nrun),
             ('g1meas','f8',nrun),
             ('g1err','f8',nrun),
             ('g2meas','f8',nrun),
             ('g2err','f8',nrun)]
         
-        #for i_s2n in xrange(n_s2n):
-
         for i in xrange(nrow*ncol):
             irow = i / ncol
             icol = i % ncol
@@ -405,7 +569,7 @@ class MultiPlotterVsShear(MultiPlotterBase):
             #arr[irow,icol].yrange = [-0.0025,0.0025]
             arr[irow,icol].yrange = [-0.035,0.009]
 
-        fdtype=[('s2','f8',n_s2n), ('s2n','f8',n_s2n),
+        fdtype=[('s2','f8',n_s2n), ('s2n','f8',n_s2n),('s2n_meas','f8',n_s2n),
                 ('c','f8',n_s2n), ('cerr','f8',n_s2n),
                 ('m','f8',n_s2n),('merr','f8',n_s2n)]
         fits1 = zeros(n_s2, dtype=fdtype)
@@ -414,16 +578,15 @@ class MultiPlotterVsShear(MultiPlotterBase):
         fcurves=[]
         nplot=0
         is2ns = list(reversed(xrange(n_s2n)))
-        #for i_s2n in xrange(n_s2n):
         for i_s2n in is2ns:
-            #irow = i_s2n / ncol
-            #icol = i_s2n % ncol
             irow = nplot / ncol
             icol = nplot % ncol
             td = self.plotters[0].read_data()
             s2n = td[0][s2n_name][i_s2n]
 
             data = zeros(n_s2,dtype=dt)
+
+            # runs correspond to different applied shear values
             for irun,plotter in enumerate(self.plotters):
                 d = plotter.read_data()
                 shear = plotter.get_shear_true()
@@ -436,15 +599,8 @@ class MultiPlotterVsShear(MultiPlotterBase):
                     s2,ellip = shapesim.get_s2_e(plotter.simc, is2, 0)
                     s2vals.append(s2)
 
-                    """
-                    print is2,irun,i_s2n,data['g1true'].shape,d[is2].shape
-                    print data['g1meas'].shape
-                    print len(d)
-                    print tag1
-                    print data['g1meas'][is2,irun]
-                    #print d[is2][tag1][i_s2n]
-                    print d[is2][tag1]
-                    """
+                    data['s2n'][is2,irun] = d[is2][s2n_name][i_s2n]
+                    data['s2n_meas'][is2,irun] = d[is2]['s2n_meas'][i_s2n]
 
                     data['g1true'][is2,irun] = shear.g1
                     data['g2true'][is2,irun] = shear.g2
@@ -457,6 +613,7 @@ class MultiPlotterVsShear(MultiPlotterBase):
             for is2 in xrange(n_s2):
                 s2=s2vals[is2]
 
+                s2n_meas = data['s2n_meas'][is2,:]
                 g1true = data['g1true'][is2,:]
                 g2true = data['g2true'][is2,:]
                 g1err  = data['g1err'][is2,:]
@@ -466,14 +623,19 @@ class MultiPlotterVsShear(MultiPlotterBase):
 
                 linfit1 = fitting.LineFitter(g1true, diff1, g1err)
                 linfit2 = fitting.LineFitter(g1true, diff2, g2err)
+
                 fits1['s2'][is2,i_s2n] = s2
                 fits1['s2n'][is2,i_s2n] = s2n
+                fits1['s2n_meas'][is2,i_s2n] = s2n_meas.mean()
+
                 fits1['m'][is2,i_s2n] = linfit1.pars[0]
                 fits1['merr'][is2,i_s2n] = linfit1.perr[0]
                 fits1['c'][is2,i_s2n] = linfit1.pars[1]
                 fits1['cerr'][is2,i_s2n] = linfit1.perr[1]
+
                 fits2['s2'][is2,i_s2n] = s2
                 fits2['s2n'][is2,i_s2n] = s2n
+                fits2['s2n_meas'][is2,i_s2n] = s2n_meas.mean()
                 fits2['m'][is2,i_s2n] = linfit2.pars[0]
                 fits2['merr'][is2,i_s2n] = linfit2.perr[0]
                 fits2['c'][is2,i_s2n] = linfit2.pars[1]
@@ -644,9 +806,11 @@ class MultiPlotterVsShear(MultiPlotterBase):
         #mplt.add(mupper)
         #mplt.add(mlower)
         mplt.add( biggles.FillBetween([-500,500], [0.004,0.004], 
-                                      [-500,500], [-0.004,-0.004]))
+                                      [-500,500], [-0.004,-0.004],
+                                      color=self.fill_color))
         cplt.add( biggles.FillBetween([-500,500], [0.0004,0.0004], 
-                                      [-500,500], [-0.0004,-0.0004]))
+                                      [-500,500], [-0.0004,-0.0004],
+                                      color=self.fill_color))
 
         n_s2 = self.n_s2
         n_s2n = self.n_s2n
@@ -750,7 +914,7 @@ class MultiPlotterVsShear(MultiPlotterBase):
         cplt.add(biggles.Curve([-50,500],[0,0]))
         mplt.add(biggles.Curve([-50,500],[0,0]))
 
-        mplt.yrange=[-0.02,.2]
+        mplt.yrange=[-0.02,.1]
 
         xrng=[-1,110]
         cplt.xrange=xrng
@@ -772,6 +936,12 @@ class MultiPlotterVsShear(MultiPlotterBase):
         mplt.write_eps(m_epsfile)
         converter.convert(c_epsfile,dpi=100,verbose=True)
         converter.convert(m_epsfile,dpi=100,verbose=True)
+
+        bias_file=shapesim.get_bias_file(self.set, 'bias')
+        wlog("writing fits to file:",bias_file)
+        with fitsio.FITS(bias_file,mode='rw',clobber=True) as fobj:
+            fobj.write(fits1)
+            fobj.write(fits2)
 
 class MultiPlotterVsEpsf(MultiPlotterBase):
     """
@@ -855,7 +1025,8 @@ class MultiPlotterVsEpsf(MultiPlotterBase):
             arr[irow,icol].yrange = [-0.035,0.035]
 
             arr[irow,icol].add( biggles.FillBetween([-500,500], [0.0004,0.0004], 
-                                                    [-500,500], [-0.0004,-0.0004]))
+                                                    [-500,500], [-0.0004,-0.0004], 
+                                                    color=self.fill_color))
 
         fdtype=[('s2','f8',n_s2n), ('s2n','f8',n_s2n),
                 ('c','f8',n_s2n), ('cerr','f8',n_s2n),

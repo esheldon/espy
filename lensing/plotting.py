@@ -52,9 +52,11 @@ def plot2dsig(r1, dsig1, dsig1err, r2, dsig2, dsig2err, **keys):
 
     color2 = 'red'
     ptype1='filled circle'
-    size1=2
+    size1=1.5
     ptype2='filled circle'
-    size2=2
+    size2=1.5
+
+    xmul = keys.get('xmul',1.)
 
     show = keys.get('show',True)
     yrange1 = keys.get('yrange1',None)
@@ -92,8 +94,8 @@ def plot2dsig(r1, dsig1, dsig1err, r2, dsig2, dsig2err, **keys):
     dsig1err_p = SymErrY(r1, dsig1, dsig1err, color='black')
     dsig1_p.label=label1
 
-    dsig2_p = Points(r2, dsig2, color=color2, type=ptype2, size=size2)
-    dsig2err_p = SymErrY(r2, dsig2, dsig2err, color=color2)
+    dsig2_p = Points(r2*xmul, dsig2, color=color2, type=ptype2, size=size2)
+    dsig2err_p = SymErrY(r2*xmul, dsig2, dsig2err, color=color2)
     dsig2_p.label=label2
 
     c=Curve([1.e-5,1.e5],[0,0], type='solid')

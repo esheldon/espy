@@ -770,6 +770,14 @@ def get_plot_dir(run):
     return dir
 
 
+def get_bias_file(run, type):
+    d=get_plot_dir(run)
+    f='%s' % run
+
+    f += '-%s.fits' % type
+    f = path_join(d, f)
+    return f
+
 
 def get_plot_file(run, type, s2min=None, yrng=None):
     d=get_plot_dir(run)

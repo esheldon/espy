@@ -222,6 +222,10 @@ gmix-fit
         Same as above but using delta function and admom S/N
         et05r02,et06r02,et07r02,et08r02,et09r02,et10r02
             .00     .01     .02     .03     .04     .05 
+        Same as above to increase S/N
+        et05r03,et06r03,et07r03,et08r03,et09r03,et10r03
+            .00     .01     .02     .03     .04     .05 
+
 
 
 
@@ -237,8 +241,6 @@ gmix-fit
                 by s/n
                     run      ie    e  s2n_method   notes
                     edg02r02  7 0.33    matched    rerunning
-                    edg02r03 19 0.80    matched    todo
-                    edg02r04  0 0.05    matched    todo
 
     edg14r01,edg03r02,edg04r01,edg05r01,edg06r01,edg07r01,edg08r01
          0.0      .01     0.02     0.03     0.04     0.05     0.06
@@ -336,6 +338,9 @@ gmix-fit
     # these with admom s2n and delta function
     edg09r02,edg02r03,edg10r02,edg11r02,edg12r02,edg13r02
          .00      .01      .02      .03      .04      .05
+    # combine for more S/N
+    edg09r03,edg02r04,edg10r03,edg11r03,edg12r03,edg13r03
+         .00      .01      .02      .03      .04      .05
 
         edg09
             round double gaussian psf
@@ -402,7 +407,11 @@ gmix-fit
                     run dt03r03r04 is the average
 
                     dt03r05
-                        3 gaussians, delta function as one
+                        3 gaussians, delta function as one, admom s2n
+                    same for more stats
+                    dt03r06
+                    dt03r07
+                    dt03r08
 
 
     low noise runs

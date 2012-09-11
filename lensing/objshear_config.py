@@ -88,6 +88,10 @@ class ObjshearRunConfig(dict):
                 if 'zmin' in self['lens_config']:
                     local_file.write(fmt % ('min_zlens_interp',self['lens_config']['zmin']))
 
+                for key in ['mag_range','R_range']:
+                    if key in self:
+                        vstr = '[' + ' '.join( ['%s' % v for v in self[key]] ) + ']'
+                        local_file.write(fmt % (key,vstr))
 
             hdfs_file.put(clobber=True)
 

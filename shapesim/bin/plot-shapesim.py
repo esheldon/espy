@@ -132,6 +132,10 @@ if run[0:3] == 'set':
                                                docum=options.cum,show=show,
                                                use_rb=options.use_rb)
 
+    elif 'set-nbias' in set: 
+        p=shapesim.plotting.MultiPlotterNoiseBias(set, title=title,
+                                                  yrange=yrng,
+                                                  show=show)
     else:
         raise ValueError("bad set name '%s'" % set)
     p.doplots()
