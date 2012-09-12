@@ -3,11 +3,14 @@ class EPrior:
     """
     This is in g1,g2 space
 
-    Prob = A cos(|e| pi/2) exp( - [ 2 |e| / B / (1 + |e|^D) ]^C )
+    2D
+    Prob = A cos(|g| pi/2) exp( - [ 2 |g| / B / (1 + |g|^D) ]^C )
+
+    For 1D prob, you need to multiply by 2*pi*|g|
     """
     def __init__(self):
         # A actually depends on norm when doing full thing
-        self.A = 1
+        self.A = 12.25
         self.B = 0.03
         self.C = 0.45
         self.D = 13.
@@ -18,11 +21,12 @@ class EPrior:
         """
         Prior actually only depends on the total mag of g
         """
-        g1 = array(g1, ndmin=1, copy=False)
-        g2 = array(g2, ndmin=1, copy=False)
         g = sqrt(g1**2 + g2**2)
+        return self.prior_gabs(g)
 
-        prior = zeros(g1.size)
+    def prior_gabs(self, g):
+        g = array(g, ndmin=1, copy=False)
+        prior = zeros(g.size)
 
         w,=where(g < 1)
         if w.size > 0:
