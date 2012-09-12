@@ -689,16 +689,23 @@ def get_theta(conf, itheta=None):
         if orient != 'ring':
             raise ValueError("itheta only makes sense for ring test "
                              "simulation types")
-        if (conf['nring'] % 2) != 0:
-            raise ValueError("ring sims must have nring even")
 
-        thetas = zeros(conf['nring'])
-        nhalf = conf['nring']/2
-        thetas[0:nhalf] = linspace(0,90,nhalf)
-        thetas[nhalf:] = thetas[0:nhalf] + 90
-
+        thetas = get_ring_thetas(conf['nring'])
         theta = thetas[itheta]
     return theta
+
+def get_ring_thetas(nring):
+    nring=int(nring)
+    if (nring % 2) != 0:
+        raise ValueError("nring must be even")
+
+    thetas = zeros(nring)
+    nhalf = nring/2
+    thetas[0:nhalf] = linspace(0,90,nhalf)
+    thetas[nhalf:] = thetas[0:nhalf] + 90
+
+    return thetas
+
 
 
 
