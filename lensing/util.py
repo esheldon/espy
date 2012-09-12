@@ -53,18 +53,36 @@ def average_shear(e1, e2, weights=None, doerr=False):
         return g1,g2, R
 
 
-def e2gamma(e):
+def e2g(e):
     """
-    Convert "delta", e.g. (a^2-b^2)/(a^2+b^2) to gamma which is 0.5*(a-b)/(a+2)
+    Convert "delta" to g
+
+        delta=(a^2-b^2)/(a^2+b^2) 
+        g=(a-b)/(a+2)
     """
+    if e >= 1:
+        raise ValueError("|e| > 1")
     return tanh(0.5*arctanh(e))
 
-def gamma2e(gamma):
-    return tanh(2*arctanh(gamma))
+def g2e(g):
+    """
+    Convert g to delta.  
+    
+        delta=(a^2-b^2)/(a^2+b^2) 
+        g=(a-b)/(a+2)
+    """
+    if g >= 1:
+        raise ValueError("|g| > 1")
+    return tanh(2*arctanh(g))
+
+e2gamma=e2g
+gamma2e=g2e
 
 def e1e2_to_g1g2(e1, e2):
     e = sqrt(e1**2 + e2**2)
-    g = e2gamma(e)
+    if e == 0:
+        return 0.,0.
+    g = e2g(e)
     fac = g/e
     g1, g2 = fac*e1, fac*e2
     return g1,g2
@@ -73,7 +91,7 @@ def g1g2_to_e1e2(g1, g2):
     g = sqrt(g1**2 + g2**2)
     if g == 0:
         return 0.,0.
-    e = gamma2e(g)
+    e = g2e(g)
     fac = e/g
     e1, e2 = fac*g1, fac*g2
     return e1,e2
