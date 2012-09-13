@@ -1,8 +1,13 @@
 """
 TODO:
 
-    - The coarse grid makes checking a single ellip trial not very interesting.
-    Need to do a run with lots of different ellip from prior surface.
+    - The coarse grid produces a large variance in the mean estimated shear,
+    of order the grid size.
+
+    - how to organize g1,g2 sampling?  nring=20 and then how many e values?  I
+    normally just increased the number of repeats for each ring but here we
+    prefer instead to get a new place in the g1,g2 plane to sample the prior.
+    But this gets expensive generating the models.
 
     - Need to implement prior and sensitivity.
 
@@ -219,8 +224,8 @@ class BayesFitter:
         # range for search
         self.gmin=-.98
         self.gmax= .98
-        #self.ngrid=20 # in both g1 and g2
-        self.ngrid=100 # in both g1 and g2
+        self.ngrid=20 # in both g1 and g2
+        #self.ngrid=100 # in both g1 and g2
 
         self.g1vals = linspace(self.gmin, self.gmax, self.ngrid)
         self.g2vals = self.g1vals.copy()
