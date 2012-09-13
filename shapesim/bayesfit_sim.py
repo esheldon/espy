@@ -12,6 +12,7 @@ TODO:
     - Need to implement prior and sensitivity.
 
 """
+import numpy
 from numpy import sqrt, cos, sin, exp, pi, zeros, ones, empty, \
         random, where, array, linspace
 from . import shapesim
@@ -418,6 +419,7 @@ class GPrior:
 
     2D
     Prob = A cos(|g| pi/2) exp( - [ 2 |g| / B / (1 + |g|^D) ]^C )
+    d/dE(  A cos(sqrt(E^2+q^2) pi/2) exp( - ( 2 sqrt(E^2 + q^2) / B / (1 + sqrt(E^2 + q^2)^D) )^C ) )
 
     For 1D prob, you need to multiply by 2*pi*|g|
     """
@@ -439,6 +441,30 @@ class GPrior:
         """
         g = sqrt(g1**2 + g2**2)
         return self.prior_gabs(g)
+
+    def dbyg1(self, g1, g2, h=1.e-6):
+        """
+        Derivative with respect to g1 at the input g1,g2 location
+
+        Uses central difference and a small enough step size
+        to use just two points
+        """
+        ff = self.prior(g1+h/2, g2)
+        fb = self.prior(g1-h/2, g2)
+
+        return (ff - fb)/h
+
+    def dbyg2(self, g1, g2, h=1.e-6):
+        """
+        Derivative with respect to g2 at the input g1,g2 location
+
+        Uses central difference and a small enough step size
+        to use just two points
+        """
+        ff = self.prior(g1, g2+h/2)
+        fb = self.prior(g1, g2-h/2)
+        return (ff - fb)/h
+
 
     def prior_gabs(self, g):
         """
