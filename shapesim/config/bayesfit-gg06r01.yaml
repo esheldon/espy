@@ -13,7 +13,10 @@ retrim: false
 retrim_fluxfrac: null
 s2ncalc_fluxfrac: null
 
-s2nvals: [5,10,15,20,25,30,40,50,60,70,80,90,100]
+#s2nvals: [5,10,15,20,25,30,40,50,60,70,80,90,100]
+#s2nvals: [1.0e+8]
+s2nvals: [100]
+#s2nvals: [1.0e+8]
 
 s2n_psf: 1.0e+8
 

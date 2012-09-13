@@ -1,9 +1,11 @@
-from numpy import sqrt, cos, sin, exp, pi, zeros, empty, random, where, array, linspace
+from numpy import sqrt, cos, sin, exp, pi, zeros, ones, empty, \
+        random, where, array, linspace
 from . import shapesim
 import lensing
 from fimage.convolved import NoisyConvolvedImage
 import gmix_image
 import images
+from esutil.misc import wlog
 
 from sys import stderr
 
@@ -18,19 +20,24 @@ class BayesFitSim(shapesim.BaseSim):
             self['verbose'] = False
 
         self.gprior = GPrior()
-        self.fitter = BayesFitter()
+        self.fitter = BayesFitter(None)
+
 
     def process_trials_by_s2n(self, is2, is2n):
         """
-        This only works for ring tests, processing
-        all in the ring.  You can call the single one too
+        ring test
+
+        Generates a random total ellipticity from the 
+        assumed prior
+
+        Run this many times to sample the prior distribution
         """
 
-        s2n = get_s2n(self, is2n)
+        s2n = shapesim.get_s2n(self, is2n)
         s2n_fac = self['s2n_fac']
 
         nring = self.simc['nring']
-        nrepeat = get_s2n_nrepeat(s2n, fac=s2n_fac)
+        nrepeat = shapesim.get_s2n_nrepeat(s2n, fac=s2n_fac)
 
         ntot = nring*nrepeat
         out = zeros(ntot, dtype=self.out_dtype())
@@ -56,8 +63,7 @@ class BayesFitSim(shapesim.BaseSim):
             out[ii:ii+nrepeat] = st
             ii += nrepeat
 
-        stop
-        write_output(self['run'], is2, is2n, out, fs=self.fs)
+        #write_output(self['run'], is2, is2n, out, fs=self.fs)
         return out
 
 
@@ -69,7 +75,6 @@ class BayesFitSim(shapesim.BaseSim):
         possible noise realizations
         """
         ellip=lensing.util.g2e(g)
-        print 'true g:',g
 
         s2 = linspace(self.simc['mins2'],
                       self.simc['maxs2'], 
@@ -77,6 +82,8 @@ class BayesFitSim(shapesim.BaseSim):
         s2n_psf = self['s2n_psf']
         s2n = shapesim.get_s2n(self, is2n)
         theta = shapesim.get_theta(self.simc, itheta=itheta)
+
+        print 'true g:',g,'theta:',theta,'s/n:',s2n,'s2:',s2
 
         s2n_fac = self['s2n_fac']
         s2n_method = self['s2n_method']
@@ -87,12 +94,21 @@ class BayesFitSim(shapesim.BaseSim):
         # do this once and get noise realizations.
         ci_nonoise = self.shapesim.get_trial(s2, ellip, theta)
 
+        e1true=ci_nonoise['e1true']
+        e2true=ci_nonoise['e2true']
+        g1true,g2true=lensing.util.e1e2_to_g1g2(e1true,e2true)
+        print 'true sheared g1,g2:',g1true,g2true
+
         if dolog:
             wlog("ring theta: %s/%s" % (itheta+1,self.simc['nring']))
             wlog('ellip:',ellip,'s2n:',s2n,
                  's2n_psf:',s2n_psf,'s2n_method:',s2n_method)
 
         out = zeros(nrepeat, dtype=self.out_dtype())
+        out['gtrue'][:,0] = g1true
+        out['gtrue'][:,1] = g2true
+        out['shear_true'][:,0] = self.simc['shear'][0]
+        out['shear_true'][:,1] = self.simc['shear'][1]
         for irepeat in xrange(nrepeat):
             
             if self['verbose']:
@@ -110,10 +126,22 @@ class BayesFitSim(shapesim.BaseSim):
             # self.fitter is used in here
             self._run_fitter(ci)
 
+            # just likelihood right now
             like = self.fitter.get_like()
             like = like/like.sum()
-            images.multiview(like)
-            stop
+
+            res = self.fitter.get_result()
+
+            out['g'][irepeat,:] = res['g']
+            out['gcov'][irepeat,:,:] = res['gcov']
+            """
+            print 'g1: %.4g +/- %.4g' % (res['g'][0],sqrt(res['cov'][0,0]))
+            print 'g2: %.4g +/- %.4g' % (res['g'][1],sqrt(res['cov'][1,1]))
+            print 'covar:',res['cov'][0,1]
+            """
+
+            #images.multiview(like)
+            #stop
             """
             if res['flags'] == 0:
                 st = self.copy_output(s2, ellip, s2n, ci, res)
@@ -125,7 +153,6 @@ class BayesFitSim(shapesim.BaseSim):
         if self['verbose']:
             stderr.write("niter: %d\n" % (iter+1))
 
-        stop
         return out
 
     def _run_fitter(self, ci):
@@ -142,13 +169,16 @@ class BayesFitSim(shapesim.BaseSim):
               'irr':psf_cov[0],'irc':psf_cov[1],'icc':psf_cov[2]}]
         self.fitter.process_image(image=ci.image,
                                   pixerr=ci['skysig'],
-                                  prior=None,
                                   cen=ci['cen'],
                                   T=T,
                                   psf=psf)
 
     def out_dtype(self):
-        return None
+        dt=[('shear_true','f8',2),
+            ('gtrue','f8',2),
+            ('g','f8',2),
+            ('gcov','f8',(2,2))]
+        return dt
 
 
 class BayesFitter:
@@ -174,30 +204,33 @@ class BayesFitter:
         N = sqrt( S*A/sum(ymod^2) )
     (i.e. set ymod = ymod*N/S) 
     """
-    def __init__(self):
-        # we will always set "A" to 1 in model, see Miller et al. sec 3.1
-        self.A = 1.0
+    def __init__(self, prior):
+        self.prior=prior
 
         # range for search
-        self.gmin=-.9999999
-        self.gmax= .9999999
-        self.ngrid=20 # in both g1 and g2
+        self.gmin=-.98
+        self.gmax= .98
+        #self.ngrid=20 # in both g1 and g2
+        self.ngrid=100 # in both g1 and g2
 
         self.g1vals = linspace(self.gmin, self.gmax, self.ngrid)
         self.g2vals = self.g1vals.copy()
+
+        self.g1matrix = self.g1vals.reshape(self.ngrid,1)*ones(self.ngrid)
+        self.g2matrix = self.g2vals*ones(self.ngrid).reshape(self.ngrid,1)
+
+        self.delta_g = self.g1vals[1]-self.g1vals[0]
 
         self.models={}
 
     def process_image(self, 
                       image=None, 
                       pixerr=None, 
-                      prior=None, 
                       psf=None,
                       cen=None, # send to fix cen
                       T=None):  # send to fix T
         self._set_data(image=image,
                        pixerr=pixerr,
-                       prior=prior,
                        psf=psf,
                        cen=cen,
                        T=T)
@@ -209,7 +242,7 @@ class BayesFitter:
         cen   = self.cen
         dims = self.image.shape
 
-        like=zeros((self.ngrid, self.ngrid))
+        loglike=zeros((self.ngrid, self.ngrid))
 
         for i1 in xrange(self.ngrid):
             g1 = self.g1vals[i1]
@@ -230,20 +263,60 @@ class BayesFitter:
                 mod_over_err2=self._get_normalized_model(i1, i2, T, dims, cen)
 
                 # this creates a temporary, can speed up
-                chi2=( (mod_over_err2*self.image)**2 ).sum()
-                like[i1,i2] = exp(chi2)
+                chi2=( mod_over_err2*self.image ).sum()
+                #like[i1,i2] = exp(chi2)
+                loglike[i1,i2] = chi2
 
+        loglike -= loglike.max()
+        like = exp(loglike)
+
+        like /= like.sum()
         self._like=like
+        # get the expectation values, sensitiviey and errors
+        self._calc_expected()
 
     def get_like(self):
         return self._like
+    def get_result(self):
+        return self._result
+
+    def _calc_expected(self):
+        if self.prior is None:
+            #g1 = self.delta_g**2 * (self._like*self.g1matrix).sum()
+            #g2 = self.delta_g**2 * (self._like*self.g2matrix).sum()
+            # assuming likelihood is normalized
+            g1 = (self._like*self.g1matrix).sum()
+            g2 = (self._like*self.g2matrix).sum()
+
+
+            g1diff = g1-self.g1matrix
+            g2diff = g2-self.g2matrix
+            g11var = (self._like*g1diff**2).sum()
+            g22var = (self._like*g2diff**2).sum()
+            g12var = (self._like*g1diff*g2diff).sum()
+
+        else:
+            raise ValueError("implement working with prior")
+        
+        g=zeros(2)
+        cov=zeros((2,2))
+        g[0] = g1
+        g[1] = g2
+        cov[0,0] = g11var
+        cov[0,1] = g12var
+        cov[1,0] = g12var
+        cov[1,1] = g22var
+
+        self._result={'g':g,'gcov':cov}
+
+
 
     def _get_normalized_model(self, i1, i2, T, dims, cen):
         #import images
         model = self._get_model(i1, i2, T, dims, cen)
 
-        images.multiview(model)
-        key=raw_input('hit a key: ')
+        #images.multiview(model)
+        #key=raw_input('hit a key: ')
         ymod = model/self.pixerr
 
         ymodsum = ymod.sum()
@@ -298,13 +371,11 @@ class BayesFitter:
     def _set_data(self, 
                   image=None, 
                   pixerr=None, 
-                  prior=None, 
                   psf=None,
                   cen=None,
                   T=None):
         self.image=image
         self.pixerr=pixerr
-        self.prior=prior
         self.T=T
         self.cen=cen
 
@@ -314,6 +385,8 @@ class BayesFitter:
             raise ValueError("send at least image and pixerr")
         if T is None or cen is None:
             raise ValueError("for now send T and cen to fix them")
+
+        self.A = ( (image/pixerr)**2 ).sum()
 
     def _set_psf(self, psf):
         self.psf_gmix = psf
