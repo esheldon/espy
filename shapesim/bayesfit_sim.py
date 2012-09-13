@@ -1,3 +1,12 @@
+"""
+TODO:
+
+    - The coarse grid makes checking a single ellip trial not very interesting.
+    Need to do a run with lots of different ellip from prior surface.
+
+    - Need to implement prior and sensitivity.
+
+"""
 from numpy import sqrt, cos, sin, exp, pi, zeros, ones, empty, \
         random, where, array, linspace
 from . import shapesim
