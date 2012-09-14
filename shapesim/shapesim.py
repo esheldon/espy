@@ -935,7 +935,7 @@ def read_averaged_outputs(run, docum=False, skip1=[], fs=None):
             data.append(d)
     return data
 
-def make_averaged_outputs(run, docum=True, 
+def make_averaged_outputs(run, docum=False, 
                           skip1=[], 
                           skip2=[]):
     """
@@ -947,7 +947,11 @@ def make_averaged_outputs(run, docum=True,
     runtype=c['runtype']
 
     straight_avg=False
-    if run[0:5] == 'deswl':
+    bayes=False
+    if 'bayesfit' in run:
+        wlog("doing bayes averaging")
+        bayes=True
+    elif 'deswl' in run:
         straight_avg=True
         wlog("Doing straight average for deswl")
 
@@ -967,7 +971,7 @@ def make_averaged_outputs(run, docum=True,
                 continue
             edata = read_output(run, i1, i2, verbose=True, fs='hdfs')
             s2data.append(edata)
-        s2data = average_outputs(s2data, straight_avg=straight_avg)
+        s2data = average_outputs(s2data, straight_avg=straight_avg, bayes=bayes)
         data.append(s2data)
 
     wlog("writing averaged outputs")
@@ -1034,7 +1038,6 @@ def read_all_outputs(run,
     """
     Data are grouped as a list by is2 and then sublists by ie/is2n
 
-    If docum=True, we accumulate the sums for s2 < s2i.
     """
     data=[]
     c=read_config(run)
@@ -1131,7 +1134,7 @@ def accumulate_outputs(data):
 
     return out
 
-def average_outputs(data, straight_avg=False):
+def average_outputs(data, straight_avg=False, bayes=False):
     """
     Input should be a list of arrays.  The output will be
     an array with length of list, values averaged over the
@@ -1139,36 +1142,39 @@ def average_outputs(data, straight_avg=False):
     """
     dt = data[0].dtype.descr
 
-    if 'e1_meas' in data[0].dtype.names:
-        if straight_avg:
-            # deswl we can just do straight_avg sums on gamma
-            dt_extra = [('gamma1sum','f8'),
-                   ('gamma2sum','f8'),
-                   ('nsum','i8')]
-        else:
-            dt_extra = [('e1sum','f8'), # sums so we can do cumulative
-                        ('e2sum','f8'),
-                        ('e1err2invsum','f8'),
-                        ('e2err2invsum','f8'),
-                        ('esqsum','f8'),
-                        ('nsum','i8'),
-                        ('shear1','f8'),
-                        ('shear1err','f8'),  # average in particular bin
-                        ('shear2','f8'),
-                        ('shear2err','f8'),
-                        ('Rshear_true','f8'),
-                        ('Rshear','f8')]
+    if straight_avg:
+        # deswl we can just do straight_avg sums on gamma
+        dt_extra = [('gamma1sum','f8'),
+                    ('gamma2sum','f8'),
+                    ('nsum','i8')]
+    elif bayes:
+        dt_extra = [('g1sum','f8'),
+                    ('g2sum','f8'),
+                    ('g1sensum','f8'),
+                    ('g2sensum','f8'),
+                    ('shear1','f8'),
+                    ('shear1err','f8'),
+                    ('shear2','f8'),
+                    ('shear2err','f8')]
     else:
-        raise ValueError('DEAL WITH e1meas missing')
+        dt_extra = [('e1sum','f8'), # sums so we can do cumulative
+                    ('e2sum','f8'),
+                    ('e1err2invsum','f8'),
+                    ('e2err2invsum','f8'),
+                    ('esqsum','f8'),
+                    ('nsum','i8'),
+                    ('shear1','f8'),
+                    ('shear1err','f8'),  # average in particular bin
+                    ('shear2','f8'),
+                    ('shear2err','f8'),
+                    ('Rshear_true','f8'),
+                    ('Rshear','f8')]
 
     dt += dt_extra
     name_extra = [dd[0] for dd in dt_extra]
 
     d=zeros(len(data),dtype=dt)
     for i,edata in enumerate(data): # over different ellipticities
-        #shear1,shear2,R,shear1err,shear2err \
-        #    = lensing.util.average_shear(edata['e1_meas'],edata['e2_meas'],
-        #                                 doerr=True)
 
         if straight_avg:
             g1 = edata['gamma1_meas']
@@ -1180,6 +1186,37 @@ def average_outputs(data, straight_avg=False):
             d['gamma1sum'][i] = g1.sum()
             d['gamma2sum'][i] = g2.sum()
             d['nsum'][i] = num
+        elif bayes:
+            g1 = edata['g'][:,0]
+            g2 = edata['g'][:,1]
+            g1sens = edata['gsens'][:,0]
+            g2sens = edata['gsens'][:,0]
+
+            g1sum = g1.sum()
+            g2sum = g2.sum()
+            g1sensum = g1sens.sum()
+            g2sensum = g2sens.sum()
+
+            # we use the scatter from true, becuase with ring tests
+            # we don't have shape noise
+            g1scatt = (g1-edata['gtrue'][:,0]).var()
+            g2scatt = (g2-edata['gtrue'][:,1]).var()
+
+            num = g1.size
+            g1err = sqrt(g1scatt/num)
+            g2err = sqrt(g2scatt/num)
+            g1err2inv = num/g1scatt
+            g2err2inv = num/g2scatt
+
+            d['shear1'] = g1sum/g1sensum
+            d['shear2'] = g2sum/g2sensum
+            d['shear1err'] = g1err/g1sens.mean()
+            d['shear2err'] = g2err/g2sens.mean()
+
+            d['g1sum'] = g1sum
+            d['g2sum'] = g2sum
+            d['g1sensum'] = g1sensum
+            d['g2sensum'] = g2sensum
         else:
             e1 = edata['e1_meas']
             e2 = edata['e2_meas']
@@ -1262,51 +1299,6 @@ def average_outputs(data, straight_avg=False):
 
     return d
 
-
-def average_outputs_old(data):
-    """
-    data is a list of lists of arrays
-
-    Take the results from read_all_outputs and average the trials for each
-    ellip value.  The result will be a list of arrays, one for each s2.  Each
-    array will have one entry for each ellipticity
-    """
-    out=[]
-    dt = data[0][0].dtype.descr
-
-    if 'e1_meas' in data[0][0].dtype.names:
-        dt += [('shear1','f8'),('shear1err','f8'),
-               ('shear2','f8'),('shear2err','f8'),
-               ('Rshear_true','f8'),('Rshear','f8')]
-    else:
-        raise ValueError('DEAL WITH e1meas missing')
-
-    for s2data in data: # over different values of s2
-        d=zeros(len(s2data),dtype=dt)
-        for i,edata in enumerate(s2data): # over different ellipticities
-            shear1,shear2,R,shear1err,shear2err \
-                = lensing.util.average_shear(edata['e1_meas'],edata['e2_meas'],
-                                             doerr=True)
-            for n in d.dtype.names:
-                if n == 'Rshear':
-                    d['Rshear'][i] = R
-                elif n == 'Rshear_true':
-                    d['Rshear_true'][i] = (1-0.5*edata['etrue']**2).mean()
-                elif n == 'shear1':
-                    d['shear1'][i] = shear1
-                elif n == 'shear2':
-                    d['shear2'][i] = shear2
-                elif n == 'shear1err':
-                    d['shear1err'][i] = shear1err
-                elif n == 'shear2err':
-                    d['shear2err'][i] = shear2err
-                else:
-                    if edata[n].dtype.names is None and len(edata[n].shape) == 1:
-                        #d[n][i] = median(edata[n])
-                        d[n][i] = edata[n].mean()
-
-        out.append(d)
-    return out
 
 
 def plot_signal_vs_rad(im, cen):

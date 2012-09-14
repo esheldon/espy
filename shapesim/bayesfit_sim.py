@@ -66,47 +66,35 @@ class BayesFitSim(shapesim.BaseSim):
         s2n = shapesim.get_s2n(self, is2n)
         s2n_fac = self['s2n_fac']
 
+        nellip = self.get_nellip(is2n)
+
         nring = self.simc['nring']
-        #nrepeat = shapesim.get_s2n_nrepeat(s2n, fac=s2n_fac)
-        nrepeat=1
 
-        ntot = nring*nrepeat
+        ntot = nring*nellip
         out = zeros(ntot, dtype=self.out_dtype())
-
-        # random g value
-        g = self.gprior.sample1d(1)[0]
-        print 'gtrue:',g
 
         ii = 0
         for i in xrange(nring):
             itheta=i
 
-            #if self['verbose']:
-            #    stderr.write('-'*70)
-            #    stderr.write('\n')
-            # we always write this
-            #stderr.write("%d/%d %d%% done\n" % ((i+1),nring,
-            #                                    100.*(i+1)/float(nring)))
-
             dolog=False
             if i==0:
                 dolog=True
-            st = self.process_trial_by_s2n(is2, is2n, itheta, g, dolog=dolog)
-            out[ii:ii+nrepeat] = st
-            ii += nrepeat
+            st = self.process_trial_by_s2n(is2, is2n, itheta, dolog=dolog)
+            out[ii:ii+nellip] = st
+            ii += nellip
 
-        #write_output(self['run'], is2, is2n, out, fs=self.fs)
+        shapesim.write_output(self['run'], is2, is2n, out, fs=self.fs)
         return out
 
 
-
-    def process_trial_by_s2n(self, is2, is2n, itheta, g,
+    def process_trial_by_s2n(self, is2, is2n, itheta,
+                             dowrite=False, 
                              dolog=False):
         """
-        Process a singe element in the ring, with nrepeat
+        Process a singe element in the ring, with nellip
         possible noise realizations
         """
-        ellip=lensing.util.g2e(g)
 
         s2 = linspace(self.simc['mins2'],
                       self.simc['maxs2'], 
@@ -115,46 +103,57 @@ class BayesFitSim(shapesim.BaseSim):
         s2n = shapesim.get_s2n(self, is2n)
         theta = shapesim.get_theta(self.simc, itheta=itheta)
 
-        #print 'true g:',g,'theta:',theta,'s/n:',s2n,'s2:',s2
-
         s2n_fac = self['s2n_fac']
         s2n_method = self['s2n_method']
         s2ncalc_fluxfrac =self['s2ncalc_fluxfrac']
 
-        #nrepeat = shapesim.get_s2n_nrepeat(s2n, fac=s2n_fac)
-        nrepeat=1
+        nellip=self.get_nellip(is2n)
 
-        # do this once and get noise realizations.
-        ci_nonoise = self.shapesim.get_trial(s2, ellip, theta)
-
-        e1true=ci_nonoise['e1true']
-        e2true=ci_nonoise['e2true']
-        g1true,g2true=lensing.util.e1e2_to_g1g2(e1true,e2true)
-        #print 'true sheared g1,g2:',g1true,g2true
+        # these are generated on the same series every itheta for a given run
+        # seed so that each itheta gets the same ellip values; otherwise no
+        # ring
+        gvals = self.get_gvals(nellip)
+        out = zeros(nellip, dtype=self.out_dtype())
+        out['s2'] = s2
 
         if dolog:
-            #wlog("ring theta: %s/%s" % (itheta+1,self.simc['nring']))
-            wlog('ellip:',ellip,'s2n:',s2n,
-                 's2n_psf:',s2n_psf,'s2n_method:',s2n_method)
+            wlog('s2n:',s2n,'s2n_psf:',s2n_psf,'s2n_method:',s2n_method)
 
-        out = zeros(nrepeat, dtype=self.out_dtype())
-        out['gtrue'][:,0] = g1true
-        out['gtrue'][:,1] = g2true
-        out['shear_true'][:,0] = self.simc['shear'][0]
-        out['shear_true'][:,1] = self.simc['shear'][1]
-        for irepeat in xrange(nrepeat):
+
+        for i,g in enumerate(gvals):
+
+            ellip=lensing.util.g2e(g)
+
+            ci_nonoise = self.shapesim.get_trial(s2, ellip, theta)
+
+            e1true=ci_nonoise['e1true']
+            e2true=ci_nonoise['e2true']
+            g1true,g2true=lensing.util.e1e2_to_g1g2(e1true,e2true)
+
+            out['gtrue'][i,0] = g1true
+            out['gtrue'][i,1] = g2true
+            out['shear_true'][i,0] = self.simc['shear'][0]
+            out['shear_true'][i,1] = self.simc['shear'][1]
             
             if self['verbose']:
                 stderr.write('-'*70 + '\n')
             # we always write this, although slower when not verbose
-            if (nrepeat > 1) and (( (irepeat+1) % 10) == 0 or irepeat == 0):
-                stderr.write("  %s/%s repeat done\n" % ((irepeat+1),nrepeat))
+            if (nellip > 1) and (( (i+1) % 10) == 0 or i== 0):
+                stderr.write("  %s/%s ellip done\n" % ((i+1),nellip))
 
             ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf,
                                      s2n_method=s2n_method,
                                      fluxfrac=s2ncalc_fluxfrac)
             if self['verbose']:
-                wlog("s2n_admom:",ci['s2n_admom'],"s2n_uw:",ci['s2n_uw'],"s2n_matched:",ci['s2n_matched'])
+                wlog("s2n_admom:",ci['s2n_admom'],"s2n_uw:",ci['s2n_uw'],
+                     "s2n_matched:",ci['s2n_matched'])
+
+            out['s2n_admom'][i] = ci['s2n_admom']
+            out['s2n_matched'][i] = ci['s2n_matched']
+            out['s2n_uw'][i] = ci['s2n_uw']
+            out['s2n_admom_psf'][i] = ci['s2n_admom_psf']
+            out['s2n_matched_psf'][i] = ci['s2n_matched_psf']
+            out['s2n_uw_psf'][i] = ci['s2n_uw_psf']
 
             # self.fitter is used in here
             self._run_fitter(ci)
@@ -165,28 +164,14 @@ class BayesFitSim(shapesim.BaseSim):
 
             res = self.fitter.get_result()
 
-            out['g'][irepeat,:] = res['g']
-            out['gsens'][irepeat,:] = res['gsens']
-            out['gcov'][irepeat,:,:] = res['gcov']
-            """
-            print 'g1: %.4g +/- %.4g' % (res['g'][0],sqrt(res['cov'][0,0]))
-            print 'g2: %.4g +/- %.4g' % (res['g'][1],sqrt(res['cov'][1,1]))
-            print 'covar:',res['cov'][0,1]
-            """
+            out['g'][i,:] = res['g']
+            out['gsens'][i,:] = res['gsens']
+            out['gcov'][i,:,:] = res['gcov']
 
-            #images.multiview(like)
-            #stop
-            """
-            if res['flags'] == 0:
-                st = self.copy_output(s2, ellip, s2n, ci, res)
-                out[irepeat] = st
-                break
-            else:
-                raise ValueError("error encountered")
-            """
-        if self['verbose']:
-            stderr.write("niter: %d\n" % (iter+1))
 
+        if dowrite:
+            shapesim.write_output(self['run'], is2, is2n, out, itrial=itheta,
+                         fs=self.fs)
         return out
 
     def _run_fitter(self, ci):
@@ -198,11 +183,6 @@ class BayesFitSim(shapesim.BaseSim):
         cov=ci['covtrue']
         T = cov[0] + cov[2]
         cen = ci['cen']
-
-        # p/row/col unimportant
-        #psf_cov = ci.psfpars['cov']
-        #psf=[{'p':1,'row':1,'col':1,
-        #      'irr':psf_cov[0],'irc':psf_cov[1],'icc':psf_cov[2]}]
 
         res = admom.admom(ci.psf,
                           ci['cen_uw'][0],
@@ -222,8 +202,35 @@ class BayesFitSim(shapesim.BaseSim):
                                   T=T,
                                   psf=psf)
 
+    def get_nellip(self, is2n):
+        s2n = shapesim.get_s2n(self, is2n)
+        s2n_fac = self['s2n_fac']
+        nellip = shapesim.get_s2n_nrepeat(s2n, fac=s2n_fac)
+
+        if nellip < self['min_gcount']:
+            nellip=self['min_gcount']
+        return nellip
+
+    def get_gvals(self, nellip):
+        if self['seed'] == None:
+            raise ValueError("can't use null seed for bayesfit")
+
+        # always use same seed for all in sim so we use the
+        # same g values at given theta in ring
+        numpy.random.seed(self['seed'])
+        gvals = self.gprior.sample1d(nellip)
+        return gvals
+
+
     def out_dtype(self):
-        dt=[('shear_true','f8',2),
+        dt=[('s2n_admom','f8'),
+            ('s2n_matched','f8'),
+            ('s2n_uw','f8'),
+            ('s2n_admom_psf','f8'),
+            ('s2n_matched_psf','f8'),
+            ('s2n_uw_psf','f8'),
+            ('s2','f8'),
+            ('shear_true','f8',2),
             ('gtrue','f8',2),
             ('g','f8',2),
             ('gsens','f8',2),
@@ -276,8 +283,6 @@ class BayesFitter:
 
         self.models={}
 
-        self.A = 1
-
     def get_like(self):
         return self._like
     def get_result(self):
@@ -303,31 +308,44 @@ class BayesFitter:
         cen   = self.cen
         dims = self.image.shape
 
-        loglike=zeros((self.n_ggrid, self.n_ggrid))
+        loglike=-9999.0e9 + zeros((self.n_ggrid, self.n_ggrid))
 
-        for i1 in xrange(self.n_ggrid):
-            g1 = self.g1vals[i1]
-            for i2 in xrange(self.n_ggrid):
-                g2 = self.g2vals[i2]
+        for i1,g1 in enumerate(self.g1vals):
+            for i2,g2 in enumerate(self.g2vals):
 
-                g=sqrt(g1**2 + g2**2)
-                if g >= 1:
-                    # leave like[i1,i2]==0
+                try:
+                    # will raise exception if g > 1 or e > 1
+                    sh=self.get_shape(i1,i2)
+                except lensing.ShapeRangeError:
                     continue
 
                 # like is exp(0.5*A*B^2) where
-                # a is sum((model/err)^2)
-                # and B is sum(model*image/err^2)/A
+                # A is sum((model/err)^2) and is fixed
+                # and
+                #   B = sum(model*image/err^2)/A
+                #     = sum(model/err * image/err)/A
 
-                # this is model/err^2
-                mod_over_err2=self._get_normalized_model(i1, i2, T, dims, cen)
+                # build up B
+                # this is model/err
+                Btmp=self._get_normalized_model(i1, i2, T, dims, cen)
 
-                B = (mod_over_err2*self.image).sum()/self.A
+                # Now multiply by image/err
+                Btmp *= self.image
+                Btmp *= 1./self.pixerr
+                # now do the sum and divide by A
+                B = Btmp.sum()/self.A
+
+                # A actually fully cancels here when we perform the
+                # renormalization to make sum( (model/err)^2 ) == A
+                arg = self.A * B**2/2
+                loglike[i1,i2] = arg
+
+                #B = (mod_over_err2*self.image).sum()/self.A
                 
                 # A actually fully cancels here when we perform the
-                # renormalization
-                arg = self.A*B**2/2
-                loglike[i1,i2] = arg
+                # renormalization to make sum( (model/err)^2 ) == A
+                #arg = self.A*B**2/2
+                #loglike[i1,i2] = arg
 
         loglike -= loglike.max()
         like = exp(loglike)
@@ -388,6 +406,9 @@ class BayesFitter:
 
 
     def _get_normalized_model(self, i1, i2, T, dims, cen):
+        """
+        Model/err.  Normalized such that sum(model/err)^2 ) = A
+        """
         #import images
         model = self._get_model(i1, i2, T, dims, cen)
 
@@ -398,6 +419,7 @@ class BayesFitter:
         ymodsum = ymod.sum()
         ymod2sum = (ymod**2).sum()
 
+        # this ensures sum( (model/err)^2 ) == A
         norm = sqrt(ymodsum**2*self.A/ymod2sum)
 
         # also divide again by err since we actually need model/err^2
@@ -409,7 +431,7 @@ class BayesFitter:
         # also divide again by err since we actually need model/err^2
         # put this above after we do the check
         #ymod *= (1./self.pixerr/sqrt(2))
-        ymod *= 1./self.pixerr
+        #ymod *= 1./self.pixerr
 
         return ymod
 
@@ -472,6 +494,7 @@ class BayesFitter:
         if T is None or cen is None:
             raise ValueError("for now send T and cen to fix them")
 
+        self.A = 1
         #self.A = ( (image/pixerr)**2 ).sum()
 
     def _set_psf(self, psf):
@@ -673,9 +696,13 @@ class GPrior:
 
 def test(n_ggrid=19, n=1000, s2n=40, gmin=-.9, gmax=.9, show=False, clobber=False):
     """
-    window 1: ngrid=21,range-1,1,s2n=10,n=2000 (instead of 19 from -.9,.9)
-    window 2: ngrid=39,n=2000
+     
+    ngrid=39,n=2000  This looks better actually, 1 sigma from true, but might
+        be fluctuated up
 
+    window 6: n=59
+
+    other shell: n=19 but different seed to see what happens
     """
     import fitsio
     outfile=os.path.expanduser('~/tmp/test-n-ggrid%d-%06d-s2n%d.fits' % (n_ggrid,n,s2n))

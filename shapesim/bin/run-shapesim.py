@@ -33,6 +33,8 @@ def main():
         sim=shapesim.gmix_fit_sim.GMixFitSim(run)
     elif run[0:4] == 'gmix':
         sim=shapesim.gmix_em_sim.GMixEMSim(run)
+    elif 'bayesfit' in run:
+        sim=shapesim.bayesfit_sim.BayesFitSim(run)
     else:
         raise ValueError("Don't know about run '%s'" % run)
 
