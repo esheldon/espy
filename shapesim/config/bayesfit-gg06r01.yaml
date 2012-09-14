@@ -13,6 +13,8 @@ s2n_fac: 1
 numg: 1000
 
 n_ggrid: 19
+gmin: -0.9
+gmax:  0.9
 
 retrim: false
 retrim_fluxfrac: null

@@ -29,25 +29,28 @@ from sys import stderr
 
 
 class BayesFitSim(shapesim.BaseSim):
-    def __init__(self, run, n_ggrid=None, s2nvals=None):
+    def __init__(self, run, extra=None):
         """
         use config files 
 
-        can over-ride n_ggrid and s2nvals here, basically for quick testing
-        purposes s2nvals is a sequence
+        can over-ride any values with extra= for quick
+        tests. 
 
         """
         super(BayesFitSim,self).__init__(run)
         if 'verbose' not in self:
             self['verbose'] = False
 
-        if n_ggrid:
-            self['n_ggrid'] = n_ggrid
-        if s2nvals:
-            self['s2nvals'] = s2nvals
+        if extra:
+            for k,v in extra.iteritems():
+                print k,v
+                self[k] = v
 
         self.gprior = GPrior()
-        self.fitter = BayesFitter(self.gprior, n_ggrid=self['n_ggrid'])
+        self.fitter = BayesFitter(prior=self.gprior, 
+                                  n_ggrid=self['n_ggrid'],
+                                  gmin=self['gmin'],
+                                  gmax=self['gmax'])
 
 
     def process_trials_by_s2n(self, is2, is2n):
@@ -251,17 +254,16 @@ class BayesFitter:
         N = sqrt( S*A/sum(ymod^2) )
     (i.e. set ymod = ymod*N/S) 
     """
-    def __init__(self, prior=None, n_ggrid=None):
+    def __init__(self, prior=None, n_ggrid=None, gmin=-.9, gmax=.9):
         if prior is None or n_ggrid is None:
             raise ValueError("BayesFitter(prior=, n_ggrid=)")
 
-        self.A = 1
-        self.n_ggrid=n_ggrid
         self.prior=prior
+        self.n_ggrid=n_ggrid
 
         # range for search
-        self.gmin=-.9
-        self.gmax= .9
+        self.gmin=gmin
+        self.gmax=gmax
         self.n_ggrid=n_ggrid # in both g1 and g2
 
         self.g1vals = linspace(self.gmin, self.gmax, self.n_ggrid)
@@ -273,6 +275,8 @@ class BayesFitter:
         self._set_prior_matrices()
 
         self.models={}
+
+        self.A = 1
 
     def get_like(self):
         return self._like
@@ -323,8 +327,6 @@ class BayesFitter:
                 # A actually fully cancels here when we perform the
                 # renormalization
                 arg = self.A*B**2/2
-                # this creates a temporary, can speed up
-                #chi2=( mod_over_err2*self.image ).sum()
                 loglike[i1,i2] = arg
 
         loglike -= loglike.max()
@@ -344,6 +346,11 @@ class BayesFitter:
         lp = self._like*self.prior_matrix
         lpsum = lp.sum()
 
+        #images.multiview(self.prior_d1_matrix)
+        #images.multiview(self.prior_d2_matrix)
+        #images.multiview(self.prior_matrix,title='prior')
+        #images.multiview(lp/lpsum,title='like*prior')
+        #stop
         g1 = (lp*self.g1matrix).sum()/lpsum
         g2 = (lp*self.g2matrix).sum()/lpsum
 
@@ -664,21 +671,22 @@ class GPrior:
         return -self.prior1d(g)
 
 
-def test(n_ggrid=19, n=1000, s2n=40, show=False, clobber=False):
+def test(n_ggrid=19, n=1000, s2n=40, gmin=-.9, gmax=.9, show=False, clobber=False):
     """
-    window 1: measure psf with admom nsub=1, s2n=10,n=2000
+    window 1: ngrid=21,range-1,1,s2n=10,n=2000 (instead of 19 from -.9,.9)
+    window 2: ngrid=39,n=2000
 
-    window 5: generating models sub-pixel because I didn't have a psf
-    measurement
-
-    window 3: old way no pixelization accounted for anywhere,s/n = 10
-    n=2000
     """
     import fitsio
-    outfile=os.path.expanduser('~/tmp/test-n-ggrid%d-%06d-s2n%d.fits' % (n_ggrid,  n,s2n))
+    outfile=os.path.expanduser('~/tmp/test-n-ggrid%d-%06d-s2n%d.fits' % (n_ggrid,n,s2n))
     if os.path.exists(outfile) and clobber:
         os.remove(outfile)
-    s=BayesFitSim('bayesfit-gg06r01', n_ggrid=n_ggrid, s2nvals=[s2n])
+
+    extra={'n_ggrid':n_ggrid,
+           's2nvals':[s2n],
+           'gmin':gmin,
+           'gmax':gmax}
+    s=BayesFitSim('bayesfit-gg06r01', extra=extra)
     print outfile
 
     if not os.path.exists(outfile):
