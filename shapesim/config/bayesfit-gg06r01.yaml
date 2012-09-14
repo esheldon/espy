@@ -4,10 +4,15 @@ sim: sim-gg06
 runtype: bys2n
 
 s2n_method: admom
-s2n_fac: 20
+#s2n_fac: 20
+# note currently we set nrepeat=1
+s2n_fac: 1
 
-# number of random ellip values to generate
-nume: 1000
+# number of random g values to generate
+# need large to sample the g1,g2 prior space
+numg: 1000
+
+n_ggrid: 19
 
 retrim: false
 retrim_fluxfrac: null
@@ -15,7 +20,7 @@ s2ncalc_fluxfrac: null
 
 #s2nvals: [5,10,15,20,25,30,40,50,60,70,80,90,100]
 #s2nvals: [1.0e+8]
-s2nvals: [100]
+s2nvals: [40]
 #s2nvals: [1.0e+8]
 
 s2n_psf: 1.0e+8
@@ -32,4 +37,4 @@ coellip_psf: true
 coellip_obj: true
 
 # set to null for new seed each time. Good when adding to the cache
-seed: null
+seed: 3

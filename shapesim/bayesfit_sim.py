@@ -12,30 +12,42 @@ TODO:
     - Need to implement prior and sensitivity.
 
 """
+import os
 import numpy
 from numpy import sqrt, cos, sin, exp, pi, zeros, ones, empty, \
         random, where, array, linspace
 from . import shapesim
 import lensing
+import fimage
 from fimage.convolved import NoisyConvolvedImage
 import gmix_image
 import images
+import esutil as eu
 from esutil.misc import wlog
 
 from sys import stderr
 
 
 class BayesFitSim(shapesim.BaseSim):
-    def __init__(self, run):
+    def __init__(self, run, n_ggrid=None, s2nvals=None):
         """
         use config files 
+
+        can over-ride n_ggrid and s2nvals here, basically for quick testing
+        purposes s2nvals is a sequence
+
         """
         super(BayesFitSim,self).__init__(run)
         if 'verbose' not in self:
             self['verbose'] = False
 
+        if n_ggrid:
+            self['n_ggrid'] = n_ggrid
+        if s2nvals:
+            self['s2nvals'] = s2nvals
+
         self.gprior = GPrior()
-        self.fitter = BayesFitter(None)
+        self.fitter = BayesFitter(self.gprior, n_ggrid=self['n_ggrid'])
 
 
     def process_trials_by_s2n(self, is2, is2n):
@@ -52,24 +64,26 @@ class BayesFitSim(shapesim.BaseSim):
         s2n_fac = self['s2n_fac']
 
         nring = self.simc['nring']
-        nrepeat = shapesim.get_s2n_nrepeat(s2n, fac=s2n_fac)
+        #nrepeat = shapesim.get_s2n_nrepeat(s2n, fac=s2n_fac)
+        nrepeat=1
 
         ntot = nring*nrepeat
         out = zeros(ntot, dtype=self.out_dtype())
 
         # random g value
         g = self.gprior.sample1d(1)[0]
+        print 'gtrue:',g
 
         ii = 0
         for i in xrange(nring):
             itheta=i
 
-            if self['verbose']:
-                stderr.write('-'*70)
-                stderr.write('\n')
+            #if self['verbose']:
+            #    stderr.write('-'*70)
+            #    stderr.write('\n')
             # we always write this
-            stderr.write("%d/%d %d%% done\n" % ((i+1),nring,
-                                                100.*(i+1)/float(nring)))
+            #stderr.write("%d/%d %d%% done\n" % ((i+1),nring,
+            #                                    100.*(i+1)/float(nring)))
 
             dolog=False
             if i==0:
@@ -98,13 +112,14 @@ class BayesFitSim(shapesim.BaseSim):
         s2n = shapesim.get_s2n(self, is2n)
         theta = shapesim.get_theta(self.simc, itheta=itheta)
 
-        print 'true g:',g,'theta:',theta,'s/n:',s2n,'s2:',s2
+        #print 'true g:',g,'theta:',theta,'s/n:',s2n,'s2:',s2
 
         s2n_fac = self['s2n_fac']
         s2n_method = self['s2n_method']
         s2ncalc_fluxfrac =self['s2ncalc_fluxfrac']
 
-        nrepeat = shapesim.get_s2n_nrepeat(s2n, fac=s2n_fac)
+        #nrepeat = shapesim.get_s2n_nrepeat(s2n, fac=s2n_fac)
+        nrepeat=1
 
         # do this once and get noise realizations.
         ci_nonoise = self.shapesim.get_trial(s2, ellip, theta)
@@ -112,10 +127,10 @@ class BayesFitSim(shapesim.BaseSim):
         e1true=ci_nonoise['e1true']
         e2true=ci_nonoise['e2true']
         g1true,g2true=lensing.util.e1e2_to_g1g2(e1true,e2true)
-        print 'true sheared g1,g2:',g1true,g2true
+        #print 'true sheared g1,g2:',g1true,g2true
 
         if dolog:
-            wlog("ring theta: %s/%s" % (itheta+1,self.simc['nring']))
+            #wlog("ring theta: %s/%s" % (itheta+1,self.simc['nring']))
             wlog('ellip:',ellip,'s2n:',s2n,
                  's2n_psf:',s2n_psf,'s2n_method:',s2n_method)
 
@@ -148,6 +163,7 @@ class BayesFitSim(shapesim.BaseSim):
             res = self.fitter.get_result()
 
             out['g'][irepeat,:] = res['g']
+            out['gsens'][irepeat,:] = res['gsens']
             out['gcov'][irepeat,:,:] = res['gcov']
             """
             print 'g1: %.4g +/- %.4g' % (res['g'][0],sqrt(res['cov'][0,0]))
@@ -174,14 +190,29 @@ class BayesFitSim(shapesim.BaseSim):
         """
         cheat on psf, T and cen for now
         """
+        import admom
+
         cov=ci['covtrue']
         T = cov[0] + cov[2]
         cen = ci['cen']
 
         # p/row/col unimportant
-        psf_cov = ci.psfpars['cov']
-        psf=[{'p':1,'row':1,'col':1,
-              'irr':psf_cov[0],'irc':psf_cov[1],'icc':psf_cov[2]}]
+        #psf_cov = ci.psfpars['cov']
+        #psf=[{'p':1,'row':1,'col':1,
+        #      'irr':psf_cov[0],'irc':psf_cov[1],'icc':psf_cov[2]}]
+
+        res = admom.admom(ci.psf,
+                          ci['cen_uw'][0],
+                          ci['cen_uw'][1], 
+                          guess=(ci['cov_uw'][0]+ci['cov_uw'][2])/2,
+                          nsub=1)
+
+        psf=[{'p':1,
+              'row':res['row'],
+              'col':res['col'],
+              'irr':res['Irr'],
+              'irc':res['Irc'],
+              'icc':res['Icc']}]
         self.fitter.process_image(image=ci.image,
                                   pixerr=ci['skysig'],
                                   cen=ci['cen'],
@@ -192,6 +223,7 @@ class BayesFitSim(shapesim.BaseSim):
         dt=[('shear_true','f8',2),
             ('gtrue','f8',2),
             ('g','f8',2),
+            ('gsens','f8',2),
             ('gcov','f8',(2,2))]
         return dt
 
@@ -204,39 +236,48 @@ class BayesFitter:
     likelihood is exp(0.5*A*B^2)
 
     A is 
-        sum( (model/err)^2 ) which we will fix at 1
+        sum( (model/err)^2 ) which we fix to sum ((ydata/err)^2)
     B is
         sum( model*data/err^2 )/A
 
-    We must fix A as a constant for every model we generate, so that
-    the relative height of the likelihood is valid give the other
-    simplifications we have made.  We can take A=1 for example
+    We must fix A as a constant for every model we generate, so that the
+    relative height of the likelihood is valid given the other simplifications
+    we have made. We choose 1 because, using the re-normalization below,
+    the value actually cancels.
 
-    So we should normalize the model according to the A condition.
-    create
+    We must normalize the model according to the A condition.  create
         ymod = model/err
     which will have a normalization S. Then the renormalization is given by
         N = sqrt( S*A/sum(ymod^2) )
     (i.e. set ymod = ymod*N/S) 
     """
-    def __init__(self, prior):
+    def __init__(self, prior=None, n_ggrid=None):
+        if prior is None or n_ggrid is None:
+            raise ValueError("BayesFitter(prior=, n_ggrid=)")
+
+        self.A = 1
+        self.n_ggrid=n_ggrid
         self.prior=prior
 
         # range for search
-        self.gmin=-.98
-        self.gmax= .98
-        self.ngrid=20 # in both g1 and g2
-        #self.ngrid=100 # in both g1 and g2
+        self.gmin=-.9
+        self.gmax= .9
+        self.n_ggrid=n_ggrid # in both g1 and g2
 
-        self.g1vals = linspace(self.gmin, self.gmax, self.ngrid)
+        self.g1vals = linspace(self.gmin, self.gmax, self.n_ggrid)
         self.g2vals = self.g1vals.copy()
 
-        self.g1matrix = self.g1vals.reshape(self.ngrid,1)*ones(self.ngrid)
-        self.g2matrix = self.g2vals*ones(self.ngrid).reshape(self.ngrid,1)
+        self.g1matrix = self.g1vals.reshape(self.n_ggrid,1)*ones(self.n_ggrid)
+        self.g2matrix = self.g2vals*ones(self.n_ggrid).reshape(self.n_ggrid,1)
 
-        self.delta_g = self.g1vals[1]-self.g1vals[0]
+        self._set_prior_matrices()
 
         self.models={}
+
+    def get_like(self):
+        return self._like
+    def get_result(self):
+        return self._result
 
     def process_image(self, 
                       image=None, 
@@ -252,16 +293,17 @@ class BayesFitter:
 
         self._go()
 
+
     def _go(self):
         T     = self.T
         cen   = self.cen
         dims = self.image.shape
 
-        loglike=zeros((self.ngrid, self.ngrid))
+        loglike=zeros((self.n_ggrid, self.n_ggrid))
 
-        for i1 in xrange(self.ngrid):
+        for i1 in xrange(self.n_ggrid):
             g1 = self.g1vals[i1]
-            for i2 in xrange(self.ngrid):
+            for i2 in xrange(self.n_ggrid):
                 g2 = self.g2vals[i2]
 
                 g=sqrt(g1**2 + g2**2)
@@ -272,58 +314,70 @@ class BayesFitter:
                 # like is exp(0.5*A*B^2) where
                 # a is sum((model/err)^2)
                 # and B is sum(model*image/err^2)/A
-                # since A is 1, all we need is sum (model*image)/err^2
 
-                # this is model/err^2/sqrt(2)
+                # this is model/err^2
                 mod_over_err2=self._get_normalized_model(i1, i2, T, dims, cen)
 
+                B = (mod_over_err2*self.image).sum()/self.A
+                
+                # A actually fully cancels here when we perform the
+                # renormalization
+                arg = self.A*B**2/2
                 # this creates a temporary, can speed up
-                chi2=( mod_over_err2*self.image ).sum()
-                #like[i1,i2] = exp(chi2)
-                loglike[i1,i2] = chi2
+                #chi2=( mod_over_err2*self.image ).sum()
+                loglike[i1,i2] = arg
 
         loglike -= loglike.max()
         like = exp(loglike)
 
-        like /= like.sum()
         self._like=like
+        #images.multiview(like)
+        #key=raw_input('q to quit')
+        #if key == 'q':
+        #    stop
+
         # get the expectation values, sensitiviey and errors
-        self._calc_expected()
-
-    def get_like(self):
-        return self._like
-    def get_result(self):
-        return self._result
-
-    def _calc_expected(self):
-        if self.prior is None:
-            #g1 = self.delta_g**2 * (self._like*self.g1matrix).sum()
-            #g2 = self.delta_g**2 * (self._like*self.g2matrix).sum()
-            # assuming likelihood is normalized
-            g1 = (self._like*self.g1matrix).sum()
-            g2 = (self._like*self.g2matrix).sum()
+        self._calc_result()
 
 
-            g1diff = g1-self.g1matrix
-            g2diff = g2-self.g2matrix
-            g11var = (self._like*g1diff**2).sum()
-            g22var = (self._like*g2diff**2).sum()
-            g12var = (self._like*g1diff*g2diff).sum()
+    def _calc_result(self):
+        lp = self._like*self.prior_matrix
+        lpsum = lp.sum()
 
-        else:
-            raise ValueError("implement working with prior")
+        g1 = (lp*self.g1matrix).sum()/lpsum
+        g2 = (lp*self.g2matrix).sum()/lpsum
+
+        # order matters for sensitivity below
+        g1diff = g1-self.g1matrix
+        g2diff = g2-self.g2matrix
+        g11var = (lp*g1diff**2).sum()/lpsum
+        g22var = (lp*g2diff**2).sum()/lpsum
+        g12var = (lp*g1diff*g2diff).sum()/lpsum
+
         
+        ldp1 = self._like*self.prior_d1_matrix
+        ldp2 = self._like*self.prior_d2_matrix
+        
+        g1sens = 1.-(g1diff*ldp1).sum()/lpsum
+        g2sens = 1.-(g2diff*ldp2).sum()/lpsum
+
         g=zeros(2)
-        cov=zeros((2,2))
+        gcov=zeros((2,2))
+        gsens = zeros(2)
+
         g[0] = g1
         g[1] = g2
-        cov[0,0] = g11var
-        cov[0,1] = g12var
-        cov[1,0] = g12var
-        cov[1,1] = g22var
+        gsens[0] = g1sens
+        gsens[1] = g2sens
+        gcov[0,0] = g11var
+        gcov[0,1] = g12var
+        gcov[1,0] = g12var
+        gcov[1,1] = g22var
 
-        self._result={'g':g,'gcov':cov}
 
+        self._g = g
+        self._gcov=gcov
+        self._result={'g':g,'gcov':gcov,'gsens':gsens}
 
 
     def _get_normalized_model(self, i1, i2, T, dims, cen):
@@ -347,8 +401,8 @@ class BayesFitter:
         #print ymod
         # also divide again by err since we actually need model/err^2
         # put this above after we do the check
-        # also put 1/sqrt(2) since we need 0.5*B^2 in the likelihood
-        ymod *= (1./self.pixerr/sqrt(2))
+        #ymod *= (1./self.pixerr/sqrt(2))
+        ymod *= 1./self.pixerr
 
         return ymod
 
@@ -361,16 +415,26 @@ class BayesFitter:
         sh = self.get_shape(i1,i2)
         #print 'shape:',sh
 
-        model=empty(dims,dtype='f8')
-        #model=zeros(dims,dtype='f8')
 
         # for now pars are only for single gaussian
         # note setting p=1 since we must renormalize anyway
         pars=array([cen[0],cen[1],sh.e1,sh.e2,T,1.0],dtype='f8')
-        #print 'pars:',pars
-        #print 'psf_pars:',self.psf_pars
+        model=empty(dims,dtype='f8')
         gmix_image.render._render.fill_model_coellip(model, pars, self.psf_pars, None)
 
+        # doing this for now since we are using the true sizes, which means we
+        # have to actually render them correctly; normally we fit the pixelized
+        # psf so it accounts for pixelization
+        """
+        Irc = sh.e2*T/2.0
+        Icc = (1+sh.e1)*T/2.0
+        Irr = (1-sh.e1)*T/2.0
+
+        cov=[Irr + self.psf_gmix[0]['irr'],
+             Irc + self.psf_gmix[0]['irc'],
+             Icc + self.psf_gmix[0]['icc']]
+        model = fimage.model_image('gauss', dims, cen, cov, nsub=4) # sim uses 16
+        """
         return model
 
     def get_shape(self, i1, i2):
@@ -401,7 +465,7 @@ class BayesFitter:
         if T is None or cen is None:
             raise ValueError("for now send T and cen to fix them")
 
-        self.A = ( (image/pixerr)**2 ).sum()
+        #self.A = ( (image/pixerr)**2 ).sum()
 
     def _set_psf(self, psf):
         self.psf_gmix = psf
@@ -412,6 +476,16 @@ class BayesFitter:
                 raise ValueError("psf must be list of dicts")
             self.psf_pars = gmix_image.gmix2pars(psf)
 
+    def _set_prior_matrices(self):
+        self.prior_matrix = zeros( (self.n_ggrid,self.n_ggrid) )
+        self.prior_d1_matrix = zeros( (self.n_ggrid,self.n_ggrid) )
+        self.prior_d2_matrix = zeros( (self.n_ggrid,self.n_ggrid) )
+
+        for i1,g1 in enumerate(self.g1vals):
+            for i2,g2 in enumerate(self.g2vals):
+                self.prior_matrix[i1,i2] = self.prior(g1,g2)
+                self.prior_d1_matrix[i1,i2] = self.prior.dbyg1(g1,g2)
+                self.prior_d2_matrix[i1,i2] = self.prior.dbyg2(g1,g2)
 
 class GPrior:
     """
@@ -430,9 +504,9 @@ class GPrior:
         self.C = 0.45
         self.D = 13.
 
-        self.maxval = self.prior(0., 0.)
+        self.maxval = self(0., 0.)
 
-    def prior(self, g1, g2):
+    def __call__(self, g1, g2):
         """
         Get the prior for the input g1,g2 value(s)
 
@@ -449,8 +523,8 @@ class GPrior:
         Uses central difference and a small enough step size
         to use just two points
         """
-        ff = self.prior(g1+h/2, g2)
-        fb = self.prior(g1-h/2, g2)
+        ff = self(g1+h/2, g2)
+        fb = self(g1-h/2, g2)
 
         return (ff - fb)/h
 
@@ -461,8 +535,8 @@ class GPrior:
         Uses central difference and a small enough step size
         to use just two points
         """
-        ff = self.prior(g1, g2+h/2)
-        fb = self.prior(g1, g2-h/2)
+        ff = self(g1, g2+h/2)
+        fb = self(g1, g2-h/2)
         return (ff - fb)/h
 
 
@@ -511,7 +585,7 @@ class GPrior:
             # now finally the height from [0,maxval)
             h = self.maxval*random.random(nleft)
 
-            pvals = self.prior(g1rand, g2rand)
+            pvals = self(g1rand, g2rand)
 
             w,=where(h < pvals)
             if w.size > 0:
@@ -589,3 +663,61 @@ class GPrior:
         """
         return -self.prior1d(g)
 
+
+def test(n_ggrid=19, n=1000, s2n=40, show=False, clobber=False):
+    """
+    window 1: measure psf with admom nsub=1, s2n=10,n=2000
+
+    window 5: generating models sub-pixel because I didn't have a psf
+    measurement
+
+    window 3: old way no pixelization accounted for anywhere,s/n = 10
+    n=2000
+    """
+    import fitsio
+    outfile=os.path.expanduser('~/tmp/test-n-ggrid%d-%06d-s2n%d.fits' % (n_ggrid,  n,s2n))
+    if os.path.exists(outfile) and clobber:
+        os.remove(outfile)
+    s=BayesFitSim('bayesfit-gg06r01', n_ggrid=n_ggrid, s2nvals=[s2n])
+    print outfile
+
+    if not os.path.exists(outfile):
+        data=[]
+        for i in xrange(n):
+            print '-'*70
+            print '%d/%d' % (i+1,n)
+            out=s.process_trials_by_s2n(1, 0)
+            data.append(out)
+
+        # combine into one big struct
+        alldata=eu.numpy_util.combine_arrlist(data,keep=True)
+
+        # means for each g value
+        means = zeros(n)
+        for i,d in enumerate(data):
+            means[i] = d['g'][:,0].sum()/d['gsens'][:,0].sum()
+
+        print 'writing:',outfile
+        with fitsio.FITS(outfile,mode='rw',clobber=True) as fits:
+            fits.write(means)
+            fits.write(alldata)
+    else:
+        print 'reading:',outfile
+        with fitsio.FITS(outfile,mode='rw') as fits:
+            means = fits[0].read()
+            alldata=None
+            if len(fits) > 1:
+                alldata=fits[1].read()
+
+    if show:
+        std=means.std()
+        binsize=std/4.
+        eu.plotting.bhist(means, binsize=binsize, 
+                          title=os.path.basename(outfile))
+        
+    mean = alldata['g'][:,0].sum()/alldata['gsens'][:,0].sum()
+    print 'mean:',mean
+    print 'mean from means:',means.mean(),"+/-",means.std()/sqrt(means.size)
+    print 'error per ring:',means.std()
+
+    return means, alldata
