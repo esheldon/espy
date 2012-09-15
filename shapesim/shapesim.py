@@ -1208,15 +1208,15 @@ def average_outputs(data, straight_avg=False, bayes=False):
             g1err2inv = num/g1scatt
             g2err2inv = num/g2scatt
 
-            d['shear1'] = g1sum/g1sensum
-            d['shear2'] = g2sum/g2sensum
-            d['shear1err'] = g1err/g1sens.mean()
-            d['shear2err'] = g2err/g2sens.mean()
+            d['shear1'][i] = g1sum/g1sensum
+            d['shear2'][i] = g2sum/g2sensum
+            d['shear1err'][i] = g1err/g1sens.mean()
+            d['shear2err'][i] = g2err/g2sens.mean()
 
-            d['g1sum'] = g1sum
-            d['g2sum'] = g2sum
-            d['g1sensum'] = g1sensum
-            d['g2sensum'] = g2sensum
+            d['g1sum'][i] = g1sum
+            d['g2sum'][i] = g2sum
+            d['g1sensum'][i] = g1sensum
+            d['g2sensum'][i] = g2sensum
         else:
             e1 = edata['e1_meas']
             e2 = edata['e2_meas']

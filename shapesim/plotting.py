@@ -1323,7 +1323,7 @@ class SimPlotter(dict):
 
         # looping over s2
         for i,st in enumerate(reversed(data)):
-            wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
+            #wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
 
             s2 = median(st['s2'])
 
@@ -1476,11 +1476,12 @@ class SimPlotter(dict):
             psf_sigma = self.simc['psf_sigma']
             siglab = r'$\sigma: %.1f$ pix' % psf_sigma
         siglab += ' '+self.psf_estring
-        siglab += r'$ e_{gal}^{tot}: %.2f$' % st['etrue'].mean()
+        if 'etrue' in st.dtype.names:
+            siglab += r'$ e_{gal}^{tot}: %.2f$' % st['etrue'].mean()
 
-        sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
-                               fontsize=2.5)
-        arr[1,0].add(sl)
+            sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
+                                   fontsize=2.5)
+            arr[1,0].add(sl)
 
         arr.xlabel=xlabel
 

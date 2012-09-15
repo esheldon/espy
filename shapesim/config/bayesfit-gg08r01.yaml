@@ -1,5 +1,6 @@
-run: bayesfit-gg07r01
-sim: sim-gg07
+# gg08 has 100 in ring
+run: bayesfit-gg08r01
+sim: sim-gg08
 
 runtype: bys2n
 
@@ -10,18 +11,18 @@ s2n_fac: 80
 # need decent count to sample the prior surface
 min_gcount: 500
 
-# this gives 0.05 spacing
-n_ggrid: 39
-gmin: -0.95
-gmax:  0.95
+# this gives 0.1 spacing
+n_ggrid: 19
+gmin: -0.9
+gmax:  0.9
 
 retrim: false
 retrim_fluxfrac: null
 s2ncalc_fluxfrac: null
 
-#s2nvals: [5,10,15,20,25,30,40,50,60,70,80,90,100]
+s2nvals: [10,15,20,25,30,40,50,60,70,80,90,100]
 #s2nvals: [1.0e+8]
-s2nvals: [10]
+#s2nvals: [10]
 
 s2n_psf: 1.0e+8
 

@@ -112,7 +112,7 @@ class BayesFitSim(shapesim.BaseSim):
         # these are generated on the same series every itheta for a given run
         # seed so that each itheta gets the same ellip values; otherwise no
         # ring
-        gvals = self.get_gvals(nellip)
+        gvals = self.get_gvals(is2, is2n, nellip)
         out = zeros(nellip, dtype=self.out_dtype())
         out['s2'] = s2
 
@@ -211,13 +211,18 @@ class BayesFitSim(shapesim.BaseSim):
             nellip=self['min_gcount']
         return nellip
 
-    def get_gvals(self, nellip):
+    def get_gvals(self, is2, is2n, nellip):
         if self['seed'] == None:
             raise ValueError("can't use null seed for bayesfit")
 
-        # always use same seed for all in sim so we use the
-        # same g values at given theta in ring
-        numpy.random.seed(self['seed'])
+        seed=self['seed']
+        allseed= seed*10000 + is2n*100 + is2
+
+        print 'seed,is2n,is2,allseed:',seed,is2n,is2,allseed
+        # always use same seed for a given is2/is2n and config seed so we use
+        # the same g values at given theta in ring
+
+        numpy.random.seed(allseed)
         gvals = self.gprior.sample1d(nellip)
         return gvals
 
