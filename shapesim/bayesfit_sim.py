@@ -674,7 +674,8 @@ class GPrior:
 def test(n_ggrid=19, n=1000, s2n=40, gmin=-.9, gmax=.9, show=False, clobber=False):
     """
     window 1: ngrid=21,range-1,1,s2n=10,n=2000 (instead of 19 from -.9,.9)
-    window 2: ngrid=39,n=2000
+        - gave same answer
+    on astro: ngrid=39,n=2000,s2n=10
 
     """
     import fitsio
