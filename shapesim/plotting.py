@@ -1263,7 +1263,6 @@ class SimPlotter(dict):
                            type='diff',
                            xrng=None,
                            yrng=None, 
-                           doavg=False,
                            title=None,
                            show=True):
         import biggles
@@ -1276,10 +1275,7 @@ class SimPlotter(dict):
         biggles.configure('PlotKey','key_width',13)
         biggles.configure('PlotKey','key_vsep',1.0)
 
-        if doavg:
-            extra='-avg'
-        else:
-            extra=''
+        extra=''
 
         if self.docum:
             extra+='-cum'
@@ -1288,7 +1284,12 @@ class SimPlotter(dict):
         if runtype != 'bys2n':
             raise ValueError("Can only make plots vs s2n for 'bys2n' runs")
 
-        shear_true = self.get_shear_true()
+        is_shearmag=False
+        if 'shearmag' in self.simc:
+            is_shearmag=True
+            shearmag = self.simc['shearmag']
+        else:
+            shear_true = self.get_shear_true()
 
         data = self.read_data()
 
@@ -1310,70 +1311,53 @@ class SimPlotter(dict):
         if title:
             arr.title=title
  
+
+        if self['run'][0:5] == 'deswl':
+            tag1='gamma1_meas'
+            tag2='gamma2_meas'
+            # convention
+            st[tag1] = -st[tag1]
+        else:
+            if is_shearmag:
+                tag1='sheardiff'
+                tag2='osheardiff'
+                errtag1='sheardifferr'
+                errtag2='osheardifferr'
+                lab1=r'$\gamma_+$'
+                lab2=r'$\gamma_\times$'
+            else:
+                tag1='shear1'
+                tag2='shear2'
+                errtag1='shear1err'
+                errtag2='shear2err'
+                lab1=r'$\gamma_1$'
+                lab2=r'$\gamma_2$'
+
+
         plots1=[]
         plots2=[]
         allplots=[]
 
-        if doavg:
-            max_s2n_len=0
-            for st in data:
-                if st['s2'].size > max_s2n_len:
-                    max_s2n_len = st['s2'].size
-            avg=zeros(max_s2n_len, dtype=[('s2n','f8'),('shear1','f8'),('shear2','f8'),('n','i8')])
 
         # looping over s2
         for i,st in enumerate(reversed(data)):
-            wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
+            #wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
 
             s2 = median(st['s2'])
 
             s2n_name='s2n_admom'
             xlabel = 'S/N'
-            """
-            if 's2n_matched' in st.dtype.names:
-                s2n_name='s2n_matched'
-            elif 's2n_uw' in st.dtype.names:
-                s2n_name='s2n_uw'
-                xlabel = r'$S/N_{uw}$'
-            else:
-                # assuming matched
-                s2n_name='s2n'
-                xlabel = r'$S/N$'
-            """
 
             s2n = st[s2n_name]
 
-            if self['run'][0:5] == 'deswl':
-                if self.docum:
-                    tag1='shear1cum'
-                    tag2='shear2cum'
-                else:
-                    tag1='gamma1_meas'
-                    tag2='gamma2_meas'
-                # convention
-                st[tag1] = -st[tag1]
-            else:
-                if self.docum:
-                    tag1='shear1cum'
-                    tag2='shear2cum'
-                else:
-                    tag1='shear1'
-                    tag2='shear2'
-
-            if self.docum and i == (len(data)-1):
-                # save for later
-                pts1_0 = st[tag1].copy()
-                pts2_0 = st[tag2].copy()
-                if type == 'diff':
-                    pts1_0 -= shear_true.g1
-                    pts2_0 -= shear_true.g2
-
-                err1_0 = st['shear1cum_err']
-                err2_0 = st['shear2cum_err']
           
             if type == 'diff':
-                yvals1 = st[tag1] - shear_true.g1
-                yvals2 = st[tag2] - shear_true.g2
+                if is_shearmag:
+                    yvals1 = st[tag1]
+                    yvals2 = st[tag2]
+                else:
+                    yvals1 = st[tag1] - shear_true.g1
+                    yvals2 = st[tag2] - shear_true.g2
             elif type == 'val':
                 yvals1 = st[tag1]
                 yvals2 = st[tag2]
@@ -1381,10 +1365,7 @@ class SimPlotter(dict):
             else:
                 raise ValueError("bad plot type: '%s'" % type)
 
-            if self.docum:
-                label = r'< %0.3f' % s2
-            else:
-                label = r'%0.3f' % s2
+            label = r'%0.3f' % s2
 
             cwidth=5.
             pr1 = biggles.Points(s2n, yvals1, color=colors[i],
@@ -1402,12 +1383,9 @@ class SimPlotter(dict):
             arr[0,0].add(cr1,pr1)
             arr[1,0].add(cr2,pr2)
             
-            #if not self.docum and i == (len(data)-1):
             if True:
-                #g1err = [st['shear1err'].max()]*st['shear1err'].size
-                #g2err = [st['shear2err'].max()]*st['shear2err'].size
-                g1err = st['shear1err']
-                g2err = st['shear2err']
+                g1err = st[errtag1]
+                g2err = st[errtag2]
                 err1p = biggles.SymmetricErrorBarsY(s2n, yvals1, g1err,
                                                     color=colors[i])
                 err2p = biggles.SymmetricErrorBarsY(s2n, yvals2, g2err,
@@ -1421,33 +1399,6 @@ class SimPlotter(dict):
             else:
                 plots2.append(cr1)
 
-            if doavg:
-                if st['s2'].size == avg['n'].size:
-                    avg['n'] += 1
-                    avg['s2n'] += s2n
-                    avg['shear1'] += yvals1
-                    avg['shear2'] += yvals2
-
-        if doavg:
-            avg['s2n'] = avg['s2n']/avg['n']
-            avg['shear1'] = avg['shear1']/avg['n']
-            avg['shear2'] = avg['shear2']/avg['n']
-            avg1 = biggles.Points(avg['s2n'],avg['shear1'],
-                                  type='filled circle',size=2)
-            avg2 = biggles.Points(avg['s2n'],avg['shear2'],
-                                  type='filled circle',size=2)
-            avg1.label = 'average'
-
-            if len(plots2) > 0:
-                plots2.append(avg1)
-            else:
-                plots1.append(avg1)
-
-        if self.docum and not self.noerr:
-            err1p = biggles.SymmetricErrorBarsY(s2n, pts1_0, err1_0)
-            err2p = biggles.SymmetricErrorBarsY(s2n, pts2_0, err2_0)
-            arr[0,0].add(err1p)
-            arr[1,0].add(err2p)
 
         fsize=2
         key1 = biggles.PlotKey(0.85,0.92, plots1, halign='right', 
@@ -1476,54 +1427,42 @@ class SimPlotter(dict):
             psf_sigma = self.simc['psf_sigma']
             siglab = r'$\sigma: %.1f$ pix' % psf_sigma
         siglab += ' '+self.psf_estring
-        siglab += r'$ e_{gal}^{tot}: %.2f$' % st['etrue'].mean()
+        if 'etrue' in st.dtype.names:
+            siglab += r'$ e_{gal}^{tot}: %.2f$' % st['etrue'].mean()
 
-        sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
-                               fontsize=2.5)
-        arr[1,0].add(sl)
+            sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
+                                   fontsize=2.5)
+            arr[1,0].add(sl)
 
         arr.xlabel=xlabel
 
 
-        # might be a diff
-        if doavg:
-            arr[0,0].add(avg1)
-            arr[1,0].add(avg2)
+        arr.ylabel = r'$\Delta \gamma$'
 
-        if type == 'val':
-            arr.ylabel = r'$\gamma$'
-            expect1 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()],
-                                    [shear_true.g1,shear_true.g1])
-            expect1.label = r'$\gamma_1$ = %.2g' % shear_true.g1
-            expect2 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()],
-                                    [shear_true.g2,shear_true.g2])
-            expect2.label = r'$\gamma_2$ = %.2g' % shear_true.g2
-
-            ekey1 = biggles.PlotKey(0.1,0.9, [expect1], halign='left', 
-                                   fontsize=3)
-            ekey2 = biggles.PlotKey(0.1,0.9, [expect2], halign='left', 
-                                   fontsize=3)
-
-            arr[0,0].add(expect1,ekey1)
-            arr[1,0].add(expect2,ekey2)
-
+        if is_shearmag:
+            g1lab_txt = lab1 + ' = %.2g' % shearmag
+            g2lab_txt = lab2
         else:
-            arr.ylabel = r'$\Delta \gamma$'
-            g1lab = biggles.PlotLabel(0.1,0.9, r'$\gamma_1$ = %.2g' % shear_true.g1, halign='left')
-            if 'dt' in self['run']:
-                g2x = 0.7
-            else:
-                g2x=0.1
-            g2lab = biggles.PlotLabel(g2x,0.9, r'$\gamma_2$ = %.2g' % shear_true.g2, halign='left')
+            g1lab_txt = lab1 + ' = %.2g' % shear_true.g1
+            g2lab_txt = lab2 + ' = %.2g' % shear_true.g2
 
-            arr[0,0].add(g1lab)
-            arr[1,0].add(g2lab)
+        g1lab = biggles.PlotLabel(0.1,0.9, g1lab_txt, halign='left')
 
-            expect1 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()], [0,0])
-            expect2 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()], [0,0])
+        if 'dt' in self['run']:
+            g2x = 0.7
+        else:
+            g2x = 0.1
 
-            arr[0,0].add(expect1)
-            arr[1,0].add(expect2)
+        g2lab = biggles.PlotLabel(g2x,0.9, g2lab_txt, halign='left')
+
+        arr[0,0].add(g1lab)
+        arr[1,0].add(g2lab)
+
+        expect1 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()], [0,0])
+        expect2 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()], [0,0])
+
+        arr[0,0].add(expect1)
+        arr[1,0].add(expect2)
 
 
 

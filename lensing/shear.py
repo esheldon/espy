@@ -2,6 +2,7 @@ import esutil as eu
 from numpy import sqrt
 import copy
 from . import util
+from .util import ShapeRangeError
 
 
 class Shear:
@@ -34,27 +35,43 @@ class Shear:
                 self.set_e1e2(0.0,0.0)
 
     def set_e1e2(self, e1, e2):
-        etot = e1**2 + e2**2
-        if etot > 1:
-            raise ValueError("ellipticity must be <= 1")
+        etot = sqrt(e1**2 + e2**2)
         self._e1 = e1
         self._e2 = e2
         self._etot = etot
 
         g1,g2 = util.e1e2_to_g1g2(self._e1, self._e2)
+        gtot = sqrt(g1**2 + g2**2)
+
+        if gtot >= 1:
+            mess="""
+g values must be < 1, found %.16g (%.16g,%.16g).
+Converted from e values %.16g (%.16g,%.16g)
+"""
+            mess = mess % (gtot,g1,g2,etot,e1,e2)
+            raise ShapeRangeError(mess)
 
         self._g1, self._g2 = g1,g2
 
     def set_g1g2(self, g1, g2):
+        gtot = sqrt(g1**2 + g2**2)
+
         e1,e2 = util.g1g2_to_e1e2(g1, g2)
         self.set_e1e2(e1,e2)
-        etot = e1**2 + e2**2
-        if etot > 1:
-            raise ValueError("ellipticity must be <= 1")
+        etot = sqrt(e1**2 + e2**2)
+        if etot >= 1:
+            mess="""
+e values must be <= 1, found %.16g (%.16g,%.16g).
+Converted from g values %.16g (%.16g,%.16g)
+"""
+            mess = mess % (etot,e1,e2,gtot,g1,g2)
+            raise ShapeRangeError(mess)
 
         self._g1,self._g2 = g1,g2
         self._e1 = e1
         self._e2 = e2
+
+        self._gtot = gtot
         self._etot = etot
 
     def get_e1e2(self):

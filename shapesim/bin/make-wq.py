@@ -71,7 +71,7 @@ def main():
         if orient == 'ring':
             ntrial = cs['nring']
         else:
-            ntrial = c['ntrial']
+            ntrial = cs['ntrial']
 
 
     wqd = shapesim.get_wq_dir(run, bytrial=options.bytrial)

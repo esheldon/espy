@@ -4,6 +4,10 @@ from numpy import tanh, arctanh, sqrt
 from numpy.random import random as randu
 import copy
 
+class ShapeRangeError(Exception):
+    pass
+
+
 def average_shear(e1, e2, weights=None, doerr=False):
     """
     Calculate the mean shear from shapes.
@@ -61,8 +65,11 @@ def e2g(e):
         g=(a-b)/(a+2)
     """
     if e >= 1:
-        raise ValueError("|e| > 1")
-    return tanh(0.5*arctanh(e))
+        raise ShapeRangeError("e must be <= 1, found %.16g" % e)
+    g = tanh(0.5*arctanh(e))
+    if g >= 1:
+        raise ShapeRangeError("converted g must be <= 1, found %.16g" % g)
+    return g
 
 def g2e(g):
     """
@@ -72,8 +79,12 @@ def g2e(g):
         g=(a-b)/(a+2)
     """
     if g >= 1:
-        raise ValueError("|g| > 1")
-    return tanh(2*arctanh(g))
+        raise ShapeRangeError("ellipticity must be < 1, "
+                              "found %.16g" % g)
+    e = tanh(2*arctanh(g))
+    if e >= 1:
+        raise ShapeRangeError("converted e must be < 1, found %.16g" % e)
+    return e
 
 e2gamma=e2g
 gamma2e=g2e

@@ -1,29 +1,28 @@
-run: bayesfit-gg06r01
-sim: sim-gg06
+# gg08 has 100 in ring
+run: bayesfit-gg08r03
+sim: sim-gg08
 
 runtype: bys2n
 
 s2n_method: admom
 s2n_fac: 20
 
+# minimum number of random ellipticities to use.
+# need decent count to sample the prior surface
 min_gcount: 500
 
-# number of random g values to generate
-# need large to sample the g1,g2 prior space
-#numg: 1000
-
-n_ggrid: 19
-gmin: -0.9
-gmax:  0.9
+# this gives 0.05 spacing
+n_ggrid: 79
+gmin: -0.99
+gmax:  0.99
 
 retrim: false
 retrim_fluxfrac: null
 s2ncalc_fluxfrac: null
 
-#s2nvals: [5,10,15,20,25,30,40,50,60,70,80,90,100]
+s2nvals: [10,15,20,25,30,40,50,60,70,80,90,100]
 #s2nvals: [1.0e+8]
-s2nvals: [10]
-#s2nvals: [1.0e+8]
+#s2nvals: [10]
 
 s2n_psf: 1.0e+8
 
@@ -41,4 +40,4 @@ coellip_obj: true
 # currently need to set this for the trials to work.
 # can perhaps instead just put a set of ellipticities 
 # somewhere from which to draw
-seed: 200
+seed: 7

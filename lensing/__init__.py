@@ -210,6 +210,7 @@ is actually specific to mz binning right now
 from . import util
 from . import shear
 from .shear import Shear
+from .util import ShapeRangeError
 
 from . import rotation
 

@@ -14,6 +14,8 @@ from optparse import OptionParser
 parser=OptionParser(__doc__)
 parser.add_option('-p','--priority',default='med',
                   help='priority for queue')
+parser.add_option('--bynode',action='store_true',
+                  help="grab a full node")
 parser.add_option('-g','--group',default=None,
                   help='groups/groups')
 parser.add_option('-e','--extra',default=None,
@@ -29,7 +31,7 @@ command: |
     python $ESPY_DIR/shapesim/bin/combine-trials.py %(run)s %(i1)d %(i2)d
 
 %(group)s
-mode: bynode
+%(mode)s
 job_name: %(job_name)s
 priority: %(pri)s\n"""
 
@@ -50,6 +52,10 @@ def main():
         group = 'group: ['+group+']'
     else:
         group=''
+
+    mode=''
+    if options.bynode:
+        mode='mode: bynode'
 
     extra=''
     if options.extra is not None:
@@ -85,6 +91,7 @@ def main():
                                         'i1':i1,
                                         'i2':i2,
                                         'group':group,
+                                        'mode':mode,
                                         'extra':extra,
                                         'pri':options.priority}
                 fobj.write(wqscript)

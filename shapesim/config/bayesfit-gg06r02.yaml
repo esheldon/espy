@@ -1,4 +1,4 @@
-run: bayesfit-gg06r01
+run: bayesfit-gg06r02
 sim: sim-gg06
 
 runtype: bys2n
@@ -6,15 +6,14 @@ runtype: bys2n
 s2n_method: admom
 s2n_fac: 20
 
+# minimum number of random ellipticities to use.
+# need decent count to sample the prior surface
 min_gcount: 500
 
-# number of random g values to generate
-# need large to sample the g1,g2 prior space
-#numg: 1000
-
-n_ggrid: 19
-gmin: -0.9
-gmax:  0.9
+# this gives 0.05 spacing
+n_ggrid: 39
+gmin: -0.95
+gmax:  0.95
 
 retrim: false
 retrim_fluxfrac: null
@@ -41,4 +40,4 @@ coellip_obj: true
 # currently need to set this for the trials to work.
 # can perhaps instead just put a set of ellipticities 
 # somewhere from which to draw
-seed: 200
+seed: 1337

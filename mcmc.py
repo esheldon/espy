@@ -6,10 +6,6 @@ Classes:
     MCMC: A class for running Monte Carlo Markov Chains.
     MCMCTester: A class for testing the MCMC class.
 
-functions:
-    read_results(filename):
-        Read a result structure output by the mcmc code.  
-
 testing:
     test: Run the MCMCTester
     testmany:  Run mutliple realizations of the tester and plot a histogram
@@ -22,89 +18,41 @@ Revision History:
 """
 
 import numpy
-from numpy import zeros, sqrt, arange, isfinite, where
+from numpy import array, zeros, sqrt, arange, isfinite, where, diag
+from numpy.random import randn
 from sys import stdout
 import os
 
-def read_results(filename):
-    """
-    Name:
-        read_results
-    Purpose:
-        Read a result structure output by the mcmc code.  
-
-    Description:
-
-        The format of the file is binary in the native endian of the machine.
-        The first 4 bytes are a 4-byte integer holding the number of
-        parameters:
-
-            4 byte integer                number of parameters
-
-        then a large block of bytes representing each step in the chain. Each
-        step is represented by npar 8-byte floats for each parameter, followed
-        by an 8-byte float for the likelihood of that step
-
-            npar*8 + 8 bytes              number of steps for each trial
-
-        Thus the number of steps can be computed from the size of the file:
-            
-            nsteps = (nbytes-4)/(npar*8 + 8)
-
-        The result is an array with fields, with data type:
-
-            [('pars',('f8',npar)), ('like','f8')]
 
 
-    """
-    stat = os.stat(filename)
-    nbytes = stat.st_size
-
-    fobj = open(filename, 'r')
-
-    npar = zeros(1, dtype='i4')
-    npar = numpy.fromfile(fobj, dtype='i4', count=1)
-
-    # each row is par0,par1,par2,...,parN,like
-    # where the par and like are 8-byte floats
-    # thus the number of trials is nbytes/(npar*8 + 8)
-    # don't forget to remove 4 bytes for npar at 
-    # the beginning
-
-    nstep = (nbytes-4)/(npar*8 + 8)
-
-    dtype = result_dtype(npar)
-    data = numpy.fromfile(fobj, dtype=dtype, count=nstep)
-
-    fobj.close()
-    return data
-
-def result_dtype(npar):
-    return [('pars',('f8',npar)), ('like','f8')]
-
-def extract_stats(data, burnin):
-    import esutil
+def extract_stats(data, burnin=0):
     npar = data['pars'].shape[1]
 
     means = zeros(npar,dtype='f8')
-    errs  = zeros(npar,dtype='f8')
+    cov = zeros( (npar,npar), dtype='f8')
 
-
-    w=arange(burnin,data.size)
     for i in xrange(npar):
-        ww,=where(isfinite(data['like'][w]))
-        if ww.size == 0:
-            raise ValueError("no values are finite")
-        means[i] = data['pars'][w[ww], i].mean()
-        errs[i] = data['pars'][w[ww], i].std()
+        means[i] = data['pars'][burnin:, i].mean()
 
-    return means, errs
+    num=data.size-burnin
+
+    for i in xrange(npar):
+        iidiff = data['pars'][burnin:,i]-means[i]
+        for j in xrange(i,npar):
+            if i == j:
+                cov[i,j] = (iidiff*iidiff).sum()/(num-1)
+            else:
+                jjdiff = data['pars'][burnin:,j]-means[j]
+                cov[i,j] = (iidiff*jjdiff).sum()/(num-1)
+                cov[j,i] = cov[i,j]
+
+    return means, cov
 
 def extract_maxlike_stats(data, burnin):
     nuse = data.size-burnin
     npar = data['pars'].shape[1]
 
-    maxi = data['like'][burnin:].argmax()
+    maxi = data['loglike'][burnin:].argmax()
 
     max_like = zeros(npar,dtype='f8')
     error    = zeros(npar,dtype='f8')
@@ -126,11 +74,11 @@ class MCMC:
         MCMC
     Purpose:
         Run a Monte Carlo Markov Chain (MCMC).  The user inputs an object that
-        has the methods "step" and "likelihood" that can be used to generate
-        the chain
+        has the methods "step" and "loglike" that can be used to generate the
+        chain. Note the loglike method should return the log likelihood
 
     Calling Sequence:
-        m=mcmc.MCMC(obj, log=True)
+        m=mcmc.MCMC(obj)
         result = m.run(nstep, par_guess, seed=None)
 
     Construction:
@@ -138,50 +86,27 @@ class MCMC:
             obj: 
                 An object to use for evaluating likelihoods and taking steps in
                 the chain.  The object must have the methods "step" and
-                "likelihood".  These methods must have the following
+                "loglike".  These methods must have the following
                 signatures:
-                    .newpars = obj.step(pars)
+                    newpars = obj.step(pars)
                         Take a new step and return the new parameters.  
-                    .likelihood = obj.likelihood(pars)
-                        Return the likelihood of the input parameters.
-
-        Optional Inputs:
-            log:  If True, the object returns log likelihoods.  Default
-                is True.
+                    loglike = obj.loglike(pars)
+                        Return the log likelihood of the input parameters.
 
     See docs for the .run method for more details.
 
     Revision History:
         Created: 2010-04-02, Erin Sheldon, BNL
     """
-    def __init__(self, obj, log=True):
-         self.init(obj, log=log)
+    def __init__(self, obj):
+         self.init(obj)
 
-    def init(self, obj, log=True):
+    def init(self, obj):
         self.obj = obj
-        self.log = log
         self.fobj = None
         self.parguess=None
 
-    def open_output(self, filename):
-        if self.parguess is None:
-            raise ValueError("parguess must be set before opening")
-
-        self.fobj = open(filename, 'w')
-        try:
-            npar = len(self.parguess)
-        except:
-            npar = 1
-        npar = numpy.array(npar, dtype='i4')
-        npar.tofile( self.fobj )
- 
-        
-    def close_output(self):
-        if isinstance(self.fobj, file):
-            self.fobj.close()
-            self.fobj=None
-
-    def run(self, nstep, parguess, seed=None, file=None):
+    def run(self, nstep, parguess, seed=None):
         """
         Class:
             MCMC
@@ -190,7 +115,7 @@ class MCMC:
         Purpose:
             Run the MCMC chain.
         Calling Sequence:
-            m=mcmc.MCMC(obj, log=True)
+            m=mcmc.MCMC(obj)
 
             # run the chain
             chain_data = m.run(nstep, par_guess, seed=None)
@@ -204,79 +129,53 @@ class MCMC:
             seed: A seed for the random number generator. If not given, 
                 a seed is automatically generated by numpy.random.seed()
 
-            file: 
-                a file name to write the results.  The file will contain a
-                4-byte integer for the number of parameters, followed by the
-                data, 8 byte floats for each parameter and and 8-byte float for
-                the likelihood.  Repeated for each step.  See the read_results
-                function for more info.
-
-                if file is sent, the return value of this method is None
-
         Outputs:
             A rec array holding the chain data.  The data type is
-                [('pars',('f8',npar)), ('like','f8')]
+
+                [('accepted','i1'),('pars',('f8',npar)), ('loglike','f8')]
+
             So output['pars'][i] is the parameters in step i, and
-            output['likelihood'][i] is the likelihood of step i.
+            output['loglike'][i] is the log likelihood of step i.
+            Accepted is 1 if the step was accepted 0 otherwise.
 
             For example:
                 data = m.run(1000)
                 data['pars']
-                data['likelihood']
-
-            If file is sent, then None is returned.
-
+                data['loglike']
 
         """
+
+        self.parguess=array(parguess,dtype='f8')
 
         # If seed sent use it, else just generate one
         numpy.random.seed(seed)
 
-        if not numpy.isscalar(parguess):
-            self.parguess = numpy.array(parguess, dtype='f8')
-            self.npar = self.parguess.size
-        else:
-            self.parguess = parguess
-            self.npar=1
-
-        # these are the results
-        if file is not None:
-            self.open_output(file)
-            output = None
-        else:
-            output = self.result_struct(nstep)
 
         self.oldpars = self.parguess.copy()
-        self.oldlike = self.obj.likelihood(self.oldpars)
+        self.oldlike = self.obj.loglike(self.oldpars)
+        self.npar = self.oldpars.size
+
+        output = self.result_struct(nstep)
 
         for i in xrange(nstep):
             self.step()
 
-            if file is not None:
-                self.write_step()
-            else:
-                output['pars'][i] = self.newpars
-                output['like'][i] = self.newlike
+            output['pars'][i] = self.newpars
+            output['loglike'][i] = self.newlike
+            output['accepted'][i] = self.accepted
 
             self.oldpars = self.newpars
             self.oldlike = self.newlike
 
-        if file is not None:
-            self.close_output()
-        # when writing to a file, will be None
         return output
 
     def result_struct(self, num):
-        dtype = result_dtype(self.npar)
+        dtype = self.result_dtype(self.npar)
         st = zeros(num, dtype=dtype)
         return st
 
-    def write_step(self):
-        parout = numpy.array(self.newpars, dtype='f8', copy=False)
-        parout.tofile(self.fobj)
-        likeout = numpy.array(self.newlike, dtype='f8')
-        likeout.tofile(self.fobj)
-
+    def result_dtype(self, npar):
+        return [('accepted','i1'),('pars',('f8',npar)), ('loglike','f8')]
 
     def step(self):
         """
@@ -286,8 +185,8 @@ class MCMC:
             step
         Purpose:
             Take the next step in the MCMC chain.  Calls the .step and
-            .likelihood methods of the object send during construction.  If
-            the new likelihood is not greater than the previous, or a
+            .loglike methods of the object send during construction.  If
+            the new loglike is not greater than the previous, or a
             uniformly generated random number is greater than the the ratio of
             new to old likelihoods, the new step is not used, and the new
             parameters are the same as the old.  Otherwise the new step is
@@ -298,25 +197,23 @@ class MCMC:
         """
         # Take a step and evaluate the likelihood
         newpars = self.obj.step(self.oldpars)
-        newlike = self.obj.likelihood(newpars)
+        newlike = self.obj.loglike(newpars)
 
-        if self.log:
-            likeratio = newlike-self.oldlike
-        else:
-            likeratio = newlike/self.oldlike
+        likeratio = newlike-self.oldlike
 
         randnum = numpy.random.random()
-        if self.log:
-            randnum = numpy.log(randnum)
+        randnum = numpy.log(randnum)
 
         # we allow use of -infinity as a sign we are out of bounds
         if (isfinite(newlike) 
-            and ( (newlike > self.oldlike) | (randnum < likeratio)) ):
-                self.newpars=newpars
-                self.newlike=newlike
+                and ( (newlike > self.oldlike) | (randnum < likeratio)) ):
+            self.newpars=newpars
+            self.newlike=newlike
+            self.accepted=1
         else:
             self.newpars=self.oldpars
             self.newlike=self.oldlike
+            self.accepted=0
 
 
 
@@ -359,13 +256,16 @@ class MCMCTester:
             self.npoints = ny
             self.y = zeros(ny, dtype='f8')
             self.y[:] = val
-            self.y[:] += sigma*numpy.random.standard_normal(ny)
+            self.y[:] += sigma*randn(ny)
 
             self.yerr = zeros(ny, dtype='f8')
             self.yerr[:] = sigma
 
             self.ivar = 1.0/self.yerr**2
             self.psigma = self.yerr[0]
+
+            #self.parguess=val + 3*sigma*randn()
+            self.parguess=0.
 
             if verbose:
                 stdout.write('  type: "constant"\n')
@@ -385,9 +285,9 @@ class MCMCTester:
 
     # pars must be an array
     def step(self,pars):
-        return pars + self.psigma*numpy.random.standard_normal(self.npars)
+        return pars + self.psigma*randn(self.npars)
 
-    def likelihood(self,pars):
+    def loglike(self,pars):
         if self.type == 'constant':
             chi2 = self.ivar*(self.y-pars)**2
             chi2 = -0.5*chi2.sum()
@@ -395,15 +295,14 @@ class MCMCTester:
             raise ValueError("only support type='constant'")
         return chi2
 
-    def RunTest(self, nstep=10000, file=None):
+    def RunTest(self, nstep=10000):
 
         if self.verbose:
             stdout.write("  nstep: %s\n" % nstep)
 
-        parguess = self.true_pars
 
         m=MCMC(self)
-        self.trials = m.run(nstep, parguess, file=file)
+        self.trials = m.run(nstep, self.parguess)
 
     def RunMultipleTests(self, ntrial, nstep=1000, burnin=100):
         """
@@ -554,12 +453,13 @@ class MCMCTester:
         return self.trials, self.like
 
 
+
 def plot_results6(res, burnin, sigma_clip=True):
     import biggles
     import esutil
     tab = biggles.Table(2,3)
-    means,errs = extract_stats(res, burnin, sigma_clip=sigma_clip)
-    
+    means,cov= extract_stats(res, burnin)
+    errs = sqrt(diag(cov)) 
     for i in xrange(6):
         irow = i//3
         icol = i % 3
@@ -580,30 +480,48 @@ def plot_results6(res, burnin, sigma_clip=True):
 
     tab.show()
 
-def plot_burnin(res,burnin):
+def plot_burnin(vals, loglike, burnin, ylabel=None, show=True):
+    import biggles
+
+    tab=biggles.Table(2,1)
+
+    ind=arange(vals.size)
+
+    bplt=biggles.FramedPlot()
+    pts = biggles.Curve(ind, vals, type='solid')
+    bpts = biggles.Curve(ind[0:burnin], vals[0:burnin], type='solid',
+                         color='red')
+    bplt.add(pts,bpts)
+    bplt.xlabel = 'trial #'
+    if ylabel:
+        bplt.ylabel=ylabel
+
+    lplt=biggles.FramedPlot()
+
+    mlike=loglike.max()
+    llikemod = loglike-loglike.max()
+
+    lpts=biggles.Curve(ind, llikemod, type='solid')
+    blpts=biggles.Curve(ind[0:burnin], llikemod[0:burnin],
+                        type='solid',color='red')
+
+    lplt.add(lpts,blpts)
+    lplt.xlabel='trial #'
+    lplt.ylabel='log(like)'
+
+    tab[0,0] = bplt
+    tab[1,0] = lplt
+
+    if show:
+        tab.show()
+    return tab
+
+
+def plot_results(res, burnin):
     import biggles
     import esutil
-    w=arange(burnin,res.size)
-    ww,=where(isfinite(res['like'][w]))
-    if ww.size == 0:
-        raise ValueError("no values are finite")
-
-    w=w[ww]
-    plt = esutil.plotting.bscatter(arange(w.size),res['like'][w],show=False,
-                                   xlabel='trial #')
-
-    w2,=where(isfinite(res['like'][0:burnin]))
-    if ww.size == 0:
-        raise ValueError("no values are finite")
-    esutil.plotting.bscatter(arange(w2.size),res['like'][w2],
-                             color='red',plt=plt)
-
-
-def plot_results(res,burnin, prior=None, pwidth=None):
-    import biggles
-    import esutil
-    means,errs = extract_stats(res, burnin)
-    
+    means,cov = extract_stats(res, burnin)
+    errs=sqrt(diag(cov)) 
     plot_burnin(res,burnin)
 
     npar = len(means)
@@ -619,14 +537,6 @@ def plot_results(res,burnin, prior=None, pwidth=None):
         plt=biggles.FramedPlot()
         plt.xlabel='par %s' % i
         plt.add(hplot)
-
-        if prior is not None and pwidth is not None:
-            mn = prior[i]
-            sig = pwidth[i]
-            g = numpy.exp(-0.5*(hdict['center']-mn)**2/sig**2 )
-            g *= res[burnin:].size/g.sum()
-            pc = biggles.Curve(hdict['center'], g, color='blue')
-            plt.add(pc)
             
         lab = r'$<p%d> = %0.4g \pm %0.4g$' % (i,means[i],errs[i])
         plab = biggles.PlotLabel(0.1,0.9,lab,halign='left')
@@ -634,7 +544,7 @@ def plot_results(res,burnin, prior=None, pwidth=None):
         plt.add(plab)
         plt.show()
 
-def test(nstep=10000, doplot=False, hardcopy=False):
+def test(burnin=100, nstep=10000, doplot=False, hardcopy=False):
     """
     Name:
         test
@@ -643,6 +553,7 @@ def test(nstep=10000, doplot=False, hardcopy=False):
     """
     tc = MCMCTester("constant")
     tc.RunTest(nstep)
+    plot_burnin(tc.trials['pars'], tc.trials['loglike'], burnin)
     tc.CompareResults(doplot=doplot, hardcopy=hardcopy)
 
 def testmany(ntrial):
@@ -700,8 +611,8 @@ def test_line(nstep=10000, doplot=False):
         tab.show()
 
         # get status for chain
-        parfit, errfit = extract_stats(data, burnin)
-
+        parfit, cov = extract_stats(data, burnin)
+        errfit = sqrt(diag(cov))
 
         # plot the histograms and comparison plot
 
@@ -798,10 +709,10 @@ class LinFitter:
 
 
     def step(self,pars):
-        newpars = pars + self.err_guess*numpy.random.standard_normal(self.npars)
+        newpars = pars + self.err_guess*randn(self.npars)
         return newpars
     
-    def likelihood(self, pars):
+    def loglike(self, pars):
         yfunc = self.line_func(pars)
         chi2 = self.ivar*(self.y-yfunc)**2
         return -0.5*chi2.sum()
@@ -815,7 +726,7 @@ def noisy_line(pars, xmin, xmax, nx, yerr):
     x = numpy.linspace(xmin, xmax, nx)
     y = pars[0]*x + pars[1]
 
-    y += yerr*numpy.random.standard_normal(nx)
+    y += yerr*randn(nx)
     
     yerr_vals = numpy.array([yerr]*x.size, dtype='f8')
 
