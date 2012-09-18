@@ -5,8 +5,9 @@ import esutil as eu
 from esutil.misc import wlog
 from esutil.stat import wmom
 import numpy
-from numpy import ogrid, array, sqrt, where, linspace, median, zeros
-from numpy.random import standard_normal
+from numpy import ogrid, array, sqrt, where, linspace, median, zeros, pi
+from numpy import sin, cos, arctan2
+from numpy.random import randn
 import fimage
 from fimage import add_noise_admom, add_noise_dev, add_noise_uw
 from fimage.conversions import mom2sigma, cov2sigma, etheta2e1e2, ellip2mom
@@ -231,11 +232,26 @@ class ShapeSim(dict):
             ci = fimage.convolved.ConvolverTurbulence(objpars,psfpars, **self)
 
         ci['obj_theta'] = obj_theta
+        if shear is not None:
+            ci['shear1'] = shear.g1
+            ci['shear2'] = shear.g2
+        else:
+            ci['shear1']=0.
+            ci['shear2']=0.
         return ci
 
     def get_shear(self):
-        sh = self['shear']
-        if sh is not None:
+        if 'shearmag' in self:
+            numpy.random.seed(None)
+
+            shearmag=self['shearmag']+self['shearwidth']*randn()
+
+            theta=numpy.random.random()*pi
+            g1 = shearmag*cos(2*theta)
+            g2 = shearmag*sin(2*theta)
+            shear=lensing.Shear(g1=g1,g2=g2)
+        elif 'shear' in self:
+            sh = self['shear']
             if len(sh) != 2:
                 raise ValueError("shear in config should have the "
                                  "form [g1,g2]")
@@ -312,8 +328,8 @@ class BaseSim(dict):
         pprint.pprint(self, stream=stderr)
 
         orient=self.simc['orient']
-        if orient != 'ring':
-            raise ValueError("no longer support anything but ring")
+        #if orient != 'ring':
+        #    raise ValueError("no longer support anything but ring")
     
     def wlog(self, *args):
         if self['verbose']:
@@ -948,7 +964,7 @@ def make_averaged_outputs(run, docum=False,
 
     straight_avg=False
     bayes=False
-    if 'bayesfit' in run:
+    if 'bayes' in run:
         wlog("doing bayes averaging")
         bayes=True
     elif 'deswl' in run:
@@ -971,7 +987,10 @@ def make_averaged_outputs(run, docum=False,
                 continue
             edata = read_output(run, i1, i2, verbose=True, fs='hdfs')
             s2data.append(edata)
-        s2data = average_outputs(s2data, straight_avg=straight_avg, bayes=bayes)
+        if 'shearmag' in cs:
+            s2data = average_randshear_outputs(s2data)
+        else:
+            s2data = average_outputs(s2data, straight_avg=straight_avg, bayes=bayes, orient=cs['orient'])
         data.append(s2data)
 
     wlog("writing averaged outputs")
@@ -991,6 +1010,15 @@ def average_runs(runlist, new_run_name):
     in all indices of relevance
     """
 
+    if 'bayes' in runlist[0]:
+        bayes=True
+        sumlist=['g1sum','g2sum','g1sensum','g2sensum',
+                 'g1err2invsum','g1err2invsum','nsum']
+    else:
+        sumlist=['e1sum','e2sum','e1err2invsum','e2err2invsum',
+                 'esqsum','nsum']
+        bayes=False
+
     dir = get_output_dir(new_run_name)
     if not os.path.exists(dir):
         wlog("making dir:",dir)
@@ -1009,18 +1037,25 @@ def average_runs(runlist, new_run_name):
             if irun == 0:
                 data = d.copy()
             else:
-                for field in ['e1sum','e2sum',
-                              'e1err2invsum','e2err2invsum',
-                              'esqsum','nsum']:
+                for field in sumlist:
                     data[field] += d[field]
             
             # this is an array with mean for each in second index
-            mesq = data['esqsum']/data['nsum']
-            data['Rshear'] = 1.-.5*mesq
-            data['shear1'] = .5*data['e1sum']/data['nsum']/data['Rshear']
-            data['shear2'] = .5*data['e2sum']/data['nsum']/data['Rshear']
-            data['shear1err'] = 0.5*sqrt(1/data['e1err2invsum'])
-            data['shear2err'] = 0.5*sqrt(1/data['e2err2invsum'])
+            if bayes:
+                g1sens_mean = data['g1sensum']/data['nsum']
+                g2sens_mean = data['g2sensum']/data['nsum']
+                data['shear1'] = data['g1sum']/data['g1sensum']
+                data['shear2'] = data['g2sum']/data['g2sensum']
+                data['shear1err'] = sqrt(1/data['g1err2invsum'])/g1sens_mean
+                data['shear2err'] = sqrt(1/data['g2err2invsum'])/g2sens_mean
+
+            else:
+                mesq = data['esqsum']/data['nsum']
+                data['Rshear'] = 1.-.5*mesq
+                data['shear1'] = .5*data['e1sum']/data['nsum']/data['Rshear']
+                data['shear2'] = .5*data['e2sum']/data['nsum']/data['Rshear']
+                data['shear1err'] = 0.5*sqrt(1/data['e1err2invsum'])
+                data['shear2err'] = 0.5*sqrt(1/data['e2err2invsum'])
 
 
         for fs in [None,'hdfs']:
@@ -1134,7 +1169,7 @@ def accumulate_outputs(data):
 
     return out
 
-def average_outputs(data, straight_avg=False, bayes=False):
+def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
     """
     Input should be a list of arrays.  The output will be
     an array with length of list, values averaged over the
@@ -1152,6 +1187,9 @@ def average_outputs(data, straight_avg=False, bayes=False):
                     ('g2sum','f8'),
                     ('g1sensum','f8'),
                     ('g2sensum','f8'),
+                    ('g1err2invsum','f8'),
+                    ('g2err2invsum','f8'),
+                    ('nsum','i8'),
                     ('shear1','f8'),
                     ('shear1err','f8'),
                     ('shear2','f8'),
@@ -1190,7 +1228,10 @@ def average_outputs(data, straight_avg=False, bayes=False):
             g1 = edata['g'][:,0]
             g2 = edata['g'][:,1]
             g1sens = edata['gsens'][:,0]
-            g2sens = edata['gsens'][:,0]
+            g2sens = edata['gsens'][:,1]
+
+            g1sens_mean=g1sens.mean()
+            g2sens_mean=g2sens.mean()
 
             g1sum = g1.sum()
             g2sum = g2.sum()
@@ -1199,24 +1240,38 @@ def average_outputs(data, straight_avg=False, bayes=False):
 
             # we use the scatter from true, becuase with ring tests
             # we don't have shape noise
-            g1scatt = (g1-edata['gtrue'][:,0]).var()
-            g2scatt = (g2-edata['gtrue'][:,1]).var()
+            #g1scatt = (g1-edata['gtrue'][:,0]).var()
+            #g2scatt = (g2-edata['gtrue'][:,1]).var()
 
             num = g1.size
-            g1err = sqrt(g1scatt/num)
-            g2err = sqrt(g2scatt/num)
-            g1err2inv = num/g1scatt
-            g2err2inv = num/g2scatt
+            #g1err = sqrt(g1scatt/num)
+            #g2err = sqrt(g2scatt/num)
+            if orient == 'ring':
+                SN=0.0
+                g1err2invsum = ( 1/(SN**2 + edata['gcov'][:,0,0]) ).sum()
+                g2err2invsum = ( 1/(SN**2 + edata['gcov'][:,1,1]) ).sum()
+                g1err = sqrt(1/g1err2invsum)/g1sens_mean
+                g2err = sqrt(1/g2err2invsum)/g2sens_mean
+            else:
+                g1corr = g1/g1sens.mean()
+                g2corr = g2/g2sens.mean()
+                g1err = g1corr.std()/sqrt(num)/g1sens_mean
+                g2err = g2corr.std()/sqrt(num)/g2sens_mean
 
+            d['nsum'][i] = g1.size
             d['shear1'][i] = g1sum/g1sensum
             d['shear2'][i] = g2sum/g2sensum
-            d['shear1err'][i] = g1err/g1sens.mean()
-            d['shear2err'][i] = g2err/g2sens.mean()
+            d['shear1err'][i] = g1err
+            d['shear2err'][i] = g2err
+            print 'shear1: %.16g +/- %.16g' % (d['shear1'][i],d['shear1err'][i])
 
             d['g1sum'][i] = g1sum
             d['g2sum'][i] = g2sum
             d['g1sensum'][i] = g1sensum
             d['g2sensum'][i] = g2sensum
+
+            d['g1err2invsum'][i] = g1err2invsum
+            d['g2err2invsum'][i] = g2err2invsum
         else:
             e1 = edata['e1_meas']
             e2 = edata['e2_meas']
@@ -1299,6 +1354,71 @@ def average_outputs(data, straight_avg=False, bayes=False):
 
     return d
 
+def average_randshear_outputs(data):
+    """
+    New version where we specify a shear magnitude but use random orientations
+    for each realization.  In this case we average the shear difference from
+    truth rather than the shapes
+
+    Set up for bayes only right now
+    """
+    dt = data[0].dtype.descr
+    dt_extra = [('sheardiff','f8'),
+                ('osheardiff','f8'),
+                ('sheardifferr','f8'),
+                ('osheardifferr','f8')]
+
+    dt += dt_extra
+    name_extra = [dd[0] for dd in dt_extra]
+
+    d=zeros(len(data),dtype=dt)
+    for i,edata in enumerate(data): # over different ellipticities
+
+        twotheta = -arctan2( edata['shear_true'][:,1],edata['shear_true'][:,0] )
+        shearmag=sqrt(edata['shear_true'][:,0]**2 + edata['shear_true'][:,1]**2)
+
+        g1 = edata['g'][:,0]
+        g2 = edata['g'][:,1]
+        shear  = g1*cos(twotheta) - g2*sin(twotheta)
+        oshear = g1*sin(twotheta) + g2*cos(twotheta)
+
+        g1sens = edata['gsens'][:,0]
+        g2sens = edata['gsens'][:,1]
+        g1sensum = g1sens.sum()
+        g2sensum = g2sens.sum()
+
+        g1sens_mean=g1sens.mean()
+        g2sens_mean=g2sens.mean()
+
+        shearsum = shear.sum()
+        oshearsum = oshear.sum()
+
+        # using g1sensum...should be same either way?
+        shear = shearsum/g1sensum
+        oshear = oshearsum/g1sensum
+
+        sheardiff = shear-shearmag.mean()
+
+        SN=0.0
+        g1err2inv = ( 1/(SN**2 + edata['gcov'][:,0,0]) ).sum()
+        g2err2inv = ( 1/(SN**2 + edata['gcov'][:,1,1]) ).sum()
+        shearerr = sqrt(1/g1err2inv)
+        oshearerr = sqrt(1/g1err2inv)
+
+        d['sheardiff'][i] = sheardiff
+        d['osheardiff'][i] = oshear
+        d['sheardifferr'][i] = shearerr/g1sens_mean
+        d['osheardifferr'][i] = oshearerr/g1sens_mean
+        print 'shear diff:',d['sheardiff'][i],'+/-',shearerr
+
+        for n in d.dtype.names:
+            if n not in name_extra:
+                if edata[n].dtype.names is None and len(edata[n].shape) == 1:
+                    #d[n][i] = median(edata[n])
+                    d[n][i] = edata[n].mean()
+
+    return d
+
 
 
 def plot_signal_vs_rad(im, cen):
@@ -1339,7 +1459,7 @@ def combine_trials(run, is2, ie):
     if orient == 'ring':
         ntrial = cs['nring']
     else:
-        ntrial = c['ntrial']
+        ntrial = cs['ntrial']
 
 
     outfile=get_output_url(run, is2, ie, fs='hdfs')

@@ -19,6 +19,11 @@ mins2: 0.5
 maxs2: 2.0
 nums2: 4
 
+A: 12.25
+B: 0.03
+C: 0.45
+D: 13.
+
 comments: |
 
     more in ring since at low s/n we see the prior

@@ -15,7 +15,8 @@ TODO:
 import os
 import numpy
 from numpy import sqrt, cos, sin, exp, pi, zeros, ones, empty, \
-        random, where, array, linspace
+        random, where, array, linspace, diag
+from numpy.random import randn
 from . import shapesim
 import lensing
 import fimage
@@ -46,11 +47,15 @@ class BayesFitSim(shapesim.BaseSim):
                 print k,v
                 self[k] = v
 
-        self.gprior = GPrior()
-        self.fitter = BayesFitter(prior=self.gprior, 
-                                  n_ggrid=self['n_ggrid'],
-                                  gmin=self['gmin'],
-                                  gmax=self['gmax'])
+        self.gprior = GPrior(A=self.simc['A'],
+                             B=self.simc['B'],
+                             C=self.simc['C'],
+                             D=self.simc['D'])
+        if 'mcbayes' not in run:
+            self.fitter = BayesFitter(prior=self.gprior, 
+                                      n_ggrid=self['n_ggrid'],
+                                      gmin=self['gmin'],
+                                      gmax=self['gmax'])
 
 
     def process_trials_by_s2n(self, is2, is2n):
@@ -130,10 +135,11 @@ class BayesFitSim(shapesim.BaseSim):
             e2true=ci_nonoise['e2true']
             g1true,g2true=lensing.util.e1e2_to_g1g2(e1true,e2true)
 
+            #wlog("g1true:",g1true,"g2true:",g2true)
             out['gtrue'][i,0] = g1true
             out['gtrue'][i,1] = g2true
-            out['shear_true'][i,0] = self.simc['shear'][0]
-            out['shear_true'][i,1] = self.simc['shear'][1]
+            out['shear_true'][i,0] = ci_nonoise['shear1']
+            out['shear_true'][i,1] = ci_nonoise['shear2']
             
             if self['verbose']:
                 stderr.write('-'*70 + '\n')
@@ -158,10 +164,6 @@ class BayesFitSim(shapesim.BaseSim):
             # self.fitter is used in here
             self._run_fitter(ci)
 
-            # just likelihood right now
-            like = self.fitter.get_like()
-            like = like/like.sum()
-
             res = self.fitter.get_result()
 
             out['g'][i,:] = res['g']
@@ -173,6 +175,92 @@ class BayesFitSim(shapesim.BaseSim):
             shapesim.write_output(self['run'], is2, is2n, out, itrial=itheta,
                          fs=self.fs)
         return out
+
+    def process_bruteforce_trial_by_s2n(self, is2, is2n, itrial):
+        """
+        Here itrial is not a ring theta.
+        
+        Was just a test, things look consistent
+        """
+        s2 = linspace(self.simc['mins2'],
+                      self.simc['maxs2'], 
+                      self.simc['nums2'])[is2]
+        s2n_psf = self['s2n_psf']
+        s2n = shapesim.get_s2n(self, is2n)
+
+        s2n_fac = self['s2n_fac']
+        s2n_method = self['s2n_method']
+        s2ncalc_fluxfrac =self['s2ncalc_fluxfrac']
+
+        nellip=self.get_nellip(is2n)
+
+        g1vals,g2vals = self.gprior.sample(nellip)
+
+        # these are generated on the same series every itheta for a given run
+        # seed so that each itheta gets the same ellip values; otherwise no
+        # ring
+        out = zeros(nellip, dtype=self.out_dtype())
+        out['s2'] = s2
+
+        wlog('s2n:',s2n,'s2n_psf:',s2n_psf,'s2n_method:',s2n_method)
+
+        psf_cov=fimage.ellip2mom(2*self.simc['psf_sigma']**2,
+                                 e1=self.simc['psf_e1'], e2=self.simc['psf_e2'])
+        psfpars={'model':'gauss',
+                 'cov':psf_cov}
+        sigma = self.simc['psf_sigma']/sqrt(s2)
+        shear=self.shapesim.get_shear()
+
+        for i in xrange(nellip):
+            if self['verbose']:
+                stderr.write('-'*70 + '\n')
+            # we always write this, although slower when not verbose
+            if (nellip > 1) and (( (i+1) % 10) == 0 or i== 0):
+                stderr.write("  %s/%s ellip done\n" % ((i+1),nellip))
+           
+            shape=lensing.Shear(g1=g1vals[i],g2=g2vals[i])
+            sheared_shape = shape + shear
+            cov = fimage.ellip2mom(e1=sheared_shape.e1,
+                                   e2=sheared_shape.e2,
+                                   T=2*sigma**2)
+
+            objpars = {'model':'gauss', 'cov':cov}
+            ci_nonoise = fimage.convolved.ConvolverAllGauss(objpars,psfpars, **self)
+
+            out['gtrue'][i,0] = sheared_shape.g1
+            out['gtrue'][i,1] = sheared_shape.g2
+            out['shear_true'][i,0] = self.simc['shear'][0]
+            out['shear_true'][i,1] = self.simc['shear'][1]
+
+            ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf,
+                                     s2n_method=s2n_method,
+                                     fluxfrac=s2ncalc_fluxfrac)
+            if self['verbose']:
+                wlog("s2n_admom:",ci['s2n_admom'],"s2n_uw:",ci['s2n_uw'],
+                     "s2n_matched:",ci['s2n_matched'])
+
+            out['s2n_admom'][i] = ci['s2n_admom']
+            out['s2n_matched'][i] = ci['s2n_matched']
+            out['s2n_uw'][i] = ci['s2n_uw']
+            out['s2n_admom_psf'][i] = ci['s2n_admom_psf']
+            out['s2n_matched_psf'][i] = ci['s2n_matched_psf']
+            out['s2n_uw_psf'][i] = ci['s2n_uw_psf']
+
+            # self.fitter is used in here
+            self._run_fitter(ci)
+
+            res = self.fitter.get_result()
+
+            out['g'][i,:] = res['g']
+            out['gsens'][i,:] = res['gsens']
+            out['gcov'][i,:,:] = res['gcov']
+
+
+        shapesim.write_output(self['run'], is2, is2n, out, itrial=itrial,
+                              fs=self.fs)
+        return out
+
+
 
     def _run_fitter(self, ci):
         """
@@ -196,11 +284,24 @@ class BayesFitSim(shapesim.BaseSim):
               'irr':res['Irr'],
               'irc':res['Irc'],
               'icc':res['Icc']}]
-        self.fitter.process_image(image=ci.image,
-                                  pixerr=ci['skysig'],
-                                  cen=ci['cen'],
-                                  T=T,
-                                  psf=psf)
+        if 'mcbayes' not in self['run']:
+            self.fitter.process_image(image=ci.image,
+                                      pixerr=ci['skysig'],
+                                      cen=ci['cen'],
+                                      T=T,
+                                      psf=psf)
+        else:
+            # note we create a new fitter each time here
+            self.fitter=MCMCFitter(image=ci.image,
+                                   pixerr=ci['skysig'],
+                                   gprior=self.gprior,
+                                   cen=ci['cen'],
+                                   T=T,
+                                   psf=psf,
+                                   s2n=ci['s2n_admom'],
+                                   nstep=self['nstep'],
+                                   burnin=self['burnin'])
+
 
     def get_nellip(self, is2n):
         s2n = shapesim.get_s2n(self, is2n)
@@ -224,6 +325,10 @@ class BayesFitSim(shapesim.BaseSim):
 
         numpy.random.seed(allseed)
         gvals = self.gprior.sample1d(nellip)
+
+        # now random seed
+        numpy.random.seed(None)
+
         return gvals
 
 
@@ -245,10 +350,11 @@ class BayesFitSim(shapesim.BaseSim):
 
 class BayesFitter:
     """
-    Desiged to be re-used since the models are all
-    stored in a cache.
-
     likelihood is exp(0.5*A*B^2)
+
+    This analytically marginalizes over the amplitide.  We
+    actually check a grid over the parameters.  There is also
+    the MCMCFitter
 
     A is 
         sum( (model/err)^2 ) which we fix to sum ((ydata/err)^2)
@@ -257,14 +363,14 @@ class BayesFitter:
 
     We must fix A as a constant for every model we generate, so that the
     relative height of the likelihood is valid given the other simplifications
-    we have made. We choose 1 because, using the re-normalization below,
-    the value actually cancels.
+    we have made. We arbitrarily choose A=1 because, using the re-normalization
+    below, the value actually cancels.
 
-    We must normalize the model according to the A condition.  create
+    To normalize the model according to the A condition, create
         ymod = model/err
     which will have a normalization S. Then the renormalization is given by
         N = sqrt( S*A/sum(ymod^2) )
-    (i.e. set ymod = ymod*N/S) 
+    (i.e. set ymod = ymod*N/S)
     """
     def __init__(self, prior=None, n_ggrid=None, gmin=-.9, gmax=.9):
         if prior is None or n_ggrid is None:
@@ -369,6 +475,8 @@ class BayesFitter:
         lp = self._like*self.prior_matrix
         lpsum = lp.sum()
 
+        #images.multiview(lp)
+        #stop
         #images.multiview(self.prior_d1_matrix)
         #images.multiview(self.prior_d2_matrix)
         #images.multiview(self.prior_matrix,title='prior')
@@ -405,8 +513,6 @@ class BayesFitter:
         gcov[1,1] = g22var
 
 
-        self._g = g
-        self._gcov=gcov
         self._result={'g':g,'gcov':gcov,'gsens':gsens}
 
 
@@ -456,19 +562,6 @@ class BayesFitter:
         model=empty(dims,dtype='f8')
         gmix_image.render._render.fill_model_coellip(model, pars, self.psf_pars, None)
 
-        # doing this for now since we are using the true sizes, which means we
-        # have to actually render them correctly; normally we fit the pixelized
-        # psf so it accounts for pixelization
-        """
-        Irc = sh.e2*T/2.0
-        Icc = (1+sh.e1)*T/2.0
-        Irr = (1-sh.e1)*T/2.0
-
-        cov=[Irr + self.psf_gmix[0]['irr'],
-             Irc + self.psf_gmix[0]['irc'],
-             Icc + self.psf_gmix[0]['icc']]
-        model = fimage.model_image('gauss', dims, cen, cov, nsub=4) # sim uses 16
-        """
         return model
 
     def get_shape(self, i1, i2):
@@ -522,6 +615,354 @@ class BayesFitter:
                 self.prior_d1_matrix[i1,i2] = self.prior.dbyg1(g1,g2)
                 self.prior_d2_matrix[i1,i2] = self.prior.dbyg2(g1,g2)
 
+
+class MCMCFitter:
+    """
+    Desiged to be re-used since the models are all
+    stored in a cache.
+
+    likelihood is exp(0.5*A*B^2)
+
+    A is 
+        sum( (model/err)^2 ) which we fix to sum ((ydata/err)^2)
+    B is
+        sum( model*data/err^2 )/A
+
+    We must fix A as a constant for every model we generate, so that the
+    relative height of the likelihood is valid given the other simplifications
+    we have made. We choose 1 because, using the re-normalization below,
+    the value actually cancels.
+
+    We must normalize the model according to the A condition.  create
+        ymod = model/err
+    which will have a normalization S. Then the renormalization is given by
+        N = sqrt( S*A/sum(ymod^2) )
+    (i.e. set ymod = ymod*N/S) 
+
+    If using "exp", 3 gaussian mixture model, you can examine run
+    gmix-fit-et10r99
+
+        Moving parts
+
+            - Want cen with tight prior
+            - Want e1,e2. prior applied *after* exploring likelihood surface
+            because the prior can be cuspy and this confuses the MCMC
+            - Want a T that represents the size, no prior at all but a limited
+            range
+
+        Fixed parts of model
+
+            - Want a delta function; fixed at zero for now: can only detect
+            non-zero at *very* high S/N
+            - Want a fixed F that is a multiple of T for the second gauss.  For
+            s2 ~ 1, this appears to be 
+
+                ~3.8 for s2 ~ 1
+
+            - Want fixed p values. these  are only meaningful relative since we
+            marginalize over amplitude. For s2=1
+
+                0.379 0.563, 0.0593
+    """
+
+    def __init__(self, 
+                 image=None, 
+                 pixerr=None, 
+                 guess=[0.,0.],
+                 gprior=None,
+                 psf=None,
+                 cen=None, # send to fix cen
+                 T=None,  # send to fix T
+                 s2n=None, 
+                 nstep=6400, 
+                 burnin=1000):
+        """
+        parameters
+        ----------
+        image:
+            image as a numpy array
+        pixerr:
+            Error per pixel
+        guess:
+            Starting guess for pars
+        psf:
+            The psf gaussian mixture
+        cen:
+            The center, to be held fixed
+        T:
+            ixx+iyy to be held fixed.
+        nstep:
+            Number of steps in MCMC chain.
+        burnin:
+            Number of burn in steps.
+        gprior:
+            The prior on the g1,g2 surface.
+        s2n:
+            S/N value; will be used to create step sizes.
+            Currently step size is fixed actually
+        """
+
+        self._set_data(image=image, 
+                       pixerr=pixerr, 
+                       guess=guess,
+                       gprior=gprior,
+                       psf=psf,
+                       cen=cen, # send to fix cen
+                       T=T,  # send to fix T
+                       s2n=s2n, 
+                       nstep=nstep, 
+                       burnin=burnin)
+
+        self._go()
+
+    def get_result(self):
+        return self._result
+
+    def _go(self):
+        import mcmc
+        mcmc=mcmc.MCMC(self)
+
+        # need to improve this when we add other parameters
+        guess=0.1*random.random(self.npars)
+        
+        self.trials = mcmc.run(self.nstep, guess)
+
+        # get the expectation values, sensitivity and errors
+        self._calc_result()
+
+        if False:
+            self._doplots()
+            key=raw_input('hit a key (q to quit): ')
+            if key=='q':
+                stop
+
+
+    def loglike(self, pars):
+        """
+        Packaged up for the MCMC code
+        """
+        try:
+            shape=lensing.Shear(g1=pars[0], g2=pars[1])
+        except:
+            return self.lowval
+
+        #return self._get_logprob(shape, self.T, self.cen)
+        return self._get_loglike(shape, self.T, self.cen)
+
+    def step(self, pars):
+        """
+        public for the MCMC code
+        """
+        nextpars=zeros(self.npars)
+        f=random.random()
+        if f > 0.5:
+            nextpars = pars + self.small_stepsize*randn(self.npars)
+        else:
+            nextpars = pars + self.stepsize*randn(self.npars)
+        #nextpars = pars + self.stepsize*randn(self.npars)
+        return nextpars
+
+    def _get_logprob(self, shape, T, cen):
+        """
+        get log(like) + log(prior)
+        """
+        loglike = self._get_loglike(shape, T, cen)
+        logprob = self.gprior(shape.g1, shape.g2) + loglike
+        return logprob
+
+    def _get_loglike(self, shape, T, cen):
+        # like is exp(0.5*A*B^2) where
+        # A is sum((model/err)^2) and is fixed
+        # and
+        #   B = sum(model*image/err^2)/A
+        #     = sum(model/err * image/err)/A
+
+        # build up B
+        # this is model/err
+        Btmp=self._get_normalized_model(shape, T, cen)
+
+        # Now multiply by image/err
+        Btmp *= self.image
+        Btmp *= 1./self.pixerr
+        # now do the sum and divide by A
+        B = Btmp.sum()/self.A
+
+        # A actually fully cancels here when we perform the
+        # renormalization to make sum( (model/err)^2 ) == A
+        loglike = self.A * B**2/2
+        return loglike
+
+
+    def _calc_result(self):
+        """
+        We apply the shape prior here
+        """
+        burn=self.burnin
+
+        g=zeros(2)
+        gcov=zeros((2,2))
+        gsens = zeros(2)
+
+        g1vals=self.trials['pars'][burn:,0]
+        g2vals=self.trials['pars'][burn:,1]
+
+        prior = self.gprior(self.trials['pars'][burn:,0],
+                            self.trials['pars'][burn:,1])
+        dpri_by_g1 = self.gprior.dbyg1(g1vals,g2vals)
+        dpri_by_g2 = self.gprior.dbyg2(g1vals,g2vals)
+
+        psum = prior.sum()
+
+        g[0] = (g1vals*prior).sum()/psum
+        g[1] = (g2vals*prior).sum()/psum
+
+        g1diff = g[0]-g1vals
+        g2diff = g[1]-g2vals
+
+        gcov[0,0] = (g1diff**2*prior).sum()/psum
+        gcov[0,1] = (g1diff*g2diff*prior).sum()/psum
+        gcov[1,0] = gcov[0,1]
+        gcov[1,1] = (g2diff**2*prior).sum()/psum
+
+        # now the sensitivity is 
+        #  sum( (<g>-g) L*dP/dg )
+        #  ----------------------
+        #        sum(L*P)
+        #
+        # the likelihood is already in the points
+
+        gsens[0] = 1. - (g1diff*dpri_by_g1).sum()/psum
+        gsens[1] = 1. - (g2diff*dpri_by_g2).sum()/psum
+
+        self._result={'g':g,'gcov':gcov,'gsens':gsens}
+
+
+    def _get_normalized_model(self, shape, T, cen):
+        """
+        Model/err.  Normalized such that sum(model/err)^2 ) = A
+        """
+        model = self._get_model(shape, T, cen)
+
+        ymod = model/self.pixerr
+
+        ymodsum = ymod.sum()
+        ymod2sum = (ymod**2).sum()
+
+        # this ensures sum( (model/err)^2 ) == A
+        norm = sqrt(ymodsum**2*self.A/ymod2sum)
+
+        # also divide again by err since we actually need model/err^2
+        ymod *= (norm/ymodsum)
+
+
+        return ymod
+
+
+    def _get_model(self, shape, T, cen):
+        """
+        for now don't bother with cache
+        """
+
+
+        # for now pars are only for single gaussian
+        # note setting p=1 since we must renormalize anyway
+        pars=array([cen[0], cen[1], shape.e1, shape.e2, T, 1.0],dtype='f8')
+        model=empty(self.image.shape,dtype='f8')
+        gmix_image.render._render.fill_model_coellip(model, pars, self.psf_pars, 
+                                                     None)
+
+        return model
+
+
+    def _set_data(self, 
+                  image=None, 
+                  pixerr=None, 
+                  guess=None,
+                  gprior=None,
+                  psf=None,
+                  cen=None,
+                  T=None,
+                  s2n=None, 
+                  nstep=6400,
+                  burnin=1000):
+
+        self.npars=2
+
+        self.image=image
+        self.pixerr=pixerr
+        #self.guess=0.1*random.random(self.npars)
+        self.T=T
+        self.cen=cen
+        self.nstep=nstep
+        self.burnin=burnin
+        self.s2n=s2n
+        self.gprior=gprior
+
+        self.stepsize=array([0.1,0.1], dtype='f8')
+        self.small_stepsize=array([0.01,0.01], dtype='f8')
+
+        self._set_psf(psf)
+
+        if gprior is None or s2n is None:
+            raise ValueError("BayesFitter(gprior=, nstep=6400, burnin=1000, s2n=)")
+        if image is None or pixerr is None:
+            raise ValueError("send at least image and pixerr")
+        if T is None or cen is None:
+            raise ValueError("for now send T and cen to fix them")
+        #if self.guess.size != self.npars:
+        #    raise ValueError("expected guess with length %d" % self.npars)
+
+        self.A = 1
+
+        # This will make sure make sure the guess is valid
+        #self.guess_shape = lensing.Shear(guess[0],guess[1])
+
+        self.lowval=-9999.9e9
+
+    def _set_psf(self, psf):
+        self.psf_gmix = psf
+        self.psf_pars = None
+
+        if psf is not None:
+            if not isinstance(psf[0],dict):
+                raise ValueError("psf must be list of dicts")
+            self.psf_pars = gmix_image.gmix2pars(psf)
+
+    def _doplots(self):
+        import mcmc
+        import biggles
+        biggles.configure("default","fontsize_min",1.2)
+        tab=biggles.Table(2,2)
+        burn1=mcmc.plot_burnin(self.trials['pars'][:,0], 
+                               self.trials['loglike'],
+                               self.burnin, ylabel=r'$g_1$',
+                               show=False)
+        burn2=mcmc.plot_burnin(self.trials['pars'][:,1], 
+                               self.trials['loglike'],
+                               self.burnin, ylabel=r'$g_2$',
+                               show=False)
+
+        g = self._result['g']
+        gcov = self._result['gcov']
+        errs = sqrt(diag(gcov))
+        print 'g1: %.16g +/- %.16g' % (g[0],errs[0])
+        print 'g2: %.16g +/- %.16g' % (g[1],errs[1])
+        print 'g1sens:',self._result['gsens'][0]
+        print 'g2sens:',self._result['gsens'][1]
+        bsize1=errs[0]*0.2
+        bsize2=errs[1]*0.2
+        hplt1 = eu.plotting.bhist(self.trials['pars'][self.burnin:, 0],binsize=bsize1,
+                                  show=False)
+        hplt2 = eu.plotting.bhist(self.trials['pars'][self.burnin:, 1],binsize=bsize2,
+                                  show=False)
+
+        tab[0,0] = burn1
+        tab[1,0] = burn2
+        tab[0,1] = hplt1
+        tab[1,1] = hplt2
+        tab.show()
+
+
 class GPrior:
     """
     This is in g1,g2 space
@@ -532,12 +973,12 @@ class GPrior:
 
     For 1D prob, you need to multiply by 2*pi*|g|
     """
-    def __init__(self):
+    def __init__(self, A=12.25, B=0.03, C=0.45, D=13.):
         # A actually depends on norm when doing full thing
-        self.A = 12.25
-        self.B = 0.03
-        self.C = 0.45
-        self.D = 13.
+        self.A = A
+        self.B = B
+        self.C = C
+        self.D = D
 
         self.maxval = self(0., 0.)
 
@@ -550,6 +991,10 @@ class GPrior:
         """
         g = sqrt(g1**2 + g2**2)
         return self.prior_gabs(g)
+
+    def logprior(self, g1, g2):
+        p = self(g1,g2)
+        return log10(p)
 
     def dbyg1(self, g1, g2, h=1.e-6):
         """
