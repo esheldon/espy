@@ -21,12 +21,12 @@ parser.add_option('-g','--group',default=None,
 parser.add_option('-e','--extra',default=None,
                   help='; separated')
 
+#module unload wl && module load wl/work
 _wqtemplate="""
 command: |
     source ~/.bashrc
     module unload espy && module load espy/work
     module unload fimage && module load fimage/work
-    module unload wl && module load wl/work
     module unload gmix_image && module load gmix_image/work
     python $ESPY_DIR/shapesim/bin/combine-trials.py %(run)s %(i1)d %(i2)d
 

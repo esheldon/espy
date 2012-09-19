@@ -36,13 +36,17 @@ class ShapeSim(dict):
         for k,v in keys.iteritems():
             self[k] = v
 
-        self.fs = 'hdfs'
+        self.fs=None
+        if os.environ.get('SHAPESIM_FS')=='hdfs':
+            self.fs='hdfs'
+
         self.cache_list={}
 
         self['verbose'] = self.get('verbose',False)
 
         wlog("sim self:")
         pprint.pprint(self, stream=stderr)
+
 
     def write_trial(self, is2, ie, itheta=None):
         """
@@ -304,9 +308,6 @@ class ShapeSim(dict):
 
         return psfpars, psf_sigma_tot
 
-
-
-
 class BaseSim(dict):
     def __init__(self, run):
         conf=read_config(run)
@@ -316,7 +317,9 @@ class BaseSim(dict):
 
         self.simc = read_config(self['sim'])
 
-        self.fs='hdfs'
+        self.fs=None
+        if os.environ.get('SHAPESIM_FS')=='hdfs':
+            self.fs='hdfs'
 
         self['verbose'] = self.get('verbose',False)
 
@@ -330,7 +333,8 @@ class BaseSim(dict):
         orient=self.simc['orient']
         #if orient != 'ring':
         #    raise ValueError("no longer support anything but ring")
-    
+
+   
     def wlog(self, *args):
         if self['verbose']:
             wlog(*args)
@@ -900,6 +904,10 @@ def get_cache_pattern(simname, is2, ie, fs=None):
 def write_output(run, is2, ie, data, itrial=None, fs=None):
     f=get_output_url(run, is2, ie, itrial=itrial, fs=fs)
     wlog("Writing output:",f)
+    if 'hdfs' not in f:
+        d=os.path.dirname(f)
+        if not os.path.exists(d):
+            os.makedirs(d)
     eu.io.write(f, data, clobber=True)
 
 def read_output(run, is2, ie, itrial=None, verbose=False, fs=None):

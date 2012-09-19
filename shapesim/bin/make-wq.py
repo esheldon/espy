@@ -24,12 +24,12 @@ parser.add_option('--i2new',default=None,
 parser.add_option('--bytrial',action='store_true',
                   help=('Write a wq script for each trial '
                         'separately (with possible repeats)'))
+#module unload wl && module load wl/work
 _wqtemplate="""
 command: |
     source ~/.bashrc
     module unload espy && module load espy/work
     module unload fimage && module load fimage/work
-    module unload wl && module load wl/work
     module unload gmix_image && module load gmix_image/work
     python $ESPY_DIR/shapesim/bin/run-shapesim.py %(run)s %(i1)d %(i2)d
 
@@ -43,7 +43,6 @@ command: |
     source ~/.bashrc
     module unload espy && module load espy/work
     module unload fimage && module load fimage/work
-    module unload wl && module load wl/work
     module unload gmix_image && module load gmix_image/work
     python $ESPY_DIR/shapesim/bin/run-shapesim.py %(run)s %(i1)d %(i2)d %(itrial)d
 
