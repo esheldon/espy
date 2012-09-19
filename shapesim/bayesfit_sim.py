@@ -1197,13 +1197,6 @@ class GPrior:
 
 def test(n_ggrid=19, n=1000, s2n=40, gmin=-.9, gmax=.9, show=False, clobber=False):
     """
-     
-    ngrid=39,n=2000  This looks better actually, 1 sigma from true, but might
-        be fluctuated up
-
-    window 6: n=59
-
-    other shell: n=19 but different seed to see what happens
     """
     import fitsio
     outfile=os.path.expanduser('~/tmp/test-n-ggrid%d-%06d-s2n%d.fits' % (n_ggrid,n,s2n))
