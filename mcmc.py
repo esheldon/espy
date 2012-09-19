@@ -37,13 +37,13 @@ def extract_stats(data, burnin=0):
     num=data.size-burnin
 
     for i in xrange(npar):
-        iidiff = data['pars'][burnin:,i]-means[i]
+        idiff = data['pars'][burnin:,i]-means[i]
         for j in xrange(i,npar):
             if i == j:
-                cov[i,j] = (iidiff*iidiff).sum()/(num-1)
+                cov[i,j] = (idiff*idiff).sum()/(num-1)
             else:
-                jjdiff = data['pars'][burnin:,j]-means[j]
-                cov[i,j] = (iidiff*jjdiff).sum()/(num-1)
+                jdiff = data['pars'][burnin:,j]-means[j]
+                cov[i,j] = (idiff*jdiff).sum()/(num-1)
                 cov[j,i] = cov[i,j]
 
     return means, cov

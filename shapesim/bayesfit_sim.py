@@ -251,6 +251,7 @@ class BayesFitSim(shapesim.BaseSim):
 
             res = self.fitter.get_result()
 
+            out['arate'][i] = res['arate']
             out['g'][i,:] = res['g']
             out['gsens'][i,:] = res['gsens']
             out['gcov'][i,:,:] = res['gcov']
@@ -295,6 +296,7 @@ class BayesFitSim(shapesim.BaseSim):
             self.fitter=MCMCFitter(image=ci.image,
                                    pixerr=ci['skysig'],
                                    gprior=self.gprior,
+                                   when_prior=self.simc['when_prior'],
                                    cen=ci['cen'],
                                    T=T,
                                    psf=psf,
@@ -342,6 +344,7 @@ class BayesFitSim(shapesim.BaseSim):
             ('s2','f8'),
             ('shear_true','f8',2),
             ('gtrue','f8',2),
+            ('arate','f8'),
             ('g','f8',2),
             ('gsens','f8',2),
             ('gcov','f8',(2,2))]
@@ -675,6 +678,7 @@ class MCMCFitter:
                  T=None,  # send to fix T
                  s2n=None, 
                  nstep=6400, 
+                 when_prior='after',
                  burnin=1000):
         """
         parameters
@@ -746,20 +750,24 @@ class MCMCFitter:
         except:
             return self.lowval
 
-        #return self._get_logprob(shape, self.T, self.cen)
-        return self._get_loglike(shape, self.T, self.cen)
+        if self.when_prior=='after':
+            return self._get_loglike(shape, self.T, self.cen)
+        else:
+            return self._get_logprob(shape, self.T, self.cen)
 
     def step(self, pars):
         """
         public for the MCMC code
         """
         nextpars=zeros(self.npars)
+        """
         f=random.random()
         if f > 0.5:
             nextpars = pars + self.small_stepsize*randn(self.npars)
         else:
             nextpars = pars + self.stepsize*randn(self.npars)
-        #nextpars = pars + self.stepsize*randn(self.npars)
+        """
+        nextpars = pars + self.stepsize*randn(self.npars)
         return nextpars
 
     def _get_logprob(self, shape, T, cen):
@@ -795,7 +803,7 @@ class MCMCFitter:
 
     def _calc_result(self):
         """
-        We apply the shape prior here
+        if when_prior='after', We apply the shape prior here
         """
         burn=self.burnin
 
@@ -813,28 +821,49 @@ class MCMCFitter:
 
         psum = prior.sum()
 
-        g[0] = (g1vals*prior).sum()/psum
-        g[1] = (g2vals*prior).sum()/psum
+        if self.when_prior=='after':
+            # we need to multiply each by the prior
+            g[0] = (g1vals*prior).sum()/psum
+            g[1] = (g2vals*prior).sum()/psum
 
-        g1diff = g[0]-g1vals
-        g2diff = g[1]-g2vals
+            g1diff = g[0]-g1vals
+            g2diff = g[1]-g2vals
 
-        gcov[0,0] = (g1diff**2*prior).sum()/psum
-        gcov[0,1] = (g1diff*g2diff*prior).sum()/psum
-        gcov[1,0] = gcov[0,1]
-        gcov[1,1] = (g2diff**2*prior).sum()/psum
+            gcov[0,0] = (g1diff**2*prior).sum()/psum
+            gcov[0,1] = (g1diff*g2diff*prior).sum()/psum
+            gcov[1,0] = gcov[0,1]
+            gcov[1,1] = (g2diff**2*prior).sum()/psum
 
-        # now the sensitivity is 
-        #  sum( (<g>-g) L*dP/dg )
-        #  ----------------------
-        #        sum(L*P)
-        #
-        # the likelihood is already in the points
+            # now the sensitivity is 
+            #  sum( (<g>-g) L*dP/dg )
+            #  ----------------------
+            #        sum(L*P)
+            #
+            # the likelihood is already in the points
 
-        gsens[0] = 1. - (g1diff*dpri_by_g1).sum()/psum
-        gsens[1] = 1. - (g2diff*dpri_by_g2).sum()/psum
+            gsens[0] = 1. - (g1diff*dpri_by_g1).sum()/psum
+            gsens[1] = 1. - (g2diff*dpri_by_g2).sum()/psum
+        else:
+            # prior is already in the distribution of
+            # points.  This is simpler for most things but
+            # for sensitivity we need a factor of (1/P)dP/de
+            g, gcov = mcmc.extract_stats(self.trials, burn)
 
-        self._result={'g':g,'gcov':gcov,'gsens':gsens}
+            g1diff = g[0]-g1vals
+            g2diff = g[1]-g2vals
+
+            w,=where(prior > 0)
+            if w.size == 0:
+                raise ValueError("no prior values > 0!")
+
+            gsens[0]= 1.-(g1diff[w]*dpri_by_g1[w]/prior[w]).mean()
+            gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
+
+ 
+        w,=where(self.trials['accepted']==1)
+        arate = w.size/float(self.trials.size)
+        #print 'acceptance rate:',w.size/float(self.trials.size)
+        self._result={'g':g,'gcov':gcov,'gsens':gsens,'arate':arate}
 
 
     def _get_normalized_model(self, shape, T, cen):
@@ -873,6 +902,17 @@ class MCMCFitter:
 
         return model
 
+    def _get_stepsize(self, s2n):
+        # these are pretty good for gauss-gauss and just e1,e2
+        # going for about 0.3-0.35 acceptance rate for 2 pars
+        # for higher dims should tend closer to .25
+        s2ns  = [  5,  10,  15,  20,  25,  30,  40,  50,   60,   70,   80,   90,  100]
+        steps = [.40, .22, .13, .10, .08, .07, .05, .04, .034, .030, .026, .023, .021]
+
+        s2ns=array(s2ns,dtype='f8')
+        steps=array(steps,dtype='f8')
+
+        return numpy.interp(s2n, s2ns, steps)
 
     def _set_data(self, 
                   image=None, 
@@ -884,6 +924,7 @@ class MCMCFitter:
                   T=None,
                   s2n=None, 
                   nstep=6400,
+                  when_prior='after',
                   burnin=1000):
 
         self.npars=2
@@ -898,8 +939,14 @@ class MCMCFitter:
         self.s2n=s2n
         self.gprior=gprior
 
-        self.stepsize=array([0.1,0.1], dtype='f8')
-        self.small_stepsize=array([0.01,0.01], dtype='f8')
+        stepsize=self._get_stepsize(s2n)
+        #print 'stepsize:',stepsize
+
+        self.stepsize=array([stepsize,stepsize], dtype='f8')
+        #self.stepsize=array([0.1,0.1], dtype='f8')
+        #self.small_stepsize=array([0.01,0.01], dtype='f8')
+        #self.stepsize=array([0.8,0.8], dtype='f8')
+        #self.small_stepsize=array([0.01,0.01], dtype='f8')
 
         self._set_psf(psf)
 
@@ -918,6 +965,8 @@ class MCMCFitter:
         #self.guess_shape = lensing.Shear(guess[0],guess[1])
 
         self.lowval=-9999.9e9
+
+        self.when_prior=when_prior
 
     def _set_psf(self, psf):
         self.psf_gmix = psf
@@ -945,6 +994,8 @@ class MCMCFitter:
         g = self._result['g']
         gcov = self._result['gcov']
         errs = sqrt(diag(gcov))
+        w,=where(self.trials['accepted']==1)
+        print 'acceptance rate:',w.size/float(self.trials.size)
         print 'g1: %.16g +/- %.16g' % (g[0],errs[0])
         print 'g2: %.16g +/- %.16g' % (g[1],errs[1])
         print 'g1sens:',self._result['gsens'][0]

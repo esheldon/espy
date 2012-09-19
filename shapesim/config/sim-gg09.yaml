@@ -1,7 +1,6 @@
 name: sim-gg09
 
 orient: ring
-
 nring: 100
 
 dotrim: false
