@@ -48,6 +48,14 @@ def extract_stats(data, burnin=0):
 
     return means, cov
 
+def print_stats(means, cov, names=None):
+    npar=len(means)
+    for i in xrange(npar):
+        if names is not None:
+            name=names[i]
+        else:
+            name='%s' % i
+        print '%s: %.16g +/- %.16g' % (name,means[i],sqrt(cov[i,i]))
 def extract_maxlike_stats(data, burnin):
     nuse = data.size-burnin
     npar = data['pars'].shape[1]
