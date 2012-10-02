@@ -15,7 +15,7 @@ maptype=sys.argv[2]
 system=sys.argv[3]
 nrand=int(sys.argv[4])
 
-m=es_sdsspy.stomp_maps.load(mapname,maptype)
+m=es_sdsspy.stomp_maps.load(mapname,maptype,maxres=8192)
 
 carr1,carr2 = m.GenerateRandomPoints(nrand,system)
 

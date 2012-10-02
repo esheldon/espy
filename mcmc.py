@@ -26,23 +26,24 @@ import os
 
 
 def extract_stats(data, burnin=0):
-    npar = data['pars'].shape[1]
+    ntrials=data.shape[0]
+    npar = data.shape[1]
 
     means = zeros(npar,dtype='f8')
     cov = zeros( (npar,npar), dtype='f8')
 
     for i in xrange(npar):
-        means[i] = data['pars'][burnin:, i].mean()
+        means[i] = data[burnin:, i].mean()
 
-    num=data.size-burnin
+    num=ntrials-burnin
 
     for i in xrange(npar):
-        idiff = data['pars'][burnin:,i]-means[i]
+        idiff = data[burnin:,i]-means[i]
         for j in xrange(i,npar):
             if i == j:
                 cov[i,j] = (idiff*idiff).sum()/(num-1)
             else:
-                jdiff = data['pars'][burnin:,j]-means[j]
+                jdiff = data[burnin:,j]-means[j]
                 cov[i,j] = (idiff*jdiff).sum()/(num-1)
                 cov[j,i] = cov[i,j]
 
