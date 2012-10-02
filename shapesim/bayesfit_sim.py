@@ -18,6 +18,7 @@ from numpy import sqrt, cos, sin, exp, log, pi, zeros, ones, empty, \
         random, where, array, linspace, diag
 from numpy import tanh, arctanh
 from numpy.random import randn
+from numpy.random import random as randu
 from . import shapesim
 import lensing
 import fimage
@@ -368,26 +369,25 @@ class BayesFitSim(shapesim.BaseSim):
                     guess=zeros( (nwalkers,5) )
                     # center
                     guess[:,0:2]=cen
-                    guess[:,0] += guess[:,0]*0.01*random.random(nwalkers)
-                    guess[:,1] += guess[:,1]*0.01*random.random(nwalkers)
+                    guess[:,0] += guess[:,0]*0.01*(randu(nwalkers)-0.5)
+                    guess[:,1] += guess[:,1]*0.01*(randu(nwalkers)-0.5)
                     # guess for g1,g2 is (0,0) with some scatter
-                    #guess[:,2:4]=0.1*random.random(nwalkers*2).reshape(nwalkers,2)
-                    glist=[]
+                    #guess[:,2:4]=0.1*(randu(nwalkers*2)-0.5).reshape(nwalkers,2)
                     for i in xrange(nwalkers):
                         if regen:
-                            g1rand,g2rand = 0.2*random.random(2)
+                            wlog("Doing REGEN")
+                            g1rand,g2rand = 0.2*(randu(2)-0.5)
                             shrand = lensing.Shear(g1=g1rand,g2=g2rand)
                             guess[i,2] = shrand.g1
                             guess[i,3] = shrand.g2
                         else:
-                            g1rand,g2rand = 0.01*random.random(2)
+                            g1rand,g2rand = 0.01*(randu(2)-0.5)
                             shrand = lensing.Shear(g1=g1rand,g2=g2rand)
                             sh2 = sh + shrand
                             guess[i,2] = sh2.g1
                             guess[i,3] = sh2.g2
-
                     # guess for T is self.T with scatter
-                    guess[:,4] = T + T*0.1*random.random(nwalkers)
+                    guess[:,4] = T + T*0.1*(randu(nwalkers)-0.5)
                     
                     # width of prior on center
                     cenprior=CenPrior([res['row'],res['col']],
@@ -495,6 +495,9 @@ class EmceeFitter:
             marginalize over amplitude. For s2=1
 
                 0.379 0.563, 0.0593
+
+    seeing wierd bais:
+        - fixed assymmetric random starts: wow, that fixed it!
     """
 
     def __init__(self, 
@@ -561,7 +564,7 @@ class EmceeFitter:
         self.tpars=zeros(self.npars+1)
 
         # this is the scale factor for the emcee sampler.
-        # it gives a acceptance rate of about 0.3
+        # 4 it gives a acceptance rate of about 0.3
         self.emcee_a = 4.
         #self.emcee_a = 2.
 
