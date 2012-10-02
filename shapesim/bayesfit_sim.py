@@ -16,6 +16,7 @@ import os
 import numpy
 from numpy import sqrt, cos, sin, exp, log, pi, zeros, ones, empty, \
         random, where, array, linspace, diag
+from numpy import tanh, arctanh
 from numpy.random import randn
 from . import shapesim
 import lensing
@@ -25,6 +26,9 @@ import gmix_image
 import images
 import esutil as eu
 from esutil.misc import wlog
+
+import math
+import time
 
 from sys import stderr
 
@@ -535,7 +539,7 @@ class EmceeFitter:
         self.npars=5
 
         self.image=image
-        self.ierr=ierr
+        self.ierr=float(ierr)
         self._set_psf(psf)
         self.guess=guess
         self.s2n=s2n
@@ -545,22 +549,16 @@ class EmceeFitter:
         self.nstep=nstep
         self.burnin=burnin
 
-
-        if isinstance(ierr,numpy.ndarray):
-            if ierr.shape != image.shape:
-                raise ValueError("ierr image shape %s does not match image "
-                                 "%s " % (ierr.shape,image.shape))
         if self.guess.shape[1] != self.npars:
             raise ValueError("expected guess with length %d" % self.npars)
         self.nwalkers = self.guess.shape[0]
 
-        self.A = 1
+        self.A = float(1.)
 
         self.lowval=-9999.9e9
 
         # for the p
         self.tpars=zeros(self.npars+1)
-        self.model=zeros(self.image.shape)
 
         # this is the scale factor for the emcee sampler.
         # it gives a acceptance rate of about 0.3
@@ -580,6 +578,13 @@ class EmceeFitter:
 
     def _go(self):
         import emcee
+        """
+        self.logl_tm=0.
+        self.lnprob_tm=0.
+        self.gprior_tm=0.
+        self.cenprior_tm=0.
+        self.mcmc_tm=time.time()
+        """
 
         sampler = emcee.EnsembleSampler(self.nwalkers, 
                                         self.npars, 
@@ -589,6 +594,19 @@ class EmceeFitter:
         pos, prob, state = sampler.run_mcmc(self.guess, self.burnin)
         sampler.reset()
         pos, prob, state = sampler.run_mcmc(pos, self.nstep)
+
+        """
+        self.mcmc_tm = time.time()-self.mcmc_tm
+        wlog("mcmc time:",self.mcmc_tm)
+        wlog("lnprob time:",self.lnprob_tm)
+        wlog("logl time:",self.logl_tm)
+        wlog("gprior time:",self.gprior_tm)
+        wlog("cenprior time:",self.cenprior_tm)
+
+        overhead=self.mcmc_tm-self.lnprob_tm
+        wlog("emcee overhead: %s (%s)" % (overhead,overhead/self.mcmc_tm))
+        wlog("-"*70)
+        """
 
         self._sampler = sampler
         self._trials  = sampler.flatchain
@@ -608,45 +626,75 @@ class EmceeFitter:
         """
         Packaged up for the MCMC code
         """
+
+        #t0=time.time()
         # hard priors first
-        try:
-            # make sure we pass shape tests
-            self.shape=lensing.Shear(g1=pars[2], g2=pars[3])
-        except:
+
+        g = sqrt(pars[2]**2 + pars[3]**2)
+        if g >= 1.:
             return self.lowval
+
 
         if pars[4] < 0:
             return self.lowval
 
         loglike = self._get_loglike(pars)
 
-        gp = log( self.gprior(pars[2], pars[3]) )
-        gp=gp[0]
+        #t00=time.time()
+        gp = log( self.gprior.prior_gabs_scalar(g) )
+        #self.gprior_tm += time.time()-t00
+
+        #t00=time.time()
         cp = self.cenprior.lnprob(pars[0:2])
+        #self.cenprior_tm += time.time()-t00
         logprob = gp + cp + loglike
+        #self.lnprob_tm += time.time()-t0
+
         return logprob
 
+
+
     def _get_loglike(self, pars):
-        # like is exp(0.5*A*B^2) where
-        # A is sum((model/err)^2) and is fixed
-        # and
-        #   B = sum(model*image/err^2)/A
-        #     = sum(model/err * image/err)/A
+        #t0=time.time()
 
-        # build up B
-        # this is model/err
-        Btmp=self._get_normalized_model(pars)
-
-        # Now multiply by image/err
-        Btmp *= self.image
-        Btmp *= self.ierr
-        # now do the sum and divide by A
-        B = Btmp.sum()/self.A
-
-        # A actually fully cancels here when we perform the
-        # renormalization to make sum( (model/err)^2 ) == A
-        loglike = self.A * B**2/2
+        tpars = self._convert_pars(pars)
+        loglike,flags=\
+            gmix_image.render._render.loglike_coellip(self.image, 
+                                                      tpars, 
+                                                      self.psf_pars, 
+                                                      self.A,
+                                                      self.ierr)
+        if flags != 0:
+            return self.lowval
+            #raise ValueError("error in loglike coellip: %s" % flags)
+        #self.logl_tm += time.time()-t0
         return loglike
+
+
+    def _get_model(self, pars):
+
+        # note setting p=1 since we must renormalize anyway
+        # also we have pre-computed the e1,e2 versions of pars
+
+        model=zeros(self.image.shape)
+
+        tpars = self._convert_pars(pars)
+        gmix_image.render._render.fill_model_coellip(model, 
+                                                     tpars, 
+                                                     self.psf_pars, 
+                                                     None)
+
+        return model
+
+    def _convert_pars(self, pars):
+        # this provides significant overhead
+        e1,e2 = g1g2_to_e1e2(pars[2],pars[3])
+        self.tpars[0:self.npars] = pars
+        self.tpars[-1] = 1.
+        self.tpars[2] = e1
+        self.tpars[3] = e2
+
+        return self.tpars
 
 
     def _calc_result(self):
@@ -696,46 +744,6 @@ class EmceeFitter:
         #print 'acceptance rate:',arate
         self._result={'g':g,'gcov':gcov,'gsens':gsens,'arate':arate}
 
-
-    def _get_normalized_model(self, pars):
-        """
-        Model/err.  Normalized such that sum(model/err)^2 ) = A
-
-        ymod is a temporary
-        """
-        model = self._get_model(pars)
-
-        ymod = model*self.ierr
-
-        ymodsum = ymod.sum()
-        ymod2sum = (ymod**2).sum()
-
-        # this ensures sum( (model/err)^2 ) == A
-        norm = sqrt(ymodsum**2*self.A/ymod2sum)
-
-        # also divide again by err since we actually need model/err^2
-        ymod *= (norm/ymodsum)
-
-        return ymod
-
-
-    def _get_model(self, pars):
-
-        # note setting p=1 since we must renormalize anyway
-        # also we have pre-computed the e1,e2 versions of pars
-
-
-        self.tpars[0:self.npars] = pars
-        self.tpars[-1] = 1.
-        #pars=array([cen[0], cen[1], shape.e1, shape.e2, T, 1.0],dtype='f8')
-        #model=empty(self.image.shape,dtype='f8')
-        #print self.tpars
-        gmix_image.render._render.fill_model_coellip(self.model, 
-                                                     self.tpars, 
-                                                     self.psf_pars, 
-                                                     None)
-
-        return self.model
 
 
     def _set_psf(self, psf):
@@ -2422,6 +2430,8 @@ class GPrior:
             prior[w] = self.A * cos(g[w]*pi/2)*exp( - ( 2*g[w] / self.B / (1 + g[w]**self.D) )**self.C )
         return prior
 
+    def prior_gabs_scalar(self, g):
+        return self.A * math.cos(g*pi/2)*math.exp( - ( 2*g / self.B / (1 + g**self.D) )**self.C )
 
 
     def sample(self, nrand, as_shear=False):
@@ -2532,6 +2542,22 @@ class GPrior:
         So we can use the minimizer
         """
         return -self.prior1d(g)
+
+def g1g2_to_e1e2(g1, g2):
+    """
+    This version without exceptions
+    """
+    g = sqrt(g1**2 + g2**2)
+    if g == 0:
+        return 0.,0.
+    e = math.tanh(2*math.atanh(g))
+    #e = tanh(2*arctanh(g))
+
+    fac = e/g
+    e1, e2 = fac*g1, fac*g2
+    return e1,e2
+
+
 
 
 def test(n_ggrid=19, n=1000, s2n=40, gmin=-.9, gmax=.9, show=False, clobber=False):
