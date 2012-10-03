@@ -375,7 +375,6 @@ class BayesFitSim(shapesim.BaseSim):
                     #guess[:,2:4]=0.1*(randu(nwalkers*2)-0.5).reshape(nwalkers,2)
                     for i in xrange(nwalkers):
                         if regen:
-                            wlog("Doing REGEN")
                             g1rand,g2rand = 0.2*(randu(2)-0.5)
                             shrand = lensing.Shear(g1=g1rand,g2=g2rand)
                             guess[i,2] = shrand.g1

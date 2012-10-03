@@ -1,4 +1,4 @@
-run: mcbayes-gg10r05
+run: mcbayes-gg10r06
 sim: sim-gg10
 
 runtype: bys2n
@@ -23,8 +23,8 @@ fixT: false
 
 # step and burnin are *per walker*
 nwalkers: 100
-nstep: 10 # steps per walker
-burnin: 40 # burnin per walker. With fixed guess, can change to 10 it seems
+nstep: 1 # steps per walker
+burnin: 5 # burnin per walker.
 
 use_cache: false
 add_to_cache: false
