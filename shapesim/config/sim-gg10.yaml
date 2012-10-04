@@ -21,7 +21,6 @@ maxs2: 2.0
 nums2: 4
 
 # gprior parameters
-when_prior: "during"
 A: 12.25
 B: 0.2
 C: 1.05

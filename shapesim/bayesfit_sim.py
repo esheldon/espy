@@ -11,6 +11,33 @@ TODO:
 
     - Need to implement prior and sensitivity.
 
+
+    Seeing large bias with emcee:
+        - I verified the loglike calculation is the same
+        - made a fixcen version; a small test shows lower bias
+        - noted that low burnin did have higher bias but
+        need to explore
+        - re-running mcbayes-gg10r05 3 5 with tight prior on centroid (1.e-3)
+        to see how well it works: better but not perfect
+        - ran fixcen gg10r06: still bad.
+
+        - what about using 0.5 acceptance?
+
+        Tried old mcmc gg10r03. Note applied prior *after*
+            looks good to S/N = 10, bad at 5
+        Running gg10r07 with prior *during*
+            If this looks bad, it probably means I need to just calculate
+            the likelihood surface and use the prior afterward.  The
+            1/P dP/de is unstable.  This also probably means I will
+            go back to using the affine invariant sampler as well.
+
+            If it looks good, then the problem is somehow in going
+            to log prob.  Should verify get the same numbers.  Or
+            somehow the affine invariant sampler or it's burnin?
+
+    NEED to compare mcmc to emcee version: what is the difference?
+        - differences in formula?
+        - burnin?
 """
 import os
 import numpy
@@ -305,32 +332,32 @@ class BayesFitSim(shapesim.BaseSim):
                                       T=T,
                                       psf=psf)
         else:
-            # note we create a new fitter each time here
-            if self['fixcen'] and self['fixT']:
-                self.fitter=MCMCFitterFixTCen(image=ci.image,
-                                              pixerr=ci['skysig'],
-                                              gprior=self.gprior,
-                                              when_prior=self.simc['when_prior'],
-                                              cen=ci['cen'],
-                                              T=T,
-                                              psf=psf,
-                                              s2n=ci['s2n_admom'],
-                                              nstep=self['nstep'],
-                                              burnin=self['burnin'])
-            elif self['fixcen']:
-                self.fitter=MCMCFitterFixCen(image=ci.image,
-                                             pixerr=ci['skysig'],
-                                             gprior=self.gprior,
-                                             when_prior=self.simc['when_prior'],
-                                             cen=ci['cen'],
-                                             T=T,
-                                             psf=psf,
-                                             s2n=ci['s2n_admom'],
-                                             nstep=self['nstep'],
-                                             burnin=self['burnin'])
-            else:
-                nwalkers=self.get('nwalkers',None)
-                if nwalkers is None:
+            nwalkers=self.get('nwalkers',None)
+            if nwalkers is None:
+                # note we create a new fitter each time here
+                if self['fixcen'] and self['fixT']:
+                    self.fitter=MCMCFitterFixTCen(image=ci.image,
+                                                  pixerr=ci['skysig'],
+                                                  gprior=self.gprior,
+                                                  when_prior=self['when_prior'],
+                                                  cen=ci['cen'],
+                                                  T=T,
+                                                  psf=psf,
+                                                  s2n=ci['s2n_admom'],
+                                                  nstep=self['nstep'],
+                                                  burnin=self['burnin'])
+                elif self['fixcen']:
+                    self.fitter=MCMCFitterFixCen(image=ci.image,
+                                                 pixerr=ci['skysig'],
+                                                 gprior=self.gprior,
+                                                 when_prior=self['when_prior'],
+                                                 cen=ci['cen'],
+                                                 T=T,
+                                                 psf=psf,
+                                                 s2n=ci['s2n_admom'],
+                                                 nstep=self['nstep'],
+                                                 burnin=self['burnin'])
+                else:
                     guess=zeros(5)
                     # center
                     guess[0:2]=[res['row'], res['col']]
@@ -348,58 +375,70 @@ class BayesFitSim(shapesim.BaseSim):
                                            ci['s2n_admom'], 
                                            self.gprior,
                                            cenwidth,
-                                           when_prior=self.simc['when_prior'],
+                                           when_prior=self['when_prior'],
                                            nstep=self['nstep'], 
                                            burnin=self['burnin'])
+
+            else:
+
+                if self['fixcen']:
+                    # width ignored
+                    #cenprior=CenPrior(ci['cen'], [1.e-8]*2)
+                    cenprior=CenPrior([res['row'],res['col']], [1.e-8]*2)
+                    npars=3
+                    estart=0
                 else:
-
+                    # width of prior on center
+                    cenprior=CenPrior([res['row'],res['col']], [1.e-3]*2)
+                    npars=5
+                    estart=2
                     
-                    regen=False
-                    if res['whyflag'] == 0:
-                        cen=[res['row'],res['col']]
-                        try:
-                            sh = lensing.Shear(e1=res['e1'], e2=res['e2'])
-                        except:
-                            regen=True
-                            #print 'DOING REGEN'
-                    else:
+                regen=False
+                if res['whyflag'] == 0:
+                    cen=[res['row'],res['col']]
+                    try:
+                        sh = lensing.Shear(e1=res['e1'], e2=res['e2'])
+                    except:
                         regen=True
+                        #print 'DOING REGEN'
+                else:
+                    regen=True
 
 
-                    guess=zeros( (nwalkers,5) )
+                guess=zeros( (nwalkers,npars) )
+                if not self['fixcen']:
                     # center
                     guess[:,0:2]=cen
                     guess[:,0] += guess[:,0]*0.01*(randu(nwalkers)-0.5)
                     guess[:,1] += guess[:,1]*0.01*(randu(nwalkers)-0.5)
-                    # guess for g1,g2 is (0,0) with some scatter
-                    #guess[:,2:4]=0.1*(randu(nwalkers*2)-0.5).reshape(nwalkers,2)
-                    for i in xrange(nwalkers):
-                        if regen:
-                            g1rand,g2rand = 0.2*(randu(2)-0.5)
-                            shrand = lensing.Shear(g1=g1rand,g2=g2rand)
-                            guess[i,2] = shrand.g1
-                            guess[i,3] = shrand.g2
-                        else:
-                            g1rand,g2rand = 0.01*(randu(2)-0.5)
-                            shrand = lensing.Shear(g1=g1rand,g2=g2rand)
-                            sh2 = sh + shrand
-                            guess[i,2] = sh2.g1
-                            guess[i,3] = sh2.g2
-                    # guess for T is self.T with scatter
-                    guess[:,4] = T + T*0.1*(randu(nwalkers)-0.5)
-                    
-                    # width of prior on center
-                    cenprior=CenPrior([res['row'],res['col']],
-                                      [.5,.5])
-                    self.fitter=EmceeFitter(ci.image, 
-                                            1./ci['skysig'],
-                                            psf,
-                                            guess,
-                                            ci['s2n_admom'], 
-                                            self.gprior,
-                                            cenprior,
-                                            nstep=self['nstep'], 
-                                            burnin=self['burnin'])
+                # guess for g1,g2 is (0,0) with some scatter
+                #guess[:,2:4]=0.1*(randu(nwalkers*2)-0.5).reshape(nwalkers,2)
+                for i in xrange(nwalkers):
+                    if regen:
+                        g1rand,g2rand = 0.1*(randu(2)-0.5)
+                        shrand = lensing.Shear(g1=g1rand,g2=g2rand)
+                        guess[i,estart] = shrand.g1
+                        guess[i,estart+1] = shrand.g2
+                    else:
+                        g1rand,g2rand = 0.01*(randu(2)-0.5)
+                        shrand = lensing.Shear(g1=g1rand,g2=g2rand)
+                        sh2 = sh + shrand
+                        guess[i,estart] = sh2.g1
+                        guess[i,estart+1] = sh2.g2
+                # guess for T is self.T with scatter
+                guess[:,estart+2] = T + T*0.1*(randu(nwalkers)-0.5)
+                
+                self.fitter=EmceeFitter(ci.image, 
+                                        1./ci['skysig'],
+                                        psf,
+                                        guess,
+                                        ci['s2n_admom'], 
+                                        self.gprior,
+                                        cenprior,
+                                        fixcen=self['fixcen'],
+                                        nstep=self['nstep'], 
+                                        burnin=self['burnin'],
+                                        when_prior=self['when_prior'])
 
 
 
@@ -495,8 +534,6 @@ class EmceeFitter:
 
                 0.379 0.563, 0.0593
 
-    seeing wierd bais:
-        - fixed assymmetric random starts: wow, that fixed it!
     """
 
     def __init__(self, 
@@ -507,8 +544,10 @@ class EmceeFitter:
                  s2n, 
                  gprior,
                  cenprior,
+                 fixcen=False,
                  nstep=10, 
-                 burnin=40):
+                 burnin=40,
+                 when_prior='during'):
         """
         parameters
         ----------
@@ -537,8 +576,6 @@ class EmceeFitter:
             Number of burn in steps per walker.
         """
 
-        # e1,e2,cen1,cen2,T
-        self.npars=5
 
         self.image=image
         self.ierr=float(ierr)
@@ -547,9 +584,19 @@ class EmceeFitter:
         self.s2n=s2n
         self.gprior=gprior
         self.cenprior=cenprior
+        self.fixcen=fixcen
+        if fixcen:
+            # e1,e2,T
+            self.npars=3
+            self.estart=0
+        else:
+            # cen1,cen2,e1,e2,T
+            self.npars=5
+            self.estart=2
 
         self.nstep=nstep
         self.burnin=burnin
+        self.when_prior=when_prior
 
         if self.guess.shape[1] != self.npars:
             raise ValueError("expected guess with length %d" % self.npars)
@@ -559,8 +606,8 @@ class EmceeFitter:
 
         self.lowval=-9999.9e9
 
-        # for the p
-        self.tpars=zeros(self.npars+1)
+        # single gaussian
+        self.tpars=zeros(6)
 
         # this is the scale factor for the emcee sampler.
         # 4 it gives a acceptance rate of about 0.3
@@ -632,25 +679,30 @@ class EmceeFitter:
         #t0=time.time()
         # hard priors first
 
-        g = sqrt(pars[2]**2 + pars[3]**2)
+        g = sqrt(pars[self.estart]**2 + pars[self.estart+1]**2)
         if g >= 1.:
             return self.lowval
 
 
-        if pars[4] < 0:
+        # Check T
+        if pars[self.estart+2] < 0:
             return self.lowval
 
-        loglike = self._get_loglike(pars)
+        logprob = self._get_loglike(pars)
 
-        #t00=time.time()
-        gp = log( self.gprior.prior_gabs_scalar(g) )
-        #self.gprior_tm += time.time()-t00
+        if self.when_prior=='during':
+            #t00=time.time()
+            gp = log( self.gprior.prior_gabs_scalar(g) )
+            #self.gprior_tm += time.time()-t00
 
-        #t00=time.time()
-        cp = self.cenprior.lnprob(pars[0:2])
-        #self.cenprior_tm += time.time()-t00
-        logprob = gp + cp + loglike
-        #self.lnprob_tm += time.time()-t0
+            logprob += gp
+
+        if not self.fixcen:
+            #t00=time.time()
+            cp = self.cenprior.lnprob(pars[0:2])
+            #self.cenprior_tm += time.time()-t00
+            logprob += cp
+            #self.lnprob_tm += time.time()-t0
 
         return logprob
 
@@ -690,12 +742,24 @@ class EmceeFitter:
 
     def _convert_pars(self, pars):
         # this provides significant overhead
-        e1,e2 = g1g2_to_e1e2(pars[2],pars[3])
-        self.tpars[0:self.npars] = pars
-        self.tpars[-1] = 1.
-        self.tpars[2] = e1
-        self.tpars[3] = e2
+        e1,e2 = g1g2_to_e1e2(pars[self.estart],pars[self.estart+1])
 
+        if self.fixcen:
+            self.tpars[0:2] = self.cenprior.cen
+            self.tpars[2] = e1
+            self.tpars[3] = e2
+            self.tpars[4] = pars[self.estart+2]
+            self.tpars[-1] = 1.
+        else:
+            # copies cen1,cen2,g1,g2,T
+            self.tpars[0:self.npars] = pars
+            self.tpars[2] = e1
+            self.tpars[3] = e2
+            self.tpars[-1] = 1.
+
+        #wlog("pars:",pars)
+        #wlog("tpars:",self.tpars)
+        #stop
         return self.tpars
 
 
@@ -713,31 +777,56 @@ class EmceeFitter:
         gsens = zeros(2)
 
 
-        g1vals=self._trials[:,2]
-        g2vals=self._trials[:,3]
+        g1vals=self._trials[:,self.estart]
+        g2vals=self._trials[:,self.estart+1]
 
         prior = self.gprior(g1vals,g2vals)
         dpri_by_g1 = self.gprior.dbyg1(g1vals,g2vals)
         dpri_by_g2 = self.gprior.dbyg2(g1vals,g2vals)
 
-        # prior is already in the distribution of
-        # points.  This is simpler for most things but
-        # for sensitivity we need a factor of (1/P)dP/de
-        means, cov = mcmc.extract_stats(self._trials, 0)
-        #mcmc.print_stats(means,cov,names=['cen1','cen2','g1','g2','T'])
+        if self.when_prior=='after':
+            #wlog("** applying after")
+            # we need to multiply each by the prior
+            psum=prior.sum()
+            g[0] = (g1vals*prior).sum()/psum
+            g[1] = (g2vals*prior).sum()/psum
 
-        g=means[2:4]
-        gcov=cov[2:4,2:4]
+            g1diff = g[0]-g1vals
+            g2diff = g[1]-g2vals
 
-        g1diff = g[0]-g1vals
-        g2diff = g[1]-g2vals
+            gcov[0,0] = (g1diff**2*prior).sum()/psum
+            gcov[0,1] = (g1diff*g2diff*prior).sum()/psum
+            gcov[1,0] = gcov[0,1]
+            gcov[1,1] = (g2diff**2*prior).sum()/psum
 
-        w,=where(prior > 0)
-        if w.size == 0:
-            raise ValueError("no prior values > 0!")
+            # now the sensitivity is 
+            #  sum( (<g>-g) L*dP/dg )
+            #  ----------------------
+            #        sum(L*P)
+            #
+            # the likelihood is already in the points
 
-        gsens[0]= 1.-(g1diff[w]*dpri_by_g1[w]/prior[w]).mean()
-        gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
+            gsens[0] = 1. - (g1diff*dpri_by_g1).sum()/psum
+            gsens[1] = 1. - (g2diff*dpri_by_g2).sum()/psum
+        else:
+            # prior is already in the distribution of
+            # points.  This is simpler for most things but
+            # for sensitivity we need a factor of (1/P)dP/de
+            means, cov = mcmc.extract_stats(self._trials, 0)
+            #mcmc.print_stats(means,cov,names=['cen1','cen2','g1','g2','T'])
+
+            g=means[self.estart:self.estart+2]
+            gcov=cov[self.estart:self.estart+2,self.estart:self.estart+2]
+
+            g1diff = g[0]-g1vals
+            g2diff = g[1]-g2vals
+
+            w,=where(prior > 0)
+            if w.size == 0:
+                raise ValueError("no prior values > 0!")
+
+            gsens[0]= 1.-(g1diff[w]*dpri_by_g1[w]/prior[w]).mean()
+            gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
 
  
         arates = self._sampler.acceptance_fraction
@@ -758,6 +847,10 @@ class EmceeFitter:
             self.psf_pars = gmix_image.gmix2pars(psf)
 
     def _doplots(self):
+        if self.fixcen:
+            self._doplots_fixcen()
+            return
+
         import mcmc
         import biggles
         biggles.configure("default","fontsize_min",1.2)
@@ -839,6 +932,68 @@ class EmceeFitter:
         tab[2,1] = hplt_g2
         tab[3,1] = hplt_T
         tab[4,0] = likep
+        tab.show()
+
+
+    def _doplots_fixcen(self):
+        import mcmc
+        import biggles
+        biggles.configure("default","fontsize_min",1.2)
+        tab=biggles.Table(4,2)
+
+        ind=numpy.arange(self._trials[:,0].size)
+
+        burn_g1=biggles.FramedPlot()
+        burn_g1.add(biggles.Curve(ind, self._trials[:,self.estart]))
+        burn_g1.ylabel=r'$g_1$'
+
+        burn_g2=biggles.FramedPlot()
+        burn_g2.add(biggles.Curve(ind, self._trials[:,self.estart+1]))
+        burn_g2.ylabel=r'$g_2$'
+
+        burn_T=biggles.FramedPlot()
+        burn_T.add(biggles.Curve(ind, self._trials[:,self.estart+2]))
+        burn_T.ylabel='T'
+
+        likep = biggles.FramedPlot()
+        likep.add( biggles.Curve(ind, self._lnprobs) )
+        likep.ylabel='ln( prob )'
+
+
+        g = self._result['g']
+        gcov = self._result['gcov']
+        errs = sqrt(diag(gcov))
+
+        res=self.get_result()
+        print 'acceptance rate:',res['arate']
+        print 'g1: %.16g +/- %.16g' % (g[0],errs[0])
+        print 'g2: %.16g +/- %.16g' % (g[1],errs[1])
+        print 'g1sens:',self._result['gsens'][0]
+        print 'g2sens:',self._result['gsens'][1]
+
+        bsize1=errs[0]*0.2
+        bsize2=errs[1]*0.2
+        hplt_g1 = eu.plotting.bhist(self._trials[:, self.estart],binsize=bsize1,
+                                  show=False)
+        hplt_g2 = eu.plotting.bhist(self._trials[:, self.estart+1],binsize=bsize2,
+                                  show=False)
+
+        Tsdev = self._trials[:,self.estart+2].std()
+        Tbsize=Tsdev*0.2
+        hplt_T = eu.plotting.bhist(self._trials[:, self.estart+2],binsize=Tbsize,
+                                  show=False)
+
+        hplt_g1.xlabel=r'$g_1$'
+        hplt_g2.xlabel=r'$g_2$'
+        hplt_T.xlabel='T'
+        tab[0,0] = burn_g1
+        tab[1,0] = burn_g2
+        tab[2,0] = burn_T
+
+        tab[0,1] = hplt_g1
+        tab[1,1] = hplt_g2
+        tab[2,1] = hplt_T
+        tab[3,0] = likep
         tab.show()
 
 
@@ -1323,7 +1478,7 @@ class MCMCFitterFixCen:
                  T=None,
                  s2n=None, 
                  nstep=6400, 
-                 when_prior='after',
+                 when_prior='during',
                  burnin=1000):
         """
         parameters
@@ -1359,7 +1514,8 @@ class MCMCFitterFixCen:
                        T=T,
                        s2n=s2n, 
                        nstep=nstep, 
-                       burnin=burnin)
+                       burnin=burnin,
+                       when_prior=when_prior)
 
         self._go()
 
@@ -1372,9 +1528,9 @@ class MCMCFitterFixCen:
 
         guess=zeros(self.npars)
         # guess for g1,g2 is (0,0 with some scatter
-        guess[0:2]=0.1*random.random(2)
+        guess[0:2]=0.1*(randu(2)-0.5)
         # guess for T is self.T with scatter
-        guess[2] = self.T + self.T*0.1*random.random()
+        guess[2] = self.T + self.T*0.1*(randu()-0.5)
         
         self.trials = mcmc.run(self.nstep, guess)
 
@@ -1389,6 +1545,37 @@ class MCMCFitterFixCen:
 
 
     def loglike(self, pars):
+        """
+        pars are [g1,g2,T]
+        Packaged up for the MCMC code
+        """
+        # hard priors first
+        g1,g2=pars[0],pars[1]
+        T=pars[2]
+
+        e1,e2 = g1g2_to_e1e2(g1,g2)
+        etot=sqrt(e1**2 + e2**2)
+        if etot >= 1.:
+            return self.lowval
+        if T < 0:
+            return self.lowval
+
+        self.tpars[0]=self.cen[0]
+        self.tpars[1]=self.cen[1]
+        self.tpars[2]=e1
+        self.tpars[3]=e2
+        self.tpars[4]=T
+        self.tpars[5]=1.
+
+        logprob = self._get_loglike_c(self.tpars)
+        if self.when_prior=='during':
+            gp = self._get_lngprior(g1,g2)
+            logprob += gp
+
+        return logprob
+
+
+    def loglike_old(self, pars):
         """
         Packaged up for the MCMC code
         """
@@ -1406,11 +1593,12 @@ class MCMCFitterFixCen:
         else:
             return self._get_logprob(shape, pars[2], self.cen)
 
+
     def step(self, pars):
         """
         public for the MCMC code
         """
-        nextpars=zeros(self.npars)
+        #nextpars=zeros(self.npars)
         """
         f=random.random()
         if f > 0.5:
@@ -1426,10 +1614,33 @@ class MCMCFitterFixCen:
         get log(like) + log(prior)
         """
         loglike = self._get_loglike(shape, T, cen)
-        gp = log( self.gprior(pars[2], pars[3]) )
-        gp=gp[0]
+        gp = self._get_lngprior(shape.g1, shape.g2)
         logprob = gp + loglike
         return logprob
+
+
+    def _get_loglike_c(self, pars):
+        #t0=time.time()
+
+        loglike,flags=\
+            gmix_image.render._render.loglike_coellip(self.image, 
+                                                      pars, 
+                                                      self.psf_pars, 
+                                                      self.A,
+                                                      self.ierr)
+        if flags != 0:
+            return self.lowval
+        #self.logl_tm += time.time()-t0
+        return loglike
+
+    def _get_lngprior(self, g1, g2):
+        g=sqrt(g1**2 + g2**2)
+        gp = self.gprior.prior_gabs_scalar(g)
+        if gp > 0:
+            gp = log(gp)
+        else:
+            gp=self.lowval
+        return gp
 
     def _get_loglike(self, shape, T, cen):
         # like is exp(0.5*A*B^2) where
@@ -1446,13 +1657,52 @@ class MCMCFitterFixCen:
         Btmp *= self.image
         Btmp *= 1./self.pixerr
         # now do the sum and divide by A
-        B = Btmp.sum()/self.A
+        B = Btmp.sum()/self.Anorm
 
         # A actually fully cancels here when we perform the
         # renormalization to make sum( (model/err)^2 ) == A
-        loglike = self.A * B**2/2
+        loglike = self.Anorm * B**2/2
+
         return loglike
 
+
+
+    def _get_normalized_model(self, shape, T, cen):
+        """
+        Model/err.  Normalized such that sum(model/err)^2 ) = A
+        """
+        model = self._get_model(shape, T, cen)
+
+        ymod = model/self.pixerr
+
+        ymodsum = ymod.sum()
+        ymod2sum = (ymod**2).sum()
+
+        # this ensures sum( (model/err)^2 ) == A
+        norm = sqrt(ymodsum**2*self.Anorm/ymod2sum)
+
+        # also divide again by err since we actually need model/err^2
+        ymod *= (norm/ymodsum)
+
+        return ymod
+
+
+    def _get_model(self, shape, T, cen):
+        """
+        for now don't bother with cache
+        """
+
+
+        # for now pars are only for single gaussian
+        # note setting p=1 since we must renormalize anyway
+        pars=array([cen[0], cen[1], shape.e1, shape.e2, T, 1.0],dtype='f8')
+        #model=empty(self.image.shape,dtype='f8')
+        gmix_image.render._render.fill_model_coellip(self._model, 
+                                                     pars, 
+                                                     self.psf_pars, 
+                                                     None)
+
+        return self._model
 
     def _calc_result(self):
         """
@@ -1461,6 +1711,7 @@ class MCMCFitterFixCen:
         We marginalize over all parameters but g1,g2, which
         are index 0 and 1 in the pars array
         """
+        import mcmc
         burn=self.burnin
 
         g=zeros(2)
@@ -1503,7 +1754,7 @@ class MCMCFitterFixCen:
             # prior is already in the distribution of
             # points.  This is simpler for most things but
             # for sensitivity we need a factor of (1/P)dP/de
-            g, gcov = mcmc.extract_stats(self.trials['pars'], burn)
+            g, gcov = mcmc.extract_stats(self.trials['pars'][:,0:2], burn)
 
             g1diff = g[0]-g1vals
             g2diff = g[1]-g2vals
@@ -1522,48 +1773,17 @@ class MCMCFitterFixCen:
         self._result={'g':g,'gcov':gcov,'gsens':gsens,'arate':arate}
 
 
-    def _get_normalized_model(self, shape, T, cen):
-        """
-        Model/err.  Normalized such that sum(model/err)^2 ) = A
-        """
-        model = self._get_model(shape, T, cen)
-
-        ymod = model/self.pixerr
-
-        ymodsum = ymod.sum()
-        ymod2sum = (ymod**2).sum()
-
-        # this ensures sum( (model/err)^2 ) == A
-        norm = sqrt(ymodsum**2*self.A/ymod2sum)
-
-        # also divide again by err since we actually need model/err^2
-        ymod *= (norm/ymodsum)
-
-
-        return ymod
-
-
-    def _get_model(self, shape, T, cen):
-        """
-        for now don't bother with cache
-        """
-
-
-        # for now pars are only for single gaussian
-        # note setting p=1 since we must renormalize anyway
-        pars=array([cen[0], cen[1], shape.e1, shape.e2, T, 1.0],dtype='f8')
-        model=empty(self.image.shape,dtype='f8')
-        gmix_image.render._render.fill_model_coellip(model, pars, self.psf_pars, 
-                                                     None)
-
-        return model
 
     def _get_gstepsize(self, s2n):
         # these are pretty good for gauss-gauss and just e1,e2
         # going for about 0.3-0.35 acceptance rate for 2 pars
         # for higher dims should tend closer to .25
-        s2ns  = [  5,  10,  15,  20,  25,  30,  40,  50,   60,   70,   80,   90,  100]
-        steps = [.40, .22, .13, .10, .08, .07, .05, .04, .034, .030, .026, .023, .021]
+        if self.when_prior=='during':
+            s2ns  = [  5,  10,  15,  20,  25,  30,  40,  50,   60,   70,   80,   90,  100]
+            steps = [.20, .14, .10, .08, .06, .05, .04, .034, .030, .026, .021, .017, .015]
+        else:
+            s2ns  = [  5,  10,  15,  20,  25,  30,  40,  50,   60,   70,   80,   90,  100]
+            steps = [.40, .22, .13, .10, .08, .07, .05, .04, .034, .030, .026, .023, .021]
 
         s2ns=array(s2ns,dtype='f8')
         steps=array(steps,dtype='f8')
@@ -1571,8 +1791,12 @@ class MCMCFitterFixCen:
         return numpy.interp(s2n, s2ns, steps)
 
     def _get_Tstepsize(self, s2n):
-        s2ns  = [  5,  10,  15,  20,  25,  30,  40,  50,  60,  70,  80,  90, 100]
-        steps = [2.0, 1.8, 1.5, 1.1, .80, .60, .45, .35, .28, .20, .20, .20, .20]
+        if self.when_prior=='during':
+            s2ns  = [  5,  10,  15,  20,  25,  30,  40,  50,  60,  70,  80,  90, 100]
+            steps = [1.0, 1.2, 1.0, .80, .50, .45, .35, .28, .20, .18, .16, .15, .13]
+        else:
+            s2ns  = [  5,  10,  15,  20,  25,  30,  40,  50,  60,  70,  80,  90, 100]
+            steps = [2.0, 1.8, 1.5, 1.1, .80, .60, .45, .35, .28, .20, .20, .20, .20]
 
         s2ns=array(s2ns,dtype='f8')
         steps=array(steps,dtype='f8')
@@ -1590,20 +1814,22 @@ class MCMCFitterFixCen:
                   T=None,
                   s2n=None, 
                   nstep=6400,
-                  when_prior='after',
-                  burnin=1000):
+                  burnin=1000,
+                  when_prior='during'):
 
         # e1,e2,T
         self.npars=3
 
         self.image=image
         self.pixerr=pixerr
+        self.ierr=float(1./pixerr)
         self.T=T
         self.cen=cen
         self.nstep=nstep
         self.burnin=burnin
         self.s2n=s2n
         self.gprior=gprior
+        self.when_prior=when_prior
 
         gstepsize=self._get_gstepsize(s2n)
         Tstepsize=self._get_Tstepsize(s2n)
@@ -1620,14 +1846,16 @@ class MCMCFitterFixCen:
         #if self.guess.size != self.npars:
         #    raise ValueError("expected guess with length %d" % self.npars)
 
-        self.A = 1
+        self.Anorm = float(1)
 
         # This will make sure make sure the guess is valid
         #self.guess_shape = lensing.Shear(guess[0],guess[1])
 
         self.lowval=-9999.9e9
 
-        self.when_prior=when_prior
+        self.tpars=zeros(6,dtype='f8')
+
+        self._model = zeros( image.shape )
 
     def _set_psf(self, psf):
         self.psf_gmix = psf
@@ -2434,7 +2662,6 @@ class GPrior:
 
     def prior_gabs_scalar(self, g):
         return self.A * math.cos(g*pi/2)*math.exp( - ( 2*g / self.B / (1 + g**self.D) )**self.C )
-
 
     def sample(self, nrand, as_shear=False):
         """

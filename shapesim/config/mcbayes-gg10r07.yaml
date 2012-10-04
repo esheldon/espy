@@ -1,5 +1,6 @@
+# straight mcmc.  same as gg10r03 but with during prior
 # for averaging with gg10r01
-run: mcbayes-gg10r03
+run: mcbayes-gg10r07
 sim: sim-gg10
 
 runtype: bys2n
@@ -25,7 +26,7 @@ fixT: false
 nstep: 5000 # minimum number of steps
 burnin: 4000 # eventually we will figure this out on the fly
 
-when_prior: "after"
+when_prior: "during"
 
 use_cache: false
 add_to_cache: false

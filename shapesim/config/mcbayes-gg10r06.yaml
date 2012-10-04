@@ -18,13 +18,15 @@ s2ncalc_fluxfrac: null
 s2n_psf: 1.0e+8
 s2nvals: [5,10,15,20,25,30,40,50,60,70,80,90,100]
 
-fixcen: false
+fixcen: true
 fixT: false
 
 # step and burnin are *per walker*
 nwalkers: 100
-nstep: 1 # steps per walker
-burnin: 5 # burnin per walker.
+nstep: 10 # steps per walker
+burnin: 40 # burnin per walker.
+
+when_prior: "after"
 
 use_cache: false
 add_to_cache: false

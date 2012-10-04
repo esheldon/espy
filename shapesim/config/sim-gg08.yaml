@@ -19,7 +19,6 @@ mins2: 0.5
 maxs2: 2.0
 nums2: 4
 
-when_prior: "after"
 A: 12.25
 B: 0.03
 C: 0.45
