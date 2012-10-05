@@ -1,6 +1,7 @@
 # trying to plug in emcee to the regular mcmc one just to
 # see.  nwalkers will be fixed
-run: mcbayes-gg10r08
+# this one nwalkers 10
+run: mcbayes-gg10r09
 sim: sim-gg10
 
 runtype: bys2n

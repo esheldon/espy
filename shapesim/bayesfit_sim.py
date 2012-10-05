@@ -41,7 +41,21 @@ TODO:
             into that class to see if it works. First make sure my
             faster version agrees: looks OK
             This is gg10r08. Just running s2 001 s2n 002 as a test:
-                looks ok, running rest and going to bed
+                looks ok, doing the rest of this run
+            Looks bad, constant offset below.  I'm guessing this
+            is somehow related to the burnin period and that I
+            guessed (0,0) plus noise for the ellip.
+            re-running 000 012 with longer burnin just to see
+                looks much better, so what's up?
+                - try again with 1000 walkers and old burnin 000 011
+                - try again with 10 walkers and old burnin   000 010
+                    this worked best
+
+            Doing a new run gg10r09 with 10 walkers and still
+                4000 burnin, 5000 total.
+
+            Note still choosing (0,0) centered start; with 10 walkers
+            should we go back to a good guess?
 
     NEED to compare mcmc to emcee version: what is the difference?
         - differences in formula?
@@ -1567,7 +1581,7 @@ class MCMCFitterFixCen:
 
     def _go_emcee(self):
         import emcee
-        self.nwalkers=100
+        self.nwalkers=10
         guess=zeros( (self.nwalkers,self.npars) )
 
 
