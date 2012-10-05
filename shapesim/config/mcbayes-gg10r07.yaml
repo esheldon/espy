@@ -26,6 +26,7 @@ fixT: false
 nstep: 5000 # minimum number of steps
 burnin: 4000 # eventually we will figure this out on the fly
 
+sampler: "mcmc"
 when_prior: "during"
 
 use_cache: false

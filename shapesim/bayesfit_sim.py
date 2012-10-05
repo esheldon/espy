@@ -25,15 +25,23 @@ TODO:
 
         Tried old mcmc gg10r03. Note applied prior *after*
             looks good to S/N = 10, bad at 5
-        Running gg10r07 with prior *during*
+        Running gg10r07 with prior *during* (like gg10r06 emcee)
             If this looks bad, it probably means I need to just calculate
             the likelihood surface and use the prior afterward.  The
             1/P dP/de is unstable.  This also probably means I will
-            go back to using the affine invariant sampler as well.
+            go back to using the affine invariant sampler as well,
+            but only using it to explore the likelihood surface.
+            Would have to test that too.
 
-            If it looks good, then the problem is somehow in going
-            to log prob.  Should verify get the same numbers.  Or
-            somehow the affine invariant sampler or it's burnin?
+            If it looks good, then the problem is somehow in particulars
+            of the class.  Should run with exact same numbers to see
+            if agreement is found.
+
+            It looks OK.  So, I'm going to try just plugging emcee
+            into that class to see if it works. First make sure my
+            faster version agrees: looks OK
+            This is gg10r08. Just running s2 001 s2n 002 as a test:
+                looks ok, running rest and going to bed
 
     NEED to compare mcmc to emcee version: what is the difference?
         - differences in formula?
@@ -60,6 +68,7 @@ import time
 
 from sys import stderr
 
+LOWVAL=-9999.9e9
 
 class BayesFitSim(shapesim.BaseSim):
     def __init__(self, run, extra=None):
@@ -356,7 +365,8 @@ class BayesFitSim(shapesim.BaseSim):
                                                  psf=psf,
                                                  s2n=ci['s2n_admom'],
                                                  nstep=self['nstep'],
-                                                 burnin=self['burnin'])
+                                                 burnin=self['burnin'],
+                                                 sampler=self['sampler'])
                 else:
                     guess=zeros(5)
                     # center
@@ -604,7 +614,6 @@ class EmceeFitter:
 
         self.A = float(1.)
 
-        self.lowval=-9999.9e9
 
         # single gaussian
         self.tpars=zeros(6)
@@ -679,14 +688,15 @@ class EmceeFitter:
         #t0=time.time()
         # hard priors first
 
-        g = sqrt(pars[self.estart]**2 + pars[self.estart+1]**2)
-        if g >= 1.:
-            return self.lowval
+        # now checked in loglike
+        #g = sqrt(pars[self.estart]**2 + pars[self.estart+1]**2)
+        #if g >= 1.:
+        #    return LOWVAL
 
 
         # Check T
         if pars[self.estart+2] < 0:
-            return self.lowval
+            return LOWVAL
 
         logprob = self._get_loglike(pars)
 
@@ -711,7 +721,10 @@ class EmceeFitter:
     def _get_loglike(self, pars):
         #t0=time.time()
 
-        tpars = self._convert_pars(pars)
+        tpars,ok = self._convert_pars(pars)
+        if not ok:
+            return LOWVAL
+
         loglike,flags=\
             gmix_image.render._render.loglike_coellip(self.image, 
                                                       tpars, 
@@ -719,20 +732,19 @@ class EmceeFitter:
                                                       self.A,
                                                       self.ierr)
         if flags != 0:
-            return self.lowval
-            #raise ValueError("error in loglike coellip: %s" % flags)
+            return LOWVAL
         #self.logl_tm += time.time()-t0
         return loglike
 
 
     def _get_model(self, pars):
-
-        # note setting p=1 since we must renormalize anyway
-        # also we have pre-computed the e1,e2 versions of pars
-
+        """
+        Not used in fitting, just here in case we need it
+        """
+        tpars,ok = self._convert_pars(pars)
+        if not ok:
+            raise ValueError("error converting pars")
         model=zeros(self.image.shape)
-
-        tpars = self._convert_pars(pars)
         gmix_image.render._render.fill_model_coellip(model, 
                                                      tpars, 
                                                      self.psf_pars, 
@@ -742,7 +754,9 @@ class EmceeFitter:
 
     def _convert_pars(self, pars):
         # this provides significant overhead
-        e1,e2 = g1g2_to_e1e2(pars[self.estart],pars[self.estart+1])
+        e1,e2,ok = g1g2_to_e1e2(pars[self.estart],pars[self.estart+1])
+        if not ok:
+            return None,False
 
         if self.fixcen:
             self.tpars[0:2] = self.cenprior.cen
@@ -760,7 +774,7 @@ class EmceeFitter:
         #wlog("pars:",pars)
         #wlog("tpars:",self.tpars)
         #stop
-        return self.tpars
+        return self.tpars, True
 
 
     def _calc_result(self):
@@ -1124,7 +1138,6 @@ class MCMCFitter:
 
         self.A = 1
 
-        self.lowval=-9999.9e9
 
         # for the p
         self.tpars=zeros(self.npars+1)
@@ -1160,10 +1173,10 @@ class MCMCFitter:
             # make sure we pass shape tests
             self.shape=lensing.Shear(g1=pars[2], g2=pars[3])
         except:
-            return self.lowval
+            return LOWVAL
 
         if pars[4] < 0:
-            return self.lowval
+            return LOWVAL
 
         if self.when_prior=='after':
             return self._get_loglike(pars)
@@ -1478,8 +1491,9 @@ class MCMCFitterFixCen:
                  T=None,
                  s2n=None, 
                  nstep=6400, 
+                 burnin=1000,
                  when_prior='during',
-                 burnin=1000):
+                 sampler='mcmc'):
         """
         parameters
         ----------
@@ -1505,6 +1519,7 @@ class MCMCFitterFixCen:
             S/N value; will be used to create step sizes.
         """
 
+        self.make_plots=False
         self._set_data(image=image, 
                        pixerr=pixerr, 
                        guess=guess,
@@ -1515,6 +1530,7 @@ class MCMCFitterFixCen:
                        s2n=s2n, 
                        nstep=nstep, 
                        burnin=burnin,
+                       sampler=sampler,
                        when_prior=when_prior)
 
         self._go()
@@ -1523,6 +1539,12 @@ class MCMCFitterFixCen:
         return self._result
 
     def _go(self):
+        if self.sampler=='mcmc':
+            self._go_mcmc()
+        else:
+            self._go_emcee()
+
+    def _go_mcmc(self):
         import mcmc
         mcmc=mcmc.MCMC(self)
 
@@ -1537,7 +1559,57 @@ class MCMCFitterFixCen:
         # get the expectation values, sensitivity and errors
         self._calc_result()
 
-        if False:
+        if self.make_plots:
+            self._doplots()
+            key=raw_input('hit a key (q to quit): ')
+            if key=='q':
+                stop
+
+    def _go_emcee(self):
+        import emcee
+        self.nwalkers=100
+        guess=zeros( (self.nwalkers,self.npars) )
+
+
+        # guess for g1,g2 is (0,0) with some scatter
+        guess[:,0]=0.1*(randu(self.nwalkers)-0.5)
+        guess[:,1]=0.1*(randu(self.nwalkers)-0.5)
+
+        # guess for T is self.T with scatter
+        guess[:,2] = self.T + self.T*0.1*(randu(self.nwalkers)-0.5)
+
+        sampler = emcee.EnsembleSampler(self.nwalkers, 
+                                        self.npars, 
+                                        self.loglike,
+                                        a=4.)
+        
+        burn_per=self.burnin/self.nwalkers
+        nstep_per=(self.nstep-self.burnin)/self.nwalkers
+
+        pos, prob, state = sampler.run_mcmc(guess, burn_per)
+        sampler.reset()
+        pos, prob, state = sampler.run_mcmc(pos, nstep_per)
+        
+        # dummy
+        self.burnin=10
+
+        dtype = [('pars',('f8',self.npars)), ('loglike','f8')]
+        trials = zeros(self.nwalkers*nstep_per, dtype=dtype)
+
+        lnprobs = sampler.lnprobability.reshape(self.nwalkers*nstep_per)
+        lnprobs = lnprobs - lnprobs.max()
+
+        trials['pars'] = sampler.flatchain
+        trials['loglike'] = lnprobs
+
+        self.trials=trials
+
+        self._emcee_sampler=sampler
+
+        # get the expectation values, sensitivity and errors
+        self._calc_result()
+
+        if self.make_plots:
             self._doplots()
             key=raw_input('hit a key (q to quit): ')
             if key=='q':
@@ -1553,12 +1625,12 @@ class MCMCFitterFixCen:
         g1,g2=pars[0],pars[1]
         T=pars[2]
 
-        e1,e2 = g1g2_to_e1e2(g1,g2)
-        etot=sqrt(e1**2 + e2**2)
-        if etot >= 1.:
-            return self.lowval
+        e1,e2,ok = g1g2_to_e1e2(g1,g2)
+        if not ok:
+            return LOWVAL
+
         if T < 0:
-            return self.lowval
+            return LOWVAL
 
         self.tpars[0]=self.cen[0]
         self.tpars[1]=self.cen[1]
@@ -1583,10 +1655,10 @@ class MCMCFitterFixCen:
         try:
             shape=lensing.Shear(g1=pars[0], g2=pars[1])
         except:
-            return self.lowval
+            return LOWVAL
 
         if pars[2] < 0:
-            return self.lowval
+            return LOWVAL
 
         if self.when_prior=='after':
             return self._get_loglike(shape, pars[2], self.cen)
@@ -1626,10 +1698,10 @@ class MCMCFitterFixCen:
             gmix_image.render._render.loglike_coellip(self.image, 
                                                       pars, 
                                                       self.psf_pars, 
-                                                      self.A,
+                                                      self.Anorm,
                                                       self.ierr)
         if flags != 0:
-            return self.lowval
+            return LOWVAL
         #self.logl_tm += time.time()-t0
         return loglike
 
@@ -1639,7 +1711,7 @@ class MCMCFitterFixCen:
         if gp > 0:
             gp = log(gp)
         else:
-            gp=self.lowval
+            gp=LOWVAL
         return gp
 
     def _get_loglike(self, shape, T, cen):
@@ -1767,8 +1839,12 @@ class MCMCFitterFixCen:
             gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
 
  
-        w,=where(self.trials['accepted']==1)
-        arate = w.size/float(self.trials.size)
+        if self.sampler=='emcee':
+            arates = self._emcee_sampler.acceptance_fraction
+            arate = arates.mean()
+        else:
+            w,=where(self.trials['accepted']==1)
+            arate = w.size/float(self.trials.size)
         #print 'acceptance rate:',w.size/float(self.trials.size)
         self._result={'g':g,'gcov':gcov,'gsens':gsens,'arate':arate}
 
@@ -1815,6 +1891,7 @@ class MCMCFitterFixCen:
                   s2n=None, 
                   nstep=6400,
                   burnin=1000,
+                  sampler='mcmc',
                   when_prior='during'):
 
         # e1,e2,T
@@ -1830,6 +1907,7 @@ class MCMCFitterFixCen:
         self.s2n=s2n
         self.gprior=gprior
         self.when_prior=when_prior
+        self.sampler=sampler
 
         gstepsize=self._get_gstepsize(s2n)
         Tstepsize=self._get_Tstepsize(s2n)
@@ -1850,8 +1928,6 @@ class MCMCFitterFixCen:
 
         # This will make sure make sure the guess is valid
         #self.guess_shape = lensing.Shear(guess[0],guess[1])
-
-        self.lowval=-9999.9e9
 
         self.tpars=zeros(6,dtype='f8')
 
@@ -1888,8 +1964,7 @@ class MCMCFitterFixCen:
         g = self._result['g']
         gcov = self._result['gcov']
         errs = sqrt(diag(gcov))
-        w,=where(self.trials['accepted']==1)
-        print 'acceptance rate:',w.size/float(self.trials.size)
+        print 'acceptance rate:',self._result['arate']
         print 'g1: %.16g +/- %.16g' % (g[0],errs[0])
         print 'g2: %.16g +/- %.16g' % (g[1],errs[1])
         print 'g1sens:',self._result['gsens'][0]
@@ -2047,7 +2122,7 @@ class MCMCFitterFixTCen:
         try:
             shape=lensing.Shear(g1=pars[0], g2=pars[1])
         except:
-            return self.lowval
+            return LOWVAL
 
         if self.when_prior=='after':
             return self._get_loglike(shape, self.T, self.cen)
@@ -2265,7 +2340,6 @@ class MCMCFitterFixTCen:
         # This will make sure make sure the guess is valid
         #self.guess_shape = lensing.Shear(guess[0],guess[1])
 
-        self.lowval=-9999.9e9
 
         self.when_prior=when_prior
 
@@ -2775,16 +2849,22 @@ class GPrior:
 def g1g2_to_e1e2(g1, g2):
     """
     This version without exceptions
+
+    returns e1,e2,okflag
     """
     g = sqrt(g1**2 + g2**2)
+    if g >= 1.:
+        return LOWVAL,LOWVAL,False
+
     if g == 0:
-        return 0.,0.
+        return 0.,0.,True
     e = math.tanh(2*math.atanh(g))
-    #e = tanh(2*arctanh(g))
+    if e >= 1.:
+        return LOWVAL,LOWVAL,False
 
     fac = e/g
     e1, e2 = fac*g1, fac*g2
-    return e1,e2
+    return e1,e2,True
 
 
 

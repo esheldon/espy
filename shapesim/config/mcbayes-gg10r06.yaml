@@ -26,7 +26,7 @@ nwalkers: 100
 nstep: 10 # steps per walker
 burnin: 40 # burnin per walker.
 
-when_prior: "after"
+when_prior: "during"
 
 use_cache: false
 add_to_cache: false
