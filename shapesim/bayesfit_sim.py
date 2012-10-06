@@ -57,6 +57,15 @@ TODO:
             Note still choosing (0,0) centered start; with 10 walkers
             should we go back to a good guess?
 
+        - going back to emcee now with 10 walkers.  No other changes!
+            gg10r10  fixcen still.  Looks like shit, maybe because
+            of the e guess.  Using same as other, zero centered.  Still shit.
+                re-running 0 1 using new EmceeFitterFixCen class made
+                from the mcmcfitter
+
+        - if that checks out we can try other things like not
+        fixing center (marginilizing amplitude? probably lower priority)
+
     NEED to compare mcmc to emcee version: what is the difference?
         - differences in formula?
         - burnin?
@@ -224,6 +233,7 @@ class BayesFitSim(shapesim.BaseSim):
             out['g'][i,:] = res['g']
             out['gsens'][i,:] = res['gsens']
             out['gcov'][i,:,:] = res['gcov']
+            out['arate'][i] = res['arate']
 
 
         if dowrite:
@@ -406,63 +416,73 @@ class BayesFitSim(shapesim.BaseSim):
             else:
 
                 if self['fixcen']:
-                    # width ignored
-                    #cenprior=CenPrior(ci['cen'], [1.e-8]*2)
-                    cenprior=CenPrior([res['row'],res['col']], [1.e-8]*2)
-                    npars=3
-                    estart=0
+                    self.fitter=EmceeFitterFixCen(ci.image,
+                                                  1./ci['skysig'],
+                                                  psf,
+                                                  ci['cen'],
+                                                  T,
+                                                  self.gprior,
+                                                  nwalkers=nwalkers,
+                                                  nstep=self['nstep'], 
+                                                  burnin=self['burnin'],
+                                                  when_prior=self['when_prior'])
+
                 else:
                     # width of prior on center
                     cenprior=CenPrior([res['row'],res['col']], [1.e-3]*2)
                     npars=5
                     estart=2
                     
-                regen=False
-                if res['whyflag'] == 0:
-                    cen=[res['row'],res['col']]
-                    try:
-                        sh = lensing.Shear(e1=res['e1'], e2=res['e2'])
-                    except:
-                        regen=True
-                        #print 'DOING REGEN'
-                else:
-                    regen=True
-
-
-                guess=zeros( (nwalkers,npars) )
-                if not self['fixcen']:
-                    # center
-                    guess[:,0:2]=cen
-                    guess[:,0] += guess[:,0]*0.01*(randu(nwalkers)-0.5)
-                    guess[:,1] += guess[:,1]*0.01*(randu(nwalkers)-0.5)
-                # guess for g1,g2 is (0,0) with some scatter
-                #guess[:,2:4]=0.1*(randu(nwalkers*2)-0.5).reshape(nwalkers,2)
-                for i in xrange(nwalkers):
-                    if regen:
-                        g1rand,g2rand = 0.1*(randu(2)-0.5)
-                        shrand = lensing.Shear(g1=g1rand,g2=g2rand)
-                        guess[i,estart] = shrand.g1
-                        guess[i,estart+1] = shrand.g2
+                    """
+                    regen=False
+                    if res['whyflag'] == 0:
+                        cen=[res['row'],res['col']]
+                        try:
+                            sh = lensing.Shear(e1=res['e1'], e2=res['e2'])
+                        except:
+                            regen=True
+                            #print 'DOING REGEN'
                     else:
-                        g1rand,g2rand = 0.01*(randu(2)-0.5)
-                        shrand = lensing.Shear(g1=g1rand,g2=g2rand)
-                        sh2 = sh + shrand
-                        guess[i,estart] = sh2.g1
-                        guess[i,estart+1] = sh2.g2
-                # guess for T is self.T with scatter
-                guess[:,estart+2] = T + T*0.1*(randu(nwalkers)-0.5)
-                
-                self.fitter=EmceeFitter(ci.image, 
-                                        1./ci['skysig'],
-                                        psf,
-                                        guess,
-                                        ci['s2n_admom'], 
-                                        self.gprior,
-                                        cenprior,
-                                        fixcen=self['fixcen'],
-                                        nstep=self['nstep'], 
-                                        burnin=self['burnin'],
-                                        when_prior=self['when_prior'])
+                        regen=True
+                    """
+
+                    guess=zeros( (nwalkers,npars) )
+                    if not self['fixcen']:
+                        # center
+                        guess[:,0:2]=cen
+                        guess[:,0] += guess[:,0]*0.01*(randu(nwalkers)-0.5)
+                        guess[:,1] += guess[:,1]*0.01*(randu(nwalkers)-0.5)
+                    # guess for g1,g2 is (0,0) with some scatter
+                    guess[:,estart]   = 0.1*(randu(nwalkers)-0.5)
+                    guess[:,estart+1] = 0.1*(randu(nwalkers)-0.5)
+                    """
+                    for i in xrange(nwalkers):
+                        if regen:
+                            g1rand,g2rand = 0.1*(randu(2)-0.5)
+                            shrand = lensing.Shear(g1=g1rand,g2=g2rand)
+                            guess[i,estart] = shrand.g1
+                            guess[i,estart+1] = shrand.g2
+                        else:
+                            g1rand,g2rand = 0.01*(randu(2)-0.5)
+                            shrand = lensing.Shear(g1=g1rand,g2=g2rand)
+                            sh2 = sh + shrand
+                            guess[i,estart] = sh2.g1
+                            guess[i,estart+1] = sh2.g2
+                    """
+                    # guess for T is self.T with scatter
+                    guess[:,estart+2] = T + T*0.1*(randu(nwalkers)-0.5)
+                    
+                    self.fitter=EmceeFitter(ci.image, 
+                                            1./ci['skysig'],
+                                            psf,
+                                            guess,
+                                            ci['s2n_admom'], 
+                                            self.gprior,
+                                            cenprior,
+                                            fixcen=self['fixcen'],
+                                            nstep=self['nstep'], 
+                                            burnin=self['burnin'],
+                                            when_prior=self['when_prior'])
 
 
 
@@ -702,69 +722,46 @@ class EmceeFitter:
         #t0=time.time()
         # hard priors first
 
-        # now checked in loglike
-        #g = sqrt(pars[self.estart]**2 + pars[self.estart+1]**2)
-        #if g >= 1.:
-        #    return LOWVAL
-
-
-        # Check T
-        if pars[self.estart+2] < 0:
+        # checks on e <1 and T > 0 performed
+        tpars,ok = self._convert_pars(pars)
+        if not ok:
             return LOWVAL
 
-        logprob = self._get_loglike(pars)
+        logprob,flags=\
+            gmix_image.render._render.loglike_coellip(self.image, 
+                                                      tpars, 
+                                                      self.psf_pars, 
+                                                      self.A,
+                                                      self.ierr)
+
+        if flags != 0:
+            return LOWVAL
 
         if self.when_prior=='during':
             #t00=time.time()
-            gp = log( self.gprior.prior_gabs_scalar(g) )
-            #self.gprior_tm += time.time()-t00
-
+            gp,ok=self._get_lngprior(tpars[2],tpars[3])
+            if not ok:
+                return LOWVAL
             logprob += gp
+            #self.gprior_tm += time.time()-t00
 
         if not self.fixcen:
             #t00=time.time()
             cp = self.cenprior.lnprob(pars[0:2])
             #self.cenprior_tm += time.time()-t00
             logprob += cp
-            #self.lnprob_tm += time.time()-t0
 
+        #self.lnprob_tm += time.time()-t0
         return logprob
 
-
-
-    def _get_loglike(self, pars):
-        #t0=time.time()
-
-        tpars,ok = self._convert_pars(pars)
-        if not ok:
-            return LOWVAL
-
-        loglike,flags=\
-            gmix_image.render._render.loglike_coellip(self.image, 
-                                                      tpars, 
-                                                      self.psf_pars, 
-                                                      self.A,
-                                                      self.ierr)
-        if flags != 0:
-            return LOWVAL
-        #self.logl_tm += time.time()-t0
-        return loglike
-
-
-    def _get_model(self, pars):
-        """
-        Not used in fitting, just here in case we need it
-        """
-        tpars,ok = self._convert_pars(pars)
-        if not ok:
-            raise ValueError("error converting pars")
-        model=zeros(self.image.shape)
-        gmix_image.render._render.fill_model_coellip(model, 
-                                                     tpars, 
-                                                     self.psf_pars, 
-                                                     None)
-
-        return model
+    def _get_lngprior(self, g1, g2):
+        g=sqrt(g1**2 + g2**2)
+        gp = self.gprior.prior_gabs_scalar(g)
+        if gp > 0:
+            gp = log(gp)
+            return gp,True
+        else:
+            return LOWVAL,False
 
     def _convert_pars(self, pars):
         # this provides significant overhead
@@ -785,6 +782,10 @@ class EmceeFitter:
             self.tpars[3] = e2
             self.tpars[-1] = 1.
 
+        # check T
+        if self.tpars[4] < 0.:
+            return None,False
+            
         #wlog("pars:",pars)
         #wlog("tpars:",self.tpars)
         #stop
@@ -1024,6 +1025,312 @@ class EmceeFitter:
         tab[3,0] = likep
         tab.show()
 
+
+class EmceeFitterFixCen:
+    def __init__(self, 
+                 image, 
+                 ierr, 
+                 psf,
+                 cen,
+                 T,
+                 gprior,
+                 nwalkers=10,
+                 nstep=100, 
+                 burnin=400,
+                 when_prior='during'):
+        """
+        parameters
+        ----------
+        image:
+            image as a numpy array
+        ierr:
+            Error per pixel
+        psf:
+            The psf gaussian mixture
+        cen:
+            The center.
+        T:
+            Starting value for ixx+iyy of main component
+        gprior:
+            The prior on the g1,g2 surface.
+        nstep:
+            Number of steps in MCMC chain.
+        burnin:
+            Number of burn in steps.
+        when_prior:
+            'during' or 'after'
+        """
+
+        
+        self.make_plots=False
+
+        # e1,e2,T
+        self.npars=3
+
+        self.image=image
+        self.ierr=float(ierr)
+        self.T=T
+        self.cen=cen
+
+        self.nwalkers=nwalkers
+        self.nstep=nstep
+        self.burnin=burnin
+        self.gprior=gprior
+        self.when_prior=when_prior
+
+        self._set_psf(psf)
+
+        self.Anorm = float(1)
+
+        self.tpars=zeros(6,dtype='f8')
+
+        self._go()
+
+    def get_result(self):
+        return self._result
+
+    def _go(self):
+        if self.sampler=='mcmc':
+            self._go_mcmc()
+        else:
+            self._go_emcee()
+
+    def _go(self):
+        import emcee
+
+        guess=zeros( (self.nwalkers,self.npars) )
+
+        # guess for g1,g2 is (0,0) with some scatter
+        guess[:,0]=0.1*(randu(self.nwalkers)-0.5)
+        guess[:,1]=0.1*(randu(self.nwalkers)-0.5)
+
+        # guess for T is self.T with scatter
+        guess[:,2] = self.T + self.T*0.1*(randu(self.nwalkers)-0.5)
+
+        sampler = emcee.EnsembleSampler(self.nwalkers, 
+                                        self.npars, 
+                                        self._calc_lnprob,
+                                        a=4.)
+        
+
+        pos, prob, state = sampler.run_mcmc(guess, self.burnin)
+        sampler.reset()
+        pos, prob, state = sampler.run_mcmc(pos, self.nstep)
+
+        self.trials  = sampler.flatchain
+        lnprobs = sampler.lnprobability.reshape(self.nwalkers*self.nstep)
+        self.lnprobs = lnprobs - lnprobs.max()
+
+        self._emcee_sampler=sampler
+
+        # get the expectation values, sensitivity and errors
+        self._calc_result()
+
+        if self.make_plots:
+            self._doplots()
+            key=raw_input('hit a key (q to quit): ')
+            if key=='q':
+                stop
+
+
+    def _calc_lnprob(self, pars):
+        """
+        pars are [g1,g2,T]
+        """
+        # hard priors first
+        g1,g2=pars[0],pars[1]
+        T=pars[2]
+
+        e1,e2,ok = g1g2_to_e1e2(g1,g2)
+        if not ok:
+            return LOWVAL
+
+        if T < 0:
+            return LOWVAL
+
+        self.tpars[0]=self.cen[0]
+        self.tpars[1]=self.cen[1]
+        self.tpars[2]=e1
+        self.tpars[3]=e2
+        self.tpars[4]=T
+        self.tpars[5]=1.
+
+        logprob = self._get_loglike_c(self.tpars)
+
+        if self.when_prior=='during':
+            gp = self._get_lngprior(g1,g2)
+            logprob += gp
+
+        return logprob
+
+
+
+
+    def _get_loglike_c(self, pars):
+        #t0=time.time()
+
+        loglike,flags=\
+            gmix_image.render._render.loglike_coellip(self.image, 
+                                                      pars, 
+                                                      self.psf_pars, 
+                                                      self.Anorm,
+                                                      self.ierr)
+        if flags != 0:
+            return LOWVAL
+        #self.logl_tm += time.time()-t0
+        return loglike
+
+    def _get_lngprior(self, g1, g2):
+        g=sqrt(g1**2 + g2**2)
+        gp = self.gprior.prior_gabs_scalar(g)
+        if gp > 0:
+            gp = log(gp)
+        else:
+            gp=LOWVAL
+        return gp
+
+    def _calc_result(self):
+        """
+        if when_prior='after', We apply the shape prior here
+
+        We marginalize over all parameters but g1,g2, which
+        are index 0 and 1 in the pars array
+        """
+        import mcmc
+
+        g=zeros(2)
+        gcov=zeros((2,2))
+        gsens = zeros(2)
+
+        g1vals=self.trials[:,0]
+        g2vals=self.trials[:,1]
+
+        prior = self.gprior(g1vals,g2vals)
+        dpri_by_g1 = self.gprior.dbyg1(g1vals,g2vals)
+        dpri_by_g2 = self.gprior.dbyg2(g1vals,g2vals)
+
+        psum = prior.sum()
+
+        if self.when_prior=='after':
+            # we need to multiply each by the prior
+            g[0] = (g1vals*prior).sum()/psum
+            g[1] = (g2vals*prior).sum()/psum
+
+            g1diff = g[0]-g1vals
+            g2diff = g[1]-g2vals
+
+            gcov[0,0] = (g1diff**2*prior).sum()/psum
+            gcov[0,1] = (g1diff*g2diff*prior).sum()/psum
+            gcov[1,0] = gcov[0,1]
+            gcov[1,1] = (g2diff**2*prior).sum()/psum
+
+            # now the sensitivity is 
+            #  sum( (<g>-g) L*dP/dg )
+            #  ----------------------
+            #        sum(L*P)
+            #
+            # the likelihood is already in the points
+
+            gsens[0] = 1. - (g1diff*dpri_by_g1).sum()/psum
+            gsens[1] = 1. - (g2diff*dpri_by_g2).sum()/psum
+        else:
+            # prior is already in the distribution of
+            # points.  This is simpler for most things but
+            # for sensitivity we need a factor of (1/P)dP/de
+            g, gcov = mcmc.extract_stats(self.trials[:,0:2], 0)
+
+            g1diff = g[0]-g1vals
+            g2diff = g[1]-g2vals
+
+            w,=where(prior > 0)
+            if w.size == 0:
+                raise ValueError("no prior values > 0!")
+
+            gsens[0]= 1.-(g1diff[w]*dpri_by_g1[w]/prior[w]).mean()
+            gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
+
+ 
+        arates = self._emcee_sampler.acceptance_fraction
+        arate = arates.mean()
+        #print 'acceptance rate:',w.size/float(self.trials.size)
+        self._result={'g':g,'gcov':gcov,'gsens':gsens,'arate':arate}
+        #wlog("arate:",self._result['arate'])
+
+
+
+
+    def _set_psf(self, psf):
+        self.psf_gmix = psf
+        self.psf_pars = None
+
+        if psf is not None:
+            if not isinstance(psf[0],dict):
+                raise ValueError("psf must be list of dicts")
+            self.psf_pars = gmix_image.gmix2pars(psf)
+
+    def _doplots(self):
+        import mcmc
+        import biggles
+        biggles.configure("default","fontsize_min",1.2)
+        tab=biggles.Table(4,2)
+
+        ind=numpy.arange(self.trials[:,0].size)
+
+        g1vals=self.trials[:,0]
+        g2vals=self.trials[:,1]
+        Tvals=self.trials[:,2]
+
+        burn_g1=biggles.FramedPlot()
+        burn_g1.add(biggles.Curve(ind, g1vals))
+        burn_g1.ylabel=r'$g_1$'
+
+        burn_g2=biggles.FramedPlot()
+        burn_g2.add(biggles.Curve(ind, g2vals))
+        burn_g2.ylabel=r'$g_2$'
+
+        burn_T=biggles.FramedPlot()
+        burn_T.add(biggles.Curve(ind, Tvals))
+        burn_T.ylabel='T'
+
+        likep = biggles.FramedPlot()
+        likep.add( biggles.Curve(ind, self.lnprobs) )
+        likep.ylabel='ln( prob )'
+
+
+        g = self._result['g']
+        gcov = self._result['gcov']
+        errs = sqrt(diag(gcov))
+
+        res=self.get_result()
+        print 'acceptance rate:',res['arate']
+        print 'g1: %.16g +/- %.16g' % (g[0],errs[0])
+        print 'g2: %.16g +/- %.16g' % (g[1],errs[1])
+        print 'g1sens:',self._result['gsens'][0]
+        print 'g2sens:',self._result['gsens'][1]
+
+        bsize1=errs[0]*0.2
+        bsize2=errs[1]*0.2
+        hplt_g1 = eu.plotting.bhist(g1vals,binsize=bsize1,
+                                    show=False)
+        hplt_g2 = eu.plotting.bhist(g2vals,binsize=bsize2,
+                                  show=False)
+
+        Tsdev = Tvals.std()
+        Tbsize=Tsdev*0.2
+        hplt_T = eu.plotting.bhist(Tvals,binsize=Tbsize, show=False)
+
+        hplt_g1.xlabel=r'$g_1$'
+        hplt_g2.xlabel=r'$g_2$'
+        hplt_T.xlabel='T'
+        tab[0,0] = burn_g1
+        tab[1,0] = burn_g2
+        tab[2,0] = burn_T
+
+        tab[0,1] = hplt_g1
+        tab[1,1] = hplt_g2
+        tab[2,1] = hplt_T
+        tab[3,0] = likep
+        tab.show()
 
 
 
@@ -1861,6 +2168,7 @@ class MCMCFitterFixCen:
             arate = w.size/float(self.trials.size)
         #print 'acceptance rate:',w.size/float(self.trials.size)
         self._result={'g':g,'gcov':gcov,'gsens':gsens,'arate':arate}
+        #wlog("arate:",self._result['arate'])
 
 
 
