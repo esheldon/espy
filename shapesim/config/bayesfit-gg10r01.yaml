@@ -1,0 +1,42 @@
+# same as gg08r05 but more to average down the statistics
+# gg08 has 100 in ring
+run: bayesfit-gg10r01
+sim: sim-gg10
+
+runtype: bys2n
+
+s2n_method: admom
+s2n_fac: 40
+
+# minimum number of random ellipticities to use.
+# need decent count to sample the prior surface
+min_gcount: 500
+
+# this gives 0.1 spacing
+n_ggrid: 22
+gmin: -0.9
+gmax:  0.9
+
+retrim: false
+retrim_fluxfrac: null
+s2ncalc_fluxfrac: null
+
+s2nvals: [5,10,15,20,25,30,40,50,60,70,80,90,100]
+
+s2n_psf: 1.0e+8
+
+use_cache: false
+add_to_cache: false
+
+verbose: false
+
+ngauss_psf: 1
+ngauss_obj: 1
+
+coellip_psf: true
+coellip_obj: true
+
+# currently need to set this for the trials to work.
+# can perhaps instead just put a set of ellipticities 
+# somewhere from which to draw
+seed: 9753

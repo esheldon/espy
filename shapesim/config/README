@@ -54,6 +54,13 @@ gmix-fit
                     deswl-dt02r02
 
 
+    bayesfit
+        gg08r05 fix T/cen, ngrid 22, -0.9,0.9
+        gg08r06 averaged with r05
+        gg08r07 should be consistent with above, just using
+            faster likelihood code
+        gg10r01 Using less cuspy prior distribution
+        gg10r02 Marginalize over T
     mcmc/emcee:
         mcbayes
             gg10r07 - fixed cen, standard mcmc

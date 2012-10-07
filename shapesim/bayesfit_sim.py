@@ -121,10 +121,19 @@ class BayesFitSim(shapesim.BaseSim):
                              C=self.simc['C'],
                              D=self.simc['D'])
         if 'mcbayes' not in run:
-            self.fitter = BayesFitter(prior=self.gprior, 
-                                      n_ggrid=self['n_ggrid'],
-                                      gmin=self['gmin'],
-                                      gmax=self['gmax'])
+            if 'n_Tgrid' in self:
+                self.fitter = BayesFitterFixCen(self.gprior, 
+                                                self['n_ggrid'],
+                                                self['gmin'],
+                                                self['gmax'],
+                                                self['n_Tgrid'],
+                                                self['Tmin'],
+                                                self['Tmax'])
+            else:
+                self.fitter = BayesFitterFixTCen(self.gprior, 
+                                                 self['n_ggrid'],
+                                                 self['gmin'],
+                                                 self['gmax'])
 
 
     def process_trials_by_s2n(self, is2, is2n):
@@ -238,7 +247,8 @@ class BayesFitSim(shapesim.BaseSim):
             out['g'][i,:] = res['g']
             out['gsens'][i,:] = res['gsens']
             out['gcov'][i,:,:] = res['gcov']
-            out['arate'][i] = res['arate']
+            if 'arate' in res:
+                out['arate'][i] = res['arate']
 
 
         if dowrite:
@@ -364,11 +374,17 @@ class BayesFitSim(shapesim.BaseSim):
               'irc':psfres['Irc'],
               'icc':psfres['Icc']}]
         if 'mcbayes' not in self['run']:
-            self.fitter.process_image(image=ci.image,
-                                      pixerr=ci['skysig'],
-                                      cen=ci['cen'],
-                                      T=T,
-                                      psf=psf)
+            if 'n_Tgrid' in self:
+                self.fitter.process_image(ci.image,
+                                          ci['skysig'],
+                                          ci['cen'],
+                                          psf)
+            else:
+                self.fitter.process_image(ci.image,
+                                          ci['skysig'],
+                                          ci['cen'],
+                                          T,
+                                          psf)
         else:
             nwalkers=self.get('nwalkers',None)
             if nwalkers is None:
@@ -543,10 +559,12 @@ class BayesFitSim(shapesim.BaseSim):
             ('s2','f8'),
             ('shear_true','f8',2),
             ('gtrue','f8',2),
-            ('arate','f8'),
             ('g','f8',2),
             ('gsens','f8',2),
             ('gcov','f8',(2,2))]
+        if 'bayesfit' not in self['run']:
+            dt += [('arate','f8')]
+
         return dt
 
 
@@ -1662,6 +1680,7 @@ class EmceeFitterFixCen:
 
         Tsdev = Tvals.std()
         Tbsize=Tsdev*0.2
+        wlog("T binsize:",Tbsize)
         hplt_T = eu.plotting.bhist(Tvals,binsize=Tbsize, show=False)
 
         hplt_g1.xlabel=r'$g_1$'
@@ -3056,8 +3075,7 @@ class MCMCFitterFixTCen:
         tab.show()
 
 
-
-class BayesFitter:
+class BayesFitterFixCen:
     """
     likelihood is exp(0.5*A*B^2)
 
@@ -3081,25 +3099,31 @@ class BayesFitter:
         N = sqrt( S*A/sum(ymod^2) )
     (i.e. set ymod = ymod*N/S)
     """
-    def __init__(self, prior=None, n_ggrid=None, gmin=-.9, gmax=.9):
-        if prior is None or n_ggrid is None:
-            raise ValueError("BayesFitter(prior=, n_ggrid=)")
-
+    def __init__(self, prior, n_ggrid, gmin, gmax, n_Tgrid, Tmin, Tmax):
         self.prior=prior
-        self.n_ggrid=n_ggrid
 
         # range for search
+        self.n_ggrid=n_ggrid # in both g1 and g2
         self.gmin=gmin
         self.gmax=gmax
-        self.n_ggrid=n_ggrid # in both g1 and g2
+
+        self.n_Tgrid=n_Tgrid
+        self.Tmin=Tmin
+        self.Tmax=Tmax
 
         self.g1vals = linspace(self.gmin, self.gmax, self.n_ggrid)
         self.g2vals = self.g1vals.copy()
+
+        self.Tvals = linspace(self.Tmin, self.Tmax, self.n_Tgrid)
 
         self.g1matrix = self.g1vals.reshape(self.n_ggrid,1)*ones(self.n_ggrid)
         self.g2matrix = self.g2vals*ones(self.n_ggrid).reshape(self.n_ggrid,1)
 
         self._set_prior_matrices()
+
+        self.tpars = zeros(6, dtype='f8')
+
+        self.Anorm = float(1)
 
         self.models={}
 
@@ -3109,88 +3133,84 @@ class BayesFitter:
         return self._result
 
     def process_image(self, 
-                      image=None, 
-                      pixerr=None, 
-                      psf=None,
-                      cen=None, # send to fix cen
-                      T=None):  # send to fix T
-        self._set_data(image=image,
-                       pixerr=pixerr,
-                       psf=psf,
-                       cen=cen,
-                       T=T)
+                      image, 
+                      pixerr, 
+                      cen,
+                      psf):
+
+        self.image=image
+        self.pixerr=float(pixerr)
+        self.ierr = float(1./pixerr)
+        self.cen=cen
+
+        self._set_psf(psf)
+
 
         self._go()
 
 
     def _go(self):
-        T     = self.T
         cen   = self.cen
         dims = self.image.shape
 
-        loglike=-9999.0e9 + zeros((self.n_ggrid, self.n_ggrid))
+        loglike=LOWVAL + zeros((self.n_Tgrid,self.n_ggrid, self.n_ggrid))
 
-        for i1,g1 in enumerate(self.g1vals):
-            for i2,g2 in enumerate(self.g2vals):
-
-                try:
-                    # will raise exception if g > 1 or e > 1
-                    sh=self.get_shape(i1,i2)
-                except lensing.ShapeRangeError:
-                    continue
-
-                # like is exp(0.5*A*B^2) where
-                # A is sum((model/err)^2) and is fixed
-                # and
-                #   B = sum(model*image/err^2)/A
-                #     = sum(model/err * image/err)/A
-
-                # build up B
-                # this is model/err
-                Btmp=self._get_normalized_model(i1, i2, T, dims, cen)
-
-                # Now multiply by image/err
-                Btmp *= self.image
-                Btmp *= 1./self.pixerr
-                # now do the sum and divide by A
-                B = Btmp.sum()/self.A
-
-                # A actually fully cancels here when we perform the
-                # renormalization to make sum( (model/err)^2 ) == A
-                arg = self.A * B**2/2
-                loglike[i1,i2] = arg
-
-                #B = (mod_over_err2*self.image).sum()/self.A
-                
-                # A actually fully cancels here when we perform the
-                # renormalization to make sum( (model/err)^2 ) == A
-                #arg = self.A*B**2/2
-                #loglike[i1,i2] = arg
+        for iT,T in enumerate(self.Tvals):
+            for i1,g1 in enumerate(self.g1vals):
+                for i2,g2 in enumerate(self.g2vals):
+                    loglike[T,i1,i2] = self._calc_loglike(cen, g1, g2, T)
 
         loglike -= loglike.max()
-        like = exp(loglike)
+        liketot = exp(loglike)
+
+        # marginalize over T
+        like = liketot.sum(0)
 
         self._like=like
         #images.multiview(like)
-        #key=raw_input('q to quit')
+        #key=raw_input('q to quit: ')
         #if key == 'q':
         #    stop
 
         # get the expectation values, sensitiviey and errors
         self._calc_result()
 
+    def _calc_loglike(self, cen, g1, g2, T):
+        """
+        pars are [g1,g2,T]
+        """
+
+        e1,e2,ok = g1g2_to_e1e2(g1,g2)
+        if not ok:
+            return LOWVAL
+
+        if T < 0:
+            return LOWVAL
+
+        self.tpars[0]=cen[0]
+        self.tpars[1]=cen[1]
+        self.tpars[2]=e1
+        self.tpars[3]=e2
+        self.tpars[4]=T
+        self.tpars[5]=1.
+
+        loglike,flags=\
+            gmix_image.render._render.loglike_coellip(self.image, 
+                                                      self.tpars, 
+                                                      self.psf_pars, 
+                                                      self.Anorm,
+                                                      self.ierr)
+        if flags != 0:
+            return LOWVAL
+
+        return loglike 
+
+
 
     def _calc_result(self):
         lp = self._like*self.prior_matrix
         lpsum = lp.sum()
 
-        #images.multiview(lp)
-        #stop
-        #images.multiview(self.prior_d1_matrix)
-        #images.multiview(self.prior_d2_matrix)
-        #images.multiview(self.prior_matrix,title='prior')
-        #images.multiview(lp/lpsum,title='like*prior')
-        #stop
         g1 = (lp*self.g1matrix).sum()/lpsum
         g2 = (lp*self.g2matrix).sum()/lpsum
 
@@ -3225,84 +3245,189 @@ class BayesFitter:
         self._result={'g':g,'gcov':gcov,'gsens':gsens}
 
 
-    def _get_normalized_model(self, i1, i2, T, dims, cen):
-        """
-        Model/err.  Normalized such that sum(model/err)^2 ) = A
-        """
-        #import images
-        model = self._get_model(i1, i2, T, dims, cen)
+    def _set_psf(self, psf):
+        self.psf_gmix = psf
+        self.psf_pars = None
 
-        #images.multiview(model)
-        #key=raw_input('hit a key: ')
-        ymod = model/self.pixerr
+        if psf is not None:
+            if not isinstance(psf[0],dict):
+                raise ValueError("psf must be list of dicts")
+            self.psf_pars = gmix_image.gmix2pars(psf)
 
-        ymodsum = ymod.sum()
-        ymod2sum = (ymod**2).sum()
+    def _set_prior_matrices(self):
+        self.prior_matrix = zeros( (self.n_ggrid,self.n_ggrid) )
+        self.prior_d1_matrix = zeros( (self.n_ggrid,self.n_ggrid) )
+        self.prior_d2_matrix = zeros( (self.n_ggrid,self.n_ggrid) )
 
-        # this ensures sum( (model/err)^2 ) == A
-        norm = sqrt(ymodsum**2*self.A/ymod2sum)
-
-        # also divide again by err since we actually need model/err^2
-        ymod *= (norm/ymodsum)
-
-        #print 'A:',self.A,'sum(ymod^2):',(ymod**2).sum()
-        #print ymod.shape
-        #print ymod
-        # also divide again by err since we actually need model/err^2
-        # put this above after we do the check
-        #ymod *= (1./self.pixerr/sqrt(2))
-        #ymod *= 1./self.pixerr
-
-        return ymod
+        for i1,g1 in enumerate(self.g1vals):
+            for i2,g2 in enumerate(self.g2vals):
+                self.prior_matrix[i1,i2] = self.prior(g1,g2)
+                self.prior_d1_matrix[i1,i2] = self.prior.dbyg1(g1,g2)
+                self.prior_d2_matrix[i1,i2] = self.prior.dbyg2(g1,g2)
 
 
-    def _get_model(self, i1, i2, T, dims, cen):
-        """
-        for now don't bother with cache
-        """
 
-        sh = self.get_shape(i1,i2)
-        #print 'shape:',sh
+class BayesFitterFixTCen:
+    """
+    likelihood is exp(0.5*A*B^2)
 
+    This analytically marginalizes over the amplitide.  We
+    actually check a grid over the parameters.  There is also
+    the MCMC Fitter
 
-        # for now pars are only for single gaussian
-        # note setting p=1 since we must renormalize anyway
-        pars=array([cen[0],cen[1],sh.e1,sh.e2,T,1.0],dtype='f8')
-        model=empty(dims,dtype='f8')
-        gmix_image.render._render.fill_model_coellip(model, pars, self.psf_pars, None)
+    A is 
+        sum( (model/err)^2 ) which we fix to sum ((ydata/err)^2)
+    B is
+        sum( model*data/err^2 )/A
 
-        return model
+    We must fix A as a constant for every model we generate, so that the
+    relative height of the likelihood is valid given the other simplifications
+    we have made. We arbitrarily choose A=1 because, using the re-normalization
+    below, the value actually cancels.
 
-    def get_shape(self, i1, i2):
-        g1 = self.g1vals[i1]
-        g2 = self.g2vals[i2]
-        #print 'g1,g2:',g1,g2
-        shape = lensing.Shear(g1=g1,g2=g2)
-        return shape
+    To normalize the model according to the A condition, create
+        ymod = model/err
+    which will have a normalization S. Then the renormalization is given by
+        N = sqrt( S*A/sum(ymod^2) )
+    (i.e. set ymod = ymod*N/S)
+    """
+    def __init__(self, prior, n_ggrid, gmin, gmax):
+        self.prior=prior
 
-    def _create_model_container(self):
-        if not hasattr(self,'model'):
-            pass
-    def _set_data(self, 
-                  image=None, 
-                  pixerr=None, 
-                  psf=None,
-                  cen=None,
-                  T=None):
+        # range for search
+        self.n_ggrid=n_ggrid # in both g1 and g2
+        self.gmin=gmin
+        self.gmax=gmax
+
+        self.g1vals = linspace(self.gmin, self.gmax, self.n_ggrid)
+        self.g2vals = self.g1vals.copy()
+
+        self.g1matrix = self.g1vals.reshape(self.n_ggrid,1)*ones(self.n_ggrid)
+        self.g2matrix = self.g2vals*ones(self.n_ggrid).reshape(self.n_ggrid,1)
+
+        self._set_prior_matrices()
+
+        self.tpars = zeros(6, dtype='f8')
+        self.Anorm = float(1)
+
+        self.models={}
+
+    def get_like(self):
+        return self._like
+    def get_result(self):
+        return self._result
+
+    def process_image(self, 
+                      image, 
+                      pixerr, 
+                      cen,
+                      T,
+                      psf):
+
         self.image=image
-        self.pixerr=pixerr
+        self.pixerr=float(pixerr)
+        self.ierr = float(1./pixerr)
         self.T=T
         self.cen=cen
 
         self._set_psf(psf)
 
-        if image is None or pixerr is None:
-            raise ValueError("send at least image and pixerr")
-        if T is None or cen is None:
-            raise ValueError("for now send T and cen to fix them")
 
-        self.A = 1
-        #self.A = ( (image/pixerr)**2 ).sum()
+        self._go()
+
+
+    def _go(self):
+        T     = self.T
+        cen   = self.cen
+        dims = self.image.shape
+
+        loglike=LOWVAL + zeros((self.n_ggrid, self.n_ggrid))
+
+        for i1,g1 in enumerate(self.g1vals):
+            for i2,g2 in enumerate(self.g2vals):
+                loglike[i1,i2] = self._calc_loglike(cen, g1, g2, T)
+
+        loglike -= loglike.max()
+        like = exp(loglike)
+
+        self._like=like
+        #images.multiview(like)
+        #key=raw_input('q to quit: ')
+        #if key == 'q':
+        #    stop
+
+        # get the expectation values, sensitiviey and errors
+        self._calc_result()
+
+    def _calc_loglike(self, cen, g1, g2, T):
+        """
+        pars are [g1,g2,T]
+        """
+
+        e1,e2,ok = g1g2_to_e1e2(g1,g2)
+        if not ok:
+            return LOWVAL
+
+        if T < 0:
+            return LOWVAL
+
+        self.tpars[0]=cen[0]
+        self.tpars[1]=cen[1]
+        self.tpars[2]=e1
+        self.tpars[3]=e2
+        self.tpars[4]=T
+        self.tpars[5]=1.
+
+        loglike,flags=\
+            gmix_image.render._render.loglike_coellip(self.image, 
+                                                      self.tpars, 
+                                                      self.psf_pars, 
+                                                      self.Anorm,
+                                                      self.ierr)
+        if flags != 0:
+            return LOWVAL
+
+        return loglike 
+
+
+
+    def _calc_result(self):
+        lp = self._like*self.prior_matrix
+        lpsum = lp.sum()
+
+        g1 = (lp*self.g1matrix).sum()/lpsum
+        g2 = (lp*self.g2matrix).sum()/lpsum
+
+        # order matters for sensitivity below
+        g1diff = g1-self.g1matrix
+        g2diff = g2-self.g2matrix
+        g11var = (lp*g1diff**2).sum()/lpsum
+        g22var = (lp*g2diff**2).sum()/lpsum
+        g12var = (lp*g1diff*g2diff).sum()/lpsum
+
+        
+        ldp1 = self._like*self.prior_d1_matrix
+        ldp2 = self._like*self.prior_d2_matrix
+        
+        g1sens = 1.-(g1diff*ldp1).sum()/lpsum
+        g2sens = 1.-(g2diff*ldp2).sum()/lpsum
+
+        g=zeros(2)
+        gcov=zeros((2,2))
+        gsens = zeros(2)
+
+        g[0] = g1
+        g[1] = g2
+        gsens[0] = g1sens
+        gsens[1] = g2sens
+        gcov[0,0] = g11var
+        gcov[0,1] = g12var
+        gcov[1,0] = g12var
+        gcov[1,1] = g22var
+
+
+        self._result={'g':g,'gcov':gcov,'gsens':gsens}
+
 
     def _set_psf(self, psf):
         self.psf_gmix = psf
@@ -3323,6 +3448,68 @@ class BayesFitter:
                 self.prior_matrix[i1,i2] = self.prior(g1,g2)
                 self.prior_d1_matrix[i1,i2] = self.prior.dbyg1(g1,g2)
                 self.prior_d2_matrix[i1,i2] = self.prior.dbyg2(g1,g2)
+
+
+    def _go_old(self):
+        T     = self.T
+        cen   = self.cen
+        dims = self.image.shape
+
+        loglike=-9999.0e9 + zeros((self.n_ggrid, self.n_ggrid))
+
+        for i1,g1 in enumerate(self.g1vals):
+            for i2,g2 in enumerate(self.g2vals):
+
+                try:
+                    # will raise exception if g > 1 or e > 1
+                    sh=self.get_shape(i1,i2)
+                except lensing.ShapeRangeError:
+                    continue
+
+                # like is exp(0.5*A*B^2) where
+                # A is sum((model/err)^2) and is fixed
+                # and
+                #   B = sum(model*image/err^2)/A
+                #     = sum(model/err * image/err)/A
+
+                # build up B
+                # this is model/err
+                Btmp=self._get_normalized_model(i1, i2, T, dims, cen)
+
+                # Now multiply by image/err
+                Btmp *= self.image
+                Btmp *= 1./self.pixerr
+                # now do the sum and divide by A
+                B = Btmp.sum()/self.A
+
+                # A actually fully cancels here when we perform the
+                # renormalization to make sum( (model/err)^2 ) == A
+                arg = self.A * B**2/2
+
+                loglike1 = arg
+                loglike2 = self._calc_loglike(cen, g1, g2, T)
+                wlog(loglike1-loglike2)
+                loglike[i1,i2] = arg
+
+                #B = (mod_over_err2*self.image).sum()/self.A
+                
+                # A actually fully cancels here when we perform the
+                # renormalization to make sum( (model/err)^2 ) == A
+                #arg = self.A*B**2/2
+                #loglike[i1,i2] = arg
+
+        loglike -= loglike.max()
+        like = exp(loglike)
+
+        self._like=like
+        #images.multiview(like)
+        #key=raw_input('q to quit')
+        #if key == 'q':
+        #    stop
+
+        # get the expectation values, sensitiviey and errors
+        self._calc_result()
+
 
 
 class CenPrior:
