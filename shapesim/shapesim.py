@@ -1355,10 +1355,11 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
             d['nsum'][i] = num
 
         for n in d.dtype.names:
-            if n not in name_extra:
-                if edata[n].dtype.names is None and len(edata[n].shape) == 1:
-                    #d[n][i] = median(edata[n])
-                    d[n][i] = edata[n].mean()
+            if n in edata.dtype.names:
+                if n not in name_extra:
+                    if edata[n].dtype.names is None and len(edata[n].shape) == 1:
+                        #d[n][i] = median(edata[n])
+                        d[n][i] = edata[n].mean()
 
     return d
 

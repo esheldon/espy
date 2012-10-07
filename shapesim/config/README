@@ -36,7 +36,7 @@ gmix-fit
                     gmix-fit-et02r08
                     desw-et02r02
                 byellip low noise
-                    deswl-et02r04 running
+                    deswl-et02r04 
                     gmix-fit-et02r01
             dt02
                 NEED to tell story of how error is a function
@@ -58,9 +58,11 @@ gmix-fit
         gg08r05 fix T/cen, ngrid 22, -0.9,0.9
         gg08r06 averaged with r05
         gg08r07 should be consistent with above, just using
-            faster likelihood code
+            faster likelihood code.  Looks fine.
         gg10r01 Using less cuspy prior distribution
+            - looks worse than gg08r07
         gg10r02 Marginalize over T
+            - running
     mcmc/emcee:
         mcbayes
             gg10r07 - fixed cen, standard mcmc
@@ -79,9 +81,12 @@ gmix-fit
             gg10r03 - fixed cen, straight mcmc
             gg10r02 ??
             gg10r01 ??
+
+            gg08r03 - old prior, fixed cen, emcee, prior after
+                - running
     sims
         et01
-            - am running et01r05 with add to cache, 1000 per.
+            - am et01r05 with add to cache, 1000 per.
         dt01
             - have about 100-200 per as of now.  Some with same seeds.
 
@@ -187,7 +192,7 @@ gmix-fit
             deswl
                 byellip
                     run       s/n   nrepeat       notes
-                    et02r04  1.e6         1       running
+                    et02r04  1.e6         1       
 
                 by s/n
                     run      ie    e  s2n_method   notes
@@ -265,7 +270,7 @@ gmix-fit
 
                 by s/n
                     run      ie    e  s2n_method   notes
-                    edg02r02  7 0.33    matched    rerunning
+                    edg02r02  7 0.33    matched    
 
     edg14r01,edg03r02,edg04r01,edg05r01,edg06r01,edg07r01,edg08r01
          0.0      .01     0.02     0.03     0.04     0.05     0.06
@@ -353,7 +358,7 @@ gmix-fit
             gmix
                 by s/n
                     run      ie    e  s2n_method   notes
-                    edg14r01  2 0.26    matched    running
+                    edg14r01  2 0.26    matched    
 
 
 
@@ -402,9 +407,8 @@ gmix-fit
                     
                 by s/n
                     run      ie    e  s2n_method   notes
-                    dt02r01  19 0.80   matched     running (died)
-                    dt02r03   7 0.33   matched     running died re-running 000-000
-                                                                           001-000
+                    dt02r01  19 0.80   matched     
+                    dt02r03   7 0.33   matched     
         dt03
             - ring.  Fewer s2 but will do more trials per run
 

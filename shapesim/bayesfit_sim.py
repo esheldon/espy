@@ -71,6 +71,18 @@ TODO:
             gg10r11, s2 3 s/n 0: no difference really
                 it looks biased!
 
+            gg08r03 - old prior, emcee, fixed cen
+
+        - trying grid search
+            - gg08r07 : original prior, faster C code.
+                - looks good
+            - gg10r01 : new prior
+                doesn't look as good as old prior.  Maybe this prior is
+                just harder to get right?  Will try emcee on old prior in
+                gg08r03, prior after
+            - gg10r02 : new prior, T grid
+                - running
+
     NEED to compare mcmc to emcee version: what is the difference?
         - differences in formula?
         - burnin?
