@@ -18,7 +18,7 @@ TODO:
         - noted that low burnin did have higher bias but
         need to explore
         - re-running mcbayes-gg10r05 3 5 with tight prior on centroid (1.e-3)
-        to see how well it works: better but not perfect
+        to see how well it works: better but still crap
         - ran fixcen gg10r06: still bad.
 
         - what about using 0.5 acceptance?
@@ -62,9 +62,14 @@ TODO:
             of the e guess.  Using same as other, zero centered.  Still shit.
                 re-running 0 1 using new EmceeFitterFixCen class made
                 from the mcmcfitter; looks better, re-running all now
+            I've also created a new EmceeFitter class directly from
+            the EmceeFitterFixCen class, so we shall see.  will run
+            gg10r11 for that (testing 0 1 now s/n=15)
 
-        - if that checks out we can try other things like not
-        fixing center (marginilizing amplitude? probably lower priority)
+            Both look ok except at s/n of 10.  I wonder if increasing the
+            burning would help?  Will try burn in 1000 per "in place" for
+            gg10r11, s2 3 s/n 0: no difference really
+                it looks biased!
 
     NEED to compare mcmc to emcee version: what is the difference?
         - differences in formula?
@@ -1074,7 +1079,7 @@ class EmceeFitter:
             'during' or 'after'
         """
         
-        self.make_plots=True
+        self.make_plots=False
 
         # cen1,cen2,e1,e2,T
         self.npars=5

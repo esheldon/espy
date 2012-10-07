@@ -54,6 +54,24 @@ gmix-fit
                     deswl-dt02r02
 
 
+    mcmc/emcee:
+        mcbayes
+            gg10r07 - fixed cen, standard mcmc
+            gg10r10 - emcee, fixed center
+            gg10r11 - emcee, center free with prior
+                doesn't look as good as gg10r07
+            gg10r12 - to be averaged with gg10r11
+
+            older
+            gg10r09 - fixed cen, using emcee plugged into mcmc fitter
+            gg10r08 - fixed cen, using emcee plugged into mcmc fitter
+                using 100 walkers, crap
+            gg10r06 - emcee 100 walkers crap
+            gg10r05 - emcee 100 walkers crap
+            gg10r04 - ??
+            gg10r03 - fixed cen, straight mcmc
+            gg10r02 ??
+            gg10r01 ??
     sims
         et01
             - am running et01r05 with add to cache, 1000 per.
