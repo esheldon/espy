@@ -59,6 +59,9 @@ gmix-fit
         gg08r06 averaged with r05
         gg08r07 should be consistent with above, just using
             faster likelihood code.  Looks fine.
+        gg08r08 marginalize over T.    See notes in 
+            bayesfit_sim.py
+
         gg10r01 Using less cuspy prior distribution
             - looks worse than gg08r07
         gg10r02 Marginalize over T
@@ -83,7 +86,7 @@ gmix-fit
             gg10r01 ??
 
             gg08r03 - old prior, fixed cen, emcee, prior after
-                - running
+            gg08r04 - old prior, fixed cen, emcee, prior during
     sims
         et01
             - am et01r05 with add to cache, 1000 per.

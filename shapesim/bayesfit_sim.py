@@ -71,11 +71,24 @@ TODO:
             gg10r11, s2 3 s/n 0: no difference really
                 it looks biased!
 
-            gg08r03 - old prior, emcee, fixed cen
+            gg08r03 - old prior, emcee, fixed cen, prior after
+                - doesn't look that good
+            gg08r04 - old prior, emcee, fixed cen, prior during
+                - running
 
-        - trying grid search
+            Idea from Anze: run with higher "temperature" to make sure we
+            explore the tails
+
+        - trying grid search bayesfit
             - gg08r07 : original prior, faster C code.
                 - looks good
+            - gg08r08: T marginilization
+                - shows some bias at s/n=10 and 15
+                - looks reasonable for higher s/n for large galaxies, but
+                like total crap at high s/n for smaller galaxies
+                This could be because the grid is too crude to get any
+                measure of the distribution in T without some noise to
+                smear things out
             - gg10r01 : new prior
                 doesn't look as good as old prior.  Maybe this prior is
                 just harder to get right?  Will try emcee on old prior in

@@ -20,6 +20,8 @@ parser.add_option('--ncores',default=None,
 
 parser.add_option('--i2new',default=None,
                   help='use new,new2 groups for i2 in [0,value]')
+parser.add_option('--i2new2',default=None,
+                  help='use new2 group for i2 in [0,value]')
 
 parser.add_option('--bytrial',action='store_true',
                   help=('Write a wq script for each trial '
@@ -107,6 +109,9 @@ def main():
             elif options.i2new is not None:
                 if i2 <= int(options.i2new):
                     groups='group: [new,new2]'
+            elif options.i2new2 is not None:
+                if i2 <= int(options.i2new2):
+                    groups='group: [new2]'
 
             if options.bytrial:
                 for itrial in xrange(ntrial):
