@@ -81,10 +81,13 @@ TODO:
             better, if so will try it on that, otherwise will try on
             new prior.
                 mcbayes-gg10r13: temp=2, free cen, new prior
+                - didn't help
 
-            maybe need more points in after-burnin to see tail?  Try
-            using 400 per in gg10r14
-
+            - along same lines, maybe need more points in after-burnin to see
+            tail?  Try using 400 per in gg10r14
+                - looks good
+                - running gg10r15 for averaging
+        
 
         - trying grid search bayesfit
             - gg08r07 : original prior, faster C code.
