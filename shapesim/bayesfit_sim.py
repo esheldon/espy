@@ -81,12 +81,13 @@ TODO:
             better, if so will try it on that, otherwise will try on
             new prior.
                 mcbayes-gg10r13: temp=2, free cen, new prior
-                - didn't help
+                - had wrong formula
 
             - along same lines, maybe need more points in after-burnin to see
             tail?  Try using 400 per in gg10r14
                 - looks good
-                - running gg10r15 for averaging
+                - gg10r15 for averaging
+                - gg10r16 for averaging
         
 
         - trying grid search bayesfit
@@ -638,19 +639,17 @@ class EmceeFitterOld:
             - Want a T that represents the size, no prior at all but a limited
             range
 
-        Fixed parts of model
+            - The pars will be [cen1,cen2,e1,e2,T,p]
+            
+        Fixed parts
 
-            - Want a delta function; fixed at zero for now: can only detect
-            non-zero at *very* high S/N
-            - Want a fixed F that is a multiple of T for the second gauss.  For
-            s2 ~ 1, this appears to be 
+            Fvals: [1.91152,0.501073,3.94814e-05]
+            pvals: [0.375162,0.564524,0.0603135]
 
-                ~3.8 for s2 ~ 1
+            such that
+                T = sum(Ti*pi)/sum(pi)
+                Tj = T/pvals[j]*(psum - Fpsum + pvals[j]*Fvals[j])
 
-            - Want fixed p values. these  are only meaningful relative since we
-            marginalize over amplitude. For s2=1
-
-                0.379 0.563, 0.0593
 
     """
 
@@ -1114,6 +1113,8 @@ class EmceeFitter:
                  temp=None,
                  when_prior='during'):
         """
+        mcmc sampling of posterior.  Amplitude is analytically marginalized.
+
         parameters
         ----------
         image:
@@ -1241,6 +1242,7 @@ class EmceeFitter:
                                                       self.psf_pars, 
                                                       self.Anorm,
                                                       self.ierr)
+
         if flags != 0:
             return LOWVAL
         #self.logl_tm += time.time()-t0
@@ -1306,7 +1308,7 @@ class EmceeFitter:
 
             wt=None
             if self.temp is not None:
-                wt=exp(self.lnprobs)**(self.temp-1.)
+                wt=exp(self.lnprobs*(1.-1./self.temp))
 
             g, gcov = mcmc.extract_stats(self.trials[:,2:2+2],weights=wt)
 
@@ -1667,7 +1669,7 @@ class EmceeFitterFixCen:
             # for sensitivity we need a factor of (1/P)dP/de
             wt=None
             if self.temp is not None:
-                wt=exp(self.lnprobs)**(self.temp-1.)
+                wt=exp(self.lnprobs*(1.-1./self.temp))
                 #print wt
             g, gcov = mcmc.extract_stats(self.trials[:,0:2], weights=wt)
             """

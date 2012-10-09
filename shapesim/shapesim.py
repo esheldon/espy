@@ -1020,11 +1020,20 @@ def average_runs(runlist, new_run_name):
 
     if 'bayes' in runlist[0]:
         bayes=True
-        sumlist=['g1sum','g2sum','g1sensum','g2sensum',
-                 'g1err2invsum','g1err2invsum','nsum']
+        sumlist=['g1sum',
+                 'g2sum',
+                 'g1sensum',
+                 'g2sensum',
+                 'g1err2invsum',
+                 'g2err2invsum',
+                 'nsum']
     else:
-        sumlist=['e1sum','e2sum','e1err2invsum','e2err2invsum',
-                 'esqsum','nsum']
+        sumlist=['e1sum',
+                 'e2sum',
+                 'e1err2invsum',
+                 'e2err2invsum',
+                 'esqsum',
+                 'nsum']
         bayes=False
 
     dir = get_output_dir(new_run_name)
@@ -1048,22 +1057,22 @@ def average_runs(runlist, new_run_name):
                 for field in sumlist:
                     data[field] += d[field]
             
-            # this is an array with mean for each in second index
-            if bayes:
-                g1sens_mean = data['g1sensum']/data['nsum']
-                g2sens_mean = data['g2sensum']/data['nsum']
-                data['shear1'] = data['g1sum']/data['g1sensum']
-                data['shear2'] = data['g2sum']/data['g2sensum']
-                data['shear1err'] = sqrt(1/data['g1err2invsum'])/g1sens_mean
-                data['shear2err'] = sqrt(1/data['g2err2invsum'])/g2sens_mean
+        # this is an array with mean for each in second index
+        if bayes:
+            g1sens_mean = data['g1sensum']/data['nsum']
+            g2sens_mean = data['g2sensum']/data['nsum']
+            data['shear1'] = data['g1sum']/data['g1sensum']
+            data['shear2'] = data['g2sum']/data['g2sensum']
+            data['shear1err'] = sqrt(1/data['g1err2invsum'])/g1sens_mean
+            data['shear2err'] = sqrt(1/data['g2err2invsum'])/g2sens_mean
 
-            else:
-                mesq = data['esqsum']/data['nsum']
-                data['Rshear'] = 1.-.5*mesq
-                data['shear1'] = .5*data['e1sum']/data['nsum']/data['Rshear']
-                data['shear2'] = .5*data['e2sum']/data['nsum']/data['Rshear']
-                data['shear1err'] = 0.5*sqrt(1/data['e1err2invsum'])
-                data['shear2err'] = 0.5*sqrt(1/data['e2err2invsum'])
+        else:
+            mesq = data['esqsum']/data['nsum']
+            data['Rshear'] = 1.-.5*mesq
+            data['shear1'] = .5*data['e1sum']/data['nsum']/data['Rshear']
+            data['shear2'] = .5*data['e2sum']/data['nsum']/data['Rshear']
+            data['shear1err'] = 0.5*sqrt(1/data['e1err2invsum'])
+            data['shear2err'] = 0.5*sqrt(1/data['e2err2invsum'])
 
 
         for fs in [None,'hdfs']:

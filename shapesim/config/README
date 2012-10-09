@@ -73,10 +73,11 @@ gmix-fit
             gg10r11 - emcee, center free with prior
                 doesn't look as good as gg10r07
             gg10r12 - to be averaged with gg10r11
-            gg10r13 - tried temperature
+            gg10r13 - tried temperature but had wrong formula
             gg10r14 - increased number *after* burning to 
                 better sample the tail.  This looks pretty good!
             gg10r15 - same as gg10r14 for averaging
+            gg10r16 - same as gg10r14 for averaging
 
             older
             gg10r09 - fixed cen, using emcee plugged into mcmc fitter
