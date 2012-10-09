@@ -77,7 +77,14 @@ TODO:
                 - running
 
             Idea from Anze: run with higher "temperature" to make sure we
-            explore the tails
+            explore the tails.  Waiting to see if 'during' gg08r04 looks
+            better, if so will try it on that, otherwise will try on
+            new prior.
+                mcbayes-gg10r13: temp=2, free cen, new prior
+
+            maybe need more points in after-burnin to see tail?  Try
+            using 400 per in gg10r14
+
 
         - trying grid search bayesfit
             - gg08r07 : original prior, faster C code.
@@ -412,6 +419,7 @@ class BayesFitSim(shapesim.BaseSim):
                                           psf)
         else:
             nwalkers=self.get('nwalkers',None)
+            temp=self.get('temp',None)
             if nwalkers is None:
                 # note we create a new fitter each time here
                 if self['fixcen'] and self['fixT']:
@@ -471,6 +479,7 @@ class BayesFitSim(shapesim.BaseSim):
                                                   nwalkers=nwalkers,
                                                   nstep=self['nstep'], 
                                                   burnin=self['burnin'],
+                                                  temp=temp,
                                                   when_prior=self['when_prior'])
 
                 elif True:
@@ -485,6 +494,7 @@ class BayesFitSim(shapesim.BaseSim):
                                             nwalkers=nwalkers,
                                             nstep=self['nstep'], 
                                             burnin=self['burnin'],
+                                            temp=temp, # need to implement
                                             when_prior=self['when_prior'])
                 else:
                     #deprecated
@@ -902,7 +912,7 @@ class EmceeFitterOld:
             # prior is already in the distribution of
             # points.  This is simpler for most things but
             # for sensitivity we need a factor of (1/P)dP/de
-            means, cov = mcmc.extract_stats(self._trials, 0)
+            means, cov = mcmc.extract_stats(self._trials)
             #mcmc.print_stats(means,cov,names=['cen1','cen2','g1','g2','T'])
 
             g=means[self.estart:self.estart+2]
@@ -1098,6 +1108,7 @@ class EmceeFitter:
                  nwalkers=10,
                  nstep=100, 
                  burnin=400,
+                 temp=None,
                  when_prior='during'):
         """
         parameters
@@ -1143,6 +1154,10 @@ class EmceeFitter:
         self.Anorm = float(1)
 
         self.tpars=zeros(6,dtype='f8')
+
+        if temp is not None and when_prior=='after':
+            raise ValueError("don't support temp for when_prior after yet")
+        self.temp=temp
 
         self._go()
 
@@ -1207,6 +1222,8 @@ class EmceeFitter:
             gp = self._get_lngprior(g1,g2)
             logprob += gp
 
+        if self.temp is not None:
+            logprob /= self.temp
         return logprob
 
     def _get_loglike_c(self, pars):
@@ -1283,7 +1300,12 @@ class EmceeFitter:
             # prior is already in the distribution of
             # points.  This is simpler for most things but
             # for sensitivity we need a factor of (1/P)dP/de
-            g, gcov = mcmc.extract_stats(self.trials[:,2:2+2], 0)
+
+            wt=None
+            if self.temp is not None:
+                wt=exp(self.lnprobs)**(self.temp-1.)
+
+            g, gcov = mcmc.extract_stats(self.trials[:,2:2+2],weights=wt)
 
             g1diff = g[0]-g1vals
             g2diff = g[1]-g2vals
@@ -1292,8 +1314,17 @@ class EmceeFitter:
             if w.size == 0:
                 raise ValueError("no prior values > 0!")
 
-            gsens[0]= 1.-(g1diff[w]*dpri_by_g1[w]/prior[w]).mean()
-            gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
+            if wt is None:
+                gsens[0]= 1.-(g1diff[w]*dpri_by_g1[w]/prior[w]).mean()
+                gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
+            else:
+                wsum=wt[w].sum()
+                sum1=(wt[w]*g1diff[w]*dpri_by_g1[w]/prior[w]).sum()
+                sum2=(wt[w]*g2diff[w]*dpri_by_g2[w]/prior[w]).sum()
+
+                gsens[0]= 1.-sum1/wsum
+                gsens[1]= 1.-sum2/wsum
+
 
  
         arates = self._emcee_sampler.acceptance_fraction
@@ -1431,6 +1462,7 @@ class EmceeFitterFixCen:
                  nwalkers=10,
                  nstep=100, 
                  burnin=400,
+                 temp=None,
                  when_prior='during'):
         """
         parameters
@@ -1455,7 +1487,6 @@ class EmceeFitterFixCen:
             'during' or 'after'
         """
 
-        
         self.make_plots=False
 
         # e1,e2,T
@@ -1477,6 +1508,10 @@ class EmceeFitterFixCen:
         self.Anorm = float(1)
 
         self.tpars=zeros(6,dtype='f8')
+
+        if temp is not None and when_prior=='after':
+            raise ValueError("don't support temp for when_prior after yet")
+        self.temp=temp
 
         self._go()
 
@@ -1549,6 +1584,8 @@ class EmceeFitterFixCen:
             gp = self._get_lngprior(g1,g2)
             logprob += gp
 
+        if self.temp is not None:
+            logprob /= self.temp
         return logprob
 
 
@@ -1625,7 +1662,18 @@ class EmceeFitterFixCen:
             # prior is already in the distribution of
             # points.  This is simpler for most things but
             # for sensitivity we need a factor of (1/P)dP/de
-            g, gcov = mcmc.extract_stats(self.trials[:,0:2], 0)
+            wt=None
+            if self.temp is not None:
+                wt=exp(self.lnprobs)**(self.temp-1.)
+                #print wt
+            g, gcov = mcmc.extract_stats(self.trials[:,0:2], weights=wt)
+            """
+            g2, gcov2 = mcmc.extract_stats(self.trials[:,0:2])
+            print g
+            print g2
+            print gcov
+            print gcov2
+            """
 
             g1diff = g[0]-g1vals
             g2diff = g[1]-g2vals
@@ -1634,8 +1682,16 @@ class EmceeFitterFixCen:
             if w.size == 0:
                 raise ValueError("no prior values > 0!")
 
-            gsens[0]= 1.-(g1diff[w]*dpri_by_g1[w]/prior[w]).mean()
-            gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
+            if wt is None:
+                gsens[0]= 1.-(g1diff[w]*dpri_by_g1[w]/prior[w]).mean()
+                gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
+            else:
+                wsum=wt[w].sum()
+                sum1=(wt[w]*g1diff[w]*dpri_by_g1[w]/prior[w]).sum()
+                sum2=(wt[w]*g2diff[w]*dpri_by_g2[w]/prior[w]).sum()
+
+                gsens[0]= 1.-sum1/wsum
+                gsens[1]= 1.-sum2/wsum
 
  
         arates = self._emcee_sampler.acceptance_fraction
@@ -1992,7 +2048,7 @@ class MCMCFitter:
             # prior is already in the distribution of
             # points.  This is simpler for most things but
             # for sensitivity we need a factor of (1/P)dP/de
-            means, cov = mcmc.extract_stats(self.trials['pars'], burn)
+            means, cov = mcmc.extract_stats(self.trials['pars'][burn:,:])
             #mcmc.print_stats(means,cov,names=['cen1','cen2','g1','g2','T'])
 
             g=means[2:4]
@@ -2536,7 +2592,7 @@ class MCMCFitterFixCen:
             # prior is already in the distribution of
             # points.  This is simpler for most things but
             # for sensitivity we need a factor of (1/P)dP/de
-            g, gcov = mcmc.extract_stats(self.trials['pars'][:,0:2], burn)
+            g, gcov = mcmc.extract_stats(self.trials['pars'][burn:,0:2])
 
             g1diff = g[0]-g1vals
             g2diff = g[1]-g2vals
@@ -2934,7 +2990,7 @@ class MCMCFitterFixTCen:
             # prior is already in the distribution of
             # points.  This is simpler for most things but
             # for sensitivity we need a factor of (1/P)dP/de
-            g, gcov = mcmc.extract_stats(self.trials['pars'], burn)
+            g, gcov = mcmc.extract_stats(self.trials['pars'][burn:,:])
 
             g1diff = g[0]-g1vals
             g2diff = g[1]-g2vals
