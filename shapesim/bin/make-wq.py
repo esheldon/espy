@@ -20,6 +20,9 @@ parser.add_option('--ncores',default=None,
 
 parser.add_option('--i2new',default=None,
                   help='use new,new2 groups for i2 in [0,value]')
+
+parser.add_option('--i2new1',default=None,
+                  help='use new group for i2 in [0,value]')
 parser.add_option('--i2new2',default=None,
                   help='use new2 group for i2 in [0,value]')
 
@@ -104,14 +107,14 @@ def main():
     for i1 in xrange(n1):
         for i2 in xrange(n2):
             groups=''
-            if options.groups is not None:
+            if options.i2new is not None and i2 <= int(options.i2new):
+                groups='group: [new,new2]'
+            elif options.i2new1 is not None and i2 <= int(options.i2new1):
+                groups='group: [new1]'
+            elif options.i2new2 is not None and i2 <= int(options.i2new2):
+                groups='group: [new2]'
+            elif options.groups is not None:
                 groups = 'group: [%s]' % options.groups
-            elif options.i2new is not None:
-                if i2 <= int(options.i2new):
-                    groups='group: [new,new2]'
-            elif options.i2new2 is not None:
-                if i2 <= int(options.i2new2):
-                    groups='group: [new2]'
 
             if options.bytrial:
                 for itrial in xrange(ntrial):

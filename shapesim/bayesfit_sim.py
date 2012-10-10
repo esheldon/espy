@@ -387,7 +387,7 @@ class BayesFitSim(shapesim.BaseSim):
                                           when_prior=self['when_prior'])
 
         elif True:
-            cenprior=CenPrior(ci['cen'], [1.e-3]*2)
+            cenprior=CenPrior(ci['cen'], [0.1]*2)
             self.fitter=EmceeFitter(ci.image,
                                     1./ci['skysig'],
                                     psf,
@@ -580,6 +580,9 @@ class EmceeFitter:
             gp = self._get_lngprior(g1,g2)
             logprob += gp
 
+        cp = self.cenprior.lnprob(pars[0:2])
+        logprob += cp
+
         if self.temp is not None:
             logprob /= self.temp
         return logprob
@@ -588,7 +591,6 @@ class EmceeFitter:
         """
         pars is *full*
         """
-        #t0=time.time()
 
         if self.model=='gexp':
             gmix0=gmix_image.GMixExp(pars)
@@ -601,27 +603,14 @@ class EmceeFitter:
 
         gmix=gmix0.convolve(self.psf_GMix)
 
-        loglike_new,flags_new=\
+        loglike,flags=\
             gmix_image.render._render.loglike(self.image, 
                                               gmix,
                                               self.Anorm,
                                               self.ierr)
 
-
-        loglike,flags=\
-            gmix_image.render._render.loglike_coellip(self.image, 
-                                                      pars, 
-                                                      self.psf_pars, 
-                                                      self.Anorm,
-                                                      self.ierr)
-        #wlog(pars)
-        #wlog(gmix)
-        #wlog(flags_new,flags,loglike_new,loglike,loglike_new-loglike)
-        #stop
-
         if flags != 0:
             return LOWVAL
-        #self.logl_tm += time.time()-t0
         return loglike
 
     def _get_lngprior(self, g1, g2):

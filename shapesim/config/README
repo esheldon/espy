@@ -92,6 +92,9 @@ gmix-fit
 
             gg08r03 - old prior, fixed cen, emcee, prior after
             gg08r04 - old prior, fixed cen, emcee, prior during
+
+            gegt01r01 - new prior, emcee, prior during
+                cenprior 0.1
     sims
         et01
             - am et01r05 with add to cache, 1000 per.
