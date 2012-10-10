@@ -7,6 +7,7 @@ nring: 100
 dotrim: false
 
 psfmodel: gauss
+# T = 2*1.4**2 = 3.9
 psf_sigma: 1.4
 psf_ellip: 0.0
 psf_e1: 0.0

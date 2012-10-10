@@ -204,6 +204,9 @@ class ShapeSim(dict):
         Generate a convolved image with the input parameters and the psf and
         object models listed in the config.
         """
+        if self['objmodel'] in ['gexp','gdev']:
+            return self.new_gmix_convolved_image(s2, obj_ellip, obj_theta)
+
         psfmodel = self['psfmodel']
         objmodel = self['objmodel']
 
@@ -243,6 +246,61 @@ class ShapeSim(dict):
             ci['shear1']=0.
             ci['shear2']=0.
         return ci
+
+    def new_gmix_convolved_image(self, s2, obj_ellip, obj_theta):
+        """
+        Generate a convolved image with the input parameters and the psf and
+        object models listed in the config.
+        """
+        import gmix_image
+        psfmodel = self['psfmodel']
+        objmodel = self['objmodel']
+            
+        e1psf = self['psf_e1']
+        e2psf = self['psf_e2']
+        Tpsf=self['T']
+        if psfmodel in ['gauss','gturb']:
+            psfpars=[-9., -9., e1psf, e2psf, Tpsf, 1.0]
+            if psfmodel=='gauss':
+                psf_gmix=gmix_image.GMixCoellip(psfpars)
+            else:
+                psf_gmix=gmix_image.GMixTurb(psfpars)
+        else:
+            raise ValueError("unsupported gmix psf type: '%s'" % psfmodel)
+
+        Tobj = Tpsf/s2
+
+
+        e1,e2 = etheta2e1e2(obj_ellip, obj_theta)
+
+        shape0 = lensing.Shear(e1=e1,e2=e2)
+        shear=self.get_shear()
+
+        if shear is not None:
+            shear = self.get_shear()
+            shape = shape0 + shear
+        else:
+            shape=shape0
+
+        objpars=[-9., -9., shape.e1, shape.e2, Tobj, 1.0]
+        if objmodel=='gexp':
+            obj_gmix=gmix_image.GMixExp(objpars)
+        elif objmodel=='gdev':
+            obj_gmix=gmix_image.GMixDev(objpars)
+        else:
+            raise ValueError("unsupported gmix object type: '%s'" % objmodel)
+
+        ci=fimage.convolved.ConvolverGMix(obj_gmix, psf_gmix, **self)
+
+        ci['obj_theta'] = obj_theta
+        if shear is not None:
+            ci['shear1'] = shear.g1
+            ci['shear2'] = shear.g2
+        else:
+            ci['shear1']=0.
+            ci['shear2']=0.
+        return ci
+
 
     def get_shear(self):
         if 'shearmag' in self:
