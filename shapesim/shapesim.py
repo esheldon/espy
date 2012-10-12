@@ -258,7 +258,7 @@ class ShapeSim(dict):
             
         e1psf = self['psf_e1']
         e2psf = self['psf_e2']
-        Tpsf=self['T']
+        Tpsf=self['Tpsf']
         if psfmodel in ['gauss','gturb']:
             psfpars=[-9., -9., e1psf, e2psf, Tpsf, 1.0]
             if psfmodel=='gauss':

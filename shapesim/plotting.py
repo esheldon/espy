@@ -1249,6 +1249,8 @@ class SimPlotter(dict):
 
         self.docum = keys.get('docum',False)
 
+        self.fill_color='grey80'
+
     def get_title(self, title=None):
         if title is None and self.maketitle:
             title=self.title
@@ -1421,18 +1423,19 @@ class SimPlotter(dict):
         l = biggles.PlotLabel(0.9,0.1, plab, halign='right')
         arr[1,0].add(l)
 
-        if self.simc['psfmodel'] == 'turb':
-            siglab = r'$FWHM: %.1f$ pix' % self.simc['psf_fwhm']
-        else:
-            psf_sigma = self.simc['psf_sigma']
-            siglab = r'$\sigma: %.1f$ pix' % psf_sigma
-        siglab += ' '+self.psf_estring
-        if 'etrue' in st.dtype.names:
-            siglab += r'$ e_{gal}^{tot}: %.2f$' % st['etrue'].mean()
+        if 'Tpsf' not in self.simc:
+            if self.simc['psfmodel'] == 'turb':
+                siglab = r'$FWHM: %.1f$ pix' % self.simc['psf_fwhm']
+            else:
+                psf_sigma = self.simc['psf_sigma']
+                siglab = r'$\sigma: %.1f$ pix' % psf_sigma
+            siglab += ' '+self.psf_estring
+            if 'etrue' in st.dtype.names:
+                siglab += r'$ e_{gal}^{tot}: %.2f$' % st['etrue'].mean()
 
-            sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
-                                   fontsize=2.5)
-            arr[1,0].add(sl)
+                sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
+                                       fontsize=2.5)
+                arr[1,0].add(sl)
 
         arr.xlabel=xlabel
 
@@ -1480,6 +1483,156 @@ class SimPlotter(dict):
             arr.show()
         arr.write_eps(epsfile)
         converter.convert(epsfile,dpi=100,verbose=True)
+
+
+    def plots_shear1_frac_vs_s2n(self, 
+                                 xrng=None,
+                                 yrng=None, 
+                                 title=None,
+                                 show=True):
+        """
+        special plotting just shear1 as a fraction of
+        true
+        """
+        import biggles
+        import pcolors
+        import converter
+
+        type='frac'
+
+        biggles.configure("default","fontsize_min",2)
+        biggles.configure('_HalfAxis','ticks_size',2.5)
+        biggles.configure('_HalfAxis','subticks_size',2.5/2)
+        biggles.configure('PlotKey','key_width',13)
+        biggles.configure('PlotKey','key_vsep',1.0)
+
+        extra=''
+
+        if self.docum:
+            extra+='-cum'
+
+        runtype = self.get('runtype','byellip')
+        if runtype != 'bys2n':
+            raise ValueError("Can only make plots vs s2n for 'bys2n' runs")
+
+        is_shearmag=False
+        if 'shearmag' in self.simc:
+            is_shearmag=True
+            shearmag = self.simc['shearmag']
+        else:
+            shear_true = self.get_shear_true()
+
+        data = self.read_data()
+
+        epsfile = shapesim.get_plot_file(self['run'],type+extra,yrng=yrng)
+        wlog("will plot to:",epsfile)
+
+        if len(data) == 4:
+            colors=['red','forestgreen','NavajoWhite3','blue']
+            linetypes=['dotted','dashed','dotdashed','solid']
+        else:
+            colors=pcolors.rainbow(len(data), 'hex')
+            linetypes=['solid']*len(data)
+        point_types=['filled circle','filled diamond','filled square','filled triangle']
+
+        plt=biggles.FramedPlot()
+        plt.add( biggles.FillBetween([-500,500], [0.004,0.004], 
+                                     [-500,500], [-0.004,-0.004],
+                                     color=self.fill_color))
+
+
+        title=self.get_title(title=title)
+        if title:
+            plt.title=title
+ 
+
+        tag1='shear1'
+        tag2='shear2'
+        errtag1='shear1err'
+        errtag2='shear2err'
+        lab1=r'$\gamma$'
+
+
+        plots1=[]
+        allplots=[]
+
+
+        # looping over s2
+        for i,st in enumerate(reversed(data)):
+            #wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
+
+            s2 = median(st['s2'])
+
+            s2n_name='s2n_admom'
+            xlabel = 'S/N'
+
+            s2n = st[s2n_name]
+
+          
+            yvals1 = (st[tag1] - shear_true.g1)/shear_true.g1
+
+            label = r'%0.3f' % s2
+
+            cwidth=5.
+            pr1 = biggles.Points(s2n, yvals1, color=colors[i],
+                                 size=2,
+                                 type=point_types[i])
+            cr1 = biggles.Curve(s2n, yvals1, color=colors[i],type=linetypes[i],width=cwidth)
+            cr1.label = label
+
+            plt.add(cr1,pr1)
+            
+            g1err = st[errtag1]/shear_true.g1
+            err1p = biggles.SymmetricErrorBarsY(s2n, yvals1, g1err,
+                                                color=colors[i])
+            plt.add(err1p)
+
+            plots1.append(cr1)
+
+
+        fsize=2
+        key1 = biggles.PlotKey(0.85,0.92, plots1, halign='right', 
+                               fontsize=fsize)
+        plt.add(key1)
+
+        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}: $'
+        klab = biggles.PlotLabel(.62,.92,klabtext,
+                                 fontsize=2.5,halign='right')
+        plt.add(klab)
+        objmodel = self.simc['objmodel']
+        psfmodel = self.simc['psfmodel']
+
+
+        plab='%s %s' % (objmodel,psfmodel)
+        l = biggles.PlotLabel(0.9,0.1, plab, halign='right')
+        plt.add(l)
+
+        plt.xlabel=xlabel
+
+
+        plt.ylabel = r'$\Delta \gamma/\gamma$'
+
+        g1lab_txt = lab1 + ' = %.2g' % shear_true.g1
+
+        g1lab = biggles.PlotLabel(0.1,0.9, g1lab_txt, halign='left')
+
+        plt.add(g1lab)
+
+        erange=[0.2*s2n.min(),1.05*s2n.max()]
+        expect1 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()], [0,0])
+
+        plt.add(expect1)
+        plt.xrange=[0.,erange[1]]
+
+        if yrng is not None:
+            plt.yrange = yrng
+
+        wlog("Writing plot file:",epsfile)
+        if show:
+            plt.show()
+        plt.write_eps(epsfile)
+        converter.convert(epsfile,dpi=100,verbose=True)
+
 
 
 
@@ -1663,12 +1816,16 @@ class SimPlotter(dict):
         l = biggles.PlotLabel(0.9,0.1, plab, halign='right')
         arr[1,0].add(l)
 
-        if self.simc['psfmodel'] == 'turb':
-            siglab=r'$FWHM_{PSF}: %.1f$ pix' % self.simc['psf_fwhm']
-        else:
-            psf_sigma = self.simc['psf_sigma']
-            siglab=r'$\sigma_{PSF}: %.1f$ pix' % psf_sigma
-        siglab += ' '+self.psf_estring
+        if 'Tpsf' not in self.simc:
+            if self.simc['psfmodel'] == 'turb':
+                siglab=r'$FWHM_{PSF}: %.1f$ pix' % self.simc['psf_fwhm']
+            else:
+                psf_sigma = self.simc['psf_sigma']
+                siglab=r'$\sigma_{PSF}: %.1f$ pix' % psf_sigma
+            siglab += ' '+self.psf_estring
+
+            sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
+                                   fontsize=2.5)
 
         s2n=self['s2n']
         if s2n > 0:
@@ -1678,13 +1835,6 @@ class SimPlotter(dict):
             else:
                 ls2n = '%.0f' % s2n
 
-            #siglab+=r'$ S/N: %(s2n)d N_{trial}: %(ntrial)d$' % self
-            siglab+=' S/N: %s' % ls2n
-        #else:
-        #    siglab+=r'$  N_{trial}: %(ntrial)d$' % self
-
-        sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
-                               fontsize=2.5)
         arr[1,0].add(sl)
 
 

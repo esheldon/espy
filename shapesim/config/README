@@ -95,6 +95,11 @@ gmix-fit
 
             gegt01r01 - new prior, emcee, prior during
                 cenprior 0.1
+            get01r02 - same as above but with min_gcount: 100
+                and npsf gauss 2 to speed things up
+            get01r01 - same as get01r02  for averaging
+            get01r02 - same as get01r02  for averaging
+            get01r03 - same as get01r02  for averaging
     sims
         et01
             - am et01r05 with add to cache, 1000 per.

@@ -3,7 +3,8 @@
 #
 #  usage:  wget-des [-d dir] type run band
 #
-# type is the file type, "red" or "coadd"
+# type is the file type, "red" or "coadd" "commsrc"
+# band is ignored for type = "commsrc"
 #
 # Data are copied from
 #
@@ -36,6 +37,10 @@ Description
         DES data area. You can send the -d keyword to specify an alternative
         prefix to \$DESDATA.
 
+        The exception is for type commsrc for which the data go to
+            DESDATA/comm/src/{run}/src 
+        and band is ignored; just send junk for that argument
+
 Arguments
         type: either 'red' or 'coadd'
         run:  The run identifier
@@ -55,7 +60,6 @@ dir=""
 while getopts "n:d:" Option
   do
   case $Option in
-      n)  njobs=$OPTARG ;;
       d)  dir=$OPTARG ;;
       [?]) usage_and_exit ;;
   esac
@@ -71,22 +75,32 @@ if [[ $dir == "" ]]; then
     dir="$DESDATA"
 fi
 
-type="$1"
+download_type="$1"
 run="$2"
 band=$3
 
-case $type in
+case $download_type in
     "red") 
         accept="*-${band}-*[0-9].fits.fz,*-${band}-*_cat.fits"
+        proj="DES"
+        type="red"
         ;;
     "coadd")
         accept="*${band}.fits.fz,*${band}_cat.fits"
+        proj="DES"
+        type="coadd"
+        ;;
+    "commsrc")
+        accept="*.fits.fz"
+        proj="DTS"
+        type="src"
+        dir=$DESDATA/comm 
         ;;
       *) usage_and_exit
         ;;
 esac
 
-url="ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES/${type}/${run}/${type}"
+url="ftp://desar.cosmology.illinois.edu/DESFiles/desardata/${proj}/${type}/${run}/${type}"
 echo "
     type:    $type
     run:     $run

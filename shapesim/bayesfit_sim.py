@@ -300,11 +300,14 @@ class BayesFitSim(shapesim.BaseSim):
 
     def _measure_gmix_psf(self, ci):
         import admom
+        counts=ci.psf.sum()
         psfres = admom.admom(ci.psf,
                              ci['cen_uw'][0],
                              ci['cen_uw'][1], 
                              guess=2.,
                              nsub=1)
+
+        npars=2*self['ngauss_psf']+4
 
         if self['ngauss_psf']==1:
             psf=[{'p':1,
@@ -313,10 +316,47 @@ class BayesFitSim(shapesim.BaseSim):
                   'irr':psfres['Irr'],
                   'irc':psfres['Irc'],
                   'icc':psfres['Icc']}]
+        elif self['ngauss_psf']==2:
+
+            prior=zeros(npars)
+            width=zeros(npars) + 100
+
+            Tpsf=psfres['Irr']+psfres['Icc']
+
+            Tmax=Tpsf*1.7
+            Tfrac1=0.8/1.7
+
+            prior[0]=psfres['row']
+            prior[1]=psfres['col']
+            prior[2]=psfres['e1']
+            prior[3]=psfres['e2']
+            prior[4] = Tmax
+            prior[5] = Tfrac1 
+
+            prior[6] = 0.418*counts
+            prior[7] = 0.582*counts
+
+            # randomize
+            prior[0] += 0.01*(randu()-0.5)
+            prior[1] += 0.01*(randu()-0.5)
+
+            e1start=prior[2]
+            e2start=prior[3]
+            prior[2],prior[3] = randomize_e1e2(e1start,e2start)
+
+            prior[4] += prior[4]*0.05*(randu()-0.5)
+            prior[5] += prior[5]*0.05*(randu()-0.5)
+            prior[6] += prior[6]*0.05*(randu()-0.5)
+            prior[7] += prior[7]*0.05*(randu()-0.5)
+
+            gm = gmix_image.GMixFitCoellip(ci.psf, ci['skysig'],
+                                           prior,width,
+                                           Tpositive=True)
+            psf=gm.get_gmix()
         elif self['ngauss_psf']==3:
 
-            prior=zeros(10)
-            width=zeros(10) + 100
+            prior=zeros(npars)
+            width=zeros(npars) + 100
 
             Tpsf=psfres['Irr']+psfres['Icc']
             Tmax = Tpsf*8.3
@@ -330,10 +370,13 @@ class BayesFitSim(shapesim.BaseSim):
             prior[5] = Tfrac1 
             prior[6] = Tfrac2
 
-            prior[7] = 0.08
-            prior[8] = 0.38
-            prior[9] = 0.53
+            prior[7] = 0.08*counts
+            prior[8] = 0.38*counts
+            prior[9] = 0.53*counts
 
+            # randomize
+            prior[0] += 0.01*(randu()-0.5)
+            prior[1] += 0.01*(randu()-0.5)
             e1start=prior[2]
             e2start=prior[3]
             prior[2],prior[3] = randomize_e1e2(e1start,e2start)
@@ -349,6 +392,7 @@ class BayesFitSim(shapesim.BaseSim):
                                            prior,width,
                                            Tpositive=True)
             psf=gm.get_gmix()
+
         else:
             raise ValueError("bad ngauss_psf: %s" % self['ngauss_psf'])
 

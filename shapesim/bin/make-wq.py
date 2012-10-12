@@ -110,7 +110,7 @@ def main():
             if options.i2new is not None and i2 <= int(options.i2new):
                 groups='group: [new,new2]'
             elif options.i2new1 is not None and i2 <= int(options.i2new1):
-                groups='group: [new1]'
+                groups='group: [new]'
             elif options.i2new2 is not None and i2 <= int(options.i2new2):
                 groups='group: [new2]'
             elif options.groups is not None:

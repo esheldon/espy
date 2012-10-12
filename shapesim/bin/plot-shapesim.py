@@ -159,6 +159,11 @@ else:
                               show=show,type=options.type,
                               title=options.title)
     else:
-        p.plots_shear_vs_s2n(yrng=yrng, xrng=xrng, type=options.type, 
-                             title=options.title,
-                             show=show)
+        if options.type=='frac':
+            p.plots_shear1_frac_vs_s2n(yrng=yrng, xrng=xrng, 
+                                       title=options.title,
+                                       show=show)
+        else:
+            p.plots_shear_vs_s2n(yrng=yrng, xrng=xrng, type=options.type, 
+                                 title=options.title,
+                                 show=show)

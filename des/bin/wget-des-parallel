@@ -17,7 +17,7 @@ input list of runs is sent on standard input, e.g.
         wget-des-parallel red i < runlist
 
 Arguments
-        type: either 'red' or 'coadd'
+        type: either 'red' or 'coadd' 'commsrc'
         band: g,r,i,z,Y
 
 Options
