@@ -104,6 +104,10 @@ gmix-fit
             get01r04 - Doing test with new code, make sure not crazy
 
             gdt01r01 - looks terrible
+            gdt01r02 gdt01r03 gdt01r04 for averaging
+
+            gdt01r05 - improved dev model
+
     sims
         et01
             - am et01r05 with add to cache, 1000 per.

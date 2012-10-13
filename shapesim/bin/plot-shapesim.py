@@ -33,6 +33,9 @@ parser.add_option('--maketitle',action="store_true",
 
 parser.add_option('--s2min',default=None,
                   help="min value in s2")
+parser.add_option('--s2n-name',default=None,
+                  help="field for s2n")
+
 parser.add_option('--etot',action='store_true',
                   help=('plot the difference between average '
                         'measured total ellip and true total ellip. '
@@ -169,5 +172,6 @@ else:
                                  show=show)
         else:
             p.plots_shear_vs_s2n(yrng=yrng, xrng=xrng, type=options.type, 
+                                 s2n_name=options.s2n_name,
                                  title=options.title,
                                  show=show)

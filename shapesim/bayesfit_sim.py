@@ -108,14 +108,19 @@ TODO:
                 - running
 
     - trying exp/turb models now
-        - get01 look pretty good
+        - get01 look pretty good but the larger galaxies actually
+            look worse at large gamma error than the small ones.
+            ??
         - gdt01 look awful.  T values range to hundreds
+            - might have screwed things up in code; running get01r04
+                to make sure things look OK
             - maybe try fitting exp just to see?
             - look at mean error
 
-    NEED to compare mcmc to emcee version: what is the difference?
-        - differences in formula?
-        - burnin?
+            - redid dev model, trying in gdt01r05
+                note model depends on ratio of psf to object size, what?
+            - also redid exp but it is not in the C code yet
+
 """
 import os
 import numpy

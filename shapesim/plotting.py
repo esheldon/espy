@@ -1263,6 +1263,7 @@ class SimPlotter(dict):
 
     def plots_shear_vs_s2n(self, 
                            type='diff',
+                           s2n_name=None,
                            xrng=None,
                            yrng=None, 
                            title=None,
@@ -1276,6 +1277,9 @@ class SimPlotter(dict):
         biggles.configure('_HalfAxis','subticks_size',2.5/2)
         biggles.configure('PlotKey','key_width',13)
         biggles.configure('PlotKey','key_vsep',1.0)
+
+        if s2n_name is None:
+            s2n_name='s2n_admom'
 
         extra=''
 
@@ -1347,7 +1351,7 @@ class SimPlotter(dict):
 
             s2 = median(st['s2'])
 
-            s2n_name='s2n_admom'
+            #s2n_name='s2n_admom'
             xlabel = 'S/N'
 
             s2n = st[s2n_name]
@@ -1713,15 +1717,24 @@ class SimPlotter(dict):
         allplots=[]
 
 
+        err_range=[1.e9,-1.e9]
         # looping over s2
         for i,st in enumerate(reversed(data)):
             #wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
 
             s2 = median(st['s2'])
 
-            xlabel = r'$\sigma(\gamma)/galaxy$'
+            xlabel = r'$\sigma(\gamma) per galaxy$'
 
-            err = st[errtag1]*sqrt(st['nsum'])
+            #g1sens_mean=st['g1sensum']/st['nsum']
+            err = st[errtag1]*sqrt(st['nsum'])#*g1sens_mean
+
+            minerr=err.min()
+            maxerr=err.max()
+            if minerr < err_range[0]:
+                err_range[0]=minerr
+            if maxerr > err_range[1]:
+                err_range[1]=maxerr
 
           
             yvals1 = st[tag1] - shear_true.g1
@@ -1821,8 +1834,8 @@ class SimPlotter(dict):
         arr[0,0].add(g1lab)
         arr[1,0].add(g2lab)
 
-        expect1 = biggles.Curve([0.8*err.min(),1.5*err.max()], [0,0])
-        expect2 = biggles.Curve([0.8*err.min(),1.5*err.max()], [0,0])
+        expect1 = biggles.Curve([0.5*err_range[0],1.5*err_range[1]], [0,0])
+        expect2 = biggles.Curve([0.5*err_range[0],1.5*err_range[1]], [0,0])
 
         arr[0,0].add(expect1)
         arr[1,0].add(expect2)
@@ -1831,6 +1844,7 @@ class SimPlotter(dict):
         if yrng is not None:
             arr.yrange = yrng
 
+        arr.xrange=[.01,1.]
         arr.xlog=True
 
         wlog("Writing plot file:",epsfile)

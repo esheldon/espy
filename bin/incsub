@@ -22,6 +22,7 @@ parser.add_option("--port", default=None, help="port for socket")
 parser.add_option("--poll", default=30,
         help=("time between polls of wq status when we are at max allowed"
               "jobs, default %default"))
+parser.add_option("-r","--req",default=None,help="over-ride requirements")
 parser.add_option("-n", "--njobs", default=50, 
                   help="max number of jobs, default %default")
 parser.add_option("-s", "--sleep-time", default=.2, 
@@ -33,6 +34,7 @@ parser.add_option("-f", "--force", action="store_true",
 parser.add_option("-d", "--dryrun", action='store_true', 
                   help="dry run.  Just print number of jobs and exit.")
 
+parser.add_option("--rand", action="store_true",help="randomize the order of files")
 
 pars={'host':wq.DEFAULT_HOST,      # Symbolic name meaning all available interfaces
       'port':wq.DEFAULT_PORT,
@@ -126,7 +128,7 @@ class JobLister(dict):
 def get_log_fname(fname):
     return fname+'.wqlog'
 
-def submit_job(job_fname):
+def submit_job(job_fname, req):
     """
     Put the job in the background
 
@@ -135,18 +137,39 @@ def submit_job(job_fname):
     """
     log_fname = get_log_fname(job_fname)
     command="""
-        nohup wq -p "{port}" sub "{jobf}" &> "{logf}" &
+        nohup wq -p "{port}" sub {req} "{jobf}" &> "{logf}" &
     """.format(port=pars['port'],
                jobf=job_fname,
-               logf=log_fname)
+               logf=log_fname,
+               req=req)
     os.system(command)
    
 
+def get_req(options):
+    if options.req:
+        req = """ -r "%s" """ % options.req
+    else:
+        req=""
+
+    return req
+
+def randomize_flist(flist):
+    import random
+    d={}
+    for f in flist:
+        d[random.randint(0,2000000000)] = f
+    return [d[k] for k in d]
+
 def go(flist, options):
+
     nfiles=len(flist)
     maxjobs=int(options.njobs)
     polltime=int(options.poll)
     sleep_time=float(options.sleep_time)
+
+    req=get_req(options)
+    if options.rand:
+        flist=randomize_flist(flist)
 
     user=os.environ['USER']
 
@@ -175,12 +198,12 @@ def go(flist, options):
             date = datetime.datetime.now().strftime('%H:%M:%S')
             print >>stderr,\
               "    submitting %s %s %s/%s (%i%%)" % (fname,date,i+1,nfiles,perc)
-            submit_job(fname)
+            submit_job(fname,req)
 
             diffjobs -= 1
 
             # this helps when the file system is slow
-            os.spawn('wq & >/dev/null')
+            os.system('wq &> /dev/null')
 
             # minimum time in case above is fast
             time.sleep(sleep_time)
