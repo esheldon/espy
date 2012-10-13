@@ -1634,7 +1634,213 @@ class SimPlotter(dict):
         converter.convert(epsfile,dpi=100,verbose=True)
 
 
+    def plots_shear_vs_err(self, 
+                           xrng=None,
+                           yrng=None, 
+                           title=None,
+                           show=True):
+        import biggles
+        import pcolors
+        import converter
 
+        biggles.configure("default","fontsize_min",2)
+        biggles.configure('_HalfAxis','ticks_size',2.5)
+        biggles.configure('_HalfAxis','subticks_size',2.5/2)
+        biggles.configure('PlotKey','key_width',13)
+        biggles.configure('PlotKey','key_vsep',1.0)
+
+        extra=''
+
+        if self.docum:
+            extra+='-cum'
+
+        runtype = self.get('runtype','byellip')
+        if runtype != 'bys2n':
+            raise ValueError("Can only make plots vs s2n for 'bys2n' runs")
+
+        is_shearmag=False
+        if 'shearmag' in self.simc:
+            is_shearmag=True
+            shearmag = self.simc['shearmag']
+        else:
+            shear_true = self.get_shear_true()
+
+        data = self.read_data()
+
+        epsfile = shapesim.get_plot_file(self['run'],'ediff'+extra,yrng=yrng)
+        wlog("will plot to:",epsfile)
+
+        if len(data) == 4:
+            colors=['red','forestgreen','NavajoWhite3','blue']
+            linetypes=['dotted','dashed','dotdashed','solid']
+        else:
+            colors=pcolors.rainbow(len(data), 'hex')
+            linetypes=['solid']*len(data)
+        point_types=['filled circle','filled diamond','filled square','filled triangle']
+
+        arr=biggles.FramedArray(2,1)
+        #arr.aspect_ratio=1
+        
+        title=self.get_title(title=title)
+        if title:
+            arr.title=title
+ 
+
+        if self['run'][0:5] == 'deswl':
+            tag1='gamma1_meas'
+            tag2='gamma2_meas'
+            # convention
+            st[tag1] = -st[tag1]
+        else:
+            if is_shearmag:
+                tag1='sheardiff'
+                tag2='osheardiff'
+                errtag1='sheardifferr'
+                errtag2='osheardifferr'
+                lab1=r'$\gamma_+$'
+                lab2=r'$\gamma_\times$'
+            else:
+                tag1='shear1'
+                tag2='shear2'
+                errtag1='shear1err'
+                errtag2='shear2err'
+                lab1=r'$\gamma_1$'
+                lab2=r'$\gamma_2$'
+
+
+        plots1=[]
+        plots2=[]
+        allplots=[]
+
+
+        # looping over s2
+        for i,st in enumerate(reversed(data)):
+            #wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
+
+            s2 = median(st['s2'])
+
+            xlabel = r'$\sigma(\gamma)/galaxy$'
+
+            err = st[errtag1]*sqrt(st['nsum'])
+
+          
+            yvals1 = st[tag1] - shear_true.g1
+            yvals2 = st[tag2] - shear_true.g2
+
+            label = r'%0.3f' % s2
+
+            cwidth=5.
+            pr1 = biggles.Points(err, yvals1, color=colors[i],
+                                 size=2,
+                                 type=point_types[i])
+            pr2 = biggles.Points(err, yvals2, color=colors[i],
+                                 size=2,
+                                 type=point_types[i])
+            cr1 = biggles.Curve(err, yvals1, color=colors[i],type=linetypes[i],width=cwidth)
+            cr2 = biggles.Curve(err, yvals2, color=colors[i],type=linetypes[i],width=cwidth)
+            cr1.label = label
+            cr2.label = label
+
+
+            arr[0,0].add(cr1,pr1)
+            arr[1,0].add(cr2,pr2)
+            
+            if True:
+                g1err = st[errtag1]
+                g2err = st[errtag2]
+                err1p = biggles.SymmetricErrorBarsY(err, yvals1, g1err,
+                                                    color=colors[i])
+                err2p = biggles.SymmetricErrorBarsY(err, yvals2, g2err,
+                                                    color=colors[i])
+                if not self.noerr:
+                    arr[0,0].add(err1p)
+                    arr[1,0].add(err2p)
+
+            if i < 15:
+                plots1.append(cr1)
+            else:
+                plots2.append(cr1)
+
+
+        fsize=2
+        key1 = biggles.PlotKey(0.85,0.92, plots1, halign='right', 
+                               fontsize=fsize)
+        arr[0,0].add(key1)
+        if len(plots2) > 0:
+            key2 = biggles.PlotKey(0.85,0.92, plots2, halign='right', 
+                                   fontsize=fsize)
+            arr[1,0].add(key2)
+
+        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}: $'
+        klab = biggles.PlotLabel(.65,.92,klabtext,
+                                 fontsize=2.5,halign='right')
+        arr[0,0].add(klab)
+        objmodel = self.simc['objmodel']
+        psfmodel = self.simc['psfmodel']
+
+
+        plab='%s %s' % (objmodel,psfmodel)
+        l = biggles.PlotLabel(0.9,0.1, plab, halign='right')
+        arr[1,0].add(l)
+
+        if 'Tpsf' not in self.simc:
+            if self.simc['psfmodel'] == 'turb':
+                siglab = r'$FWHM: %.1f$ pix' % self.simc['psf_fwhm']
+            else:
+                psf_sigma = self.simc['psf_sigma']
+                siglab = r'$\sigma: %.1f$ pix' % psf_sigma
+            siglab += ' '+self.psf_estring
+            if 'etrue' in st.dtype.names:
+                siglab += r'$ e_{gal}^{tot}: %.2f$' % st['etrue'].mean()
+
+                sl = biggles.PlotLabel(0.075,0.1, siglab, halign='left', 
+                                       fontsize=2.5)
+                arr[1,0].add(sl)
+
+        arr.xlabel=xlabel
+
+
+        arr.ylabel = r'$\Delta \gamma$'
+
+        if is_shearmag:
+            g1lab_txt = lab1 + ' = %.2g' % shearmag
+            g2lab_txt = lab2
+        else:
+            g1lab_txt = lab1 + ' = %.2g' % shear_true.g1
+            g2lab_txt = lab2 + ' = %.2g' % shear_true.g2
+
+        g1lab = biggles.PlotLabel(0.1,0.9, g1lab_txt, halign='left')
+
+        if 'dt' in self['run']:
+            g2x = 0.7
+        else:
+            g2x = 0.1
+
+        g2lab = biggles.PlotLabel(g2x,0.9, g2lab_txt, halign='left')
+
+        arr[0,0].add(g1lab)
+        arr[1,0].add(g2lab)
+
+        expect1 = biggles.Curve([0.8*err.min(),1.5*err.max()], [0,0])
+        expect2 = biggles.Curve([0.8*err.min(),1.5*err.max()], [0,0])
+
+        arr[0,0].add(expect1)
+        arr[1,0].add(expect2)
+
+
+        if yrng is not None:
+            arr.yrange = yrng
+
+        arr.xlog=True
+
+        wlog("Writing plot file:",epsfile)
+        if show:
+            arr.show()
+        arr.write_eps(epsfile)
+        converter.convert(epsfile,dpi=100,verbose=True)
+
+
+ 
 
 
     def plot_shear_vs_e(self, 

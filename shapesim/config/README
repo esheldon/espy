@@ -100,6 +100,10 @@ gmix-fit
             get01r01 - same as get01r02  for averaging
             get01r02 - same as get01r02  for averaging
             get01r03 - same as get01r02  for averaging
+
+            get01r04 - Doing test with new code, make sure not crazy
+
+            gdt01r01 - looks terrible
     sims
         et01
             - am et01r05 with add to cache, 1000 per.

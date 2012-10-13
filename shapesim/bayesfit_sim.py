@@ -108,9 +108,10 @@ TODO:
                 - running
 
     - trying exp/turb models now
-        - The convolved models are coming out much more compact than true exp,
-        maybe I am just making them too small or maybe my effective size is
-        too small compared to real ones.
+        - get01 look pretty good
+        - gdt01 look awful.  T values range to hundreds
+            - maybe try fitting exp just to see?
+            - look at mean error
 
     NEED to compare mcmc to emcee version: what is the difference?
         - differences in formula?
@@ -266,7 +267,8 @@ class BayesFitSim(shapesim.BaseSim):
             # we always write this, although slower when not verbose
             if (nellip > 1) and (( (i+1) % 10) == 0 or i== 0):
                 stderr.write("  %s/%s ellip done\n" % ((i+1),nellip))
-
+            #if i==20:
+            #    stop
             ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf,
                                      s2n_method=s2n_method,
                                      fluxfrac=s2ncalc_fluxfrac)
@@ -647,11 +649,26 @@ class EmceeFitter:
 
         gmix=gmix0.convolve(self.psf_GMix)
 
+        """
+        old: 0m38.391s
+        new: 0m33.923s
+        removing exp cuts it to 19 sec
+        """
+
+        """
         loglike,flags=\
             gmix_image.render._render.loglike(self.image, 
                                               gmix,
                                               self.Anorm,
                                               self.ierr)
+        """
+        loglike,flags=\
+            gmix_image.render._render.loglike_faster(self.image, 
+                                              gmix,
+                                              self.Anorm,
+                                              self.ierr)
+        #print loglike_new-loglike
+        #stop
 
         if flags != 0:
             return LOWVAL
