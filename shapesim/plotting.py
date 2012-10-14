@@ -1281,7 +1281,7 @@ class SimPlotter(dict):
         if s2n_name is None:
             s2n_name='s2n_admom'
 
-        extra=''
+        extra='-'+s2n_name.replace('_','-')
 
         if self.docum:
             extra+='-cum'
@@ -1346,6 +1346,7 @@ class SimPlotter(dict):
 
 
         # looping over s2
+        s2n_range=[1.e9,-1.e9]
         for i,st in enumerate(reversed(data)):
             #wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
 
@@ -1356,7 +1357,14 @@ class SimPlotter(dict):
 
             s2n = st[s2n_name]
 
-          
+            mins2n=s2n.min()
+            maxs2n=s2n.max()
+            if mins2n < s2n_range[0]:
+                s2n_range[0]=mins2n
+            if maxs2n > s2n_range[1]:
+                s2n_range[1]=maxs2n
+
+
             if type == 'diff':
                 if is_shearmag:
                     yvals1 = st[tag1]
@@ -1465,12 +1473,16 @@ class SimPlotter(dict):
         arr[0,0].add(g1lab)
         arr[1,0].add(g2lab)
 
-        expect1 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()], [0,0])
-        expect2 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()], [0,0])
+        #expect1 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()], [0,0])
+        #expect2 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()], [0,0])
+
+        expect1 = biggles.Curve([0.5*s2n_range[0],1.5*s2n_range[1]], [0,0])
+        expect2 = biggles.Curve([0.5*s2n_range[0],1.5*s2n_range[1]], [0,0])
 
         arr[0,0].add(expect1)
         arr[1,0].add(expect2)
 
+        arr.xrange=[1,105]
 
 
         """
