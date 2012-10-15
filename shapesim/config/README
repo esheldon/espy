@@ -116,13 +116,25 @@ gmix-fit
             gdt01r10 - more burnin
                 - checked 0 0, not much difference
             gdt01r11 - more burnin *and* steps
-                Just ran (1, 1) for a check
-                maybe slightly better, doign full run
-                for is2=1
+                - not better
             gdt01r12 - More walkers: 40 walkers but still
                 400 burning per and 400 steps per
                 ran (1, 1) for a check
                 LOOKS LIKE SHIT
+            
+            Trying to also marginalize over amplitude
+
+            get01r05 - first exp with amp marg
+                - looks better for 0,0, doing a ful run
+                - forgot to use new seed, RERUN
+
+            gdt01r13 - first dev with amp marg
+                - looks the same for 0,0 but used same seed
+                    - re-running 0 0 with new seed
+                - maybe try temperature higher?
+                    - gdt01r14 - running 0 0
+                - maybe try prior after?  Perhaps the 1/prior
+                  causing problems for dev?
 
 
     sims

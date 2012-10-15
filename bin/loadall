@@ -18,7 +18,10 @@ parser.add_option("-d","--date",action='store_true',
 
 NMACHINE=34
 #NMACHINE=10
-MACHINE_SKIP=['astro0034']
+MACHINE_SKIP=['astro0012','astro0013','astro0014',
+              'astro0015','astro0016','astro0017',
+              'astro0018','astro0019','astro0020',
+              'astro0034']
 
 def get_loads():
 

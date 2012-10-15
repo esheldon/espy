@@ -30,6 +30,7 @@ nstep: 400 # steps per walker
 burnin: 400 # burnin per walker.
 
 when_prior: "during"
+margamp: true
 
 
 use_cache: false
