@@ -107,6 +107,23 @@ gmix-fit
             gdt01r02 gdt01r03 gdt01r04 for averaging
 
             gdt01r05 - improved dev model
+            gdt01r06,,gdt01r07,gdt01r08 for averaging
+                - looks better, less biased than the LM code
+                but still biases
+
+            gdt01r09 - more steps after burning
+                - checked 0 0, not much difference
+            gdt01r10 - more burnin
+                - checked 0 0, not much difference
+            gdt01r11 - more burnin *and* steps
+                Just ran (1, 1) for a check
+                maybe slightly better, doign full run
+                for is2=1
+            gdt01r12 - More walkers: 40 walkers but still
+                400 burning per and 400 steps per
+                ran (1, 1) for a check
+                LOOKS LIKE SHIT
+
 
     sims
         et01

@@ -119,6 +119,8 @@ TODO:
 
             - redid dev model, trying in gdt01r05
                 note model depends on ratio of psf to object size, what?
+                llooks better, but still huge bias.
+                Tried some alternatives, see README
             - also redid exp but it is not in the C code yet
 
 """
