@@ -262,6 +262,17 @@ class BayesFitSim(shapesim.BaseSim):
 
             ci_nonoise = self.shapesim.get_trial(s2, ellip, theta)
 
+            retrim = self['retrim']
+            if retrim:
+                if 'retrim_fluxfrac' not in self:
+                    raise ValueError("you must set fluxfrac for a retrim")
+                retrim_fluxfrac=self['retrim_fluxfrac']
+                olddims=ci_nonoise.image.shape
+                ci_nonoise.trim(fluxfrac=retrim_fluxfrac)
+                if self['verbose']:
+                    wlog("re-trimming with fluxfrac: %.12g" % retrim_fluxfrac)
+                    wlog("old dims:",str(olddims),"new dims:",str(ci_nonoise.image.shape))
+
             e1true=ci_nonoise['e1true']
             e2true=ci_nonoise['e2true']
             g1true,g2true=lensing.util.e1e2_to_g1g2(e1true,e2true)
@@ -857,8 +868,8 @@ class EmceeFitter:
                                      show=False, plt=hplt_cen0)
         hplt_cen.add(key)
 
-        bsize1=errs[0]*0.2
-        bsize2=errs[1]*0.2
+        bsize1=g1vals.std()*0.2 #errs[0]*0.2
+        bsize2=g2vals.std()*0.2 # errs[1]*0.2
         hplt_g1 = eu.plotting.bhist(g1vals,binsize=bsize1,
                                   show=False)
         hplt_g2 = eu.plotting.bhist(g2vals,binsize=bsize2,

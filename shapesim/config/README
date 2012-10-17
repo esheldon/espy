@@ -109,14 +109,14 @@ gmix-fit
             gdt01r05 - improved dev model
             gdt01r06,,gdt01r07,gdt01r08 for averaging
                 - looks better, less biased than the LM code
-                but still biases
+                but still biased
 
             gdt01r09 - more steps after burning
                 - checked 0 0, not much difference
             gdt01r10 - more burnin
                 - checked 0 0, not much difference
             gdt01r11 - more burnin *and* steps
-                - not better
+                - did a full run, might be a little better.
             gdt01r12 - More walkers: 40 walkers but still
                 400 burning per and 400 steps per
                 ran (1, 1) for a check
@@ -127,15 +127,42 @@ gmix-fit
             get01r05 - first exp with amp marg
                 - looks better for 0,0, doing a ful run
                 - forgot to use new seed, RERUN
+                    and do some more for averaging tonight
+                    get01r06,get01r07,get01r08
 
-            gdt01r13 - first dev with amp marg
-                - looks the same for 0,0 but used same seed
-                    - re-running 0 0 with new seed
+            - first dev with amp marg 
+                gdt01r13 
+                - Doing a full run: looks about the same
+
                 - maybe try temperature higher?
-                    - gdt01r14 - running 0 0
+                    - gdt01r14 - running 0 0  looks crazy
+
                 - maybe try prior after?  Perhaps the 1/prior
                   causing problems for dev?
+                    - gdt01r15 doing full run
+                    actually looks a little better but noisy
 
+                - might need more walkers with higher dim space
+                    am using the "minimum" of 2*6=12 (althoug
+                    this worked fine for exp!)
+                    -gdt01r16 nwalkers 40, prior during
+                        - running 0,0
+                    looks about the same
+
+            -fix exp to dev?  Just curious, but quick look shows it will
+            greatly underestimate the size.  I have a config for this in
+            gdt01r18 but not run yet
+
+            - but that does make me wonder if I should just limit
+            the radius used for calculations?  I forgot to put that in!
+                gdt01r19, same as r13 but trimmed
+                worse: I checked and I was using the underlying T to
+                get image size.
+
+            - try using T convolved to get image size
+                gdt01r20.  didn't help, so I'm turning on
+                some other things I think might help: more walkers
+                after prior
 
     sims
         et01

@@ -1740,6 +1740,7 @@ class SimPlotter(dict):
 
             #g1sens_mean=st['g1sensum']/st['nsum']
             err = st[errtag1]*sqrt(st['nsum'])#*g1sens_mean
+            #err = sqrt(1/st['g1err2invsum'])*sqrt(st['nsum'])
 
             minerr=err.min()
             maxerr=err.max()
@@ -1856,7 +1857,7 @@ class SimPlotter(dict):
         if yrng is not None:
             arr.yrange = yrng
 
-        arr.xrange=[.01,1.]
+        arr.xrange=[.01,1.5]
         arr.xlog=True
 
         wlog("Writing plot file:",epsfile)
