@@ -457,11 +457,17 @@ class BayesFitSim(shapesim.BaseSim):
                                     when_prior=self['when_prior'])
         else:
             cenprior=CenPrior(ci['cen'], [0.1]*2)
+            if self['Tprior']:
+                # need to guess this width for real data
+                Tsend = eu.random.LogNormal(T, 1.e-5)
+            else:
+                Tsend = T
+
             self.fitter=EmceeFitter(ci.image,
                                     1./ci['skysig']**2,
                                     psf,
                                     cenprior,
-                                    T,
+                                    Tsend,
                                     self.gprior,
                                     self['fitmodel'],
                                     nwalkers=self['nwalkers'],
@@ -549,6 +555,7 @@ class EmceeFitter:
             The center prior object.
         T:
             Starting value for ixx+iyy of main component
+            or a LogNormal object
         gprior:
             The prior on the g1,g2 surface.
         nstep:
@@ -579,6 +586,10 @@ class EmceeFitter:
 
         self._set_psf(psf)
 
+        if isinstance(T, eu.random.LogNormal):
+            self.T_is_prior=True
+        else:
+            self.T_is_prior=False
 
         self.tpars=zeros(6,dtype='f8')
 
@@ -648,6 +659,10 @@ class EmceeFitter:
 
         cp = self.cenprior.lnprob(pars[0:2])
         logprob += cp
+
+        if self.T_is_prior:
+            Tp = self.T.lnprob(T)
+            logprob += Tp
 
         if self.temp is not None:
             logprob /= self.temp
@@ -781,7 +796,11 @@ class EmceeFitter:
         guess[:,3]=0.1*(randu(self.nwalkers)-0.5)
 
         # guess for T is self.T with scatter
-        guess[:,4] = self.T + self.T*0.1*(randu(self.nwalkers)-0.5)
+        if self.T_is_prior:
+            T=self.T.mean
+        else:
+            T=self.T
+        guess[:,4] = T + T*0.1*(randu(self.nwalkers)-0.5)
 
         # first guess at amp is the total flux
         imtot=self.image.sum()
@@ -1731,6 +1750,7 @@ class CenPrior:
         lnprob0 = -(self.cen[0]-pos[0])**2/self.sigma2[0]
         lnprob1 = -(self.cen[1]-pos[1])**2/self.sigma2[1]
         return lnprob0 + lnprob1
+
 
 class GPrior:
     """

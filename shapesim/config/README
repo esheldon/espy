@@ -150,8 +150,9 @@ gmix-fit
                     looks about the same
 
             -fix exp to dev?  Just curious, but quick look shows it will
-            greatly underestimate the size.  I have a config for this in
-            gdt01r18 but not run yet
+            greatly underestimate the size. 
+                - running gdt01r18
+                - it did just as well at s/n=20!
 
             - but that does make me wonder if I should just limit
             the radius used for calculations?  I forgot to put that in!
@@ -159,10 +160,23 @@ gmix-fit
                 worse: I checked and I was using the underlying T to
                 get image size.
 
-            - try using T convolved to get image size
+            - fixed bug, now T convolved to get image size
                 gdt01r20.  didn't help, so I'm turning on
                 some other things I think might help: more walkers
-                after prior
+                after prior and using 80 walkers with 200/200
+                no better
+
+            - the average T values are way too big in the gdev fit.
+            Maybe applying some kind of sanity prior would help.
+
+            - also instead of a hard prior at 0 on T, something that goes
+              smoothly to zero?  Trying a fairly tight lognormal prior on T
+                - gdt01r21
+                looks about the same!
+
+                - gdt01r22
+                    even tighter T prior  accidantally used
+                        40/200/200 so it's gonna take twice as long
 
     sims
         et01
