@@ -364,3 +364,24 @@ def compare_images(im1, im2, cen=None, minval=None,
     biggles.configure( 'default', 'fontsize_min', 1.25)
 
     return tab
+
+def image_read(fname):
+    """
+    Read the simple text image format:
+        nrows ncols
+        im00 im01 im02...
+        im10 im11 im12...
+    """
+
+    with open(fname) as fobj:
+        ls=fobj.readline().split()
+        nrows=int(ls[0])
+        ncols=int(ls[1])
+
+
+        image=numpy.fromfile(fobj, 
+                             sep=' ', 
+                             count=(nrows*ncols), 
+                             dtype='f8').reshape(nrows,ncols)
+    return image
+
