@@ -459,7 +459,8 @@ class BayesFitSim(shapesim.BaseSim):
             cenprior=CenPrior(ci['cen'], [0.1]*2)
             if self['Tprior']:
                 # need to guess this width for real data
-                Tsend = eu.random.LogNormal(T, 1.e-5)
+                Twidth=T*self['Twidthfrac']
+                Tsend = eu.random.LogNormal(T, Twidth)
             else:
                 Tsend = T
 
@@ -872,6 +873,7 @@ class EmceeFitter:
 
         res=self.get_result()
         print 'acceptance rate:',res['arate']
+        print 'T:  %.16g +/- %.16g' % (Tvals.mean(), Tvals.std())
         print 'g1: %.16g +/- %.16g' % (g[0],errs[0])
         print 'g2: %.16g +/- %.16g' % (g[1],errs[1])
         print 'g1sens:',self._result['gsens'][0]
@@ -925,6 +927,19 @@ class EmceeFitter:
         tab[5,0] = likep
         tab.show()
 
+    
+        nx = ny = 40
+        levels=8
+        h2d = eu.stat.histogram2d(Tvals, g1vals, nx=nx, ny=ny,more=True)
+        images.view(h2d['hist'], type='cont',
+                    xdr=[h2d['xcenter'][0], h2d['xcenter'][-1]],
+                    ydr=[h2d['ycenter'][0], h2d['ycenter'][-1]],
+                    xlabel='T', ylabel='g1', levels=levels)
+        h2d = eu.stat.histogram2d(Tvals, g2vals, nx=nx, ny=ny,more=True)
+        images.view(h2d['hist'], type='cont',
+                    xdr=[h2d['xcenter'][0], h2d['xcenter'][-1]],
+                    ydr=[h2d['ycenter'][0], h2d['ycenter'][-1]],
+                    xlabel='T', ylabel='g2', levels=levels)
 
 
 class EmceeFitterMargAmp:
@@ -1747,8 +1762,8 @@ class CenPrior:
         self.sigma2=[s**2 for s in sigma]
 
     def lnprob(self, pos):
-        lnprob0 = -(self.cen[0]-pos[0])**2/self.sigma2[0]
-        lnprob1 = -(self.cen[1]-pos[1])**2/self.sigma2[1]
+        lnprob0 = -0.5*(self.cen[0]-pos[0])**2/self.sigma2[0]
+        lnprob1 = -0.5*(self.cen[1]-pos[1])**2/self.sigma2[1]
         return lnprob0 + lnprob1
 
 

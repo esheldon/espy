@@ -1,12 +1,12 @@
-# no analytical amp marg
-run: mcbayes-gdt01r13
+# fixed convolved image size bug: now use Tconvolved
+run: mcbayes-gdt01r23
 sim: sim-gdt01
 
 
 runtype: bys2n
 
 # need to set this for the trials to work.
-seed: 2659
+seed: 3288
 
 s2n_method: admom
 s2n_fac: 20
@@ -24,12 +24,15 @@ s2nvals: [10,15,20,25,30,40,50,60,70,80,90,100]
 
 fixcen: false
 fixT: false
-Tprior: false
 
 # step and burnin are *per walker*
-nwalkers: 12
-nstep: 400 # steps per walker
-burnin: 400 # burnin per walker.
+# whoops, 40 was too much
+nwalkers: 20
+nstep: 200 # steps per walker
+burnin: 200 # burnin per walker.
+
+Tprior: true
+Twidthfrac: 0.1 # sigma(T)/T
 
 when_prior: "during"
 margamp: false

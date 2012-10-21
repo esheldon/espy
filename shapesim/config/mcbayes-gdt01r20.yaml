@@ -32,6 +32,7 @@ burnin: 200 # burnin per walker.
 
 when_prior: "after"
 margamp: false
+Tprior: false
 
 use_cache: false
 add_to_cache: false
