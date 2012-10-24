@@ -56,7 +56,37 @@ def multiview(image, **keys):
     return tab
 
 def view(image, **keys): 
+    """
+    View the image
+
+    parameters
+    ----------
+    image: ndarray
+        The images as a 2-d array
+    type: string
+        Type of plot, 'dens', 'cont', 'dens-cont'.  
+        Default is 'dens'.
+    xlabel: string
+        Label for the X axis
+    ylabel: string
+        Label for the Y axis
+    show: bool
+        Set False to not show the image in an X window.
+    reverse: bool
+        Reverse the scale so dark is larger.  Default is True
+    levels: int
+        Number of levels for contours. Default 8
+    ccolor:
+        color for contour, default 'black' unless type is dens-cont
+        then grey.
+    transpose: bool
+        Transpose the image.  Default True because of biggles' conventions.
+    epsfile: string
+        Write the image to the intput file name.
+    """
     import biggles
+
+    type=keys.get('type','dens')
 
     # image_scale does not reverse by default, but for display purposes we
     # will want to
@@ -72,21 +102,40 @@ def view(image, **keys):
     plt = biggles.FramedPlot()
 
     s = im.shape
-    # this is a difference from Contours which can be alarming
-    #ranges = ((0, 0), (s[0], s[1]))
-    ranges = ((-0.5, -0.5), (s[0]-0.5, s[1]-0.5))
-    d = biggles.Density(im, ranges)
-    plt.add(d)
+    if 'xdr' in keys and 'ydr' in keys:
+        xdr=keys['xdr']
+        ydr=keys['ydr']
+        ranges = ((xdr[0], ydr[0]), (xdr[1], ydr[1]))
 
-    levels=keys.get('levels',None)
-    if levels is not None:
-        ccolor = keys.get('ccolor','grey')
-        c = biggles.Contours(im, color=ccolor)
-        c.levels = levels
-        plt.add(c)
+        x=numpy.linspace(xdr[0],xdr[1],s[0])
+        y=numpy.linspace(ydr[0],ydr[1],s[1])
+    else:
+        # this is a difference from Contours which can be alarming
+        ranges = ((-0.5, -0.5), (s[0]-0.5, s[1]-0.5))
+        x=None
+        y=None
+
+    def_contour_color='black'
+    if 'dens' in type:
+        d = biggles.Density(im, ranges)
+        plt.add(d)
+        def_contour_color='grey'
+
+    if 'cont' in type:
+        levels=keys.get('levels',8)
+        if levels is not None:
+            ccolor = keys.get('ccolor',def_contour_color)
+            c = biggles.Contours(im,x=x,y=y,color=ccolor)
+            c.levels = levels
+            plt.add(c)
 
     # make sure the pixels look square
     plt.aspect_ratio = im.shape[1]/float(im.shape[0])
+
+    if 'xlabel' in keys:
+        plt.xlabel=keys['xlabel']
+    if 'ylabel' in keys:
+        plt.ylabel=keys['ylabel']
 
     if 'epsfile' in keys:
         epsfile=os.path.expandvars(keys['epsfile'])

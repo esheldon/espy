@@ -177,6 +177,19 @@ gmix-fit
                 - gdt01r22
                     even tighter T prior  accidantally used
                         40/200/200 so it's gonna take twice as long
+                        used fixed width 1.e-6
+                - gdt01r23
+                    Using prior width 0.1*T  This is still quite tight
+                    compared to the mcmc chain distribution for s/n=10
+                    
+                    This does look better indeed
+                - gdt01r24
+                    Using prior width 1*T to see if this just helps prevent
+                    crazy T values.  
+                    
+
+
+
 
     sims
         et01
