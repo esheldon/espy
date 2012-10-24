@@ -81,8 +81,11 @@ def view(image, **keys):
         then grey.
     transpose: bool
         Transpose the image.  Default True because of biggles' conventions.
-    epsfile: string
-        Write the image to the intput file name.
+    file: string
+        Write the image to the intput file name.  .png will be written
+        as a png file, else an eps file.
+    dims:
+        [width,height] for png output, default 800x800
     """
     import biggles
 
@@ -137,10 +140,15 @@ def view(image, **keys):
     if 'ylabel' in keys:
         plt.ylabel=keys['ylabel']
 
-    if 'epsfile' in keys:
-        epsfile=os.path.expandvars(keys['epsfile'])
-        epsfile=os.path.expanduser(epsfile)
-        plt.write_eps(epsfile)
+    if 'file' in keys:
+        file=os.path.expandvars(keys['file'])
+        file=os.path.expanduser(file)
+        if '.png' in file:
+            png_dims=keys.get('dims',[800,800])
+            plt.write_img(dims[0],dims[1],pngfile)
+        else:
+            plt.write_eps(file)
+
     show=keys.get('show',True)
     if show:
         plt.show()
