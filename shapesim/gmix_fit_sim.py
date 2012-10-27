@@ -1090,7 +1090,6 @@ class GMixGalSim(dict):
 
         self.load_config()
 
-        self.load_data()
 
     def load_config(self):
         f=self.get_config_file()
@@ -1146,6 +1145,10 @@ class GMixGalSim(dict):
         bname=self.get_image_basename()
         bname=bname.replace('.fits','-gmix.fits')
         return os.path.join(dir,bname)
+    def read_output(self):
+        f=self.get_output_file()
+        print f
+        return eu.io.read(f)
 
     def load_data(self):
         im_file=self.get_image_file()
@@ -1162,6 +1165,7 @@ class GMixGalSim(dict):
         wlog(str(self.psf.shape))
 
     def run(self):
+        self.load_data()
         ntot=self['nobj_row']*self['nobj_col']
         output=zeros(ntot,dtype=self.get_dtype())
 
@@ -1385,14 +1389,15 @@ class GMixGalSim(dict):
 
                 prior[4] = T*admom_mult
                 prior[5] = .3 # should be ~0.08 for dev galaxies
-                prior[6] = 0.
+                prior[6] = 0.02
                 
                 # should be ~.4, .45, .05 or something for dev
                 prior[7] = 0.26*counts
                 prior[8] = 0.55*counts
                 prior[9] = 0.18*counts
 
-                width[6] = 1.e-8
+                #width[6] = 1.e-8
+                width[6] = .01
                 prior[6] = width[6]*randn()
 
                 rand_fac=0.2
