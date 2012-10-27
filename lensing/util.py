@@ -8,7 +8,7 @@ class ShapeRangeError(Exception):
     pass
 
 
-def average_shear(e1, e2, weights=None, doerr=False):
+def average_shear(e1, e2, e1err=None, e2err=None):
     """
     Calculate the mean shear from shapes.
 
@@ -18,10 +18,9 @@ def average_shear(e1, e2, weights=None, doerr=False):
         e1 values
     e2: array
         e2 values
-    weights: array, optional
-    doerr: bool, optional
-        Calculate the error. Not meaningful in ring tests where the
-        orientations are not random.
+    e1err,e2err: 
+        Calculate the error on the mean and return
+            g1,g2,g1err,g2err
 
     notes
     -----
@@ -29,8 +28,6 @@ def average_shear(e1, e2, weights=None, doerr=False):
     compoments for the responsivity
     """
 
-    if weights is not None:
-        raise ValueError("implemented weighted")
 
     num=e1.size
     if e2.size != num:
@@ -45,13 +42,13 @@ def average_shear(e1, e2, weights=None, doerr=False):
     g1 = 0.5*me1/R
     g2 = 0.5*me2/R
 
-    if doerr:
-        mesq_err = esq.std()/sqrt(num)
-        e1err = e1.std()/sqrt(num)
-        e2err = e2.std()/sqrt(num)
-        
-        g1err = g1*sqrt( (mesq_err/mesq)**2 + (e1err/me1)**2 )
-        g2err = g2*sqrt( (mesq_err/mesq)**2 + (e1err/me2)**2 )
+    if e1err is not None and e2err is not None:
+        e1_ivar = 1/e1err**2
+        e2_ivar = 1/e2err**2
+
+        g1err = 0.5/sqrt(e1_ivar.sum())/R
+        g2err = 0.5/sqrt(e2_ivar.sum())/R
+
         return g1,g2,R,g1err,g2err
     else:
         return g1,g2, R
