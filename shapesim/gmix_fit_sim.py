@@ -1186,7 +1186,7 @@ class GMixGalSim(dict):
 
 
 
-    def run_obj(self, orow, ocol):
+    def run_obj_old(self, orow, ocol):
         """
         Process all objects in the image and psf
         """
@@ -1240,15 +1240,16 @@ class GMixGalSim(dict):
 
             out['flags'] = out['res']['flags']
 
+            if out['flags'] != 0:
+                wlog('failed PSF flags:')
+
         else:
             wlog('failed PSF flags:')
-            if self['verbose']:
-                gmix_image.printflags("flags:",out['flags'])
 
-        if out['flags'] != 0 and self['verbose']:
-            wlog('flags:')
-            if self['verbose']:
-                gmix_image.printflags("flags:",out['flags'])
+        # this is a ring test, we cannot have failures
+        if out['flags'] != 0:
+            gmix_image.printflags("flags:",out['flags'])
+            raise RuntimeError("error, halting")
         return out
 
     def run_admom(self, im, rowguess, colguess, skysig, Tguess):
@@ -1256,10 +1257,78 @@ class GMixGalSim(dict):
                         sigsky=skysig, guess=Tguess/2, nsub=1)  
         return res
 
+    def run_obj(self, orow, ocol):
+        """
+        Process all objects in the image and psf
+        """
+
+        rows_per=self.image.shape[0]/self['nobj_row']
+        cols_per=self.image.shape[1]/self['nobj_col']
+
+        row1=orow*rows_per
+        row2=(orow+1)*rows_per
+
+        col1=ocol*cols_per
+        col2=(ocol+1)*cols_per
+
+
+        image = self.image[row1:row2, col1:col2].copy()
+        psf0 = self.psf[row1:row2, col1:col2].copy()
+        psf,skysig_psf = fimage.add_noise_admom(psf0,self['s2n_psf'])
+        self['skysig_psf']=skysig_psf
+
+        cenrow=image.shape[0]/2.
+        cencol=image.shape[1]/2.
+
+        psf_admom=self.run_admom(psf,cenrow,cencol,skysig_psf,4.0)
+        obj_admom=self.run_admom(image,cenrow,cencol,self['skysig_obj'],6.0)
+
+        cen_psf_admom=array([psf_admom['row'],psf_admom['col']])
+        cov_psf_admom = array([psf_admom['Irr'],psf_admom['Irc'],psf_admom['Icc']])
+        cen_admom = array([obj_admom['row'], obj_admom['col']])
+        cov_admom = array([obj_admom['Irr'],obj_admom['Irc'],obj_admom['Icc']])
+
+        out={}
+        out['flags'] = 9999
+        i=1
+        while out['flags'] != 0:
+            wlog("  psf try:",i)
+            out['psf_res'] = self.process_image(psf, self['skysig_psf'],
+                                                self['ngauss_psf'],
+                                                cen_psf_admom, cov_psf_admom)
+            out['psf_res']['s2n_admom'] = psf_admom['s2n']
+            out['flags'] = out['psf_res']['flags']
+            i+=1
+
+        Tadmom=cov_admom[0]+cov_admom[2]
+        Tpsf_admom = cov_psf_admom[0]+cov_psf_admom[2]
+        psf_gmix=pars2gmix(out['psf_res']['pars'], coellip=True)
+
+        i=1
+        out['flags'] = 9999
+        while out['flags'] != 0:
+            wlog("  obj try:",i)
+            out['res'] = self.process_image(image, self['skysig_obj'],
+                                            self['ngauss_obj'],
+                                            cen_admom,
+                                            cov_admom,
+                                            psf=psf_gmix)
+
+            out['res']['s2n_admom'] = obj_admom['s2n']
+
+            out['flags'] = out['res']['flags']
+            i+=1
+
+        return out
+
+
     def process_image(self, image, skysig, ngauss, cen, cov, psf=None):
         counts = image.sum()
 
-        maxtry=self['maxtry']
+        if psf is not None:
+            maxtry=self['maxtry']
+        else:
+            maxtry=self['maxtry_psf']
 
         ntry=0
         chi2perarr=zeros(maxtry) + 1.e9
@@ -1322,6 +1391,8 @@ class GMixGalSim(dict):
         popt=gm.get_pars()
         pcov=gm.get_pcov()
         perr=gm.get_perr()
+        #if pcov is None:
+        #    raise ValueError("best fit has failed cov calculation")
         gmix=pars2gmix(popt, coellip=True)
 
 
@@ -1381,28 +1452,48 @@ class GMixGalSim(dict):
         e2=2*cov[1]/T
 
         if psf is not None:
-            if ngauss == 3:
-                prior[2],prior[3] = randomize_e1e2(0., 0.)
 
-                # should really be 0.08, 0.0 for dev
-                Tfracs = array([0.3, 0.0])
+            if ngauss == 4:
+                prior[2] = 0.4*(randu()-0.5)
+                prior[3] = 0.4*(randu()-0.5)
 
-                prior[4] = T*admom_mult
-                prior[5] = .3 # should be ~0.08 for dev galaxies
-                prior[6] = 0.02
+                prior[4] = T*admom_mult*2
+                prior[5] = .5
+                prior[6] = 0.1
+                prior[7] = 0.002
                 
                 # should be ~.4, .45, .05 or something for dev
+                prior[8]  = 0.05*counts
+                prior[9]  = 0.26*counts
+                prior[10]  = 0.55*counts
+                prior[11] = 0.18*counts
+
+                rand_fac=0.2
+                prior[4]  += prior[4]*rand_fac*(randu()-0.5)
+                prior[5]  += prior[5]*rand_fac*(randu()-0.5)
+                prior[6]  += prior[6]*rand_fac*(randu()-0.5)
+                prior[7]  += prior[7]*rand_fac*(randu()-0.5)
+                prior[8]  += prior[8]*rand_fac*(randu()-0.5)
+                prior[9]  += prior[9]*rand_fac*(randu()-0.5)
+                prior[10] += prior[10]*rand_fac*(randu()-0.5)
+                prior[11] += prior[11]*rand_fac*(randu()-0.5)
+
+            elif ngauss == 3:
+                prior[2] = 0.4*(randu()-0.5)
+                prior[3] = 0.4*(randu()-0.5)
+
+                prior[4] = T*admom_mult
+                prior[5] = .3
+                prior[6] = 0.02
+                
                 prior[7] = 0.26*counts
                 prior[8] = 0.55*counts
                 prior[9] = 0.18*counts
 
-                #width[6] = 1.e-8
-                width[6] = .01
-                prior[6] = width[6]*randn()
-
                 rand_fac=0.2
                 prior[4] += prior[4]*rand_fac*(randu()-0.5)
                 prior[5] += prior[5]*rand_fac*(randu()-0.5)
+                prior[6] += prior[6]*rand_fac*(randu()-0.5)
                 prior[7] += prior[7]*rand_fac*(randu()-0.5)
                 prior[8] += prior[8]*rand_fac*(randu()-0.5)
                 prior[9] += prior[9]*rand_fac*(randu()-0.5)
@@ -1492,42 +1583,40 @@ class GMixGalSim(dict):
         st['ocol']=ocol
         st['flags']=res['flags']
 
-        if 'psf_res' in res:
-            st['pars_psf']     = res['psf_res']['pars']
-            st['pars_psf_err'] = res['psf_res']['perr']
-            st['pars_psf_cov'] = res['psf_res']['pcov']
+        st['pars_psf']     = res['psf_res']['pars']
+        st['pars_psf_err'] = res['psf_res']['perr']
+        st['pars_psf_cov'] = res['psf_res']['pcov']
 
-            psf_moms = gmix_image.total_moms(res['psf_res']['gmix'])
+        psf_moms = gmix_image.total_moms(res['psf_res']['gmix'])
 
-            st['numiter_psf'] = res['psf_res']['numiter']
-            st['chi2per_psf'] = res['psf_res']['chi2per']
-            st['dof_psf'] = res['psf_res']['dof']
+        st['numiter_psf'] = res['psf_res']['numiter']
+        st['chi2per_psf'] = res['psf_res']['chi2per']
+        st['dof_psf'] = res['psf_res']['dof']
 
-            st['s2n_admom_psf'] = res['psf_res']['s2n_admom']
-            st['s2n_uw_psf'] = res['psf_res']['s2n_uw']
-            st['s2n_w_psf'] = res['psf_res']['s2n_w']
+        st['s2n_admom_psf'] = res['psf_res']['s2n_admom']
+        st['s2n_uw_psf'] = res['psf_res']['s2n_uw']
+        st['s2n_w_psf'] = res['psf_res']['s2n_w']
 
-            if 'res' in res:
-                st['pars']=res['res']['pars']
-                st['pars_err']=res['res']['perr']
-                st['pars_cov']=res['res']['pcov']
+        st['pars']=res['res']['pars']
+        st['pars_err']=res['res']['perr']
+        st['pars_cov']=res['res']['pcov']
 
-                st['e1']    = res['res']['pars'][2]
-                st['e1err'] = res['res']['perr'][2]
-                st['e2']    = res['res']['pars'][3]
-                st['e2err'] = res['res']['perr'][3]
-                st['ecov']  = res['res']['pcov'][2:4,2:4]
+        st['e1']    = res['res']['pars'][2]
+        st['e1err'] = res['res']['perr'][2]
+        st['e2']    = res['res']['pars'][3]
+        st['e2err'] = res['res']['perr'][3]
+        st['ecov']  = res['res']['pcov'][2:4,2:4]
 
-                st['numiter'] = res['res']['numiter']
-                st['chi2per'] = res['res']['chi2per']
-                st['dof'] = res['res']['dof']
+        st['numiter'] = res['res']['numiter']
+        st['chi2per'] = res['res']['chi2per']
+        st['dof'] = res['res']['dof']
 
-                st['s2n_admom'] = res['res']['s2n_admom']
-                st['s2n_uw'] = res['res']['s2n_uw']
-                st['s2n_w'] = res['res']['s2n_w']
+        st['s2n_admom'] = res['res']['s2n_admom']
+        st['s2n_uw'] = res['res']['s2n_uw']
+        st['s2n_w'] = res['res']['s2n_w']
 
-                moms = gmix_image.total_moms(res['res']['gmix'])
-                st['s2']=(psf_moms['irr']+psf_moms['icc'])/(moms['irr']+moms['icc'])
+        moms = gmix_image.total_moms(res['res']['gmix'])
+        st['s2']=(psf_moms['irr']+psf_moms['icc'])/(moms['irr']+moms['icc'])
 
         return st
 
