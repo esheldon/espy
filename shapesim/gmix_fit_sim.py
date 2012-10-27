@@ -1388,9 +1388,9 @@ class GMixGalSim(dict):
                 prior[6] = 0.
                 
                 # should be ~.4, .45, .05 or something for dev
-                prior[7] = 0.26
-                prior[8] = 0.55
-                prior[9] = 0.18
+                prior[7] = 0.26*counts
+                prior[8] = 0.55*counts
+                prior[9] = 0.18*counts
 
                 width[6] = 1.e-8
                 prior[6] = width[6]*randn()
