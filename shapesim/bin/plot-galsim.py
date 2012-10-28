@@ -32,6 +32,8 @@ def main():
     run=args[0]
 
     biggles.configure("default","fontsize_min",1.0)
+    biggles.configure("screen","width",1800)
+    biggles.configure("screen","height",1100)
 
     nrows=2
     ncols=3

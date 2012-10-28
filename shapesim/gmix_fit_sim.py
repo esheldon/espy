@@ -1095,6 +1095,7 @@ class GMixGalSim(dict):
         f=self.get_config_file()
         wlog(f)
         c=eu.io.read(f)
+        pprint(c,stream=stderr)
 
         sim_name='%s%s' % (self['run'],self['profile'])
         if c['name'] != sim_name:
@@ -1293,9 +1294,11 @@ class GMixGalSim(dict):
         i=1
         while out['flags'] != 0:
             wlog("  psf try:",i)
-            out['psf_res'] = self.process_image(psf, self['skysig_psf'],
-                                                self['ngauss_psf'],
-                                                cen_psf_admom, cov_psf_admom)
+            out['psf_res'] = self.process_image(psf, 
+                                                self['skysig_psf'],
+                                                self['fitmodel_psf'],
+                                                cen_psf_admom, 
+                                                cov_psf_admom)
             out['psf_res']['s2n_admom'] = psf_admom['s2n']
             out['flags'] = out['psf_res']['flags']
             i+=1
@@ -1309,7 +1312,7 @@ class GMixGalSim(dict):
         while out['flags'] != 0:
             wlog("  obj try:",i)
             out['res'] = self.process_image(image, self['skysig_obj'],
-                                            self['ngauss_obj'],
+                                            self['fitmodel'],
                                             cen_admom,
                                             cov_admom,
                                             psf=psf_gmix)
@@ -1322,7 +1325,7 @@ class GMixGalSim(dict):
         return out
 
 
-    def process_image(self, image, skysig, ngauss, cen, cov, psf=None):
+    def process_image(self, image, skysig, fitmodel, cen, cov, psf=None):
         counts = image.sum()
 
         if psf is not None:
@@ -1344,19 +1347,24 @@ class GMixGalSim(dict):
                 eguess=None
 
             admom_mult = 4.
-            guess,width = self.get_prior_generic(ngauss,
-                                                 counts, cen, cov, admom_mult,
-                                                 eguess=eguess,
-                                                 psf=psf)
-
 
             Tpositive=True
-            if psf is not None and ngauss > 1:
-                Tpositive=False
+            if fitmodel['type'] == 'coellip':
+                ngauss=fitmodel['ngauss']
+                guess,width = self.get_prior_generic(ngauss,
+                                                     counts, cen, cov, admom_mult,
+                                                     eguess=eguess,
+                                                     psf=psf)
+                if psf is not None and ngauss > 1:
+                    Tpositive=False
+            else:
+                guess,width=self.get_prior_model(counts,cen,cov)
+
             gm = gmix_image.GMixFitCoellip(image, skysig,
                                            guess,width,
                                            psf=psf,
                                            verbose=self['verbose'],
+                                           model=fitmodel['type'],
                                            Tpositive=Tpositive)
 
 
@@ -1405,7 +1413,6 @@ class GMixGalSim(dict):
                 wlog("chi^2/deg:",chi2per,"prob:",prob)
             wlog("s2n_w:",s2n_w)
             #wlog("numiter gmix:",gm.numiter)
-            wlog("Topt/Tguess:",popt[ngauss+4:]/guess[ngauss+4:])
 
         if not hasattr(gm,'ier'):
             ier=0
@@ -1415,6 +1422,16 @@ class GMixGalSim(dict):
             numiter=gm.get_numiter()
             if self['verbose']:
                 wlog("numiter:",numiter)
+        flags=gm.get_flags()
+        if False and flags==0:
+            import biggles
+            biggles.configure('screen','width',1800)
+            biggles.configure('screen','height',1100)
+            mod=gm.get_model()
+            images.compare_images(image,mod)
+            key=raw_input('hit a key (q to quit): ')
+            if key=='q':
+                stop
         out={'gmix':    gmix,
              'pars':    popt,
              'perr':    perr,
@@ -1430,7 +1447,26 @@ class GMixGalSim(dict):
         return out
 
 
+    def get_prior_model(self, counts, cen, cov):
+        npars=6
+        prior=zeros(npars)
+        width=zeros(npars) + 1.e20
 
+        prior[0] = cen[0]
+        prior[1] = cen[1]
+
+        width[0] = 1.
+        width[1] = 1.
+
+        T = cov[2]+cov[0]
+
+        prior[2] = 0.4*(randu()-0.5)
+        prior[3] = 0.4*(randu()-0.5)
+
+        prior[4] = 2*T*(1. + 2*0.1*(randu()-0.5))
+        prior[5] = counts*(1. + 2*0.1*(randu()-0.5))
+
+        return prior, width
 
     def get_prior_generic(self, ngauss, counts, cen, cov, admom_mult,
                           psf=None,
@@ -1460,7 +1496,8 @@ class GMixGalSim(dict):
                 prior[4] = T*admom_mult*2
                 prior[5] = .5
                 prior[6] = 0.1
-                prior[7] = 0.002
+                prior[7] = 0.0
+                width[7] = 1.e-8
                 
                 # should be ~.4, .45, .05 or something for dev
                 prior[8]  = 0.05*counts
@@ -1472,7 +1509,9 @@ class GMixGalSim(dict):
                 prior[4]  += prior[4]*rand_fac*(randu()-0.5)
                 prior[5]  += prior[5]*rand_fac*(randu()-0.5)
                 prior[6]  += prior[6]*rand_fac*(randu()-0.5)
-                prior[7]  += prior[7]*rand_fac*(randu()-0.5)
+                #prior[7]  += prior[7]*rand_fac*(randu()-0.5)
+                prior[7]  += width[7]*0.1*(randu()-0.5)
+
                 prior[8]  += prior[8]*rand_fac*(randu()-0.5)
                 prior[9]  += prior[9]*rand_fac*(randu()-0.5)
                 prior[10] += prior[10]*rand_fac*(randu()-0.5)
@@ -1484,7 +1523,9 @@ class GMixGalSim(dict):
 
                 prior[4] = T*admom_mult
                 prior[5] = .3
-                prior[6] = 0.02
+                #prior[6] = 0.02
+                width[6] = 1.e-8
+                prior[6] = 0.001
                 
                 prior[7] = 0.26*counts
                 prior[8] = 0.55*counts
@@ -1620,13 +1661,15 @@ class GMixGalSim(dict):
 
         return st
 
-
+    def get_npars(self, fitmodel):
+        if fitmodel['type'] in ['gdev','gexp','gturb']:
+            return 6
+        else:
+            return 2*fitmodel['ngauss'] + 4
     def get_dtype(self):
 
-        ngauss_psf=self['ngauss_psf']
-        ngauss_obj=self['ngauss_obj']
-        npars_psf = 2*ngauss_psf+4
-        npars_obj = 2*ngauss_obj+4
+        npars_psf=self.get_npars(self['fitmodel_psf'])
+        npars_obj=self.get_npars(self['fitmodel'])
 
         dt=[('orow','i4'),
             ('ocol','i4'),

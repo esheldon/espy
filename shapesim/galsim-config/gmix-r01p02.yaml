@@ -12,7 +12,17 @@ s2n_psf: 10000.
 maxtry: 2
 maxtry_psf: 2
 
-ngauss_psf: 3
-ngauss_obj: 3
+#ngauss_psf: 3
+#ngauss_obj: 3
+
+fitmodel_psf: 
+    type: "coellip"
+    ngauss: 2
+
+fitmodel: 
+    type: "gexp"
+#ngauss_obj: 4
+
+
 
 verbose: false
