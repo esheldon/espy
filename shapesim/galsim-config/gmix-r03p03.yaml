@@ -17,7 +17,6 @@ fitmodel_psf:
     ngauss: 3
 
 fitmodel: 
-    type: "coellip"
-    ngauss: 4
+    type: "gdev"
 
 verbose: false
