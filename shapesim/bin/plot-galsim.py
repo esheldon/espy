@@ -23,7 +23,6 @@ evals=[0.0, 0.3, 0.6]
 hlrvals=[0.4,0.8,1.2,1.6,2.]
 
 yrange=[-0.014,0.014]
-#yrange=None
 def main():
     options,args = parser.parse_args(sys.argv[1:])
 
@@ -33,21 +32,16 @@ def main():
 
     run=args[0]
 
-    #width=2.5
     biggles.configure("default","fontsize_min",1.0)
     biggles.configure("screen","width",1800)
     biggles.configure("screen","height",1100)
-    #biggles.configure("postscript","width",'7.5in')
     h=str(7.5/1.636)+'in'
     biggles.configure("postscript","height",h)
-    #biggles.configure("default","linewidth",width)
     biggles.configure("_HalfAxis","ticks_size",2.5)
     biggles.configure("_HalfAxis","subticks_size",2.5/2)
-    #biggles.configure("_LineCompoment","kw_defaults",{'linewidth':2.5})
 
     nrows=2
     ncols=3
-    #arr=biggles.FramedArray(3,2)
     tab=biggles.Table(nrows,ncols)
 
     for ip,p in enumerate([1,2,3,4,5,6]):
@@ -99,7 +93,6 @@ def main():
         key=biggles.PlotKey(0.9,0.9,curves,halign='right')
         arr[0,0].add(key)
         arr.yrange=yrange
-        #arr.show()
 
         tab[prow,pcol] = arr
 
@@ -107,9 +100,6 @@ def main():
     epsfile=g.get_compare_plot_file()
     print epsfile
     tab.write_eps(epsfile)
-    #pngfile=epsfile.replace('.eps','.png')
-    #print pngfile
-    #tab.write_img(1800,1100,pngfile)
 
  
 main()
