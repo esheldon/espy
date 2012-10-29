@@ -21,7 +21,8 @@ ecolors=['blue','red','magenta']
 evals=[0.0, 0.3, 0.6]
 hlrvals=[0.4,0.8,1.2,1.6,2.]
 
-yrange=[-0.014,0.014]
+#yrange=[-0.014,0.014]
+yrange=None
 def main():
     options,args = parser.parse_args(sys.argv[1:])
 

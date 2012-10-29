@@ -1523,9 +1523,9 @@ class GMixGalSim(dict):
 
                 prior[4] = T*admom_mult
                 prior[5] = .3
-                #prior[6] = 0.02
-                width[6] = 1.e-8
-                prior[6] = 0.001
+                prior[6] = 0.02
+                #width[6] = 1.e-8
+                #prior[6] = 0.001
                 
                 prior[7] = 0.26*counts
                 prior[8] = 0.55*counts
