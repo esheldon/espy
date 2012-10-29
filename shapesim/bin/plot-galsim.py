@@ -6,6 +6,7 @@ import sys
 import shapesim
 import biggles
 import lensing
+import converter
 from numpy import zeros
 
 from optparse import OptionParser
@@ -21,8 +22,8 @@ ecolors=['blue','red','magenta']
 evals=[0.0, 0.3, 0.6]
 hlrvals=[0.4,0.8,1.2,1.6,2.]
 
-#yrange=[-0.014,0.014]
-yrange=None
+yrange=[-0.014,0.014]
+#yrange=None
 def main():
     options,args = parser.parse_args(sys.argv[1:])
 
@@ -32,9 +33,17 @@ def main():
 
     run=args[0]
 
+    #width=2.5
     biggles.configure("default","fontsize_min",1.0)
     biggles.configure("screen","width",1800)
     biggles.configure("screen","height",1100)
+    #biggles.configure("postscript","width",'7.5in')
+    h=str(7.5/1.636)+'in'
+    biggles.configure("postscript","height",h)
+    #biggles.configure("default","linewidth",width)
+    biggles.configure("_HalfAxis","ticks_size",2.5)
+    biggles.configure("_HalfAxis","subticks_size",2.5/2)
+    #biggles.configure("_LineCompoment","kw_defaults",{'linewidth':2.5})
 
     nrows=2
     ncols=3
@@ -95,6 +104,12 @@ def main():
         tab[prow,pcol] = arr
 
     tab.show()
+    epsfile=g.get_compare_plot_file()
+    print epsfile
+    tab.write_eps(epsfile)
+    #pngfile=epsfile.replace('.eps','.png')
+    #print pngfile
+    #tab.write_img(1800,1100,pngfile)
 
  
 main()

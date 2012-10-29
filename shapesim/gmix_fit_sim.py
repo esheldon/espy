@@ -1140,12 +1140,18 @@ class GMixGalSim(dict):
         dir=os.path.join(dir,'%s/profile%s' % (self['run'],profile))
         return dir
 
-
     def get_output_file(self):
         dir=self.get_output_dir()
         bname=self.get_image_basename()
         bname=bname.replace('.fits','-gmix.fits')
         return os.path.join(dir,bname)
+
+    def get_compare_plot_file(self):
+        dir=os.path.expanduser('~/galsim-outputs/%s' % self['run'])
+        pfile='%s-compare-truth.eps' % self['run']
+        pfile=os.path.join(dir,pfile)
+        return pfile
+
     def read_output(self):
         f=self.get_output_file()
         print f
@@ -1185,73 +1191,6 @@ class GMixGalSim(dict):
                 #stop
         self.write_output(output)
 
-
-
-    def run_obj_old(self, orow, ocol):
-        """
-        Process all objects in the image and psf
-        """
-
-        rows_per=self.image.shape[0]/self['nobj_row']
-        cols_per=self.image.shape[1]/self['nobj_col']
-
-        row1=orow*rows_per
-        row2=(orow+1)*rows_per
-
-        col1=ocol*cols_per
-        col2=(ocol+1)*cols_per
-
-
-        image = self.image[row1:row2, col1:col2].copy()
-        psf0 = self.psf[row1:row2, col1:col2].copy()
-        psf,skysig_psf = fimage.add_noise_admom(psf0,self['s2n_psf'])
-        self['skysig_psf']=skysig_psf
-
-        cenrow=image.shape[0]/2.
-        cencol=image.shape[1]/2.
-
-        psf_admom=self.run_admom(psf,cenrow,cencol,skysig_psf,4.0)
-        obj_admom=self.run_admom(image,cenrow,cencol,self['skysig_obj'],6.0)
-
-        cen_psf_admom=array([psf_admom['row'],psf_admom['col']])
-        cov_psf_admom = array([psf_admom['Irr'],psf_admom['Irc'],psf_admom['Icc']])
-        cen_admom = array([obj_admom['row'], obj_admom['col']])
-        cov_admom = array([obj_admom['Irr'],obj_admom['Irc'],obj_admom['Icc']])
-
-        out={}
-        out['psf_res'] = self.process_image(psf, self['skysig_psf'],
-                                            self['ngauss_psf'],
-                                            cen_psf_admom, cov_psf_admom)
-        out['psf_res']['s2n_admom'] = psf_admom['s2n']
-
-
-        out['flags'] = out['psf_res']['flags']
-        if out['flags'] == 0:
-            Tadmom=cov_admom[0]+cov_admom[2]
-            Tpsf_admom = cov_psf_admom[0]+cov_psf_admom[2]
-
-            psf_gmix=pars2gmix(out['psf_res']['pars'], coellip=True)
-            out['res'] = self.process_image(image, self['skysig_obj'],
-                                            self['ngauss_obj'],
-                                            cen_admom,
-                                            cov_admom,
-                                            psf=psf_gmix)
-
-            out['res']['s2n_admom'] = obj_admom['s2n']
-
-            out['flags'] = out['res']['flags']
-
-            if out['flags'] != 0:
-                wlog('failed PSF flags:')
-
-        else:
-            wlog('failed PSF flags:')
-
-        # this is a ring test, we cannot have failures
-        if out['flags'] != 0:
-            gmix_image.printflags("flags:",out['flags'])
-            raise RuntimeError("error, halting")
-        return out
 
     def run_admom(self, im, rowguess, colguess, skysig, Tguess):
         res=admom.admom(im, rowguess, colguess, 
