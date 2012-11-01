@@ -129,8 +129,8 @@ TODO:
 """
 import os
 import numpy
-from numpy import sqrt, cos, sin, exp, log, pi, zeros, ones, empty, \
-        random, where, array, linspace, diag
+from numpy import sqrt, cos, sin, exp, log, log10, pi, zeros, ones, empty, \
+        random, where, array, linspace, diag, median
 from numpy import tanh, arctanh
 from numpy.random import randn
 from numpy.random import random as randu
@@ -641,10 +641,17 @@ class EmceeFitter:
     def _calc_lnprob(self, pars):
         """
         pars are [g1,g2,T]
+
+        if using logT we convert to linear here
         """
         # hard priors first
         g1,g2=pars[2],pars[3]
-        T=pars[4]
+
+        if self.logT:
+            #T=exp(pars[4])
+            T=10.0**(pars[4])
+        else:
+            T=pars[4]
 
         e1,e2,ok = g1g2_to_e1e2(g1,g2)
         if not ok:
@@ -653,9 +660,12 @@ class EmceeFitter:
         if T < 0:
             return LOWVAL
 
-        self.tpars[:] = pars[:]
+        self.tpars[0] = pars[0]
+        self.tpars[1] = pars[1]
         self.tpars[2]=e1
         self.tpars[3]=e2
+        self.tpars[4]=T
+        self.tpars[5:] = pars[5:]
 
         logprob = self._get_loglike_c(self.tpars)
 
@@ -675,10 +685,6 @@ class EmceeFitter:
         return logprob
 
     def _get_loglike_c(self, pars):
-        """
-        pars is *full*
-        """
-
         if self.model=='gexp':
             gmix0=gmix_image.GMixExp(pars)
         elif self.model=='gdev':
@@ -805,8 +811,16 @@ class EmceeFitter:
         if self.T_is_prior:
             T=self.T.mean
         else:
-            T=self.T
-        guess[:,4] = T + T*0.1*(randu(self.nwalkers)-0.5)
+            if self.logT:
+                if self.T < 0.01:
+                    raise ValueError("guess for T must be > 0.01")
+                #logT=log(self.T)
+                logT=log10(self.T)
+                # rand range +/- 0.005
+                guess[:,4] = logT + .01*(randu(self.nwalkers)-0.5)
+            else:
+                T=self.T
+                guess[:,4] = T + T*0.1*(randu(self.nwalkers)-0.5)
 
         # first guess at amp is the total flux
         imtot=self.image.sum()
@@ -833,7 +847,11 @@ class EmceeFitter:
         cen2vals=self.trials[:,1]
         g1vals=self.trials[:,2]
         g2vals=self.trials[:,3]
-        Tvals=self.trials[:,4]
+        if self.logT:
+            #Tvals=exp(self.trials[:,4])
+            Tvals=self.trials[:,4]
+        else:
+            Tvals=self.trials[:,4]
         ampvals=self.trials[:,5]
 
         ind=numpy.arange(g1vals.size)
@@ -878,9 +896,14 @@ class EmceeFitter:
 
         res=self.get_result()
         print 'acceptance rate:',res['arate']
-        print 'T:  %.16g +/- %.16g' % (Tvals.mean(), Tvals.std())
+        if self.logT:
+            tmp=10.0**(Tvals)
+            print 'T:  %.16g +/- %.16g' % (tmp.mean(), tmp.std())
+        else:
+            print 'T:  %.16g +/- %.16g' % (Tvals.mean(), Tvals.std())
         print 'g1: %.16g +/- %.16g' % (g[0],errs[0])
         print 'g2: %.16g +/- %.16g' % (g[1],errs[1])
+        print 'median g1:  %.16g ' % median(g1vals)
         print 'g1sens:',self._result['gsens'][0]
         print 'g2sens:',self._result['gsens'][1]
 
@@ -915,7 +938,10 @@ class EmceeFitter:
         hplt_cen.xlabel='center'
         hplt_g1.xlabel=r'$g_1$'
         hplt_g2.xlabel=r'$g_2$'
-        hplt_T.xlabel='T'
+        if self.logT:
+            hplt_T.xlabel=r'$log_{10}T$'
+        else:
+            hplt_T.xlabel='T'
         hplt_amp.xlabel='Amplitude'
 
         tab[0,0] = burn_cen
