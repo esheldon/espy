@@ -463,6 +463,7 @@ class BayesFitSim(shapesim.BaseSim):
                 Tsend = eu.random.LogNormal(T, Twidth)
             else:
                 Tsend = T
+            logT=self['logT']
 
             self.fitter=EmceeFitter(ci.image,
                                     1./ci['skysig']**2,
@@ -474,6 +475,7 @@ class BayesFitSim(shapesim.BaseSim):
                                     nwalkers=self['nwalkers'],
                                     nstep=self['nstep'], 
                                     burnin=self['burnin'],
+                                    logT=logT,
                                     temp=temp, # need to implement
                                     when_prior=self['when_prior'])
 
@@ -539,6 +541,7 @@ class EmceeFitter:
                  nwalkers=10,
                  nstep=100, 
                  burnin=400,
+                 logT=False,
                  temp=None,
                  when_prior='during'):
         """
@@ -576,6 +579,8 @@ class EmceeFitter:
         self.ivar=float(ivar)
         self.T=T
         self.cenprior=cenprior
+
+        self.logT=logT
 
         self.model=model
 
@@ -927,19 +932,19 @@ class EmceeFitter:
         tab[5,0] = likep
         tab.show()
 
-    
-        nx = ny = 40
-        levels=8
-        h2d = eu.stat.histogram2d(Tvals, g1vals, nx=nx, ny=ny,more=True)
-        images.view(h2d['hist'], type='cont',
-                    xdr=[h2d['xcenter'][0], h2d['xcenter'][-1]],
-                    ydr=[h2d['ycenter'][0], h2d['ycenter'][-1]],
-                    xlabel='T', ylabel='g1', levels=levels)
-        h2d = eu.stat.histogram2d(Tvals, g2vals, nx=nx, ny=ny,more=True)
-        images.view(h2d['hist'], type='cont',
-                    xdr=[h2d['xcenter'][0], h2d['xcenter'][-1]],
-                    ydr=[h2d['ycenter'][0], h2d['ycenter'][-1]],
-                    xlabel='T', ylabel='g2', levels=levels)
+        if False: 
+            nx = ny = 40
+            levels=8
+            h2d = eu.stat.histogram2d(Tvals, g1vals, nx=nx, ny=ny,more=True)
+            images.view(h2d['hist'], type='cont',
+                        xdr=[h2d['xcenter'][0], h2d['xcenter'][-1]],
+                        ydr=[h2d['ycenter'][0], h2d['ycenter'][-1]],
+                        xlabel='T', ylabel='g1', levels=levels)
+            h2d = eu.stat.histogram2d(Tvals, g2vals, nx=nx, ny=ny,more=True)
+            images.view(h2d['hist'], type='cont',
+                        xdr=[h2d['xcenter'][0], h2d['xcenter'][-1]],
+                        ydr=[h2d['ycenter'][0], h2d['ycenter'][-1]],
+                        xlabel='T', ylabel='g2', levels=levels)
 
 
 class EmceeFitterMargAmp:

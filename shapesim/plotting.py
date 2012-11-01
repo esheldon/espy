@@ -1482,7 +1482,10 @@ class SimPlotter(dict):
         arr[0,0].add(expect1)
         arr[1,0].add(expect2)
 
-        arr.xrange=[1,105]
+        if xrng is not None:
+            arr.xrange = xrng
+        else:
+            arr.xrange=[1,105]
 
 
         """
