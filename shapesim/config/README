@@ -188,8 +188,17 @@ gmix-fit
                     crazy T values.  
                     
 
+            - gdt02 - 10 gaussians for dev
+                gdt02r01 - straight run
+                gdt02r02 - using log10(T) as variable
+                    - The errors on the shape are larger, but at fixed error
+                    the systematics are better.  Need more statistics
+                    Why is the error larger?
+                gdt02r03 - same as r01 for more statistics
+                gdt02r04 - same as r02 for more statistics
 
-
+                Todo: exp with new 6 gauss with and without logT for
+                    comparison with these
 
     sims
         et01

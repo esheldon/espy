@@ -148,6 +148,8 @@ import time
 
 from sys import stderr
 
+import scipy.stats
+
 LOWVAL=-9999.9e9
 
 class BayesFitSim(shapesim.BaseSim):
@@ -312,6 +314,11 @@ class BayesFitSim(shapesim.BaseSim):
             out['g'][i,:] = res['g']
             out['gsens'][i,:] = res['gsens']
             out['gcov'][i,:,:] = res['gcov']
+            out['s2n_meas_w'][i] = res['s2n_w']
+            out['loglike'][i] = res['loglike']
+            out['chi2per'][i] = res['chi2per']
+            out['dof'][i] = res['dof']
+            out['fit_prob'][i] = res['fit_prob']
             if 'arate' in res:
                 out['arate'][i] = res['arate']
 
@@ -522,7 +529,13 @@ class BayesFitSim(shapesim.BaseSim):
             ('gtrue','f8',2),
             ('g','f8',2),
             ('gsens','f8',2),
-            ('gcov','f8',(2,2))]
+            ('gcov','f8',(2,2)),
+            ('s2n_meas_w','f8'),  # weighted s/n based on most likely point
+            ('loglike','f8'),     # loglike of fit
+            ('chi2per','f8'),     # chi^2/degree of freedom
+            ('dof','i4'),         # degrees of freedom
+            ('fit_prob','f8')     # probability of the fit happening randomly
+           ]
         if 'bayesfit' not in self['run']:
             dt += [('arate','f8')]
 
@@ -608,6 +621,20 @@ class EmceeFitter:
     def get_result(self):
         return self._result
 
+    def get_maxlike_model(self):
+        """
+        Get the model representing the maximum likelihood point in the chain
+        Is this useful?
+        """
+        w=self.lnprobs.argmax()
+        pars = self.trials[w,:].copy()
+        if self.logT:
+            pars[4] = 10.0**(pars[4])
+        gmix=self._get_convolved_gmix(pars)
+        model=gmix_image.gmix2image(gmix, self.image.shape)
+        return model
+
+
     def _go(self):
         import emcee
 
@@ -684,7 +711,24 @@ class EmceeFitter:
             logprob /= self.temp
         return logprob
 
+    def _get_convolved_gmix(self,pars):
+        """
+        This should have T linear
+        """
+        if self.model=='gexp':
+            gmix0=gmix_image.GMixExp(pars)
+        elif self.model=='gdev':
+            gmix0=gmix_image.GMixDev(pars)
+        elif self.model=='gauss':
+            gmix0=gmix_image.GMixCoellip(pars)
+        else:
+            raise ValueError("bad model: '%s'" % self.model)
+        gmix=gmix0.convolve(self.psf_GMix)
+        return gmix
+
+ 
     def _get_loglike_c(self, pars):
+        """
         if self.model=='gexp':
             gmix0=gmix_image.GMixExp(pars)
         elif self.model=='gdev':
@@ -695,8 +739,10 @@ class EmceeFitter:
             raise ValueError("bad model: '%s'" % self.model)
 
         gmix=gmix0.convolve(self.psf_GMix)
+        """
+        gmix=self._get_convolved_gmix(pars)
 
-        loglike,flags=\
+        loglike,s2n,flags=\
             gmix_image.render._render.loglike(self.image, 
                                               gmix,
                                               self.ivar)
@@ -792,9 +838,41 @@ class EmceeFitter:
         arates = self._emcee_sampler.acceptance_fraction
         arate = arates.mean()
         #print 'acceptance rate:',w.size/float(self.trials.size)
-        self._result={'g':g,'gcov':gcov,'gsens':gsens,'arate':arate}
+
+        # weighted s/n based on the most likely point
+        s2n,loglike,chi2per,dof,prob=self._calculate_maxlike_stats()
+        self._result={'g':g,
+                      'gcov':gcov,
+                      'gsens':gsens,
+                      'arate':arate,
+                      's2n_w':s2n,
+                      'loglike':loglike,
+                      'chi2per':chi2per,
+                      'dof':dof,
+                      'fit_prob':prob}
         #wlog("arate:",self._result['arate'])
 
+    def _calculate_maxlike_stats(self):
+        """
+        Stats Based on the most likely point
+        """
+
+        w=self.lnprobs.argmax()
+        pars = self.trials[w,:].copy()
+        if self.logT:
+            pars[4] = 10.0**(pars[4])
+        gmix=self._get_convolved_gmix(pars)
+
+        loglike,s2n,flags=\
+            gmix_image.render._render.loglike(self.image, 
+                                              gmix,
+                                              self.ivar)
+        chi2=loglike/(-0.5)
+        dof=self.image.size-pars.size
+        chi2per = chi2/dof
+
+        prob = scipy.stats.chisqprob(chi2, dof)
+        return s2n, loglike, chi2per, dof, prob
 
 
     def _get_guess(self):
@@ -895,6 +973,9 @@ class EmceeFitter:
         errs = sqrt(diag(gcov))
 
         res=self.get_result()
+        print 's2n weighted maxlike:',res['s2n_w']
+        print 'chi^2/dof: %.3f/%i = %f' % (res['chi2per']*res['dof'],res['dof'],res['chi2per'])
+        print 'prob:',res['fit_prob']
         print 'acceptance rate:',res['arate']
         if self.logT:
             tmp=10.0**(Tvals)
