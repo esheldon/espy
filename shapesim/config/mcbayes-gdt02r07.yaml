@@ -1,0 +1,54 @@
+run: mcbayes-gdt02r07
+sim: sim-gdt02
+
+runtype: bys2n
+
+# need to set this for the trials to work.
+seed: 2027
+
+s2n_method: admom
+s2n_fac: 20
+
+# minimum number of random ellipticities to use.
+# need decent count to sample the prior surface
+min_gcount: 100
+
+retrim: false
+retrim_fluxfrac: null
+s2ncalc_fluxfrac: null
+
+s2n_psf: 1.0e+8
+s2nvals: [10,15,20,25,30,40,50,60,70,80,90,100]
+
+fixcen: false
+fixT: false
+
+# step and burnin are *per walker*
+nwalkers: 20
+nstep: 200 # steps per walker
+burnin: 200 # burnin per walker.
+
+Tprior: false
+Twidthfrac: null
+logT: true
+eta: true
+
+when_prior: "after"
+margamp: false
+
+use_cache: false
+add_to_cache: false
+
+verbose: false
+
+ngauss_psf: 3
+fitmodel: 'gdev'
+
+coellip_psf: true
+coellip_obj: true
+
+mca_a: 2.0
+
+comments: |
+    trying eta parametrization
+    sim-gdt02 is 10 gaussians

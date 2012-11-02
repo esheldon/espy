@@ -1741,8 +1741,9 @@ class SimPlotter(dict):
 
             xlabel = r'$\sigma(\gamma) per galaxy$'
 
-            #g1sens_mean=st['g1sensum']/st['nsum']
-            err = st[errtag1]*sqrt(st['nsum'])#*g1sens_mean
+            g1sens_mean=st['g1sensum']/st['nsum']
+            err = st[errtag1]*sqrt(st['nsum'])*g1sens_mean
+            #err = st[errtag1]*sqrt(st['nsum'])
             #err = sqrt(1/st['g1err2invsum'])*sqrt(st['nsum'])
 
             minerr=err.min()
@@ -1860,8 +1861,10 @@ class SimPlotter(dict):
         if yrng is not None:
             arr.yrange = yrng
 
-        arr.xrange=[.01,1.5]
-        arr.xlog=True
+        if xrng is None:
+            xrng=[.01,.18]
+        arr.xrange=xrng
+        #arr.xlog=True
 
         wlog("Writing plot file:",epsfile)
         if show:

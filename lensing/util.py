@@ -104,6 +104,14 @@ def g1g2_to_e1e2(g1, g2):
     e1, e2 = fac*g1, fac*g2
     return e1,e2
 
+def e1e2_to_eta1eta2(e1,e2):
+    etot=sqrt(e1**2 + e2**2)
+    if etot==0:
+        return 0., 0.
+
+    cos2theta=e1/etot
+    sin2theta=e2/etot
+    eta=arctanh(etot)
 
 def shear_fracdiff(e, em, deriv=1.0):
     """

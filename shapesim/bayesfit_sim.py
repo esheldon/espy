@@ -136,6 +136,7 @@ from numpy.random import randn
 from numpy.random import random as randu
 from . import shapesim
 import lensing
+from lensing.shear import Shear
 import fimage
 from fimage.convolved import NoisyConvolvedImage
 import gmix_image
@@ -471,6 +472,7 @@ class BayesFitSim(shapesim.BaseSim):
             else:
                 Tsend = T
             logT=self['logT']
+            eta=self['eta']
 
             self.fitter=EmceeFitter(ci.image,
                                     1./ci['skysig']**2,
@@ -483,6 +485,7 @@ class BayesFitSim(shapesim.BaseSim):
                                     nstep=self['nstep'], 
                                     burnin=self['burnin'],
                                     logT=logT,
+                                    eta=eta,
                                     temp=temp, # need to implement
                                     when_prior=self['when_prior'])
 
@@ -555,6 +558,8 @@ class EmceeFitter:
                  nstep=100, 
                  burnin=400,
                  logT=False,
+                 eta=False,
+                 mca_a=2.0,
                  temp=None,
                  when_prior='during'):
         """
@@ -583,7 +588,7 @@ class EmceeFitter:
             'during' or 'after'
         """
         
-        self.make_plots=False
+        self.make_plots=True
 
         # cen1,cen2,e1,e2,T,p
         self.npars=6
@@ -594,6 +599,8 @@ class EmceeFitter:
         self.cenprior=cenprior
 
         self.logT=logT
+        self.eta=eta
+        self.mca_a=mca_a
 
         self.model=model
 
@@ -630,6 +637,16 @@ class EmceeFitter:
         pars = self.trials[w,:].copy()
         if self.logT:
             pars[4] = 10.0**(pars[4])
+        if self.eta:
+            e1,e2=eta1eta2_to_e1e2(pars[2],pars[3])
+            if not ok:
+                raise ValueError("bad e1,e2")
+        else:
+            e1,e2,ok=g1g2_to_e1e2(pars[2],pars[3])
+            if not ok:
+                raise ValueError("bad e1,e2")
+
+        pars[2],pars[3]=e1,e2
         gmix=self._get_convolved_gmix(pars)
         model=gmix_image.gmix2image(gmix, self.image.shape)
         return model
@@ -641,7 +658,7 @@ class EmceeFitter:
         sampler = emcee.EnsembleSampler(self.nwalkers, 
                                         self.npars, 
                                         self._calc_lnprob,
-                                        a=2.5)
+                                        a=self.mca_a)
         
         guess=self._get_guess()
 
@@ -672,13 +689,27 @@ class EmceeFitter:
         if using logT we convert to linear here
         """
         # hard priors first
-        g1,g2=pars[2],pars[3]
 
         if self.logT:
             #T=exp(pars[4])
             T=10.0**(pars[4])
         else:
             T=pars[4]
+
+        if self.eta:
+            """
+            try:
+                s=Shear(eta1=pars[2],eta2=pars[3])
+                e1,e2=s.e1,s.e2
+                ok=True
+            except:
+                ok=False
+            """
+            g1,g2,ok = eta1eta2_to_g1g2(pars[2],pars[3])
+            if not ok:
+                return LOWVAL
+        else:
+            g1,g2=pars[2],pars[3]
 
         e1,e2,ok = g1g2_to_e1e2(g1,g2)
         if not ok:
@@ -773,8 +804,12 @@ class EmceeFitter:
         gcov=zeros((2,2))
         gsens = zeros(2)
 
-        g1vals=self.trials[:,2]
-        g2vals=self.trials[:,3]
+        if self.eta:
+            g1vals,g2vals=self._get_gvals_from_eta(self.trials[:,2],
+                                                   self.trials[:,3])
+        else:
+            g1vals=self.trials[:,2]
+            g2vals=self.trials[:,3]
 
         prior = self.gprior(g1vals,g2vals)
         dpri_by_g1 = self.gprior.dbyg1(g1vals,g2vals)
@@ -861,6 +896,16 @@ class EmceeFitter:
         pars = self.trials[w,:].copy()
         if self.logT:
             pars[4] = 10.0**(pars[4])
+        if self.eta:
+            e1,e2,ok=eta1eta2_to_e1e2(pars[2],pars[3])
+            if not ok:
+                raise ValueError("bad e1,e2")
+        else:
+            e1,e2,ok=g1g2_to_e1e2(pars[2],pars[3])
+            if not ok:
+                raise ValueError("bad e1,e2")
+        pars[2],pars[3]=e1,e2
+
         gmix=self._get_convolved_gmix(pars)
 
         loglike,s2n,flags=\
@@ -874,6 +919,17 @@ class EmceeFitter:
         prob = scipy.stats.chisqprob(chi2, dof)
         return s2n, loglike, chi2per, dof, prob
 
+
+    def _get_gvals_from_eta(self, eta1, eta2):
+        g1vals=zeros(eta1.size)
+        g2vals=zeros(eta2.size)
+        for i in xrange(eta1.size):
+            g1,g2,ok=eta1eta2_to_g1g2(eta1[i], eta2[i])
+            if not ok:
+                raise ValueError("bad g1,g2")
+            g1vals[i]=g1
+            g2vals[i]=g2
+        return g1vals,g2vals
 
     def _get_guess(self):
         guess=zeros( (self.nwalkers,self.npars) )
@@ -923,13 +979,22 @@ class EmceeFitter:
 
         cen1vals=self.trials[:,0]
         cen2vals=self.trials[:,1]
-        g1vals=self.trials[:,2]
-        g2vals=self.trials[:,3]
         if self.logT:
             #Tvals=exp(self.trials[:,4])
             Tvals=self.trials[:,4]
         else:
             Tvals=self.trials[:,4]
+        """
+        if self.eta:
+            g1vals,g2vals=self._get_gvals_from_eta(self.trials[:,2],
+                                                   self.trials[:,3])
+        else:
+            g1vals=self.trials[:,2]
+            g2vals=self.trials[:,3]
+        """
+        g1vals=self.trials[:,2]
+        g2vals=self.trials[:,3]
+
         ampvals=self.trials[:,5]
 
         ind=numpy.arange(g1vals.size)
@@ -1017,8 +1082,12 @@ class EmceeFitter:
 
 
         hplt_cen.xlabel='center'
-        hplt_g1.xlabel=r'$g_1$'
-        hplt_g2.xlabel=r'$g_2$'
+        if self.eta:
+            hplt_g1.xlabel=r'$\eta_1$'
+            hplt_g2.xlabel=r'$\eta_2$'
+        else:
+            hplt_g1.xlabel=r'$g_1$'
+            hplt_g2.xlabel=r'$g_2$'
         if self.logT:
             hplt_T.xlabel=r'$log_{10}T$'
         else:
@@ -2062,7 +2131,7 @@ def g1g2_to_e1e2(g1, g2):
 
     returns e1,e2,okflag
     """
-    g = sqrt(g1**2 + g2**2)
+    g = math.sqrt(g1**2 + g2**2)
     if g >= 1.:
         return LOWVAL,LOWVAL,False
 
@@ -2076,6 +2145,66 @@ def g1g2_to_e1e2(g1, g2):
     e1, e2 = fac*g1, fac*g2
     return e1,e2,True
 
+def eta1eta2_to_g1g2(eta1, eta2):
+    """
+    This version without exceptions
+
+    returns e1,e2,okflag
+    """
+    eta = math.sqrt(eta1**2 + eta2**2)
+
+    if eta == 0:
+        return 0.,0.,True
+    gtot = math.tanh(eta/2.)
+    if gtot >= 1.:
+        return LOWVAL,LOWVAL,False
+
+    fac = gtot/eta
+    g1, g2 = fac*eta1, fac*eta2
+    return g1,g2,True
+
+def eta1eta2_to_e1e2(eta1, eta2):
+    """
+    This version without exceptions
+
+    returns e1,e2,okflag
+    """
+    eta = math.sqrt(eta1**2 + eta2**2)
+
+    if eta == 0:
+        return 0.,0.,True
+    etot = math.tanh(eta)
+    if etot >= 1.:
+        return LOWVAL,LOWVAL,False
+
+    fac = etot/eta
+    e1, e2 = fac*eta1, fac*eta2
+    return e1,e2,True
+
+def check():
+    import time
+    import lensing.shear
+    eta1=2.3
+    eta2=-1.78
+
+    n=10000
+    t1=time.time()
+    for i in xrange(n):
+        s=lensing.shear.Shear(eta1=eta1,eta2=eta2)
+        g1,g2 = s.g1,s.g2
+    print time.time()-t1
+
+    print g1,g2
+    print s.e1,s.e2
+    
+    t1=time.time()
+    for i in xrange(n):
+        g1,g2,ok=eta1eta2_to_g1g2(eta1,eta2)
+    print time.time()-t1
+
+    print g1,g2
+    e1,e2,ok=g1g2_to_e1e2(g1,g2)
+    print e1,e2
 
 
 
