@@ -1,10 +1,10 @@
-run: mcbayes-gdt02r08
-sim: sim-gdt02
+run: mcbayes-get02r02
+sim: sim-get02
 
 runtype: bys2n
 
 # need to set this for the trials to work.
-seed: 2333
+seed: 8015
 
 s2n_method: admom
 s2n_fac: 20
@@ -30,8 +30,9 @@ burnin: 200 # burnin per walker.
 
 Tprior: false
 Twidthfrac: null
-logT: false
 eta: false
+logT: false
+mca_a: 2.0
 
 when_prior: "after"
 margamp: false
@@ -42,14 +43,13 @@ add_to_cache: false
 verbose: false
 
 ngauss_psf: 3
-fitmodel: 'gdev'
+fitmodel: 'gexp'
 
 coellip_psf: true
 coellip_obj: true
 
-mca_a: 2.0
-
 comments: |
-    In this one we are prior after and keeping the
-    cov from before prior in the output file
-    sim-gdt02 is 10 gaussians
+    sim-gexp02 is 6 gaussians
+    This one prior after and keeping cov on likelihood only
+    as cov0
+    no prior on T

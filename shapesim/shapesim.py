@@ -1085,6 +1085,11 @@ def average_runs(runlist, new_run_name):
                  'g1err2invsum',
                  'g2err2invsum',
                  'nsum']
+
+        f=get_averaged_url(runlist[0], 0, fs='hdfs')
+        t=eu.io.read(f)
+        if 'g1err0sum2' in t.dtype.names:
+            sumlist+=['g1err0sum2','g2err0sum2']
     else:
         sumlist=['e1sum',
                  'e2sum',
@@ -1123,6 +1128,10 @@ def average_runs(runlist, new_run_name):
             data['shear2'] = data['g2sum']/data['g2sensum']
             data['shear1err'] = sqrt(1/data['g1err2invsum'])/g1sens_mean
             data['shear2err'] = sqrt(1/data['g2err2invsum'])/g2sens_mean
+
+            if 'g1err0sum2' in sumlist:
+                data['g1err0_mean'] = sqrt(data['g1err0sum2']/data['nsum'])
+                data['g2err0_mean'] = sqrt(data['g2err0sum2']/data['nsum'])
 
         else:
             mesq = data['esqsum']/data['nsum']
@@ -1269,6 +1278,11 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                     ('shear1err','f8'),
                     ('shear2','f8'),
                     ('shear2err','f8')]
+        if 'gcov0' in data[0].dtype.names:
+            dt_extra += [('g1err0sum2','f8'),
+                         ('g2err0sum2','f8'),
+                         ('g1err0_mean','f8'), # this is the rms: sqrt(sum(sigma^2)/n)
+                         ('g2err0_mean','f8')]
     else:
         dt_extra = [('e1sum','f8'), # sums so we can do cumulative
                     ('e2sum','f8'),
@@ -1347,41 +1361,18 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
 
             d['g1err2invsum'][i] = g1err2invsum
             d['g2err2invsum'][i] = g2err2invsum
+
+
+
+            if 'gcov0' in data[0].dtype.names:
+                d['g1err0sum2'][i] = edata['gcov0'][:,0,0].sum()
+                d['g2err0sum2'][i] = edata['gcov0'][:,1,1].sum()
+                d['g1err0_mean'][i] = sqrt(d['g1err0sum2'][i]/num)
+                d['g2err0_mean'][i] = sqrt(d['g2err0sum2'][i]/num)
         else:
-            e1 = edata['e1_meas']
-            e2 = edata['e2_meas']
-            esq = e1**2 + e2**2
-
-            num=e1.size
-
-            e1sum = e1.sum()
-            e2sum = e2.sum()
-            esqsum = esq.sum()
-
-            atype='uw'
-            if atype=='weighted':
-                wtstot = 1/(2*0.3**2 + edata['pars_err'][:,2]**2 + edata['pars_err'][:,3]**2)
-                wts1 = 1/(0.3**2 + edata['pars_err'][:,2]**2)
-                wts2 = 1/(0.3**2 + edata['pars_err'][:,3]**2)
-                me1,e1err0 = wmom(e1, wts1, calcerr=True)
-                me2,e2err0 = wmom(e2, wts2, calcerr=True)
-
-                mcrap,e1err = wmom(e1-edata['e1true'], wts1, calcerr=True)
-                mcrap,e2err = wmom(e2-edata['e2true'], wts2, calcerr=True)
-
-                mesq,mesq_err = wmom(esq, wtstot, calcerr=True)
-
-                e1err2inv = 1/e1err**2
-                e2err2inv = 1/e2err**2
-
-                print e1err0,e1err
-                print e2err0,e2err
-            else:
-
-                mesq = esqsum/num
-                me1 = e1sum/num
-                me2 = e2sum/num
-
+            if 'e1_meas' in edata:
+                e1 = edata['e1_meas']
+                e2 = edata['e2_meas']
                 # we use the scatter from true, becuase with ring tests
                 # we don't have shape noise
                 e1scatt = (e1-edata['e1true']).var()
@@ -1392,12 +1383,30 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                 e1err2inv = num/e1scatt
                 e2err2inv = num/e2scatt
 
-                #mesq_err = esq.std()/sqrt(num)
-                #e1err = sqrt(1/e1err2inv)
-                #e2err = sqrt(1/e2err2inv)
-                
-                #g1err = g1*sqrt( (mesq_err/mesq)**2 + (e1err/me1)**2 )
-                #g2err = g2*sqrt( (mesq_err/mesq)**2 + (e1err/me2)**2 )
+                e1err2invsum=e1err2inv.sum()
+                e2err2invsum=e2err2inv.sum()
+
+            else:
+                e1 = edata['e'][:,0]
+                e2 = edata['e'][:,1]
+                e1err2invsum = ( 1/edata['ecov'][:,0,0] ).sum()
+                e2err2invsum = ( 1/edata['ecov'][:,1,1] ).sum()
+                e1err = sqrt(1/e1err2invsum)
+                e2err = sqrt(1/e2err2invsum)
+
+            esq = e1**2 + e2**2
+
+            num=e1.size
+
+            e1sum = e1.sum()
+            e2sum = e2.sum()
+            esqsum = esq.sum()
+
+
+            mesq = esqsum/num
+            me1 = e1sum/num
+            me2 = e2sum/num
+
 
             R = 1-.5*mesq
             g1 = 0.5*me1/R
@@ -1408,7 +1417,7 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
 
 
             d['Rshear'][i] = R
-            d['Rshear_true'][i] = (1-0.5*edata['etrue']**2).mean()
+            #d['Rshear_true'][i] = (1-0.5*edata['etrue']**2).mean()
             d['shear1'][i] = g1
             d['shear2'][i] = g2
             d['shear1err'][i] = g1err
@@ -1416,10 +1425,11 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
 
             d['e1sum'][i] = e1sum
             d['e2sum'][i] = e2sum
-            d['e1err2invsum'][i] = e1err2inv
-            d['e2err2invsum'][i] = e2err2inv
+            d['e1err2invsum'][i] = e1err2invsum
+            d['e2err2invsum'][i] = e2err2invsum
             d['esqsum'][i] = esqsum
             d['nsum'][i] = num
+            print 'shear1: %.16g +/- %.16g' % (d['shear1'][i],d['shear1err'][i])
 
         for n in d.dtype.names:
             if n in edata.dtype.names:

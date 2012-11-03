@@ -1739,12 +1739,16 @@ class SimPlotter(dict):
 
             s2 = median(st['s2'])
 
-            xlabel = r'$\sigma(\gamma) per galaxy$'
 
-            g1sens_mean=st['g1sensum']/st['nsum']
-            err = st[errtag1]*sqrt(st['nsum'])*g1sens_mean
-            #err = st[errtag1]*sqrt(st['nsum'])
-            #err = sqrt(1/st['g1err2invsum'])*sqrt(st['nsum'])
+            if 'g1err0_mean' in st.dtype.names:
+                err=st['g1err0_mean']
+                xlabel = r'$\sigma(\gamma) per galaxy (raw)$'
+            else:
+                xlabel = r'$\sigma(\gamma) per galaxy$'
+                g1sens_mean=st['g1sensum']/st['nsum']
+                err = st[errtag1]*sqrt(st['nsum'])*g1sens_mean
+                #err = st[errtag1]*sqrt(st['nsum'])
+                #err = sqrt(1/st['g1err2invsum'])*sqrt(st['nsum'])
 
             minerr=err.min()
             maxerr=err.max()
