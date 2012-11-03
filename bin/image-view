@@ -33,4 +33,4 @@ im=images.image_read(fname)
 if options.multiview:
     images.multiview(im)
 else:
-    images.view(im, file=file, dims=dims)
+    images.view(im, file=options.file, dims=dims)

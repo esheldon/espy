@@ -1,5 +1,5 @@
 # eta param, don't use
-run: mcbayes-gdt02r07
+run: mcbayes-gdt02r08
 sim: sim-gdt02
 
 runtype: bys2n
@@ -32,7 +32,7 @@ burnin: 200 # burnin per walker.
 Tprior: false
 Twidthfrac: null
 logT: true
-eta: true
+eta: false
 
 when_prior: "after"
 margamp: false

@@ -140,7 +140,7 @@ def view(image, **keys):
     if 'ylabel' in keys:
         plt.ylabel=keys['ylabel']
 
-    if 'file' in keys:
+    if 'file' in keys and keys['file'] is not None:
         file=os.path.expandvars(keys['file'])
         file=os.path.expanduser(file)
         if '.png' in file:

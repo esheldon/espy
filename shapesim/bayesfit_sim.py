@@ -322,7 +322,10 @@ class BayesFitSim(shapesim.BaseSim):
             out['fit_prob'][i] = res['fit_prob']
             if 'arate' in res:
                 out['arate'][i] = res['arate']
-
+            
+            if self['when_prior'] == 'after':
+                out['g0'][i,:] = res['g0']
+                out['gcov0'][i,:] = res['gcov0']
 
         if dowrite:
             shapesim.write_output(self['run'], is2, is2n, out, itrial=itheta,
@@ -542,6 +545,9 @@ class BayesFitSim(shapesim.BaseSim):
         if 'bayesfit' not in self['run']:
             dt += [('arate','f8')]
 
+        if self['when_prior'] == 'after':
+            dt += [('g0','f8',2),
+                   ('gcov0','f8',(2,2))]
         return dt
 
 
@@ -817,7 +823,11 @@ class EmceeFitter:
 
         psum = prior.sum()
 
+        g0=None
+        gcov0=None
         if self.when_prior=='after':
+            g0,gcov0 = mcmc.extract_stats(self.trials[:,2:2+2])
+
             # we need to multiply each by the prior
             g[0] = (g1vals*prior).sum()/psum
             g[1] = (g2vals*prior).sum()/psum
@@ -879,6 +889,8 @@ class EmceeFitter:
         self._result={'g':g,
                       'gcov':gcov,
                       'gsens':gsens,
+                      'g0':g0,
+                      'gcov0':gcov0,
                       'arate':arate,
                       's2n_w':s2n,
                       'loglike':loglike,
@@ -1052,6 +1064,11 @@ class EmceeFitter:
         print 'median g1:  %.16g ' % median(g1vals)
         print 'g1sens:',self._result['gsens'][0]
         print 'g2sens:',self._result['gsens'][1]
+        if self._result['g0'] is not None:
+            g0=self._result['g0']
+            err0=sqrt(diag(self._result['gcov0']))
+            print 'g1_0: %.16g +/- %.16g' % (g0[0],err0[0])
+            print 'g2_0: %.16g +/- %.16g' % (g0[1],err0[1])
 
         cenw = cen1vals.std()
         cen_bsize=cenw*0.2
