@@ -203,12 +203,16 @@ gmix-fit
                     at -1,1 with no prior.  May be beacuse thereis just more
                     area out there and the likelihoods are hardly different.
 
+             Idea:  the error without the prior on g1,g2 may be the
+             best indicator of badness
+                gdt02r08 - prior after and keeping g0 and gcov0 for later use
+
+
 
              get02 - 6 gaussians for exp
                 get02r01
             
-             Idea:  the error without the prior on g1,g2 may be the
-             best indicator of badness
+        mcmc-gdt01r01 - working in e1,e2 space and no prior, for comparison
 
     sims
         et01

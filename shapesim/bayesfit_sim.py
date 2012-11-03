@@ -175,7 +175,7 @@ class BayesFitSim(shapesim.BaseSim):
                              B=self.simc['B'],
                              C=self.simc['C'],
                              D=self.simc['D'])
-        if 'mcbayes' not in run:
+        if 'mcbayes' not in run and 'mca' not in run:
             if 'n_Tgrid' in self:
                 self.fitter = BayesFitterFixCen(self.gprior, 
                                                 self['n_ggrid'],
@@ -312,9 +312,16 @@ class BayesFitSim(shapesim.BaseSim):
 
             res = self.fitter.get_result()
 
-            out['g'][i,:] = res['g']
-            out['gsens'][i,:] = res['gsens']
-            out['gcov'][i,:,:] = res['gcov']
+            if 'gcov' in res:
+                out['g'][i,:] = res['g']
+                out['gsens'][i,:] = res['gsens']
+                out['gcov'][i,:,:] = res['gcov']
+            else:
+                out['e'][i,:] = res['e']
+                out['ecov'][i,:,:] = res['ecov']
+                out['pars'][i,:] = res['pars']
+                out['pcov'][i,:,:] = res['pcov']
+
             out['s2n_meas_w'][i] = res['s2n_w']
             out['loglike'][i] = res['loglike']
             out['chi2per'][i] = res['chi2per']
@@ -323,7 +330,7 @@ class BayesFitSim(shapesim.BaseSim):
             if 'arate' in res:
                 out['arate'][i] = res['arate']
             
-            if self['when_prior'] == 'after':
+            if 'when_prior' in self and self['when_prior'] == 'after':
                 out['g0'][i,:] = res['g0']
                 out['gcov0'][i,:] = res['gcov0']
 
@@ -431,6 +438,7 @@ class BayesFitSim(shapesim.BaseSim):
             raise ValueError("bad ngauss_psf: %s" % self['ngauss_psf'])
 
         return psf
+
     def _run_fitter(self, ci):
         """
         cheat on psf, T and cen for now
@@ -444,15 +452,13 @@ class BayesFitSim(shapesim.BaseSim):
             T = cov[0] + cov[2]
         cen = ci['cen']
 
-        #print 's2:',self['s2'],'Tpsf/Tobj:',ci['Ttrue_psf']/ci['Ttrue']
-        #print ci.image.shape
         psf=self._measure_gmix_psf(ci)
 
 
         temp=self.get('temp',None)
         if self['fixcen']:
             raise ValueError("fixcen no longer supported")
-        elif self['margamp']:
+        elif 'margamp' in self and self['margamp']:
             cenprior=CenPrior(ci['cen'], [0.1]*2)
             self.fitter=EmceeFitterMargAmp(ci.image,
                                     1./ci['skysig'],
@@ -466,6 +472,28 @@ class BayesFitSim(shapesim.BaseSim):
                                     burnin=self['burnin'],
                                     temp=temp, # need to implement
                                     when_prior=self['when_prior'])
+        elif 'mca' in self['run']:
+            cenprior=CenPrior(ci['cen'], [0.1]*2)
+            if self['Tprior']:
+                # need to guess this width for real data
+                Twidth=T*self['Twidthfrac']
+                Tsend = eu.random.LogNormal(T, Twidth)
+            else:
+                Tsend = T
+            logT=self['logT']
+
+            self.fitter=EmceeFitterE1E2(ci.image,
+                                        1./ci['skysig']**2,
+                                        psf,
+                                        cenprior,
+                                        Tsend,
+                                        self['fitmodel'],
+                                        nwalkers=self['nwalkers'],
+                                        nstep=self['nstep'], 
+                                        burnin=self['burnin'],
+                                        logT=logT)
+
+
         else:
             cenprior=CenPrior(ci['cen'], [0.1]*2)
             if self['Tprior']:
@@ -524,32 +552,57 @@ class BayesFitSim(shapesim.BaseSim):
 
 
     def out_dtype(self):
-        dt=[('s2n_admom','f8'),
-            ('s2n_matched','f8'),
-            ('s2n_uw','f8'),
-            ('s2n_admom_psf','f8'),
-            ('s2n_matched_psf','f8'),
-            ('s2n_uw_psf','f8'),
-            ('s2','f8'),
-            ('shear_true','f8',2),
-            ('gtrue','f8',2),
-            ('g','f8',2),
-            ('gsens','f8',2),
-            ('gcov','f8',(2,2)),
-            ('s2n_meas_w','f8'),  # weighted s/n based on most likely point
-            ('loglike','f8'),     # loglike of fit
-            ('chi2per','f8'),     # chi^2/degree of freedom
-            ('dof','i4'),         # degrees of freedom
-            ('fit_prob','f8')     # probability of the fit happening randomly
-           ]
-        if 'bayesfit' not in self['run']:
-            dt += [('arate','f8')]
+        if self['fitmodel'] not in ['gexp','gdev']:
+            raise ValueError("expected 6 parameter fitmodel e.g. 'gdev','gexp'")
+        if 'mca' in self['run']:
+            npars=6
+            dt=[('s2n_admom','f8'),
+                ('s2n_matched','f8'),
+                ('s2n_uw','f8'),
+                ('s2n_admom_psf','f8'),
+                ('s2n_matched_psf','f8'),
+                ('s2n_uw_psf','f8'),
+                ('s2','f8'),
+                ('shear_true','f8',2),
+                ('gtrue','f8',2),
+                ('e','f8',2),
+                ('ecov','f8',(2,2)),
+                ('pars','f8',npars),
+                ('pcov','f8',(npars,npars)),
+                ('s2n_meas_w','f8'),  # weighted s/n based on most likely point
+                ('loglike','f8'),     # loglike of fit
+                ('chi2per','f8'),     # chi^2/degree of freedom
+                ('dof','i4'),         # degrees of freedom
+                ('fit_prob','f8'),    # probability of the fit happening randomly
+                ('arate','f8'),
+               ]
 
-        if self['when_prior'] == 'after':
-            dt += [('g0','f8',2),
-                   ('gcov0','f8',(2,2))]
+        else:
+            dt=[('s2n_admom','f8'),
+                ('s2n_matched','f8'),
+                ('s2n_uw','f8'),
+                ('s2n_admom_psf','f8'),
+                ('s2n_matched_psf','f8'),
+                ('s2n_uw_psf','f8'),
+                ('s2','f8'),
+                ('shear_true','f8',2),
+                ('gtrue','f8',2),
+                ('g','f8',2),
+                ('gsens','f8',2),
+                ('gcov','f8',(2,2)),
+                ('s2n_meas_w','f8'),  # weighted s/n based on most likely point
+                ('loglike','f8'),     # loglike of fit
+                ('chi2per','f8'),     # chi^2/degree of freedom
+                ('dof','i4'),         # degrees of freedom
+                ('fit_prob','f8')     # probability of the fit happening randomly
+               ]
+            if 'bayesfit' not in self['run']:
+                dt += [('arate','f8')]
+
+            if self['when_prior'] == 'after':
+                dt += [('g0','f8',2),
+                       ('gcov0','f8',(2,2))]
         return dt
-
 
 class EmceeFitter:
     def __init__(self, 
@@ -594,7 +647,7 @@ class EmceeFitter:
             'during' or 'after'
         """
         
-        self.make_plots=True
+        self.make_plots=False
 
         # cen1,cen2,e1,e2,T,p
         self.npars=6
@@ -1138,6 +1191,395 @@ class EmceeFitter:
                         xdr=[h2d['xcenter'][0], h2d['xcenter'][-1]],
                         ydr=[h2d['ycenter'][0], h2d['ycenter'][-1]],
                         xlabel='T', ylabel='g2', levels=levels)
+
+
+class EmceeFitterE1E2:
+    def __init__(self, 
+                 image, 
+                 ivar, 
+                 psf,
+                 cenprior,
+                 T,
+                 model,
+                 nwalkers=10,
+                 nstep=100, 
+                 burnin=400,
+                 logT=False,
+                 mca_a=2.0):
+        """
+        mcmc sampling of posterior.
+
+        parameters
+        ----------
+        image:
+            sky subtracted image as a numpy array
+        ivar:
+            1/(Error per pixel)**2
+        psf:
+            The psf gaussian mixture
+        cenprior:
+            The center prior object.
+        T:
+            Starting value for ixx+iyy of main component
+            or a LogNormal object
+        nstep:
+            Number of steps in MCMC chain.
+        burnin:
+            Number of burn in steps.
+        when_prior:
+            'during' or 'after'
+        """
+        
+        self.make_plots=True
+
+        # cen1,cen2,e1,e2,T,p
+        self.npars=6
+
+        self.image=image
+        self.ivar=float(ivar)
+        self.T=T
+        self.cenprior=cenprior
+
+        self.logT=logT
+        self.mca_a=mca_a
+
+        self.model=model
+
+        self.nwalkers=nwalkers
+        self.nstep=nstep
+        self.burnin=burnin
+
+        self._set_psf(psf)
+
+        if isinstance(T, eu.random.LogNormal):
+            self.T_is_prior=True
+        else:
+            self.T_is_prior=False
+
+        self.tpars=zeros(6,dtype='f8')
+
+        self._go()
+
+    def get_result(self):
+        return self._result
+
+    def get_maxlike_model(self):
+        """
+        Get the model representing the maximum likelihood point in the chain
+        Is this useful?
+        """
+        w=self.lnprobs.argmax()
+        pars = self.trials[w,:].copy()
+        if self.logT:
+            pars[4] = 10.0**(pars[4])
+
+        pars[2],pars[3]=e1,e2
+        gmix=self._get_convolved_gmix(pars)
+        model=gmix_image.gmix2image(gmix, self.image.shape)
+        return model
+
+
+    def _go(self):
+        import emcee
+
+        sampler = emcee.EnsembleSampler(self.nwalkers, 
+                                        self.npars, 
+                                        self._calc_lnprob,
+                                        a=self.mca_a)
+        
+        guess=self._get_guess()
+
+        pos, prob, state = sampler.run_mcmc(guess, self.burnin)
+        sampler.reset()
+        pos, prob, state = sampler.run_mcmc(pos, self.nstep)
+
+        self.trials  = sampler.flatchain
+        lnprobs = sampler.lnprobability.reshape(self.nwalkers*self.nstep)
+        self.lnprobs = lnprobs - lnprobs.max()
+
+        self._emcee_sampler=sampler
+
+        # get the expectation values, sensitivity and errors
+        self._calc_result()
+
+        if self.make_plots:
+            self._doplots()
+            key=raw_input('hit a key (q to quit): ')
+            if key=='q':
+                stop
+
+
+    def _calc_lnprob(self, pars):
+        # hard priors first
+
+        if self.logT:
+            T=10.0**(pars[4])
+        else:
+            T=pars[4]
+
+        if T < 0:
+            return LOWVAL
+        e1,e2=pars[2],pars[3]
+        etot=sqrt(e1**2 + e2**2)
+        if etot >= 1.:
+            return LOWVAL
+
+        self.tpars[:] = pars[:]
+        self.tpars[4]=T
+
+        logprob = self._get_loglike_c(self.tpars)
+
+        cp = self.cenprior.lnprob(pars[0:2])
+        logprob += cp
+
+        if self.T_is_prior:
+            Tp = self.T.lnprob(T)
+            logprob += Tp
+
+        return logprob
+
+ 
+    def _get_loglike_c(self, pars):
+        gmix=self._get_convolved_gmix(pars)
+
+        loglike,s2n,flags=\
+            gmix_image.render._render.loglike(self.image, 
+                                              gmix,
+                                              self.ivar)
+
+        if flags != 0:
+            return LOWVAL
+        return loglike
+
+    def _get_convolved_gmix(self,pars):
+        """
+        This should have T linear
+        """
+        if self.model=='gexp':
+            gmix0=gmix_image.GMixExp(pars)
+        elif self.model=='gdev':
+            gmix0=gmix_image.GMixDev(pars)
+        elif self.model=='gauss':
+            gmix0=gmix_image.GMixCoellip(pars)
+        else:
+            raise ValueError("bad model: '%s'" % self.model)
+        gmix=gmix0.convolve(self.psf_GMix)
+        return gmix
+
+
+
+    def _calc_result(self):
+        import mcmc
+
+        pars,pcov = mcmc.extract_stats(self.trials)
+        e = pars[2:2+2]
+        ecov = pcov[2:2+2, 2:2+2]
+ 
+        arates = self._emcee_sampler.acceptance_fraction
+        arate = arates.mean()
+
+        # weighted s/n based on the most likely point
+        s2n,loglike,chi2per,dof,prob=self._calculate_maxlike_stats()
+        self._result={'e':e,
+                      'ecov':ecov,
+                      'pars':pars,
+                      'pcov':pcov,
+                      'arate':arate,
+                      's2n_w':s2n,
+                      'loglike':loglike,
+                      'chi2per':chi2per,
+                      'dof':dof,
+                      'fit_prob':prob}
+
+    def _calculate_maxlike_stats(self):
+        """
+        Stats Based on the most likely point
+        """
+
+        w=self.lnprobs.argmax()
+        pars = self.trials[w,:].copy()
+        if self.logT:
+            pars[4] = 10.0**(pars[4])
+
+        gmix=self._get_convolved_gmix(pars)
+
+        loglike,s2n,flags=\
+            gmix_image.render._render.loglike(self.image, 
+                                              gmix,
+                                              self.ivar)
+        chi2=loglike/(-0.5)
+        dof=self.image.size-pars.size
+        chi2per = chi2/dof
+
+        prob = scipy.stats.chisqprob(chi2, dof)
+        return s2n, loglike, chi2per, dof, prob
+
+    def _get_guess(self):
+        guess=zeros( (self.nwalkers,self.npars) )
+
+        guess[:,0]=self.cenprior.cen[0] + 0.01*(randu(self.nwalkers)-0.5)
+        guess[:,1]=self.cenprior.cen[1] + 0.01*(randu(self.nwalkers)-0.5)
+
+        # guess for e1,e2 is (0,0) with some scatter
+        guess[:,2]=0.1*(randu(self.nwalkers)-0.5)
+        guess[:,3]=0.1*(randu(self.nwalkers)-0.5)
+
+        # guess for T is self.T with scatter
+        if self.T_is_prior:
+            T=self.T.mean
+        else:
+            if self.logT:
+                if self.T < 0.01:
+                    raise ValueError("guess for T must be > 0.01")
+                #logT=log(self.T)
+                logT=log10(self.T)
+                # rand range +/- 0.005
+                guess[:,4] = logT + .01*(randu(self.nwalkers)-0.5)
+            else:
+                T=self.T
+                guess[:,4] = T + T*0.1*(randu(self.nwalkers)-0.5)
+
+        # first guess at amp is the total flux
+        imtot=self.image.sum()
+        guess[:,5] = imtot + imtot*0.1*(randu(self.nwalkers)-0.5)
+
+        return guess
+
+    def _set_psf(self, psf):
+        self.psf_gmix = psf
+
+        if not isinstance(psf[0],dict):
+            raise ValueError("psf must be list of dicts")
+        self.psf_pars = gmix_image.gmix2pars(psf)
+        self.psf_GMix=gmix_image.GMix(psf)
+
+    def _doplots(self):
+
+        import mcmc
+        import biggles
+        biggles.configure("default","fontsize_min",1.2)
+        tab=biggles.Table(6,2)
+
+        cen1vals=self.trials[:,0]
+        cen2vals=self.trials[:,1]
+        Tvals=self.trials[:,4]
+
+        e1vals=self.trials[:,2]
+        e2vals=self.trials[:,3]
+
+        ampvals=self.trials[:,5]
+
+        ind=numpy.arange(e1vals.size)
+
+        burn_cen=biggles.FramedPlot()
+        cen1p=biggles.Curve(ind, cen1vals, color='blue')
+        cen2p=biggles.Curve(ind, cen2vals, color='red')
+        cen1p.label=r'$x_1$'
+        cen2p.label=r'$x_2$'
+        burn_cen.add(cen1p)
+        burn_cen.add(cen2p)
+        key=biggles.PlotKey(0.9,0.9,[cen1p,cen2p],halign='right')
+        burn_cen.add(key)
+        burn_cen.ylabel='cen'
+
+        burn_e1=biggles.FramedPlot()
+        burn_e1.add(biggles.Curve(ind, e1vals))
+        burn_e1.ylabel=r'$g_1$'
+
+        burn_e2=biggles.FramedPlot()
+        burn_e2.add(biggles.Curve(ind, e2vals))
+        burn_e2.ylabel=r'$g_2$'
+
+        burn_T=biggles.FramedPlot()
+        burn_T.add(biggles.Curve(ind, Tvals))
+        burn_T.ylabel='T'
+
+        burn_amp=biggles.FramedPlot()
+        burn_amp.add(biggles.Curve(ind, ampvals))
+        burn_amp.ylabel='Amplitide'
+
+
+
+        likep = biggles.FramedPlot()
+        likep.add( biggles.Curve(ind, self.lnprobs) )
+        likep.ylabel='ln( prob )'
+
+
+        e = self._result['e']
+        ecov = self._result['ecov']
+        errs = sqrt(diag(ecov))
+
+        res=self.get_result()
+        print 's2n weighted maxlike:',res['s2n_w']
+        print 'chi^2/dof: %.3f/%i = %f' % (res['chi2per']*res['dof'],res['dof'],res['chi2per'])
+        print 'prob:',res['fit_prob']
+        print 'acceptance rate:',res['arate']
+        if self.logT:
+            tmp=10.0**(Tvals)
+            print 'T:  %.16g +/- %.16g' % (tmp.mean(), tmp.std())
+        else:
+            print 'T:  %.16g +/- %.16g' % (Tvals.mean(), Tvals.std())
+        print 'e1: %.16g +/- %.16g' % (e[0],errs[0])
+        print 'e2: %.16g +/- %.16g' % (e[1],errs[1])
+        print 'median e1:  %.16g ' % median(e1vals)
+
+        cenw = cen1vals.std()
+        cen_bsize=cenw*0.2
+        hplt_cen0 = eu.plotting.bhist(cen1vals,binsize=cen_bsize,
+                                      color='blue',
+                                      show=False)
+        hplt_cen = eu.plotting.bhist(cen2vals,binsize=cen_bsize,
+                                     color='red',
+                                     show=False, plt=hplt_cen0)
+        hplt_cen.add(key)
+
+        bsize1=e1vals.std()*0.2 #errs[0]*0.2
+        bsize2=e2vals.std()*0.2 # errs[1]*0.2
+        hplt_e1 = eu.plotting.bhist(e1vals,binsize=bsize1,
+                                  show=False)
+        hplt_e2 = eu.plotting.bhist(e2vals,binsize=bsize2,
+                                  show=False)
+
+        if self.logT:
+            Tsdev = Tvals.std()
+            Tbsize=Tsdev*0.2
+            hplt_T = eu.plotting.bhist(Tvals,binsize=Tbsize,
+                                       show=False)
+        else:
+            logTvals=log10(Tvals)
+            Tsdev = logTvals.std()
+            Tbsize=Tsdev*0.2
+            hplt_T = eu.plotting.bhist(logTvals,binsize=Tbsize,
+                                       show=False)
+
+
+        amp_sdev = ampvals.std()
+        amp_bsize=amp_sdev*0.2
+        hplt_amp = eu.plotting.bhist(ampvals,binsize=amp_bsize,
+                                     show=False)
+
+
+
+        hplt_cen.xlabel='center'
+        hplt_e1.xlabel=r'$e_1$'
+        hplt_e2.xlabel=r'$e_2$'
+
+        hplt_T.xlabel=r'$log_{10}T$'
+        hplt_amp.xlabel='Amplitude'
+
+        tab[0,0] = burn_cen
+        tab[1,0] = burn_e1
+        tab[2,0] = burn_e2
+        tab[3,0] = burn_T
+        tab[4,0] = burn_amp
+
+        tab[0,1] = hplt_cen
+        tab[1,1] = hplt_e1
+        tab[2,1] = hplt_e2
+        tab[3,1] = hplt_T
+        tab[4,1] = hplt_amp
+        tab[5,0] = likep
+        tab.show()
 
 
 class EmceeFitterMargAmp:

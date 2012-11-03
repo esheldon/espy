@@ -1,10 +1,10 @@
-run: mcbayes-gdt02r08
+run: mca-gdt02r01
 sim: sim-gdt02
 
 runtype: bys2n
 
 # need to set this for the trials to work.
-seed: 2333
+seed: 7151
 
 s2n_method: admom
 s2n_fac: 20
@@ -31,10 +31,6 @@ burnin: 200 # burnin per walker.
 Tprior: false
 Twidthfrac: null
 logT: false
-eta: false
-
-when_prior: "after"
-margamp: false
 
 use_cache: false
 add_to_cache: false
@@ -50,6 +46,6 @@ coellip_obj: true
 mca_a: 2.0
 
 comments: |
-    In this one we are prior after and keeping the
-    error from before prior in the output file
+    work in e1e2 space no priors on e1,e2
+    just for comparison
     sim-gdt02 is 10 gaussians
