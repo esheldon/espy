@@ -321,6 +321,7 @@ class BayesFitSim(shapesim.BaseSim):
                 out['ecov'][i,:,:] = res['ecov']
                 out['pars'][i,:] = res['pars']
                 out['pcov'][i,:,:] = res['pcov']
+                out['emed'][i,:] = res['emed']
 
             out['s2n_meas_w'][i] = res['s2n_w']
             out['loglike'][i] = res['loglike']
@@ -491,7 +492,8 @@ class BayesFitSim(shapesim.BaseSim):
                                         nwalkers=self['nwalkers'],
                                         nstep=self['nstep'], 
                                         burnin=self['burnin'],
-                                        logT=logT)
+                                        logT=logT,
+                                        mca_a=self['mca_a'])
 
 
         else:
@@ -516,6 +518,7 @@ class BayesFitSim(shapesim.BaseSim):
                                     nstep=self['nstep'], 
                                     burnin=self['burnin'],
                                     logT=logT,
+                                    mca_a=self['mca_a'],
                                     eta=eta,
                                     temp=temp, # need to implement
                                     when_prior=self['when_prior'])
@@ -569,6 +572,7 @@ class BayesFitSim(shapesim.BaseSim):
                 ('ecov','f8',(2,2)),
                 ('pars','f8',npars),
                 ('pcov','f8',(npars,npars)),
+                ('emed','f8',2),
                 ('s2n_meas_w','f8'),  # weighted s/n based on most likely point
                 ('loglike','f8'),     # loglike of fit
                 ('chi2per','f8'),     # chi^2/degree of freedom
@@ -1230,7 +1234,7 @@ class EmceeFitterE1E2:
             'during' or 'after'
         """
         
-        self.make_plots=True
+        self.make_plots=False
 
         # cen1,cen2,e1,e2,T,p
         self.npars=6
@@ -1273,7 +1277,6 @@ class EmceeFitterE1E2:
         if self.logT:
             pars[4] = 10.0**(pars[4])
 
-        pars[2],pars[3]=e1,e2
         gmix=self._get_convolved_gmix(pars)
         model=gmix_image.gmix2image(gmix, self.image.shape)
         return model
@@ -1374,6 +1377,9 @@ class EmceeFitterE1E2:
         pars,pcov = mcmc.extract_stats(self.trials)
         e = pars[2:2+2]
         ecov = pcov[2:2+2, 2:2+2]
+
+        e1med=median(self.trials[:,2])
+        e2med=median(self.trials[:,3])
  
         arates = self._emcee_sampler.acceptance_fraction
         arate = arates.mean()
@@ -1384,6 +1390,7 @@ class EmceeFitterE1E2:
                       'ecov':ecov,
                       'pars':pars,
                       'pcov':pcov,
+                      'emed':array([e1med,e2med]),
                       'arate':arate,
                       's2n_w':s2n,
                       'loglike':loglike,
