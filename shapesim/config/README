@@ -200,26 +200,37 @@ gmix-fit
                 gdt02r06 - same as r02 for more statistics
 
                 gdt02r07 - using eta as parametrization: the e values are all
-                    at -1,1 with no prior.  May be beacuse thereis just more
+                    at -1,1 with no prior.  May be because thereis just more
                     area out there and the likelihoods are hardly different.
 
                     running with prior during to see if mitigates this.
 
+                Idea: run with prior after and look at the width
+                    of *eta* might be the best indicator, even better
+                    than the width on g. It is so broad it is causing
+                    proglems for the gsens calculation!
+
+                    PROBLEM: the mcmc just doesn't seem to move well
+                    in eta space, often never burned in at low s/n
+
              Idea:  the error without the prior on g1,g2 may be the
              best indicator of badness
                 gdt02r08 - prior after and keeping g0 and gcov0 for later use
-                    - need to run
 
 
 
              get02 - 6 gaussians for exp
                 get02r01
 
-                using prior after and will look at error vs cov0 
                 get02r02
+                    - using prior after and will look at shear error vs cov0 
             
+             TODO: add more stats to gdt02r08 and get02r02
+                - gdt02r09 - running
+                - get02r03?
+
         mca-gdt02r01 - working in e1,e2 space and no prior, for comparison
-            - running
+            - not sure what to make of it
 
     sims
         et01

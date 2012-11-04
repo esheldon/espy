@@ -141,23 +141,6 @@ class Shear:
         sout = Shear(e1=e1,e2=e2)
         return sout
 
-
-    def add_by_eta(self, s):
-        """
-        This doesn't seem to work
-        """
-        if not isinstance(s,Shear):
-            raise ValueError("Only Shear objects can be added")
-
-        if s.eta1 == 0 and s.eta2 == 0:
-            return copy.deepcopy(self)
-
-        eta1new = self.eta1 + s.eta1
-        eta2new = self.eta2 + s.eta2
-
-        return Shear(eta1=eta1new, eta2=eta2new)
-
-
     def __sub__(self, s):
         return self.__add__(-s)
     def __repr__(self):

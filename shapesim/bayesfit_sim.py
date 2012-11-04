@@ -332,8 +332,13 @@ class BayesFitSim(shapesim.BaseSim):
                 out['arate'][i] = res['arate']
             
             if 'when_prior' in self and self['when_prior'] == 'after':
-                out['g0'][i,:] = res['g0']
-                out['gcov0'][i,:] = res['gcov0']
+                if self['eta']:
+                    print 'doing eta'
+                    out['eta0'][i,:] = res['eta0']
+                    out['etacov0'][i,:] = res['etacov0']
+                else:
+                    out['g0'][i,:] = res['g0']
+                    out['gcov0'][i,:] = res['gcov0']
 
         if dowrite:
             shapesim.write_output(self['run'], is2, is2n, out, itrial=itheta,
@@ -604,8 +609,12 @@ class BayesFitSim(shapesim.BaseSim):
                 dt += [('arate','f8')]
 
             if self['when_prior'] == 'after':
-                dt += [('g0','f8',2),
-                       ('gcov0','f8',(2,2))]
+                if self['eta']:
+                    dt += [('eta0','f8',2),
+                           ('etacov0','f8',(2,2))]
+                else:
+                    dt += [('g0','f8',2),
+                           ('gcov0','f8',(2,2))]
         return dt
 
 class EmceeFitter:
@@ -868,8 +877,8 @@ class EmceeFitter:
         gsens = zeros(2)
 
         if self.eta:
-            g1vals,g2vals=self._get_gvals_from_eta(self.trials[:,2],
-                                                   self.trials[:,3])
+            eta1vals,eta2vals=self.trials[:,2], self.trials[:,3]
+            g1vals,g2vals=self._get_gvals_from_eta(eta1vals,eta2vals)
         else:
             g1vals=self.trials[:,2]
             g2vals=self.trials[:,3]
@@ -883,6 +892,7 @@ class EmceeFitter:
         g0=None
         gcov0=None
         if self.when_prior=='after':
+            # this will be eta not g if using that parametrization
             g0,gcov0 = mcmc.extract_stats(self.trials[:,2:2+2])
 
             # we need to multiply each by the prior
@@ -943,11 +953,15 @@ class EmceeFitter:
 
         # weighted s/n based on the most likely point
         s2n,loglike,chi2per,dof,prob=self._calculate_maxlike_stats()
+        if self.eta:
+            g0name='eta'
+        else:
+            g0name='g'
         self._result={'g':g,
                       'gcov':gcov,
                       'gsens':gsens,
-                      'g0':g0,
-                      'gcov0':gcov0,
+                      g0name+'0':g0,
+                      g0name+'cov0':gcov0,
                       'arate':arate,
                       's2n_w':s2n,
                       'loglike':loglike,
@@ -1048,21 +1062,19 @@ class EmceeFitter:
 
         cen1vals=self.trials[:,0]
         cen2vals=self.trials[:,1]
-        if self.logT:
-            #Tvals=exp(self.trials[:,4])
-            Tvals=self.trials[:,4]
-        else:
-            Tvals=self.trials[:,4]
-        """
+        Tvals=self.trials[:,4]
         if self.eta:
-            g1vals,g2vals=self._get_gvals_from_eta(self.trials[:,2],
-                                                   self.trials[:,3])
+            eta1vals=self.trials[:,2]
+            eta2vals=self.trials[:,3]
+            g1vals,g2vals=self._get_gvals_from_eta(eta1vals,eta2vals)
+
+            g1lab=r'$\eta_1$'
+            g2lab=r'$\eta_2$'
         else:
             g1vals=self.trials[:,2]
             g2vals=self.trials[:,3]
-        """
-        g1vals=self.trials[:,2]
-        g2vals=self.trials[:,3]
+            g1lab=r'$g_1$'
+            g2lab=r'$g_2$'
 
         ampvals=self.trials[:,5]
 
@@ -1116,12 +1128,17 @@ class EmceeFitter:
             print 'T:  %.16g +/- %.16g' % (tmp.mean(), tmp.std())
         else:
             print 'T:  %.16g +/- %.16g' % (Tvals.mean(), Tvals.std())
+
         print 'g1: %.16g +/- %.16g' % (g[0],errs[0])
         print 'g2: %.16g +/- %.16g' % (g[1],errs[1])
         print 'median g1:  %.16g ' % median(g1vals)
         print 'g1sens:',self._result['gsens'][0]
         print 'g2sens:',self._result['gsens'][1]
-        if self._result['g0'] is not None:
+
+        if self.eta:
+            print 'eta1: %.16g +/- %.16g' % (eta1vals.mean(),eta1vals.std())
+            print 'eta2: %.16g +/- %.16g' % (eta2vals.mean(),eta2vals.std())
+        elif self._result['g0'] is not None:
             g0=self._result['g0']
             err0=sqrt(diag(self._result['gcov0']))
             print 'g1_0: %.16g +/- %.16g' % (g0[0],err0[0])
@@ -1137,17 +1154,41 @@ class EmceeFitter:
                                      show=False, plt=hplt_cen0)
         hplt_cen.add(key)
 
-        bsize1=g1vals.std()*0.2 #errs[0]*0.2
-        bsize2=g2vals.std()*0.2 # errs[1]*0.2
-        hplt_g1 = eu.plotting.bhist(g1vals,binsize=bsize1,
-                                  show=False)
-        hplt_g2 = eu.plotting.bhist(g2vals,binsize=bsize2,
-                                  show=False)
+        if self.eta:
+            bsize1=eta1vals.std()*0.2 #errs[0]*0.2
+            bsize2=eta2vals.std()*0.2 # errs[1]*0.2
+            hplt_g1 = eu.plotting.bhist(eta1vals,binsize=bsize1,
+                                      show=False)
+            hplt_g2 = eu.plotting.bhist(eta2vals,binsize=bsize2,
+                                      show=False)
+
+        else:
+            bsize1=g1vals.std()*0.2 #errs[0]*0.2
+            bsize2=g2vals.std()*0.2 # errs[1]*0.2
+            hplt_g1 = eu.plotting.bhist(g1vals,binsize=bsize1,
+                                      show=False)
+            hplt_g2 = eu.plotting.bhist(g2vals,binsize=bsize2,
+                                      show=False)
 
         Tsdev = Tvals.std()
         Tbsize=Tsdev*0.2
-        hplt_T = eu.plotting.bhist(Tvals,binsize=Tbsize,
-                                  show=False)
+        #hplt_T = eu.plotting.bhist(Tvals,binsize=Tbsize,
+        #                          show=False)
+
+        if self.logT:
+            Tsdev = Tvals.std()
+            Tbsize=Tsdev*0.2
+            hplt_T = eu.plotting.bhist(Tvals,binsize=Tbsize,
+                                       show=False)
+        else:
+            logTvals=log10(Tvals)
+            Tsdev = logTvals.std()
+            Tbsize=Tsdev*0.2
+            hplt_T = eu.plotting.bhist(logTvals,binsize=Tbsize,
+                                       show=False)
+
+
+
         amp_sdev = ampvals.std()
         amp_bsize=amp_sdev*0.2
         hplt_amp = eu.plotting.bhist(ampvals,binsize=amp_bsize,
@@ -1156,16 +1197,9 @@ class EmceeFitter:
 
 
         hplt_cen.xlabel='center'
-        if self.eta:
-            hplt_g1.xlabel=r'$\eta_1$'
-            hplt_g2.xlabel=r'$\eta_2$'
-        else:
-            hplt_g1.xlabel=r'$g_1$'
-            hplt_g2.xlabel=r'$g_2$'
-        if self.logT:
-            hplt_T.xlabel=r'$log_{10}T$'
-        else:
-            hplt_T.xlabel='T'
+        hplt_g1.xlabel=g1lab
+        hplt_g2.xlabel=g2lab
+        hplt_T.xlabel=r'$log_{10}T$'
         hplt_amp.xlabel='Amplitude'
 
         tab[0,0] = burn_cen
