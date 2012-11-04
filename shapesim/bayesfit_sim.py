@@ -529,7 +529,6 @@ class BayesFitSim(shapesim.BaseSim):
                                     when_prior=self['when_prior'])
 
 
-
     def get_nellip(self, is2n):
         s2n = shapesim.get_s2n(self, is2n)
         s2n_fac = self['s2n_fac']
@@ -1027,6 +1026,7 @@ class EmceeFitter:
         # guess for T is self.T with scatter
         if self.T_is_prior:
             T=self.T.mean
+            guess[:,4] = T + T*0.1*(randu(self.nwalkers)-0.5)
         else:
             if self.logT:
                 if self.T < 0.01:
@@ -1468,6 +1468,7 @@ class EmceeFitterE1E2:
         # guess for T is self.T with scatter
         if self.T_is_prior:
             T=self.T.mean
+            guess[:,4] = T + T*0.1*(randu(self.nwalkers)-0.5)
         else:
             if self.logT:
                 if self.T < 0.01:
