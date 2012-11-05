@@ -1740,7 +1740,7 @@ class SimPlotter(dict):
             s2 = median(st['s2'])
 
 
-            if False and 'g1err0_mean' in st.dtype.names:
+            if True and 'g1err0_mean' in st.dtype.names:
                 err=st['g1err0_mean']
                 xlabel = r'$\sigma(\gamma) per galaxy (raw)$'
             else:

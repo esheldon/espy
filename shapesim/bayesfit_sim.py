@@ -510,7 +510,7 @@ class BayesFitSim(shapesim.BaseSim):
         burnin = self['burnin']
         if start_pars is None:
             # we might have a very bad guess, increase burnin
-            burnin=burnin*4
+            burnin=self['burnin']*4
 
         temp=self.get('temp',None)
         if self['fixcen']:
