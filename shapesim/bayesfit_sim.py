@@ -140,9 +140,12 @@ from lensing.shear import Shear
 import fimage
 from fimage.convolved import NoisyConvolvedImage
 import gmix_image
+from gmix_image import print_pars
 import images
 import esutil as eu
 from esutil.misc import wlog
+
+
 
 import math
 import time
@@ -345,7 +348,7 @@ class BayesFitSim(shapesim.BaseSim):
                          fs=self.fs)
         return out
 
-    def _measure_gmix_psf(self, ci):
+    def _gmix_fit_psf(self, ci):
         import admom
         counts=ci.psf.sum()
         psfres = admom.admom(ci.psf,
@@ -445,6 +448,49 @@ class BayesFitSim(shapesim.BaseSim):
 
         return psf
 
+
+    def _gmix_fit_convolved_simple(self, ci, psf_gmix, Tguess):
+        """
+        Use the fitter to get a starting guess
+        """
+
+        counts=ci.image.sum()
+
+        npars=6
+        prior=zeros(npars)
+        width=zeros(npars) + 1000
+
+        width[0] = 0.1
+        width[1] = 0.1
+        width[5]=0.1
+        if self['Tprior']:
+            # this is intended to be lognormal but I
+            # haven't implemented that yet in the fitter
+            width[4]=Tguess*self['Twidthfrac']
+
+        ntry=10
+        for i in xrange(ntry):
+                             
+            prior[0]=ci['cen_uw'][0]*(1.0+0.1*(randu()-0.5))
+            prior[1]=ci['cen_uw'][1]*(1.0+0.1*(randu()-0.5))
+            prior[2],prior[3] = randomize_e1e2(0.0, 0.0)
+            prior[4] = Tguess*(1.0+0.1*(randu()-0.5))
+            prior[5] = counts*(1.0+0.01*(randu()-0.5))
+
+            gm = gmix_image.GMixFitCoellip(ci.image, 
+                                           ci['skysig'],
+                                           prior,width,
+                                           psf=psf_gmix,
+                                           model=self['fitmodel'])
+
+            if 0==gm.get_flags():
+                pars=gm.get_pars()
+                perr=gm.get_perr()
+                return pars,perr
+
+        wlog("could not find a fit after %s tries, returning None" % ntry)
+        return None,None
+
     def _run_fitter(self, ci):
         """
         cheat on psf, T and cen for now
@@ -458,8 +504,13 @@ class BayesFitSim(shapesim.BaseSim):
             T = cov[0] + cov[2]
         cen = ci['cen']
 
-        psf=self._measure_gmix_psf(ci)
+        psf_gmix=self._gmix_fit_psf(ci)
+        start_pars,start_err=self._gmix_fit_convolved_simple(ci,psf_gmix,T)
 
+        burnin = self['burnin']
+        if start_pars is None:
+            # we might have a very bad guess, increase burnin
+            burnin=burnin*4
 
         temp=self.get('temp',None)
         if self['fixcen']:
@@ -468,14 +519,14 @@ class BayesFitSim(shapesim.BaseSim):
             cenprior=CenPrior(ci['cen'], [0.1]*2)
             self.fitter=EmceeFitterMargAmp(ci.image,
                                     1./ci['skysig'],
-                                    psf,
+                                    psf_gmix,
                                     cenprior,
                                     T,
                                     self.gprior,
                                     self['fitmodel'],
                                     nwalkers=self['nwalkers'],
                                     nstep=self['nstep'], 
-                                    burnin=self['burnin'],
+                                    burnin=burnin,
                                     temp=temp, # need to implement
                                     when_prior=self['when_prior'])
         elif 'mca' in self['run']:
@@ -490,13 +541,13 @@ class BayesFitSim(shapesim.BaseSim):
 
             self.fitter=EmceeFitterE1E2(ci.image,
                                         1./ci['skysig']**2,
-                                        psf,
+                                        psf_gmix,
                                         cenprior,
                                         Tsend,
                                         self['fitmodel'],
                                         nwalkers=self['nwalkers'],
                                         nstep=self['nstep'], 
-                                        burnin=self['burnin'],
+                                        burnin=burnin,
                                         logT=logT,
                                         mca_a=self['mca_a'])
 
@@ -514,19 +565,20 @@ class BayesFitSim(shapesim.BaseSim):
 
             self.fitter=EmceeFitter(ci.image,
                                     1./ci['skysig']**2,
-                                    psf,
+                                    psf_gmix,
                                     cenprior,
                                     Tsend,
                                     self.gprior,
                                     self['fitmodel'],
                                     nwalkers=self['nwalkers'],
                                     nstep=self['nstep'], 
-                                    burnin=self['burnin'],
+                                    burnin=burnin,
                                     logT=logT,
                                     mca_a=self['mca_a'],
                                     eta=eta,
                                     temp=temp, # need to implement
-                                    when_prior=self['when_prior'])
+                                    when_prior=self['when_prior'],
+                                    start_pars=start_pars) # Tprior/cenprior over-ride
 
 
     def get_nellip(self, is2n):
@@ -632,7 +684,8 @@ class EmceeFitter:
                  eta=False,
                  mca_a=2.0,
                  temp=None,
-                 when_prior='during'):
+                 when_prior='during', 
+                 start_pars=None):  # tprior,cenprior take precedence
         """
         mcmc sampling of posterior.
 
@@ -680,6 +733,8 @@ class EmceeFitter:
         self.burnin=burnin
         self.gprior=gprior
         self.when_prior=when_prior
+
+        self.start_pars=start_pars
 
         self._set_psf(psf)
 
@@ -830,18 +885,6 @@ class EmceeFitter:
 
  
     def _get_loglike_c(self, pars):
-        """
-        if self.model=='gexp':
-            gmix0=gmix_image.GMixExp(pars)
-        elif self.model=='gdev':
-            gmix0=gmix_image.GMixDev(pars)
-        elif self.model=='gauss':
-            gmix0=gmix_image.GMixCoellip(pars)
-        else:
-            raise ValueError("bad model: '%s'" % self.model)
-
-        gmix=gmix0.convolve(self.psf_GMix)
-        """
         gmix=self._get_convolved_gmix(pars)
 
         loglike,s2n,flags=\
@@ -1019,9 +1062,16 @@ class EmceeFitter:
         guess[:,0]=self.cenprior.cen[0] + 0.01*(randu(self.nwalkers)-0.5)
         guess[:,1]=self.cenprior.cen[1] + 0.01*(randu(self.nwalkers)-0.5)
 
-        # guess for g1,g2 is (0,0) with some scatter
-        guess[:,2]=0.1*(randu(self.nwalkers)-0.5)
-        guess[:,3]=0.1*(randu(self.nwalkers)-0.5)
+        if self.start_pars is not None:
+            sh=Shear(e1=self.start_pars[2],e2=self.start_pars[3])
+            for i in xrange(self.nwalkers):
+                e1s,e2s=randomize_e1e2(sh.g1,sh.g2,width=0.05)
+                guess[i,2] = e1s
+                guess[i,3] = e2s
+        else:
+            # (0,0) with some scatter
+            guess[:,2]=0.1*(randu(self.nwalkers)-0.5)
+            guess[:,3]=0.1*(randu(self.nwalkers)-0.5)
 
         # guess for T is self.T with scatter
         if self.T_is_prior:
@@ -1040,8 +1090,12 @@ class EmceeFitter:
                 guess[:,4] = T + T*0.1*(randu(self.nwalkers)-0.5)
 
         # first guess at amp is the total flux
-        imtot=self.image.sum()
-        guess[:,5] = imtot + imtot*0.1*(randu(self.nwalkers)-0.5)
+        if self.start_pars is not None:
+            pguess=self.start_pars[5]
+            guess[:,5] = pguess*(1+0.1*(randu(self.nwalkers)-0.5))
+        else:
+            imtot=self.image.sum()
+            guess[:,5] = imtot + imtot*0.1*(randu(self.nwalkers)-0.5)
 
         return guess
 
@@ -2626,6 +2680,27 @@ class GPrior:
         """
         return -self.prior1d(g)
 
+def test_shear_mean():
+    gp=GPrior(A= 12.25,
+              B= 0.2,
+              C= 1.05,
+              D= 13.)
+    n=100000
+    e1=zeros(n)
+    g1true,g2true=gp.sample(n)
+    shear=Shear(g1=0.04,g2=0.0)
+
+    g1meas=zeros(n)
+    for i in xrange(n):
+        s=Shear(g1=g1true[i],g2=g2true[i])
+        ssum = s + shear
+
+        g1meas[i] = ssum.g1
+
+    g1mean=g1meas.mean()
+    g1err=g1meas.std()/sqrt(n)
+    print 'shear: %.16g +/- %.16g' % (g1mean,g1err)
+
 def g1g2_to_e1e2(g1, g2):
     """
     This version without exceptions
@@ -2765,7 +2840,7 @@ def test(n_ggrid=19, n=1000, s2n=40, gmin=-.9, gmax=.9, show=False, clobber=Fals
 
     return means, alldata
 
-def randomize_e1e2(e1start,e2start):
+def randomize_e1e2(e1start,e2start, width=0.1):
     if e1start == 0 and e2start==0:
         e1rand = 0.05*(randu()-0.5)
         e2rand = 0.05*(randu()-0.5)
@@ -2773,8 +2848,8 @@ def randomize_e1e2(e1start,e2start):
         nmax=100
         ii=0
         while True:
-            e1rand = e1start*(1 + 0.2*(randu()-0.5))
-            e2rand = e2start*(1 + 0.2*(randu()-0.5))
+            e1rand = e1start*(1 + 2*width*(randu()-0.5))
+            e2rand = e2start*(1 + 2*width*(randu()-0.5))
             etot = sqrt(e1rand**2 + e2rand**2)
             if etot < 0.95:
                 break

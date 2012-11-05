@@ -26,7 +26,7 @@ fixT: false
 # step and burnin are *per walker*
 nwalkers: 20
 nstep: 200 # steps per walker
-burnin: 200 # burnin per walker.
+burnin: 400 # burnin per walker.
 
 Tprior: true
 Twidthfrac: 1.0e-7
@@ -51,3 +51,4 @@ mca_a: 2.0
 
 comments: |
     trying very tight prior on width
+    doing initial fit to help burnin

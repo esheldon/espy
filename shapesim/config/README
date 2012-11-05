@@ -226,9 +226,16 @@ gmix-fit
                     - using prior after and will look at shear error vs cov0 
             
              TODO: add more stats to gdt02r08 and get02r02
-                - gdt02r09 - running
+                - gdt02r09,gdt02r10
                 - get02r03?
 
+            Ran with tight prior on T
+                gdt02r11 - looks way biased even at high S/N, what's going on?
+                trying a get run to see if also biased.
+                    temporarily using get02rtest with 2000 burning accidentally
+                    looks very good, running 0 10 with 200 burn to see how it looks
+                    looks bad! rerunning that one with burning
+            
         mca-gdt02r01 - working in e1,e2 space and no prior, for comparison
             - not sure what to make of it
 

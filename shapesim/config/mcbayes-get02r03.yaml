@@ -1,10 +1,10 @@
-run: mcbayes-get02rtest
+run: mcbayes-get02r03
 sim: sim-get02
 
 runtype: bys2n
 
 # need to set this for the trials to work.
-seed: 4459
+seed: 2901
 
 s2n_method: admom
 s2n_fac: 20
@@ -50,4 +50,6 @@ coellip_obj: true
 
 comments: |
     trying tight Tprior, which was bad
-    for gdev
+    for gdev.  Now using fitter to get good
+    guess at high s/n and prevent need for long
+    burnin
