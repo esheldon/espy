@@ -94,7 +94,7 @@ case $download_type in
         accept="*.fits.fz"
         proj="DTS"
         type="src"
-        dir=$DESDATA/comm 
+        dir=$dir/comm 
         ;;
       *) usage_and_exit
         ;;

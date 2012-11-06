@@ -668,6 +668,509 @@ class BayesFitSim(shapesim.BaseSim):
                            ('gcov0','f8',(2,2))]
         return dt
 
+
+
+class BayesFitSimTprior(shapesim.BaseSim):
+    def __init__(self, run, extra=None):
+        """
+        We draw T values from a distribution and  use that
+        distribution in the fits
+        """
+        super(BayesFitSim,self).__init__(run)
+        if 'verbose' not in self:
+            self['verbose'] = False
+
+        if extra:
+            for k,v in extra.iteritems():
+                print k,v
+                self[k] = v
+
+        self.gprior = GPrior(A=self.simc['A'],
+                             B=self.simc['B'],
+                             C=self.simc['C'],
+                             D=self.simc['D'])
+
+        Tmean = self['Tmean']
+        Twidth = Tmean*self['Twidthfrac']
+        self.Tprior = eu.random.LogNormal(T, Twidth)
+
+    def process_trials_by_s2n(self, is2n):
+        """
+        ring test
+
+        Generates a random total ellipticity and total T from the assumed priors
+
+        Run this many times to sample the prior distribution
+        """
+
+        s2n = shapesim.get_s2n(self, is2n)
+        s2n_fac = self['s2n_fac']
+
+        nellip = self.get_nellip(is2n)
+
+        nring = self.simc['nring']
+
+        ntot = nring*nellip
+        out = zeros(ntot, dtype=self.out_dtype())
+
+        ii = 0
+        for i in xrange(nring):
+            itheta=i
+
+            dolog=False
+            if i==0:
+                dolog=True
+            st = self.process_trial_by_s2n(is2n, itheta, dolog=dolog)
+            out[ii:ii+nellip] = st
+            ii += nellip
+
+        shapesim.write_output(self['run'], is2, is2n, out, fs=self.fs)
+        return out
+
+
+    def process_trial_by_s2n(self, is2n, itheta,
+                             dowrite=False, 
+                             dolog=False):
+        """
+        Process a singe element in the ring, with nellip
+        possible noise realizations
+        """
+
+        s2 = linspace(self.simc['mins2'],
+                      self.simc['maxs2'], 
+                      self.simc['nums2'])[is2]
+        s2n_psf = self['s2n_psf']
+        s2n = shapesim.get_s2n(self, is2n)
+        theta = shapesim.get_theta(self.simc, itheta=itheta)
+
+        s2n_fac = self['s2n_fac']
+        s2n_method = self['s2n_method']
+        s2ncalc_fluxfrac =self['s2ncalc_fluxfrac']
+
+        nellip=self.get_nellip(is2n)
+
+        # these are generated on the same series every itheta for a given run
+        # seed so that each itheta gets the same ellip values; otherwise no
+        # ring
+        gvals = self.get_gvals(is2, is2n, nellip)
+        Tvals = self.get_Tvals(??)
+        out = zeros(nellip, dtype=self.out_dtype())
+        out['s2'] = s2
+        self['s2']=s2
+
+        if dolog:
+            wlog('s2n:',s2n,'s2n_psf:',s2n_psf,'s2n_method:',s2n_method)
+
+
+        for i,g in enumerate(gvals):
+
+            ellip=lensing.util.g2e(g)
+
+            ci_nonoise = self.shapesim.get_trial(s2, ellip, theta)
+
+            retrim = self['retrim']
+            if retrim:
+                if 'retrim_fluxfrac' not in self:
+                    raise ValueError("you must set fluxfrac for a retrim")
+                retrim_fluxfrac=self['retrim_fluxfrac']
+                olddims=ci_nonoise.image.shape
+                ci_nonoise.trim(fluxfrac=retrim_fluxfrac)
+                if self['verbose']:
+                    wlog("re-trimming with fluxfrac: %.12g" % retrim_fluxfrac)
+                    wlog("old dims:",str(olddims),"new dims:",str(ci_nonoise.image.shape))
+
+            e1true=ci_nonoise['e1true']
+            e2true=ci_nonoise['e2true']
+            g1true,g2true=lensing.util.e1e2_to_g1g2(e1true,e2true)
+
+            #wlog("g1true:",g1true,"g2true:",g2true)
+            out['gtrue'][i,0] = g1true
+            out['gtrue'][i,1] = g2true
+            out['shear_true'][i,0] = ci_nonoise['shear1']
+            out['shear_true'][i,1] = ci_nonoise['shear2']
+            
+            if self['verbose']:
+                stderr.write('-'*70 + '\n')
+            # we always write this, although slower when not verbose
+            if (nellip > 1) and (( (i+1) % 10) == 0 or i== 0):
+                stderr.write("  %s/%s ellip done\n" % ((i+1),nellip))
+            #if i==20:
+            #    stop
+            ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf,
+                                     s2n_method=s2n_method,
+                                     fluxfrac=s2ncalc_fluxfrac)
+            if self['verbose']:
+                wlog("s2n_admom:",ci['s2n_admom'],"s2n_uw:",ci['s2n_uw'],
+                     "s2n_matched:",ci['s2n_matched'])
+
+            out['s2n_admom'][i] = ci['s2n_admom']
+            out['s2n_matched'][i] = ci['s2n_matched']
+            out['s2n_uw'][i] = ci['s2n_uw']
+            out['s2n_admom_psf'][i] = ci['s2n_admom_psf']
+            out['s2n_matched_psf'][i] = ci['s2n_matched_psf']
+            out['s2n_uw_psf'][i] = ci['s2n_uw_psf']
+
+            # self.fitter is used in here
+            self._run_fitter(ci)
+
+            res = self.fitter.get_result()
+
+            if 'gcov' in res:
+                out['g'][i,:] = res['g']
+                out['gsens'][i,:] = res['gsens']
+                out['gcov'][i,:,:] = res['gcov']
+            else:
+                out['e'][i,:] = res['e']
+                out['ecov'][i,:,:] = res['ecov']
+                out['pars'][i,:] = res['pars']
+                out['pcov'][i,:,:] = res['pcov']
+                out['emed'][i,:] = res['emed']
+
+            out['s2n_meas_w'][i] = res['s2n_w']
+            out['loglike'][i] = res['loglike']
+            out['chi2per'][i] = res['chi2per']
+            out['dof'][i] = res['dof']
+            out['fit_prob'][i] = res['fit_prob']
+            if 'arate' in res:
+                out['arate'][i] = res['arate']
+            
+            if 'when_prior' in self and self['when_prior'] == 'after':
+                if self['eta']:
+                    print 'doing eta'
+                    out['eta0'][i,:] = res['eta0']
+                    out['etacov0'][i,:] = res['etacov0']
+                else:
+                    out['g0'][i,:] = res['g0']
+                    out['gcov0'][i,:] = res['gcov0']
+
+        if dowrite:
+            shapesim.write_output(self['run'], is2, is2n, out, itrial=itheta,
+                         fs=self.fs)
+        return out
+
+    def _gmix_fit_psf(self, ci):
+        import admom
+        counts=ci.psf.sum()
+        psfres = admom.admom(ci.psf,
+                             ci['cen_uw'][0],
+                             ci['cen_uw'][1], 
+                             guess=2.,
+                             nsub=1)
+
+        npars=2*self['ngauss_psf']+4
+
+        if self['ngauss_psf']==1:
+            psf=[{'p':1,
+                  'row':psfres['row'],
+                  'col':psfres['col'],
+                  'irr':psfres['Irr'],
+                  'irc':psfres['Irc'],
+                  'icc':psfres['Icc']}]
+        elif self['ngauss_psf']==2:
+
+            prior=zeros(npars)
+            width=zeros(npars) + 100
+
+            Tpsf=psfres['Irr']+psfres['Icc']
+
+            Tmax=Tpsf*1.7
+            Tfrac1=0.8/1.7
+
+            prior[0]=psfres['row']
+            prior[1]=psfres['col']
+            prior[2]=psfres['e1']
+            prior[3]=psfres['e2']
+            prior[4] = Tmax
+            prior[5] = Tfrac1 
+
+            prior[6] = 0.418*counts
+            prior[7] = 0.582*counts
+
+            # randomize
+            prior[0] += 0.01*(randu()-0.5)
+            prior[1] += 0.01*(randu()-0.5)
+
+            e1start=prior[2]
+            e2start=prior[3]
+            prior[2],prior[3] = randomize_e1e2(e1start,e2start)
+
+            prior[4] += prior[4]*0.05*(randu()-0.5)
+            prior[5] += prior[5]*0.05*(randu()-0.5)
+            prior[6] += prior[6]*0.05*(randu()-0.5)
+            prior[7] += prior[7]*0.05*(randu()-0.5)
+
+            gm = gmix_image.GMixFitCoellip(ci.psf, ci['skysig'],
+                                           prior,width,
+                                           Tpositive=True)
+            psf=gm.get_gmix()
+        elif self['ngauss_psf']==3:
+
+            prior=zeros(npars)
+            width=zeros(npars) + 100
+
+            Tpsf=psfres['Irr']+psfres['Icc']
+            Tmax = Tpsf*8.3
+            Tfrac1 = 1.7/8.3
+            Tfrac2 = 0.8/8.3
+            prior[0]=psfres['row']
+            prior[1]=psfres['col']
+            prior[2]=psfres['e1']
+            prior[3]=psfres['e2']
+            prior[4] = Tmax
+            prior[5] = Tfrac1 
+            prior[6] = Tfrac2
+
+            prior[7] = 0.08*counts
+            prior[8] = 0.38*counts
+            prior[9] = 0.53*counts
+
+            # randomize
+            prior[0] += 0.01*(randu()-0.5)
+            prior[1] += 0.01*(randu()-0.5)
+            e1start=prior[2]
+            e2start=prior[3]
+            prior[2],prior[3] = randomize_e1e2(e1start,e2start)
+
+            prior[4] += prior[4]*0.05*(randu()-0.5)
+            prior[5] += prior[5]*0.05*(randu()-0.5)
+            prior[6] += prior[6]*0.05*(randu()-0.5)
+            prior[7] += prior[7]*0.05*(randu()-0.5)
+            prior[8] += prior[8]*0.05*(randu()-0.5)
+            prior[9] += prior[9]*0.05*(randu()-0.5)
+
+            gm = gmix_image.GMixFitCoellip(ci.psf, ci['skysig'],
+                                           prior,width,
+                                           Tpositive=True)
+            psf=gm.get_gmix()
+
+        else:
+            raise ValueError("bad ngauss_psf: %s" % self['ngauss_psf'])
+
+        return psf
+
+
+    def _gmix_fit_convolved_simple(self, ci, psf_gmix, Tguess):
+        """
+        Use the fitter to get a starting guess
+        """
+
+        counts=ci.image.sum()
+
+        npars=6
+        prior=zeros(npars)
+        width=zeros(npars) + 1000
+
+        width[0] = 0.1
+        width[1] = 0.1
+        width[5]=0.1
+        if self['Tprior']:
+            # this is intended to be lognormal but I
+            # haven't implemented that yet in the fitter
+            width[4]=Tguess*self['Twidthfrac']
+
+        ntry=10
+        for i in xrange(ntry):
+                             
+            prior[0]=ci['cen_uw'][0]*(1.0+0.1*(randu()-0.5))
+            prior[1]=ci['cen_uw'][1]*(1.0+0.1*(randu()-0.5))
+            prior[2],prior[3] = randomize_e1e2(0.0, 0.0)
+            prior[4] = Tguess*(1.0+0.1*(randu()-0.5))
+            prior[5] = counts*(1.0+0.01*(randu()-0.5))
+
+            gm = gmix_image.GMixFitCoellip(ci.image, 
+                                           ci['skysig'],
+                                           prior,width,
+                                           psf=psf_gmix,
+                                           model=self['fitmodel'])
+
+            if 0==gm.get_flags():
+                pars=gm.get_pars()
+                perr=gm.get_perr()
+                return pars,perr
+
+        wlog("could not find a fit after %s tries, returning None" % ntry)
+        return None,None
+
+    def _run_fitter(self, ci):
+        """
+        cheat on psf, T and cen for now
+        """
+        import admom
+
+        if 'Ttrue' in ci:
+            T=ci['Ttrue']
+        else:
+            cov=ci['covtrue']
+            T = cov[0] + cov[2]
+        cen = ci['cen']
+
+        psf_gmix=self._gmix_fit_psf(ci)
+        start_pars,start_err=self._gmix_fit_convolved_simple(ci,psf_gmix,T)
+
+        burnin = self['burnin']
+        if start_pars is None:
+            # we might have a very bad guess, increase burnin
+            burnin=self['burnin']*4
+
+        temp=self.get('temp',None)
+        if self['fixcen']:
+            raise ValueError("fixcen no longer supported")
+        elif 'margamp' in self and self['margamp']:
+            cenprior=CenPrior(ci['cen'], [0.1]*2)
+            self.fitter=EmceeFitterMargAmp(ci.image,
+                                    1./ci['skysig'],
+                                    psf_gmix,
+                                    cenprior,
+                                    T,
+                                    self.gprior,
+                                    self['fitmodel'],
+                                    nwalkers=self['nwalkers'],
+                                    nstep=self['nstep'], 
+                                    burnin=burnin,
+                                    temp=temp, # need to implement
+                                    when_prior=self['when_prior'])
+        elif 'mca' in self['run']:
+            cenprior=CenPrior(ci['cen'], [0.1]*2)
+            if self['Tprior']:
+                # need to guess this width for real data
+                Twidth=T*self['Twidthfrac']
+                Tsend = eu.random.LogNormal(T, Twidth)
+            else:
+                Tsend = T
+            logT=self['logT']
+
+            self.fitter=EmceeFitterE1E2(ci.image,
+                                        1./ci['skysig']**2,
+                                        psf_gmix,
+                                        cenprior,
+                                        Tsend,
+                                        self['fitmodel'],
+                                        nwalkers=self['nwalkers'],
+                                        nstep=self['nstep'], 
+                                        burnin=burnin,
+                                        logT=logT,
+                                        mca_a=self['mca_a'])
+
+
+        else:
+            cenprior=CenPrior(ci['cen'], [0.1]*2)
+            if self['Tprior']:
+                # need to guess this width for real data
+                Twidth=T*self['Twidthfrac']
+                Tsend = eu.random.LogNormal(T, Twidth)
+            else:
+                Tsend = T
+            logT=self['logT']
+            eta=self['eta']
+
+            self.fitter=EmceeFitter(ci.image,
+                                    1./ci['skysig']**2,
+                                    psf_gmix,
+                                    cenprior,
+                                    Tsend,
+                                    self.gprior,
+                                    self['fitmodel'],
+                                    nwalkers=self['nwalkers'],
+                                    nstep=self['nstep'], 
+                                    burnin=burnin,
+                                    logT=logT,
+                                    mca_a=self['mca_a'],
+                                    eta=eta,
+                                    temp=temp, # need to implement
+                                    when_prior=self['when_prior'],
+                                    start_pars=start_pars) # Tprior/cenprior over-ride
+
+
+    def get_nellip(self, is2n):
+        s2n = shapesim.get_s2n(self, is2n)
+        s2n_fac = self['s2n_fac']
+        nellip = shapesim.get_s2n_nrepeat(s2n, fac=s2n_fac)
+
+        if nellip < self['min_gcount']:
+            nellip=self['min_gcount']
+        return nellip
+
+    def get_gvals(self, is2, is2n, nellip):
+        if self['seed'] == None:
+            raise ValueError("can't use null seed for bayesfit")
+
+        seed=self['seed']
+        allseed= seed*10000 + is2n*100 + is2
+
+        print 'seed,is2n,is2,allseed:',seed,is2n,is2,allseed
+        # always use same seed for a given is2/is2n and config seed so we use
+        # the same g values at given theta in ring
+
+        numpy.random.seed(allseed)
+        gvals = self.gprior.sample1d(nellip)
+
+        # now random seed
+        numpy.random.seed(None)
+
+        return gvals
+
+
+    def out_dtype(self):
+        if self['fitmodel'] not in ['gexp','gdev']:
+            raise ValueError("expected 6 parameter fitmodel e.g. 'gdev','gexp'")
+        if 'mca' in self['run']:
+            npars=6
+            dt=[('s2n_admom','f8'),
+                ('s2n_matched','f8'),
+                ('s2n_uw','f8'),
+                ('s2n_admom_psf','f8'),
+                ('s2n_matched_psf','f8'),
+                ('s2n_uw_psf','f8'),
+                ('s2','f8'),
+                ('shear_true','f8',2),
+                ('gtrue','f8',2),
+                ('e','f8',2),
+                ('ecov','f8',(2,2)),
+                ('pars','f8',npars),
+                ('pcov','f8',(npars,npars)),
+                ('emed','f8',2),
+                ('s2n_meas_w','f8'),  # weighted s/n based on most likely point
+                ('loglike','f8'),     # loglike of fit
+                ('chi2per','f8'),     # chi^2/degree of freedom
+                ('dof','i4'),         # degrees of freedom
+                ('fit_prob','f8'),    # probability of the fit happening randomly
+                ('arate','f8'),
+               ]
+
+        else:
+            dt=[('s2n_admom','f8'),
+                ('s2n_matched','f8'),
+                ('s2n_uw','f8'),
+                ('s2n_admom_psf','f8'),
+                ('s2n_matched_psf','f8'),
+                ('s2n_uw_psf','f8'),
+                ('s2','f8'),
+                ('shear_true','f8',2),
+                ('gtrue','f8',2),
+                ('g','f8',2),
+                ('gsens','f8',2),
+                ('gcov','f8',(2,2)),
+                ('s2n_meas_w','f8'),  # weighted s/n based on most likely point
+                ('loglike','f8'),     # loglike of fit
+                ('chi2per','f8'),     # chi^2/degree of freedom
+                ('dof','i4'),         # degrees of freedom
+                ('fit_prob','f8')     # probability of the fit happening randomly
+               ]
+            if 'bayesfit' not in self['run']:
+                dt += [('arate','f8')]
+
+            if self['when_prior'] == 'after':
+                if self['eta']:
+                    dt += [('eta0','f8',2),
+                           ('etacov0','f8',(2,2))]
+                else:
+                    dt += [('g0','f8',2),
+                           ('gcov0','f8',(2,2))]
+        return dt
+
+
+
+
 class EmceeFitter:
     def __init__(self, 
                  image, 
