@@ -753,7 +753,7 @@ class BayesFitSimTprior(shapesim.BaseSim):
         # seed so that each itheta gets the same ellip values; otherwise no
         # ring
         gvals = self.get_gvals(is2, is2n, nellip)
-        Tvals = self.get_Tvals(??)
+        #Tvals = self.get_Tvals(??)
         out = zeros(nellip, dtype=self.out_dtype())
         out['s2'] = s2
         self['s2']=s2
