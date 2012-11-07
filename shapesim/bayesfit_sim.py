@@ -694,7 +694,7 @@ class BayesFitSimTprior(shapesim.BaseSim):
         Twidth = Tmean*self['Twidthfrac']
         self.Tprior = eu.random.LogNormal(T, Twidth)
 
-    def process_trials_by_s2n(self, is2n):
+    def process_trials_by_s2n(self, is2, is2n):
         """
         ring test
 
@@ -720,7 +720,7 @@ class BayesFitSimTprior(shapesim.BaseSim):
             dolog=False
             if i==0:
                 dolog=True
-            st = self.process_trial_by_s2n(is2n, itheta, dolog=dolog)
+            st = self.process_trial_by_s2n(is2, is2n, itheta, dolog=dolog)
             out[ii:ii+nellip] = st
             ii += nellip
 
@@ -728,7 +728,7 @@ class BayesFitSimTprior(shapesim.BaseSim):
         return out
 
 
-    def process_trial_by_s2n(self, is2n, itheta,
+    def process_trial_by_s2n(self, is2, is2n, itheta,
                              dowrite=False, 
                              dolog=False):
         """
@@ -752,8 +752,7 @@ class BayesFitSimTprior(shapesim.BaseSim):
         # these are generated on the same series every itheta for a given run
         # seed so that each itheta gets the same ellip values; otherwise no
         # ring
-        gvals = self.get_gvals(is2, is2n, nellip)
-        #Tvals = self.get_Tvals(??)
+        gvals,Tvals = self.get_gvals_Tvals(is2, is2n, nellip)
         out = zeros(nellip, dtype=self.out_dtype())
         out['s2'] = s2
         self['s2']=s2
@@ -1090,7 +1089,7 @@ class BayesFitSimTprior(shapesim.BaseSim):
             nellip=self['min_gcount']
         return nellip
 
-    def get_gvals(self, is2, is2n, nellip):
+    def get_gvals_Tvals(self, is2, is2n, nellip):
         if self['seed'] == None:
             raise ValueError("can't use null seed for bayesfit")
 
@@ -1104,10 +1103,12 @@ class BayesFitSimTprior(shapesim.BaseSim):
         numpy.random.seed(allseed)
         gvals = self.gprior.sample1d(nellip)
 
+        Tvals = self.Tprior.sample(nellip)
+
         # now random seed
         numpy.random.seed(None)
 
-        return gvals
+        return gvals, Tvals
 
 
     def out_dtype(self):
@@ -3363,4 +3364,63 @@ def randomize_e1e2(e1start,e2start, width=0.1):
 
     return e1rand, e2rand
 
+
+class MillerRdist:
+    """
+    Miller et al. 2012
+
+    r*exp(-(r/a)^alpha)
+    """
+    def __init__(self, rd):
+        """
+        note for exponentials, Miller et al. 2012 found
+
+            ln(rd/arcsec) ~ -1.145 - 0.269*(i_{814} - 23 )
+
+        where rd is the median of the major axis scale length
+        """
+        from math import sqrt,log
+        self.rd=rd
+        self.alpha=4./3.
+        self.a=rd/.833
+
+        # these are only for alpha=4/3
+        # note .66467=(3/4)gammainc(3/2,x**(4./3.))*gamma(3/2)
+        # for x->infinity. Reaches .997 of max at x=4.3, so
+        # we should generate randoms for r=a*x > 4.3*a
+        self.mode=self.a*( 3.**(3./4.)/2./sqrt(2.) )
+        self.norm=1./(self.a*.66467)
+        self.logofnorm=log(self.norm)
+        self.maxval = self.prob(self.mode)
+
+    def lnprob(self, r):
+        return self.logofnorm + log(r) - (r/self.a)**self.alpha
+
+    def prob(self, r):
+        return exp(self.lnprob(r))
+
+    def sample(self, nrand):
+        """
+        generating randoms to > a*4.3 gives "3 sigma" .997
+        a*5 gives .9993
+        """
+        minr=0
+        maxr=self.a*5.
+        generator=eu.random.CutGenerator(self.prob,[minr,maxr],self.maxval)
+        return generator.genrand(nrand)
+
+def test_miller_rdist(rd):
+    """
+    note ln(rd/arcsec) ~ -1.145 - 0.269*(i_{814} - 23 )
+    """
+
+    mrd=MillerRdist(rd)
+    minr=0.01
+    maxr=5.0*mrd.a
+    cr=eu.random.CutGenerator(mrd.prob, [minr,maxr], mrd.maxval)
+    cr.test()
+
+    x=numpy.linspace(0.01,25.0,100000)
+    p=mrd.prob(x)
+    print 'predicted maxval: %.16g found on grid: %.16g' % (mrd.maxval,p.max())
 
