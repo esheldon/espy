@@ -166,6 +166,11 @@ else:
             p.plots_shear1_frac_vs_s2n(yrng=yrng, xrng=xrng, 
                                        title=options.title,
                                        show=show)
+        if options.type=='efrac':
+            p.plots_shear1_frac_vs_err(yrng=yrng, xrng=xrng, 
+                                       title=options.title,
+                                       show=show)
+
         elif options.type=='ediff':
             p.plots_shear_vs_err(yrng=yrng, xrng=xrng, 
                                  title=options.title,

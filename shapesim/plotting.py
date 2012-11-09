@@ -1653,6 +1653,151 @@ class SimPlotter(dict):
         converter.convert(epsfile,dpi=100,verbose=True)
 
 
+    def plots_shear1_frac_vs_err(self, 
+                                 xrng=None,
+                                 yrng=None, 
+                                 title=None,
+                                 show=True):
+        """
+        special plotting just shear1 as a fraction of
+        true
+        """
+        import biggles
+        import pcolors
+        import converter
+
+        type='efrac'
+
+        biggles.configure("default","fontsize_min",2)
+        biggles.configure('_HalfAxis','ticks_size',2.5)
+        biggles.configure('_HalfAxis','subticks_size',2.5/2)
+        biggles.configure('PlotKey','key_width',13)
+        biggles.configure('PlotKey','key_vsep',1.0)
+
+        extra=''
+
+        runtype = self.get('runtype','byellip')
+        if runtype != 'bys2n':
+            raise ValueError("Can only make plots vs s2n for 'bys2n' runs")
+
+        shear_true = self.get_shear_true()
+
+        data = self.read_data()
+
+        epsfile = shapesim.get_plot_file(self['run'],type+extra,yrng=yrng)
+        wlog("will plot to:",epsfile)
+
+        if len(data) == 4:
+            colors=['red','forestgreen','NavajoWhite3','blue']
+            linetypes=['dotted','dashed','dotdashed','solid']
+        else:
+            colors=pcolors.rainbow(len(data), 'hex')
+            linetypes=['solid']*len(data)
+        point_types=['filled circle','filled diamond','filled square','filled triangle']
+
+        plt=biggles.FramedPlot()
+        plt.add( biggles.FillBetween([-500,500], [0.004,0.004], 
+                                     [-500,500], [-0.004,-0.004],
+                                     color=self.fill_color))
+
+
+        title=self.get_title(title=title)
+        if title:
+            plt.title=title
+ 
+
+        tag1='shear1'
+        errtag1='shear1err'
+        lab1=r'$\gamma$'
+
+
+        plots1=[]
+        allplots=[]
+
+
+        # looping over s2
+        for i,st in enumerate(reversed(data)):
+            #wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
+
+            s2 = median(st['s2'])
+
+            if True and 'g1err0_mean' in st.dtype.names:
+                err=st['g1err0_mean']
+                xlabel = r'$\sigma(\gamma) per galaxy (raw)$'
+            else:
+                xlabel = r'$\sigma(\gamma) per galaxy$'
+                g1sens_mean=st['g1sensum']/st['nsum']
+                err = st[errtag1]*sqrt(st['nsum'])*g1sens_mean
+
+          
+            yvals1 = (st[tag1] - shear_true.g1)/shear_true.g1
+
+            label = r'%0.3f' % s2
+
+            cwidth=5.
+            pr1 = biggles.Points(err, yvals1, color=colors[i],
+                                 size=2,
+                                 type=point_types[i])
+            cr1 = biggles.Curve(err, yvals1, color=colors[i],type=linetypes[i],width=cwidth)
+            cr1.label = label
+
+            plt.add(cr1,pr1)
+            
+            g1err = st[errtag1]/shear_true.g1
+            err1p = biggles.SymmetricErrorBarsY(err, yvals1, g1err,
+                                                color=colors[i])
+            plt.add(err1p)
+
+            plots1.append(cr1)
+
+
+        fsize=2
+        key1 = biggles.PlotKey(0.85,0.92, plots1, halign='right', 
+                               fontsize=fsize)
+        plt.add(key1)
+
+        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}: $'
+        klab = biggles.PlotLabel(.62,.92,klabtext,
+                                 fontsize=2.5,halign='right')
+        plt.add(klab)
+        objmodel = self.simc['objmodel']
+        psfmodel = self.simc['psfmodel']
+
+
+        plab='%s %s' % (objmodel,psfmodel)
+        l = biggles.PlotLabel(0.9,0.1, plab, halign='right')
+        plt.add(l)
+
+        plt.xlabel=xlabel
+
+
+        plt.ylabel = r'$\Delta \gamma/\gamma$'
+
+        g1lab_txt = lab1 + ' = %.2g' % shear_true.g1
+
+        g1lab = biggles.PlotLabel(0.1,0.9, g1lab_txt, halign='left')
+
+        plt.add(g1lab)
+
+
+        if yrng is not None:
+            plt.yrange = yrng
+        if xrng is None:
+            xrng=[.01,.4]
+        plt.xrange=xrng
+
+        expect1 = biggles.Curve(xrng, [0,0])
+        plt.add(expect1)
+
+        wlog("Writing plot file:",epsfile)
+        if show:
+            plt.show()
+        plt.write_eps(epsfile)
+        converter.convert(epsfile,dpi=100,verbose=True)
+
+
+
+
     def plots_shear_vs_err(self, 
                            xrng=None,
                            yrng=None, 
