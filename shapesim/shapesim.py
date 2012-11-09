@@ -1336,11 +1336,17 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
             #g1err = sqrt(g1scatt/num)
             #g2err = sqrt(g2scatt/num)
             if orient == 'ring':
-                SN=0.0
-                g1err2invsum = ( 1/(SN**2 + edata['gcov'][:,0,0]) ).sum()
-                g2err2invsum = ( 1/(SN**2 + edata['gcov'][:,1,1]) ).sum()
-                g1err = sqrt(1/g1err2invsum)/g1sens_mean
-                g2err = sqrt(1/g2err2invsum)/g2sens_mean
+                #SN=0.0
+                #g1err2invsum = ( 1/(SN**2 + edata['gcov'][:,0,0]) ).sum()
+                #g2err2invsum = ( 1/(SN**2 + edata['gcov'][:,1,1]) ).sum()
+                #g1err = sqrt(1/g1err2invsum)/g1sens_mean
+                #g2err = sqrt(1/g2err2invsum)/g2sens_mean
+                g1var = (g1-edata['gtrue'][:,0]).var()
+                g2var = (g2-edata['gtrue'][:,1]).var()
+                g1err2invsum = num/g1var
+                g2err2invsum = num/g2var
+                g1err = sqrt(g1var/num)
+                g2err = sqrt(g2var/num)
             else:
                 g1corr = g1/g1sens.mean()
                 g2corr = g2/g2sens.mean()

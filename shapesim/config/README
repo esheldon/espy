@@ -239,9 +239,9 @@ gmix-fit
                 three represent 20+40+40. To double would need 5 more 20s
                 gdt02r14,gdt02r15,gdt02r16,gdt02r17,gdt02r18 argh!
 
-                get02r03 - also tight prior, running.  Same as without
-                tight prior, good! Can average with and get02r02 (not get02r01
-                since raw error was not calculated)
+
+                get02r03 - also tight prior, running.  Similar to without
+                tight prior.
 
                 also doing get02r04 get02r05 with prior after and raw
                 cov calc for averaging with get02r03

@@ -578,6 +578,7 @@ class BayesFitSim(shapesim.BaseSim):
                                     eta=eta,
                                     temp=temp, # need to implement
                                     when_prior=self['when_prior'],
+                                    iter=self.get('iter',False),
                                     start_pars=start_pars) # Tprior/cenprior over-ride
 
 
@@ -1189,6 +1190,7 @@ class EmceeFitter:
                  mca_a=2.0,
                  temp=None,
                  when_prior='during', 
+                 iter=False,
                  start_pars=None):  # tprior,cenprior take precedence
         """
         mcmc sampling of posterior.
@@ -1236,6 +1238,7 @@ class EmceeFitter:
         self.nstep=nstep
         self.burnin=burnin
         self.gprior=gprior
+        self.iter=iter
         self.when_prior=when_prior
 
         self.start_pars=start_pars
@@ -1292,11 +1295,23 @@ class EmceeFitter:
         
         guess=self._get_guess()
 
-        pos, prob, state = sampler.run_mcmc(guess, self.burnin)
-        sampler.reset()
-        pos, prob, state = sampler.run_mcmc(pos, self.nstep)
+        if self.iter:
+            pos, prob, state = sampler.run_mcmc(guess, self.burnin)
+            sampler.reset()
+            while True:
+                pos, prob, state = sampler.run_mcmc(pos, self.nstep)
+                tau = (sampler.acor/self.burnin).max()
+                if tau > 0.1:
+                    wlog("tau",tau,"greater than 0.1")
+                else:
+                    break
+        else:
+            pos, prob, state = sampler.run_mcmc(guess, self.burnin)
+            sampler.reset()
+            pos, prob, state = sampler.run_mcmc(pos, self.nstep)
 
         self.trials  = sampler.flatchain
+
         lnprobs = sampler.lnprobability.reshape(self.nwalkers*self.nstep)
         self.lnprobs = lnprobs - lnprobs.max()
 
