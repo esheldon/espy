@@ -1070,84 +1070,6 @@ def make_averaged_outputs(run, docum=False,
         write_averaged_outputs(run, cumdata, docum=docum, skip1=skip1,fs='hdfs')
     return data
 
-def average_runs(runlist, new_run_name):
-    """
-    The runs must already be averaged and have the same size
-    in all indices of relevance
-    """
-
-    if 'bayes' in runlist[0]:
-        bayes=True
-        sumlist=['g1sum',
-                 'g2sum',
-                 'g1sensum',
-                 'g2sensum',
-                 'g1err2invsum',
-                 'g2err2invsum',
-                 'nsum']
-
-        f=get_averaged_url(runlist[0], 0, fs='hdfs')
-        t=eu.io.read(f)
-        if 'g1err0sum2' in t.dtype.names:
-            sumlist+=['g1err0sum2','g2err0sum2']
-    else:
-        sumlist=['e1sum',
-                 'e2sum',
-                 'e1err2invsum',
-                 'e2err2invsum',
-                 'esqsum',
-                 'nsum']
-        bayes=False
-
-    dir = get_output_dir(new_run_name)
-    if not os.path.exists(dir):
-        wlog("making dir:",dir)
-        os.makedirs(dir)
- 
-    c=read_config(runlist[0])
-    cs0=read_config(c['sim'])
-
-    numi1 = cs0['nums2']
-    for i1 in xrange(numi1):
-        for irun,run in enumerate(runlist):
-            f=get_averaged_url(run, i1, fs='hdfs')
-            wlog("Reading:",f)
-            d=eu.io.read(f)
-
-            if irun == 0:
-                data = d.copy()
-            else:
-                for field in sumlist:
-                    data[field] += d[field]
-            
-        # this is an array with mean for each in second index
-        if bayes:
-            g1sens_mean = data['g1sensum']/data['nsum']
-            g2sens_mean = data['g2sensum']/data['nsum']
-            data['shear1'] = data['g1sum']/data['g1sensum']
-            data['shear2'] = data['g2sum']/data['g2sensum']
-            data['shear1err'] = sqrt(1/data['g1err2invsum'])/g1sens_mean
-            data['shear2err'] = sqrt(1/data['g2err2invsum'])/g2sens_mean
-
-            if 'g1err0sum2' in sumlist:
-                data['g1err0_mean'] = sqrt(data['g1err0sum2']/data['nsum'])
-                data['g2err0_mean'] = sqrt(data['g2err0sum2']/data['nsum'])
-
-        else:
-            mesq = data['esqsum']/data['nsum']
-            data['Rshear'] = 1.-.5*mesq
-            data['shear1'] = .5*data['e1sum']/data['nsum']/data['Rshear']
-            data['shear2'] = .5*data['e2sum']/data['nsum']/data['Rshear']
-            data['shear1err'] = 0.5*sqrt(1/data['e1err2invsum'])
-            data['shear2err'] = 0.5*sqrt(1/data['e2err2invsum'])
-
-
-        for fs in [None,'hdfs']:
-            fout=get_averaged_url(new_run_name, i1, fs=fs)
-            wlog("    writing:",fout)
-            eu.io.write(fout, data, clobber=True)
-
-
 
 def read_all_outputs(run, 
                      verbose=False, 
@@ -1278,6 +1200,8 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                     ('pvarmeans','f8',npars),  # average of square error for each par
                     ('psums','f8',npars),
                     ('pvarsums','f8',npars),   # sum of square error for each par
+                    ('Ts2n_sum','f8'),
+                    ('Ts2n','f8'),
                     ('nsum','i8'),
                     ('shear1','f8'),
                     ('shear1err','f8'),
@@ -1376,12 +1300,16 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
             d['g2err2invsum'][i] = g2err2invsum
 
 
-            if 'pars' in edata.dtypes.names:
+            if 'pars' in edata.dtype.names:
                 for pi in xrange(npars):
-                    d['psums'][pi,i] = edata['pars'][:,i].sum()
-                    d['pvarsums'][pi,i] = edata['pars'][:,i,i].sum()
-                    d['pmeans'][pi,i] = d['psums'][pi,i]/num
-                    d['pvarmeans'][pi,i] = d['pvarsums'][pi,i]/num
+                    d['psums'][i,pi] = edata['pars'][:,pi].sum()
+                    d['pvarsums'][i,pi] = edata['pcov'][:,pi,pi].sum()
+                    d['pmeans'][i,pi] = d['psums'][i,pi]/num
+                    d['pvarmeans'][i,pi] = d['pvarsums'][i,pi]/num
+
+                Ts2n_vals=edata['pars'][:,4]/sqrt(edata['pcov'][:,4,4])
+                d['Ts2n_sum'][i] = Ts2n_vals.sum()
+                d['Ts2n'][i] = d['Ts2n_sum'][i]/num
 
             if 'gcov0' in data[0].dtype.names:
                 d['g1err0sum2'][i] = edata['gcov0'][:,0,0].sum()
@@ -1458,6 +1386,95 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                         d[n][i] = edata[n].mean()
 
     return d
+
+
+def average_runs(runlist, new_run_name):
+    """
+    The runs must already be averaged and have the same size
+    in all indices of relevance
+    """
+
+    if 'bayes' in runlist[0]:
+        bayes=True
+        sumlist=['g1sum',
+                 'g2sum',
+                 'g1sensum',
+                 'g2sensum',
+                 'g1err2invsum',
+                 'g2err2invsum',
+                 'nsum']
+
+        f=get_averaged_url(runlist[0], 0, fs='hdfs')
+        t=eu.io.read(f)
+        if 'g1err0sum2' in t.dtype.names:
+            sumlist+=['g1err0sum2','g2err0sum2']
+        if 'Ts2n_sum' in t.dtype.names:
+            print 'doing Ts2n'
+            sumlist +=['Ts2n_sum']
+    else:
+        sumlist=['e1sum',
+                 'e2sum',
+                 'e1err2invsum',
+                 'e2err2invsum',
+                 'esqsum',
+                 'nsum']
+        bayes=False
+
+    dir = get_output_dir(new_run_name)
+    if not os.path.exists(dir):
+        wlog("making dir:",dir)
+        os.makedirs(dir)
+ 
+    c=read_config(runlist[0])
+    cs0=read_config(c['sim'])
+
+    numi1 = cs0['nums2']
+    for i1 in xrange(numi1):
+        for irun,run in enumerate(runlist):
+            f=get_averaged_url(run, i1, fs='hdfs')
+            wlog("Reading:",f)
+            d=eu.io.read(f)
+
+            if irun == 0:
+                data = d.copy()
+            else:
+                for field in sumlist:
+                    data[field] += d[field]
+            
+        # this is an array with mean for each in second index
+        if bayes:
+            g1sens_mean = data['g1sensum']/data['nsum']
+            g2sens_mean = data['g2sensum']/data['nsum']
+            data['shear1'] = data['g1sum']/data['g1sensum']
+            data['shear2'] = data['g2sum']/data['g2sensum']
+            data['shear1err'] = sqrt(1/data['g1err2invsum'])/g1sens_mean
+            data['shear2err'] = sqrt(1/data['g2err2invsum'])/g2sens_mean
+            for d in data:
+                print '%.16g +/- %.16g' % (d['shear1'],d['shear1err'])
+
+            if 'g1err0sum2' in sumlist:
+                data['g1err0_mean'] = sqrt(data['g1err0sum2']/data['nsum'])
+                data['g2err0_mean'] = sqrt(data['g2err0sum2']/data['nsum'])
+
+            if 'Ts2n_sum' in t.dtype.names:
+                data['Ts2n'] = data['Ts2n_sum']/data['nsum']
+
+        else:
+            mesq = data['esqsum']/data['nsum']
+            data['Rshear'] = 1.-.5*mesq
+            data['shear1'] = .5*data['e1sum']/data['nsum']/data['Rshear']
+            data['shear2'] = .5*data['e2sum']/data['nsum']/data['Rshear']
+            data['shear1err'] = 0.5*sqrt(1/data['e1err2invsum'])
+            data['shear2err'] = 0.5*sqrt(1/data['e2err2invsum'])
+
+
+        for fs in [None,'hdfs']:
+            fout=get_averaged_url(new_run_name, i1, fs=fs)
+            wlog("    writing:",fout)
+            eu.io.write(fout, data, clobber=True)
+
+
+
 
 def average_randshear_outputs(data):
     """

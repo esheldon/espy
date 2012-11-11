@@ -1508,7 +1508,9 @@ class SimPlotter(dict):
                                  xrng=None,
                                  yrng=None, 
                                  title=None,
-                                 show=True):
+                                 show=True,
+                                 Ts2n=False,
+                                 nokey=False):
         """
         special plotting just shear1 as a fraction of
         true
@@ -1519,7 +1521,7 @@ class SimPlotter(dict):
 
         type='frac'
 
-        biggles.configure("default","fontsize_min",2)
+        biggles.configure("default","fontsize_min",2.5)
         biggles.configure('_HalfAxis','ticks_size',2.5)
         biggles.configure('_HalfAxis','subticks_size',2.5/2)
         biggles.configure('PlotKey','key_width',13)
@@ -1549,14 +1551,20 @@ class SimPlotter(dict):
         if len(data) == 4:
             colors=['red','forestgreen','NavajoWhite3','blue']
             linetypes=['dotted','dashed','dotdashed','solid']
+            cwidth=5.
+        elif len(data)==1:
+            colors=['darkblue']
+            linetypes=['solid']
+            cwidth=2.
         else:
             colors=pcolors.rainbow(len(data), 'hex')
             linetypes=['solid']*len(data)
+            cwidth=5.
         point_types=['filled circle','filled diamond','filled square','filled triangle']
 
         plt=biggles.FramedPlot()
-        plt.add( biggles.FillBetween([-500,500], [0.004,0.004], 
-                                     [-500,500], [-0.004,-0.004],
+        plt.add( biggles.FillBetween([1.e-6,500], [0.004,0.004], 
+                                     [1.e-6,500], [-0.004,-0.004],
                                      color=self.fill_color))
 
 
@@ -1575,6 +1583,12 @@ class SimPlotter(dict):
         plots1=[]
         allplots=[]
 
+        if Ts2n:
+            s2n_name='Ts2n'
+            xlabel = r'$(S/N)_{size}$'
+        else:
+            s2n_name='s2n_admom'
+            xlabel = 'S/N'
 
         # looping over s2
         for i,st in enumerate(reversed(data)):
@@ -1582,8 +1596,6 @@ class SimPlotter(dict):
 
             s2 = median(st['s2'])
 
-            s2n_name='s2n_admom'
-            xlabel = 'S/N'
 
             s2n = st[s2n_name]
 
@@ -1592,7 +1604,6 @@ class SimPlotter(dict):
 
             label = r'%0.3f' % s2
 
-            cwidth=5.
             pr1 = biggles.Points(s2n, yvals1, color=colors[i],
                                  size=2,
                                  type=point_types[i])
@@ -1601,23 +1612,23 @@ class SimPlotter(dict):
 
             plt.add(cr1,pr1)
             
-            g1err = st[errtag1]/shear_true.g1
-            err1p = biggles.SymmetricErrorBarsY(s2n, yvals1, g1err,
-                                                color=colors[i])
+            yerr1 = st[errtag1]/shear_true.g1
+            err1p = biggles.SymmetricErrorBarsY(s2n, yvals1, yerr1, color=colors[i])
             plt.add(err1p)
 
             plots1.append(cr1)
 
 
         fsize=2
-        key1 = biggles.PlotKey(0.85,0.92, plots1, halign='right', 
-                               fontsize=fsize)
-        plt.add(key1)
+        if not nokey:
+            key1 = biggles.PlotKey(0.85,0.92, plots1, halign='right', 
+                                   fontsize=fsize)
+            plt.add(key1)
 
-        klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}: $'
-        klab = biggles.PlotLabel(.62,.92,klabtext,
-                                 fontsize=2.5,halign='right')
-        plt.add(klab)
+            klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}: $'
+            klab = biggles.PlotLabel(.62,.92,klabtext,
+                                     fontsize=2.5,halign='right')
+            plt.add(klab)
         objmodel = self.simc['objmodel']
         psfmodel = self.simc['psfmodel']
 
@@ -1637,13 +1648,15 @@ class SimPlotter(dict):
 
         plt.add(g1lab)
 
-        erange=[0.2*s2n.min(),1.05*s2n.max()]
-        expect1 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()], [0,0])
+        xrng=[2., 120.]
+        expect1 = biggles.Curve(xrng, [0,0])
 
         plt.aspect_ratio=1
 
         plt.add(expect1)
-        plt.xrange=[0.,erange[1]]
+
+        plt.xrange=xrng
+        plt.xlog=True
 
         if yrng is not None:
             plt.yrange = yrng

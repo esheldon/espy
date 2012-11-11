@@ -246,6 +246,11 @@ gmix-fit
                 also doing get02r04 get02r05 with prior after and raw
                 cov calc for averaging with get02r03
             
+        gdt03r01,r02 - Keeping track of all pars and will plot vs. Ts2n
+        get03r01,r02 - same as gdt03*
+
+        TODO: try putting a prior on T?  Will this make T s/n be equal
+            for everything noisier than some level?
 
         mca-gdt02r01 - working in e1,e2 space and no prior, for comparison
             - not sure what to make of it
