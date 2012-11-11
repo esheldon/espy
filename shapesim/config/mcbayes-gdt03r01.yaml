@@ -1,10 +1,10 @@
-run: mcbayes-get02rtest
-sim: sim-get02
+run: mcbayes-gdt03r01
+sim: sim-gdt03
 
 runtype: bys2n
 
 # need to set this for the trials to work.
-seed: 5369
+seed: 1913
 
 s2n_method: admom
 s2n_fac: 20
@@ -18,8 +18,7 @@ retrim_fluxfrac: null
 s2ncalc_fluxfrac: null
 
 s2n_psf: 1.0e+8
-#s2nvals: [10,15,20,25,30,40,50,60,70,80,90,100]
-s2nvals: [10,15,20,25,30,40,50,60,70,80,90,100,120,140,160,180,200,250,300,350,400]
+s2nvals: [40,50,60,70,80,90,100,120,140,160,180,200,250,300,350,400,500,600,700]
 
 fixcen: false
 fixT: false
@@ -27,13 +26,12 @@ fixT: false
 # step and burnin are *per walker*
 nwalkers: 20
 nstep: 200 # steps per walker
-#burnin: 200 # burnin per walker. good enought up to s/n 300 or so. may  differ for dev!
-burnin: 400 # burnin per walker.  3 needed for s2n > 300
+burnin: 400 # burnin per walker.
 
 Tprior: false
 Twidthfrac: null
 logT: false
-eta: false 
+eta: false
 
 iter: true
 
@@ -46,7 +44,7 @@ add_to_cache: false
 verbose: false
 
 ngauss_psf: 3
-fitmodel: 'gexp'
+fitmodel: 'gdev'
 
 coellip_psf: true
 coellip_obj: true

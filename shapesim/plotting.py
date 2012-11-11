@@ -1640,6 +1640,8 @@ class SimPlotter(dict):
         erange=[0.2*s2n.min(),1.05*s2n.max()]
         expect1 = biggles.Curve([0.2*s2n.min(),1.05*s2n.max()], [0,0])
 
+        plt.aspect_ratio=1
+
         plt.add(expect1)
         plt.xrange=[0.,erange[1]]
 
@@ -1788,6 +1790,7 @@ class SimPlotter(dict):
 
         expect1 = biggles.Curve(xrng, [0,0])
         plt.add(expect1)
+        plt.aspect_ratio=1
 
         wlog("Writing plot file:",epsfile)
         if show:

@@ -1267,12 +1267,17 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                     ('gamma2sum','f8'),
                     ('nsum','i8')]
     elif bayes:
+        npars=data[0]['pars'].shape[1]
         dt_extra = [('g1sum','f8'),
                     ('g2sum','f8'),
                     ('g1sensum','f8'),
                     ('g2sensum','f8'),
                     ('g1err2invsum','f8'),
                     ('g2err2invsum','f8'),
+                    ('pmeans','f8',npars),
+                    ('pvarmeans','f8',npars),  # average of square error for each par
+                    ('psums','f8',npars),
+                    ('pvarsums','f8',npars),   # sum of square error for each par
                     ('nsum','i8'),
                     ('shear1','f8'),
                     ('shear1err','f8'),
@@ -1336,17 +1341,19 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
             #g1err = sqrt(g1scatt/num)
             #g2err = sqrt(g2scatt/num)
             if orient == 'ring':
-                #SN=0.0
-                #g1err2invsum = ( 1/(SN**2 + edata['gcov'][:,0,0]) ).sum()
-                #g2err2invsum = ( 1/(SN**2 + edata['gcov'][:,1,1]) ).sum()
-                #g1err = sqrt(1/g1err2invsum)/g1sens_mean
-                #g2err = sqrt(1/g2err2invsum)/g2sens_mean
+                SN=0.0
+                g1err2invsum = ( 1/(SN**2 + edata['gcov'][:,0,0]) ).sum()
+                g2err2invsum = ( 1/(SN**2 + edata['gcov'][:,1,1]) ).sum()
+                g1err = sqrt(1/g1err2invsum)/g1sens_mean
+                g2err = sqrt(1/g2err2invsum)/g2sens_mean
+                """
                 g1var = (g1-edata['gtrue'][:,0]).var()
                 g2var = (g2-edata['gtrue'][:,1]).var()
                 g1err2invsum = num/g1var
                 g2err2invsum = num/g2var
                 g1err = sqrt(g1var/num)
                 g2err = sqrt(g2var/num)
+                """
             else:
                 g1corr = g1/g1sens.mean()
                 g2corr = g2/g2sens.mean()
@@ -1369,6 +1376,12 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
             d['g2err2invsum'][i] = g2err2invsum
 
 
+            if 'pars' in edata.dtypes.names:
+                for pi in xrange(npars):
+                    d['psums'][pi,i] = edata['pars'][:,i].sum()
+                    d['pvarsums'][pi,i] = edata['pars'][:,i,i].sum()
+                    d['pmeans'][pi,i] = d['psums'][pi,i]/num
+                    d['pvarmeans'][pi,i] = d['pvarsums'][pi,i]/num
 
             if 'gcov0' in data[0].dtype.names:
                 d['g1err0sum2'][i] = edata['gcov0'][:,0,0].sum()
