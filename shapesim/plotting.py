@@ -1585,7 +1585,7 @@ class SimPlotter(dict):
 
         if Ts2n:
             s2n_name='Ts2n'
-            xlabel = r'$(S/N)_{size}$'
+            xlabel = r'$(S/N)_{T}$'
         else:
             s2n_name='s2n_admom'
             xlabel = 'S/N'
