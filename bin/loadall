@@ -16,7 +16,7 @@ parser=OptionParser(__doc__)
 parser.add_option("-d","--date",action='store_true',
                   help="print the date at the end")
 
-NMACHINE=34
+NMACHINE=44
 #NMACHINE=10
 MACHINE_SKIP=['astro0012','astro0013','astro0014',
               'astro0015','astro0016','astro0017',
