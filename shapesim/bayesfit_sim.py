@@ -1289,11 +1289,17 @@ class EmceeFitter:
             sampler.reset()
             while True:
                 pos, prob, state = sampler.run_mcmc(pos, self.nstep)
-                tau = (sampler.acor/self.burnin).max()
-                if tau > 0.1:
-                    wlog("tau",tau,"greater than 0.1")
-                else:
-                    break
+                try:
+                    acor=sampler.acor
+                    tau = (sampler.acor/self.burnin).max()
+                    if tau > 0.1:
+                        wlog("tau",tau,"greater than 0.1")
+                    else:
+                        break
+                except:
+                    # something went wrong with acor, run some more
+                    pass
+
         else:
             pos, prob, state = sampler.run_mcmc(guess, self.burnin)
             sampler.reset()
