@@ -84,7 +84,6 @@ def make_output(data):
            ('imz','f4')]
 
 
-    #pprint.pprint(dt)
     out=zeros(data.size, dtype=dt)
 
     for n in data.dtype.names:
@@ -104,6 +103,7 @@ def make_output(data):
     out['imz'] = data['model_mag'][:,3]-data['model_mag'][:,4]
 
     return out
+
 def main():
     options, args = parser.parse_args(sys.argv[1:])
     if len(args) == 0:
@@ -128,19 +128,6 @@ def main():
     s.execute('ALTER TABLE rm ADD comments TEXT')
 
     print 'adding indices'
-    """
-    index_cols=['mem_match_id',
-                'ra','dec',
-                'imag',
-                'lambda_chisq',
-                'z_lambda','zred','bcg_spec_z','z',
-                'p_bcg_1','umg','gmr','rmi','imz',
-                'lnlamlike','lnbcglike',
-                'maskfrac','comments']
-    for icol in index_cols:
-        print '    ',icol
-        s.add_index('rm',icol)
-    """      
 
     for icol in out.dtype.names:
         print '    ',icol
