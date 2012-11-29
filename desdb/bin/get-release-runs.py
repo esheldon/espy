@@ -31,6 +31,8 @@ def main():
         parser.print_help()
         sys.exit(45)
 
+    conn=desdb.Connection(user=options.user,password=options.password)
+
     release=args[0].strip()
     filetype=args[1].strip()
 
@@ -41,28 +43,37 @@ def main():
     else:
         extra='order by run'
 
-    base=desdb.files.des_net_rootdir()
-
-    query="""
-    select
-        distinct(run),
-        '%(base)s/' || '%(filetype)s/' || run || '/%(filetype)s' as url,
-        '$DESDATA/' || '%(filetype)s/' || run || '/%(filetype)s' as path,
-        nite,
-        tilename
-    from
-        %(release)s_files
-    where
-        filetype='%(filetype)s' %(extra)s\n""" % {'base':base,
-                                                  'release':release,
-                                                  'filetype':filetype,
-                                                  'extra':extra}
-
-    conn=desdb.Connection(user=options.user,password=options.password)
-
     if options.url:
+        import deswl
+        base=deswl.files.des_rootdir(fs='net')
+
+        query="""
+        select
+            distinct(run),
+            '%(base)s/' || '%(filetype)s/' || run || '/%(filetype)s' as url,
+            '$DESDATA/' || '%(filetype)s/' || run || '/%(filetype)s' as path,
+            nite,
+            tilename
+        from
+            %(release)s_files
+        where
+            filetype='%(filetype)s' %(extra)s\n""" % {'base':base,
+                                                      'release':release,
+                                                      'filetype':filetype,
+                                                      'extra':extra}
         conn.quickWrite(query,fmt=options.format,show=options.show)
     else:
+        query="""
+        select
+            distinct(run),nite,tilename
+        from
+            %(release)s_files
+        where
+            filetype='%(filetype)s' %(extra)s
+        """ % {'release':release,
+               'filetype':filetype,
+               'extra':extra}
+
         res=conn.quick(query,show=options.show)
         for r in res:
             print r['run']
