@@ -1,10 +1,13 @@
 # vim: set filetype=python :
 import os
 
-default_version = 'v0.64'
-base_url = 'https://desweb.cosmology.illinois.edu/svn/desdm/devel/tmv'
-source_type = 'svn'
-get_method = 'svn export'
+default_version = '0.71'
+
+url="""
+'http://tmv-cpp.googlecode.com/files/tmv%s.tar.gz' % (self.version)
+"""
+
+source_type = 'tar'
 install_method = 'scons'
 
 # figure out how many processors we can use
@@ -16,5 +19,25 @@ try:
 except:
     nproc=1
 #build_flags = 'IMPORT_PATHS=True WITH_LAPACK=False WITH_UPS=True WITH_OPENMP=False -j %s' % nproc
-build_flags = 'WITH_LAPACK=False WITH_UPS=True WITH_OPENMP=False SHARED=True -j %s' % nproc
+build_flags = 'WITH_OPENMP=False SHARED=True -j %s' % nproc
+
+# for the modules system
+create_module_file='''"""#%%Module
+# vim: set filetype=tcl :
+
+module-whatis	"TMV"
+conflict tmv
+
+set PRODUCT_DIR %s
+set TMV_DIR $PRODUCT_DIR
+
+prepend-path PATH            $TMV_DIR/bin
+prepend-path LD_LIBRARY_PATH $TMV_DIR/lib
+prepend-path LIBRARY_PATH    $TMV_DIR/lib
+prepend-path C_INCLUDE_PATH  $TMV_DIR/include
+prepend-path CPATH           $TMV_DIR/include
+
+setenv TMV_DIR $TMV_DIR
+
+""" % self.install_dir'''
 
