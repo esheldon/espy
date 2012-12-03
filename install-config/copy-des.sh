@@ -4,4 +4,4 @@ rsync -av \
       --exclude "*swp" \
       --exclude "*~" \
       --exclude "*pyc" \
-      . $DES_MODULES_ROOT/install-config/
+      . $DES_MODULES_CONFIG/

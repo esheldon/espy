@@ -21,23 +21,17 @@ conflict desoracle
 set DESORACLE_DIR %s
 
 set ORACLE_HOME $DESORACLE_DIR/instantclient_11_2
-setenv ORACLE_HOME $ORACLE_HOME 
 
 prepend-path LD_LIBRARY_PATH $ORACLE_HOME
 prepend-path LIBRARY_PATH    $ORACLE_HOME
 prepend-path C_INCLUDE_PATH  $ORACLE_HOME
 prepend-path CPATH           $ORACLE_HOME
+prepend-path PATH            $ORACLE_HOME
 
 prepend-path PYTHONPATH $DESORACLE_DIR/cx_Oracle-5.1.1-ess
 
+setenv ORACLE_HOME $ORACLE_HOME 
+setenv DESORACLE_DIR $DESORACLE_DIR
 """ % self.install_dir'''
 
 
-# create the ups directory after installation
-create_ups="""
-setupRequired("cfitsio")
-envPrepend(LD_LIBRARY_PATH,${PRODUCT_DIR}/lib)
-envPrepend(LIBRARY_PATH,${PRODUCT_DIR}/lib)
-envPrepend(C_INCLUDE_PATH,${PRODUCT_DIR}/include)
-envPrepend(CPATH,${PRODUCT_DIR}/include)
-"""

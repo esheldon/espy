@@ -16,6 +16,11 @@ try:
     nproc = os.sysconf('SC_NPROCESSORS_ONLN')
     if not isinstance(nproc,int) or nproc <= 0:
         nproc=1
+
+    # only use half
+    nproc=nproc/2
+    if nproc < 1:
+        nproc=1
 except:
     nproc=1
 #build_flags = 'IMPORT_PATHS=True WITH_LAPACK=False WITH_UPS=True WITH_OPENMP=False -j %s' % nproc

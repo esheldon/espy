@@ -19,7 +19,7 @@ module-whatis	"libaio"
 conflict libaio
 
 set PRODUCT_DIR %s
-setenv LIBAIO_DIR PRODUCT_DIR
+setenv LIBAIO_DIR $PRODUCT_DIR
 
 prepend-path LD_LIBRARY_PATH $PRODUCT_DIR/lib
 prepend-path LIBRARY_PATH    $PRODUCT_DIR/lib
