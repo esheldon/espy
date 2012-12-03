@@ -1,7 +1,41 @@
+import copy
 import os
 from sys import stderr
 from . import desdb
-import deswl
+from esutil.ostools import path_join, getenv_check
+
+def get_default_fs():
+    return os.environ.get('DES_DEFAULT_FS','nfs')
+
+def get_des_rootdir(**keys):
+    default_fs=get_default_fs()
+    fs=keys.get('fs',default_fs)
+    if fs == 'nfs':
+        return get_nfs_rootdir()
+    elif fs == 'hdfs':
+        return get_hdfs_rootdir()
+    elif fs == 'net':
+        return get_net_rootdir()
+    else:
+        raise ValueError("fs should be 'nfs' or 'hdfs'")
+
+def get_nfs_rootdir():
+    if 'DESDATA' not in os.environ:
+        raise ValueError("The DESDATA environment variable is not set")
+    return os.environ['DESDATA']
+
+def get_hdfs_rootdir():
+    return 'hdfs:///user/esheldon/DES'
+
+def get_net_rootdir():
+    if 'DESREMOTE' not in os.environ:
+        raise ValueError("The DESREMOTE environment variable is not set")
+    return os.environ['DESREMOTE']
+
+def get_scratch_dir():
+    if 'DES_SCRATCH' not in os.environ:
+        raise ValueError("The DES_SCRATCH environment variable is not set")
+    return os.environ['DES_SCRATCH']
 
 def get_url(type, **keys):
     df=DESFiles(**keys)
@@ -42,7 +76,7 @@ def get_red_info(release, band,
                  show=True,
                  doprint=False, fmt='json'):
 
-    net_rootdir=deswl.files.des_rootdir(fs='net')
+    net_rootdir=get_des_rootdir(fs='net')
 
     # note removing 0 dec stuff because there are dups
     query="""
@@ -214,7 +248,7 @@ class Coadd(dict):
                  id=None, 
                  run=None, band=None, 
                  dataset=None, tilename=None,
-                 fs=deswl.files._default_fs,
+                 fs=None,
                  verbose=False, 
                  user=None, password=None,
                  conn=None):
@@ -249,6 +283,8 @@ class Coadd(dict):
         self['tilename'] = tilename
 
         self.verbose=verbose
+        if not fs:
+            fs=get_default_fs()
         self.fs=fs
 
 
@@ -420,31 +456,41 @@ class DESFiles:
     """
     Generate file urls/paths from filetype, run, etc.
 
-    The returned name is a local path or web url.  The generic
-    name "url" is used for both.
+    The returned name is a local path or web url.  The generic name "url" is
+    used for both.
 
     parameters
     ----------
-    root: string, optional
-        The root for filenames.  Defaults to the DESDATA environment
-        variable.
-
-        If you send root='net', the following is used:
-            ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES
-
-    Notes
-    -----
-    - Currently / is used for all path separators.  Good on unix and the web.
-    
+    fs: string, optional
+        The file system.  Default is DES_DEFAULT_FS
     """
-    def __init__(self, fs=deswl.files._default_fs):
+    def __init__(self, fs=None):
+        if not fs:
+            fs=get_default_fs()
         self.fs = fs
-        self.root=deswl.files.des_rootdir(fs=self.fs)
+        self._root=get_des_rootdir(fs=self.fs)
 
     def root(self):
-        return self.root
+        return self._root
     
     def dir(self, type=None, **keys):
+        """
+        Get the DES directory for the input file type
+
+        parameters
+        ----------
+        type: string
+            The directory type, e.g. 'red_run'.  See the _fs
+            dict.  If None, the root directory is returned
+        run: string
+            The run id
+        expname:
+            Exposure name
+            Can also be built up by sending keywords
+                pointing,band and visit
+        fs:
+            over-ride the default file system
+        """
         if type is None:
             return self.root()
 
@@ -457,6 +503,33 @@ class DESFiles:
         return url
 
     def url(self, type=None, **keys):
+        """
+        Get the URL (local or remote) for the file type.
+
+        parameters
+        ----------
+        type: string
+            The file type, e.g. 'red_image'.  See the _fs dict.
+            dict.  If None, the root directory is returned
+        run: string
+            The run id
+
+        The rest of the URL is built up from some combination
+        of the following that depends on the file type
+
+        expname:
+            Exposure name
+            Can also be built up by sending keywords
+                pointing, band and visit
+        ccd: string/number
+            The ccd number
+        band: string
+            The band, e.g. 'i'
+        tilename: string
+            Tilename for coadds
+        fs:
+            over-ride the default file system
+        """
         if type is None:
             return self.root()
 
@@ -468,7 +541,7 @@ class DESFiles:
     name=url
 
     def _expand_desvars(self, url, **keys):
-        keys['fs'] = self.fs
+        keys['fs'] = keys.get('fs',self.fs)
         return expand_desvars(url, **keys)
 
 
@@ -502,9 +575,8 @@ _fs['coadd_cat']   = {'remote_dir': _fs['coadd_run']['remote_dir'],
 def expand_desvars(string_in, **keys):
 
     string=string_in
-    fs=keys.get('fs',deswl.files._default_fs)
-    root=deswl.files.des_rootdir(fs=fs)
-    root_remote=deswl.files.des_rootdir(fs='net')
+    root=get_des_rootdir(**keys)
+    root_remote=get_des_rootdir(fs='net')
 
     if string.find('$DESDATA') != -1:
         string = string.replace('$DESDATA', root)

@@ -44,8 +44,7 @@ def main():
         extra='order by run'
 
     if options.url:
-        import deswl
-        base=deswl.files.des_rootdir(fs='net')
+        base=desdb.files.get_des_rootdir(fs='net')
 
         query="""
         select
