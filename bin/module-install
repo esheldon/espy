@@ -294,6 +294,7 @@ class ModuleInstaller(object):
         if prompt is None:
             prompt=self.prompt
 
+        self.MakeTempDir()
         self.Get()
         self.Extract()
         #self.InstallDeps(prompt=prompt)
@@ -303,18 +304,19 @@ class ModuleInstaller(object):
         #self.Declare()
         self.Cleanup()
 
-    
-    def Get(self):
-        """
-        Creates the build_dir, changes into that directory, and gets the
-        data.  The CWD remains the build_dir after running this program
-        """
-
+    def MakeTempDir(self):
         if self.verbose:
             stdout.write('\nCreating temporary build dir...  ')
         self.build_dir=self.TempBuildDir()
         if self.verbose:
             stdout.write('%s\n' % self.build_dir)
+   
+    def Get(self):
+        """
+        cd to the build_dir and get the data.  Remains in the 
+        build dir after running this program
+        """
+
 
         # from here on out everything references the build dir except for
         # the install dir
@@ -349,6 +351,8 @@ class ModuleInstaller(object):
                 URLLibGet(url)
             except:
                 URLLib2Get(url)
+        elif self.get_method is None:
+            pass
         else:
             raise ValueError("Unsupported get_method: '%s'" % self.get_method)
 
