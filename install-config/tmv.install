@@ -43,6 +43,7 @@ prepend-path C_INCLUDE_PATH  $TMV_DIR/include
 prepend-path CPATH           $TMV_DIR/include
 
 setenv TMV_DIR $TMV_DIR
+setenv TMV_VERS %s
 
-""" % self.install_dir'''
+""" % (self.install_dir,self.version)'''
 
