@@ -17,12 +17,18 @@ import esutil as eu
 from esutil.ostools import path_join
 from esutil.numpy_util import where1
 
-import es_sdsspy
-from es_sdsspy import stomp_maps
+try:
+    import cosmology
+except:
+    from esutil import cosmology
+try:
+    import es_sdsspy
+    from es_sdsspy import stomp_maps
+except:
+    pass
 
 from . import binning
 
-import cosmology
 
 def instantiate_sample(**keys):
     sample=keys['sample']

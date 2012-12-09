@@ -29,7 +29,11 @@ from numpy import log10, unique, sqrt, exp
 import esutil as eu
 from esutil.numpy_util import where1
 from esutil.ostools import path_join
-import sdsspy
+try:
+    import sdsspy
+except:
+    pass
+
 from . import stomp_maps
 
 try:

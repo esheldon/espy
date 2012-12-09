@@ -1,10 +1,14 @@
 import sys
 from sys import stdout, stderr
 import os
-import sdsspy
 import numpy
 from numpy import where, isscalar, rad2deg, arccos
 import esutil as eu
+
+try:
+    import sdsspy
+except:
+    pass
 
 try:
     import stomp

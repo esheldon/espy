@@ -14,7 +14,10 @@ import deswl
 import numpy
 from numpy import arange
 
-import columns
+try:
+    import columns
+except:
+    print("could not import columns")
 
 def open_columns(run):
     coldir=deswl.files.coldir(run)

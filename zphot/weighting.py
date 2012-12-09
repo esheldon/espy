@@ -136,8 +136,11 @@ from esutil.numpy_util import where1
 from esutil.stat import histogram
 from esutil.plotting import make_hist_curve
 
-import es_sdsspy
-import sdsspy
+try:
+    import es_sdsspy
+    import sdsspy
+except:
+    pass
 
 import biggles
 from biggles import FramedPlot, FramedArray, PlotKey, Histogram, \

@@ -31,7 +31,7 @@ def main():
         sys.exit(1)
 
     run = args[0]
-    expname = args[0]
+    expname = args[1]
     combine=True
     if options.nocombine:
         combine=False

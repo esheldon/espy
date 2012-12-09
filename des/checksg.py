@@ -14,8 +14,6 @@ class SizeMagPlotter(dict):
             self[k] = v
         if 'ptype' not in self:
             self['ptype'] = 'png'
-        if 'fs' not in self:
-            self['fs'] = 'nfs'
 
         if self['ptype'] in ['png','eps']:
             self['fext']=self['ptype']
@@ -84,7 +82,7 @@ class SizeMagPlotter(dict):
         import biggles
 
         if self.cols is None:
-            f = deswl.files.se_url(expname,ccd,'stars',serun=self['run'],fs=self['fs'])
+            f = deswl.modules.shapelets.get_se_filename('stars',self['run'],expname,ccd)
             data = eu.io.read(f)
             magname='mag'
         else:

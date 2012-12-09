@@ -1,4 +1,3 @@
-from __future__ import print_function
 import esutil as eu
 from numpy import tanh, arctanh, sqrt
 from numpy.random import random as randu

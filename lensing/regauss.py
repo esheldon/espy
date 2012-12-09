@@ -23,30 +23,33 @@ classes:
 from __future__ import print_function
 import os, sys
 import glob
-import sdsspy
-from sdsspy.atlas.atlas import NoAtlasImageError
-import es_sdsspy
+
+
 import numpy
 from numpy import where,sqrt
 import esutil as eu
 from esutil.numpy_util import where1
 from esutil.ostools import path_join, expand_path
 
-import biggles
-from biggles import FramedPlot, PlotKey, Table, PlotLabel, Points, \
-            SymmetricErrorBarsY as SymErrY, SymmetricErrorBarsX as SymErrX
-
 import images
-import fimage
-from fimage.conversions import mom2fwhm
-import admom
-
-import zphot
 
 try:
+
+    import sdsspy
+    from sdsspy.atlas.atlas import NoAtlasImageError
+    import es_sdsspy
+    import biggles
+
+    import fimage
+    from fimage.conversions import mom2fwhm
+
+    import admom
+    import zphot
     import columns
 except:
-    pass
+    print("could not import external modules")
+
+
 
 def open_columns(procrun, sweeptype):
     coll = Collator(procrun, sweeptype)

@@ -226,16 +226,23 @@ from . import condor
 from . import wqsubmit
 
 
-from . import regauss
-from . import regauss_test
-from . import regauss_sim
+try:
+    from . import regauss
+    from . import regauss_test
+    from . import regauss_sim
+except:
+    pass
 
 try:
     from . import gmix_sdss
 except:
     pass
 
-from . import princeton
+try:
+    from . import princeton
+except:
+    pass
+
 from . import files
 from . import pbslens
 
