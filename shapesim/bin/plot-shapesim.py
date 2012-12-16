@@ -53,6 +53,8 @@ parser.add_option('--noerr',action="store_true",
                   help="don't show error bars")
 parser.add_option('--noshow',action="store_true",
                   help="don't show")
+parser.add_option('--nokey',action="store_true",
+                  help="don't show the key")
 
 
 parser.add_option('--use-rb',action="store_true",
@@ -166,6 +168,16 @@ else:
             p.plots_shear1_frac_vs_s2n(yrng=yrng, xrng=xrng, 
                                        title=options.title,
                                        show=show)
+        elif options.type=='Tfrac':
+            p.plots_shear1_frac_vs_s2n(yrng=yrng, xrng=xrng, 
+                                       title=options.title,
+                                       show=show, Ts2n=True, 
+                                       nokey=options.nokey)
+        elif options.type=='efrac':
+            p.plots_shear1_frac_vs_err(yrng=yrng, xrng=xrng, 
+                                       title=options.title,
+                                       show=show)
+
         elif options.type=='ediff':
             p.plots_shear_vs_err(yrng=yrng, xrng=xrng, 
                                  title=options.title,

@@ -4,7 +4,8 @@ import os
 
 default_version='1.6.6'
 url="""
-'http://ftp.heanet.ie/mirrors/sourceforge/b/project/bi/biggles/biggles/%s/python2-biggles-%s.tar.gz' % (self.version,self.version)"""
+'http://downloads.sourceforge.net/project/biggles/biggles/%s/python2-biggles-%s.tar.gz' % (self.version,self.version)"""
+
 source_type = 'tar'
 
 

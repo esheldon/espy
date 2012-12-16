@@ -10,7 +10,6 @@ from esutil.numpy_util import where1
 import numpy
 
 import converter
-import recfile
 
 def get_match_dir(serun,merun):
     sedir=deswl.files.collated_dir(serun)

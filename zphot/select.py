@@ -15,7 +15,10 @@ try:
 except:
     pass
 
-import es_sdsspy
+try:
+    import es_sdsspy
+except:
+    print("could not import es_sdsspy")
 
 import zphot
 

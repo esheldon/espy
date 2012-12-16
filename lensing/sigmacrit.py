@@ -5,8 +5,12 @@ import esutil
 from esutil import cosmology as cosmo
 from esutil.ostools import path_join
 from esutil.numpy_util import where1
-import zphot
 from math import pi as PI
+
+try:
+    import zphot
+except:
+    print("could not load module zphot")
 
 def make_zlvals(dzl, zlmin, zlmax):
     """

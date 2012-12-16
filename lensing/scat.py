@@ -16,7 +16,10 @@ from . import regauss
 
 import copy
 
-import zphot
+try:
+    import zphot
+except:
+    pass
 
 def instantiate_sample(sample):
     conf = lensing.files.read_config('scat', sample)

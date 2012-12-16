@@ -76,12 +76,6 @@ TODO:
             gg08r04 - old prior, emcee, fixed cen, prior during
                 - running
 
-            Idea from Anze: run with higher "temperature" to make sure we
-            explore the tails.  Waiting to see if 'during' gg08r04 looks
-            better, if so will try it on that, otherwise will try on
-            new prior.
-                mcbayes-gg10r13: temp=2, free cen, new prior
-                - had wrong formula
 
             - along same lines, maybe need more points in after-burnin to see
             tail?  Try using 400 per in gg10r14
@@ -315,6 +309,9 @@ class BayesFitSim(shapesim.BaseSim):
 
             res = self.fitter.get_result()
 
+            out['pars'][i,:] = res['pars']
+            out['pcov'][i,:,:] = res['pcov']
+
             if 'gcov' in res:
                 out['g'][i,:] = res['g']
                 out['gsens'][i,:] = res['gsens']
@@ -322,8 +319,6 @@ class BayesFitSim(shapesim.BaseSim):
             else:
                 out['e'][i,:] = res['e']
                 out['ecov'][i,:,:] = res['ecov']
-                out['pars'][i,:] = res['pars']
-                out['pcov'][i,:,:] = res['pcov']
                 out['emed'][i,:] = res['emed']
 
             out['s2n_meas_w'][i] = res['s2n_w']
@@ -474,7 +469,7 @@ class BayesFitSim(shapesim.BaseSim):
                              
             prior[0]=ci['cen_uw'][0]*(1.0+0.1*(randu()-0.5))
             prior[1]=ci['cen_uw'][1]*(1.0+0.1*(randu()-0.5))
-            prior[2],prior[3] = randomize_e1e2(0.0, 0.0)
+            prior[2],prior[3] = randomize_e1e2(None,None)
             prior[4] = Tguess*(1.0+0.1*(randu()-0.5))
             prior[5] = counts*(1.0+0.01*(randu()-0.5))
 
@@ -513,7 +508,6 @@ class BayesFitSim(shapesim.BaseSim):
             # we might have a very bad guess, increase burnin
             burnin=self['burnin']*4
 
-        temp=self.get('temp',None)
         if self['fixcen']:
             raise ValueError("fixcen no longer supported")
         elif 'margamp' in self and self['margamp']:
@@ -528,7 +522,6 @@ class BayesFitSim(shapesim.BaseSim):
                                     nwalkers=self['nwalkers'],
                                     nstep=self['nstep'], 
                                     burnin=burnin,
-                                    temp=temp, # need to implement
                                     when_prior=self['when_prior'])
         elif 'mca' in self['run']:
             cenprior=CenPrior(ci['cen'], [0.1]*2)
@@ -577,8 +570,8 @@ class BayesFitSim(shapesim.BaseSim):
                                     logT=logT,
                                     mca_a=self['mca_a'],
                                     eta=eta,
-                                    temp=temp, # need to implement
                                     when_prior=self['when_prior'],
+                                    iter=self.get('iter',False),
                                     start_pars=start_pars) # Tprior/cenprior over-ride
 
 
@@ -614,8 +607,8 @@ class BayesFitSim(shapesim.BaseSim):
     def out_dtype(self):
         if self['fitmodel'] not in ['gexp','gdev']:
             raise ValueError("expected 6 parameter fitmodel e.g. 'gdev','gexp'")
+        npars=6
         if 'mca' in self['run']:
-            npars=6
             dt=[('s2n_admom','f8'),
                 ('s2n_matched','f8'),
                 ('s2n_uw','f8'),
@@ -651,6 +644,8 @@ class BayesFitSim(shapesim.BaseSim):
                 ('g','f8',2),
                 ('gsens','f8',2),
                 ('gcov','f8',(2,2)),
+                ('pars','f8',npars),
+                ('pcov','f8',(npars,npars)),
                 ('s2n_meas_w','f8'),  # weighted s/n based on most likely point
                 ('loglike','f8'),     # loglike of fit
                 ('chi2per','f8'),     # chi^2/degree of freedom
@@ -695,7 +690,7 @@ class BayesFitSimTprior(shapesim.BaseSim):
         Twidth = Tmean*self['Twidthfrac']
         self.Tprior = eu.random.LogNormal(T, Twidth)
 
-    def process_trials_by_s2n(self, is2n):
+    def process_trials_by_s2n(self, is2, is2n):
         """
         ring test
 
@@ -721,7 +716,7 @@ class BayesFitSimTprior(shapesim.BaseSim):
             dolog=False
             if i==0:
                 dolog=True
-            st = self.process_trial_by_s2n(is2n, itheta, dolog=dolog)
+            st = self.process_trial_by_s2n(is2, is2n, itheta, dolog=dolog)
             out[ii:ii+nellip] = st
             ii += nellip
 
@@ -729,7 +724,7 @@ class BayesFitSimTprior(shapesim.BaseSim):
         return out
 
 
-    def process_trial_by_s2n(self, is2n, itheta,
+    def process_trial_by_s2n(self, is2, is2n, itheta,
                              dowrite=False, 
                              dolog=False):
         """
@@ -753,8 +748,7 @@ class BayesFitSimTprior(shapesim.BaseSim):
         # these are generated on the same series every itheta for a given run
         # seed so that each itheta gets the same ellip values; otherwise no
         # ring
-        gvals = self.get_gvals(is2, is2n, nellip)
-        #Tvals = self.get_Tvals(??)
+        gvals,Tvals = self.get_gvals_Tvals(is2, is2n, nellip)
         out = zeros(nellip, dtype=self.out_dtype())
         out['s2'] = s2
         self['s2']=s2
@@ -974,7 +968,7 @@ class BayesFitSimTprior(shapesim.BaseSim):
                              
             prior[0]=ci['cen_uw'][0]*(1.0+0.1*(randu()-0.5))
             prior[1]=ci['cen_uw'][1]*(1.0+0.1*(randu()-0.5))
-            prior[2],prior[3] = randomize_e1e2(0.0, 0.0)
+            prior[2],prior[3] = randomize_e1e2(None,None)
             prior[4] = Tguess*(1.0+0.1*(randu()-0.5))
             prior[5] = counts*(1.0+0.01*(randu()-0.5))
 
@@ -1013,7 +1007,6 @@ class BayesFitSimTprior(shapesim.BaseSim):
             # we might have a very bad guess, increase burnin
             burnin=self['burnin']*4
 
-        temp=self.get('temp',None)
         if self['fixcen']:
             raise ValueError("fixcen no longer supported")
         elif 'margamp' in self and self['margamp']:
@@ -1028,7 +1021,6 @@ class BayesFitSimTprior(shapesim.BaseSim):
                                     nwalkers=self['nwalkers'],
                                     nstep=self['nstep'], 
                                     burnin=burnin,
-                                    temp=temp, # need to implement
                                     when_prior=self['when_prior'])
         elif 'mca' in self['run']:
             cenprior=CenPrior(ci['cen'], [0.1]*2)
@@ -1077,7 +1069,6 @@ class BayesFitSimTprior(shapesim.BaseSim):
                                     logT=logT,
                                     mca_a=self['mca_a'],
                                     eta=eta,
-                                    temp=temp, # need to implement
                                     when_prior=self['when_prior'],
                                     start_pars=start_pars) # Tprior/cenprior over-ride
 
@@ -1091,7 +1082,7 @@ class BayesFitSimTprior(shapesim.BaseSim):
             nellip=self['min_gcount']
         return nellip
 
-    def get_gvals(self, is2, is2n, nellip):
+    def get_gvals_Tvals(self, is2, is2n, nellip):
         if self['seed'] == None:
             raise ValueError("can't use null seed for bayesfit")
 
@@ -1105,10 +1096,12 @@ class BayesFitSimTprior(shapesim.BaseSim):
         numpy.random.seed(allseed)
         gvals = self.gprior.sample1d(nellip)
 
+        Tvals = self.Tprior.sample(nellip)
+
         # now random seed
         numpy.random.seed(None)
 
-        return gvals
+        return gvals, Tvals
 
 
     def out_dtype(self):
@@ -1139,6 +1132,7 @@ class BayesFitSimTprior(shapesim.BaseSim):
                ]
 
         else:
+            npars=6
             dt=[('s2n_admom','f8'),
                 ('s2n_matched','f8'),
                 ('s2n_uw','f8'),
@@ -1151,6 +1145,8 @@ class BayesFitSimTprior(shapesim.BaseSim):
                 ('g','f8',2),
                 ('gsens','f8',2),
                 ('gcov','f8',(2,2)),
+                ('pars','f8',npars),
+                ('pcov','f8',(npars,npars)),
                 ('s2n_meas_w','f8'),  # weighted s/n based on most likely point
                 ('loglike','f8'),     # loglike of fit
                 ('chi2per','f8'),     # chi^2/degree of freedom
@@ -1187,8 +1183,8 @@ class EmceeFitter:
                  logT=False,
                  eta=False,
                  mca_a=2.0,
-                 temp=None,
                  when_prior='during', 
+                 iter=False,
                  start_pars=None):  # tprior,cenprior take precedence
         """
         mcmc sampling of posterior.
@@ -1236,6 +1232,7 @@ class EmceeFitter:
         self.nstep=nstep
         self.burnin=burnin
         self.gprior=gprior
+        self.iter=iter
         self.when_prior=when_prior
 
         self.start_pars=start_pars
@@ -1248,10 +1245,6 @@ class EmceeFitter:
             self.T_is_prior=False
 
         self.tpars=zeros(6,dtype='f8')
-
-        if temp is not None and when_prior=='after':
-            raise ValueError("don't support temp for when_prior after yet")
-        self.temp=temp
 
         self._go()
 
@@ -1292,11 +1285,29 @@ class EmceeFitter:
         
         guess=self._get_guess()
 
-        pos, prob, state = sampler.run_mcmc(guess, self.burnin)
-        sampler.reset()
-        pos, prob, state = sampler.run_mcmc(pos, self.nstep)
+        if self.iter:
+            pos, prob, state = sampler.run_mcmc(guess, self.burnin)
+            sampler.reset()
+            while True:
+                pos, prob, state = sampler.run_mcmc(pos, self.nstep)
+                try:
+                    acor=sampler.acor
+                    tau = (sampler.acor/self.burnin).max()
+                    if tau > 0.1:
+                        wlog("tau",tau,"greater than 0.1")
+                    else:
+                        break
+                except:
+                    # something went wrong with acor, run some more
+                    pass
+
+        else:
+            pos, prob, state = sampler.run_mcmc(guess, self.burnin)
+            sampler.reset()
+            pos, prob, state = sampler.run_mcmc(pos, self.nstep)
 
         self.trials  = sampler.flatchain
+
         lnprobs = sampler.lnprobability.reshape(self.nwalkers*self.nstep)
         self.lnprobs = lnprobs - lnprobs.max()
 
@@ -1368,8 +1379,6 @@ class EmceeFitter:
             Tp = self.T.lnprob(T)
             logprob += Tp
 
-        if self.temp is not None:
-            logprob /= self.temp
         return logprob
 
     def _get_convolved_gmix(self,pars):
@@ -1439,19 +1448,23 @@ class EmceeFitter:
         gcov0=None
         if self.when_prior=='after':
             # this will be eta not g if using that parametrization
-            g0,gcov0 = mcmc.extract_stats(self.trials[:,2:2+2])
+            g0,gcov0 = mcmc.extract_stats(self.trials[:,2:4])
 
+            pars, pcov = mcmc.extract_stats(self.trials,weights=prior)
             # we need to multiply each by the prior
+            """
             g[0] = (g1vals*prior).sum()/psum
             g[1] = (g2vals*prior).sum()/psum
 
-            g1diff = g[0]-g1vals
-            g2diff = g[1]-g2vals
 
             gcov[0,0] = (g1diff**2*prior).sum()/psum
             gcov[0,1] = (g1diff*g2diff*prior).sum()/psum
             gcov[1,0] = gcov[0,1]
             gcov[1,1] = (g2diff**2*prior).sum()/psum
+            """
+
+            g[:] = pars[2:4]
+            gcov[:,:] = pcov[2:4, 2:4]
 
             # now the sensitivity is 
             #  sum( (<g>-g) L*dP/dg )
@@ -1460,6 +1473,8 @@ class EmceeFitter:
             #
             # the likelihood is already in the points
 
+            g1diff = g[0]-g1vals
+            g2diff = g[1]-g2vals
             gsens[0] = 1. - (g1diff*dpri_by_g1).sum()/psum
             gsens[1] = 1. - (g2diff*dpri_by_g2).sum()/psum
         else:
@@ -1467,11 +1482,11 @@ class EmceeFitter:
             # points.  This is simpler for most things but
             # for sensitivity we need a factor of (1/P)dP/de
 
-            wt=None
-            if self.temp is not None:
-                wt=exp(self.lnprobs*(1.-1./self.temp))
+            pars,pcov = mcmc.extract_stats(self.trials)
+            #g, gcov = mcmc.extract_stats(self.trials[:,2:2+2])
 
-            g, gcov = mcmc.extract_stats(self.trials[:,2:2+2],weights=wt)
+            g[:] = pars[2:4]
+            gcov[:,:] = pcov[2:4, 2:4]
 
             g1diff = g[0]-g1vals
             g2diff = g[1]-g2vals
@@ -1480,17 +1495,8 @@ class EmceeFitter:
             if w.size == 0:
                 raise ValueError("no prior values > 0!")
 
-            if wt is None:
-                gsens[0]= 1.-(g1diff[w]*dpri_by_g1[w]/prior[w]).mean()
-                gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
-            else:
-                wsum=wt[w].sum()
-                sum1=(wt[w]*g1diff[w]*dpri_by_g1[w]/prior[w]).sum()
-                sum2=(wt[w]*g2diff[w]*dpri_by_g2[w]/prior[w]).sum()
-
-                gsens[0]= 1.-sum1/wsum
-                gsens[1]= 1.-sum2/wsum
-
+            gsens[0]= 1.-(g1diff[w]*dpri_by_g1[w]/prior[w]).mean()
+            gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
 
  
         arates = self._emcee_sampler.acceptance_fraction
@@ -1508,6 +1514,8 @@ class EmceeFitter:
                       'gsens':gsens,
                       g0name+'0':g0,
                       g0name+'cov0':gcov0,
+                      'pars':pars,
+                      'pcov':pcov,
                       'arate':arate,
                       's2n_w':s2n,
                       'loglike':loglike,
@@ -1687,6 +1695,8 @@ class EmceeFitter:
         else:
             print 'T:  %.16g +/- %.16g' % (Tvals.mean(), Tvals.std())
 
+        print_pars(self._result['pars'])
+        print_pars(sqrt(diag(self._result['pcov'])))
         print 'g1: %.16g +/- %.16g' % (g[0],errs[0])
         print 'g2: %.16g +/- %.16g' % (g[1],errs[1])
         print 'median g1:  %.16g ' % median(g1vals)
@@ -2405,11 +2415,7 @@ class EmceeFitterMargAmp:
             # points.  This is simpler for most things but
             # for sensitivity we need a factor of (1/P)dP/de
 
-            wt=None
-            if self.temp is not None:
-                wt=exp(self.lnprobs*(1.-1./self.temp))
-
-            g, gcov = mcmc.extract_stats(self.trials[:,2:2+2],weights=wt)
+            g, gcov = mcmc.extract_stats(self.trials[:,2:2+2])
 
             g1diff = g[0]-g1vals
             g2diff = g[1]-g2vals
@@ -2418,18 +2424,8 @@ class EmceeFitterMargAmp:
             if w.size == 0:
                 raise ValueError("no prior values > 0!")
 
-            if wt is None:
-                gsens[0]= 1.-(g1diff[w]*dpri_by_g1[w]/prior[w]).mean()
-                gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
-            else:
-                wsum=wt[w].sum()
-                sum1=(wt[w]*g1diff[w]*dpri_by_g1[w]/prior[w]).sum()
-                sum2=(wt[w]*g2diff[w]*dpri_by_g2[w]/prior[w]).sum()
-
-                gsens[0]= 1.-sum1/wsum
-                gsens[1]= 1.-sum2/wsum
-
-
+            gsens[0]= 1.-(g1diff[w]*dpri_by_g1[w]/prior[w]).mean()
+            gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
  
         arates = self._emcee_sampler.acceptance_fraction
         arate = arates.mean()
@@ -3345,23 +3341,88 @@ def test(n_ggrid=19, n=1000, s2n=40, gmin=-.9, gmax=.9, show=False, clobber=Fals
     return means, alldata
 
 def randomize_e1e2(e1start,e2start, width=0.1):
-    if e1start == 0 and e2start==0:
+    if e1start == 0 or e1start is None or e2start==0 or e2start is None:
         e1rand = 0.05*(randu()-0.5)
         e2rand = 0.05*(randu()-0.5)
     else:
+        e1rand = e1start*(1 + 2*width*(randu()-0.5))
+        e2rand = e2start*(1 + 2*width*(randu()-0.5))
+        etot = sqrt(e1rand**2 + e2rand**2)
+        if etot > 0.95:
+            e1rand,e2rand=randomize_e1e2(None,None)
+
+        """
         nmax=100
         ii=0
         while True:
             e1rand = e1start*(1 + 2*width*(randu()-0.5))
             e2rand = e2start*(1 + 2*width*(randu()-0.5))
-            etot = sqrt(e1rand**2 + e2rand**2)
             if etot < 0.95:
                 break
             ii += 1
             if ii==nmax:
                 wlog("---- hit max try on randomize e1e2, setting zero and restart")
-                return randomize_e1e2(0.0,0.0)
-
+                return randomize_e1e2(None,None)
+        """
     return e1rand, e2rand
 
+
+class MillerRdist:
+    """
+    Miller et al. 2012
+
+    r*exp(-(r/a)^alpha)
+    """
+    def __init__(self, rd):
+        """
+        note for exponentials, Miller et al. 2012 found
+
+            ln(rd/arcsec) ~ -1.145 - 0.269*(i_{814} - 23 )
+
+        where rd is the median of the major axis scale length
+        """
+        from math import sqrt,log
+        self.rd=rd
+        self.alpha=4./3.
+        self.a=rd/.833
+
+        # these are only for alpha=4/3
+        # note .66467=(3/4)gammainc(3/2,x**(4./3.))*gamma(3/2)
+        # for x->infinity. Reaches .997 of max at x=4.3, so
+        # we should generate randoms for r=a*x > 4.3*a
+        self.mode=self.a*( 3.**(3./4.)/2./sqrt(2.) )
+        self.norm=1./(self.a*.66467)
+        self.logofnorm=log(self.norm)
+        self.maxval = self.prob(self.mode)
+
+    def lnprob(self, r):
+        return self.logofnorm + log(r) - (r/self.a)**self.alpha
+
+    def prob(self, r):
+        return exp(self.lnprob(r))
+
+    def sample(self, nrand):
+        """
+        generating randoms to > a*4.3 gives "3 sigma" .997
+        a*5 gives .9993
+        """
+        minr=0
+        maxr=self.a*5.
+        generator=eu.random.CutGenerator(self.prob,[minr,maxr],self.maxval)
+        return generator.genrand(nrand)
+
+def test_miller_rdist(rd):
+    """
+    note ln(rd/arcsec) ~ -1.145 - 0.269*(i_{814} - 23 )
+    """
+
+    mrd=MillerRdist(rd)
+    minr=0.01
+    maxr=5.0*mrd.a
+    cr=eu.random.CutGenerator(mrd.prob, [minr,maxr], mrd.maxval)
+    cr.test()
+
+    x=numpy.linspace(0.01,25.0,100000)
+    p=mrd.prob(x)
+    print 'predicted maxval: %.16g found on grid: %.16g' % (mrd.maxval,p.max())
 

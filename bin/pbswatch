@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-    %prog [options username] 
+    %prog [options] 
 
     This program runs 
         qstat -n -1    
@@ -30,6 +30,10 @@ except:
     import curses.wrapper as curses_wrapper
 
 parser=OptionParser(__doc__)
+parser.add_option("-u","--user",default=None, 
+    help="restruct to the given user.")
+parser.add_option("-q","--queue",default=None, 
+    help="restruct to the given queue.")
 parser.add_option("-r","--refresh",default=30, 
     help="refresh rate in seconds.  default is %default")
 parser.add_option("-d","--dark",action="store_true", 
@@ -87,7 +91,7 @@ def SetColors(dark,light):
         colors['nexiting'] = curses.color_pair(red)
         colors['ncompleted'] = curses.color_pair(green)
 
-def qstat(stdscr, username, refresh_rate, dark, light):
+def qstat(stdscr, username, queue, refresh_rate, dark, light):
 
     MakeColorPairs()
     SetColors(dark,light)
@@ -115,11 +119,14 @@ def qstat(stdscr, username, refresh_rate, dark, light):
         sout=GetQstat(username)
         sout = sout.split('\n')
 
-        stats = GetQstatStats(sout, username)
+        stats = GetQstatStats(sout, username, queue)
         PrintStats(curses, win1, stats, username)
         ii=0
         for line in sout:
             if ii < maxy3 and ii > 1:
+                if queue and ii > 4:
+                    if not check_queue(line, queue):
+                        continue
                 win3.addstr(ii-2, 0, line[0:maxx3])
             ii+=1
         win3.refresh()
@@ -128,10 +135,16 @@ def qstat(stdscr, username, refresh_rate, dark, light):
         if c == ord('q'): 
             break
 
+def check_queue(line, queue):
+    ls=line.split()
+    if len(ls) >= 3:
+        return ls[2] == queue
+    else:
+        return False
 
 
-def GetQstat(username):
-    if username != 'any':
+def GetQstat(username=None):
+    if username:
         command = 'qstat -n -1 -u %s' % username
     else:
         command = 'qstat -n -1'
@@ -143,7 +156,7 @@ def GetQstat(username):
 
 
 
-def GetQstatStats(sout, username):
+def GetQstatStats(sout, username, queue):
     # gather some statistics
 
     sd={'njobs':0, 
@@ -160,7 +173,12 @@ def GetQstatStats(sout, username):
 
         #if len(ls) >= 11:
         if len(ls) >= 12:
-            if ls[0] != 'Job' and (ls[1] == username or username == 'any'):
+            if ls[0] != 'Job' and (ls[1] == username or username == None):
+
+                if queue:
+                    if ls[2] != queue:
+                        continue
+
                 sd['njobs'] += 1
                 jobstat = ls[9]
                 if jobstat == "R":
@@ -185,7 +203,7 @@ def GetQstatStats(sout, username):
 def PrintStats(curses, win, stats, username):
     win.erase()
     # begin at second line, far left
-    if username != 'any':
+    if username:
         win.addstr(1, 0, 'Jobs for %s:' % (username,), colors['njobs'] )
     else:
         win.addstr(1, 0, 'Jobs:', colors['njobs'] )
@@ -218,12 +236,14 @@ def PrintStats(curses, win, stats, username):
 if __name__=="__main__":
     try:
         options, args = parser.parse_args(sys.argv[1:])
-        if len(args) > 0:
-            user=args[0]
-        else:
-            user='any'
+
+        if not options.dark and not options.light:
+            # if we want other to use this, should remove
+            # this 
+            options.dark=True
         curses_wrapper(qstat, 
-                       user, 
+                       options.user, 
+                       options.queue,
                        int(options.refresh), 
                        options.dark,
                        options.light)

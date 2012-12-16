@@ -682,7 +682,7 @@ class GMixFitSim(shapesim.BaseSim):
 
         if psf is not None:
             if ngauss == 3:
-                prior[2],prior[3] = randomize_e1e2(0., 0.)
+                prior[2],prior[3] = randomize_e1e2(None,None)
 
                 # should really be 0.08, 0.0 for dev
                 Tfracs = array([0.3, 0.0])
@@ -1482,7 +1482,7 @@ class GMixGalSim(dict):
             elif ngauss==1:
                 prior[0] += 1*(randu()-0.5)
                 prior[1] += 1*(randu()-0.5)
-                prior[2],prior[3] = randomize_e1e2(0., 0.)
+                prior[2],prior[3] = randomize_e1e2(None,None)
                 prior[4] =      T*(1. + .1*(randu()-0.5))
                 prior[5] = counts*(1. + .1*(randu()-0.5))
 
@@ -1653,7 +1653,34 @@ class GMixGalSim(dict):
         wlog(fname)
         eu.io.write(fname,output,clobber=True)
 
-def randomize_e1e2(e1start,e2start):
+def randomize_e1e2(e1start,e2start, width=0.1):
+    if e1start == 0 or e1start is None or e2start==0 or e2start is None:
+        e1rand = 0.05*(randu()-0.5)
+        e2rand = 0.05*(randu()-0.5)
+    else:
+        e1rand = e1start*(1 + 2*width*(randu()-0.5))
+        e2rand = e2start*(1 + 2*width*(randu()-0.5))
+        etot = sqrt(e1rand**2 + e2rand**2)
+        if etot > 0.95:
+            e1rand,e2rand=randomize_e1e2(None,None)
+
+        """
+        nmax=100
+        ii=0
+        while True:
+            e1rand = e1start*(1 + 2*width*(randu()-0.5))
+            e2rand = e2start*(1 + 2*width*(randu()-0.5))
+            if etot < 0.95:
+                break
+            ii += 1
+            if ii==nmax:
+                wlog("---- hit max try on randomize e1e2, setting zero and restart")
+                return randomize_e1e2(None,None)
+        """
+    return e1rand, e2rand
+
+
+def randomize_e1e2_old(e1start,e2start):
     if e1start == 0 and e2start==0:
         e1rand = 0.05*(randu()-0.5)
         e2rand = 0.05*(randu()-0.5)

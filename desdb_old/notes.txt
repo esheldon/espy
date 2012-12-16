@@ -12,5 +12,3 @@ How will we know when a nite is ready to download?
 
 Should we expect a "rolling release" situation?  For example, perhaps we can
 monitor the database for "red" and "coadd" runs that are marked as ready?
-
--e

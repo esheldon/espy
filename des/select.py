@@ -8,9 +8,14 @@ import des
 import os
 from sys import stdout
 import deswl
-import columns
 import numpy
 from numpy import where
+
+try:
+    import columns
+except:
+    print("could not import columns")
+
 
 import esutil as eu
 from esutil.ostools import path_join

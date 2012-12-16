@@ -223,19 +223,34 @@ gmix-fit
 
              get02 - 6 gaussians for exp
                 get02r01
-
                 get02r02
                     - using prior after and will look at shear error vs cov0 
             
              TODO: add more stats to gdt02r08 and get02r02
                 - gdt02r09,gdt02r10
-                - get02r03?
 
             Ran with tight prior on T
-                gdt02r11 - looks unbiased.  Note implemented doing the
+
+                gdt02r11 - looks fairly unbiased.  Note implemented doing the
                 fitter as first step since at high s/n convergence was slow
-                get02r03 - also tight prior, running
+                gdt02r12 and gdt02r13 for averaging.  Need more!  Note because
+                if wierd errors with file system, probably better to run
+                more smaller s2n_fac, but I'll need *lots* of them!  These
+                three represent 20+40+40. To double would need 5 more 20s
+                gdt02r14,gdt02r15,gdt02r16,gdt02r17,gdt02r18 argh!
+
+
+                get02r03 - also tight prior, running.  Similar to without
+                tight prior.
+
+                also doing get02r04 get02r05 with prior after and raw
+                cov calc for averaging with get02r03
             
+        gdt03r01,r02 - Keeping track of all pars and will plot vs. Ts2n
+        get03r01,r02 - same as gdt03*
+
+        TODO: try putting a prior on T?  Will this make T s/n be equal
+            for everything noisier than some level?
 
         mca-gdt02r01 - working in e1,e2 space and no prior, for comparison
             - not sure what to make of it

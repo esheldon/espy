@@ -23,8 +23,6 @@ from biggles import FramedPlot, PlotKey, Table, PlotLabel, Points, \
 
 import pprint
 
-import fimage
-from fimage.conversions import mom2sigma,mom2fwhm
 
 from . import regauss
 

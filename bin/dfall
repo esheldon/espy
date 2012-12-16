@@ -22,8 +22,7 @@ parser.add_option("-d","--date",action='store_true',
 # Some data
 #
 
-# we won't use the name node, astro0033
-NMACHINE=34
+NMACHINE=44
 MACHINE_SKIP=['astro0012','astro0013','astro0014',
               'astro0015','astro0016','astro0017',
               'astro0018','astro0019','astro0020',

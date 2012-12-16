@@ -3,9 +3,12 @@ from sys import stderr
 import numpy
 import esutil as eu
 from esutil.numpy_util import where1
-import lensing
 import deswl
 import converter
+try:
+    import lensing
+except:
+    pass
 
 from . import collate
 

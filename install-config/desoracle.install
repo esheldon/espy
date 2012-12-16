@@ -1,0 +1,37 @@
+# vim: set filetype=python :
+# this is for the oracle libraries
+
+default_version='1'
+
+url="""
+'http://www.cosmo.bnl.gov/www/esheldon/code/misc/des-oracle-linux-x86-64-v%s.tar.gz' % self.version"""
+source_type = 'tar'
+
+# special command for this!
+install_command="""'./do-install %s' % self.install_dir"""
+
+# for the modules system
+create_module_file='''"""#%%Module
+# vim: set filetype=tcl :
+
+module-whatis	"desoracle"
+
+conflict desoracle
+
+set DESORACLE_DIR %s
+
+set ORACLE_HOME $DESORACLE_DIR/instantclient_11_2
+
+prepend-path LD_LIBRARY_PATH $ORACLE_HOME
+prepend-path LIBRARY_PATH    $ORACLE_HOME
+prepend-path C_INCLUDE_PATH  $ORACLE_HOME
+prepend-path CPATH           $ORACLE_HOME
+prepend-path PATH            $ORACLE_HOME
+
+prepend-path PYTHONPATH $DESORACLE_DIR/cx_Oracle-5.1.1-ess
+
+setenv ORACLE_HOME $ORACLE_HOME 
+setenv DESORACLE_DIR $DESORACLE_DIR
+""" % self.install_dir'''
+
+

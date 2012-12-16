@@ -1,7 +1,10 @@
 from __future__ import print_function
-import cosmology
 import lensing
 import esutil as eu
+try:
+    import cosmology
+except:
+    from esutil import cosmology
 
 from numpy import sqrt, zeros
 
