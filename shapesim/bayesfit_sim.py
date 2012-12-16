@@ -137,6 +137,7 @@ import gmix_image
 from gmix_image import print_pars
 import images
 import esutil as eu
+from esutil.random import srandu
 from esutil.misc import wlog
 
 
@@ -364,75 +365,70 @@ class BayesFitSim(shapesim.BaseSim):
                   'icc':psfres['Icc']}]
         elif self['ngauss_psf']==2:
 
+            Texamp=array([12.6,3.8])
+            pexamp=array([0.30, 0.70])
+
+            Tfrac=Texamp/Texamp.sum()
+            pfrac=pexamp/pexamp.sum()
+
             prior=zeros(npars)
             width=zeros(npars) + 100
 
             Tpsf=psfres['Irr']+psfres['Icc']
 
-            Tmax=Tpsf*1.7
-            Tfrac1=0.8/1.7
-
             prior[0]=psfres['row']
             prior[1]=psfres['col']
             prior[2]=psfres['e1']
             prior[3]=psfres['e2']
-            prior[4] = Tmax
-            prior[5] = Tfrac1 
-
-            prior[6] = 0.418*counts
-            prior[7] = 0.582*counts
+            prior[4:4+2] = Tpsf*Tfrac
+            prior[6:6+2] = counts*pfrac
 
             # randomize
-            prior[0] += 0.01*(randu()-0.5)
-            prior[1] += 0.01*(randu()-0.5)
+            prior[0] += 0.01*srandu()
+            prior[1] += 0.01*srandu()
 
             e1start=prior[2]
             e2start=prior[3]
             prior[2],prior[3] = randomize_e1e2(e1start,e2start)
 
-            prior[4] += prior[4]*0.05*(randu()-0.5)
-            prior[5] += prior[5]*0.05*(randu()-0.5)
-            prior[6] += prior[6]*0.05*(randu()-0.5)
-            prior[7] += prior[7]*0.05*(randu()-0.5)
+            prior[4:npars] = prior[4:npars]*(1+0.05*srandu(2*ngauss))
 
             gm = gmix_image.GMixFitCoellip(ci.psf, ci['skysig_psf'],
                                            prior,width,
                                            Tpositive=True)
             psf=gm.get_gmix()
         elif self['ngauss_psf']==3:
+            # these are good for guessing, but the final answer is
+            # often a bit off from here
+            Texamp=array([0.46,5.95,2.52])
+            pexamp=array([0.1,0.7,0.22])
+
+            Tfrac=Texamp/Texamp.sum()
+            pfrac=pexamp/pexamp.sum()
+
 
             prior=zeros(npars)
             width=zeros(npars) + 100
 
             Tpsf=psfres['Irr']+psfres['Icc']
-            Tmax = Tpsf*8.3
-            Tfrac1 = 1.7/8.3
-            Tfrac2 = 0.8/8.3
+
             prior[0]=psfres['row']
             prior[1]=psfres['col']
             prior[2]=psfres['e1']
             prior[3]=psfres['e2']
-            prior[4] = Tmax
-            prior[5] = Tfrac1 
-            prior[6] = Tfrac2
 
-            prior[7] = 0.08*counts
-            prior[8] = 0.38*counts
-            prior[9] = 0.53*counts
+            prior[4:4+3] = Tpsf*Tfrac
+            prior[7:7+3] = counts*pfrac
 
             # randomize
-            prior[0] += 0.01*(randu()-0.5)
-            prior[1] += 0.01*(randu()-0.5)
+            prior[0] += 0.01*srandu()
+            prior[1] += 0.01*srandu()
             e1start=prior[2]
             e2start=prior[3]
             prior[2],prior[3] = randomize_e1e2(e1start,e2start)
 
-            prior[4] += prior[4]*0.05*(randu()-0.5)
-            prior[5] += prior[5]*0.05*(randu()-0.5)
-            prior[6] += prior[6]*0.05*(randu()-0.5)
-            prior[7] += prior[7]*0.05*(randu()-0.5)
-            prior[8] += prior[8]*0.05*(randu()-0.5)
-            prior[9] += prior[9]*0.05*(randu()-0.5)
+
+            prior[4:npars] = prior[4:npars]*(1+0.05*srandu(2*ngauss))
 
             gm = gmix_image.GMixFitCoellip(ci.psf, ci['skysig_psf'],
                                            prior,width,
@@ -467,11 +463,11 @@ class BayesFitSim(shapesim.BaseSim):
         ntry=10
         for i in xrange(ntry):
                              
-            prior[0]=ci['cen_uw'][0]*(1.0+0.1*(randu()-0.5))
-            prior[1]=ci['cen_uw'][1]*(1.0+0.1*(randu()-0.5))
+            prior[0]=ci['cen_uw'][0]*(1.+ .1*srandu())
+            prior[1]=ci['cen_uw'][1]*(1.+ .1*srandu())
             prior[2],prior[3] = randomize_e1e2(None,None)
-            prior[4] = Tguess*(1.0+0.1*(randu()-0.5))
-            prior[5] = counts*(1.0+0.01*(randu()-0.5))
+            prior[4] = Tguess*(1. + .10*srandu())
+            prior[5] = counts*(1. + .01*srandu())
 
             gm = gmix_image.GMixFitCoellip(ci.image, 
                                            ci['skysig'],
@@ -3339,6 +3335,7 @@ def test(n_ggrid=19, n=1000, s2n=40, gmin=-.9, gmax=.9, show=False, clobber=Fals
     print 'error per ring:',means.std()
 
     return means, alldata
+
 
 def randomize_e1e2(e1start,e2start, width=0.1):
     if e1start == 0 or e1start is None or e2start==0 or e2start is None:
