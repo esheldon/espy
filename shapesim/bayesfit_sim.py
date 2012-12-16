@@ -354,6 +354,7 @@ class BayesFitSim(shapesim.BaseSim):
         psfres = admom.admom(ci.psf,
                              ci['cen_uw'][0],
                              ci['cen_uw'][1], 
+                             sigsky=ci['skysig_psf'],
                              guess=2.,
                              nsub=1)
 
@@ -399,7 +400,7 @@ class BayesFitSim(shapesim.BaseSim):
             prior[6] += prior[6]*0.05*(randu()-0.5)
             prior[7] += prior[7]*0.05*(randu()-0.5)
 
-            gm = gmix_image.GMixFitCoellip(ci.psf, ci['skysig'],
+            gm = gmix_image.GMixFitCoellip(ci.psf, ci['skysig_psf'],
                                            prior,width,
                                            Tpositive=True)
             psf=gm.get_gmix()
@@ -438,7 +439,7 @@ class BayesFitSim(shapesim.BaseSim):
             prior[8] += prior[8]*0.05*(randu()-0.5)
             prior[9] += prior[9]*0.05*(randu()-0.5)
 
-            gm = gmix_image.GMixFitCoellip(ci.psf, ci['skysig'],
+            gm = gmix_image.GMixFitCoellip(ci.psf, ci['skysig_psf'],
                                            prior,width,
                                            Tpositive=True)
             psf=gm.get_gmix()

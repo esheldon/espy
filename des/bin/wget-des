@@ -121,6 +121,7 @@ fi
 # -nH no host directories
 # use -nv for non-verbose 
 #    --progress=dot:mega     \
+comm="
 wget                        \
     -c                      \
     -nv                     \
@@ -130,4 +131,7 @@ wget                        \
     --no-parent             \
     --tries 50              \
     --accept "$accept"      \
-    "$url"
+    \"$url\"
+"
+
+echo $comm
