@@ -483,6 +483,50 @@ class BayesFitSim(shapesim.BaseSim):
         wlog("could not find a fit after %s tries, returning None" % ntry)
         return None,None
 
+    def _gmix_fit_convolved_ngauss(self, ci, psf_gmix, Tguess, ngauss):
+        """
+        Use the fitter to get a starting guess
+        """
+        raise RuntimeError("fix _gmix_fit_convolved_ngauss, make sure allow delta function")
+        counts=ci.image.sum()
+
+        npars=2*ngauss+4
+        prior=zeros(npars)
+        width=zeros(npars) + 1000
+
+        width[0] = 0.1
+        width[1] = 0.1
+        width[5]=0.1
+        if self['Tprior']:
+            # this is intended to be lognormal but I
+            # haven't implemented that yet in the fitter
+            width[4]=Tguess*self['Twidthfrac']
+
+        ntry=10
+        for i in xrange(ntry):
+                             
+            prior[0]=ci['cen_uw'][0]*(1.+ .1*srandu())
+            prior[1]=ci['cen_uw'][1]*(1.+ .1*srandu())
+            prior[2],prior[3] = randomize_e1e2(None,None)
+            prior[4] = Tguess*(1. + .10*srandu())
+            prior[5] = counts*(1. + .01*srandu())
+
+            gm = gmix_image.GMixFitCoellip(ci.image, 
+                                           ci['skysig'],
+                                           prior,width,
+                                           psf=psf_gmix,
+                                           model=self['fitmodel'])
+
+            if 0==gm.get_flags():
+                pars=gm.get_pars()
+                perr=gm.get_perr()
+                return pars,perr
+
+        wlog("could not find a fit after %s tries, returning None" % ntry)
+        return None,None
+
+
+
     def _run_fitter(self, ci):
         """
         cheat on psf, T and cen for now
@@ -497,7 +541,8 @@ class BayesFitSim(shapesim.BaseSim):
         cen = ci['cen']
 
         psf_gmix=self._gmix_fit_psf(ci)
-        start_pars,start_err=self._gmix_fit_convolved_simple(ci,psf_gmix,T)
+        if 'mcmcfull' not in self['run']:
+            start_pars,start_err=self._gmix_fit_convolved_simple(ci,psf_gmix,T)
 
         burnin = self['burnin']
         if start_pars is None:
@@ -540,6 +585,25 @@ class BayesFitSim(shapesim.BaseSim):
                                         burnin=burnin,
                                         logT=logT,
                                         mca_a=self['mca_a'])
+
+        elif 'mcmcfull' in self['run']:
+            start_pars=None
+            while start_pars is None:
+                print 're-running start pars for mcmcfull'
+                start_pars,start_err=self._gmix_fit_convolved_ngauss(ci,psf_gmix,T,self['ngauss'])
+            cenprior=CenPrior(ci['cen'], [0.1]*2)
+            doiter=self.get('iter',False)
+            self.fitter=EmceeNGaussFitter(ci.image,
+                                          1./ci['skysig']**2,
+                                          psf_gmix,
+                                          start_pars, # cenprior will over-ride
+                                          cenprior,
+                                          self.gprior,
+                                          nwalkers=self['nwalkers'],
+                                          nstep=self['nstep'], 
+                                          burnin=burnin,
+                                          mca_a=self['mca_a'],
+                                          iter=doiter)
 
 
         else:
@@ -1162,6 +1226,484 @@ class BayesFitSimTprior(shapesim.BaseSim):
         return dt
 
 
+class EmceeNGaussFitter:
+    def __init__(self, 
+                 image, 
+                 ivar, 
+                 psf,
+                 start_pars,
+                 cenprior,
+                 gprior,
+                 onedelta=False, # one is a delta function
+                 nwalkers=20,
+                 nstep=200, 
+                 burnin=400,
+                 mca_a=2.0,
+                 iter=True):  # tprior,cenprior take precedence
+        """
+        mcmc sampling of posterior.
+
+        parameters
+        ----------
+        image:
+            sky subtracted image as a numpy array
+        ivar:
+            1/(Error per pixel)**2
+        psf:
+            The psf gaussian mixture
+        cenprior:
+            The center prior object.
+        T:
+            Starting value for ixx+iyy of main component
+            or a LogNormal object
+        gprior:
+            The prior on the g1,g2 surface.
+        nstep:
+            Number of steps in MCMC chain.
+        burnin:
+            Number of burn in steps.
+        """
+        
+        raise RuntimeError("implement delta function")
+        self.make_plots=False
+
+        # cen1,cen2,e1,e2,Ti,pi
+        self.npars=len(start_pars)
+        self.start_pars=start_pars
+        self.ngauss=(len(start_pars)-4)/2
+
+        self.image=image
+        self.ivar=float(ivar)
+        self.cenprior=cenprior
+
+        self.mca_a=mca_a
+
+        self.nwalkers=nwalkers
+        self.nstep=nstep
+        self.burnin=burnin
+        self.gprior=gprior
+        self.iter=iter
+
+
+        self._set_psf(psf)
+
+
+        self.tpars=zeros(self.npars,dtype='f8')
+
+        self._go()
+
+    def get_result(self):
+        return self._result
+
+    def get_maxlike_model(self):
+        """
+        Get the model representing the maximum likelihood point in the chain
+        Is this useful?
+        """
+        w=self.lnprobs.argmax()
+        pars = self.trials[w,:].copy()
+        e1,e2,ok=g1g2_to_e1e2(pars[2],pars[3])
+        if not ok:
+            raise ValueError("bad e1,e2")
+
+        pars[2],pars[3]=e1,e2
+        gmix=self._get_convolved_gmix(pars)
+        model=gmix_image.gmix2image(gmix, self.image.shape)
+        return model
+
+
+    def _go(self):
+        import emcee
+
+        sampler = emcee.EnsembleSampler(self.nwalkers, 
+                                        self.npars, 
+                                        self._calc_lnprob,
+                                        a=self.mca_a)
+        
+        guess=self._get_guess()
+
+        if self.iter:
+            pos, prob, state = sampler.run_mcmc(guess, self.burnin)
+            sampler.reset()
+            while True:
+                pos, prob, state = sampler.run_mcmc(pos, self.nstep)
+                try:
+                    acor=sampler.acor
+                    tau = (sampler.acor/self.burnin).max()
+                    if tau > 0.1:
+                        wlog("tau",tau,"greater than 0.1")
+                    else:
+                        break
+                except:
+                    # something went wrong with acor, run some more
+                    pass
+
+        else:
+            pos, prob, state = sampler.run_mcmc(guess, self.burnin)
+            sampler.reset()
+            pos, prob, state = sampler.run_mcmc(pos, self.nstep)
+
+        self.trials  = sampler.flatchain
+
+        lnprobs = sampler.lnprobability.reshape(self.nwalkers*self.nstep)
+        self.lnprobs = lnprobs - lnprobs.max()
+
+        self._emcee_sampler=sampler
+
+        # get the expectation values, sensitivity and errors
+        self._calc_result()
+
+        if self.make_plots:
+            self._doplots()
+            key=raw_input('hit a key (q to quit): ')
+            if key=='q':
+                stop
+
+
+    def _calc_lnprob(self, pars):
+        """
+        pars are [cen1,cen2,g1,g2,Ti,pi]
+        """
+
+        g1,g2=pars[2],pars[3]
+
+        e1,e2,ok = g1g2_to_e1e2(g1,g2)
+        if not ok:
+            return LOWVAL
+
+        if not self._check_pvals_Tvals(pars):
+            return LOWVAL
+
+        self.tpars[0] = pars[0]
+        self.tpars[1] = pars[1]
+        self.tpars[2] = e1
+        self.tpars[3] = e2
+        self.tpars[4:] = pars[4:]
+
+        gmix=self._get_convolved_gmix(self.tpars)
+        T=gmix.get_T()
+        if T < 0:
+            return LOWVAL
+
+        logprob = self._get_loglike_c(gmix)
+
+        gp = self._get_lngprior(g1,g2)
+        logprob += gp
+
+        cp = self.cenprior.lnprob(pars[0:2])
+        logprob += cp
+
+        return logprob
+
+    def _check_pvals_Tvals(self,pars):
+        Tvals=pars[4:4+ngauss]
+        pvals=pars[4+ngauss:]
+
+        w,=where(Tvals <= 0)
+        if w.size > 0:
+            return False
+ 
+        w,=where(pvals <= 0)
+        if w.size > 0:
+            return False
+
+        return True
+ 
+    def _get_loglike_c(self, gmix):
+
+        loglike,s2n,flags=\
+            gmix_image.render._render.loglike(self.image, 
+                                              gmix,
+                                              self.ivar)
+
+        if flags != 0:
+            return LOWVAL
+        return loglike
+
+    def _get_convolved_gmix(self,pars):
+        """
+        This should have T linear
+        """
+        gmix0=gmix_image.GMixCoellip(pars)
+        gmix=gmix0.convolve(self.psf_GMix)
+        return gmix
+
+
+    def _get_lngprior(self, g1, g2):
+        g=sqrt(g1**2 + g2**2)
+        gp = self.gprior.prior_gabs_scalar(g)
+        if gp > 0:
+            gp = log(gp)
+        else:
+            gp=LOWVAL
+        return gp
+
+    def _calc_result(self):
+        """
+        We marginalize over all parameters but g1,g2, which
+        are index 0 and 1 in the pars array
+        """
+        import mcmc
+
+        g=zeros(2)
+        gcov=zeros((2,2))
+        gsens = zeros(2)
+
+        g1vals=self.trials[:,2]
+        g2vals=self.trials[:,3]
+
+        prior = self.gprior(g1vals,g2vals)
+        dpri_by_g1 = self.gprior.dbyg1(g1vals,g2vals)
+        dpri_by_g2 = self.gprior.dbyg2(g1vals,g2vals)
+
+        psum = prior.sum()
+
+        g0=None
+        gcov0=None
+
+        # prior is already in the distribution of points.  This is simpler for
+        # most things but for sensitivity we need a factor of (1/P)dP/de
+
+        pars,pcov = mcmc.extract_stats(self.trials)
+
+        g[:] = pars[2:4]
+        gcov[:,:] = pcov[2:4, 2:4]
+
+        g1diff = g[0]-g1vals
+        g2diff = g[1]-g2vals
+
+        w,=where(prior > 0)
+        if w.size == 0:
+            raise ValueError("no prior values > 0!")
+
+        gsens[0]= 1.-(g1diff[w]*dpri_by_g1[w]/prior[w]).mean()
+        gsens[1]= 1.-(g2diff[w]*dpri_by_g2[w]/prior[w]).mean()
+
+ 
+        arates = self._emcee_sampler.acceptance_fraction
+        arate = arates.mean()
+        #print 'acceptance rate:',w.size/float(self.trials.size)
+
+        # weighted s/n based on the most likely point
+        s2n,loglike,chi2per,dof,prob=self._calculate_maxlike_stats()
+        g0name='g'
+        self._result={'g':g,
+                      'gcov':gcov,
+                      'gsens':gsens,
+                      g0name+'0':g0,
+                      g0name+'cov0':gcov0,
+                      'pars':pars,
+                      'pcov':pcov,
+                      'arate':arate,
+                      's2n_w':s2n,
+                      'loglike':loglike,
+                      'chi2per':chi2per,
+                      'dof':dof,
+                      'fit_prob':prob}
+        #wlog("arate:",self._result['arate'])
+
+    def _calculate_maxlike_stats(self):
+        """
+        Stats Based on the most likely point
+        """
+
+        w=self.lnprobs.argmax()
+        pars = self.trials[w,:].copy()
+        e1,e2,ok=g1g2_to_e1e2(pars[2],pars[3])
+        if not ok:
+            raise ValueError("bad e1,e2")
+        pars[2],pars[3]=e1,e2
+
+        gmix=self._get_convolved_gmix(pars)
+
+        loglike,s2n,flags=\
+            gmix_image.render._render.loglike(self.image, 
+                                              gmix,
+                                              self.ivar)
+        chi2=loglike/(-0.5)
+        dof=self.image.size-pars.size
+        chi2per = chi2/dof
+
+        prob = scipy.stats.chisqprob(chi2, dof)
+        return s2n, loglike, chi2per, dof, prob
+
+
+    def _get_guess(self):
+        nwalkers=self.nwalkers
+        npars=self.npars
+        guess=zeros( (nwalkers,npars) )
+
+        guess[:,0]=self.cenprior.cen[0] + 0.01*srandu(nwalkers)
+        guess[:,1]=self.cenprior.cen[1] + 0.01*srandu(nwalkers)
+
+        sh=Shear(e1=self.start_pars[2],e2=self.start_pars[3])
+        for i in xrange(nwalkers):
+            g1s,g2s=randomize_e1e2(sh.g1,sh.g2,width=0.05)
+            guess[i,2] = g1s
+            guess[i,3] = g2s
+
+        for i in xrange(4,npars):
+            guess[:,i] = self.start_pars[i]*(1. + 0.1*srandu(nwalkers))
+
+        return guess
+
+    def _set_psf(self, psf):
+        self.psf_gmix = psf
+
+        if not isinstance(psf[0],dict):
+            raise ValueError("psf must be list of dicts")
+        self.psf_pars = gmix_image.gmix2pars(psf)
+        self.psf_GMix=gmix_image.GMix(psf)
+
+    def _doplots(self):
+
+        import mcmc
+        import biggles
+        biggles.configure("default","fontsize_min",1.2)
+        tab=biggles.Table(6,2)
+
+        cen1vals=self.trials[:,0]
+        cen2vals=self.trials[:,1]
+        Tvals=self.trials[:,4]
+        g1vals=self.trials[:,2]
+        g2vals=self.trials[:,3]
+        g1lab=r'$g_1$'
+        g2lab=r'$g_2$'
+
+        ampvals=self.trials[:,5]
+
+        ind=numpy.arange(g1vals.size)
+
+        burn_cen=biggles.FramedPlot()
+        cen1p=biggles.Curve(ind, cen1vals, color='blue')
+        cen2p=biggles.Curve(ind, cen2vals, color='red')
+        cen1p.label=r'$x_1$'
+        cen2p.label=r'$x_2$'
+        burn_cen.add(cen1p)
+        burn_cen.add(cen2p)
+        key=biggles.PlotKey(0.9,0.9,[cen1p,cen2p],halign='right')
+        burn_cen.add(key)
+        burn_cen.ylabel='cen'
+
+        burn_g1=biggles.FramedPlot()
+        burn_g1.add(biggles.Curve(ind, g1vals))
+        burn_g1.ylabel=r'$g_1$'
+
+        burn_g2=biggles.FramedPlot()
+        burn_g2.add(biggles.Curve(ind, g2vals))
+        burn_g2.ylabel=r'$g_2$'
+
+        burn_T=biggles.FramedPlot()
+        burn_T.add(biggles.Curve(ind, Tvals))
+        burn_T.ylabel='T'
+
+        burn_amp=biggles.FramedPlot()
+        burn_amp.add(biggles.Curve(ind, ampvals))
+        burn_amp.ylabel='Amplitide'
+
+
+
+        likep = biggles.FramedPlot()
+        likep.add( biggles.Curve(ind, self.lnprobs) )
+        likep.ylabel='ln( prob )'
+
+
+        g = self._result['g']
+        gcov = self._result['gcov']
+        errs = sqrt(diag(gcov))
+
+        res=self.get_result()
+        print 's2n weighted maxlike:',res['s2n_w']
+        print 'chi^2/dof: %.3f/%i = %f' % (res['chi2per']*res['dof'],res['dof'],res['chi2per'])
+        print 'prob:',res['fit_prob']
+        print 'acceptance rate:',res['arate']
+        print 'T:  %.16g +/- %.16g' % (Tvals.mean(), Tvals.std())
+
+        print_pars(self._result['pars'])
+        print_pars(sqrt(diag(self._result['pcov'])))
+        print 'g1: %.16g +/- %.16g' % (g[0],errs[0])
+        print 'g2: %.16g +/- %.16g' % (g[1],errs[1])
+        print 'median g1:  %.16g ' % median(g1vals)
+        print 'g1sens:',self._result['gsens'][0]
+        print 'g2sens:',self._result['gsens'][1]
+
+        if self._result['g0'] is not None:
+            g0=self._result['g0']
+            err0=sqrt(diag(self._result['gcov0']))
+            print 'g1_0: %.16g +/- %.16g' % (g0[0],err0[0])
+            print 'g2_0: %.16g +/- %.16g' % (g0[1],err0[1])
+
+        cenw = cen1vals.std()
+        cen_bsize=cenw*0.2
+        hplt_cen0 = eu.plotting.bhist(cen1vals,binsize=cen_bsize,
+                                      color='blue',
+                                      show=False)
+        hplt_cen = eu.plotting.bhist(cen2vals,binsize=cen_bsize,
+                                     color='red',
+                                     show=False, plt=hplt_cen0)
+        hplt_cen.add(key)
+
+        bsize1=g1vals.std()*0.2 #errs[0]*0.2
+        bsize2=g2vals.std()*0.2 # errs[1]*0.2
+        hplt_g1 = eu.plotting.bhist(g1vals,binsize=bsize1,
+                                  show=False)
+        hplt_g2 = eu.plotting.bhist(g2vals,binsize=bsize2,
+                                  show=False)
+
+        Tsdev = Tvals.std()
+        Tbsize=Tsdev*0.2
+        #hplt_T = eu.plotting.bhist(Tvals,binsize=Tbsize,
+        #                          show=False)
+
+        logTvals=log10(Tvals)
+        Tsdev = logTvals.std()
+        Tbsize=Tsdev*0.2
+        hplt_T = eu.plotting.bhist(logTvals,binsize=Tbsize,
+                                   show=False)
+
+
+
+        amp_sdev = ampvals.std()
+        amp_bsize=amp_sdev*0.2
+        hplt_amp = eu.plotting.bhist(ampvals,binsize=amp_bsize,
+                                     show=False)
+
+
+
+        hplt_cen.xlabel='center'
+        hplt_g1.xlabel=g1lab
+        hplt_g2.xlabel=g2lab
+        hplt_T.xlabel=r'$log_{10}T$'
+        hplt_amp.xlabel='Amplitude'
+
+        tab[0,0] = burn_cen
+        tab[1,0] = burn_g1
+        tab[2,0] = burn_g2
+        tab[3,0] = burn_T
+        tab[4,0] = burn_amp
+
+        tab[0,1] = hplt_cen
+        tab[1,1] = hplt_g1
+        tab[2,1] = hplt_g2
+        tab[3,1] = hplt_T
+        tab[4,1] = hplt_amp
+        tab[5,0] = likep
+        tab.show()
+
+        if False: 
+            nx = ny = 40
+            levels=8
+            h2d = eu.stat.histogram2d(Tvals, g1vals, nx=nx, ny=ny,more=True)
+            images.view(h2d['hist'], type='cont',
+                        xdr=[h2d['xcenter'][0], h2d['xcenter'][-1]],
+                        ydr=[h2d['ycenter'][0], h2d['ycenter'][-1]],
+                        xlabel='T', ylabel='g1', levels=levels)
+            h2d = eu.stat.histogram2d(Tvals, g2vals, nx=nx, ny=ny,more=True)
+            images.view(h2d['hist'], type='cont',
+                        xdr=[h2d['xcenter'][0], h2d['xcenter'][-1]],
+                        ydr=[h2d['ycenter'][0], h2d['ycenter'][-1]],
+                        xlabel='T', ylabel='g2', levels=levels)
+
 
 
 class EmceeFitter:
@@ -1357,9 +1899,9 @@ class EmceeFitter:
 
         self.tpars[0] = pars[0]
         self.tpars[1] = pars[1]
-        self.tpars[2]=e1
-        self.tpars[3]=e2
-        self.tpars[4]=T
+        self.tpars[2] = e1
+        self.tpars[3] = e2
+        self.tpars[4] = T
         self.tpars[5:] = pars[5:]
 
         logprob = self._get_loglike_c(self.tpars)
