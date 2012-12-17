@@ -664,6 +664,7 @@ class GMixFitSim(shapesim.BaseSim):
         admom_mult is used for the prepsf fit ngauss==3
         """
 
+        raise RuntimeError("fix for new coellip")
         npsf=0
         if psf is not None:
             npsf = gmix_image.get_ngauss_coellip(psf)
