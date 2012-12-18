@@ -1030,7 +1030,7 @@ def make_averaged_outputs(run, docum=False,
 
     straight_avg=False
     bayes=False
-    if 'bayes' in run:
+    if 'bayes' in run or 'mixmc' in run:
         wlog("doing bayes averaging")
         bayes=True
     elif 'deswl' in run:
@@ -1200,13 +1200,15 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                     ('pvarmeans','f8',npars),  # average of square error for each par
                     ('psums','f8',npars),
                     ('pvarsums','f8',npars),   # sum of square error for each par
-                    ('Ts2n_sum','f8'),
-                    ('Ts2n','f8'),
                     ('nsum','i8'),
                     ('shear1','f8'),
                     ('shear1err','f8'),
                     ('shear2','f8'),
                     ('shear2err','f8')]
+        if 'Ts2n' not in data[0].dtype.names:
+            dt+=[('Ts2n','f8')]
+        dt += [('Ts2n_sum','f8')]
+
         if 'gcov0' in data[0].dtype.names:
             dt_extra += [('g1err0sum2','f8'),
                          ('g2err0sum2','f8'),
@@ -1265,19 +1267,19 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
             #g1err = sqrt(g1scatt/num)
             #g2err = sqrt(g2scatt/num)
             if orient == 'ring':
-                SN=0.0
-                g1err2invsum = ( 1/(SN**2 + edata['gcov'][:,0,0]) ).sum()
-                g2err2invsum = ( 1/(SN**2 + edata['gcov'][:,1,1]) ).sum()
-                g1err = sqrt(1/g1err2invsum)/g1sens_mean
-                g2err = sqrt(1/g2err2invsum)/g2sens_mean
-                """
-                g1var = (g1-edata['gtrue'][:,0]).var()
-                g2var = (g2-edata['gtrue'][:,1]).var()
-                g1err2invsum = num/g1var
-                g2err2invsum = num/g2var
-                g1err = sqrt(g1var/num)
-                g2err = sqrt(g2var/num)
-                """
+                if False:
+                    SN=0.0
+                    g1err2invsum = ( 1/(SN**2 + edata['gcov'][:,0,0]) ).sum()
+                    g2err2invsum = ( 1/(SN**2 + edata['gcov'][:,1,1]) ).sum()
+                    g1err = sqrt(1/g1err2invsum)/g1sens_mean
+                    g2err = sqrt(1/g2err2invsum)/g2sens_mean
+                else:
+                    g1var = (g1-edata['gtrue'][:,0]).var()
+                    g2var = (g2-edata['gtrue'][:,1]).var()
+                    g1err2invsum = num/g1var
+                    g2err2invsum = num/g2var
+                    g1err = sqrt(g1var/num)
+                    g2err = sqrt(g2var/num)
             else:
                 g1corr = g1/g1sens.mean()
                 g2corr = g2/g2sens.mean()
@@ -1307,7 +1309,10 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                     d['pmeans'][i,pi] = d['psums'][i,pi]/num
                     d['pvarmeans'][i,pi] = d['pvarsums'][i,pi]/num
 
-                Ts2n_vals=edata['pars'][:,4]/sqrt(edata['pcov'][:,4,4])
+                if 'Ts2n' in edata.dtype.names:
+                    Ts2n_vals=edata['Ts2n']
+                else:
+                    Ts2n_vals=edata['pars'][:,4]/sqrt(edata['pcov'][:,4,4])
                 d['Ts2n_sum'][i] = Ts2n_vals.sum()
                 d['Ts2n'][i] = d['Ts2n_sum'][i]/num
 

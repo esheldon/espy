@@ -620,6 +620,7 @@ class BayesFitSim(shapesim.BaseSim):
                                           nstep=self['nstep'], 
                                           burnin=burnin,
                                           mca_a=self['mca_a'],
+                                          onedelta=self['onedelta'],
                                           iter=doiter)
 
 
@@ -1259,7 +1260,7 @@ class EmceeNGaussFitter:
                  start_pars,
                  cenprior,
                  gprior,
-                 onedelta=False, # one is a delta function
+                 onedelta=True, # one is a delta function
                  nwalkers=20,
                  nstep=200, 
                  burnin=400,
@@ -1424,7 +1425,7 @@ class EmceeNGaussFitter:
 
         if self.onedelta:
             val=pars[self.delta_index]
-            dprior = self.delta_prior(val)
+            dprior = self.delta_prior.lnprob(val)
             logprob += dprior
 
         return logprob
@@ -1499,6 +1500,9 @@ class EmceeNGaussFitter:
 
         pars,pcov = mcmc.extract_stats(self.trials)
 
+        #print_pars(pars,front='pars:')
+        #print_pars(sqrt(diag(pcov)),front='perr:')
+
         g[:] = pars[2:4]
         gcov[:,:] = pcov[2:4, 2:4]
 
@@ -1521,7 +1525,7 @@ class EmceeNGaussFitter:
             pvals = self.trials[:,4+self.ngauss+i]
 
             Tsums += Tvals*pvals
-            psums += self.trials[:,4+self.ngauss+i]
+            psums += pvals
  
         self.Ttots = Tsums/psums
         self.ptots = psums
@@ -1534,16 +1538,14 @@ class EmceeNGaussFitter:
 
         arates = self._emcee_sampler.acceptance_fraction
         arate = arates.mean()
-        #print 'acceptance rate:',w.size/float(self.trials.size)
 
         # weighted s/n based on the most likely point
         s2n,loglike,chi2per,dof,prob=self._calculate_maxlike_stats()
-        g0name='g'
         self._result={'g':g,
                       'gcov':gcov,
                       'gsens':gsens,
-                      g0name+'0':g0,
-                      g0name+'cov0':gcov0,
+                      'g0':g0,
+                      'gcov0':gcov0,
                       'pars':pars,
                       'pcov':pcov,
                       'Tmean':Tmean,
@@ -1555,7 +1557,6 @@ class EmceeNGaussFitter:
                       'chi2per':chi2per,
                       'dof':dof,
                       'fit_prob':prob}
-        #wlog("arate:",self._result['arate'])
 
     def _calculate_maxlike_stats(self):
         """
@@ -1607,7 +1608,7 @@ class EmceeNGaussFitter:
         Tvals=self.start_pars[4:4+self.ngauss]
         argmin=Tvals.argmin()
 
-        self.delta_index=4+argmin()
+        self.delta_index=4+argmin
 
         delta_mn=Tvals[argmin]
 
@@ -1615,7 +1616,7 @@ class EmceeNGaussFitter:
             delta_mn=1.e-7
             self.start_pars[self.delta_index] = delta_mn
 
-        delta_width = mn
+        delta_width = delta_mn*0.1
         self.delta_prior = eu.random.LogNormal(delta_mn,delta_width)
 
 
