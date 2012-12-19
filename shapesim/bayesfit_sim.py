@@ -1455,9 +1455,6 @@ class EmceeNGaussFitter:
         return loglike
 
     def _get_convolved_gmix(self,pars):
-        """
-        This should have T linear
-        """
         gmix0=gmix_image.GMixCoellip(pars)
         gmix=gmix0.convolve(self.psf_gmix)
         return gmix

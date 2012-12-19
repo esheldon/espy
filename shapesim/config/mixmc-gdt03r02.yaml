@@ -37,4 +37,4 @@ onedelta: true
 mca_a: 2.0
 
 comments: |
-    this version uses new code where we keep info for all pars
+    80 walkers instead of 20
