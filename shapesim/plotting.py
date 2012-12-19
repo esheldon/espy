@@ -1648,7 +1648,8 @@ class SimPlotter(dict):
 
         plt.add(g1lab)
 
-        xrng=[1., 120.]
+        if not xrng:
+            xrng=[1., 120.]
         expect1 = biggles.Curve(xrng, [0,0])
 
         plt.aspect_ratio=1

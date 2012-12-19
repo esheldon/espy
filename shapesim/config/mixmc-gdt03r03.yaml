@@ -1,13 +1,13 @@
-run: mixmc-gdt03r02
+run: mixmc-gdt03r03
 sim: sim-gdt03
 
 runtype: bys2n
 
 # need to set this for the trials to work.
-seed: 1884
+seed: 3458
 
 s2n_method: admom
-s2n_fac: 20
+s2n_fac: 40
 
 # minimum number of random ellipticities to use.
 # need decent count to sample the prior surface
@@ -21,7 +21,7 @@ s2n_psf: 1.0e+8
 s2nvals: [40,50,60,70,80,90,100,120,140,160,180,200,250,300,350,400,500,600,700]
 
 # step and burnin are *per walker*
-nwalkers: 80
+nwalkers: 160
 nstep: 200 # steps per walker
 burnin: 400 # burnin per walker.
 
@@ -39,4 +39,4 @@ onedelta: true
 mca_a: 2.0
 
 comments: |
-    80 walkers instead of 20
+    160 walkers instead of 20

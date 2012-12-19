@@ -30,6 +30,8 @@ iter: true
 
 verbose: false
 
+fitmodel: ['coellip']
+
 ngauss_psf: 3
 ngauss_obj: 3
 onedelta: true
