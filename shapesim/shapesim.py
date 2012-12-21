@@ -1267,7 +1267,7 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
             #g1err = sqrt(g1scatt/num)
             #g2err = sqrt(g2scatt/num)
             if orient == 'ring':
-                if False:
+                if True:
                     SN=0.0
                     g1err2invsum = ( 1/(SN**2 + edata['gcov'][:,0,0]) ).sum()
                     g2err2invsum = ( 1/(SN**2 + edata['gcov'][:,1,1]) ).sum()
@@ -1384,7 +1384,7 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
             print 'shear1: %.16g +/- %.16g' % (d['shear1'][i],d['shear1err'][i])
 
         for n in d.dtype.names:
-            if n in edata.dtype.names:
+            if n in edata.dtype.names and n != 'model':
                 if n not in name_extra:
                     if edata[n].dtype.names is None and len(edata[n].shape) == 1:
                         #d[n][i] = median(edata[n])
