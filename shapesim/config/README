@@ -1,58 +1,8 @@
 gmix-fit
 
-    for use in the paper
-        by S/N
-        gg05r01
-        et04r02 but rerun with more s2n and s2n_fac = 80
-        dt03r03r04
-    todo:
-
-        - et03, which had trimming, ran much faster.  If it was also accurate,
-          we should maybe use it instead of et02, which deswl is super slow.
-
-        - gg04r01, r02, r03 rerun with s2n_fac=10?
-
-        - I'm seeing some additive bias for edg03 shear=0.  Do a couple more
-          sims with different g1 and map it all out?
-             - edg04 g1=0.01,g2=?
-             - edg05 g1=0.02,g2=?
-             - edg06 g1=0.03,g2=?
-             - edg07 g1=0.04,g2=?
-             - edg08 g1=0.05,g2=?
-
-        sent around
-            gg04
-                s/n 0.33 
-                    gmix-fit-gg04r01
-                    deswl-gg04r01
-                byellip low noise
-                    gmix-fit-gg04r09
-                    deswl-gg04r0?
-            et02
-                s/n 0.33
-                    gmix-fit-et02r09
-                    deswl-et02r03    (not finished)
-                    OR since these are finished
-                    gmix-fit-et02r08
-                    desw-et02r02
-                byellip low noise
-                    deswl-et02r04 
-                    gmix-fit-et02r01
-            dt02
-                NEED to tell story of how error is a function
-                of ellipticity, but we haven't run the sims 
-                for byellip with different S/N.
-
-                s/n e=0.33
-                    gmix-fit-dt02r02 (not finished)
-                    gmix-fit-dt02r02 cum, no s2limit (not finished)
-                    deswl-dt02r03    (not finished)
-                    deswl-dt02r03    cum, no s2limit (not finished)
-                byellip low noise
-                    use yrange -0.1,0.1
-                    gmix-fit-dt02r01
-                    deswl-dt02r02
-
+    mixmc
+        mixmc-get03r06
+        mixmc-gdt03r09
 
     bayesfit
         gg08r05 fix T/cen, ngrid 22, -0.9,0.9
