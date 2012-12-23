@@ -15,6 +15,7 @@ em_tol: 1.0e-6
 nwalkers: 20
 nstep: 200
 burnin: 400
+iter: true
 mca_a: 3.0
 
 fitmodel: ['gdev','gexp']

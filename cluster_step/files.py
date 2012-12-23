@@ -6,8 +6,12 @@ psfnums=[1,2,3,4,5,6]
 shnums=[1,2,3,4,5,6,7,8]
 ccds=range(1,62+1)
 
-def get_basedir():
-    return os.path.expanduser("~/oh/cluster-step")
+def get_basedir(**keys):
+    fs=keys.get('fs','nfs')
+    if fs=='nfs':
+        return os.environ['CLUSTERSTEP']
+    else:
+        return os.environ['CLUSTERSTEP_HDFS']
 
 def get_version_dir(**keys):
     version=keys.get('version',None)
@@ -294,14 +298,21 @@ def get_wq_path(**keys):
     run=keys['run']
     psfnum=keys['psfnum']
     shnum=keys['shnum']
-    ccd='%02d' % int(keys['ccd'])
     ftype=keys['ftype']
 
     dir=get_wq_dir(**keys)
 
-    name='{run}-p{psfnum}-s{shnum}-{ccd}-{ftype}.yaml'
-    name=name.format(run=run,psfnum=psfnum,shnum=shnum,
-                     ccd=ccd,ftype=ftype)
+    if 'ccd' in keys:
+        ccd='%02d' % int(keys['ccd'])
+
+        name='{run}-p{psfnum}-s{shnum}-{ccd}-{ftype}.yaml'
+        name=name.format(run=run,psfnum=psfnum,shnum=shnum,
+                         ccd=ccd,ftype=ftype)
+    else:
+        name='{run}-p{psfnum}-s{shnum}-{ftype}.yaml'
+        name=name.format(run=run,psfnum=psfnum,shnum=shnum,
+                         ftype=ftype)
+
 
     return os.path.join(dir,name)
 

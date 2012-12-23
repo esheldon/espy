@@ -152,6 +152,68 @@ class Pipe(dict):
         w,=where(logic)
         return w
 
+    def run_shear(self, run_admom=False, run_psf=False):
+        """
+        todo:
+            - get random psf star gmix
+            - make a get_shear_struct method
+            - method to copy the results
+            - write file
+
+            - also simplify make-wq.py and use parallel to
+              do it
+        """
+        if not hasattr(self,'ares') or run_admom:
+            self.run_admom()
+        if not hasattr(self,'psfres') or run_psf:
+            self.run_psf()
+
+        ares=self.ares
+
+        wgal=self.get_gals()
+
+        for igal in xrange(wgal.size):
+            if ((igal % 10) == 0):
+                print "  %s/%s done\n" % (igal+1,wgal.size)
+
+            index=wgal[igal]
+
+            c=self.get_zerod_cutout(index)
+
+            im=c.subimage
+
+            wrow=ares['wrow'][index]-ares['row_range'][index,0]
+            wcol=ares['wcol'][index]-ares['col_range'][index,0]
+            cen=[wrow,wcol]
+
+            probrand=-9999.
+            for fitmodel in self['fitmodel']:
+                fitter=self.run_shear_model(im, cen, psf_gmix, fitmodel)
+
+                res0 = fitter.get_result()
+                if len(fitmodels) > 1:
+                    print '  model:',fitmodel,'probrand:',res0['fit_prob']
+                if res0['fit_prob'] > probrand:
+                    res=res0
+                    probrand=res0['fit_prob']
+
+            if len(fitmodels) > 1:
+                print '    best model:',res['model']
+
+
+ 
+
+    def run_shear_model(self, im, cen, psf_gmix, fitmodel):
+        fitter=MixMCStandAlone(im, self['ivar'], cen,
+                               psf_gmix, self.gprior, fitmodel,
+                               nwalkers=self['nwalkers'],
+                               nstep=self['nstep'], 
+                               burnin=self['burnin'],
+                               mca_a=self['mca_a'],
+                               iter=self.get('iter',False),
+                               draw_gprior=self['draw_gprior'])
+        return fitter
+
     def run_psf(self, run_admom=False):
         """
         Run the PSF measurement on the psf stars
@@ -178,9 +240,7 @@ class Pipe(dict):
             index=wpsf[ipsf]
             c=self.get_zerod_cutout(index)
 
-
             im=c.subimage
-            cen=c.subcen
 
             # put back in the sub-coordinate system
             # hoops because of endian bug in numpy
