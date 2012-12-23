@@ -5,6 +5,8 @@ from math import ceil
 from numpy import where, sqrt, random, zeros, arange
 from . import files
 import gmix_image
+from gmix_image.gmix import GMix
+from gmix_image.gmix_mcmc import MixMCStandAlone
 
 SEXTRACTOR_GAL=1
 SEXTRACTOR_STAR=2
@@ -37,6 +39,12 @@ class Pipe(dict):
         for k in conf:
             self[k]=conf[k]
         
+        # need to fit for this from data
+        self.gprior=gmix_image.priors.GPrior(A=12.25,
+                                             B=0.2,
+                                             C=1.05,
+                                             D=13.)
+
         random.seed(self['seed'])
         self._load_data()
 
@@ -170,11 +178,12 @@ class Pipe(dict):
 
         ares=self.ares
 
+        wpsf=self.get_psf_stars()
         wgal=self.get_gals()
 
         for igal in xrange(wgal.size):
             if ((igal % 10) == 0):
-                print "  %s/%s done\n" % (igal+1,wgal.size)
+                print "  %s/%s done" % (igal+1,wgal.size)
 
             index=wgal[igal]
 
@@ -186,8 +195,11 @@ class Pipe(dict):
             wcol=ares['wcol'][index]-ares['col_range'][index,0]
             cen=[wrow,wcol]
 
+            psf_gmix=self.get_random_psf_gmix()
+
             probrand=-9999.
-            for fitmodel in self['fitmodel']:
+            fitmodels=self.get_fitmodels()
+            for fitmodel in fitmodels:
                 fitter=self.run_shear_model(im, cen, psf_gmix, fitmodel)
 
                 res0 = fitter.get_result()
@@ -201,8 +213,6 @@ class Pipe(dict):
                 print '    best model:',res['model']
 
 
- 
-
     def run_shear_model(self, im, cen, psf_gmix, fitmodel):
         fitter=MixMCStandAlone(im, self['ivar'], cen,
                                psf_gmix, self.gprior, fitmodel,
@@ -213,6 +223,25 @@ class Pipe(dict):
                                iter=self.get('iter',False),
                                draw_gprior=self['draw_gprior'])
         return fitter
+
+    def get_fitmodels(self):
+        fitmodels=self['fitmodel']
+        if not isinstance(fitmodels,list):
+            fitmodels=[fitmodels]
+        return fitmodels
+    def get_random_psf_gmix(self):
+        """
+        Get a random psf gmix from good psf stars
+        """
+        wpsf,=where(self.psfres['em_flags']==0)
+
+        irand=random.randint(wpsf.size)  
+        irand=wpsf[irand]
+
+        pars=self.psfres['em_pars'][irand]
+        gmix=GMix(pars)
+        return gmix
+
 
     def run_psf(self, run_admom=False):
         """
