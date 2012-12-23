@@ -40,9 +40,6 @@ class Pipe(dict):
         random.seed(self['seed'])
         self._load_data()
 
-    def process(self):
-        pass
-
     def _check_keys(self, **keys):
         if ('run' not in keys
                 or 'psfnum' not in keys
@@ -185,6 +182,7 @@ class Pipe(dict):
             im=c.subimage
             cen=c.subcen
 
+            # put back in the sub-coordinate system
             # hoops because of endian bug in numpy
             wrow=ares['wrow'][index]-ares['row_range'][index,0]
             wcol=ares['wcol'][index]-ares['col_range'][index,0]
@@ -193,13 +191,6 @@ class Pipe(dict):
             Icc=ares['Icc'][index]
             aresi = {'wrow':wrow,'wcol':wcol,'Irr':Irr,'Irc':Irc,'Icc':Icc}
 
-            # put back in the sub-coordinate system
-            #print index
-            #print aresi['wrow'],aresi['wcol']
-            #self.show_cutout(index, with_seg=True, zero_seg=True)
-            #stop
-
-            # cen will be ignored 
             gpsf=GMixEMPSF(im, self['ivar'], self['ngauss_psf'],
                            ares=aresi, 
                            maxiter=self['em_maxiter'], tol=self['em_tol'])
@@ -268,7 +259,6 @@ class Pipe(dict):
 
         files.write_fits_output(data=ares,
                                 ftype='admom',
-                                header=hdr,
                                 **self)
 
 

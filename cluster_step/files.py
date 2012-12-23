@@ -2,6 +2,9 @@ import os
 from numpy import zeros
 
 default_version='2012-10-16'
+psfnums=[1,2,3,4,5,6]
+shnums=[1,2,3,4,5,6,7,8]
+ccds=range(1,62+1)
 
 def get_basedir():
     return os.path.expanduser("~/oh/cluster-step")
@@ -151,7 +154,12 @@ def get_config_path(run):
 def read_config(run):
     import yaml
     path=get_config_path(run)
-    return yaml.load(open(path))
+    conf=yaml.load(open(path))
+    if conf['run'] != run:
+        mess="run does not match itself in config: %s instead of  %s"
+        mess=mess % (conf['run'],run)
+        raise ValueError(mess)
+    return conf
 
 def write_fits_output(**keys):
     """
@@ -185,6 +193,12 @@ def write_fits_output(**keys):
     header=keys.get('header',None)
 
     path=get_output_path(**keys)
+    dir=os.path.dirname(path)
+    if not os.path.exists(dir):
+        try:
+            os.makedirs(dir)
+        except:
+            pass
     print 'writing:',path
     with fitsio.FITS(path,mode='rw',clobber=True) as fobj:
         fobj.write(data, header=header)
@@ -220,6 +234,7 @@ def read_fits_output(**keys):
     return fitsio.read(path)
 
 
+
 def get_output_path(**keys):
     """
     parameters
@@ -248,7 +263,7 @@ def get_output_path(**keys):
     run=keys['run']
     psfnum=keys['psfnum']
     shnum=keys['shnum']
-    ccd=keys['ccd']
+    ccd='%02d' % int(keys['ccd'])
     ftype=keys['ftype']
 
     vdir=get_version_dir(**keys)
@@ -264,6 +279,29 @@ def get_output_path(**keys):
     name='{run}-p{psfnum}-s{shnum}-{ccd}-{ftype}.{ext}'
     name=name.format(run=run,psfnum=psfnum,shnum=shnum,
                      ccd=ccd,ftype=ftype,ext=ext)
+
+    return os.path.join(dir,name)
+
+def get_wq_dir(**keys):
+    run=keys['run']
+    ftype=keys['ftype']
+
+    vdir=get_version_dir(**keys)
+    dir=os.path.join(vdir, 'shear', run, 'wq',ftype)
+    return dir
+
+def get_wq_path(**keys):
+    run=keys['run']
+    psfnum=keys['psfnum']
+    shnum=keys['shnum']
+    ccd='%02d' % int(keys['ccd'])
+    ftype=keys['ftype']
+
+    dir=get_wq_dir(**keys)
+
+    name='{run}-p{psfnum}-s{shnum}-{ccd}-{ftype}.yaml'
+    name=name.format(run=run,psfnum=psfnum,shnum=shnum,
+                     ccd=ccd,ftype=ftype)
 
     return os.path.join(dir,name)
 
