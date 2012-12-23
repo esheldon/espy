@@ -5,3 +5,10 @@ star_minmag: 18
 star_maxmag: 20
 
 cutout_size: 25
+
+ngauss_psf: 2
+em_maxiter: 10000
+em_tol: 1.0e-6
+
+# for filling areas not in object with noise
+seed: 3486

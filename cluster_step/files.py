@@ -160,6 +160,8 @@ def write_fits_output(**keys):
 
     All keywords to keep things clear
 
+    data:
+        The data to write
     run:
         run identifier
     psfnum:
@@ -170,9 +172,9 @@ def write_fits_output(**keys):
         The ccd number
     ftype:
         e.g. shear, admom, psf, sizemag, ...
-    ext: optional
-        The extension,will default to fits
-        for the appropriate ftypes
+
+    header: optional
+        optional header to write
 
     version: optional
         The version of cluster step, defaults
@@ -180,11 +182,43 @@ def write_fits_output(**keys):
     """
     import fitsio
     data=keys['data']
+    header=keys.get('header',None)
 
     path=get_output_path(**keys)
     print 'writing:',path
     with fitsio.FITS(path,mode='rw',clobber=True) as fobj:
-        fobj.write(data)
+        fobj.write(data, header=header)
+
+def read_fits_output(**keys):
+    """
+    parameters
+    ----------
+
+    All keywords to keep things clear
+
+    data:
+        The data to write
+    run:
+        run identifier
+    psfnum:
+        psf number
+    shnum:
+        The shear number
+    ccd:
+        The ccd number
+    ftype:
+        e.g. shear, admom, psf, sizemag, ...
+
+    version: optional
+        The version of cluster step, defaults
+        to global variable default_version
+    """
+    import fitsio
+
+    path=get_output_path(**keys)
+    print 'reading:',path
+    return fitsio.read(path)
+
 
 def get_output_path(**keys):
     """

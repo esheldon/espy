@@ -1,4 +1,6 @@
 import os
+from sys import stdout
+import pprint
 from math import ceil
 from numpy import where, sqrt, random, zeros, arange
 from . import files
@@ -35,6 +37,7 @@ class Pipe(dict):
         for k in conf:
             self[k]=conf[k]
         
+        random.seed(self['seed'])
         self._load_data()
 
     def process(self):
@@ -51,6 +54,15 @@ class Pipe(dict):
     def _load_data(self):
         self.cat=files.read_cat(**self)
         image_orig, self.hdr=files.read_image(**self)
+
+        admom_path=files.get_output_path(ftype='admom', **self)
+        if os.path.exists(admom_path):
+            self.ares=files.read_fits_output(ftype='admom',**self)
+
+        psf_path=files.get_output_path(ftype='psf', **self)
+        if os.path.exists(psf_path):
+            self.psfres=files.read_fits_output(ftype='psf',**self)
+
         self.seg, self.seg_hdr=files.read_image(ftype='seg', **self)
 
         skypersec=self.hdr['sky']
@@ -82,6 +94,17 @@ class Pipe(dict):
             return cutout, segcut
 
         return cutout
+
+    def get_zerod_cutout(self, index, **keys):
+        c,cseg=self.get_cutout(index, with_seg=True)
+
+        im=c.subimage
+        seg=cseg.subimage
+
+        id=self.cat['id'][index]
+        self.zero_seg(c.subimage, cseg.subimage, id)
+
+        return c
 
     def zero_seg(self, im, seg, id):
         w=where( (seg != id) & (seg != 0) )
@@ -132,25 +155,91 @@ class Pipe(dict):
         w,=where(logic)
         return w
 
+    def run_psf(self, run_admom=False):
+        """
+        Run the PSF measurement on the psf stars
 
+        Only run admom if not already run, or run_admom=True
+        """
+        from gmix_image.gmix_em import GMixEMPSF
+
+        print 'running em on PSF stars with ngauss:',self['ngauss_psf']
+
+        if not hasattr(self,'ares') or run_admom:
+            self.run_admom()
+
+        ares=self.ares
+
+        wpsf=self.get_psf_stars()
+
+        out=self.get_psf_struct(wpsf.size)
+        out['id'][:] = self.cat['id'][wpsf]
+        out['simid'][:] = self.cat['simid'][wpsf]
+
+        for ipsf in xrange(wpsf.size):
+            stdout.write(".")
+            index=wpsf[ipsf]
+            c=self.get_zerod_cutout(index)
+
+
+            im=c.subimage
+            cen=c.subcen
+
+            # hoops because of endian bug in numpy
+            wrow=ares['wrow'][index]-ares['row_range'][index,0]
+            wcol=ares['wcol'][index]-ares['col_range'][index,0]
+            Irr=ares['Irr'][index]
+            Irc=ares['Irc'][index]
+            Icc=ares['Icc'][index]
+            aresi = {'wrow':wrow,'wcol':wcol,'Irr':Irr,'Irc':Irc,'Icc':Icc}
+
+            # put back in the sub-coordinate system
+            #print index
+            #print aresi['wrow'],aresi['wcol']
+            #self.show_cutout(index, with_seg=True, zero_seg=True)
+            #stop
+
+            # cen will be ignored 
+            gpsf=GMixEMPSF(im, self['ivar'], self['ngauss_psf'],
+                           ares=aresi, 
+                           maxiter=self['em_maxiter'], tol=self['em_tol'])
+            res=gpsf.get_result()
+
+            
+            out['em_flags'][ipsf] = res['flags']
+            out['em_numiter'][ipsf] = res['numiter']
+            out['em_fdiff'][ipsf] = res['fdiff']
+            out['em_ntry'][ipsf] = res['ntry']
+            out['em_pars'][ipsf,:] = res['gmix'].get_pars()
+
+            if True and out['em_flags'][ipsf] != 0:
+                pprint.pprint(res)
+                if False:
+                    gpsf.compare_model()
+                    key=raw_input("hit a key (q to quit): ")
+                    if key=='q':
+                        stop
+
+        print
+        w, = where(out['em_flags'] != 0)
+        print 'found %d/%d bad   %s' % (w.size, wpsf.size, w.size/float(wpsf.size))
+        self.psfres=out
+
+        files.write_fits_output(data=out,
+                                ftype='psf',
+                                **self)
 
 
     def run_admom(self):
         import admom
 
-        # seed for random numbers added for pixels not
-        # in seg image
-        random.seed(35)
-        
+        print 'running admom'
         ares=self.get_admom_struct()
 
         for i in xrange(self.cat.size):
-            c,cseg=self.get_cutout(i, with_seg=True)
+            c=self.get_zerod_cutout(i)
 
             im=c.subimage
-            seg=cseg.subimage
-
-            self.zero_seg(im, seg, self.cat['id'][i])
             cen=c.subcen
 
             res = admom.admom(im, cen[0], cen[1],
@@ -179,6 +268,7 @@ class Pipe(dict):
 
         files.write_fits_output(data=ares,
                                 ftype='admom',
+                                header=hdr,
                                 **self)
 
 
@@ -327,6 +417,25 @@ class Pipe(dict):
             data[n][:] = self.cat[n][:]
 
         return data
+
+    def get_psf_struct(self, n):
+        npars=6*self['ngauss_psf']
+        dt= [('id','i4'),
+             ('simid','i4'),
+             ('em_flags','i4'),
+             ('em_numiter','i4'),
+             ('em_fdiff','f8'),
+             ('em_ntry','i4'),
+             ('em_pars','f8',npars)]
+
+        data=zeros(n, dtype=dt)
+
+        data['em_fdiff']=9999.
+        data['em_ntry']=9999
+        data['em_pars']=-9999.
+
+        return data
+
 
 class Cutout:
     def __init__(self, image, cen, size):

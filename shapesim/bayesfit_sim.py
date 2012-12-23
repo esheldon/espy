@@ -560,8 +560,9 @@ class BayesFitSim(shapesim.BaseSim):
         from gmix_image.gmix_em import GMixEMPSF
 
         psf_ivar=1./ci['skysig_psf']**2
-        gmpsf=GMixEMPSF(ci.psf, psf_ivar, ci['cen_psf'], self['ngauss_psf'],
-                       maxiter=self['em_maxiter'],tol=self['em_tol'])
+        gmpsf=GMixEMPSF(ci.psf, psf_ivar, self['ngauss_psf'],
+                        cen=ci['cen_psf'],
+                        maxiter=self['em_maxiter'],tol=self['em_tol'])
 
         psf_gmix=gmpsf.get_gmix()
 
