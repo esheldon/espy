@@ -8,8 +8,8 @@ import gmix_image
 from gmix_image.gmix import GMix
 from gmix_image.gmix_mcmc import MixMCStandAlone
 
-SEXTRACTOR_GAL=1
-SEXTRACTOR_STAR=2
+CLUSTERSTEP_GAL=1
+CLUSTERSTEP_STAR=2
 
 class Pipe(dict):
     def __init__(self, **keys):
@@ -68,6 +68,10 @@ class Pipe(dict):
         if os.path.exists(psf_path):
             self.psfres=files.read_fits_output(ftype='psf',**self)
 
+        shear_path=files.get_output_path(ftype='shear', **self)
+        if os.path.exists(shear_path):
+            self.shear_res=files.read_fits_output(ftype='shear',**self)
+
         self.seg, self.seg_hdr=files.read_image(ftype='seg', **self)
 
         skypersec=self.hdr['sky']
@@ -122,7 +126,7 @@ class Pipe(dict):
         Get things labeled as stars.  if good, also trim
         to those with good adaptive moments
         """
-        logic=self.cat['class']==SEXTRACTOR_STAR
+        logic=self.cat['class']==CLUSTERSTEP_STAR
 
         if good:
             logic = logic & (self.ares['whyflag']==0)
@@ -130,16 +134,20 @@ class Pipe(dict):
         w,=where(logic)
         return w
 
-    def get_gals(self, good=True):
+    def get_gals(self, good=True, s2n_min=None):
         """
         Get things labeled as stars.  if good, also trim
         to those with good adaptive moments
         """
 
-        logic=self.cat['class']==SEXTRACTOR_GAL
+        logic=self.cat['class']==CLUSTERSTEP_GAL
 
         if good:
             logic = logic & (self.ares['whyflag']==0)
+
+        if s2n_min is not None:
+            logic=logic & (self.ares['s2n'] > s2n_min)
+
         w,=where(logic)
         return w
 
@@ -148,7 +156,7 @@ class Pipe(dict):
         Get things labeled as stars in the psf star mag range.  if good, also
         trim to those with good adaptive moments
         """
-        star_logic = self.cat['class']==SEXTRACTOR_STAR
+        star_logic = self.cat['class']==CLUSTERSTEP_STAR
         mag_logic  = ( (self.cat['mag_auto_r'] > self['star_minmag'])
                        & (self.cat['mag_auto_r'] < self['star_maxmag']))
 
@@ -162,14 +170,8 @@ class Pipe(dict):
 
     def run_shear(self, run_admom=False, run_psf=False):
         """
-        todo:
-            - get random psf star gmix
-            - make a get_shear_struct method
-            - method to copy the results
-            - write file
-
-            - also simplify make-wq.py and use parallel to
-              do it
+        Run all things labelled as galaxies with good
+        admom measurements through the shear code
         """
         if not hasattr(self,'ares') or run_admom:
             self.run_admom()
@@ -179,13 +181,21 @@ class Pipe(dict):
         ares=self.ares
 
         wpsf=self.get_psf_stars()
-        wgal=self.get_gals()
+        wgal=self.get_gals(s2n_min=self['shear_s2n_min'])
+        #wgal=wgal[0:10]
+
+        out=self.get_shear_struct(wgal.size)
+
+        out['id'][:] = self.cat['id'][wgal]
+        out['simid'][:] = self.cat['simid'][wgal]
 
         for igal in xrange(wgal.size):
-            if ((igal % 10) == 0):
-                print "  %s/%s done" % (igal+1,wgal.size)
+            #if ((igal % 10) == 0):
+            #    print "  %s/%s done" % (igal+1,wgal.size)
 
             index=wgal[igal]
+
+            print "%s/%s s2n: %s" % (igal+1,wgal.size,ares['s2n'][index])
 
             c=self.get_zerod_cutout(index)
 
@@ -195,27 +205,45 @@ class Pipe(dict):
             wcol=ares['wcol'][index]-ares['col_range'][index,0]
             cen=[wrow,wcol]
 
-            psf_gmix=self.get_random_psf_gmix()
+            gmix_psf=self.get_random_gmix_psf()
 
-            probrand=-9999.
-            fitmodels=self.get_fitmodels()
-            for fitmodel in fitmodels:
-                fitter=self.run_shear_model(im, cen, psf_gmix, fitmodel)
+            res=self.fit_shear_models(im, cen, gmix_psf)
+            self.copy_shear_results(out, res, gmix_psf, igal)
 
-                res0 = fitter.get_result()
-                if len(fitmodels) > 1:
-                    print '  model:',fitmodel,'probrand:',res0['fit_prob']
-                if res0['fit_prob'] > probrand:
-                    res=res0
-                    probrand=res0['fit_prob']
+        self.shear_res=out
+        files.write_fits_output(data=out,
+                                ftype='shear',
+                                **self)
 
+
+    def fit_shear_models(self, im, cen, gmix_psf):
+        """
+        Fit all listed models, return the best fitting
+        """
+        probrand=-9999.
+        fitmodels=self.get_fitmodels()
+        for fitmodel in fitmodels:
+            fitter=self.run_shear_model(im, cen, gmix_psf, fitmodel)
+
+            res0 = fitter.get_result()
             if len(fitmodels) > 1:
-                print '    best model:',res['model']
+                print '  model: %s prob: %.6f Ts/n: %.6f' % \
+                    (fitmodel,res0['fit_prob'],res0['Ts2n'])
+            if res0['fit_prob'] > probrand:
+                res=res0
+                probrand=res0['fit_prob']
+
+        if len(fitmodels) > 1:
+            print '    best model:',res['model']
+        return res
 
 
-    def run_shear_model(self, im, cen, psf_gmix, fitmodel):
+    def run_shear_model(self, im, cen, gmix_psf, fitmodel):
+        """
+        Run the shear model though the mixmc code
+        """
         fitter=MixMCStandAlone(im, self['ivar'], cen,
-                               psf_gmix, self.gprior, fitmodel,
+                               gmix_psf, self.gprior, fitmodel,
                                nwalkers=self['nwalkers'],
                                nstep=self['nstep'], 
                                burnin=self['burnin'],
@@ -229,7 +257,7 @@ class Pipe(dict):
         if not isinstance(fitmodels,list):
             fitmodels=[fitmodels]
         return fitmodels
-    def get_random_psf_gmix(self):
+    def get_random_gmix_psf(self):
         """
         Get a random psf gmix from good psf stars
         """
@@ -515,6 +543,50 @@ class Pipe(dict):
 
         return data
 
+    def copy_shear_results(self, out, res, gmix_psf, igal):
+        """
+        Copy results into existing "out" structure
+        """
+        out['s2n_admom'][igal] = self.ares['s2n'][igal]
+
+        Tpsf=gmix_psf.get_T()
+        Tobj=res['Tmean']
+        s2 = Tpsf/Tobj
+        out['s2'][igal] = s2
+
+        for k in res:
+            if k in out.dtype.names:
+                out[k][igal] = res[k]
+
+
+    def get_shear_struct(self, n):
+        npars=6
+        npars_psf=6*self['ngauss_psf']
+        dt=[('id','i4'),
+            ('simid','i4'),
+            ('model','S20'),
+            ('flags','i4'),
+            ('s2','f8'),
+            ('g','f8',2),
+            ('gsens','f8',2),
+            ('gcov','f8',(2,2)),
+            ('pars','f8',npars),
+            ('pcov','f8',(npars,npars)),
+            ('pars_psf','f8',npars_psf),
+            ('Tmean','f8','f8'),
+            ('Terr','f8','f8'),
+            ('Ts2n','f8','f8'),
+            ('s2n_w','f8'),  # weighted s/n based on most likely point
+            ('s2n_admom','f8'),
+            ('arate','f8'),
+            ('loglike','f8'),     # loglike of fit
+            ('chi2per','f8'),     # chi^2/degree of freedom
+            ('dof','i4'),         # degrees of freedom
+            ('fit_prob','f8')     # probability of the fit happening randomly
+           ]
+
+        data=zeros(n, dtype=dt)
+        return data
 
 class Cutout:
     def __init__(self, image, cen, size):

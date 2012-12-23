@@ -20,6 +20,8 @@ mca_a: 3.0
 
 fitmodel: ['gdev','gexp']
 
+shear_s2n_min: 10
+
 # draw the g1,g2 starting points from the gprior
 draw_gprior: true
 
