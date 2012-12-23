@@ -1,4 +1,5 @@
 import os
+from numpy import zeros
 
 default_version='2012-10-16'
 
@@ -24,8 +25,8 @@ def get_input_path(**keys):
         psf number
     shnum:
         The shear number
-    repeat:
-        The repeat number
+    ccd:
+        The ccd number
     ftype:
         The file type, 'image', 'cat', 'seg'
 
@@ -35,7 +36,7 @@ def get_input_path(**keys):
     """
     psfnum=keys['psfnum']
     shnum=keys['shnum']
-    repeat=keys['repeat']
+    ccd=keys['ccd']
     ftype=keys['ftype']
 
     if ftype=='cat':
@@ -50,44 +51,13 @@ def get_input_path(**keys):
     else:
         raise ValueError("bad ftype: '%s'" % ftype)
 
-    name='psf{psfnum}/{subdir}/im_p{psfnum}_s{shnum}_{repeat}{ext}'
+    name='psf{psfnum}/{subdir}/im_p{psfnum}_s{shnum}_{ccd}{ext}'
     name=name.format(psfnum=psfnum,subdir=subdir,shnum=shnum,
-                     repeat=repeat,ext=ext)
+                     ccd=ccd,ext=ext)
 
     vdir=get_version_dir(**keys)
 
     return os.path.join(vdir, name)
-
-def get_output_path(**keys):
-    """
-    parameters
-    ----------
-
-    All keywords to keep things clear
-
-    psfnum:
-        psf number
-    shnum:
-        The shear number
-    repeat:
-        The repeat number
-
-    version: optional
-        The version of cluster step, defaults
-        to global variable default_version
-    """
-    psfnum=keys['psfnum']
-    shnum=keys['shnum']
-    repeat=keys['repeat']
-
-    vdir=get_version_dir(**keys)
-
-    dir=os.path.join(vdir, 'shear', 'psf%s' % psfnum)
-
-    name='mixmc_im_p{psfnum}_s{shnum}_{repeat}.fits'
-    name=name.format(psfnum=psfnum,shnum=shnum, repeat=repeat)
-
-    return os.path.join(dir,name)
 
 
 def read_image(**keys):
@@ -101,8 +71,8 @@ def read_image(**keys):
         psf number
     shnum:
         The shear number
-    repeat:
-        The repeat number
+    ccd:
+        The ccd number
 
     ftype: optional
         send ftype='seg' to read the segmentation map
@@ -130,8 +100,8 @@ def read_cat(**keys):
         psf number
     shnum:
         The shear number
-    repeat:
-        The repeat number
+    ccd:
+        The ccd number
 
     version: optional
         The version of cluster step, defaults
@@ -152,12 +122,19 @@ def read_cat(**keys):
     # 8 SIMID  
     #2        1653.320        27.031        334.8027607        -41.4594665        21.7761        0        1.0        7254574.0  
 
-    dt=[('id','i4'),('col','f8'),('row','f8'),('ra','f8'),('dec','f8'),
+    dt0=[('id','i4'),('col','f8'),('row','f8'),('ra','f8'),('dec','f8'),
         ('mag_auto_r','f8'),('flags','i4'),('class','f4'),('simid','f4')]
     skiplines=9
-    with recfile.Open(path,delim=' ',dtype=dt,skiplines=skiplines) as fobj:
+    with recfile.Open(path,delim=' ',dtype=dt0,skiplines=skiplines) as fobj:
         #data=fobj[:]
-        data=fobj.read()
+        data0=fobj.read()
+
+    # now fix the types
+    dt=[('id','i4'),('col','f8'),('row','f8'),('ra','f8'),('dec','f8'),
+        ('mag_auto_r','f8'),('flags','i4'),('class','i4'),('simid','i4')]
+    data=zeros(data0.size, dtype=dt)
+    for n in data0.dtype.names:
+        data[n][:] = data0[n][:].astype(data[n].dtype)
 
     data['row'] -= 1
     data['col'] -= 1
@@ -169,9 +146,91 @@ def get_config_dir():
 
 def get_config_path(run):
     dir=get_config_dir()
-    return os.path.join(dir, 'run-%s.yaml' % run)
+    return os.path.join(dir, '%s.yaml' % run)
 
 def read_config(run):
     import yaml
     path=get_config_path(run)
     return yaml.load(open(path))
+
+def write_fits_output(**keys):
+    """
+    parameters
+    ----------
+
+    All keywords to keep things clear
+
+    run:
+        run identifier
+    psfnum:
+        psf number
+    shnum:
+        The shear number
+    ccd:
+        The ccd number
+    ftype:
+        e.g. shear, admom, psf, sizemag, ...
+    ext: optional
+        The extension,will default to fits
+        for the appropriate ftypes
+
+    version: optional
+        The version of cluster step, defaults
+        to global variable default_version
+    """
+    import fitsio
+    data=keys['data']
+
+    path=get_output_path(**keys)
+    print 'writing:',path
+    with fitsio.FITS(path,mode='rw',clobber=True) as fobj:
+        fobj.write(data)
+
+def get_output_path(**keys):
+    """
+    parameters
+    ----------
+
+    All keywords to keep things clear
+
+    run:
+        run identifier
+    psfnum:
+        psf number
+    shnum:
+        The shear number
+    ccd:
+        The ccd number
+    ftype:
+        e.g. shear, admom, psf, sizemag, ...
+    ext: optional
+        The extension,will default to fits
+        for the appropriate ftypes
+
+    version: optional
+        The version of cluster step, defaults
+        to global variable default_version
+    """
+    run=keys['run']
+    psfnum=keys['psfnum']
+    shnum=keys['shnum']
+    ccd=keys['ccd']
+    ftype=keys['ftype']
+
+    vdir=get_version_dir(**keys)
+    dir=os.path.join(vdir, 'shear', run, 'psf%s' % psfnum)
+
+    if ftype in ['admom','psf','shear']:
+        ext='fits'
+    else:
+        ext=keys.get('ext',None)
+        if ext is None:
+            raise ValueError("send ext= for non-standard file types")
+
+    name='{run}-p{psfnum}-s{shnum}-{ccd}-{ftype}.{ext}'
+    name=name.format(run=run,psfnum=psfnum,shnum=shnum,
+                     ccd=ccd,ftype=ftype,ext=ext)
+
+    return os.path.join(dir,name)
+
+

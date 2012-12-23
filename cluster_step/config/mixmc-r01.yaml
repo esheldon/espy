@@ -1,0 +1,7 @@
+run: mixmc-r01
+version: "2012-10-16"
+
+star_minmag: 18
+star_maxmag: 20
+
+cutout_size: 25
