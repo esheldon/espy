@@ -42,14 +42,15 @@ parser.add_option("-s", "--sleep-time", default=.2,
                   help=("minimum time to sleep between individual submisions."
                         "default %default"))
 parser.add_option("-f", "--force", action="store_true",
-                  help="force starting of all jobs, even if a log file is present.")
+                  help=("force starting of all jobs, even if a "
+                        "log file is present."))
 
 
 parser.add_option('-e','--executable',action='store_true',
                   help=("the commands are simple executable paths. "
                         "The log files will be basename.wqlog"))
 
-pars={'host':wq.DEFAULT_HOST,      # Symbolic name meaning all available interfaces
+pars={'host':wq.DEFAULT_HOST, # Symbolic name meaning all available interfaces
       'port':wq.DEFAULT_PORT,
       'max_buffsize':wq.DEFAULT_MAX_BUFFSIZE}
 
@@ -100,7 +101,8 @@ def send_message(message, timeout=None, crash_on_timeout=False):
             raise RuntimeError("Error reported by server: %s" % rdict['error'])
 
         if 'response' not in rdict:
-            raise RuntimeError("Internal error. Expected a response and got screwed.")
+            raise RuntimeError("Internal error. Expected a response and "
+                               "got screwed.")
 
     except:
         es=sys.exc_info()
@@ -125,7 +127,8 @@ class JobLister(dict):
     If -u/--user is sent, the listing is restricted to that user/users.
 
     If -f/--full is sent, the full job listing is given.  This is a yaml
-    document that can be read and processed to provide a customised listing.\n"""
+    document that can be read and processed to provide a customised 
+    listing.\n"""
 
     def __init__(self, user):
         self.user=user
