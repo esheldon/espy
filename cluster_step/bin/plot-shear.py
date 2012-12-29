@@ -63,13 +63,6 @@ def doplot(bindata, bin_field, show=False):
     return arr
 
     
-def get_psfnums(psfnum):
-    if psfnum is None:
-        psfnums=range(6)
-    else:
-        psfnums=[int(p) for p in psfnum.split(',')]
-
-    return psfnums
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -85,11 +78,10 @@ def main():
     if objtype:
         print 'selecting type:',objtype
 
-    psfnums=get_psfnums(options.psfnums)
     bin_field=options.field
 
-    data=files.read_output_set(run, psfnums, shnum, objtype=objtype)
-    bindata=stats.bin_data(data, bin_field, nperbin)
+    data=files.read_output_set(run, options.psfnums, shnum, objtype=objtype)
+    bindata=stats.bin_shear_data(data, bin_field, nperbin)
 
     aprint(bindata, header=True, page=False, fancy=True)
 

@@ -1,5 +1,5 @@
 import os
-from numpy import zeros, where
+from numpy import zeros, where, sqrt
 
 default_version='2012-10-16'
 psfnums=[1,2,3,4,5,6]
@@ -208,14 +208,22 @@ def write_fits_output(**keys):
         fobj.write(data, header=header)
 
 
-def read_output_set(run, psfnums, shnum, objtype=None, columns=None):
+def read_output_set(run, psfnums, shnums, 
+                    objtype=None, 
+                    s2n_min=None,
+                    s2_max=None,
+                    gsens_min=None,
+                    gerr_max=None,
+                    columns=None):
     """
-    Read some data based on the input.  
+    Read some data based on the input.
     
     Multiple files may be read. If files are missing they will be skipped
 
     Note only a single shear number is expected but many psfnums can
-    be sent.
+    be sent.  
+    
+    Only those with flags==0 are kept.
 
     parameters
     ----------
@@ -223,35 +231,52 @@ def read_output_set(run, psfnums, shnum, objtype=None, columns=None):
         run id
     psfnums: integers
         the psf numbers to read
-    shnum: integer
-        The shear number to read
+    shnums: integers
+        The shear numbers to read.
     objtype: string, optional
         optionally select only objects with this best-fit model
     columns: optional
         only return these columns
     """
     from esutil.numpy_util import strmatch, combine_arrlist
-    if not isinstance(psfnums,list):
-        psfnums=[psfnums]
+    psfnums=get_psfnums(psfnums)
+    shnums=get_shnums(shnums)
 
     datalist=[]
     for psfnum in psfnums:
-        for ccd in xrange(1,62+1):
-            fname=get_output_path(run=run, psfnum=psfnum, shnum=shnum, 
-                                  ccd=ccd, ftype='shear')
-            if os.path.exists(fname):
-                data0=read_fits_output(run=run, psfnum=psfnum, 
-                                             shnum=shnum, ccd=ccd, 
-                                             ftype='shear',
-                                             columns=columns)
+        for shnum in shnums:
+            for ccd in xrange(1,62+1):
+                fname=get_output_path(run=run, psfnum=psfnum, shnum=shnum, 
+                                      ccd=ccd, ftype='shear')
+                if os.path.exists(fname):
+                    data0=read_fits_output(run=run, psfnum=psfnum, 
+                                           shnum=shnum, ccd=ccd, 
+                                           ftype='shear',
+                                           columns=columns, 
+                                           verbose=False)
 
-                logic=data0['flags']==0
-                if objtype:
-                    logic=logic & strmatch(data0['model'],objtype)
+                    logic=data0['flags']==0
+                    if objtype:
+                        logic=logic & strmatch(data0['model'],objtype)
+                    if s2n_min is not None:
+                        logic=logic & (data0['s2n_w'] > s2n_min)
+                    if s2_max is not None:
+                        logic=logic & (data0['s2'] < s2_max)
+                    if gsens_min is not None:
+                        logic=logic \
+                            & (data0['gsens'][:,0] > gsens_min) \
+                            & (data0['gsens'][:,1] > gsens_min)
+                    if gerr_max is not None:
+                        g1err=sqrt(data0['gcov'][:,0,0])
+                        g2err=sqrt(data0['gcov'][:,1,1])
+                        logic=logic \
+                            & (g1err < gerr_max) & (g2err < gerr_max)
 
-                wkeep,=where(logic)
-                data0=data0[wkeep]
-                datalist.append(data0)
+
+
+                    wkeep,=where(logic)
+                    data0=data0[wkeep]
+                    datalist.append(data0)
 
     if len(datalist)==0:
         raise RuntimeError("no outputs were found")
@@ -284,7 +309,9 @@ def read_fits_output(**keys):
     import fitsio
 
     path=get_output_path(**keys)
-    print 'reading:',path
+    verbose=keys.get('verbose',True)
+    if verbose:
+        print 'reading:',path
     return fitsio.read(path, **keys)
 
 
@@ -365,5 +392,26 @@ def get_wq_path(**keys):
 
 
     return os.path.join(dir,name)
+
+def get_psfnums(psfnum=None):
+    return get_nums(psfnum, 1, 6)
+
+def get_shnums(shnum=None):
+    return get_nums(shnum, 1, 8)
+
+def get_nums(nums, nmin, nmax):
+    if nums is None:
+        nums=range(nmin, nmax+1)
+    elif isinstance(nums,basestring):
+        nums=nums.split(',')
+
+    if not isinstance(nums,list):
+        nums=[nums]
+
+    nums=[int(s) for s in nums]
+    for n in nums:
+        if n < nmin or n > nmax:
+            raise ValueError("number %d out of range: [%d,%d]" % (n,nmin,nmax))
+    return nums
 
 

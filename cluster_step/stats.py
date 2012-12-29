@@ -1,9 +1,10 @@
 from numpy import zeros
-from esutil.stat import histogram, wmom
+from esutil.stat import wmom
 
 SHAPE_NOISE=0.32/2
 
-def bin_data(data, bin_field, nperbin):
+
+def bin_shear_data(data, bin_field, nperbin):
     h,rev=histogram(data[bin_field], nperbin=nperbin, rev=True)
 
     nbin=len(h)
