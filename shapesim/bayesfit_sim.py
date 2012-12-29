@@ -579,9 +579,9 @@ class BayesFitSim(shapesim.BaseSim):
 
         cenprior=CenPrior(ci['cen'], [0.1]*2)
 
-        self.fitter=MixMCStandAlone(ci.image, ivar, ci['cen'],
+        self.fitter=MixMCStandAlone(ci.image, ivar, 
                                     psf_gmix, self.gprior, fitmodel,
-
+                                    cen=ci['cen'],
                                     nwalkers=self['nwalkers'],
                                     nstep=self['nstep'], 
                                     burnin=self['burnin'],

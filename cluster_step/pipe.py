@@ -201,13 +201,9 @@ class Pipe(dict):
 
             im=c.subimage
 
-            wrow=ares['wrow'][index]-ares['row_range'][index,0]
-            wcol=ares['wcol'][index]-ares['col_range'][index,0]
-            cen=[wrow,wcol]
-
             gmix_psf=self.get_random_gmix_psf()
 
-            res=self.fit_shear_models(im, cen, gmix_psf)
+            res=self.fit_shear_models(im, ares[index].copy(), gmix_psf)
             self.copy_shear_results(out, res, gmix_psf, igal)
 
         self.shear_res=out
@@ -216,14 +212,14 @@ class Pipe(dict):
                                 **self)
 
 
-    def fit_shear_models(self, im, cen, gmix_psf):
+    def fit_shear_models(self, im, ares, gmix_psf):
         """
         Fit all listed models, return the best fitting
         """
         probrand=-9999.
         fitmodels=self.get_fitmodels()
         for fitmodel in fitmodels:
-            fitter=self.run_shear_model(im, cen, gmix_psf, fitmodel)
+            fitter=self.run_shear_model(im, ares, gmix_psf, fitmodel)
 
             res0 = fitter.get_result()
             if len(fitmodels) > 1:
@@ -238,18 +234,27 @@ class Pipe(dict):
         return res
 
 
-    def run_shear_model(self, im, cen, gmix_psf, fitmodel):
+    def run_shear_model(self, im, ares0, gmix_psf, fitmodel):
         """
         Run the shear model though the mixmc code
         """
-        fitter=MixMCStandAlone(im, self['ivar'], cen,
+
+        ares={'wrow':ares0['wrow']-ares0['row_range'][0],
+              'wcol':ares0['wcol']-ares0['col_range'][0],
+              'Irr':ares0['Irr'],
+              'Irc':ares0['Irc'],
+              'Icc':ares0['Icc'],
+              'whyflag':ares0['whyflag']}
+ 
+        fitter=MixMCStandAlone(im, self['ivar'], None,
                                gmix_psf, self.gprior, fitmodel,
                                nwalkers=self['nwalkers'],
                                nstep=self['nstep'], 
                                burnin=self['burnin'],
                                mca_a=self['mca_a'],
                                iter=self.get('iter',False),
-                               draw_gprior=self['draw_gprior'])
+                               draw_gprior=self['draw_gprior'],
+                               ares=ares)
         return fitter
 
     def get_fitmodels(self):
