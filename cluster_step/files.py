@@ -1,5 +1,5 @@
 import os
-from numpy import zeros
+from numpy import zeros, where
 
 default_version='2012-10-16'
 psfnums=[1,2,3,4,5,6]
@@ -207,6 +207,58 @@ def write_fits_output(**keys):
     with fitsio.FITS(path,mode='rw',clobber=True) as fobj:
         fobj.write(data, header=header)
 
+
+def read_output_set(run, psfnums, shnum, objtype=None, columns=None):
+    """
+    Read some data based on the input.  
+    
+    Multiple files may be read. If files are missing they will be skipped
+
+    Note only a single shear number is expected but many psfnums can
+    be sent.
+
+    parameters
+    ----------
+    run: string
+        run id
+    psfnums: integers
+        the psf numbers to read
+    shnum: integer
+        The shear number to read
+    objtype: string, optional
+        optionally select only objects with this best-fit model
+    columns: optional
+        only return these columns
+    """
+    from esutil.numpy_util import strmatch, combine_arrlist
+    if not isinstance(psfnums,list):
+        psfnums=[psfnums]
+
+    datalist=[]
+    for psfnum in psfnums:
+        for ccd in xrange(1,62+1):
+            fname=get_output_path(run=run, psfnum=psfnum, shnum=shnum, 
+                                  ccd=ccd, ftype='shear')
+            if os.path.exists(fname):
+                data0=read_fits_output(run=run, psfnum=psfnum, 
+                                             shnum=shnum, ccd=ccd, 
+                                             ftype='shear',
+                                             columns=columns)
+
+                logic=data0['flags']==0
+                if objtype:
+                    logic=logic & strmatch(data0['model'],objtype)
+
+                wkeep,=where(logic)
+                data0=data0[wkeep]
+                datalist.append(data0)
+
+    if len(datalist)==0:
+        raise RuntimeError("no outputs were found")
+    data=combine_arrlist(datalist)
+    return data
+ 
+
 def read_fits_output(**keys):
     """
     parameters
@@ -214,8 +266,6 @@ def read_fits_output(**keys):
 
     All keywords to keep things clear
 
-    data:
-        The data to write
     run:
         run identifier
     psfnum:
@@ -235,7 +285,7 @@ def read_fits_output(**keys):
 
     path=get_output_path(**keys)
     print 'reading:',path
-    return fitsio.read(path)
+    return fitsio.read(path, **keys)
 
 
 
