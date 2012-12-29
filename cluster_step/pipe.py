@@ -246,7 +246,7 @@ class Pipe(dict):
               'Icc':ares0['Icc'],
               'whyflag':ares0['whyflag']}
  
-        fitter=MixMCStandAlone(im, self['ivar'], None,
+        fitter=MixMCStandAlone(im, self['ivar'],
                                gmix_psf, self.gprior, fitmodel,
                                nwalkers=self['nwalkers'],
                                nstep=self['nstep'], 
