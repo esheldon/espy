@@ -1,5 +1,5 @@
 from numpy import zeros
-from esutil.stat import wmom
+from esutil.stat import wmom, histogram
 
 SHAPE_NOISE=0.32/2
 
