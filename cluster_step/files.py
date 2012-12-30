@@ -214,7 +214,9 @@ def read_output_set(run, psfnums, shnums,
                     s2_max=None,
                     gsens_min=None,
                     gerr_max=None,
-                    columns=None):
+                    columns=None,
+                    subtract_mean=False,
+                    progress=False):
     """
     Read some data based on the input.
     
@@ -237,15 +239,31 @@ def read_output_set(run, psfnums, shnums,
         optionally select only objects with this best-fit model
     columns: optional
         only return these columns
+    subtract_mean: bool, optional
+        Calculate the mean g and subtract it
     """
     from esutil.numpy_util import strmatch, combine_arrlist
     psfnums=get_psfnums(psfnums)
     shnums=get_shnums(shnums)
 
+    ntot=len(shnums)*len(psfnums)*62
+
+    itot=1
+    if progress:
+        from progressbar import ProgressBar
+        prog=ProgressBar(width=70, color='green')
+
     datalist=[]
-    for psfnum in psfnums:
-        for shnum in shnums:
+    for shnum in shnums:
+        shlist=[]
+        for psfnum in psfnums:
             for ccd in xrange(1,62+1):
+                if progress:
+                    #prog.update(frac=float(itot)/ntot,
+                    #            message='%s/%s' % (itot,ntot))
+                    prog.update(frac=float(itot)/ntot)
+                    itot += 1
+
                 fname=get_output_path(run=run, psfnum=psfnum, shnum=shnum, 
                                       ccd=ccd, ftype='shear')
                 if os.path.exists(fname):
@@ -276,7 +294,15 @@ def read_output_set(run, psfnums, shnums,
 
                     wkeep,=where(logic)
                     data0=data0[wkeep]
-                    datalist.append(data0)
+                    shlist.append(data0)
+        shdata=combine_arrlist(shlist)
+
+        if subtract_mean:
+            g1mean = shdata['g'][:,0].mean()
+            g2mean = shdata['g'][:,1].mean()
+            shdata['g'][:,0] -= g1mean
+            shdata['g'][:,1] -= g2mean
+        datalist.append(shdata)
 
     if len(datalist)==0:
         raise RuntimeError("no outputs were found")

@@ -989,7 +989,7 @@ class EmceeNGaussFitter:
 
     def _get_lngprior(self, g1, g2):
         g=sqrt(g1**2 + g2**2)
-        gp = self.gprior.prior_gabs_scalar(g)
+        gp = self.gprior.prior2d_gabs_scalar(g)
         if gp > 0:
             gp = log(gp)
         else:
@@ -1556,7 +1556,7 @@ class EmceeFitter:
 
     def _get_lngprior(self, g1, g2):
         g=sqrt(g1**2 + g2**2)
-        gp = self.gprior.prior_gabs_scalar(g)
+        gp = self.gprior.prior2d_gabs_scalar(g)
         if gp > 0:
             gp = log(gp)
         else:

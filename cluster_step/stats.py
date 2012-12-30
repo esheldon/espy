@@ -40,7 +40,6 @@ def bin_shear_data(data, bin_field, nperbin):
     bindata['g2'] /= bindata['g2sens']
     bindata['g2_err'] /= bindata['g2sens']
 
-
     return bindata
 
 def get_binned_dtype(bin_field):
