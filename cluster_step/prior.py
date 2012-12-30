@@ -1,5 +1,5 @@
 import numpy
-from numpy import diag, where, exp, sqrt, zeros
+from numpy import diag, where, cos, sin, exp, sqrt, zeros, random
 from math import pi
 
 class GPriorExp:
@@ -51,10 +51,10 @@ class GPriorExp:
         nleft=nrand
         while ngood < nrand:
 
-            # generate total g**2 in [0,1)
-            grand = random.random(nleft)
+            # generate total g in [0,1)
+            grand = self.gmax*random.random(nleft)
 
-            # now finally the height from [0,maxval)
+            # now the height from [0,maxval)
             h = self.maxval1d*random.random(nleft)
 
             pvals = self.prior1d(grand)
@@ -76,37 +76,12 @@ class GPriorExp:
         nrand: int
             Number to generate
         """
-        g1 = zeros(nrand)
-        g2 = zeros(nrand)
 
-        ngood=0
-        nleft=nrand
-        while ngood < nrand:
-
-            # generate total g**2 in [0,1)
-            grand2 = random.random(nleft)
-            grand = sqrt(grand2)
-            # now uniform angles
-            rangle = random.random(nleft)*2*pi
-
-            # now get cartesion locations in g1,g2 plane
-            g1rand = grand*cos(rangle)
-            g2rand = grand*sin(rangle)
-
-            # now finally the height from [0,maxval)
-            h = self.maxval*random.random(nleft)
-
-            pvals = self(g1rand, g2rand)
-
-            w,=where(h < pvals)
-            if w.size > 0:
-                g1[ngood:ngood+w.size] = g1rand[w]
-                g2[ngood:ngood+w.size] = g2rand[w]
-                ngood += w.size
-                nleft -= w.size
-
-        return g1, g2
-
+        grand=self.sample1d(nrand)
+        rangle = random.random(nrand)*2*pi
+        g1rand = grand*cos(rangle)
+        g2rand = grand*sin(rangle)
+        return g1rand, g2rand
 
     def set_maxval1d(self):
         import scipy.optimize

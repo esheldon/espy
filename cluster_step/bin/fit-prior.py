@@ -57,8 +57,7 @@ def do_fit(h):
 
 
 def get_prior_vals(h, fitres):
-    gp=prior.GPriorExp(fitres['A'], fitres['a'], fitres['g0'],
-                       gmax=fitres['gmax'])
+    gp=prior.GPriorExp(fitres['A'], fitres['a'], fitres['g0'], fitres['gmax'])
     xvals=linspace(h['low'][0], h['high'][-1], 1000)
     yvals = gp.prior1d(xvals)
 
@@ -71,6 +70,19 @@ def doplot(h1, h2, h, binsize, fitres, show=False, title=''):
 
     xfit,yfit,gprior = get_prior_vals(h, fitres)
 
+    nrand=100000
+    #nrand=h['hist'].sum()
+
+    g1rand,g2rand=gprior.sample2d(nrand)
+    grand=gprior.sample1d(nrand)
+
+    hrand=histogram(grand, binsize=binsize, min=0., max=1., more=True)
+    h1rand=histogram(g1rand, binsize=binsize, min=-1., max=1., more=True)
+
+    fbinsize=xfit[1]-xfit[0]
+    hrand['hist'] = hrand['hist']*float(yfit.sum())/hrand['hist'].sum()*fbinsize/binsize
+    h1rand['hist'] = h1rand['hist']*float(h1['hist'].sum())/h1rand['hist'].sum()
+
     #arr.uniform_limits=1
     #arr.xrange=[-1,1]
 
@@ -79,12 +91,18 @@ def doplot(h1, h2, h, binsize, fitres, show=False, title=''):
 
     hplt1=Histogram(h1['hist'], x0=h1['low'][0], binsize=binsize,color='red')
     hplt2=Histogram(h2['hist'], x0=h2['low'][0], binsize=binsize,color='blue')
+    hpltrand=Histogram(hrand['hist'], x0=hrand['low'][0], binsize=binsize,
+                       color='magenta')
+    hplt1rand=Histogram(h1rand['hist'], x0=h1rand['low'][0], binsize=binsize,
+                       color='magenta')
 
     hplt1.label=r'$g_1$'
     hplt2.label=r'$g_2$'
-    keyboth=PlotKey(0.9,0.9,[hplt1,hplt2],halign='right')
+    hplt1rand.label='rand'
+    hpltrand.label='rand'
+    keyboth=PlotKey(0.9,0.9,[hplt1,hplt2,hplt1rand],halign='right')
 
-    pltboth.add(hplt1, hplt2, keyboth)
+    pltboth.add(hplt1, hplt2, hplt1rand, keyboth)
     #arr[0,0].add(hplt1, hplt2, keyboth)
     tab[0,0]=pltboth
     
@@ -93,16 +111,15 @@ def doplot(h1, h2, h, binsize, fitres, show=False, title=''):
     plt.xlabel=r'$|g|$'
 
     hplt=Histogram(h['hist'], x0=h['low'][0], binsize=binsize)
+    hplt.label='|g|'
 
     
     line=Curve(xfit, yfit, color='blue')
-    plt.add(line)
+    line.label='model'
 
-    #oplot_gaussians(plt, h, fitres)
+    key=PlotKey(0.9,0.9,[hplt,line,hpltrand],halign='right')
+    plt.add(line, hplt, hpltrand, key)
 
-
-    #arr[1,0].add(hplt,key)
-    plt.add(hplt)
 
     tab[1,0]=plt
     
