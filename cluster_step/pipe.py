@@ -117,7 +117,7 @@ class Pipe(dict):
         return cutout
 
     def get_zerod_cutout(self, index, **keys):
-        c,cseg=self.get_cutout(index, with_seg=True)
+        c,cseg=self.get_cutout(index, with_seg=True, **keys)
 
         im=c.subimage
         seg=cseg.subimage
@@ -202,6 +202,7 @@ class Pipe(dict):
         out['simid'][:] = self.cat['simid'][wgal]
 
         for igal in xrange(wgal.size):
+            from esutil.numpy_util import aprint
             #if ((igal % 10) == 0):
             #    print "  %s/%s done" % (igal+1,wgal.size)
 
@@ -213,7 +214,7 @@ class Pipe(dict):
 
             im=c.subimage
 
-            gmix_psf=self.get_random_gmix_psf()
+            gmix_psf=self.get_gmix_psf()
 
             res=self.fit_shear_models(im, ares[index].copy(), gmix_psf)
             self.copy_shear_results(out, res, gmix_psf, igal)
@@ -235,8 +236,8 @@ class Pipe(dict):
 
             res0 = fitter.get_result()
             if len(fitmodels) > 1:
-                print '  model: %s prob: %.6f Ts/n: %.6f' % \
-                    (fitmodel,res0['fit_prob'],res0['Ts2n'])
+                print '  model: %s prob: %.6f aic: %.6f bic: %.6f Ts/n: %.6f ' % \
+                    (fitmodel,res0['fit_prob'],res0['aic'],res0['bic'],res0['Ts2n'])
             if res0['fit_prob'] > probrand:
                 res=res0
                 probrand=res0['fit_prob']
@@ -276,7 +277,8 @@ class Pipe(dict):
         if not isinstance(fitmodels,list):
             fitmodels=[fitmodels]
         return fitmodels
-    def get_random_gmix_psf(self):
+
+    def get_gmix_psf(self):
         """
         Get a random psf gmix from good psf stars
         """
@@ -314,9 +316,6 @@ class Pipe(dict):
         for ipsf in xrange(wpsf.size):
             stdout.write(".")
             index=wpsf[ipsf]
-            c=self.get_zerod_cutout(index)
-
-            im=c.subimage
 
             # put back in the sub-coordinate system
             # hoops because of endian bug in numpy
@@ -326,6 +325,11 @@ class Pipe(dict):
             Irc=ares['Irc'][index]
             Icc=ares['Icc'][index]
             aresi = {'wrow':wrow,'wcol':wcol,'Irr':Irr,'Irc':Irc,'Icc':Icc}
+
+            c=self.get_zerod_cutout(index)
+
+            im=c.subimage
+
 
             gpsf=GMixEMPSF(im, self['ivar'], self['ngauss_psf'],
                            ares=aresi, 
@@ -339,9 +343,14 @@ class Pipe(dict):
             out['em_ntry'][ipsf] = res['ntry']
             out['em_pars'][ipsf,:] = res['gmix'].get_pars()
 
-            if True and out['em_flags'][ipsf] != 0:
+
+            #if True and out['em_flags'][ipsf] == 0:
+            if False and out['em_flags'][ipsf] != 0:
+            #if True:
+                print '\nipsf:',ipsf
                 pprint.pprint(res)
-                if False:
+                pprint.pprint(gpsf.get_stats())
+                if True:
                     gpsf.compare_model()
                     key=raw_input("hit a key (q to quit): ")
                     if key=='q':
@@ -573,6 +582,8 @@ class Pipe(dict):
         s2 = Tpsf/Tobj
         out['s2'][igal] = s2
 
+        out['pars_psf'][igal] = gmix_psf.get_pars()
+
         for k in res:
             if k in out.dtype.names:
                 out[k][igal] = res[k]
@@ -601,7 +612,9 @@ class Pipe(dict):
             ('loglike','f8'),     # loglike of fit
             ('chi2per','f8'),     # chi^2/degree of freedom
             ('dof','i4'),         # degrees of freedom
-            ('fit_prob','f8')     # probability of the fit happening randomly
+            ('fit_prob','f8'),    # probability of the fit happening randomly
+            ('aic','f8'),         # Akaike Information Criterion
+            ('bic','f8')          # Bayesian Information Criterion
            ]
 
         data=zeros(n, dtype=dt)

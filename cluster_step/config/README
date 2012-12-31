@@ -1,10 +1,17 @@
 ideas about psf:
 
-    - fit 1 gauss then 2 gauss then 3 gauss and pick the one for which
-      the probability of the fit is highest
-    - fit n gaussians and then take the average parameters from all fits instead
-      of a random psf star
+    - fit 1 gauss then 2 gauss then 3 gauss and pick the one for which the
+      probability of the fit is highest.  Problem is different stars will end
+      up with different number of gaussians, see below.
+
+    - fit n gaussians and then take the average parameters from all fits
+      instead of a random psf star.   This can be paired with the above.
+
     - use brighter stars
+
+    - try using the mcmc fitter
+        - coellip full with N gauss
+        - gturb
 
 mixmc-r01
     - using the old gprior
