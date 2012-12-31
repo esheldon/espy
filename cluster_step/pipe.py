@@ -333,7 +333,9 @@ class Pipe(dict):
 
             gpsf=GMixEMPSF(im, self['ivar'], self['ngauss_psf'],
                            ares=aresi, 
-                           maxiter=self['em_maxiter'], tol=self['em_tol'])
+                           maxiter=self['em_maxiter'], 
+                           tol=self['em_tol'],
+                           cocenter=self['cocenter_psf'])
             res=gpsf.get_result()
 
             
@@ -344,8 +346,8 @@ class Pipe(dict):
             out['em_pars'][ipsf,:] = res['gmix'].get_pars()
 
 
-            #if True and out['em_flags'][ipsf] == 0:
-            if False and out['em_flags'][ipsf] != 0:
+            if True and out['em_flags'][ipsf] == 0:
+            #if False and out['em_flags'][ipsf] != 0:
             #if True:
                 print '\nipsf:',ipsf
                 pprint.pprint(res)

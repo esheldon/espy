@@ -6,7 +6,9 @@ star_maxmag: 20
 
 cutout_size: 25
 
-ngauss_psf: 2
+ngauss_psf: 1
+cocenter_psf: true
+#cocenter_psf: false
 em_maxiter: 10000
 em_tol: 1.0e-6
 #em_tol: 1.0e-8

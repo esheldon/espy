@@ -1,5 +1,9 @@
+todo
+    - look at p4 for run 02
+
 ideas about psf:
 
+    - does co-centric make it more stable?
     - fit 1 gauss then 2 gauss then 3 gauss and pick the one for which the
       probability of the fit is highest.  Problem is different stars will end
       up with different number of gaussians, see below.
@@ -11,7 +15,10 @@ ideas about psf:
 
     - try using the mcmc fitter
         - coellip full with N gauss
-        - gturb
+        - gturb 
+            - might be that comparing 1 gauss, 2 gauss, and turb will
+            cover it
+
 
 mixmc-r01
     - using the old gprior
