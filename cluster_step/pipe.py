@@ -3,7 +3,10 @@ from sys import stdout
 import pprint
 from math import ceil
 from numpy import where, sqrt, random, zeros, arange
+
 from . import files
+from . import prior
+
 import gmix_image
 from gmix_image.gmix import GMix
 from gmix_image.gmix_mcmc import MixMCStandAlone
@@ -39,11 +42,7 @@ class Pipe(dict):
         for k in conf:
             self[k]=conf[k]
         
-        # need to fit for this from data
-        self.gprior=gmix_image.priors.GPrior(A=12.25,
-                                             B=0.2,
-                                             C=1.05,
-                                             D=13.)
+        self._set_priors()
 
         random.seed(self['seed'])
         self._load_data()
@@ -55,6 +54,19 @@ class Pipe(dict):
                 or 'ccd' not in keys):
             raise ValueError("send run=, psfnum=, "
                              "shnum=, ccd=")
+
+    def _set_priors(self):
+        priors={}
+        if self['gprior_type'] == 'old':
+            priors['gexp']=gmix_image.priors.GPrior(A=12.25,
+                                                    B=0.2,
+                                                    C=1.05,
+                                                    D=13.)
+            priors['gdev'] = priors['gexp']
+        else:
+            priors['gexp']=prior.GPriorExp(self['gprior_pars_exp'])
+            priors['gdev']=prior.GPriorDev(self['gprior_pars_dev'])
+        self.gpriors=priors
 
     def _load_data(self):
         self.cat=files.read_cat(**self)
@@ -246,8 +258,10 @@ class Pipe(dict):
               'Icc':ares0['Icc'],
               'whyflag':ares0['whyflag']}
  
+        gprior=self.gpriors[fitmodel]
+
         fitter=MixMCStandAlone(im, self['ivar'],
-                               gmix_psf, self.gprior, fitmodel,
+                               gmix_psf, gprior, fitmodel,
                                nwalkers=self['nwalkers'],
                                nstep=self['nstep'], 
                                burnin=self['burnin'],

@@ -22,6 +22,8 @@ fitmodel: ['gdev','gexp']
 
 shear_s2n_min: 10
 
+gprior_type: 'old'
+
 # draw the g1,g2 starting points from the gprior
 draw_gprior: true
 

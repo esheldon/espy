@@ -80,7 +80,8 @@ def main():
 
     bin_field=options.field
 
-    data=files.read_output_set(run, options.psfnums, shnum, objtype=objtype)
+    data=files.read_output_set(run, options.psfnums, shnum, objtype=objtype,
+                               progress=True)
     bindata=stats.bin_shear_data(data, bin_field, nperbin)
 
     aprint(bindata, header=True, page=False, fancy=True)
