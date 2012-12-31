@@ -1,4 +1,4 @@
-run: mixmc-rtest
+run: mixmc-r03
 version: "2012-10-16"
 
 star_minmag: 18
@@ -6,14 +6,12 @@ star_maxmag: 20
 
 cutout_size: 25
 
-
-#ngauss_psf: 1
 psf_models: ['gturb','em1','em2','em2cocen']
 em_maxiter: 10000
 em_tol: 1.0e-6
 
 # should be 'random', 'mean'
-psf_interp: 'median'
+psf_interp: 'random'
 
 # step and burnin are *per walker*
 nwalkers: 20
@@ -35,4 +33,4 @@ gprior_pars_dev: [1.0, 8.0, 9.5e-7]
 draw_gprior: true
 
 # for filling areas not in object with noise
-seed: 3486
+seed: 2748

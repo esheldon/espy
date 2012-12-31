@@ -389,6 +389,54 @@ def get_output_path(**keys):
 
     return os.path.join(dir,name)
 
+def get_summary_plot_dir(**keys):
+    """
+    This is opposed to the plots generated to go with
+    the exposure outputs
+    """
+    run=keys['run']
+    ftype=keys['ftype']
+
+    vdir=get_version_dir(**keys)
+    dir=os.path.join(vdir, 'shear', run, 'plots', ftype)
+    return dir
+
+def get_summary_plot_path(**keys):
+    """
+    Specifically plots that are from summary data, averaged in some set
+    """
+    dir=get_summary_plot_dir(**keys)
+
+    run=keys['run']
+    ftype=keys['ftype']
+    extra=keys.get('extra',None)
+    ext=keys.get('ext','eps')
+
+    psfnum=keys.get('psfnum',None)
+    shnum=keys.get('shnum',None)
+
+    name='{run}'
+    if psfnum is not None:
+        name += '-p{psfnum}'
+    if shnum is not None:
+        name += '-s{shnum}'
+
+    name += '-{ftype}'
+
+    if extra is not None:
+        name += '-{extra}'
+
+    name += '.%s' % ext
+
+    name=name.format(run=run,
+                     psfnum=psfnum,
+                     shnum=shnum,
+                     ftype=ftype,
+                     extra=extra)
+
+    path=os.path.join(dir, name)
+    return path
+
 def get_wq_dir(**keys):
     run=keys['run']
     ftype=keys['ftype']

@@ -1,6 +1,12 @@
+- everything looks biased for dev for Ts2n < 20 but actually looks
+    ok for exp with some cuts
+- cuts on s2
+    - s2 < 0.5 looks unbiased for exp
+
 todo
+    - add linear size ratio
+        sratio = sqrt(1/s2)
     - look at p4 for run 02
-    - look at cuts on s2
 
 ideas about psf:
 
