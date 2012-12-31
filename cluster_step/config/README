@@ -1,0 +1,15 @@
+ideas about psf:
+
+    - fit 1 gauss then 2 gauss then 3 gauss and pick the one for which
+      the probability of the fit is highest
+    - fit n gaussians and then take the average parameters from all fits instead
+      of a random psf star
+    - use brighter stars
+
+mixmc-r01
+    - using the old gprior
+    - using EM and two gaussians
+    - taking a random PSF star
+
+mixmc-r01
+    - same as r01 but with gexp and gdev priors based on the bright galaxies
