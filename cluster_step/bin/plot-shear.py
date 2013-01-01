@@ -15,7 +15,7 @@ from cluster_step import files, stats
 import esutil as eu
 from esutil.numpy_util import aprint
 import biggles
-from biggles import FramedArray, Points, \
+from biggles import FramedPlot, FramedArray, Points, \
         Curve, SymmetricErrorBarsX, SymmetricErrorBarsY
 
 from optparse import OptionParser
@@ -34,11 +34,14 @@ parser.add_option('-s','--show',action='store_true',
 parser.add_option('--s2',default=None,
                   help='restrict s2 less than this value')
 
+parser.add_option('--frac',action='store_true',
+                  help=("show the fraction relative to the"
+                        "expected truth"))
 
 parser.add_option('-P','--progress',action='store_true',
                   help="show the progress bar")
 sh1exp={8:0.15}
-sh2exp={8:0.0}
+sh2exp={8:0}
 
 
 class ShearPlotter(object):
@@ -75,7 +78,10 @@ class ShearPlotter(object):
         
         self.set_bindata()
         self.set_psfnums_string()
-        self.make_plot()
+        if self.options.frac:
+            self.make_frac_plot()
+        else:
+            self.make_plot()
 
     def set_bindata(self):
         self.bindata=stats.bin_shear_data(self.data, self.bin_field, self.nperbin)
@@ -122,6 +128,7 @@ class ShearPlotter(object):
         arr.xlog=True
         arr.xrange=[0.5*bindata[bin_field].min(), 1.5*bindata[bin_field].max()]
         arr.xlabel=bin_field
+        arr.ylabel = r'$\gamma$'
 
         xdata=bindata[bin_field]
         xerr=bindata[bin_field+'_err']
@@ -149,6 +156,54 @@ class ShearPlotter(object):
 
         self.plt=arr
 
+    def make_frac_plot(self):
+        if self.shnum not in sh1exp:
+            raise ValueError("you must know the expected value")
+
+        if sh1exp[self.shnum] != 0:
+            gfield='g1'
+            gtrue=sh1exp[self.shnum]
+        elif sh1exp[self.shnum] != 0:
+            gfield='g2'
+            gtrue=sh2exp[self.shnum]
+        else:
+            raise ValueError("none of expected values are > 0")
+
+        bindata=self.bindata
+        bin_field=self.bin_field
+        plt=FramedPlot()
+        
+        plt.title=self.get_title()
+
+        plt.xlog=True
+        plt.xrange=[0.5*bindata[bin_field].min(), 1.5*bindata[bin_field].max()]
+        plt.xlabel=bin_field
+        ylabel=r'$\Delta \gamma/\gamma$'
+        plt.ylabel = ylabel
+
+        xdata=bindata[bin_field]
+
+        zero=zeros(xdata.size)
+        zero_plt=Curve(xdata, zero)
+        plt.add(zero_plt)
+
+        xfill=[xdata.min(), xdata.max()]
+
+        plt.add( biggles.FillBetween(xfill, [0.004,0.004], 
+                                     xfill, [-0.004,-0.004],
+                                     color='grey80'))
+
+
+        gfrac = bindata[gfield]/gtrue-1
+        gfrac_err = bindata[gfield+'_err']/gtrue
+        gpts = Points(xdata, gfrac)
+        gerrpts = SymmetricErrorBarsY(xdata, gfrac, gfrac_err)
+
+        plt.add( gpts, gerrpts )
+
+        self.plt=plt
+
+ 
     
     def write(self):
         import converter
@@ -183,6 +238,9 @@ class ShearPlotter(object):
         if self.s2_max:
             extra += ['s2%0.2f' % self.s2_max]
         extra += ['v%s' % self.bin_field]
+
+        if self.options.frac:
+            extra += ['frac']
         extra='-'.join(extra)
         extra = extra.replace('_','-')
         return extra
