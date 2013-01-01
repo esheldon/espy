@@ -1,4 +1,4 @@
-run: mixmc-r01
+run: mixmc-r02
 version: "2012-10-16"
 
 star_minmag: 18
@@ -23,7 +23,10 @@ fitmodel: ['gdev','gexp']
 
 shear_s2n_min: 10
 
-gprior_type: 'old'
+gprior_type: 'fits'
+gprior_pars_exp: [1.0, 13.68, 0.051, 0.87]
+gprior_pars_dev: [1.0, 8.0, 9.5e-7]
+
 
 # draw the g1,g2 starting points from the gprior
 draw_gprior: true

@@ -1,0 +1,36 @@
+- everything looks biased for dev for Ts2n < 20 but actually looks
+    ok for exp with some cuts
+- cuts on s2
+    - s2 < 0.5 looks unbiased for exp
+
+todo
+    - add linear size ratio
+        sratio = sqrt(1/s2)
+    - look at p4 for run 02
+
+ideas about psf:
+
+    - does co-centric make it more stable?
+    - fit 1 gauss then 2 gauss then 3 gauss and pick the one for which the
+      probability of the fit is highest.  Problem is different stars will end
+      up with different number of gaussians, see below.
+
+    - fit n gaussians and then take the average parameters from all fits
+      instead of a random psf star.   This can be paired with the above.
+
+    - use brighter stars
+
+    - try using the mcmc fitter
+        - coellip full with N gauss
+        - gturb 
+            - might be that comparing 1 gauss, 2 gauss, and turb will
+            cover it
+
+
+mixmc-r01
+    - using the old gprior
+    - using EM and two gaussians
+    - taking a random PSF star
+
+mixmc-r01
+    - same as r01 but with gexp and gdev priors based on the bright galaxies

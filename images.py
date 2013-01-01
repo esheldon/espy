@@ -332,7 +332,7 @@ def expand(image, new_dims, padval=0, verbose=False):
 def compare_images(im1, im2, cen=None, minval=None, 
                    label1='im1',label2='im2',
                    show=True,
-                   skysig=None, **keys):
+                   skysig=None, dof=None, **keys):
     import biggles
 
     labelres='%s-%s' % (label2,label1)
@@ -363,9 +363,11 @@ def compare_images(im1, im2, cen=None, minval=None,
     residplt=view(resid, show=False, min=minval, max=maxval)
 
     if skysig is not None:
-        chi2perpix = (resid**2).sum()/skysig**2/im1.size
+        if dof is None:
+            dof=im1.size
+        chi2per = (resid**2).sum()/skysig**2/dof
         lab = biggles.PlotLabel(0.1,0.1,
-                    r'$\chi^2/N$: %0.2e' % chi2perpix,halign='left')
+                    r'$\chi^2/dof$: %0.2f' % chi2per,halign='left')
     else:
         chi2perpix = (resid**2).sum()/im1.size
         lab = biggles.PlotLabel(0.1,0.1,

@@ -1,5 +1,5 @@
 import os
-from numpy import zeros
+from numpy import zeros, where, sqrt
 
 default_version='2012-10-16'
 psfnums=[1,2,3,4,5,6]
@@ -207,6 +207,109 @@ def write_fits_output(**keys):
     with fitsio.FITS(path,mode='rw',clobber=True) as fobj:
         fobj.write(data, header=header)
 
+
+def read_output_set(run, psfnums, shnums, 
+                    objtype=None, 
+                    s2n_min=None,
+                    s2_max=None,
+                    gsens_min=None,
+                    gerr_max=None,
+                    columns=None,
+                    subtract_mean=False,
+                    progress=False):
+    """
+    Read some data based on the input.
+    
+    Multiple files may be read. If files are missing they will be skipped
+
+    Note only a single shear number is expected but many psfnums can
+    be sent.  
+    
+    Only those with flags==0 are kept.
+
+    parameters
+    ----------
+    run: string
+        run id
+    psfnums: integers
+        the psf numbers to read
+    shnums: integers
+        The shear numbers to read.
+    objtype: string, optional
+        optionally select only objects with this best-fit model
+    columns: optional
+        only return these columns
+    subtract_mean: bool, optional
+        Calculate the mean g and subtract it
+    """
+    from esutil.numpy_util import strmatch, combine_arrlist
+    psfnums=get_psfnums(psfnums)
+    shnums=get_shnums(shnums)
+
+    ntot=len(shnums)*len(psfnums)*62
+
+    itot=1
+    if progress:
+        from progressbar import ProgressBar
+        prog=ProgressBar(width=70, color='green')
+
+    datalist=[]
+    for shnum in shnums:
+        shlist=[]
+        for psfnum in psfnums:
+            for ccd in xrange(1,62+1):
+                if progress:
+                    #prog.update(frac=float(itot)/ntot,
+                    #            message='%s/%s' % (itot,ntot))
+                    prog.update(frac=float(itot)/ntot)
+                    itot += 1
+
+                fname=get_output_path(run=run, psfnum=psfnum, shnum=shnum, 
+                                      ccd=ccd, ftype='shear')
+                if os.path.exists(fname):
+                    data0=read_fits_output(run=run, psfnum=psfnum, 
+                                           shnum=shnum, ccd=ccd, 
+                                           ftype='shear',
+                                           columns=columns, 
+                                           verbose=False)
+
+                    logic=data0['flags']==0
+                    if objtype:
+                        logic=logic & strmatch(data0['model'],objtype)
+                    if s2n_min is not None:
+                        logic=logic & (data0['s2n_w'] > s2n_min)
+                    if s2_max is not None:
+                        logic=logic & (data0['s2'] < s2_max)
+                    if gsens_min is not None:
+                        logic=logic \
+                            & (data0['gsens'][:,0] > gsens_min) \
+                            & (data0['gsens'][:,1] > gsens_min)
+                    if gerr_max is not None:
+                        g1err=sqrt(data0['gcov'][:,0,0])
+                        g2err=sqrt(data0['gcov'][:,1,1])
+                        logic=logic \
+                            & (g1err < gerr_max) & (g2err < gerr_max)
+
+
+
+                    wkeep,=where(logic)
+                    data0=data0[wkeep]
+                    shlist.append(data0)
+        shdata=combine_arrlist(shlist)
+
+        if subtract_mean:
+            g1mean = shdata['g'][:,0].mean()
+            g2mean = shdata['g'][:,1].mean()
+            shdata['g'][:,0] -= g1mean
+            shdata['g'][:,1] -= g2mean
+        datalist.append(shdata)
+
+    if len(datalist)==0:
+        raise RuntimeError("no outputs were found")
+    data=combine_arrlist(datalist)
+    return data
+ 
+
 def read_fits_output(**keys):
     """
     parameters
@@ -214,8 +317,6 @@ def read_fits_output(**keys):
 
     All keywords to keep things clear
 
-    data:
-        The data to write
     run:
         run identifier
     psfnum:
@@ -234,8 +335,10 @@ def read_fits_output(**keys):
     import fitsio
 
     path=get_output_path(**keys)
-    print 'reading:',path
-    return fitsio.read(path)
+    verbose=keys.get('verbose',True)
+    if verbose:
+        print 'reading:',path
+    return fitsio.read(path, **keys)
 
 
 
@@ -286,6 +389,54 @@ def get_output_path(**keys):
 
     return os.path.join(dir,name)
 
+def get_summary_plot_dir(**keys):
+    """
+    This is opposed to the plots generated to go with
+    the exposure outputs
+    """
+    run=keys['run']
+    ftype=keys['ftype']
+
+    vdir=get_version_dir(**keys)
+    dir=os.path.join(vdir, 'shear', run, 'plots', ftype)
+    return dir
+
+def get_summary_plot_path(**keys):
+    """
+    Specifically plots that are from summary data, averaged in some set
+    """
+    dir=get_summary_plot_dir(**keys)
+
+    run=keys['run']
+    ftype=keys['ftype']
+    extra=keys.get('extra',None)
+    ext=keys.get('ext','eps')
+
+    psfnum=keys.get('psfnum',None)
+    shnum=keys.get('shnum',None)
+
+    name='{run}'
+    if psfnum is not None:
+        name += '-p{psfnum}'
+    if shnum is not None:
+        name += '-s{shnum}'
+
+    name += '-{ftype}'
+
+    if extra is not None:
+        name += '-{extra}'
+
+    name += '.%s' % ext
+
+    name=name.format(run=run,
+                     psfnum=psfnum,
+                     shnum=shnum,
+                     ftype=ftype,
+                     extra=extra)
+
+    path=os.path.join(dir, name)
+    return path
+
 def get_wq_dir(**keys):
     run=keys['run']
     ftype=keys['ftype']
@@ -316,5 +467,26 @@ def get_wq_path(**keys):
 
 
     return os.path.join(dir,name)
+
+def get_psfnums(psfnum=None):
+    return get_nums(psfnum, 1, 6)
+
+def get_shnums(shnum=None):
+    return get_nums(shnum, 1, 8)
+
+def get_nums(nums, nmin, nmax):
+    if nums is None:
+        nums=range(nmin, nmax+1)
+    elif isinstance(nums,basestring):
+        nums=nums.split(',')
+
+    if not isinstance(nums,list):
+        nums=[nums]
+
+    nums=[int(s) for s in nums]
+    for n in nums:
+        if n < nmin or n > nmax:
+            raise ValueError("number %d out of range: [%d,%d]" % (n,nmin,nmax))
+    return nums
 
 

@@ -3,8 +3,11 @@
 # License: BSD
 #
 # Modification History
-#  Make sure percent is integer 
-#       Erin Sheldon, Brookhaven National Laboratory
+#  2012-12-30 Erin Sheldon, Brookhaven National Laboratory
+#  - render takes the fraction instead of a percent.
+#  - everything is keywords now
+#  - Added update() to only render when a change in the percent
+#    has occurred.
 
 """Draws an animated terminal progress bar
 Usage:
@@ -18,14 +21,14 @@ import sys
 class ProgressBar(object):
     """Terminal progress bar class"""
     TEMPLATE = (
-     '%(percent)-2s%% %(color)s%(progress)s%(normal)s%(empty)s %(message)s\n'
+     '%(percent)-3s%% %(color)s%(progress)s%(normal)s%(empty)s %(message)s\n'
     )
-    #TEMPLATE = (
-    # '%(percent)-2s%% [%(color)s%(progress)s%(normal)s%(empty)s] %(message)s\n'
-    #)
-    PADDING = 7
+    TEMPLATE_BRACKET = (
+     '%(percent)3s%% [%(color)s%(progress)s%(normal)s%(empty)s] %(message)s\n'
+    )
+    PADDING = 8
  
-    def __init__(self, color=None, width=None, block='█', empty=' '):
+    def __init__(self, color=None, width=None, block='=', empty=' '):
         """
         color -- color name (BLUE GREEN CYAN RED MAGENTA YELLOW WHITE BLACK)
         width -- bar width (optinal)
@@ -45,13 +48,61 @@ class ProgressBar(object):
         self.empty = empty
         self.progress = None
         self.lines = 0
+
+        self.percent_old=-9999
+        self.message_old='nothing'
  
-    def render(self, percent, message = ''):
-        """Print the progress bar
-        percent -- the progress percentage %
-        message -- message string (optional)
+    def update(self, **keys):
         """
-        percent = int(percent)
+        Same as render but only print if there has been an update.
+
+        An update is when the integer percentage has changed or the message has
+        changed.
+
+        parameters
+        ----------
+        frac: float, optional
+            The fraction finished.  Percent is 100*frac
+        message: string, optional
+            A message to print to the right
+        """
+
+        percent, message=self.get_percent_message(**keys)
+
+        if not self.is_updated(percent=percent, message=message):
+            return
+        self.percent_old=percent
+        self.message_old=message
+
+
+        self.render(**keys)
+
+    def is_updated(self, percent=None, message=None):
+        if percent is not None:
+            if percent == self.percent_old:
+                return False
+            else:
+                return True
+        if message is not None:
+            if message==self.message_old:
+                return False
+            else:
+                return True
+        return False
+
+    def render(self, **keys):
+        """
+        Print the progress bar
+
+        parameters
+        ----------
+        frac: float, optional
+            The fraction finished.  Percent is 100*frac
+        message: string, optional
+            A message to print to the right
+        """
+
+        percent, message=self.get_percent_message(**keys)
 
         inline_msg_len = 0
         if message:
@@ -68,7 +119,7 @@ class ProgressBar(object):
         if self.progress != None:
             self.clear()
         self.progress = (bar_width * percent) / 100
-        data = self.TEMPLATE % {
+        data = self.TEMPLATE_BRACKET % {
             'percent': percent,
             'color': self.color,
             'progress': self.block * self.progress,
@@ -81,8 +132,21 @@ class ProgressBar(object):
         # The number of lines printed
         self.lines = len(data.splitlines())
  
+    def get_percent_message(self, **keys):
+        frac=keys.get('frac',None)
+        message=keys.get('message','')
+
+        if frac is not None:
+            percent=int(100*frac)
+        else:
+            percent=None
+
+        return percent, message
+
     def clear(self):
         """Clear all printed lines"""
         sys.stdout.write(
             self.lines * (terminal.UP + terminal.BOL + terminal.CLEAR_EOL)
         )
+
+

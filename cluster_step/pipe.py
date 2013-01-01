@@ -2,11 +2,15 @@ import os
 from sys import stdout
 import pprint
 from math import ceil
-from numpy import where, sqrt, random, zeros, arange
+from numpy import where, sqrt, random, zeros, arange, median
+
 from . import files
+from . import prior
+
 import gmix_image
 from gmix_image.gmix import GMix
-from gmix_image.gmix_mcmc import MixMCStandAlone
+from gmix_image.gmix_mcmc import MixMCStandAlone, MixMCPSF
+from gmix_image.gmix_em import GMixEMPSF
 
 CLUSTERSTEP_GAL=1
 CLUSTERSTEP_STAR=2
@@ -39,11 +43,7 @@ class Pipe(dict):
         for k in conf:
             self[k]=conf[k]
         
-        # need to fit for this from data
-        self.gprior=gmix_image.priors.GPrior(A=12.25,
-                                             B=0.2,
-                                             C=1.05,
-                                             D=13.)
+        self._set_priors()
 
         random.seed(self['seed'])
         self._load_data()
@@ -56,6 +56,20 @@ class Pipe(dict):
             raise ValueError("send run=, psfnum=, "
                              "shnum=, ccd=")
 
+    def _set_priors(self):
+        priors={}
+        if self['gprior_type'] == 'old':
+            priors['gexp']=gmix_image.priors.GPrior(A=12.25,
+                                                    B=0.2,
+                                                    C=1.05,
+                                                    D=13.)
+            priors['gdev'] = priors['gexp']
+        else:
+            priors['gexp']=prior.GPriorExp(self['gprior_pars_exp'])
+            priors['gdev']=prior.GPriorDev(self['gprior_pars_dev'])
+        self.gpriors=priors
+
+
     def _load_data(self):
         self.cat=files.read_cat(**self)
         image_orig, self.hdr=files.read_image(**self)
@@ -66,7 +80,8 @@ class Pipe(dict):
 
         psf_path=files.get_output_path(ftype='psf', **self)
         if os.path.exists(psf_path):
-            self.psfres=files.read_fits_output(ftype='psf',**self)
+            psfres=files.read_fits_output(ftype='psf',**self)
+            self._set_psfres(psfres)
 
         shear_path=files.get_output_path(ftype='shear', **self)
         if os.path.exists(shear_path):
@@ -90,6 +105,10 @@ class Pipe(dict):
         self.image = image_orig.astype('f8') - self['sky']
         del image_orig
 
+    def _set_psfres(self, psfres):
+        self.psfres=psfres
+        self._set_best_psf_model()
+
     def get_cutout(self, index, size=None, with_seg=False):
         if size is None:
             size=self['cutout_size']
@@ -105,7 +124,7 @@ class Pipe(dict):
         return cutout
 
     def get_zerod_cutout(self, index, **keys):
-        c,cseg=self.get_cutout(index, with_seg=True)
+        c,cseg=self.get_cutout(index, with_seg=True, **keys)
 
         im=c.subimage
         seg=cseg.subimage
@@ -175,12 +194,13 @@ class Pipe(dict):
         """
         if not hasattr(self,'ares') or run_admom:
             self.run_admom()
+            self.plot_admom_sizemag()
         if not hasattr(self,'psfres') or run_psf:
             self.run_psf()
 
         ares=self.ares
 
-        wpsf=self.get_psf_stars()
+        #wpsf=self.get_psf_stars()
         wgal=self.get_gals(s2n_min=self['shear_s2n_min'])
         #wgal=wgal[0:10]
 
@@ -190,6 +210,7 @@ class Pipe(dict):
         out['simid'][:] = self.cat['simid'][wgal]
 
         for igal in xrange(wgal.size):
+            from esutil.numpy_util import aprint
             #if ((igal % 10) == 0):
             #    print "  %s/%s done" % (igal+1,wgal.size)
 
@@ -201,7 +222,7 @@ class Pipe(dict):
 
             im=c.subimage
 
-            gmix_psf=self.get_random_gmix_psf()
+            gmix_psf=self.get_gmix_psf()
 
             res=self.fit_shear_models(im, ares[index].copy(), gmix_psf)
             self.copy_shear_results(out, res, gmix_psf, igal)
@@ -223,8 +244,8 @@ class Pipe(dict):
 
             res0 = fitter.get_result()
             if len(fitmodels) > 1:
-                print '  model: %s prob: %.6f Ts/n: %.6f' % \
-                    (fitmodel,res0['fit_prob'],res0['Ts2n'])
+                print '  model: %s prob: %.6f aic: %.6f bic: %.6f Ts/n: %.6f ' % \
+                    (fitmodel,res0['fit_prob'],res0['aic'],res0['bic'],res0['Ts2n'])
             if res0['fit_prob'] > probrand:
                 res=res0
                 probrand=res0['fit_prob']
@@ -246,8 +267,10 @@ class Pipe(dict):
               'Icc':ares0['Icc'],
               'whyflag':ares0['whyflag']}
  
-        fitter=MixMCStandAlone(im, self['ivar'], None,
-                               gmix_psf, self.gprior, fitmodel,
+        gprior=self.gpriors[fitmodel]
+
+        fitter=MixMCStandAlone(im, self['ivar'],
+                               gmix_psf, gprior, fitmodel,
                                nwalkers=self['nwalkers'],
                                nstep=self['nstep'], 
                                burnin=self['burnin'],
@@ -262,17 +285,71 @@ class Pipe(dict):
         if not isinstance(fitmodels,list):
             fitmodels=[fitmodels]
         return fitmodels
+
+    def get_gmix_psf(self):
+        """
+        Get a psf model
+        """
+        if self['psf_interp']=='random':
+            return self.get_random_gmix_psf()
+        elif self['psf_interp']in ['mean','median']:
+            return self.get_mean_gmix_psf()
+
+    def _set_best_psf_model(self):
+        best_aic=1.e9
+        best_model='none'
+        for model in self['psf_models']:
+            w, = where(self.psfres[model+'_flags'] == 0)
+            aic=median(self.psfres[model+'_aic'][w])
+            if aic < best_aic:
+                best_aic=aic
+                best_model=model
+
+        print 'best psf model:',best_model
+        self._best_psf_model = best_model
+
     def get_random_gmix_psf(self):
         """
-        Get a random psf gmix from good psf stars
+        Get a random psf model
         """
-        wpsf,=where(self.psfres['em_flags']==0)
+        model=self._best_psf_model
+        wpsf,=where(self.psfres[model+'_flags']==0)
 
         irand=random.randint(wpsf.size)  
         irand=wpsf[irand]
 
-        pars=self.psfres['em_pars'][irand]
-        gmix=GMix(pars)
+        pars=self.psfres[model+'_pars'][irand]
+        gmix=self._get_model_psf_gmix(pars,model)
+        return gmix
+
+    def get_mean_gmix_psf(self):
+        """
+        Get a the mean of the good psf models
+        """
+
+        if not hasattr(self,'_mean_gmix_psf'):
+            print 'getting the',self['psf_interp'],'psf model'
+            model=self._best_psf_model
+            wpsf,=where(self.psfres[model+'_flags']==0)
+
+            pars=self.psfres[model+'_pars'][wpsf[0]]
+            allpars=self.psfres[model+'_pars'][wpsf]
+
+            for i in xrange(len(pars)):
+                if self['psf_interp']=='median':
+                    pars[i]=median(allpars[:,i])
+                else:
+                    pars[i]=allpars[:,i].mean()
+
+        gmix=self._get_model_psf_gmix(pars,model)
+        return gmix
+
+    def _get_model_psf_gmix(self, pars, model):
+        if model=='gturb':
+            # note the MixMCPSF uses e1,e2 not g1,g2
+            gmix=GMix(pars, model='gturb')
+        else:
+            gmix=GMix(pars)
         return gmix
 
 
@@ -282,12 +359,12 @@ class Pipe(dict):
 
         Only run admom if not already run, or run_admom=True
         """
-        from gmix_image.gmix_em import GMixEMPSF
 
-        print 'running em on PSF stars with ngauss:',self['ngauss_psf']
+        #print 'running em on PSF stars with ngauss:',self['ngauss_psf']
 
         if not hasattr(self,'ares') or run_admom:
             self.run_admom()
+            self.plot_admom_sizemag()
 
         ares=self.ares
 
@@ -297,51 +374,115 @@ class Pipe(dict):
         out['id'][:] = self.cat['id'][wpsf]
         out['simid'][:] = self.cat['simid'][wpsf]
 
-        for ipsf in xrange(wpsf.size):
-            stdout.write(".")
-            index=wpsf[ipsf]
-            c=self.get_zerod_cutout(index)
+        for model in self['psf_models']:
+            print 'model:',model
+            for ipsf in xrange(wpsf.size):
+                stdout.write(".")
+                #stdout.flush()
+                index=wpsf[ipsf]
 
-            im=c.subimage
+                # put back in the sub-coordinate system
+                # hoops because of endian bug in numpy
+                wrow=ares['wrow'][index]-ares['row_range'][index,0]
+                wcol=ares['wcol'][index]-ares['col_range'][index,0]
+                Irr=ares['Irr'][index]
+                Irc=ares['Irc'][index]
+                Icc=ares['Icc'][index]
+                whyflag=ares['whyflag'][index]
+                aresi = {'wrow':wrow,'wcol':wcol,'Irr':Irr,'Irc':Irc,'Icc':Icc,
+                         'whyflag':whyflag}
 
-            # put back in the sub-coordinate system
-            # hoops because of endian bug in numpy
-            wrow=ares['wrow'][index]-ares['row_range'][index,0]
-            wcol=ares['wcol'][index]-ares['col_range'][index,0]
-            Irr=ares['Irr'][index]
-            Irc=ares['Irc'][index]
-            Icc=ares['Icc'][index]
-            aresi = {'wrow':wrow,'wcol':wcol,'Irr':Irr,'Irc':Irc,'Icc':Icc}
+                c=self.get_zerod_cutout(index)
 
-            gpsf=GMixEMPSF(im, self['ivar'], self['ngauss_psf'],
-                           ares=aresi, 
-                           maxiter=self['em_maxiter'], tol=self['em_tol'])
-            res=gpsf.get_result()
+                im=c.subimage
 
-            
-            out['em_flags'][ipsf] = res['flags']
-            out['em_numiter'][ipsf] = res['numiter']
-            out['em_fdiff'][ipsf] = res['fdiff']
-            out['em_ntry'][ipsf] = res['ntry']
-            out['em_pars'][ipsf,:] = res['gmix'].get_pars()
+                if model in ['em1','em2','em2cocen']:
+                    self.run_em_psf(im, aresi, model, out, ipsf)
+                elif model=='gturb':
+                    self.run_turb_psf(im, aresi, out, ipsf)
+                else:
+                    raise ValueError("bad model: %s" % model)
+            print
 
-            if True and out['em_flags'][ipsf] != 0:
-                pprint.pprint(res)
-                if False:
-                    gpsf.compare_model()
-                    key=raw_input("hit a key (q to quit): ")
-                    if key=='q':
-                        stop
+        best_aic=1.e9
+        best_model='none'
+        for model in self['psf_models']:
+            w, = where(out[model+'_flags'] == 0)
+            wbad, = where(out[model+'_flags'] != 0)
+            aic=median(out[model+'_aic'][w])
+            if aic < best_aic:
+                best_aic=aic
+                best_model=model
+            print 'psf model:',model
+            print '  median prob:',median(out[model+'_prob'][w])
+            print '  median aic:',aic
+            print '  median bic:',median(out[model+'_bic'][w])
+            print '  %d/%d bad   %s' % (wbad.size, wpsf.size, wbad.size/float(wpsf.size))
 
-        print
-        w, = where(out['em_flags'] != 0)
-        print 'found %d/%d bad   %s' % (w.size, wpsf.size, w.size/float(wpsf.size))
-        self.psfres=out
+        self._set_psfres(out)
 
         files.write_fits_output(data=out,
                                 ftype='psf',
                                 **self)
 
+
+    def run_em_psf(self, im, aresi, model, out, ipsf):
+        cocenter=False
+        if model=='em1':
+            ngauss=1
+        elif model=='em2':
+            ngauss=2
+        elif model=='em2cocen':
+            ngauss=2
+            cocenter=True
+        else:
+            raise ValueError("bad psf model: '%s'" % model)
+        gpsf=GMixEMPSF(im, self['ivar'], ngauss,
+                       ares=aresi, 
+                       maxiter=self['em_maxiter'], 
+                       tol=self['em_tol'],
+                       cocenter=cocenter)
+        res=gpsf.get_result()
+        
+        out[model+'_flags'][ipsf] = res['flags']
+        out[model+'_numiter'][ipsf] = res['numiter']
+        out[model+'_fdiff'][ipsf] = res['fdiff']
+        out[model+'_ntry'][ipsf] = res['ntry']
+        out[model+'_pars'][ipsf,:] = res['gmix'].get_pars()
+
+        if res['flags']==0:
+            stats=gpsf.get_stats()
+            out[model+'_prob'][ipsf] = stats['fit_prob']
+            out[model+'_aic'][ipsf] = stats['aic']
+            out[model+'_bic'][ipsf] = stats['bic']
+
+        if False and res['flags'] != 0:
+        #if True:
+            print '\nipsf:',ipsf
+            pprint.pprint(res)
+            pprint.pprint(gpsf.get_stats())
+            if True:
+                gpsf.compare_model()
+                key=raw_input("hit a key (q to quit): ")
+                if key=='q':
+                    stop
+
+    def run_turb_psf(self,im, aresi, out, ipsf):
+
+        fitter=MixMCPSF(im, self['ivar'], 'gturb',
+                        nwalkers=self['nwalkers'],
+                        nstep=self['nstep'], 
+                        burnin=self['burnin'],
+                        mca_a=self['mca_a'],
+                        iter=self.get('iter',False),
+                        ares=aresi)
+
+        res=fitter.get_result()
+        out['gturb_pars'][ipsf] = res['pars']
+        out['gturb_pcov'][ipsf] = res['pcov']
+        out['gturb_prob'][ipsf] = res['fit_prob']
+        out['gturb_aic'][ipsf] = res['aic']
+        out['gturb_bic'][ipsf] = res['bic']
 
     def run_admom(self):
         import admom
@@ -531,20 +672,54 @@ class Pipe(dict):
         return data
 
     def get_psf_struct(self, n):
-        npars=6*self['ngauss_psf']
+        npars1=6
+        npars2=2*6
+        npars_turb=6
         dt= [('id','i4'),
              ('simid','i4'),
-             ('em_flags','i4'),
-             ('em_numiter','i4'),
-             ('em_fdiff','f8'),
-             ('em_ntry','i4'),
-             ('em_pars','f8',npars)]
+             ('em1_flags','i4'),
+             ('em1_numiter','i4'),
+             ('em1_fdiff','f8'),
+             ('em1_ntry','i4'),
+             ('em1_pars','f8',npars1),
+             ('em1_prob','f8'),
+             ('em1_aic','f8'),
+             ('em1_bic','f8'),
+             ('em2_flags','i4'),
+             ('em2_numiter','i4'),
+             ('em2_fdiff','f8'),
+             ('em2_ntry','i4'),
+             ('em2_pars','f8',npars2),
+             ('em2_prob','f8'),
+             ('em2_aic','f8'),
+             ('em2_bic','f8'),
+             ('em2cocen_flags','i4'),
+             ('em2cocen_numiter','i4'),
+             ('em2cocen_fdiff','f8'),
+             ('em2cocen_ntry','i4'),
+             ('em2cocen_pars','f8',npars2),
+             ('em2cocen_prob','f8'),
+             ('em2cocen_aic','f8'),
+             ('em2cocen_bic','f8'),
+             ('gturb_flags','i4'), # will always be zero
+             ('gturb_pars','f8',npars_turb),
+             ('gturb_pcov','f8',(npars_turb,npars_turb)),
+             ('gturb_prob','f8'),
+             ('gturb_aic','f8'),
+             ('gturb_bic','f8')
+             ]
+
 
         data=zeros(n, dtype=dt)
 
-        data['em_fdiff']=9999.
-        data['em_ntry']=9999
-        data['em_pars']=-9999.
+        for model in ['em1','em2','em2cocen']:
+            data[model+'_fdiff']=9999.
+            data[model+'_ntry']=9999
+            data[model+'_pars']=-9999.
+            data[model+'_aic'] = 1.e9
+            data[model+'_bic'] = 1.e9
+        data['gturb_aic'] = 1.e9
+        data['gturb_bic'] = 1.e9
 
         return data
 
@@ -554,10 +729,16 @@ class Pipe(dict):
         """
         out['s2n_admom'][igal] = self.ares['s2n'][igal]
 
-        Tpsf=gmix_psf.get_T()
+        e1psf,e2psf,Tpsf=gmix_psf.get_e1e2T()
         Tobj=res['Tmean']
         s2 = Tpsf/Tobj
+
+        out['Tpsf'][igal] = Tpsf
+        out['e1psf'][igal] = e1psf
+        out['e2psf'][igal] = e2psf
         out['s2'][igal] = s2
+
+        #out['pars_psf'][igal] = gmix_psf.get_pars()
 
         for k in res:
             if k in out.dtype.names:
@@ -566,18 +747,20 @@ class Pipe(dict):
 
     def get_shear_struct(self, n):
         npars=6
-        npars_psf=6*self['ngauss_psf']
         dt=[('id','i4'),
             ('simid','i4'),
             ('model','S20'),
             ('flags','i4'),
+            ('e1psf','f8'),
+            ('e2psf','f8'),
+            ('Tpsf','f8'),
             ('s2','f8'),
             ('g','f8',2),
             ('gsens','f8',2),
             ('gcov','f8',(2,2)),
             ('pars','f8',npars),
             ('pcov','f8',(npars,npars)),
-            ('pars_psf','f8',npars_psf),
+            #('pars_psf','f8',npars_psf),
             ('Tmean','f8','f8'),
             ('Terr','f8','f8'),
             ('Ts2n','f8','f8'),
@@ -587,7 +770,9 @@ class Pipe(dict):
             ('loglike','f8'),     # loglike of fit
             ('chi2per','f8'),     # chi^2/degree of freedom
             ('dof','i4'),         # degrees of freedom
-            ('fit_prob','f8')     # probability of the fit happening randomly
+            ('fit_prob','f8'),    # probability of the fit happening randomly
+            ('aic','f8'),         # Akaike Information Criterion
+            ('bic','f8')          # Bayesian Information Criterion
            ]
 
         data=zeros(n, dtype=dt)
