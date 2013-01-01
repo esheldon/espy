@@ -302,8 +302,9 @@ def get_wq_path(**keys):
 
     dir=get_wq_dir(**keys)
 
-    if 'ccd' in keys:
-        ccd='%02d' % int(keys['ccd'])
+    ccd=keys.get('ccd',None)
+    if ccd is not None:
+        ccd='%02d' % int(ccd)
 
         name='{run}-p{psfnum}-s{shnum}-{ccd}-{ftype}.yaml'
         name=name.format(run=run,psfnum=psfnum,shnum=shnum,
