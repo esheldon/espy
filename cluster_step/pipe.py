@@ -328,6 +328,7 @@ class Pipe(dict):
         """
 
         if not hasattr(self,'_mean_gmix_psf'):
+        #if True:
             print 'getting the',self['psf_interp'],'psf model'
             model=self._best_psf_model
             wpsf,=where(self.psfres[model+'_flags']==0)
@@ -340,9 +341,9 @@ class Pipe(dict):
                     pars[i]=median(allpars[:,i])
                 else:
                     pars[i]=allpars[:,i].mean()
-
-        gmix=self._get_model_psf_gmix(pars,model)
-        return gmix
+            gmix=self._get_model_psf_gmix(pars,model)
+            self._mean_gmix_psf=gmix
+        return self._mean_gmix_psf
 
     def _get_model_psf_gmix(self, pars, model):
         if model=='gturb':

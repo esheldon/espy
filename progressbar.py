@@ -7,7 +7,7 @@
 #  - render takes the fraction instead of a percent.
 #  - everything is keywords now
 #  - Added update() to only render when a change in the percent
-#    has occurred.
+#    or message has occurred.
 
 """Draws an animated terminal progress bar
 Usage:

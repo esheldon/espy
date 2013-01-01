@@ -34,6 +34,9 @@ parser.add_option('-s','--show',action='store_true',
 parser.add_option('--s2',default=None,
                   help='restrict s2 less than this value')
 
+
+parser.add_option('-P','--progress',action='store_true',
+                  help="show the progress bar")
 sh1exp={8:0.15}
 sh2exp={8:0.0}
 
@@ -68,7 +71,7 @@ class ShearPlotter(object):
                                         self.shnum, 
                                         objtype=self.objtype,
                                         s2_max=self.s2_max,
-                                        progress=True)
+                                        progress=options.progress)
         
         self.set_bindata()
         self.set_psfnums_string()
