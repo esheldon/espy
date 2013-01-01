@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 from numpy import zeros, where, sqrt
 
@@ -252,6 +253,10 @@ def read_output_set(run, psfnums, shnums,
     if progress:
         from progressbar import ProgressBar
         prog=ProgressBar(width=70, color='green')
+        #prog=ProgressBar(width=70, color='green', block='▣', empty='□')
+        #prog=ProgressBar(width=70, color='green', block='◧', empty='◫')
+        #prog=ProgressBar(width=70, color='green', block='■', empty='□')
+        #prog=ProgressBar(width=70, color='green', block='=', empty='-')
 
     datalist=[]
     for shnum in shnums:
