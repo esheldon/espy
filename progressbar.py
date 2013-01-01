@@ -32,7 +32,7 @@ class ProgressBar(object):
         """
         color -- color name (BLUE GREEN CYAN RED MAGENTA YELLOW WHITE BLACK)
         width -- bar width (optinal)
-        block -- progress display character (default '█')
+        block -- progress display character (default '=')
         empty -- bar display character (default ' ')
         """
         if color:
@@ -150,3 +150,16 @@ class ProgressBar(object):
         )
 
 
+def _test(block='=', empty=' '):
+    import time
+    bar=ProgressBar(block=block, empty=empty, width=70)
+    n=100
+    for i in xrange(n):
+        bar.render(frac=(i+1)/float(n), message='fraction')
+        time.sleep(0.1)
+
+def test_simple():
+    _test()
+
+def test_utf8():
+    _test(block='▣', empty='□')
