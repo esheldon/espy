@@ -76,6 +76,7 @@ def print_wrapper(refresh):
     text="""
 <html>
   </head>
+    <title>WQ Status</title>
     <meta http-equiv="refresh" content="%s" > 
     <style type="text/css">
 
