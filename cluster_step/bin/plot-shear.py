@@ -11,6 +11,7 @@ from numpy import zeros, sqrt
 
 import cluster_step
 from cluster_step import files, stats
+from cluster_step import sh1exp, sh2exp
 
 import esutil as eu
 from esutil.numpy_util import aprint
@@ -20,15 +21,23 @@ from biggles import FramedPlot, FramedArray, Points, \
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
+
+parser.add_option('-r','--run',default=None,
+                  help='The run id, required')
+parser.add_option('-s','--shnum',default=None,
+                  help='The shear number, required')
+
 parser.add_option('-p','--psfnums',default=None,
                   help='restrict to these PSFs, comma separated')
+
 parser.add_option('-f','--field',default='s2n_w',
                   help="bin by this field, default s2n_w")
 parser.add_option('-n','--nperbin',default=4000,
-                  help="bin by this field, default s2n_w")
+                  help="number in each bin, default %default")
 parser.add_option('-t','--type',default=None,
                   help="limit to objects best fit by this model")
-parser.add_option('-s','--show',action='store_true',
+
+parser.add_option('--show',action='store_true',
                   help="show the plot on the screen")
 
 parser.add_option('--s2',default=None,
@@ -40,22 +49,22 @@ parser.add_option('--frac',action='store_true',
 
 parser.add_option('-P','--progress',action='store_true',
                   help="show the progress bar")
-sh1exp={8:0.15}
-sh2exp={8:0}
 
 
 class ShearPlotter(object):
     def __init__(self):
+        biggles.configure( 'default', 'fontsize_min', 2)
         options,args = parser.parse_args(sys.argv[1:])
 
         self.options=options
 
-        if len(args) < 2:
+        if options.run is None or options.shnum is None:
             parser.print_help()
-            sys.exit(45)
+            sys.exit(1)
 
-        self.run=args[0]
-        self.shnum=int(args[1])
+        self.run=options.run
+        self.shnum=int(options.shnum)
+
         self.nperbin=int(options.nperbin)
         self.objtype=options.type
         self.doshow = options.show
@@ -163,11 +172,11 @@ class ShearPlotter(object):
         if sh1exp[self.shnum] != 0:
             gfield='g1'
             gtrue=sh1exp[self.shnum]
-        elif sh1exp[self.shnum] != 0:
+        elif sh2exp[self.shnum] != 0:
             gfield='g2'
             gtrue=sh2exp[self.shnum]
         else:
-            raise ValueError("none of expected values are > 0")
+            raise ValueError("all expected are listed as zero")
 
         bindata=self.bindata
         bin_field=self.bin_field
@@ -208,7 +217,6 @@ class ShearPlotter(object):
     def write(self):
         import converter
 
-        biggles.configure( 'default', 'fontsize_min', 2)
 
         extra=self.get_epsfile_extra()
         path=files.get_summary_plot_path(ftype='shear',

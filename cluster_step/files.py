@@ -2,10 +2,12 @@
 import os
 from numpy import zeros, where, sqrt
 
-default_version='2012-10-16'
-psfnums=[1,2,3,4,5,6]
-shnums=[1,2,3,4,5,6,7,8]
-ccds=range(1,62+1)
+DEFAULT_VERSION='2012-10-16'
+PSFNUMS=[1,2,3,4,5,6]
+SHNUMS=[1,2,3,4,5,6,7,8]
+CCDS=range(1,62+1)
+
+
 
 def get_basedir(**keys):
     fs=keys.get('fs','nfs')
@@ -17,7 +19,7 @@ def get_basedir(**keys):
 def get_version_dir(**keys):
     version=keys.get('version',None)
     if not version:
-        version=default_version
+        version=DEFAULT_VERSION
 
     bdir=get_basedir()
     return os.path.join(bdir, version)
@@ -211,6 +213,7 @@ def write_fits_output(**keys):
 
 def read_output_set(run, psfnums, shnums, 
                     objtype=None, 
+                    s2n_field='s2n_w',
                     s2n_min=None,
                     s2_max=None,
                     gsens_min=None,
@@ -281,8 +284,10 @@ def read_output_set(run, psfnums, shnums,
                     logic=data0['flags']==0
                     if objtype:
                         logic=logic & strmatch(data0['model'],objtype)
+
                     if s2n_min is not None:
-                        logic=logic & (data0['s2n_w'] > s2n_min)
+                        logic=logic & (data0[s2n_field] > s2n_min)
+
                     if s2_max is not None:
                         logic=logic & (data0['s2'] < s2_max)
                     if gsens_min is not None:
@@ -474,10 +479,10 @@ def get_wq_path(**keys):
     return os.path.join(dir,name)
 
 def get_psfnums(psfnum=None):
-    return get_nums(psfnum, 1, 6)
+    return get_nums(psfnum, PSFNUMS[0], PSFNUMS[-1])
 
 def get_shnums(shnum=None):
-    return get_nums(shnum, 1, 8)
+    return get_nums(shnum, SHNUMS[0], SHNUMS[-1])
 
 def get_nums(nums, nmin, nmax):
     if nums is None:

@@ -1,7 +1,6 @@
-- everything looks biased for dev for Ts2n < 20 but actually looks
-    ok for exp with some cuts on size
-- cuts on s2
-    - s2 < 0.5 looks unbiased for exp
+- I seem to be having problems at high S/N, actually fairly
+    wildly different at different s/n thresholds.  Is it the
+    prior or an mcmc convergence issue?
 
 todo
     - add linear size ratio
