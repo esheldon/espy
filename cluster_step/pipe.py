@@ -31,6 +31,14 @@ class Pipe(dict):
 
         version: optional
             version id
+
+        bugs
+        ----
+
+        the psf and shear row,col outputs are in the sub-image coordinates
+        Currently need to add row_range[0],col_range[0] to get back to
+        image coords
+
         """
 
         self._check_keys(**keys)
@@ -155,7 +163,7 @@ class Pipe(dict):
 
     def get_gals(self, good=True, s2n_min=None):
         """
-        Get things labeled as stars.  if good, also trim
+        Get things labeled as galaxies.  if good, also trim
         to those with good adaptive moments
         """
 
@@ -166,6 +174,10 @@ class Pipe(dict):
 
         if s2n_min is not None:
             logic=logic & (self.ares['s2n'] > s2n_min)
+
+        #logic = logic & (self.ares['s2n'] > 210) & (self.ares['s2n'] < 400)
+        #logic = logic & (self.ares['s2n'] > 200) & (self.ares['s2n'] < 210)
+        #print "FIX THIS!!!!!!"
 
         w,=where(logic)
         return w
@@ -198,6 +210,7 @@ class Pipe(dict):
         if not hasattr(self,'psfres') or run_psf:
             self.run_psf()
 
+        print 'using psf model:',self._best_psf_model
         ares=self.ares
 
         #wpsf=self.get_psf_stars()
@@ -208,6 +221,8 @@ class Pipe(dict):
 
         out['id'][:] = self.cat['id'][wgal]
         out['simid'][:] = self.cat['simid'][wgal]
+        out['row_range'][:] = self.ares['row_range'][wgal]
+        out['col_range'][:] = self.ares['col_range'][wgal]
 
         for igal in xrange(wgal.size):
             from esutil.numpy_util import aprint
@@ -254,11 +269,14 @@ class Pipe(dict):
             print '    best model:',res['model']
         return res
 
-
     def run_shear_model(self, im, ares0, gmix_psf, fitmodel):
         """
         Run the shear model though the mixmc code
         """
+
+        nwalkers=self['nwalkers']
+        burnin=self['burnin']
+        nstep=self['nstep']
 
         ares={'wrow':ares0['wrow']-ares0['row_range'][0],
               'wcol':ares0['wcol']-ares0['col_range'][0],
@@ -271,9 +289,9 @@ class Pipe(dict):
 
         fitter=MixMCStandAlone(im, self['ivar'],
                                gmix_psf, gprior, fitmodel,
-                               nwalkers=self['nwalkers'],
-                               nstep=self['nstep'], 
-                               burnin=self['burnin'],
+                               nwalkers=nwalkers,
+                               nstep=nstep,
+                               burnin=burnin,
                                mca_a=self['mca_a'],
                                iter=self.get('iter',False),
                                draw_gprior=self['draw_gprior'],
@@ -296,6 +314,10 @@ class Pipe(dict):
             return self.get_mean_gmix_psf()
 
     def _set_best_psf_model(self):
+        if self['psf_models'][0]=='admom':
+            self._best_psf_model='admom'
+            return
+
         best_aic=1.e9
         best_model='none'
         for model in self['psf_models']:
@@ -328,7 +350,6 @@ class Pipe(dict):
         """
 
         if not hasattr(self,'_mean_gmix_psf'):
-        #if True:
             print 'getting the',self['psf_interp'],'psf model'
             model=self._best_psf_model
             wpsf,=where(self.psfres[model+'_flags']==0)
@@ -350,6 +371,7 @@ class Pipe(dict):
             # note the MixMCPSF uses e1,e2 not g1,g2
             gmix=GMix(pars, model='gturb')
         else:
+            # assum pars are full [pi,ri,ci,irri,irci,icci,...]
             gmix=GMix(pars)
         return gmix
 
@@ -367,6 +389,12 @@ class Pipe(dict):
             self.run_admom()
             self.plot_admom_sizemag()
 
+        if self['psf_models'][0] == 'admom':
+            # just copy the admom results
+            self.set_psfres_from_admom()
+            self.write_psfres()
+            return
+
         ares=self.ares
 
         wpsf=self.get_psf_stars()
@@ -374,6 +402,8 @@ class Pipe(dict):
         out=self.get_psf_struct(wpsf.size)
         out['id'][:] = self.cat['id'][wpsf]
         out['simid'][:] = self.cat['simid'][wpsf]
+        out['row_range'][:] = self.ares['row_range'][wpsf]
+        out['col_range'][:] = self.ares['col_range'][wpsf]
 
         for model in self['psf_models']:
             print 'model:',model
@@ -421,11 +451,35 @@ class Pipe(dict):
             print '  %d/%d bad   %s' % (wbad.size, wpsf.size, wbad.size/float(wpsf.size))
 
         self._set_psfres(out)
+        self.write_psfres()
 
-        files.write_fits_output(data=out,
+    def write_psfres(self):
+        files.write_fits_output(data=self.psfres,
                                 ftype='psf',
                                 **self)
 
+
+    def set_psfres_from_admom(self):
+        print 'setting psfres from admom'
+
+        # get psf stars with good admom measurements
+        wpsf=self.get_psf_stars()
+
+        psfres=self.get_psf_struct(wpsf.size)
+        psfres['simid'][:]        = self.ares['simid'][wpsf]
+        psfres['id'][:]           = self.ares['id'][wpsf]
+        psfres['row_range'][:]    = self.ares['row_range'][wpsf]
+        psfres['col_range'][:]    = self.ares['col_range'][wpsf]
+
+        psfres['admom_flags'][:]  = self.ares['whyflag'][wpsf]
+        psfres['admom_pars'][:,0] = 1.0
+        psfres['admom_pars'][:,1] = self.ares['wrow'][wpsf]
+        psfres['admom_pars'][:,2] = self.ares['wcol'][wpsf]
+        psfres['admom_pars'][:,3] = self.ares['Irr'][wpsf]
+        psfres['admom_pars'][:,4] = self.ares['Irc'][wpsf]
+        psfres['admom_pars'][:,5] = self.ares['Icc'][wpsf]
+
+        self._set_psfres(psfres)
 
     def run_em_psf(self, im, aresi, model, out, ipsf):
         cocenter=False
@@ -449,6 +503,7 @@ class Pipe(dict):
         out[model+'_numiter'][ipsf] = res['numiter']
         out[model+'_fdiff'][ipsf] = res['fdiff']
         out[model+'_ntry'][ipsf] = res['ntry']
+
         out[model+'_pars'][ipsf,:] = res['gmix'].get_pars()
 
         if res['flags']==0:
@@ -490,6 +545,8 @@ class Pipe(dict):
 
         print 'running admom'
         ares=self.get_admom_struct()
+        ares['simid'][:] = self.cat['simid']
+        ares['id'][:] = self.cat['id']
 
         for i in xrange(self.cat.size):
             c=self.get_zerod_cutout(i)
@@ -645,7 +702,7 @@ class Pipe(dict):
 
     def get_admom_struct(self):
         sxdt=self.cat.dtype.descr
-        dt= [('wrow','f8'),
+        dt= [('wrow','f8'), # note simid,id in sxdt
              ('wcol','f8'),
              ('row_range','f8',2),
              ('col_range','f8',2),
@@ -673,54 +730,48 @@ class Pipe(dict):
         return data
 
     def get_psf_struct(self, n):
-        npars1=6
-        npars2=2*6
-        npars_turb=6
-        dt= [('id','i4'),
-             ('simid','i4'),
-             ('em1_flags','i4'),
-             ('em1_numiter','i4'),
-             ('em1_fdiff','f8'),
-             ('em1_ntry','i4'),
-             ('em1_pars','f8',npars1),
-             ('em1_prob','f8'),
-             ('em1_aic','f8'),
-             ('em1_bic','f8'),
-             ('em2_flags','i4'),
-             ('em2_numiter','i4'),
-             ('em2_fdiff','f8'),
-             ('em2_ntry','i4'),
-             ('em2_pars','f8',npars2),
-             ('em2_prob','f8'),
-             ('em2_aic','f8'),
-             ('em2_bic','f8'),
-             ('em2cocen_flags','i4'),
-             ('em2cocen_numiter','i4'),
-             ('em2cocen_fdiff','f8'),
-             ('em2cocen_ntry','i4'),
-             ('em2cocen_pars','f8',npars2),
-             ('em2cocen_prob','f8'),
-             ('em2cocen_aic','f8'),
-             ('em2cocen_bic','f8'),
-             ('gturb_flags','i4'), # will always be zero
-             ('gturb_pars','f8',npars_turb),
-             ('gturb_pcov','f8',(npars_turb,npars_turb)),
-             ('gturb_prob','f8'),
-             ('gturb_aic','f8'),
-             ('gturb_bic','f8')
-             ]
+        model_npars={'em1':6,'em2':2*6,'em2cocen':2*6,
+                     'gturb':6,'admom':6}
+        dt= [('simid','i4'),
+             ('id','i4'),
+             ('row_range','f8',2),
+             ('col_range','f8',2)]
 
+        for model in self['psf_models']:
+            npars=model_npars[model]
+            if model=='gturb':
+                dt+=[('gturb_flags','i4'), # will always be zero
+                     ('gturb_pars','f8',npars),
+                     ('gturb_pcov','f8',(npars,npars)),
+                     ('gturb_prob','f8'),
+                     ('gturb_aic','f8'),
+                     ('gturb_bic','f8')]
+
+            elif model=='admom':
+                dt+=[('admom_flags','i4'),
+                     ('admom_pars','f8',npars)]
+            else:
+                for dti in [('flags','i4'),('numiter','i4'),
+                            ('fdiff','f8'),('ntry','i4'),
+                            ('pars','f8',npars),
+                            ('prob','f8'),('aic','f8'),('bic','f8')]:
+                    if len(dti) > 2:
+                        dt += [(model+'_'+dti[0], dti[1], dti[2])]
+                    else:
+                        dt += [(model+'_'+dti[0], dti[1])]
 
         data=zeros(n, dtype=dt)
 
-        for model in ['em1','em2','em2cocen']:
-            data[model+'_fdiff']=9999.
-            data[model+'_ntry']=9999
-            data[model+'_pars']=-9999.
-            data[model+'_aic'] = 1.e9
-            data[model+'_bic'] = 1.e9
-        data['gturb_aic'] = 1.e9
-        data['gturb_bic'] = 1.e9
+        for model in self['psf_models']:
+            if model in ['em1','em2','em2cocen']:
+                data[model+'_fdiff']=9999.
+                data[model+'_ntry']=9999
+                data[model+'_pars']=-9999.
+                data[model+'_aic'] = 1.e9
+                data[model+'_bic'] = 1.e9
+            elif model=='gturb':
+                data['gturb_aic'] = 1.e9
+                data['gturb_bic'] = 1.e9
 
         return data
 
@@ -748,8 +799,10 @@ class Pipe(dict):
 
     def get_shear_struct(self, n):
         npars=6
-        dt=[('id','i4'),
-            ('simid','i4'),
+        dt=[('simid','i4'),
+            ('id','i4'),
+            ('row_range','f8',2),
+            ('col_range','f8',2),
             ('model','S20'),
             ('flags','i4'),
             ('e1psf','f8'),

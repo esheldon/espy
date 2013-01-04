@@ -2,6 +2,8 @@
     wildly different at different s/n thresholds.  Is it the
     prior or an mcmc convergence issue?
 
+    - look at some mcmc plots for high s/n objects
+
 todo
     - add linear size ratio
         sratio = sqrt(1/s2)

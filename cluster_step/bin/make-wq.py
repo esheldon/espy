@@ -90,8 +90,8 @@ def main():
     if not os.path.exists(wqd):
         os.makedirs(wqd)
 
-    for psfnum in files.psfnums:
-        for shnum in files.shnums:
+    for psfnum in files.PSFNUMS:
+        for shnum in files.SHNUMS:
             if byexp:
                 wqfile=files.get_wq_path(run=run,psfnum=psfnum,shnum=shnum,
                                          ftype=ftype)
@@ -111,7 +111,7 @@ def main():
                     fobj.write(text)
 
             else:
-                for ccd in files.ccds:
+                for ccd in files.CCDS:
                     wqfile=files.get_wq_path(run=run,psfnum=psfnum,shnum=shnum,
                                              ccd=ccd,ftype=ftype)
                     job_name='%s-p%s-s%s-%s-%s' % (run,psfnum,shnum,ccd,ftype)
