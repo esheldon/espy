@@ -1,5 +1,5 @@
 """
-    %prog [options] run shearnum
+    %prog [options]
 
 shearnums 1-8
 psfnums 1-6
@@ -94,6 +94,8 @@ class ShearPlotter(object):
 
     def set_bindata(self):
         self.bindata=stats.bin_shear_data(self.data, self.bin_field, self.nperbin)
+        #self.bindata=stats.bin_shear_data(self.data, self.bin_field, self.nperbin, use_median=True)
+        #self.bindata=stats.bin_shear_data(self.data, self.bin_field, self.nperbin, use_wmedian=True)
         aprint(self.bindata, header=True, page=False, fancy=True)
 
     def set_psfnums_string(self):

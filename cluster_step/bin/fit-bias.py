@@ -13,6 +13,7 @@ parser=OptionParser(__doc__)
 
 parser.add_option('-r','--run',default=None,
                   help='The run id, required')
+parser.add_option('--s2n',default=None, help="s2n range as csv, required")
 parser.add_option('-p','--psfnums',default=None,
                   help='restrict to these PSFs, comma separated')
 
@@ -22,7 +23,6 @@ parser.add_option('-t','--type',default=None,
 parser.add_option('-f','--field',default='s2n_w',
                   help="field for S/N, default %default")
 
-parser.add_option('--s2n',default=20, help=("threshold in s/n"))
 
 parser.add_option('--s2',default=0.5,
                   help='restrict s2 less than this value, default %d')
@@ -40,11 +40,13 @@ def main():
 
     doshow  = options.show
 
+    s2n_range=options.s2n.split(',')
+    s2n_range=[float(r) for r in s2n_range]
     bf=BiasFitter(options.run,
                   psfnums=options.psfnums,
                   objtype=options.type,
                   s2n_field=options.field,
-                  s2n_min=float(options.s2n),
+                  s2n_range=s2n_range,
                   s2_max=float(options.s2))
 
     if doshow:

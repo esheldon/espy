@@ -215,6 +215,7 @@ def read_output_set(run, psfnums, shnums,
                     objtype=None, 
                     s2n_field='s2n_w',
                     s2n_min=None,
+                    s2n_max=None,
                     s2_max=None,
                     gsens_min=None,
                     gerr_max=None,
@@ -287,6 +288,8 @@ def read_output_set(run, psfnums, shnums,
 
                     if s2n_min is not None:
                         logic=logic & (data0[s2n_field] > s2n_min)
+                    if s2n_max is not None:
+                        logic=logic & (data0[s2n_field] < s2n_max)
 
                     if s2_max is not None:
                         logic=logic & (data0['s2'] < s2_max)
@@ -303,8 +306,12 @@ def read_output_set(run, psfnums, shnums,
 
 
                     wkeep,=where(logic)
-                    data0=data0[wkeep]
-                    shlist.append(data0)
+                    if wkeep.size==0:
+                        print 'No objects passed cuts'
+                    else:
+                        data0=data0[wkeep]
+                        shlist.append(data0)
+
         shdata=combine_arrlist(shlist)
 
         if subtract_mean:
@@ -352,6 +359,19 @@ def read_fits_output(**keys):
 
 
 
+def get_collate_path(**keys):
+    run=keys['run']
+    s2_max=float(options.s2)
+    s2n_min=float(options.s2n)
+    s2n_field=options.field
+    objtype=options.type
+
+
+    vdir=get_version_dir(**keys)
+    dir=os.path.join(vdir, 'shear', run, 'psf%s' % psfnum)
+
+
+    pass
 def get_output_path(**keys):
     """
     parameters

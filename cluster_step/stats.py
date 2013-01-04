@@ -1,10 +1,13 @@
-from numpy import zeros
-from esutil.stat import wmom, histogram
+from numpy import zeros, median
+from esutil.stat import wmom, wmedian, histogram
 
 SHAPE_NOISE=0.32/2
 
 
-def bin_shear_data(data, bin_field, nperbin):
+def bin_shear_data(data, bin_field, nperbin, use_median=False, use_wmedian=False):
+    """
+    median or wmedian are not an improvement
+    """
     h,rev=histogram(data[bin_field], nperbin=nperbin, rev=True)
 
     nbin=len(h)
@@ -15,8 +18,6 @@ def bin_shear_data(data, bin_field, nperbin):
         if rev[i] != rev[i+1]:
             w=rev[ rev[i]:rev[i+1] ]
 
-            err2=data['gcov'][w,0,0] + data['gcov'][w,1,1]
-            #wts = 1.0/(SHAPE_NOISE**2 + err2)
             wts=get_weights(data['gcov'], ind=w)
 
             for field in fields:
@@ -33,7 +34,12 @@ def bin_shear_data(data, bin_field, nperbin):
 
                 err_field=field+'_err'
                 wmean,werr=wmom(fdata, wts, calcerr=True)
-                bindata[field][i] = wmean
+                if use_median:
+                    bindata[field][i] = median(fdata)
+                elif use_wmedian:
+                    bindata[field][i] = wmedian(fdata,wts)
+                else:
+                    bindata[field][i] = wmean
                 bindata[err_field][i] = werr
 
     bindata['g1'] /= bindata['g1sens']
@@ -49,6 +55,9 @@ def get_weights(gcov, ind=None):
     else:
         err2=gcov[:,0,0] + gcov[:,1,1]
 
+    # get average of the errors, since the
+    # shape noise is per component
+    err2 /= 2
     wts = 1.0/(SHAPE_NOISE**2 + err2)
     return wts
 

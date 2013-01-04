@@ -1,10 +1,22 @@
-- I seem to be having problems at high S/N, actually fairly
-    wildly different at different s/n thresholds.  Is it the
-    prior or an mcmc convergence issue?
-
-    - look at some mcmc plots for high s/n objects
-
 todo
+
+* I seem to be having problems at high S/N, upped the number
+    of walkers which looks better.  running p1 from mixmc-r05
+
+    - got rid of the bad burnins, but the average bias is basically unchanged
+
+- look at high s/n objects
+    - fixed bounding boxes but probably won't make a diff
+    - mixmc-r06
+- run with admom psf
+    - mixmc-r07
+- use aic instead of prob since prob can be identically zero
+    - affects high s/n more
+    - r08
+
+
+- got some shapes from julia.  Do fits.
+
     - add linear size ratio
         sratio = sqrt(1/s2)
 
@@ -14,6 +26,7 @@ ideas about psf:
         - yes but not a better fit
     * fit 1 gauss then 2 gauss then 3 gauss and pick the one for which the
       probability of the fit is highest on average.  Also added turb.
+        - generally em2 is better.  Will compare to pure admom as well
 
     * fit n gaussians and then take the average parameters from all fits
       instead of a random psf star.   This can be paired with the above.
@@ -38,3 +51,18 @@ mixmc-r03
 mixmc-r04
     - median model
         - does look better
+mixmc-r05
+    - nwalkers==40
+    - ran p1
+    * This cuts out the burnin problems but overall bias is
+        really unchanged.
+
+mixmc-r06
+    - include all segmap pixels, plus 5 pixel padding
+    - running p1-s8
+mixmc-r07
+    - admom psf
+    - running p1-s8
+mixmc-r08
+    - use aic
+    - running p1-s8

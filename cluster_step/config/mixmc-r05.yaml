@@ -18,20 +18,12 @@ nwalkers: 40
 nstep: 200
 burnin: 400
 
-burnin0: 400
-burnin_s2n0: 50
-burnin_slope: 5.0
-
 iter: true
 mca_a: 3.0 # about 35% acceptance
-#mca_a: 4.5
 
 fitmodel: ['gdev','gexp']
 
 shear_s2n_min: 10
-#shear_s2n_min: 90
-# point at which we increase the burnin to burnin2
-shear_s2n_change: 50
 
 gprior_type: 'fits'
 gprior_pars_exp: [1.0, 13.68, 0.051, 0.87]
@@ -46,4 +38,3 @@ seed: 4272
 
 comment: |
     twice the number of walkers as previous
-    seems to stabilize everything

@@ -1,5 +1,7 @@
 """
-    %prog [options]
+    %prog [options] s2n1 s2n2 s2n3 .... 
+
+Bins will be [s2n1,s2n2], [s2n2,s2n3], ...
 """
 
 import sys
@@ -67,9 +69,9 @@ def doplot(fitters, st, s2n_field):
     mplt=FramedPlot()
     cplt=FramedPlot()
 
-    mplt.xlabel=s2n_field+' threshold'
+    mplt.xlabel=s2n_field
     mplt.ylabel='m'
-    cplt.xlabel=s2n_field+' threshold'
+    cplt.xlabel=s2n_field
     cplt.ylabel='c'
 
     zvals=0*st['s2n'].copy()
@@ -100,7 +102,8 @@ def get_stats(fitters):
     st=zeros(len(fitters), dtype=dt)
 
     for i,bf in enumerate(fitters):
-        st['s2n'][i] = bf.s2n_min
+        #st['s2n'][i] = bf.s2n_min
+        st['s2n'][i] = bf.avg['s2n'].mean()
         st['m1'][i] = bf.g1fit.pars[0]
         st['m1_err'][i] = bf.g1fit.perr[0]
         st['c1'][i] = bf.g1fit.pars[1]
@@ -122,13 +125,19 @@ def main():
 
     s2n_vals=[float(s2n) for s2n in args]
 
+    s2n_minvals=[]
+    s2n_maxvals=[]
+    for i in xrange(len(s2n_vals)-1):
+        s2n_minvals.append(s2n_vals[i])
+        s2n_maxvals.append(s2n_vals[i+1])
+
     fitters=[]
-    for i,s2n in enumerate(s2n_vals):
-        bf=BiasFitter(options.run,
+    for i in xrange(len(s2n_minvals)):
+        s2n_range=[ s2n_minvals[i], s2n_maxvals[i] ]
+        bf=BiasFitter(options.run,s2n_range,
                       psfnums=options.psfnums,
                       objtype=options.type,
                       s2n_field=options.field,
-                      s2n_min=s2n,
                       s2_max=float(options.s2))
         fitters.append(bf)
 

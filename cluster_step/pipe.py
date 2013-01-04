@@ -117,28 +117,38 @@ class Pipe(dict):
         self.psfres=psfres
         self._set_best_psf_model()
 
-    def get_cutout(self, index, size=None, with_seg=False):
+    def get_cutout(self, index, size=None):
+        if size is None:
+            size=self['cutout_size']
+
+        cen=[self.cat['row'][index], self.cat['col'][index]]
+        id=self.cat['id'][index]
+
+        cutout=CutoutWithSeg(self.image, self.seg, cen, id, size,
+                             padding=self['seg_padding'])
+
+        return cutout
+
+
+    def get_cutout_old(self, index, size=None):
         if size is None:
             size=self['cutout_size']
 
         cen=[self.cat['row'][index], self.cat['col'][index]]
 
         cutout=Cutout(self.image, cen, size)
+        segcut=Cutout(self.seg, cen, size)
 
-        if with_seg:
-            segcut=Cutout(self.seg, cen, size)
-            return cutout, segcut
-
-        return cutout
+        return cutout, segcut
 
     def get_zerod_cutout(self, index, **keys):
-        c,cseg=self.get_cutout(index, with_seg=True, **keys)
+        c=self.get_cutout(index, **keys)
 
         im=c.subimage
-        seg=cseg.subimage
+        seg=c.seg_subimage
 
         id=self.cat['id'][index]
-        self.zero_seg(c.subimage, cseg.subimage, id)
+        self.zero_seg(im, seg, id)
 
         return c
 
@@ -177,6 +187,7 @@ class Pipe(dict):
 
         #logic = logic & (self.ares['s2n'] > 210) & (self.ares['s2n'] < 400)
         #logic = logic & (self.ares['s2n'] > 200) & (self.ares['s2n'] < 210)
+        #logic = logic & (self.ares['s2n'] > 100)
         #print "FIX THIS!!!!!!"
 
         w,=where(logic)
@@ -253,6 +264,7 @@ class Pipe(dict):
         Fit all listed models, return the best fitting
         """
         probrand=-9999.
+        aic=9999.e9
         fitmodels=self.get_fitmodels()
         for fitmodel in fitmodels:
             fitter=self.run_shear_model(im, ares, gmix_psf, fitmodel)
@@ -261,9 +273,12 @@ class Pipe(dict):
             if len(fitmodels) > 1:
                 print '  model: %s prob: %.6f aic: %.6f bic: %.6f Ts/n: %.6f ' % \
                     (fitmodel,res0['fit_prob'],res0['aic'],res0['bic'],res0['Ts2n'])
-            if res0['fit_prob'] > probrand:
+            #if res0['fit_prob'] > probrand:
+            #    res=res0
+            #    probrand=res0['fit_prob']
+            if res0['aic'] < aic:
                 res=res0
-                probrand=res0['fit_prob']
+                aic = res0['aic']
 
         if len(fitmodels) > 1:
             print '    best model:',res['model']
@@ -543,12 +558,16 @@ class Pipe(dict):
     def run_admom(self):
         import admom
 
-        print 'running admom'
+        print 'running admom',self.cat.size
         ares=self.get_admom_struct()
         ares['simid'][:] = self.cat['simid']
         ares['id'][:] = self.cat['id']
 
         for i in xrange(self.cat.size):
+            #stdout.write(".")
+            #stdout.flush()
+            if (i % 100) == 0:
+                print '%d/%d' % (i+1,self.cat.size)
             c=self.get_zerod_cutout(i)
 
             im=c.subimage
@@ -573,6 +592,7 @@ class Pipe(dict):
             for n in res:
                 if n in ares.dtype.names and n not in ['row','col','wrow','wcol']:
                     ares[n][i] = res[n]
+        print
 
         w, = where(ares['whyflag'] != 0)
         print 'found %d/%d bad   %s' % (w.size, ares.size, w.size/float(ares.size))
@@ -658,47 +678,62 @@ class Pipe(dict):
                 return
 
 
-    def show_cutout(self, index, size=None, with_seg=False,
+    def show_cutout(self, index, size=None, 
                     zero_seg=False):
+        import biggles
+        biggles.configure( 'default', 'fontsize_min', 2)
+        if not hasattr(self,'ares'):
+            self.run_admom()
+
         import biggles
         import images
 
+        c=self.get_cutout(index, size=size)
+        cz=self.get_zerod_cutout(index, size=size)
 
         minv=-2.5*self['skysig']
-        if not with_seg:
-            c=self.get_cutout(index, size=size)
-            subimage=c.get_subimage()
 
+        subimage=c.get_subimage().copy()
+        segsub=c.get_seg_subimage().copy()
 
-            images.multiview(subimage, min=minv)
-        else:
-            c,segc=self.get_cutout(index, size=size, with_seg=True)
+        zsubimage=cz.get_subimage().copy()
 
-            subimage=c.get_subimage()
-            segsub=segc.get_subimage()
+        objtype='star'
+        if self.cat['class'][index]==CLUSTERSTEP_GAL:
+            objtype='gal'
 
+        s2n=self.ares['s2n'][index]
+        print 'index:',index
+        print 's2n:',s2n
+        print 'ranges:'
+        print '\t',c.row_range
+        print '\t',c.col_range
+        print 'image shape:',subimage.shape
+        print
 
-            implt=images.view(subimage,show=False, min=minv)
-            segplt=images.view(segsub,show=False)
+        # make the other objects always show darker
+        id=self.cat['id'][index]
+        w=where((segsub != id) & (segsub != 0))
+        if w[0].size > 0:
+            segsub[w] = id*10
 
-            implt.title='image cutout'
-            segplt.title='seg cutout'
+        implt=images.view(subimage,show=False, min=minv)
+        segplt=images.view(segsub,show=False)
 
-            if zero_seg:
-                self.zero_seg(subimage, segsub, self.cat['id'][index])
-                zplt=images.view(subimage,show=False, min=minv)
-                zplt.title='zerod'
+        title='%d %s S/N: %.1f [%d,%d]'
+        title = title % (index, objtype,s2n,subimage.shape[0],subimage.shape[1])
+        implt.title=title
+        segplt.title='seg'
 
-                tab=biggles.Table(2,2)
-                tab[0,0]=implt
-                tab[0,1]=segplt
-                tab[1,0]=zplt
-            else:
-                tab=biggles.Table(1,2)
-                tab[0,0]=implt
-                tab[0,1]=segplt
+        zplt=images.view(zsubimage,show=False, min=minv)
+        zplt.title='zerod'
 
-            tab.show()
+        tab=biggles.Table(2,2)
+        tab[0,0]=implt
+        tab[0,1]=segplt
+        tab[1,0]=zplt
+
+        tab.show()
 
     def get_admom_struct(self):
         sxdt=self.cat.dtype.descr
@@ -831,6 +866,105 @@ class Pipe(dict):
 
         data=zeros(n, dtype=dt)
         return data
+
+class CutoutWithSeg:
+    def __init__(self, image, seg, cen, id, minsize, padding=0):
+        self.image=image
+        self.padding=padding
+        self.seg=seg
+        self.cen=cen
+        self.minsize=minsize
+        self.id=id
+
+        self._set_box()
+        self._make_cutout()
+
+    def get_subimage(self):
+        return self.subimage
+    def get_seg_subimage(self):
+        return self.seg_subimage
+
+    def get_subcen(self):
+        return self.subcen
+
+    def _get_seg_box(self):
+        """
+        Region containing the seg pixels
+        """
+        w=where(self.seg == self.id)
+
+        if w[0].size == 0:
+            raise ValueError("no seg pixels with id %s" % self.id)
+
+        minrow = w[0].min() - self.padding
+        maxrow = w[0].max() + self.padding
+        mincol = w[1].min() - self.padding
+        maxcol = w[1].max() + self.padding
+
+        return minrow,maxrow,mincol,maxcol
+
+    def _get_minimal_box(self):
+        sh=self.image.shape
+        cen=self.cen
+        size=self.minsize
+
+        if (cen[0] < 0 or cen[1] < 0
+                or cen[0] > (sh[0]-1)
+                or cen[1] > (sh[1]-1) ):
+            mess=("center [%s,%s] is out of "
+                  "bounds of image: [%s,%s] ")
+            mess=mess % (cen[0],cen[1],sh[0],sh[1])
+            raise ValueError(mess)
+
+        sz2 = (size-1)/2.
+        minrow=int(cen[0]-sz2 )
+        maxrow=int(cen[0]+sz2)
+        mincol=int(cen[1]-sz2)
+        maxcol=int(cen[1]+sz2)
+        
+        return minrow,maxrow,mincol,maxcol
+
+    def _set_box(self):
+
+        sh=self.image.shape
+        minrow0,maxrow0,mincol0,maxcol0 = self._get_minimal_box()
+        minrow,maxrow,mincol,maxcol     = self._get_seg_box()
+
+        if minrow0 < minrow:
+            minrow = minrow0
+        if maxrow0 > maxrow:
+            maxrow=maxrow0
+        if mincol0 < mincol:
+            mincol = mincol0
+        if maxcol0 > maxcol:
+            maxcol=maxcol0
+
+        if minrow < 0:
+            minrow=0
+        if maxrow > (sh[0]-1):
+            maxrow=sh[0]-1
+
+        if mincol < 0:
+            mincol=0
+        if maxcol > (sh[1]-1):
+            maxcol=sh[1]-1
+
+
+        self.row_range=[minrow,maxrow]
+        self.col_range=[mincol,maxcol]
+
+
+    def _make_cutout(self):
+        cen=self.cen
+
+        minrow,maxrow=self.row_range
+        mincol,maxcol=self.col_range
+
+        # note +1 for python slices
+        self.subimage=self.image[minrow:maxrow+1, mincol:maxcol+1].copy()
+        self.seg_subimage=self.seg[minrow:maxrow+1, mincol:maxcol+1].copy()
+        self.subcen=[cen[0]-minrow, cen[1]-mincol]
+
 
 class Cutout:
     def __init__(self, image, cen, size):

@@ -1,9 +1,10 @@
-from numpy import zeros, sqrt, linspace
+from numpy import zeros, sqrt, linspace, array, arange
 import cluster_step
 from cluster_step import files, stats
 
 
 from esutil.numpy_util import aprint
+from esutil.stat import wmom
 
 import biggles
 from biggles import FramedPlot, FramedArray, Points, \
@@ -13,14 +14,14 @@ from biggles import FramedPlot, FramedArray, Points, \
 from fitting import LineFitter
 
 class BiasFitter(object):
-    def __init__(self, run, **keys):
+    def __init__(self, run, s2n_range, **keys):
 
         self.run     = run
         psfnums = keys.get('psfnums',None)
         self.psfnums = files.get_psfnums(psfnums)
         self.objtype = keys.get('objtype',None)
 
-        self.s2n_min=keys.get('s2n_min',20.0)
+        self.s2n_range=s2n_range
 
         self.s2_max=keys.get('s2_max',0.5)
 
@@ -39,6 +40,10 @@ class BiasFitter(object):
         self.set_averages()
         aprint(self.avg, fancy=True)
 
+        #self.g1ind=array([4,5,6,7])
+        #self.g2ind=array([0,1,2,3])
+        self.g1ind=arange(8)
+        self.g2ind=arange(8)
         self.do_fits()
 
     def read_data(self):
@@ -52,7 +57,8 @@ class BiasFitter(object):
                                        objtype=self.objtype,
                                        s2_max=self.s2_max,
                                        s2n_field=self.s2n_field,
-                                       s2n_min=self.s2n_min)
+                                       s2n_min=self.s2n_range[0],
+                                       s2n_max=self.s2n_range[1])
             print data.size
             if data.size==0:
                 raise ValueError("no data read")
@@ -60,7 +66,8 @@ class BiasFitter(object):
      
     def set_averages(self):
         nsh=len(files.SHNUMS)
-        dt=[('g1true','f8'),
+        dt=[('s2n','f8'),
+            ('g1true','f8'),
             ('g2true','f8'),
             ('g1','f8'),('g1_err','f8'),
             ('g2','f8'),('g2_err','f8'),
@@ -70,6 +77,9 @@ class BiasFitter(object):
         for i,shnum in enumerate(files.SHNUMS):
             data=self.datadict[shnum]
             shres=stats.get_mean_shear_shstruct(data)
+
+            wts=stats.get_weights(data['gcov'])
+            out['s2n'][shnum-1],err = wmom(data[self.s2n_field], wts)
 
             out['g1true'][shnum-1] = cluster_step.sh1exp[shnum]
             out['g2true'][shnum-1] = cluster_step.sh2exp[shnum]
@@ -81,15 +91,20 @@ class BiasFitter(object):
 
     def do_fits(self):
 
-        g1diff=self.avg['g1']-self.avg['g1true']
-        self.g1fit=LineFitter(self.avg['g1true'],
-                              g1diff,
-                              self.avg['g1_err'])
+        g1true=self.avg['g1true'][self.g1ind]
+        g1vals=self.avg['g1'][self.g1ind]
+        g1err=self.avg['g1_err'][self.g1ind]
 
-        g2diff=self.avg['g2']-self.avg['g2true']
-        self.g2fit=LineFitter(self.avg['g2true'],
-                              g2diff,
-                              self.avg['g2_err'])
+        g2true=self.avg['g2true'][self.g2ind]
+        g2vals=self.avg['g2'][self.g2ind]
+        g2err=self.avg['g2_err'][self.g2ind]
+
+        g1diff=g1vals-g1true
+        g2diff=g2vals-g2true
+
+        self.g1fit=LineFitter(g1true, g1diff, g1err)
+        self.g2fit=LineFitter(g2true, g2diff, g2err)
+
 
         print self.g1fit
         print self.g2fit
@@ -102,7 +117,7 @@ class BiasFitter(object):
         arr.xlabel=r'$\gamma_{true}$'
         arr.ylabel=r'$\Delta \gamma$'
 
-        arr.yrange=[-0.01,0.01]
+        arr.yrange=[-0.02,0.02]
 
         # the data
         g1diff=self.avg['g1']-self.avg['g1true']
@@ -166,7 +181,9 @@ class BiasFitter(object):
         return lab
 
     def get_s2n_label(self):
-        labs=r'$%s < %.2f$' % (self.s2n_field,self.s2n_min)
+        labs=r'$%.2f < %s < %.2f$' % (self.s2n_range[0],
+                                      self.s2n_field,
+                                      self.s2n_range[1])
         yshift=1*self.lab2_yshift
         lab=PlotLabel(self.lab2_loc[0],self.lab2_loc[1]+yshift,
                       labs,
