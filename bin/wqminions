@@ -6,11 +6,11 @@ Commands come on stdin, one per line
 
 Log files are created.  Normally these are
 
-    mintion{num}.wqlog
+    minion{num}.wqlog
 
-where num is the number in of the command in the list.  If -e
-is sent, the commands are executable paths and the log file will
-be called basename(command).wqlog
+where num is the number of the command in the list.  If -e is sent, the
+commands are executable paths and the log file will be called
+basename(command).wqlog in the current directory
 
 By default, commands will not be executed if the log file exits,
 but this is modifiable with -f.
@@ -153,7 +153,7 @@ def get_log_fname(command, count, options):
         fname=os.path.basename(command)
         logfile=fname+'.wqlog'
     else:
-        logfile='minion%03i.wqlog'
+        logfile='minion%04d.wqlog' % count
     return logfile
 
 def submit_job(command, log_fname, req):
@@ -163,10 +163,13 @@ def submit_job(command, log_fname, req):
     Use os.system because it disconnects from
     the python script
     """
+    #command="""
+    #    nohup wq -p "{port}" sub {req} -c "{cmd}" &> "{logf}" &
+    #"""
     command="""
-        nohup wq -p "{port}" sub {req} -c "{cmd}" &> "{logf}" &
+        nohup wq -p "{port}" sub {req} -c "{cmd}" 2>&1 > "{logf}" &
     """.format(port=pars['port'],
-               jobf=job_fname,
+               logf=log_fname,
                cmd=command,
                req=req)
     os.system(command)
@@ -197,7 +200,7 @@ def go(options):
     count=1
     for command in sys.stdin:
 
-        logf=get_log_fname(count, command, options)
+        logf=get_log_fname(command, count, options)
 
         if not os.path.exists(logf) or options.force:
             if diffjobs <= 0:
@@ -218,7 +221,7 @@ def go(options):
             diffjobs -= 1
 
             # this helps when the file system is slow
-            os.system('wq &> /dev/null')
+            os.system('wq 1> /dev/null 2> /dev/null')
 
             # minimum time in case above is fast
             time.sleep(sleep_time)
