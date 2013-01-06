@@ -32,8 +32,12 @@ parser.add_option('-p','--psfnums',default=None,
 
 parser.add_option('-f','--field',default='s2n_w',
                   help="bin by this field, default s2n_w")
-parser.add_option('-n','--nperbin',default=4000,
-                  help="number in each bin, default %default")
+
+parser.add_option('-n','--nbin',default=40,
+                  help="number of logarithmic bins, default %default")
+parser.add_option('--s2n-max',default=800.0,
+                  help="Max s/n, %default")
+
 parser.add_option('-t','--type',default=None,
                   help="limit to objects best fit by this model")
 
@@ -65,7 +69,9 @@ class ShearPlotter(object):
         self.run=options.run
         self.shnum=int(options.shnum)
 
-        self.nperbin=int(options.nperbin)
+        self.nbin=int(options.nbin)
+        self.s2n_max=float(options.s2n_max)
+
         self.objtype=options.type
         self.doshow = options.show
 
@@ -92,10 +98,11 @@ class ShearPlotter(object):
         else:
             self.make_plot()
 
+
     def set_bindata(self):
-        self.bindata=stats.bin_shear_data(self.data, self.bin_field, self.nperbin)
-        #self.bindata=stats.bin_shear_data(self.data, self.bin_field, self.nperbin, use_median=True)
-        #self.bindata=stats.bin_shear_data(self.data, self.bin_field, self.nperbin, use_wmedian=True)
+        self.bindata=stats.logbin_shear_data(self.data, self.bin_field, 
+                                             nbin=self.nbin, 
+                                             max=self.s2n_max)
         aprint(self.bindata, header=True, page=False, fancy=True)
 
     def set_psfnums_string(self):
@@ -156,10 +163,12 @@ class ShearPlotter(object):
         xerrpts1 = SymmetricErrorBarsX(xdata, bindata['g1'], xerr)
         xerrpts2 = SymmetricErrorBarsX(xdata, bindata['g2'], xerr)
 
-        g1pts = Points(xdata, bindata['g1'])
-        g1errpts = SymmetricErrorBarsY(xdata, bindata['g1'], bindata['g1_err'])
-        g2pts = Points(xdata, bindata['g2'])
-        g2errpts = SymmetricErrorBarsY(xdata, bindata['g2'], bindata['g2_err'])
+        type='filled circle'
+        color='blue'
+        g1pts = Points(xdata, bindata['g1'], type=type, color=color)
+        g1errpts = SymmetricErrorBarsY(xdata, bindata['g1'], bindata['g1_err'], color=color)
+        g2pts = Points(xdata, bindata['g2'], type=type, color=color)
+        g2errpts = SymmetricErrorBarsY(xdata, bindata['g2'], bindata['g2_err'], color=color)
 
         arr[0,0].add( xerrpts1, g1pts, g1errpts )
         arr[1,0].add( xerrpts2, g2pts, g2errpts )
@@ -207,8 +216,10 @@ class ShearPlotter(object):
 
         gfrac = bindata[gfield]/gtrue-1
         gfrac_err = bindata[gfield+'_err']/gtrue
-        gpts = Points(xdata, gfrac)
-        gerrpts = SymmetricErrorBarsY(xdata, gfrac, gfrac_err)
+        type='filled circle'
+        color='blue'
+        gpts = Points(xdata, gfrac, type=type, color=color)
+        gerrpts = SymmetricErrorBarsY(xdata, gfrac, gfrac_err,color=color)
 
         plt.add( gpts, gerrpts )
 

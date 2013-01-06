@@ -1,24 +1,13 @@
 todo
 
+- got some shapes from julia.  Do fits.  but at s/n=30 things look good and
+  that is where the prior matters
+
 * I seem to be having problems at high S/N, upped the number
     of walkers which looks better.  running p1 from mixmc-r05
 
     - got rid of the bad burnins, but the average bias is basically unchanged
 
-- look at high s/n objects
-    - fixed bounding boxes but probably won't make a diff
-    - mixmc-r06
-- run with admom psf
-    - mixmc-r07
-- use aic instead of prob since prob can be identically zero
-    - affects high s/n more
-    - r08
-
-
-- got some shapes from julia.  Do fits.
-
-    - add linear size ratio
-        sratio = sqrt(1/s2)
 
 ideas about psf:
 
@@ -58,11 +47,17 @@ mixmc-r05
         really unchanged.
 
 mixmc-r06
-    - include all segmap pixels, plus 5 pixel padding
+    - include all segmap pixels plus 5 pixel padding
     - running p1-s8
+
 mixmc-r07
-    - admom psf
-    - running p1-s8
+    - admom psf, ran p1-p5
+    - retro-added aic and rerun
+    - this is always worse
+
 mixmc-r08
-    - use aic
+    - same as r06 but use aic
     - running p1-s8
+
+mixmc-r09
+    - em2 only

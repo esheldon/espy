@@ -36,6 +36,10 @@ class BiasFitter(object):
         self.lab2_halign='left'
         self.lab2_yshift=+0.075
 
+        self.lab3_loc=[1-0.075,1-0.075]
+        self.lab3_halign='right'
+        self.lab3_yshift=-0.075
+
         self.read_data()
         self.set_averages()
         aprint(self.avg, fancy=True)
@@ -142,10 +146,11 @@ class BiasFitter(object):
         typelab=self.get_objtype_label()
         sizelab=self.get_size_label()
         s2nlab=self.get_s2n_label()
+        runlab=self.get_run_label()
         sh1lab,sh2lab=self.get_shear_labels()
 
         arr[0,0].add(fit1c, g1_pts, g1err_pts,m1lab,c1lab,sh1lab,
-                     psflab,s2nlab,sizelab)
+                     psflab,s2nlab,sizelab,runlab)
         arr[1,0].add(fit2c, g2_pts, g2err_pts,m2lab,c2lab,sh2lab)
 
         if typelab:
@@ -190,6 +195,11 @@ class BiasFitter(object):
                       halign=self.lab2_halign)
         return lab
 
+
+    def get_run_label(self):
+        lab=PlotLabel(self.lab3_loc[0], self.lab3_loc[1], self.run, 
+                      halign=self.lab3_halign)
+        return lab
 
     def get_size_label(self):
         sratio=sqrt(1/self.s2_max)

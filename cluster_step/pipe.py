@@ -72,10 +72,56 @@ class Pipe(dict):
                                                     C=1.05,
                                                     D=13.)
             priors['gdev'] = priors['gexp']
+            self.gpriors=priors
+        elif self['gprior_type']=='fits-vs-mag-gexponly':
+            self.set_priors_vs_mag()
         else:
             priors['gexp']=prior.GPriorExp(self['gprior_pars_exp'])
             priors['gdev']=prior.GPriorDev(self['gprior_pars_dev'])
-        self.gpriors=priors
+            self.gpriors=priors
+
+    
+    def set_priors_vs_mag(self):
+        prior_pars=files.read_prior(type='gexp')
+
+        gpriors={}
+        plist=[]
+        for i in xrange(prior_pars.size):
+            pdict={}
+            p=prior.GPriorExp(prior_pars['pars'][i])
+            pdict['gprior'] = p
+            pdict['minmag'] = prior_pars['minmag'][i]
+            pdict['maxmag'] = prior_pars['maxmag'][i]
+
+            plist.append(pdict)
+
+        gpriors['gexp']=plist
+        gpriors['gdev']=plist
+
+        self.gpriors=gpriors
+
+    def get_gprior(self, index, fitmodel):
+        if self['gprior_type']=='fits-vs-mag-gexponly':
+            gprior=self.get_gprior_vs_mag(index, fitmodel)
+        else:
+            gprior=self.gpriors[fitmodel]
+        return gprior
+
+    def get_gprior_vs_mag(self, index, fitmodel):
+        mag=self.cat['mag_auto_r'][index]
+        gprior=None
+        for pdict in self.gpriors[fitmodel]:
+            if mag >= pdict['minmag'] and mag <= pdict['maxmag']:
+                gprior=pdict['gprior']
+        if gprior is None:
+            if mag < self.gpriors[fitmodel][0]['minmag']:
+                gprior=self.gpriors[fitmodel][0]['gprior']
+            elif mag > self.gpriors[fitmodel][-1]['maxmag']:
+                gprior=self.gpriors[fitmodel][-1]['gprior']
+            else:
+                raise ValueError("not possible error finding mag: nan?")
+
+        return gprior
 
 
     def _load_data(self):
@@ -250,7 +296,7 @@ class Pipe(dict):
 
             gmix_psf=self.get_gmix_psf()
 
-            res=self.fit_shear_models(im, ares[index].copy(), gmix_psf)
+            res=self.fit_shear_models(index, im, ares[index].copy(), gmix_psf)
             self.copy_shear_results(out, res, gmix_psf, igal)
 
         self.shear_res=out
@@ -259,7 +305,7 @@ class Pipe(dict):
                                 **self)
 
 
-    def fit_shear_models(self, im, ares, gmix_psf):
+    def fit_shear_models(self, index, im, ares, gmix_psf):
         """
         Fit all listed models, return the best fitting
         """
@@ -267,7 +313,7 @@ class Pipe(dict):
         aic=9999.e9
         fitmodels=self.get_fitmodels()
         for fitmodel in fitmodels:
-            fitter=self.run_shear_model(im, ares, gmix_psf, fitmodel)
+            fitter=self.run_shear_model(index, im, ares, gmix_psf, fitmodel)
 
             res0 = fitter.get_result()
             if len(fitmodels) > 1:
@@ -284,7 +330,7 @@ class Pipe(dict):
             print '    best model:',res['model']
         return res
 
-    def run_shear_model(self, im, ares0, gmix_psf, fitmodel):
+    def run_shear_model(self, index, im, ares0, gmix_psf, fitmodel):
         """
         Run the shear model though the mixmc code
         """
@@ -300,7 +346,7 @@ class Pipe(dict):
               'Icc':ares0['Icc'],
               'whyflag':ares0['whyflag']}
  
-        gprior=self.gpriors[fitmodel]
+        gprior=self.get_gprior(index, fitmodel)
 
         fitter=MixMCStandAlone(im, self['ivar'],
                                gmix_psf, gprior, fitmodel,

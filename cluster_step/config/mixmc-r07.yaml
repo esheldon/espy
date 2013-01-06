@@ -39,7 +39,4 @@ draw_gprior: true
 seed: 163
 
 comment: |
-    admom
-    Using seg range and padding and fixed bug in
-    default range.  But moved to size 28 so the
-    test is fair.
+    same as r06 but just fixing psf to admom

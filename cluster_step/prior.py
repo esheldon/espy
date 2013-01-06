@@ -241,7 +241,7 @@ def gprior1d_exp_vec(pars, g):
     return 2*pi*g*gprior2d_exp_vec(pars, g)
 
 
-class GPriorExpFitter:
+class GPriorExpFitterFixedGMax:
     def __init__(self, xvals, yvals, gmax=0.87):
         """
         Input is the histogram data
@@ -259,6 +259,24 @@ class GPriorExpFitter:
 
         model=gprior1d_exp_vec(send_pars, self.xvals)
         return model-self.yvals
+
+class GPriorExpFitter:
+    def __init__(self, xvals, yvals):
+        """
+        Fit with gmax free
+        Input is the histogram data
+        """
+        self.xvals=xvals
+        self.yvals=yvals
+
+    def __call__(self, pars):
+        w,=where(pars < 0)
+        if w.size > 0:
+            return zeros(self.xvals.size) + numpy.inf
+
+        model=gprior1d_exp_vec(pars, self.xvals)
+        return model-self.yvals
+
 
 class GPriorDevFitter:
     def __init__(self, xvals, yvals):
@@ -279,21 +297,25 @@ class GPriorDevFitter:
 
 
 
-def fit_gprior_exp(xdata, ydata):
+def fit_gprior_exp(xdata, ydata, a=0.25, g0=0.1, gmax=0.87, fix_gmax=False):
     """
     Input is the histogram data, should be close to
     normalized
     """
     from scipy.optimize import leastsq
 
+    print 'fitting exp'
 
     A=ydata.sum()*(xdata[1]-xdata[0])
-    a=0.25
-    g0=0.1
 
-    pstart=[A,a,g0]
+    if fix_gmax:
+        pstart=[A,a,g0]
+        gfitter=GPriorExpFitterFixedGMax(xdata, ydata, gmax=gmax)
+    else:
+        pstart=[A,a,g0,0.75]
+        gfitter=GPriorExpFitter(xdata, ydata)
+
     print 'pstart:',pstart
-    gfitter=GPriorExpFitter(xdata, ydata)
     res = leastsq(gfitter, pstart, full_output=1)
 
     pars, pcov0, infodict, errmsg, ier = res
@@ -323,23 +345,36 @@ def fit_gprior_exp(xdata, ydata):
 
     perr = sqrt(d)
 
-    print """
-    A:    %.6g +/- %.6g
-    a:    %.6g +/- %.6g
-    g0:   %.6g +/- %.6g
-    """ % (pars[0],perr[0],
-           pars[1],perr[1],
-           pars[2],perr[2])
 
-    return {'A':pars[0],
-            'a':pars[1],
-            'g0':pars[2],
-            #'gmax':pars[3],
-            'gmax':gfitter.gmax,
-            'pars':pars,
-            'pcov':pcov,
-            'perr':perr}
+    res={'A':pars[0],
+         'A_err':perr[0],
+         'a':pars[1],
+         'a_err':perr[1],
+         'g0':pars[2],
+         'g0_err':perr[3],
+         'pars':pars,
+         'pcov':pcov,
+         'perr':perr}
 
+    if fix_gmax:
+        res['gmax'] = gfitter.gmax
+    else:
+        res['gmax'] = pars[3]
+        res['gmax_err'] = perr[3]
+
+
+    fmt="""
+A:    %(A).6g +/- %(A_err).6g
+a:    %(a).6g +/- %(a_err).6g
+g0:   %(g0).6g +/- %(g0_err).6g
+    """.strip()
+
+    if not fix_gmax:
+        fmt += "\ngmax: %(gmax).6g +/- %(gmax_err).6g"
+
+    print fmt % res
+
+    return res
 
 def fit_gprior_dev(xdata, ydata):
     """
@@ -354,6 +389,7 @@ def fit_gprior_dev(xdata, ydata):
     c=6.7
 
     pstart=[A,b,c]
+    print 'fitting dev'
     print 'pstart:',pstart
     gfitter=GPriorDevFitter(xdata, ydata)
     res = leastsq(gfitter, pstart, full_output=1)
@@ -385,8 +421,7 @@ def fit_gprior_dev(xdata, ydata):
 
     perr = sqrt(d)
 
-    print """
-    A:  %.6g +/- %.6g
+    print """    A:  %.6g +/- %.6g
     b:  %.6g +/- %.6g
     c:  %.6g +/- %.6g
     """ % (pars[0],perr[0],

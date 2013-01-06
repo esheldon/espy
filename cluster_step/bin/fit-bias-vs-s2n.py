@@ -1,12 +1,17 @@
 """
-    %prog [options] s2n1 s2n2 s2n3 .... 
+    %prog [options] [s2n1 s2n2 s2n3] .... 
 
-Bins will be [s2n1,s2n2], [s2n2,s2n3], ...
+Either
+
+    - Send -n nbin, which will result in logarithmic binning between the min
+    s/n and 1000.
+    - Send the bin edges as args
+        Bins will be [s2n1,s2n2], [s2n2,s2n3], ...
 """
 
 import sys
 import os
-from numpy import zeros
+from numpy import zeros, logspace, log10, array
 
 import cluster_step
 from cluster_step.fitters import BiasFitter
@@ -14,7 +19,7 @@ from esutil.numpy_util import aprint
 
 from biggles import FramedPlot, FramedArray, Points, \
         Curve, SymmetricErrorBarsX, SymmetricErrorBarsY, \
-        PlotLabel, Table, PlotKey
+        PlotLabel, Table, PlotKey, FillBetween
 
 
 from optparse import OptionParser
@@ -25,6 +30,11 @@ parser.add_option('-r','--run',default=None,
                   help='The run id, required')
 parser.add_option('-p','--psfnums',default=None,
                   help='restrict to these PSFs, comma separated')
+
+parser.add_option('-n','--nbin',default=None,
+                  help='number of bins for logarithmic binning in s/n')
+parser.add_option('--s2n',default='10,500',
+                  help='s/n range when log binning, default %default')
 
 
 parser.add_option('-t','--type',default=None,
@@ -41,9 +51,22 @@ def get_labels(fitter):
     psflab=fitter.get_psf_label()
     typelab=fitter.get_objtype_label()
     sizelab=fitter.get_size_label()
+    runlab=fitter.get_run_label()
 
-    return [psflab,typelab,sizelab]
+    return [psflab,typelab,sizelab, runlab]
     
+
+def get_symmetric_range(data1, err1, data2, err2):
+    minval1=(data1-err1).min()
+    maxval1=(data1+err1).max()
+    minval2=(data2-err2).min()
+    maxval2=(data2+err2).max()
+
+    minval=min(minval1, minval2)
+    maxval=max(maxval1, maxval2)
+    
+    rng=max(abs(minval), abs(maxval))
+    return array([-1.1*rng,1.1*rng])
 
 def doplot(fitters, st, s2n_field):
     tab=Table(2,1)
@@ -64,25 +87,46 @@ def doplot(fitters, st, s2n_field):
     m1pts.label=r'$\gamma_1$'
     m2pts.label=r'$\gamma_2$'
 
-    key=PlotKey(0.9,0.9,[m1pts,m2pts], halign='right')
+    key=PlotKey(0.9,0.2,[m1pts,m2pts], halign='right')
+
+    xrng=array( [0.5*st['s2n'].min(), 1.5*st['s2n'].max()] )
+    cyrng=get_symmetric_range(st['c1'],st['c1_err'],st['c2'],st['c2_err'])
+    myrng=get_symmetric_range(st['m1'],st['m1_err'],st['m2'],st['m2_err'])
 
     mplt=FramedPlot()
     cplt=FramedPlot()
+    mplt.xlog=True
+    cplt.xlog=True
+
+    mplt.xrange=xrng
+    mplt.yrange=myrng
+    cplt.xrange=xrng
+    cplt.yrange=cyrng
 
     mplt.xlabel=s2n_field
     mplt.ylabel='m'
     cplt.xlabel=s2n_field
     cplt.ylabel='c'
 
-    zvals=0*st['s2n'].copy()
-    zplt=Curve(st['s2n'], zvals)
+    zplt=Curve(xrng, [0,0])
+    mallow=Curve(xrng, [-0.004, 0.004])
+    callow=Curve(xrng, [-0.0004, 0.0004])
+
+    mallow=FillBetween(xrng, [0.004,0.004], 
+                       xrng, [-0.004,-0.004],
+                       color='grey80')
+    callow=FillBetween(xrng, [0.0004,0.0004], 
+                       xrng, [-0.0004,-0.0004],
+                       color='grey80')
+
+
 
     labels=get_labels(fitters[0])
 
-    mplt.add( zplt, m1pts, m1errpts, m2pts, m2errpts, key )
+    mplt.add( mallow, zplt, m1pts, m1errpts, m2pts, m2errpts, key )
     mplt.add(*labels)
 
-    cplt.add( zplt, c1pts, c1errpts, c2pts, c2errpts )
+    cplt.add( callow, zplt, c1pts, c1errpts, c2pts, c2errpts )
 
     tab[0,0] = mplt
     tab[1,0] = cplt
@@ -116,20 +160,35 @@ def get_stats(fitters):
 
     return st
 
-def main():
-    options,args = parser.parse_args(sys.argv[1:])
+def get_s2n_ranges(options, args):
+    if options.nbin:
+        nbin=int(options.nbin)
+        s2n_range=options.s2n.split(',')
+        s2n_range=[float(s) for s in s2n_range]
+        log10min=log10(s2n_range[0])
+        log10max=log10(s2n_range[1])
 
-    if options.run is None or len(args) < 1:
-        parser.print_help()
-        sys.exit(1)
-
-    s2n_vals=[float(s2n) for s2n in args]
+        s2n_vals=logspace(log10min, log10max, nbin+1)
+    else:
+        s2n_vals=[float(s2n) for s2n in args]
 
     s2n_minvals=[]
     s2n_maxvals=[]
     for i in xrange(len(s2n_vals)-1):
         s2n_minvals.append(s2n_vals[i])
         s2n_maxvals.append(s2n_vals[i+1])
+
+    return s2n_minvals, s2n_maxvals
+
+def main():
+    options,args = parser.parse_args(sys.argv[1:])
+
+    if (options.run is None 
+            or (len(args) < 1 and options.nbin is None)):
+        parser.print_help()
+        sys.exit(1)
+
+    s2n_minvals, s2n_maxvals=get_s2n_ranges(options,args)
 
     fitters=[]
     for i in xrange(len(s2n_minvals)):
@@ -139,6 +198,7 @@ def main():
                       objtype=options.type,
                       s2n_field=options.field,
                       s2_max=float(options.s2))
+        #bf.show()
         fitters.append(bf)
 
     st = get_stats(fitters)

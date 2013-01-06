@@ -24,6 +24,21 @@ def get_version_dir(**keys):
     bdir=get_basedir()
     return os.path.join(bdir, version)
 
+def get_prior_dir(**keys):
+    vdir=get_version_dir(**keys)
+    dir=os.path.join(vdir, 'pofe')
+    return dir
+
+def get_prior_path(**keys):
+    dir=get_prior_dir(**keys)
+    objtype=keys['type']
+    name='pofe-fits-%s.fits' % objtype
+    return os.path.join(dir, name)
+def read_prior(**keys):
+    import fitsio
+    path=get_prior_path(**keys)
+    return fitsio.read(path)
+
 def get_input_path(**keys):
     """
     parameters
