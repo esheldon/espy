@@ -144,7 +144,7 @@ def submit_job(job_fname, req):
     """
     log_fname = get_log_fname(job_fname)
     command="""
-        nohup wq -p "{port}" sub {req} "{jobf}" &> "{logf}" &
+        nohup wq -p "{port}" sub {req} "{jobf}" 2>&1 > "{logf}" &
     """.format(port=pars['port'],
                jobf=job_fname,
                logf=log_fname,
