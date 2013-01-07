@@ -261,7 +261,7 @@ class GPriorExpFitterFixedGMax:
         return model-self.yvals
 
 class GPriorExpFitter:
-    def __init__(self, xvals, yvals):
+    def __init__(self, xvals, yvals, Aprior=None, Awidth=None):
         """
         Fit with gmax free
         Input is the histogram data
@@ -269,13 +269,27 @@ class GPriorExpFitter:
         self.xvals=xvals
         self.yvals=yvals
 
+        self.Aprior=Aprior
+        self.Awidth=Awidth
+
     def __call__(self, pars):
         w,=where(pars < 0)
         if w.size > 0:
             return zeros(self.xvals.size) + numpy.inf
 
         model=gprior1d_exp_vec(pars, self.xvals)
-        return model-self.yvals
+        #return model-self.yvals
+
+        # we apply a prior on the A normalization
+        err=sqrt(self.yvals)
+        w,=where(self.yvals==0)
+        if w.size > 0:
+            err[w]=1
+
+        ydiff_tot=zeros(model.size+1)
+        ydiff_tot[0:model.size] = (model[:]-self.yvals)/err
+        ydiff_tot[-1] = (self.Aprior-pars[0])/self.Awidth
+        return ydiff_tot
 
 
 class GPriorDevFitter:
@@ -313,7 +327,7 @@ def fit_gprior_exp(xdata, ydata, a=0.25, g0=0.1, gmax=0.87, fix_gmax=False):
         gfitter=GPriorExpFitterFixedGMax(xdata, ydata, gmax=gmax)
     else:
         pstart=[A,a,g0,0.75]
-        gfitter=GPriorExpFitter(xdata, ydata)
+        gfitter=GPriorExpFitter(xdata, ydata, Aprior=A, Awidth=1.0)
 
     print 'pstart:',pstart
     res = leastsq(gfitter, pstart, full_output=1)
@@ -351,7 +365,7 @@ def fit_gprior_exp(xdata, ydata, a=0.25, g0=0.1, gmax=0.87, fix_gmax=False):
          'a':pars[1],
          'a_err':perr[1],
          'g0':pars[2],
-         'g0_err':perr[3],
+         'g0_err':perr[2],
          'pars':pars,
          'pcov':pcov,
          'perr':perr}

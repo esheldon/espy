@@ -356,7 +356,8 @@ class Pipe(dict):
                                mca_a=self['mca_a'],
                                iter=self.get('iter',False),
                                draw_gprior=self['draw_gprior'],
-                               ares=ares)
+                               ares=ares,
+                               make_plots=False)
         return fitter
 
     def get_fitmodels(self):

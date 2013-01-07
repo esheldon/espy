@@ -35,7 +35,7 @@ parser.add_option('-f','--field',default='s2n_w',
 
 parser.add_option('-n','--nbin',default=40,
                   help="number of logarithmic bins, default %default")
-parser.add_option('--s2n-max',default=800.0,
+parser.add_option('--s2n',default='10,800',
                   help="Max s/n, %default")
 
 parser.add_option('-t','--type',default=None,
@@ -70,7 +70,9 @@ class ShearPlotter(object):
         self.shnum=int(options.shnum)
 
         self.nbin=int(options.nbin)
-        self.s2n_max=float(options.s2n_max)
+
+        s2n_range=options.s2n.split(',')
+        self.s2n_range=[float(s) for s in s2n_range]
 
         self.objtype=options.type
         self.doshow = options.show
@@ -102,7 +104,8 @@ class ShearPlotter(object):
     def set_bindata(self):
         self.bindata=stats.logbin_shear_data(self.data, self.bin_field, 
                                              nbin=self.nbin, 
-                                             max=self.s2n_max)
+                                             min=self.s2n_range[0],
+                                             max=self.s2n_range[1])
         aprint(self.bindata, header=True, page=False, fancy=True)
 
     def set_psfnums_string(self):

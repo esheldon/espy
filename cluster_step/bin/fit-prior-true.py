@@ -15,7 +15,8 @@ from esutil.numpy_util import aprint
 from esutil.stat import histogram
 
 from biggles import FramedPlot, FramedArray, Table, Points, PlotKey, \
-        SymmetricErrorBarsX, SymmetricErrorBarsY, Histogram, Curve
+        SymmetricErrorBarsX, SymmetricErrorBarsY, Histogram, Curve,\
+        ErrorBarsX
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
@@ -84,13 +85,18 @@ class FitRunner(object):
 
         #eu.plotting.bhist(self.data['mag'], binsize=0.2)
         #stop
-        nbin=10
-        magmin=18.0
-        magmax=self.data['mag'].max()
 
-        maglims=linspace(magmin, magmax, nbin+1)
-        maglims=[0.0,20.0,20.5,21.0,21.5,22.0,22.5,23.0,
-                 23.5,24.0,30.0]
+
+        # it is important that a bin starts at 23 since
+        # that is where samples changed from SDSS to HST
+        #maglims=[0.0,20.0,20.5,21.0,21.5,22.0,22.5,23.0,
+        #         23.5,24.0,30.0]
+        maglims=[18.0,20.0,20.5,21.0,21.5,22.0,22.5,23.0,
+                 23.5,24.0,24.5]
+        maglims=[18.0,19.0,20.0,20.25,20.5,20.75,21.0,
+                 21.25,21.50,21.75,22.0,22.25,22.5,22.75,
+                 23.0,23.25,23.5,23.75,24.0,24.25,24.5]
+        nbin=len(maglims)-1
 
         st=self.get_struct(nbin)
         for i in xrange(nbin):
@@ -107,6 +113,44 @@ class FitRunner(object):
             st['pcov'][i] = fitres['pcov']
 
         self.write_data(st)
+        self.plot_fits(st)
+
+    def plot_fits(self,st):
+        import biggles
+        biggles.configure( 'default', 'fontsize_min', 2)
+        if self.objtype=='gexp':
+            parnames=['A','a','g0','gmax']
+
+        else:
+            parnames=['A','b','c']
+
+        npars=len(parnames)
+        tab=Table(npars,1)
+
+        magmiddle=(st['minmag'] + st['maxmag'])/2
+        for i in xrange(npars):
+
+            yval=st['pars'][:,i]
+            yerr=st['perr'][:,i]
+
+            ymean=yval.mean()
+            ystd=yval.std()
+            yrange=[ymean-3.5*ystd, ymean+3.5*ystd]
+            
+            pts=Points(magmiddle, yval, type='filled circle')
+            yerrpts=SymmetricErrorBarsY(magmiddle,yval,yerr)
+            xerrpts=ErrorBarsX(yval, st['minmag'], st['maxmag'])
+
+            
+            plt=FramedPlot()
+            plt.yrange=yrange
+            plt.add(pts,xerrpts, yerrpts)
+            plt.xlabel='mag'
+            plt.ylabel=parnames[i]
+
+            tab[i,0] = plt
+
+        tab.show()
 
     def write_data(self, st):
         import fitsio
