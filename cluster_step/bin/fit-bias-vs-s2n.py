@@ -99,9 +99,11 @@ def doplot(fitters, st, s2n_field):
     cplt.xlog=True
 
     mplt.xrange=xrng
-    mplt.yrange=myrng
     cplt.xrange=xrng
-    cplt.yrange=cyrng
+    #mplt.yrange=myrng
+    #cplt.yrange=cyrng
+    mplt.yrange=[-0.15,0.15]
+    cplt.yrange=[-0.01,0.01]
 
     mplt.xlabel=s2n_field
     mplt.ylabel='m'

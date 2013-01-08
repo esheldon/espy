@@ -15,6 +15,7 @@ Standalone functions:
 from __future__ import print_function
 import os
 import sys
+import copy
 from sys import stdout
 import numpy
 from numpy import log10,sqrt,linspace,where
@@ -109,6 +110,9 @@ class BinnerBase(dict):
 
         See lensing.plotting.plot2dsig
         """
+
+        linear=keys.get('linear',False)
+
         name = self.name()
         data=lensing.files.sample_read(type=type,sample=run,name=name)
 
@@ -119,11 +123,72 @@ class BinnerBase(dict):
 
         keys['plot_label'] = self.bin_label(binnum)
         keys['xmul'] = 1.1
-        plt=lensing.plotting.plot2dsig(data['r'], 
-                                       data['dsig'], data['dsigerr'],
-                                       data['r'],
-                                       data['osig'], data['dsigerr'],
-                                       **keys)
+
+        if linear:
+
+            yrange=keys.get('yrange',None)
+            xrng=keys.get('xrange',None)
+
+            if xrng is None:
+                xrng=eu.plotting.get_log_plot_range(data['r'])
+
+            fac=1.1
+            rfac=data['r']*fac
+            opts=Points(rfac, data['osig'], color='red', type='filled diamond')
+            oepts=SymmetricErrorBarsY(rfac, data['osig'], data['dsigerr'],color='red')
+            oc=Curve(rfac, data['osig'], color='red')
+
+            pts=Points(data['r'], data['dsig'], type='filled circle')
+            c=Curve(data['r'], data['dsig'])
+            epts=SymmetricErrorBarsY(data['r'], data['dsig'], data['dsigerr'])
+
+            opts.label=r'$\Delta\Sigma_\times$'
+            pts.label=r'$\Delta\Sigma_+$'
+
+            zpts=Curve(xrng, [0,0])
+
+            key=PlotKey(0.9,0.9,[pts,opts],halign='right')
+
+            lab=PlotLabel(0.1,0.9,keys['plot_label'],halign='left')
+
+            plt=FramedPlot()
+            plt.xlog=True
+            plt.aspect_ratio=1
+            plt.yrange=yrange
+            plt.xrange=xrng
+            plt.xlabel=lensing.plotting.labels['rproj']
+            plt.ylabel=lensing.plotting.labels['dsig']
+
+            plt.add(zpts,opts,oepts,oc,pts,epts,c,key,lab)
+
+
+            show=keys.get('show',False)
+            if show:
+                plt.show()
+            
+            """
+            keys1=copy.deepcopy(keys)
+            keys1['show']=False
+
+            plt1=lensing.plotting.plot_dsig(r=data['r'], 
+                                            dsig=data['osig'],
+                                            dsigerr=data['dsigerr'],
+                                            ylog=False,
+                                            color='red',
+                                            **keys1)
+
+            plt=lensing.plotting.plot_dsig(comb=data, ylog=False, plt=plt1,**keys,
+                                           label=r'$\Delta\Sigma_+$')
+            """
+
+
+        else:
+            plt=lensing.plotting.plot2dsig(data['r'], 
+                                           data['dsig'], data['dsigerr'],
+                                           data['r'],
+                                           data['osig'], data['dsigerr'],
+                                           **keys)
+
         return plt
 
     def plot_dsig_osig_byrun(self, run, type, **keys):

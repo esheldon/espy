@@ -1,5 +1,5 @@
 """
-    %prog type sample
+    %prog [options]
 
 Description:
 
@@ -17,6 +17,12 @@ import lensing
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
+
+parser.add_option("-t",dest="type",default=None,
+                  help="type of input to make, required")
+parser.add_option("-s",dest="sample",default=None,
+                  help="sample name, required")
+
 parser.add_option("-n",dest="nrand",default=None,
                   help="number of randoms to generate, default is from the config "
                        "you must send an extra name in this case")
@@ -30,12 +36,13 @@ parser.add_option("-e",dest="extra_name",default=None,
 
 options,args = parser.parse_args(sys.argv[1:])
 
-if len(args) < 2:
+if options.type is None or options.sample is None:
     parser.print_help()
     sys.exit(1)
 
-type = args[0]
-sample = args[1]
+type = options.type
+sample = options.sample
+
 if type == 'scat':
     # this will also run split() on the sample
     lensing.scat.create_input(sample=sample)

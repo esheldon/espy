@@ -39,9 +39,11 @@ from optparse import OptionParser
 parser=OptionParser(__doc__)
 parser.add_option("-t",dest="types",default="config,shear,src_reduce,collate",
                   help="types to make.  Default is %default")
-parser.add_option("-g",dest="groups",default="",
+parser.add_option("-g",dest="groups",default=None,
                   help="machine groups to use.  Default is %default")
-parser.add_option("-p",dest="priority",default="med",
+parser.add_option("-n",dest="notgroups",default=None,
+                  help="machine notgroups to use.  Default is %default")
+parser.add_option("-p",dest="priority",default=None,
                   help="priority use.  Default is %default")
 
 options,args = parser.parse_args(sys.argv[1:])
@@ -58,7 +60,9 @@ types=options.types.split(',')
 if 'config' in types:
     lensing.objshear_config.write_configs(run)
 
-wql=lensing.wqsubmit.WQLens(run,options.groups,options.priority)
+wql=lensing.wqsubmit.WQLens(run,groups=options.groups,
+                            notgroups=options.notgroups, 
+                            priority=options.priority)
 
 
 if 'shear'in types:

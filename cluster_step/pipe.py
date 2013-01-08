@@ -176,17 +176,6 @@ class Pipe(dict):
         return cutout
 
 
-    def get_cutout_old(self, index, size=None):
-        if size is None:
-            size=self['cutout_size']
-
-        cen=[self.cat['row'][index], self.cat['col'][index]]
-
-        cutout=Cutout(self.image, cen, size)
-        segcut=Cutout(self.seg, cen, size)
-
-        return cutout, segcut
-
     def get_zerod_cutout(self, index, **keys):
         c=self.get_cutout(index, **keys)
 
@@ -270,9 +259,7 @@ class Pipe(dict):
         print 'using psf model:',self._best_psf_model
         ares=self.ares
 
-        #wpsf=self.get_psf_stars()
         wgal=self.get_gals(s2n_min=self['shear_s2n_min'])
-        #wgal=wgal[0:10]
 
         out=self.get_shear_struct(wgal.size)
 
@@ -283,8 +270,6 @@ class Pipe(dict):
 
         for igal in xrange(wgal.size):
             from esutil.numpy_util import aprint
-            #if ((igal % 10) == 0):
-            #    print "  %s/%s done" % (igal+1,wgal.size)
 
             index=wgal[igal]
 
@@ -309,7 +294,6 @@ class Pipe(dict):
         """
         Fit all listed models, return the best fitting
         """
-        probrand=-9999.
         aic=9999.e9
         fitmodels=self.get_fitmodels()
         for fitmodel in fitmodels:
@@ -319,9 +303,6 @@ class Pipe(dict):
             if len(fitmodels) > 1:
                 print '  model: %s prob: %.6f aic: %.6f bic: %.6f Ts/n: %.6f ' % \
                     (fitmodel,res0['fit_prob'],res0['aic'],res0['bic'],res0['Ts2n'])
-            #if res0['fit_prob'] > probrand:
-            #    res=res0
-            #    probrand=res0['fit_prob']
             if res0['aic'] < aic:
                 res=res0
                 aic = res0['aic']

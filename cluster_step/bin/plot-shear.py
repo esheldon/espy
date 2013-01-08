@@ -7,7 +7,7 @@ psfnums 1-6
 
 import sys
 import os
-from numpy import zeros, sqrt
+from numpy import zeros, sqrt, where
 
 import cluster_step
 from cluster_step import files, stats
@@ -37,6 +37,8 @@ parser.add_option('-n','--nbin',default=40,
                   help="number of logarithmic bins, default %default")
 parser.add_option('--s2n',default='10,800',
                   help="Max s/n, %default")
+parser.add_option('--Ts2n-min',default=None,
+                  help="Minimum allowed Ts2n, %default")
 
 parser.add_option('-t','--type',default=None,
                   help="limit to objects best fit by this model")
@@ -86,12 +88,17 @@ class ShearPlotter(object):
 
         self.bin_field=options.field
 
-        self.data=files.read_output_set(self.run, 
-                                        options.psfnums, 
-                                        self.shnum, 
-                                        objtype=self.objtype,
-                                        s2_max=self.s2_max,
-                                        progress=options.progress)
+
+        data=files.read_output_set(self.run, 
+                                   options.psfnums, 
+                                   self.shnum, 
+                                   objtype=self.objtype,
+                                   s2_max=self.s2_max,
+                                   progress=options.progress)
+        if options.Ts2n_min:
+            w,=where(data['Ts2n'] > float(options.Ts2n_min))
+            data=data[w]
+        self.data=data
         
         self.set_bindata()
         self.set_psfnums_string()
@@ -127,9 +134,9 @@ class ShearPlotter(object):
             title = '%s %s' % (title,self.objtype)
 
         if self.options.s2:
-            title = r'%s $\sigma^2_{psf}/\sigma^2_{gal} < %s$' % (title,self.options.s2)
-            #sratio=sqrt(1/self.s2_max)
-            #title = r'%s $\sigma_{gal}/\sigma_{psf} > %.2f$' % (title,sratio)
+            #title = r'%s $\sigma^2_{psf}/\sigma^2_{gal} < %s$' % (title,self.options.s2)
+            sratio=sqrt(1/self.s2_max)
+            title = r'%s $\sigma_{gal}/\sigma_{psf} > %.2f$' % (title,sratio)
 
         return title
 

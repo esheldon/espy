@@ -46,7 +46,7 @@ def instantiate_sample(**keys):
     elif conf['catalog'] == 'desmocks-2.13':
         return DESMockLensCatalog(sample)
 
-    elif conf['catalog'] == 'sdss-voids-01':
+    elif conf['catalog'] in ['sdss-voids-01','sdss-voids-02']:
         return SDSSVoids(sample)
     elif conf['catalog'] in ['sdss-voids-rand-01']:
         return SDSSVoidsRandom(sample)
@@ -127,8 +127,16 @@ class SDSSVoids(LcatBase):
 
     def convert2fits(self):
         import recfile
-        # ID    ra        dec         redshift      radius
-        dt=[('id','i8'),('ra','f8'),('dec','f8'),('z','f8'),('radius','f8')]
+        if self['catalog'] == "sdss-voids-01":
+            # ID    ra        dec         redshift      radius
+            dt=[('id','i8'),('ra','f8'),('dec','f8'),('z','f8'),('radius','f8')]
+        elif self['catalog'] == "sdss-voids-02":
+            # RA, dec, redshift, radius (Mpc/h), void ID
+            #216.60 0.81 0.03606 5.81 701
+            dt=[('ra','f8'),('dec','f8'),('z','f8'),('radius','f8'),('id','i8')]
+        else:
+            raise ValueError("unknown catalog: %s" % self['catalog'])
+
         
         f=self.original_file(ext='txt')
         fout=self.original_file()
@@ -200,6 +208,11 @@ class SDSSVoids(LcatBase):
 
         """
 
+        wbad=where1(ra < 0)
+        if wbad.size > 0:
+            print("bad ra:",ra[wbad])
+            stop
+
         # get radius for edge check
         cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])
         print(cconf)
@@ -231,7 +244,7 @@ class SDSSVoids(LcatBase):
         data=self.read_original()
         plt=eu.plotting.bscatter(data['z'],data['radius'],show=False)
 
-        zb = binning.ZBinner(4)
+        zb = binning.VoidZBinner(4)
         ll, hl = zb.bin_ranges()
 
         c1=biggles.Curve([ll[0]]*2, [6,60])

@@ -13,6 +13,8 @@ from optparse import OptionParser
 parser=OptionParser(__doc__)
 parser.add_option('-g','--groups',default=None,
                   help='groups for wq, csv. Default is unconstrained')
+parser.add_option('-n','--notgroups',default=None,
+                  help='not groups for wq, csv. Default is unconstrained')
 parser.add_option('-p','--priority',default='med',
                   help='priority for queue')
 
@@ -29,7 +31,7 @@ command: |
     module unload gmix_image && module load gmix_image/work
     python $ESPY_DIR/cluster_step/bin/%(cmd)s %(run)s %(psfnum)s %(shnum)s %(ccd)s
 
-%(groups)s
+%(notgroups)s
 job_name: %(job_name)s
 priority: %(pri)s\n"""
 
@@ -41,6 +43,7 @@ command: |
     parallel "python $ESPY_DIR/cluster_step/bin/%(cmd)s %(run)s %(psfnum)s %(shnum)s {}" ::: {1..62}
 
 %(groups)s
+%(notgroups)s
 mode: bynode
 job_name: %(job_name)s
 priority: %(pri)s\n"""
@@ -84,6 +87,10 @@ def main():
     groups=''
     if options.groups is not None:
         groups = 'group: [%s]' % options.groups
+    notgroups=''
+    if options.notgroups is not None:
+        notgroups = 'notgroup: [%s]' % options.notgroups
+
 
 
     wqd = files.get_wq_dir(run=run, ftype=ftype)
@@ -105,6 +112,7 @@ def main():
                        'psfnum':psfnum,
                        'shnum':shnum,
                        'groups':groups,
+                       'notgroups':notgroups,
                        'pri':options.priority}
 
                     text=_wqtemplate_byexp % d
@@ -114,7 +122,7 @@ def main():
                 for ccd in files.CCDS:
                     wqfile=files.get_wq_path(run=run,psfnum=psfnum,shnum=shnum,
                                              ccd=ccd,ftype=ftype)
-                    job_name='%s-p%s-s%s-%s-%s' % (run,psfnum,shnum,ccd,ftype)
+                    job_name='%s-p%s-s%s-%02d-%s' % (run,psfnum,shnum,ccd,ftype)
 
                     print 'writing:',wqfile
                     with open(wqfile,'w') as fobj:
@@ -125,6 +133,7 @@ def main():
                            'shnum':shnum,
                            'ccd':ccd,
                            'groups':groups,
+                           'notgroups':notgroups,
                            'pri':options.priority}
 
                         text=_wqtemplate_byccd % d

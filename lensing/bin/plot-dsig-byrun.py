@@ -22,6 +22,14 @@ parser.add_option("--compare-osig",action="store_true",
                   help="Make plots of dsig compared to osig")
 parser.add_option("--run2",default=None, help="Overplot a second run")
 
+parser.add_option("-l",'--linear',action="store_true",default=False,
+                  help="only a linear plot")
+
+parser.add_option('-y','--yrange',default=None,
+                  help="yrange for plot")
+parser.add_option('-x','--xrange',default=None,
+                  help="xrange for plot")
+
 options,args = parser.parse_args(sys.argv[1:])
 
 
@@ -33,9 +41,19 @@ run = args[0]
 bintype = args[1]
 nbin = int(args[2])
 
+yrange=options.yrange
+if yrange is not None:
+    yrange=[float(y) for y in yrange.split(',')]
+xrng=options.xrange
+if xrng is not None:
+    xrng=[float(x) for x in xrng.split(',')]
+
+
+
 b = lensing.binning.instantiate_binner(bintype, nbin)
 if options.compare_osig:
-    b.plot_dsig_osig_byrun(run, options.type, show=options.show, range4var=[0.5,100.0])
+    b.plot_dsig_osig_byrun(run, options.type, show=options.show, range4var=[0.5,100.0],
+                           linear=options.linear, yrange=yrange, xrange=xrng)
 elif options.osig:
     b.plot_osig_byrun_1var(run, options.type, show=options.show)
 else:

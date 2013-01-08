@@ -537,6 +537,8 @@ def scat_write_ascii(**keys):
 
     print("Writing ascii source file:",file)
 
+    if eu.hdfs.exists(file):
+        eu.hdfs.rm(file)
     with eu.hdfs.HDFSFile(file) as hdfs_file:
         with recfile.Open(hdfs_file.localfile,'w',delim=' ') as robj:
             robj.write(data)

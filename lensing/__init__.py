@@ -10,14 +10,14 @@ exists.
 Note for not randoms we will go ahead and combine the collated lens splits
 
     # if the scat are not already generated
-    /bin/make-objshear-input.py scat scat_sample
+    /bin/make-objshear-input.py -t scat -s scat_sample
 
     #
     # now generate the lens samples and wq scripts
     #
 
     # note lcat are now always split
-    /bin/make-objshear-input.py lcat rm03
+    /bin/make-objshear-input.py -t lcat -s rm03
 
     # creates config,shear,src_reduce,collate
     /bin/make-objshear-proc.py rm03s06

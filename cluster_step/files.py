@@ -150,6 +150,8 @@ def read_cat(**keys):
     dt0=[('id','i4'),('col','f8'),('row','f8'),('ra','f8'),('dec','f8'),
         ('mag_auto_r','f8'),('flags','i4'),('class','f4'),('simid','f4')]
     skiplines=9
+
+    print 'reading:',path
     with recfile.Open(path,delim=' ',dtype=dt0,skiplines=skiplines) as fobj:
         #data=fobj[:]
         data0=fobj.read()
@@ -374,19 +376,31 @@ def read_fits_output(**keys):
 
 
 
-def get_collate_path(**keys):
+def get_julia_collate_path(**keys):
+    """
+    All ccds for psf/shear are combined
+    """
+
     run=keys['run']
-    s2_max=float(options.s2)
-    s2n_min=float(options.s2n)
-    s2n_field=options.field
-    objtype=options.type
+    psfnum=keys['psfnum']
+    shnum=keys['shnum']
+
+    s2_max=keys['s2_max']
+    s2n_min=keys['s2n_min']
 
 
     vdir=get_version_dir(**keys)
-    dir=os.path.join(vdir, 'shear', run, 'psf%s' % psfnum)
+    dir=os.path.join(vdir, 'shear', run, 'collate')
 
+    name='%(run)s-p%(psfnum)d-s%(shnum)d-s2-%(s2_max).1f-Ts2n-%(s2n_min)d.fits'
+    name = name % {'run':run,
+                   'psfnum':psfnum,
+                   'shnum':shnum,
+                   's2_max':s2_max,
+                   's2n_min':s2n_min}
 
-    pass
+    return os.path.join(dir, name)
+
 def get_output_path(**keys):
     """
     parameters

@@ -3,14 +3,24 @@ import os
 from . import files
 
 class WQLens(dict):
-    def __init__(self, run, groups, priority):
+    def __init__(self, run, groups=None, priority="med", notgroups=None):
         conf = files.cascade_config(run)
         for key in conf:
             self[key] = conf[key]
 
-        if groups != '':
+        if groups:
             groups='group: [' + groups +']'
+        else:
+            groups=""
+        if notgroups:
+            notgroups='notgroup: [' + notgroups +']'
+        else:
+            notgroups=""
+        if not priority:
+            priority="med"
+
         self['groups'] = groups
+        self['notgroups'] = notgroups
         self['priority'] = priority
 
         if self['run'] != run:
@@ -58,7 +68,6 @@ class WQLens(dict):
                                      fs=fs)
 
 
-        groups = self['groups']
 
         job_name = self['run']
         if lens_split is not None:
@@ -70,7 +79,8 @@ class WQLens(dict):
                            'scat':scat,
                            'lcat':lcat,
                            'out_file':out_file,
-                           'groups':groups,
+                           'groups':self['groups'],
+                           'notgroups':self['notgroups'],
                            'priority':self['priority'],
                            'job_name':job_name}
         return s
@@ -146,8 +156,6 @@ class WQLens(dict):
         config_file=files.sample_file(type='config',sample=self['run'],
                                       fs='hdfs')
 
-        groups = self['groups']
-
         job_name = 'reduce-%s' % self['run']
 
         extra='mode: bynode\nN: 1\nmin_mem: 25'
@@ -155,7 +163,8 @@ class WQLens(dict):
                             'config_file':config_file,
                             'out_file':out_file,
                             'nfiles':nfiles,
-                            'groups':groups,
+                            'groups':self['groups'],
+                            'notgroups':self['notgroups'],
                             'priority':self['priority'],
                             'job_name':job_name,
                             'extra':''}
@@ -179,8 +188,6 @@ class WQLens(dict):
                                      fs='hdfs')
         config_file=files.sample_file(type='config',sample=self['run'],fs='hdfs')
 
-        groups = self['groups']
-
         job_name = 'srcred-%s-%03i' % (self['run'],lens_split)
 
         extra=''
@@ -188,7 +195,8 @@ class WQLens(dict):
                             'config_file':config_file,
                             'out_file':out_file,
                             'nfiles':nfiles,
-                            'groups':groups,
+                            'groups':self['groups'],
+                            'notgroups':self['notgroups'],
                             'priority':self['priority'],
                             'extra':extra,
                             'job_name':job_name}
@@ -217,15 +225,14 @@ class WQLens(dict):
         out_file = files.sample_file(type='reduced', sample=self['run'], fs='hdfs')
         config_file=files.sample_file(type='config',sample=self['run'],fs='hdfs')
 
-        groups = self['groups']
-
         job_name = 'lens-concat-%s' % self['run']
 
         extra=''
         s=_concat_script % {'pattern':pattern,
                             'out_file':out_file,
                             'nfiles':nfiles,
-                            'groups':groups,
+                            'groups':self['groups'],
+                            'notgroups':self['notgroups'],
                             'priority':self['priority'],
                             'job_name':job_name,
                             'extra':extra}
@@ -239,6 +246,7 @@ class WQLens(dict):
                                   'lens_split':lens_split,
                                   'job_name':job_name,
                                   'groups':self['groups'],
+                                  'notgroups':self['notgroups'],
                                   'priority':self['priority'],
                                   'extra':extra}
 
@@ -284,6 +292,7 @@ command: |
     echo `date`
 
 %(groups)s
+%(notgroups)s
 priority: %(priority)s
 job_name: %(job_name)s
 """ 
@@ -332,6 +341,7 @@ command: |
     echo `date`
 
 %(groups)s
+%(notgroups)s
 priority: %(priority)s
 job_name: %(job_name)s
 %(extra)s
@@ -377,6 +387,7 @@ command: |
     echo `date`
 
 %(groups)s
+%(notgroups)s
 priority: %(priority)s
 job_name: %(job_name)s
 %(extra)s
@@ -388,6 +399,7 @@ command: |
     source ~esheldon/.bashrc
     python ${ESPY_DIR}/lensing/bin/collate-reduced.py -s %(lens_split)s %(run)s
 %(groups)s
+%(notgroups)s
 priority: %(priority)s
 job_name: %(job_name)s
 %(extra)s

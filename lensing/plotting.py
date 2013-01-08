@@ -65,6 +65,8 @@ def plot2dsig(r1, dsig1, dsig1err, r2, dsig2, dsig2err, **keys):
     isortho = keys.get('ortho',False)
 
     # this is a y-log plot, use more powerful range determination
+    print dsig1
+    print dsig1err
     yrange1 = eu.plotting.get_log_plot_range(dsig1, err=dsig1err, 
                                              input_range=yrange1)
 
@@ -317,14 +319,26 @@ def plot2dsig_old(r, dsig1, dsig1err, dsig2, dsig2err, **keys):
 
 
  
-def plot_dsig(comb=None, r=None, dsig=None, dsigerr=None, 
-              color='black',type='filled circle',
-              nolabel=False, show=True, minval=1.e-3,
-              aspect_ratio=1):
+def plot_dsig(**keys):
     """
     This one stands alone. 
     """
 
+    comb=keys.get('comb',None)
+    r=keys.get('r',None)
+    dsig=keys.get('dsig',None)
+    dsigerr=keys.get('dsigerr',None)
+    color=keys.get('color','black')
+    type=keys.get('type','filled circle')
+    nolabel=keys.get('nolabel',False)
+    show=keys.get('show',True)
+    minval=keys.get('minval',1.e-3)
+    xlog=keys.get('xlog',True)
+    ylog=keys.get('ylog',True)
+    aspect_ratio=keys.get('aspect_ratio',1)
+    plt=keys.get('plt',None)
+
+    label=keys.get('label',None)
 
     if comb is not None:
         r=comb['r']
@@ -334,28 +348,59 @@ def plot_dsig(comb=None, r=None, dsig=None, dsigerr=None,
         if r is None or dsig is None or dsigerr is None:
             raise ValueError("Send a combined struct or r,dsig,dsigerr")
 
-    plt=FramedPlot()
-    plt.aspect_ratio=aspect_ratio
-    plt.xlog=True
-    plt.ylog=True
+    if plt is None:
+        plt=FramedPlot()
+        plt.aspect_ratio=aspect_ratio
+        plt.xlog=xlog
+        plt.ylog=ylog
 
-    if not nolabel:
-        plt.xlabel = labels['rproj']
-        plt.ylabel = labels['dsig']
+        if not nolabel:
+            plt.xlabel = labels['rproj']
+            plt.ylabel = labels['dsig']
 
-    od=add_to_log_plot(plt, r, dsig, dsigerr, 
-                       color=color, 
-                       type=type,
-                       minval=minval)
+    if ylog:
+        od=add_to_log_plot(plt, r, dsig, dsigerr, 
+                           color=color, 
+                           type=type,
+                           minval=minval)
+        plt.xrange = od['xrange']
+        plt.yrange = od['yrange']
 
-    plt.xrange = od['xrange']
-    plt.yrange = od['yrange']
+        if label:
+            od['p'].label=label
+    else:
+        zpts=Curve(r, dsig*0)
+        plt.add(zpts)
+
+        pts=Points(r, dsig, type=type, color=color)
+
+        if label:
+            pts.label=label
+
+        plt.add(pts)
+        if dsigerr is not None:
+            epts=SymErrY(r, dsig, dsigerr, color=color)
+            plt.add(epts)
+
+        yrng=keys.get('yrange',None)
+        xrng=keys.get('xrange',None)
+        if yrng:
+            plt.yrange=yrng
+        if xrng:
+            plt.xrange=xrng
+        else:
+            if xlog:
+                plt.xrange=eu.plotting.get_log_plot_range(r)
+
+
 
     if show:
         plt.show()
 
-    od['plt'] = plt
-    return od
+    if ylog:
+        od['plt'] = plt
+    else:
+        return plt
 
 def plot_drho(comb=None, r=None, drho=None, drhoerr=None, 
               color='black',type='filled circle',
