@@ -1,5 +1,5 @@
 import os
-from sys import stdout
+from sys import stdout, stderr
 import pprint
 from math import ceil
 from numpy import where, sqrt, random, zeros, arange, median
@@ -175,9 +175,26 @@ class Pipe(dict):
 
         return cutout
 
+    def get_full_cutout(self, index, size=None):
+        if size is None:
+            size=self['cutout_size']
+
+        cen=[self.cat['row'][index], self.cat['col'][index]]
+
+        cutout=Cutout(self.image, cen, size)
+
+        return cutout
+
 
     def get_zerod_cutout(self, index, **keys):
-        c=self.get_cutout(index, **keys)
+        try:
+            c=self.get_cutout(index, **keys)
+        except NoSegMatches as excpt:
+            print >>stderr,str(excpt)
+            # sometimes there are no associated
+            # segment pixels!
+            c=self.get_full_cutout(index, **keys)
+            return c
 
         im=c.subimage
         seg=c.seg_subimage
@@ -895,6 +912,12 @@ class Pipe(dict):
         data=zeros(n, dtype=dt)
         return data
 
+class NoSegMatches(Exception):
+    def __init__(self, value):
+        self.value = str(value)
+    def __str__(self):
+        return self.value
+
 class CutoutWithSeg:
     def __init__(self, image, seg, cen, id, minsize, padding=0):
         self.image=image
@@ -922,7 +945,8 @@ class CutoutWithSeg:
         w=where(self.seg == self.id)
 
         if w[0].size == 0:
-            raise ValueError("no seg pixels with id %s" % self.id)
+            mess="no seg pixels with id %s" % self.id
+            raise NoSegMatches(mess)
 
         minrow = w[0].min() - self.padding
         maxrow = w[0].max() + self.padding

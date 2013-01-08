@@ -103,6 +103,8 @@ def view(image, **keys):
         im = im.transpose()
 
     plt = biggles.FramedPlot()
+    if 'title' in keys:
+        plt.title=keys['title']
 
     s = im.shape
     if 'xdr' in keys and 'ydr' in keys:
