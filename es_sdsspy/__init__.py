@@ -51,8 +51,11 @@ from . import flags
 from .flags import flagval
 
 
-from .import util
-from .util import *
+try:
+    from sdsspy import util
+    from sdsspy.util import *
+except:
+    pass
 
 from . import stomp_maps
 from . import mangle_masks

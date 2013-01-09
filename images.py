@@ -273,8 +273,7 @@ def rebin_old(a, *args):
     return eval(''.join(evList))
 
 
-def asinh_scale(image, alpha=0.02, nonlinearity=8.0, dtype='f4'):
-    #image_out = numpy.array( image, dtype='f4')
+def asinh_scale(image, alpha=0.02, nonlinearity=8.0):
     image_out = \
         numpy.arcsinh( alpha*nonlinearity*image )/nonlinearity
 
