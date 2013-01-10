@@ -19,27 +19,9 @@ from optparse import OptionParser
 
 parser=OptionParser(__doc__)
 
-parser.add_option('-r','--run',default=None,
-                  help='The run id, required')
-
-parser.add_option('-f','--field',default='Ts2n',
-                  help="field for S/N, default %default")
-
-parser.add_option('--s2n',default=20, help=("threshold in s/n"))
-
-parser.add_option('--s2',default=1.0,
-                  help='restrict s2 less than this value, default %d')
-
-
 class Collator(object):
     def __init__(self, run, **keys):
         self.run=run
-
-        self.s2_max=keys['s2_max']
-        self.s2n_min=keys['s2n_min']
-        self.s2n_field=keys['s2n_field']
-        self.objtype='gexp'
-
         self.conf=files.read_config(self.run)
 
     def go(self):
@@ -63,9 +45,7 @@ class Collator(object):
     def write_data(self, exp_data, psfnum, shnum):
         path=files.get_julia_collate_path(run=self.run,
                                           psfnum=psfnum,
-                                          shnum=shnum,
-                                          s2_max=self.s2_max,
-                                          s2n_min=self.s2n_min)
+                                          shnum=shnum)
         dir=os.path.dirname(path)
         if not os.path.exists(dir):
             print 'making directory:',dir
@@ -76,23 +56,53 @@ class Collator(object):
             fits.write(exp_data)
 
     def set_use(self, data):
-        logic1 = (data['s2'] < self.s2_max)
-        logic1 = logic1 & (data[self.s2n_field] > self.s2n_min)
+        sratio=sqrt(1./data['s2'])
 
-        logic2=logic1 & (data['objtype'] == self.objtype)
+        isexp=(data['objtype'] == 'gexp')
+        isdev=(data['objtype'] == 'gdev')
+        
+        #size1 = (sratio > 1.0)
+        #size2 = (sratio > sqrt(2))
+        Ts2n_20 = (data['Ts2n'] > 20)
+
+        exp_or_dev20 = ( isexp | (isdev & Ts2n_20) )
+        exp20 = isexp & Ts2n_20
+        
+        # objsize > psfsize and either exp or well measured dev
+        logic1 = exp_or_dev20
+
+        # objsize > psfsize and is exp
+        logic2 = isexp
+
+        # objsize > psfsize and and well measured
+        logic3 = Ts2n_20
+
+        # objsize > psfsize and and well measured
+        logic4 = isexp & Ts2n_20
+
 
         w1,=where(logic1)
         w2,=where(logic2)
+        w3,=where(logic3)
+        w4,=where(logic4)
 
         frac1=float(w1.size)/data.size
         frac2=float(w2.size)/data.size
+        frac3=float(w3.size)/data.size
+        frac4=float(w4.size)/data.size
         print 'keep1 %s/%s %.2f' % (w1.size,data.size,frac1)
         print 'keep2 %s/%s %.2f' % (w2.size,data.size,frac2)
+        print 'keep3 %s/%s %.2f' % (w3.size,data.size,frac3)
+        print 'keep4 %s/%s %.2f' % (w4.size,data.size,frac4)
 
         if w1.size > 0:
             data['use1'][w1]=1
         if w2.size > 0:
             data['use2'][w2]=1
+        if w3.size > 0:
+            data['use3'][w3]=1
+        if w4.size > 0:
+            data['use4'][w4]=1
 
 
     def get_matched_struct(self, pipe):
@@ -114,7 +124,9 @@ class Collator(object):
             ('gsens','f8',2),
             ('weight','f8'),
             ('use1','i2'),
-            ('use2','i2')]
+            ('use2','i2'),
+            ('use3','i2'),
+            ('use4','i2')]
 
         # note this s2n min is just the limit used in the
         # shear measurement code
@@ -175,19 +187,13 @@ missing:
 def main():
     options,args = parser.parse_args(sys.argv[1:])
 
-    if options.run is None:
+    if len(args) < 1:
         parser.print_help()
         sys.exit(1)
 
-    run=options.run
-    s2_max=float(options.s2)
-    s2n_min=float(options.s2n)
-    s2n_field=options.field
+    run=args[0]
 
-    collator=Collator(run, 
-                      s2_max=s2_max,
-                      s2n_min=s2n_min,
-                      s2n_field=s2n_field)
+    collator=Collator(run)
     collator.go()
 
 main()

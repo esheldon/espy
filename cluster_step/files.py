@@ -385,19 +385,13 @@ def get_julia_collate_path(**keys):
     psfnum=keys['psfnum']
     shnum=keys['shnum']
 
-    s2_max=keys['s2_max']
-    s2n_min=keys['s2n_min']
-
-
     vdir=get_version_dir(**keys)
     dir=os.path.join(vdir, 'shear', run, 'collate')
 
-    name='%(run)s-p%(psfnum)d-s%(shnum)d-s2-%(s2_max).1f-Ts2n-%(s2n_min)d.fits'
+    name='%(run)s-p%(psfnum)d-s%(shnum)d.fits'
     name = name % {'run':run,
                    'psfnum':psfnum,
-                   'shnum':shnum,
-                   's2_max':s2_max,
-                   's2n_min':s2n_min}
+                   'shnum':shnum}
 
     return os.path.join(dir, name)
 
