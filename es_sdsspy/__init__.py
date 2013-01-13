@@ -66,3 +66,4 @@ from . import pg
 from . import target
 
 from . import atlas_tools
+from . import frames
