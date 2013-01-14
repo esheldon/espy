@@ -163,9 +163,6 @@ def submit_job(command, log_fname, req):
     Use os.system because it disconnects from
     the python script
     """
-    #command="""
-    #    nohup wq -p "{port}" sub {req} -c "{cmd}" &> "{logf}" &
-    #"""
     command="""
         nohup wq -p "{port}" sub {req} -c "{cmd}" 2>&1 > "{logf}" &
     """.format(port=pars['port'],

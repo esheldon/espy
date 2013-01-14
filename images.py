@@ -117,6 +117,26 @@ def view(image, **keys):
 
     return plt
 
+def write_jpg(filename, image, **keys):
+    """
+    Write the scaled image to a jpeg file.
+    """
+    from PIL import Image
+    #from numpy import flipud
+
+    im=scale_image(image, **keys)
+    #im=flipud(im)
+
+    #im = (im*256).astype('u1')
+    im = (im*255).astype('u1')
+    print('max val:',im.max())
+
+    pim=Image.fromarray(im)
+
+    fname=os.path.expandvars(filename)
+    fname=os.path.expanduser(fname)
+    pim.save(fname, **keys)
+
 
 def multiview(image, **keys):
     """
@@ -271,7 +291,7 @@ def compare_images(im1, im2, **keys):
 
     return tab
 
-def image_read(fname):
+def image_read_text(fname):
     """
     Read the simple text image format:
         nrows ncols
