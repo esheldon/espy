@@ -11,6 +11,8 @@ from . import wqutil
 from . import compare_truth
 from . import compare_serun_merun
 
+from . import pretty
+
 try:
     from . import admom_des
 except:

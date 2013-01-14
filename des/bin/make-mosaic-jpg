@@ -1,0 +1,158 @@
+#!/usr/bin/env python
+"""
+    %prog [options] indir outdir
+
+Create one big mosaic image for the input pointing
+"""
+
+import sys
+import os
+import glob
+import esutil as eu
+from esutil import wcsutil
+from numpy import median, flipud, zeros
+
+import des
+import fitsio
+
+from optparse import OptionParser
+parser=OptionParser(__doc__)
+
+parser.add_option('-r','--rebin',default=8,
+                  help="rebin factor")
+
+def get_image_list(indir):
+    flist0=glob.glob(indir+'/*.fits.fz')
+    flist=[]
+    for f in flist0:
+        if 'bkg' not in f:
+            flist.append(f)
+    flist.sort()
+    return flist
+
+def get_pixel_ranges(flist, show=False):
+    import biggles
+    import pcolors
+
+    nf=len(flist)
+    rowmin=zeros(nf,dtype='i8')
+    rowmax=zeros(nf,dtype='i8')
+    colmin=zeros(nf,dtype='i8')
+    colmax=zeros(nf,dtype='i8')
+
+    for i,path in enumerate(flist):
+
+        #print path
+        f=fitsio.FITS(path)
+
+        h=f[1].read_header()
+
+
+        ncol=h['znaxis1']
+        nrow=h['znaxis2']
+        ccd=h['ccdnum']
+
+        wcs=wcsutil.WCS(h)
+
+        rowmin[i]=0-wcs['crpix2']
+        colmin[i]=0-wcs['crpix1']
+
+        # note +1 for idl slices
+        rowmax[i]=rowmin[i] + nrow
+        colmax[i]=colmin[i] + ncol
+
+    rmin0 = rowmin.min()
+    cmin0 = colmin.min()
+
+    rowmin -= rmin0
+    rowmax -= rmin0
+    colmin -= cmin0
+    colmax -= cmin0
+
+    if show:
+        colors=pcolors.rainbow(len(flist),'hex')
+        plt=biggles.FramedPlot()
+
+        for i in xrange(rowmin.size):
+            box=eu.plotting.bbox(colmin[i],colmax[i]-1,
+                                 rowmin[i],rowmax[i]-1,
+                                 color=colors[i])
+            plt.add(box)
+
+        plt.xlabel='columns'
+        plt.ylabel='rows'
+        plt.show()
+
+    return rowmin,rowmax,colmin,colmax
+
+def make_mosaic(flist,rowmin,rowmax,colmin,colmax):
+
+    nrows=rowmax.max()
+    ncols=colmax.max()
+
+    image=zeros( (nrows, ncols), dtype='f4' )
+    for i,path in enumerate(flist):
+
+        print path
+        f=fitsio.FITS(path)
+
+        h=f[1].read_header()
+        tim=f[1][:,:]
+
+        exptime=h['exptime']
+
+        ims=des.pretty.scale_se_image(tim, exptime=exptime)
+
+        # sometimes there is a slight mismatch in inferred size
+        image[rowmin[i]:rowmax[i], colmin[i]:colmax[i]] = ims[:,:]
+
+    return image
+
+def main():
+    import images
+    options,args = parser.parse_args(sys.argv[1:])
+
+    if len(args) < 2:
+        parser.print_help()
+        sys.exit(45)
+
+    rebin=int(options.rebin)
+
+    indir=args[0]
+    if indir[-1] == '/':
+        indir=indir[0:len(indir)-1]
+    outdir=args[1]
+
+    expname=os.path.basename(indir)
+    jpg_file=os.path.join(outdir,expname+'_mosaic.jpg')
+
+    print 'input dir:   ',indir
+    print 'output:      ',jpg_file
+    print 'rebin factor:',rebin
+
+    if not os.path.exists(outdir):
+        print 'making directory:',outdir
+        os.makedirs(dir)
+
+    flist=get_image_list(indir)
+
+    print 'getting pixel ranges'
+    rowmin,rowmax,colmin,colmax = get_pixel_ranges(flist,show=True)
+
+    print 'making mosaic'
+    image=make_mosaic(flist,rowmin,rowmax,colmin,colmax)
+
+    print 'rebinning by:',rebin
+    newshape=[image.shape[0]/options.rebin,
+              image.shape[1]/options.rebin]
+    
+    imrebin=images.rebin(image, newshape)
+
+    #fac=float(rebin)**2
+    #imrebin *= (1./fac)
+
+    print 'writing jpg:',jpg_file
+    des.pretty.write_jpg(jpg_file, imrebin, quality=90)
+    return
+
+main()

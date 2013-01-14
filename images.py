@@ -117,21 +117,28 @@ def view(image, **keys):
 
     return plt
 
-def write_jpg(filename, image, **keys):
+def bytescale(im):
+    """ 
+    The input should be between [0,1]
+
+    output is [0,255] in a unsigned byte array
     """
-    Write the scaled image to a jpeg file.
+    imout = (im*255).astype('u1')
+    return imout
+
+def write_image(filename, image, **keys):
+    """
+    Write an image to an image file.
+
+    the image must be bytescaled between [0,255] and by of type 'u1'.  See
+    the scale_image() and bytescale() functions.
+
+    The file type, compression scheme, etc are determined by the file name.
+    Extra keywords such as quality for jpegs are passed along.
     """
     from PIL import Image
-    #from numpy import flipud
 
-    im=scale_image(image, **keys)
-    #im=flipud(im)
-
-    #im = (im*256).astype('u1')
-    im = (im*255).astype('u1')
-    print('max val:',im.max())
-
-    pim=Image.fromarray(im)
+    pim=Image.fromarray(image)
 
     fname=os.path.expandvars(filename)
     fname=os.path.expanduser(fname)
