@@ -98,7 +98,8 @@ def make_frame_jpg(**keys):
         print 'making dirs:',dname
         os.makedirs(dname)
 
-    colorim = (colorim*256).astype('u1')
+    #colorim = (colorim*255).astype('u1')
+    colorim = images.bytescale(colorim)
     colorim=flipud(colorim)
 
     pim=Image.fromarray(colorim)

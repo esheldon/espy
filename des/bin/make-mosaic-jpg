@@ -2,7 +2,10 @@
 """
     %prog [options] indir outdir
 
-Create one big mosaic image for the input pointing
+All ccd images are read from indir and the mosaic is written to outdir.  The
+name of the mosaic is the basename (last element) of indir with
+_mosaic{rebin}.jpg
+
 """
 
 import sys
@@ -10,7 +13,8 @@ import os
 import glob
 import esutil as eu
 from esutil import wcsutil
-from numpy import median, flipud, zeros
+from numpy import zeros
+import images
 
 import des
 import fitsio
@@ -18,8 +22,10 @@ import fitsio
 from optparse import OptionParser
 parser=OptionParser(__doc__)
 
-parser.add_option('-r','--rebin',default=8,
+parser.add_option('-r','--rebin',default='24',
                   help="rebin factor")
+parser.add_option('-c','--clobber',action='store_true',
+                  help="write files even if they already exist")
 
 def get_image_list(indir):
     flist0=glob.glob(indir+'/*.fits.fz')
@@ -40,6 +46,7 @@ def get_pixel_ranges(flist, show=False):
     colmin=zeros(nf,dtype='i8')
     colmax=zeros(nf,dtype='i8')
 
+    names=zeros(len(flist), dtype='S5')
     for i,path in enumerate(flist):
 
         #print path
@@ -50,7 +57,10 @@ def get_pixel_ranges(flist, show=False):
 
         ncol=h['znaxis1']
         nrow=h['znaxis2']
-        ccd=h['ccdnum']
+        ccd_name=h['detpos']
+        names[i] = ccd_name
+
+        print os.path.basename(path), names[i]
 
         wcs=wcsutil.WCS(h)
 
@@ -77,7 +87,11 @@ def get_pixel_ranges(flist, show=False):
             box=eu.plotting.bbox(colmin[i],colmax[i]-1,
                                  rowmin[i],rowmax[i]-1,
                                  color=colors[i])
+            lab=biggles.PlotLabel((colmin[i]+colmax[i])/2.,
+                                  (rowmin[i]+rowmax[i])/2.,
+                                  str(names[i].strip()))
             plt.add(box)
+            plt.add(lab)
 
         plt.xlabel='columns'
         plt.ylabel='rows'
@@ -85,74 +99,131 @@ def get_pixel_ranges(flist, show=False):
 
     return rowmin,rowmax,colmin,colmax
 
-def make_mosaic(flist,rowmin,rowmax,colmin,colmax):
+def check_rebin(image, rebin):
+    nrows=image.shape[0]
+    ncols=image.shape[1]
+
+    if ( (nrows % rebin) != 0
+            or (ncols % rebin) != 0 ):
+        raise ValueError("dims = (%d,%d) not multiple of "
+                         "rebin %d" % (nrows,ncols,rebin))
+
+def do_rebin(image, rebin):
+    nrows,ncols=image.shape
+
+    # pad nrows,ncols for rebin
+    row_remain=(nrows % rebin)
+    if row_remain != 0:
+        nrows += (rebin-row_remain)
+    col_remain=(ncols % rebin)
+    if col_remain != 0:
+        ncols += (rebin-col_remain)
+
+    imrebin=zeros( (nrows, ncols), dtype='f4' )
+
+    imrebin[0:image.shape[0], 0:image.shape[1]] = image[:,:]
+    check_rebin(imrebin, rebin)
+
+    imrebin = images.rebin(imrebin, rebin)
+
+    return imrebin
+
+def make_mosaic(outdir,flist,rowmin,rowmax,colmin,colmax):
 
     nrows=rowmax.max()
     ncols=colmax.max()
 
     image=zeros( (nrows, ncols), dtype='f4' )
+
     for i,path in enumerate(flist):
 
-        print path
+        #print path
+        bname=os.path.basename(path)
+        jpg_name=bname[0:bname.find('.')]+'.jpg'
+        jpg_file=os.path.join(outdir,jpg_name)
+
         f=fitsio.FITS(path)
 
         h=f[1].read_header()
+
         tim=f[1][:,:]
 
         exptime=h['exptime']
 
         ims=des.pretty.scale_se_image(tim, exptime=exptime)
+        print '  ',jpg_file
+        des.pretty.write_jpg(jpg_file, ims, quality=90)
 
         # sometimes there is a slight mismatch in inferred size
         image[rowmin[i]:rowmax[i], colmin[i]:colmax[i]] = ims[:,:]
 
     return image
 
+def mosaic_jpg_name(indir, outdir, rebin):
+    expname=os.path.basename(indir)
+    jpg_file=os.path.join(outdir,expname+'_mosaic%02d.jpg' % rebin)
+    return jpg_file
+
+def count_jpg_files(indir, outdir, rebin_vals):
+    # continue only if one of them not found
+    nfound=0
+    for rebin in rebin_vals:
+        jpg_file=mosaic_jpg_name(indir,outdir,rebin)
+        if os.path.exists(jpg_file):
+            nfound += 1
+    return nfound
+
 def main():
-    import images
     options,args = parser.parse_args(sys.argv[1:])
 
     if len(args) < 2:
         parser.print_help()
         sys.exit(45)
 
-    rebin=int(options.rebin)
+    clobber=options.clobber
 
     indir=args[0]
     if indir[-1] == '/':
         indir=indir[0:len(indir)-1]
     outdir=args[1]
 
-    expname=os.path.basename(indir)
-    jpg_file=os.path.join(outdir,expname+'_mosaic.jpg')
-
     print 'input dir:   ',indir
-    print 'output:      ',jpg_file
-    print 'rebin factor:',rebin
+    print 'out dir:     ',outdir
 
     if not os.path.exists(outdir):
         print 'making directory:',outdir
-        os.makedirs(dir)
+        os.makedirs(outdir)
+
+
+    rebin_vals=options.rebin.split(',')
+    rebin_vals=[int(r) for r in rebin_vals]
+
+    if not clobber:
+        if count_jpg_files(indir,outdir,rebin_vals)== len(rebin_vals):
+            print 'all mosaic images already exist'
+            return
 
     flist=get_image_list(indir)
 
     print 'getting pixel ranges'
     rowmin,rowmax,colmin,colmax = get_pixel_ranges(flist,show=True)
+    stop
 
     print 'making mosaic'
-    image=make_mosaic(flist,rowmin,rowmax,colmin,colmax)
+    image=make_mosaic(outdir,flist,rowmin,rowmax,colmin,colmax)
 
-    print 'rebinning by:',rebin
-    newshape=[image.shape[0]/options.rebin,
-              image.shape[1]/options.rebin]
-    
-    imrebin=images.rebin(image, newshape)
+    for rebin in rebin_vals:
 
-    #fac=float(rebin)**2
-    #imrebin *= (1./fac)
+        jpg_file=mosaic_jpg_name(indir, outdir, rebin)
+        if os.path.exists(jpg_file) and not clobber:
+            print 'mosaic already exists:',jpg_file
+            continue
 
-    print 'writing jpg:',jpg_file
-    des.pretty.write_jpg(jpg_file, imrebin, quality=90)
-    return
+        print '  rebinning by:',rebin
+        imrebin=do_rebin(image, rebin)
+
+        print '  writing jpg:',jpg_file
+        des.pretty.write_jpg(jpg_file, imrebin, quality=90)
+        return
 
 main()

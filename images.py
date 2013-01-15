@@ -451,15 +451,21 @@ def get_color_image(imr, img, imb, **keys):
 
 
 
-def rebin( a, newshape ):
-    '''Rebin an array to a new shape.
-    '''
-    assert len(a.shape) == len(newshape)
+def rebin(im, factor, dtype=None):
+    factor=int(factor)
+    s = im.shape
+    if ( (s[0] % factor) != 0
+            or (s[1] % factor) != 0):
+        raise ValueError("shape in each dim (%d,%d) must be "
+                   "divisible by factor (%d)" % (s[0],s[1],factor))
 
-    slices = [ slice(0,old, float(old)/new) for old,new in zip(a.shape,newshape) ]
-    coordinates = numpy.mgrid[slices]
-    indices = coordinates.astype('i')   #choose the biggest smaller integer index
-    return a[tuple(indices)]
+    newshape=array(s)/factor
+    if dtype is None:
+        a=im
+    else:
+        a=im.astype(dtype)
+
+    return a.reshape(newshape[0],factor,newshape[1],factor,).sum(1).sum(2)/factor/factor
 
 
 def scale_image(im, **keys):
