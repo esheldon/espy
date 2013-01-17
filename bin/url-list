@@ -2,7 +2,11 @@
 """
     %prog [options] url
 
-List all files at the url
+List all files at the url.
+
+Note for full listings you may want to pipe the result to column
+
+  url-list -l url | column -t
 """
 
 import sys
@@ -14,8 +18,10 @@ from urlparse import urlparse
 
 parser=OptionParser(__doc__)
 
-parser.add_option("-l","--full",action="store_true", help="show a full listing")
-parser.add_option("-n","--netrc",action="store_true", help="use ~/.netrc for authentication")
+parser.add_option("-l","--full",action="store_true", 
+                  help="show a full listing.   This is much slower")
+parser.add_option("-n","--netrc",action="store_true", 
+                  help="use ~/.netrc for authentication")
 
 class URLLister(object):
     def __init__(self, url, full=False, use_netrc=False):
@@ -46,7 +52,7 @@ class URLLister(object):
         sock=opener.open(url)
         info=sock.info()
         size=info.get('Content-Length')
-        dt=info.get('Date')
+        dt=info.get('Last-Modified')
 
         # can use this to parse
         #datetime.datetime.strptime(d,'%a, %d %b %Y %X %Z')
@@ -55,7 +61,6 @@ class URLLister(object):
         print size,dt,url
 
     def get_opener(self):
-        proxy = urllib2.ProxyHandler({'http': 'http://192.168.1.130:3128'})
         if self.use_netrc:
             authinfo=self.get_netrc_auth()
             # this proxy handler looks for $http_proxy

@@ -1,0 +1,290 @@
+#!/usr/bin/env python
+"""
+    %prog [options] remote_dir localdir
+
+Description
+
+    Copy all files from the remote directory to the local directory.  The
+    remote can be, for example, a web address.  If a local file with the same
+    name exists, it is replace only if it is older or the -c/--clobber option
+    is given.  The copy is not recursive.
+
+    This program only synchronizes a directory.  If you just want to copy a
+    single file instead of a directory, use curl or wget directly.  If you want
+    recursive copy, use wget.
+
+    If you need remote authentication, put it in your ~/.netrc and send the
+    -n/--netrc option
+
+        machine {hostname} login {username} password {pass}
+
+    (where {pass} should be replaced by your password, etc).  Just make sure it
+    is not readable by others, e.g. 
+
+        chmod go-r ~/.netrc
+
+Dependencies
+    python, curl
+"""
+
+license="""
+  Copyright (C) 2012  Erin Sheldon, BNL.  erin dot sheldon at gmail dot com
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+"""
+
+import sys
+import os
+import tempfile
+
+import urllib2
+from urlparse import urlparse
+import shutil
+
+from optparse import OptionParser
+parser=OptionParser(__doc__)
+
+parser.add_option("-n","--netrc",action="store_true", 
+                  help="use ~/.netrc for authentication")
+parser.add_option("-c","--clobber",action="store_true", 
+                  help=("download the files even if local copies exist and "
+                        "are no older than the remote versions"))
+parser.add_option("--debug",action="store_true", 
+                  help="print debugging messages")
+parser.add_option("-p","--progress",action="store_true", 
+                  help="show detailed progress on each file")
+
+parser.add_option("--license",action="store_true", 
+                  help="print the license and exit")
+
+
+class URLLister(object):
+    """
+    Get a list of all urls under the specified remote directory.
+
+    Iterate over the result, e.g.
+
+        lister=URLLister(url)
+        for url in lister:
+            print url
+    """
+    def __init__(self, url, use_netrc=False):
+        self.url=url
+        self.use_netrc=use_netrc
+
+        self.opener=self._get_opener()
+        self._get_url_list()
+
+    def get_url_list(self):
+        return self.url_list
+
+    def _get_url_list(self):
+
+        f = self.opener.open(self.url)
+
+        url_list=[]
+        for line in f:
+            if 'Parent Directory' in line:
+                continue
+            elif '?' in line:
+                continue
+            elif 'href' in line:
+                ls=(line.split('href="'))[1]
+                fname=(ls.split('"'))[0]
+                
+                url=os.path.join(self.url, fname)
+                url_list.append(url)
+
+        self._url_list=url_list
+
+    def get_size(self, url):
+        sock=self.opener.open(url)
+        info=sock.info()
+        size=int( info.get('Content-Length') )
+        return size
+
+
+    def _get_opener(self):
+        """
+        Note the this ProxyBasicAuthHandler proxy handler looks for $http_proxy
+        or $ftp_proxy
+        """
+
+        authinfo=None
+        if self.use_netrc:
+            authinfo=self._get_netrc_auth()
+
+        if authinfo is not None:
+            opener = urllib2.build_opener(urllib2.ProxyBasicAuthHandler,authinfo)
+        else:
+            opener = urllib2.build_opener(urllib2.ProxyBasicAuthHandler)
+
+        return opener
+
+    def _get_netrc_auth(self):
+        import netrc
+
+
+        host = urlparse(self.url).hostname
+        res=netrc.netrc().authenticators(host)
+
+        if res is None:
+            # no authentication is needed for this host
+            return None
+
+        (user,account,passwd) = res
+
+        password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+        password_mgr.add_password(None, 
+                                  self.url, 
+                                  user, 
+                                  passwd)
+
+        authinfo = urllib2.HTTPBasicAuthHandler(password_mgr)
+
+        return authinfo
+
+    def __iter__(self):
+        self._current=0
+        return self
+
+    def next(self):
+        if self._current < len(self._url_list):
+            url=self._url_list[self._current]
+            self._current += 1
+            return url
+        else:
+            raise StopIteration
+
+class Syncronizer(object):
+    """
+
+    This is straightforward: we use the -z flag for curl to do timestamp
+    checking.  Could do it all in python but the timezone issues are
+    too much to deal with.
+
+    Always copy to /tmp and then move the file.  This way we don't end up with
+    a half-copied file in the final location
+    """
+    def __init__(self, url_lister, local_dir, 
+                 clobber=False,
+                 show_progress=False, debug=False):
+        self.url_lister=url_lister
+        self.local_dir=local_dir
+        self.clobber=clobber
+        self.debug=debug
+        self.show_progress=show_progress
+
+    def sync(self):
+        for url in self.url_lister:
+            self.sync_file(url)
+
+    def sync_file(self, url):
+        local_path, tmp_path=self._get_local_paths(url)
+        try:
+
+            local_exists=os.path.exists(local_path)
+            cmd=self._get_curl_command(url, local_path, tmp_path, local_exists)
+
+            if self.debug:
+                print cmd
+
+            self._run_curl(cmd)
+
+            # We need to check because if the local file already existed and
+            # was no older than the remote, no file was downloaded
+            if os.path.exists(tmp_path):
+                # note we usually only print the file name if a copy was made
+                print url
+                self._move_from_tmp(local_path, tmp_path)
+
+        finally:
+            # e.g. if the user hit ctrl-c we still want to clean up
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    def _run_curl(self, cmd):
+        res=os.system(cmd)
+        if res != 0:
+            raise RuntimeError("Got curl error: %d" % res)
+
+    def _move_from_tmp(self, local_path, tmp_path):
+        if self.debug:
+            print 'removing existing file:',local_path
+        if os.path.exists(local_path):
+            os.remove(local_path)
+
+        if self.debug:
+            print 'moving',tmp_path,'to',local_path
+        shutil.move(tmp_path, local_path)
+
+    def _get_local_paths(self, url):
+
+        bname=os.path.basename(url)
+        local_path=os.path.join(self.local_dir, bname)
+
+        tmp_path=tempfile.mktemp(prefix=bname+'-',dir=self.local_dir)
+
+        return local_path, tmp_path
+
+    def _get_curl_command(self, url, local_path, tmp_path, local_exists):
+
+        # -k: don't bother with certificates
+        # --netrc-optional: use ~/.netrc for authentication if needed
+        # --create-dirs: make dirs necessary to create the output file
+        # --remote-time: give the local file the remote file timestamp
+        cmd=['curl -k --netrc-optional --create-dirs --remote-time']
+
+        if not self.show_progress:
+            cmd += ['-s']
+
+        if local_exists and not self.clobber:
+            cmd += ['-z "{local_path}"']
+
+        cmd += ['-o "{tmp_path}" "{url}"']
+        cmd = ' '.join(cmd)
+        cmd=cmd.format(local_path=local_path,
+                       url=url,
+                       tmp_path=tmp_path)
+        return cmd
+
+    def get_local_size(self, path):
+        return os.stat(path).st_size
+
+def main():
+    options, args = parser.parse_args(sys.argv[1:])
+
+    if options.license:
+        print license
+        sys.exit(0)
+
+    if len(args) < 2:
+        parser.print_help()
+        sys.exit(45)
+
+    remote_url=args[0]
+    local_dir=args[1]
+
+    try:
+        lister=URLLister(remote_url, use_netrc=options.netrc)
+        syncer=Syncronizer(lister, local_dir,
+                           clobber=options.clobber,
+                           debug=options.debug,
+                           show_progress=options.progress)
+        syncer.sync()
+    except KeyboardInterrupt:
+        pass
+
+main()
