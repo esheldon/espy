@@ -1,0 +1,163 @@
+#!/usr/bin/env python
+"""
+    %prog [options] run
+
+Make a web page pointing to the exposure mosaics.  Some info for each is also put into a table.
+"""
+
+import sys
+import os
+import glob
+
+import fitsio
+import desdb
+
+from optparse import OptionParser
+parser=OptionParser(__doc__)
+
+
+class MosaicList(object):
+    def __init__(self, run, rebin=24):
+        self.run=run
+        self.rebin=rebin
+
+        self._df=desdb.files.DESFiles()
+
+        self._set_jpg_run_dir()
+
+        if not os.path.exists(self._jpg_run_dir):
+            os.makedirs(self._jpg_run_dir)
+
+        self._set_exposure_list()
+
+
+    def make_list(self):
+        html_name=self.get_html_file()
+        print 'writing:',html_name
+        with open(html_name,'w') as fobj:
+            fobj.write(_head)
+
+            for expname in self._explist:
+                print expname,
+                filt,exptime,cenra,cendec=self._get_meta(expname)
+                print filt,exptime
+
+                exp_html,exp_html_rel=self._get_mosaic_html(expname)
+
+                if os.path.exists(exp_html):
+                    entry='<a href="%s">%s</a>' % (exp_html_rel,expname)
+                else:
+                    entry=expname
+                row="""
+    <tr>
+      <td>%(entry)s</td>
+      <td>%(filter)s</td>
+      <td>%(exptime)d</td>
+      <td>%(cenra).6f</td>
+      <td>%(cendec).6f</td>
+    <tr>\n"""
+                row=row % {'entry':entry,
+                           'filter':filt,
+                           'exptime':exptime,
+                           'cenra':cenra,
+                           'cendec':cendec}
+                fobj.write(row)
+            fobj.write(_foot)
+
+
+    def _get_mosaic_html(self, expname):
+
+        dir=os.path.join(self._jpg_run_dir,expname)
+        reldir=os.path.join('./',expname)
+
+        name='%s_mosaic%02d.html' % (expname,self.rebin)
+
+        relpath=os.path.join(reldir,name)
+        path=os.path.join(dir,name)
+
+        return path, relpath
+
+    def _set_exposure_list(self):
+        dir=self._df.dir(type='red_run',run=self.run)
+        explist0=glob.glob(dir+'/DECam_*')
+        explist=[]
+        for exposure in explist0:
+            if os.path.isdir(exposure):
+                explist.append(os.path.basename(exposure))
+        explist.sort()
+        self._explist=explist
+
+    def _get_meta(self,expname):
+        path=self._df.name(type='red_image', 
+                           run=self.run, 
+                           expname=expname,
+                           ccd=1)
+        h=fitsio.read_header(path,ext=1)
+        
+        filt=(h['filter'].split())[0]
+        exptime=h['exptime']
+        cenra=h['crval1']
+        cendec=h['crval2']
+
+        return filt, exptime, cenra, cendec
+
+    def _set_jpg_run_dir(self):
+        desdata=os.environ['DESDATA']
+        self._jpg_run_dir = os.path.join(desdata,'jpg','OPS',self.run)
+
+    def get_html_file(self):
+        return os.path.join(self._jpg_run_dir, 'mosaic-list-%s.html' % self.run)
+
+_head="""
+<html>
+  <head>
+      <style type="text/css">
+            table.simple {
+                    border-width: 1px;
+                    border-collapse: collapse;
+            }
+
+            table.simple th {
+                    background-color: #faf0e6;
+                    padding: 7px;
+                    border-width: 1px;
+                    border-style: inset;
+            }
+            table.simple td {
+                    padding: 7px;
+                    border-width: 1px;
+                    border-style: inset;
+            }
+      </style>
+  </head>
+  <body>
+  <table class=simple>
+    <tr>
+      <th>Exposure</th>
+      <th>filter</th>
+      <th>exp. time (sec)</th>
+      <th>RA</th>
+      <th>DEC</th>
+    </tr>
+
+
+"""
+ 
+_foot="""
+  </table>
+  </body>
+</html>
+"""
+
+def main():
+    options,args = parser.parse_args(sys.argv[1:])
+    if len(args) < 1:
+        parser.print_help()
+        sys.exit(45)
+
+    run=args[0]
+
+    ml=MosaicList(run)
+    ml.make_list()
+
+main()
