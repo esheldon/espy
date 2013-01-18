@@ -172,7 +172,6 @@ def main():
                                    satval=100)
 
     print 'bytescaling'
-    scales=[des.pretty.SCALE]*3
     colorim = images.bytescale(colorim)
 
     print 'writing:',outfile
