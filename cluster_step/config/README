@@ -1,7 +1,9 @@
 todo
 
-- got some shapes from julia.  Do fits.  but at s/n=30 things look good and
-  that is where the prior matters
+- try LM PSF fitting (psf1 shear4)
+- double walkers (psf1 shear4)
+- non-linear fitting at high S/N?  Tried it
+    before and it sucked
 
 * I seem to be having problems at high S/N, upped the number
     of walkers which looks better.  running p1 from mixmc-r05

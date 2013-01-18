@@ -49,8 +49,12 @@ def write_jpg(fname, im, **keys):
     from numpy import flipud
     import images
 
+    # for DES images this results in north up east to the left
+    # because jpg coordinates start in the upper left
     imout = flipud(im)
     imout=imout.transpose()
 
     imout = images.bytescale(imout)
     images.write_image(fname, imout, **keys)
+
+    return imout.shape

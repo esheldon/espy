@@ -2,10 +2,8 @@
 """
     %prog [options] run expname
 
-All ccd images are read from indir and the mosaic is written to outdir.  The
-name of the mosaic is the basename (last element) of indir with
-_mosaic{rebin}.jpg
-
+Make jpegs of all ccds and a mosaic of all images.  Also make a web page with
+an image map pointing to the individual images.
 """
 
 import sys
