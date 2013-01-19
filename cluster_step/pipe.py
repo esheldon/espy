@@ -8,7 +8,7 @@ from . import files
 from . import prior
 
 import gmix_image
-from gmix_image.gmix import GMix
+from gmix_image.gmix import GMix, GMixCoellip
 from gmix_image.gmix_mcmc import MixMCStandAlone, MixMCPSF
 from gmix_image.gmix_em import GMixEMPSF
 
@@ -269,7 +269,12 @@ class Pipe(dict):
         """
         if not hasattr(self,'ares') or run_admom:
             self.run_admom()
-            self.plot_admom_sizemag()
+            try:
+                self.plot_admom_sizemag()
+            except:
+                # some systems at nersc don't even have X installed
+                # and biggles always trys to load it
+                print 'failed to make sizemag plots'
         if not hasattr(self,'psfres') or run_psf:
             self.run_psf()
 
@@ -430,6 +435,8 @@ class Pipe(dict):
         if model=='gturb':
             # note the MixMCPSF uses e1,e2 not g1,g2
             gmix=GMix(pars, model='gturb')
+        elif model in ['gmix1','gmix2','gmix3']:
+            gmix=GMixCoellip(pars)
         else:
             # assum pars are full [pi,ri,ci,irri,irci,icci,...]
             gmix=GMix(pars)
@@ -481,6 +488,7 @@ class Pipe(dict):
                 Icc=ares['Icc'][index]
                 whyflag=ares['whyflag'][index]
                 aresi = {'wrow':wrow,'wcol':wcol,'Irr':Irr,'Irc':Irc,'Icc':Icc,
+                         'e1':ares['e1'][index],'e2':ares['e2'][index],
                          'whyflag':whyflag}
 
                 c=self.get_zerod_cutout(index)
@@ -489,6 +497,8 @@ class Pipe(dict):
 
                 if model in ['em1','em2','em2cocen']:
                     self.run_em_psf(im, aresi, model, out, ipsf)
+                elif model in ['gmix1','gmix2','gmix3']:
+                    self.run_gmix_fit_psf(im, aresi, model, out, ipsf)
                 elif model=='gturb':
                     self.run_turb_psf(im, aresi, out, ipsf)
                 else:
@@ -582,6 +592,39 @@ class Pipe(dict):
                 key=raw_input("hit a key (q to quit): ")
                 if key=='q':
                     stop
+
+    def run_gmix_fit_psf(self, im, aresi, model, out, ipsf):
+        cocenter=False
+        if model=='gmix1':
+            ngauss=1
+        elif model=='gmix2':
+            ngauss=2
+        elif model=='gmix3':
+            ngauss=3
+        else:
+            raise ValueError("bad psf model: '%s'" % model)
+
+        ntry=1
+        while ntry <= 2:
+            res=gmix_image.gmix_fit.quick_fit_psf_coellip(im, self['skysig'], 
+                                                          ngauss, ares=aresi)
+            if res.flags==0:
+                break
+            ntry += 1
+
+        out[model+'_flags'][ipsf] = res.flags
+        out[model+'_numiter'][ipsf] = res.numiter
+        out[model+'_ntry'][ipsf] = ntry
+
+        out[model+'_pars'][ipsf,:] = res.pars
+        if res.flags==0:
+            out[model+'_perr'][ipsf,:] = res.perr
+            out[model+'_pcov'][ipsf,:,:] = res.pcov
+            stats=res.get_stats()
+            out[model+'_prob'][ipsf] = stats['fit_prob']
+            out[model+'_aic'][ipsf] = stats['aic']
+            out[model+'_bic'][ipsf] = stats['bic']
+
 
     def run_turb_psf(self,im, aresi, out, ipsf):
 
@@ -811,6 +854,7 @@ class Pipe(dict):
 
     def get_psf_struct(self, n):
         model_npars={'em1':6,'em2':2*6,'em2cocen':2*6,
+                     'gmix1':6, 'gmix2':2*2+4,'gmix3':2*3+4,
                      'gturb':6,'admom':6}
         dt= [('simid','i4'),
              ('id','i4'),
@@ -839,6 +883,11 @@ class Pipe(dict):
                         dt += [(model+'_'+dti[0], dti[1], dti[2])]
                     else:
                         dt += [(model+'_'+dti[0], dti[1])]
+                if 'em' in model:
+                    dt += [(model+'_fdiff','f8')]
+                if 'gmix' in model:
+                    dt += [(model+'_perr','f8',npars),
+                           (model+'_pcov','f8',(npars,npars))]
 
         data=zeros(n, dtype=dt)
 
@@ -849,6 +898,14 @@ class Pipe(dict):
                 data[model+'_pars']=-9999.
                 data[model+'_aic'] = 1.e9
                 data[model+'_bic'] = 1.e9
+            elif model in ['gmix1','gmix2','gmix3']:
+                data[model+'_ntry']=9999
+                data[model+'_pars']=-9999.
+                data[model+'_perr']=9999.
+                data[model+'_pcov']=9999.
+                data[model+'_aic'] = 1.e9
+                data[model+'_bic'] = 1.e9
+
             elif model=='gturb':
                 data['gturb_aic'] = 1.e9
                 data['gturb_bic'] = 1.e9

@@ -132,7 +132,7 @@ def read_cat(**keys):
         The version of cluster step, defaults
         to global variable default_version
     """
-    import recfile
+    from esutil import recfile
     keys['ftype']='cat'
     path=get_input_path(**keys)
 
@@ -490,6 +490,67 @@ def get_summary_plot_path(**keys):
     path=os.path.join(dir, name)
     return path
 
+def get_script_dir(**keys):
+    run=keys['run']
+    ftype=keys['ftype']
+
+    vdir=get_version_dir(**keys)
+    dir=os.path.join(vdir, 'shear', run, 'script', ftype)
+    return dir
+
+def get_script_path(**keys):
+    run=keys['run']
+    psfnum=keys['psfnum']
+    shnum=keys['shnum']
+    ftype=keys['ftype']
+    ccd=keys['ccd']
+
+    dir=get_script_dir(**keys)
+
+    ccd='%02d' % int(ccd)
+
+    name='{run}-p{psfnum}-s{shnum}-{ccd}-{ftype}.sh'
+    name=name.format(run=run,psfnum=psfnum,shnum=shnum,
+                     ccd=ccd,ftype=ftype)
+
+    return os.path.join(dir,name)
+
+def get_pbs_dir(**keys):
+    vdir=get_version_dir(**keys)
+    run=keys['run']
+    ftype=keys['ftype']
+    dir=os.path.join(vdir, 'shear', run, 'script')
+    return dir
+
+def get_pbs_path(**keys):
+    run=keys['run']
+    psfnum=keys['psfnum']
+    shnum=keys['shnum']
+    ftype=keys['ftype']
+
+
+    dir=get_pbs_dir(**keys)
+
+    name='{run}-p{psfnum}-s{shnum}-{ftype}.pbs'
+    name=name.format(run=run,psfnum=psfnum,shnum=shnum,
+                     ftype=ftype)
+
+    return os.path.join(dir,name)
+
+def get_pbs_all_path(**keys):
+    run=keys['run']
+    ftype=keys['ftype']
+
+
+    dir=get_pbs_dir(**keys)
+
+    name='{run}-{ftype}.pbs'
+    name=name.format(run=run, ftype=ftype)
+    return os.path.join(dir,name)
+
+
+
+
 def get_wq_dir(**keys):
     run=keys['run']
     ftype=keys['ftype']
@@ -497,6 +558,7 @@ def get_wq_dir(**keys):
     vdir=get_version_dir(**keys)
     dir=os.path.join(vdir, 'shear', run, 'wq',ftype)
     return dir
+
 
 def get_wq_path(**keys):
     run=keys['run']

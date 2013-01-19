@@ -68,4 +68,5 @@ mixmc-r10
     - prior vs mag
 mixmc-r11
     - prior vs mag but more bins in mag
-
+mixmc-r12
+    - using coellip 2 gauss from gmix fit for psf

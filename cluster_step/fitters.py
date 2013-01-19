@@ -6,11 +6,6 @@ from cluster_step import files, stats
 from esutil.numpy_util import aprint
 from esutil.stat import wmom
 
-import biggles
-from biggles import FramedPlot, FramedArray, Points, \
-        Curve, SymmetricErrorBarsX, SymmetricErrorBarsY, \
-        PlotLabel, PlotKey
-
 from fitting import LineFitter
 
 class BiasFitter(object):
