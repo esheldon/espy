@@ -1,9 +1,13 @@
 todo
 
 - try LM PSF fitting (psf1 shear4)
-- double walkers (psf1 shear4)
+- double walkers (psf1 shear4) but see mixmc-r05
 - non-linear fitting at high S/N?  Tried it
     before and it sucked
+
+- Maybe the PSF is not gotten at right pixel to account for pixelization of
+  galaxy? these are single gausians.  Fit admom with sub-pixel and then render
+  it at the location to get pixelization right.  Does this make sense?
 
 * I seem to be having problems at high S/N, upped the number
     of walkers which looks better.  running p1 from mixmc-r05
