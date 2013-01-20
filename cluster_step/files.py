@@ -299,7 +299,7 @@ def read_output_set(run, psfnums, shnums,
                                            columns=columns, 
                                            verbose=False)
 
-                    logic=data0['flags']==0
+                    logic=(data0['flags']==0) | (data0['flags']==65536)
                     if objtype:
                         logic=logic & strmatch(data0['model'],objtype)
 

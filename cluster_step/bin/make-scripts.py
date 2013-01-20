@@ -19,6 +19,9 @@ parser.add_option('--run-admom',action='store_true',
 parser.add_option('--run-psf',action='store_true',
                   help="Force a re-run of psf")
 
+parser.add_option('--pbs1',action='store_true',
+                  help="instead of a script do a pbs script for each ccd")
+
 # don't need to source bashrc because pbs will load environment
 _template="""#!/bin/bash
 module unload espy && module load espy/work
@@ -28,6 +31,28 @@ logfile="%(logfile)s"
 echo "host: `hostname`" > "$logfile"
 python -u $ESPY_DIR/cluster_step/bin/%(cmd)s %(run)s %(psfnum)s %(shnum)s %(ccd)s 2>&1 > "$logfile"
 """
+
+
+_pbs1_template="""#!/bin/bash -l
+#PBS -N %(run)sp%(psfnum)ss%(shnum)sc%(ccd)02d
+#PBS -j oe
+#PBS -l nodes=1:ppn=1,walltime=8:00:00
+#PBS -q serial
+#PBS -o %(base)s.out
+#PBS -A des
+
+if [[ "Y${PBS_O_WORKDIR}" != "Y" ]]; then
+    cd $PBS_O_WORKDIR
+fi
+
+module unload espy && module load espy/work
+module unload gmix_image && module load gmix_image/work
+
+logfile="%(logfile)s"
+echo "host: `hostname`" > "$logfile"
+python -u $ESPY_DIR/cluster_step/bin/%(cmd)s %(run)s %(psfnum)s %(shnum)s %(ccd)s 2>&1 > "$logfile"
+"""
+
 
 _pbs_template_all="""#!/bin/bash -l
 #PBS -N %(run)s
@@ -133,6 +158,27 @@ def write_script(run,ftype,psfnum,shnum,ccd,cmd):
 
     os.system('chmod u+x "%s"' % sfile)
 
+def write_pbs1(run,ftype,psfnum,shnum,ccd,cmd):
+    sfile=files.get_script_path(run=run,psfnum=psfnum,shnum=shnum,
+                                ccd=ccd,ftype=ftype)
+    pbsfile=sfile.replace(".sh",".pbs")
+    logfile=sfile.replace('.sh','.out')
+
+    base=os.path.basename(pbsfile).replace('.pbs','')
+
+    print 'writing:',pbsfile
+    with open(pbsfile,'w') as fobj:
+        d={'cmd':cmd,
+           'run':run, 
+           'psfnum':psfnum,
+           'shnum':shnum,
+           'ccd':ccd,
+           'base':base,
+           'logfile':logfile}
+
+        text=_pbs1_template % d
+        fobj.write(text)
+
 def main():
     options,args = parser.parse_args(sys.argv[1:])
 
@@ -161,6 +207,9 @@ def main():
         for shnum in files.SHNUMS:
             write_pbs(run,ftype,psfnum,shnum)
             for ccd in files.CCDS:
-                write_script(run,ftype,psfnum,shnum,ccd,cmd)
+                if options.pbs1:
+                    write_pbs1(run,ftype,psfnum,shnum,ccd,cmd)
+                else:
+                    write_script(run,ftype,psfnum,shnum,ccd,cmd)
 
 main()

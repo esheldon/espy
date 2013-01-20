@@ -5,6 +5,10 @@ todo
 - non-linear fitting at high S/N?  Tried it
     before and it sucked
 
+- try doing admom with sub-pixel fit, get median model, and then for each
+  galaxy render at the best centroid location.  will need to fix the centroid
+  with a tight prior
+
 * I seem to be having problems at high S/N, upped the number
     of walkers which looks better.  running p1 from mixmc-r05
 
