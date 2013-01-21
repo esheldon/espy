@@ -332,12 +332,19 @@ class Pipe(dict):
             fitter=self.run_shear_model(index, im, ares, gmix_psf, fitmodel)
 
             res0 = fitter.get_result()
-            if len(fitmodels) > 1:
-                print '  model: %s prob: %.6f aic: %.6f bic: %.6f Ts/n: %.6f ' % \
+            print '  model: %s prob: %.6f aic: %.6f bic: %.6f Ts/n: %.6f ' % \
                     (fitmodel,res0['fit_prob'],res0['aic'],res0['bic'],res0['Ts2n'])
             if res0['aic'] < aic:
                 res=res0
                 aic = res0['aic']
+
+        if False:
+            import images
+            images.multiview(im*0.01,nonlinear=0.4)
+            key=raw_input('hit a key: ')
+            if key=='q':
+                stop
+
 
         if len(fitmodels) > 1:
             print '    best model:',res['model']
@@ -362,6 +369,7 @@ class Pipe(dict):
         gprior=self.get_gprior(index, fitmodel)
 
         cen_width=self.get('cen_width',1.0)
+        nsub=self.get('object_nsub',None)
         fitter=MixMCStandAlone(im, self['ivar'],
                                gmix_psf, gprior, fitmodel,
                                nwalkers=nwalkers,
@@ -372,6 +380,7 @@ class Pipe(dict):
                                draw_gprior=self['draw_gprior'],
                                ares=ares,
                                cen_width=cen_width,
+                               nsub=nsub,
                                make_plots=False)
         return fitter
 
