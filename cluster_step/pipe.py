@@ -11,6 +11,7 @@ import gmix_image
 from gmix_image.gmix import GMix, GMixCoellip
 from gmix_image.gmix_mcmc import MixMCStandAlone, MixMCPSF
 from gmix_image.gmix_em import GMixEMPSF
+from gmix_image.gmix_fit import GMixFitSimple
 
 CLUSTERSTEP_GAL=1
 CLUSTERSTEP_STAR=2
@@ -65,6 +66,8 @@ class Pipe(dict):
                              "shnum=, ccd=")
 
     def _set_priors(self):
+        if self['gprior_type'] is None:
+            return
         priors={}
         if self['gprior_type'] == 'old':
             priors['gexp']=gmix_image.priors.GPrior(A=12.25,
@@ -355,9 +358,6 @@ class Pipe(dict):
         Run the shear model though the mixmc code
         """
 
-        nwalkers=self['nwalkers']
-        burnin=self['burnin']
-        nstep=self['nstep']
 
         ares={'wrow':ares0['wrow']-ares0['row_range'][0],
               'wcol':ares0['wcol']-ares0['col_range'][0],
@@ -366,22 +366,32 @@ class Pipe(dict):
               'Icc':ares0['Icc'],
               'whyflag':ares0['whyflag']}
  
-        gprior=self.get_gprior(index, fitmodel)
-
         cen_width=self.get('cen_width',1.0)
-        nsub=self.get('object_nsub',None)
-        fitter=MixMCStandAlone(im, self['ivar'],
-                               gmix_psf, gprior, fitmodel,
-                               nwalkers=nwalkers,
-                               nstep=nstep,
-                               burnin=burnin,
-                               mca_a=self['mca_a'],
-                               iter=self.get('iter',False),
-                               draw_gprior=self['draw_gprior'],
-                               ares=ares,
-                               cen_width=cen_width,
-                               nsub=nsub,
-                               make_plots=False)
+        fitstyle=self.get('fitstyle','mcmc')
+        if fitstyle=='lm':
+            fitter=GMixFitSimple(im, self['ivar'],
+                                 gmix_psf, fitmodel,
+                                 ares,cen_width=cen_width)
+
+        else:
+            nsub=self.get('object_nsub',None)
+            gprior=self.get_gprior(index, fitmodel)
+
+            nwalkers=self['nwalkers']
+            burnin=self['burnin']
+            nstep=self['nstep']
+            fitter=MixMCStandAlone(im, self['ivar'],
+                                   gmix_psf, gprior, fitmodel,
+                                   nwalkers=nwalkers,
+                                   nstep=nstep,
+                                   burnin=burnin,
+                                   mca_a=self['mca_a'],
+                                   iter=self.get('iter',False),
+                                   draw_gprior=self['draw_gprior'],
+                                   ares=ares,
+                                   cen_width=cen_width,
+                                   nsub=nsub,
+                                   make_plots=False)
         return fitter
 
     def get_fitmodels(self):
@@ -1054,6 +1064,8 @@ class Pipe(dict):
            ]
 
         data=zeros(n, dtype=dt)
+        data['gcov']=9999
+        data['pcov']=9999
         return data
 
 class NoSegMatches(Exception):
