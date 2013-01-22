@@ -343,11 +343,14 @@ class Reader(dict):
                                    verbose=self['verbose'])
 
             if 'ccd' not in data0.dtype.names:
-                data0=self.collate_one(data0, shnum, psfnum, ccd)
+                data=self.collate_one(data0, shnum, psfnum, ccd)
+                del data0
+            else:
+                data=data0
         else:
-            data0=None
+            data=None
 
-        return data0           
+        return data           
 
     def collate_one(self, data0, shnum, psfnum, ccd):
         from esutil.numpy_util import match

@@ -37,11 +37,11 @@ parser.add_option('-n','--nbin',default=10,
                   help=('number of bins for logarithmic binning in s/n '
                         ', default %default'))
 
-parser.add_option('--s2n',default='10,200', help="s/n range, %default")
+parser.add_option('--s2n',default='10,800', help="s/n range, %default")
 parser.add_option('--Ts2n',default='2,200', help="Ts2n range, %default")
 parser.add_option('--sratio',default='1.0,10.0',
                   help='sratio range, %default')
-parser.add_option('--Tmean',default='4,20',
+parser.add_option('--Tmean',default='2,1.e6',
                   help='Tmean range, %default')
 parser.add_option('--mag',default='0,100',
                   help='mag range, %default')
@@ -180,18 +180,21 @@ def get_stats(fitters):
     st=zeros(len(fitters), dtype=dt)
 
     for i,bf in enumerate(fitters):
-        #st['s2n'][i] = bf.s2n_min
-        st['s2n'][i] = bf.avg['s2n'].mean()
-        st['m1'][i] = bf.g1fit.pars[0]
-        st['m1_err'][i] = bf.g1fit.perr[0]
-        st['c1'][i] = bf.g1fit.pars[1]
-        st['c1_err'][i] = bf.g1fit.perr[1]
+        if bf.g1fit.perr is not None:
+            #st['s2n'][i] = bf.s2n_min
+            st['s2n'][i] = bf.avg['s2n'].mean()
+            st['m1'][i] = bf.g1fit.pars[0]
+            st['m1_err'][i] = bf.g1fit.perr[0]
+            st['c1'][i] = bf.g1fit.pars[1]
+            st['c1_err'][i] = bf.g1fit.perr[1]
 
-        st['m2'][i] = bf.g2fit.pars[0]
-        st['m2_err'][i] = bf.g2fit.perr[0]
-        st['c2'][i] = bf.g2fit.pars[1]
-        st['c2_err'][i] = bf.g2fit.perr[1]
+            st['m2'][i] = bf.g2fit.pars[0]
+            st['m2_err'][i] = bf.g2fit.perr[0]
+            st['c2'][i] = bf.g2fit.pars[1]
+            st['c2_err'][i] = bf.g2fit.perr[1]
 
+    w,=where(st['s2n'] != 0)
+    st=st[w]
     return st
 
 def get_s2n_ranges(options, args):
@@ -224,8 +227,8 @@ def main():
     Ts2n_range=[float(s) for s in options.Ts2n.split(',')]
     Tmean_range=[float(s) for s in options.Tmean.split(',')]
     mag_range=[float(s) for s in options.mag.split(',')]
-    objtype=options.type
     psfnums=[float(s) for s in options.psfnums.split(',')]
+    objtype=options.type
 
     s2n_field=options.field
 
