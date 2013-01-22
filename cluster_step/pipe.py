@@ -104,7 +104,9 @@ class Pipe(dict):
         self.gpriors=gpriors
 
     def get_gprior(self, index, fitmodel):
-        if self['gprior_type']=='fits-vs-mag-gexponly':
+        if self['gprior_type']==None:
+            gprior=None
+        elif self['gprior_type']=='fits-vs-mag-gexponly':
             gprior=self.get_gprior_vs_mag(index, fitmodel)
         else:
             gprior=self.gpriors[fitmodel]
@@ -173,8 +175,12 @@ class Pipe(dict):
         cen=[self.cat['row'][index], self.cat['col'][index]]
         id=self.cat['id'][index]
 
+        padding=self.get('seg_padding',0)
+        include_all_seg=self.get('include_all_seg',True)
+
         cutout=CutoutWithSeg(self.image, self.seg, cen, id, size,
-                             padding=self['seg_padding'])
+                             include_all_seg=include_all_seg,
+                             padding=padding)
 
         return cutout
 
@@ -290,6 +296,10 @@ class Pipe(dict):
 
         out['id'][:] = self.cat['id'][wgal]
         out['simid'][:] = self.cat['simid'][wgal]
+        out['psfnum'][:] = self['psfnum']
+        out['shnum'][:] = self['shnum']
+        out['ccd'][:] = self['ccd']
+        out['mag_auto_r'][:] = self.cat['mag_auto_r'][wgal]
         out['row_range'][:] = self.ares['row_range'][wgal]
         out['col_range'][:] = self.ares['col_range'][wgal]
         out['flags'][:] = 2**16
@@ -369,9 +379,8 @@ class Pipe(dict):
         cen_width=self.get('cen_width',1.0)
         fitstyle=self.get('fitstyle','mcmc')
         if fitstyle=='lm':
-            fitter=GMixFitSimple(im, self['ivar'],
-                                 gmix_psf, fitmodel,
-                                 ares,cen_width=cen_width)
+            fitter=self.run_lm(index, im, self['ivar'], gmix_psf, fitmodel,
+                               ares,cen_width)
 
         else:
             nsub=self.get('object_nsub',None)
@@ -392,6 +401,24 @@ class Pipe(dict):
                                    cen_width=cen_width,
                                    nsub=nsub,
                                    make_plots=False)
+        return fitter
+
+    def run_lm(self, index, im, ivar, gmix_psf, fitmodel, ares, cen_width):
+        aic=9.999e9
+
+        # can be None
+        gprior=self.get_gprior(index, fitmodel)
+        gprior_like=self['gprior_like']
+        for i in xrange(4):
+            fitter0=GMixFitSimple(im, ivar,
+                                  gmix_psf, fitmodel,
+                                  ares,cen_width=cen_width,
+                                  gprior=gprior,
+                                  gprior_like=gprior_like)
+            res=fitter0.get_result()
+            if res['aic'] < aic:
+                aic=res['aic']
+                fitter=fitter0
         return fitter
 
     def get_fitmodels(self):
@@ -1018,11 +1045,13 @@ class Pipe(dict):
         e1psf,e2psf,Tpsf=gmix_psf.get_e1e2T()
         Tobj=res['Tmean']
         s2 = Tpsf/Tobj
+        sratio=sqrt(Tobj/Tpsf)
 
         out['Tpsf'][igal] = Tpsf
         out['e1psf'][igal] = e1psf
         out['e2psf'][igal] = e2psf
         out['s2'][igal] = s2
+        out['sratio'][igal] = sratio
 
         #out['pars_psf'][igal] = gmix_psf.get_pars()
 
@@ -1035,6 +1064,10 @@ class Pipe(dict):
         npars=6
         dt=[('simid','i4'),
             ('id','i4'),
+            ('psfnum','i2'),
+            ('shnum','i2'),
+            ('ccd','i2'),
+            ('mag_auto_r','f8'),
             ('row_range','f8',2),
             ('col_range','f8',2),
             ('model','S20'),
@@ -1043,6 +1076,7 @@ class Pipe(dict):
             ('e2psf','f8'),
             ('Tpsf','f8'),
             ('s2','f8'),
+            ('sratio','f8'),
             ('g','f8',2),
             ('gsens','f8',2),
             ('gcov','f8',(2,2)),
@@ -1075,13 +1109,16 @@ class NoSegMatches(Exception):
         return self.value
 
 class CutoutWithSeg:
-    def __init__(self, image, seg, cen, id, minsize, padding=0):
+    def __init__(self, image, seg, cen, id, minsize, 
+                 include_all_seg=True, padding=0):
         self.image=image
         self.padding=padding
         self.seg=seg
         self.cen=cen
         self.minsize=minsize
         self.id=id
+
+        self.include_all_seg=include_all_seg
 
         self._set_box()
         self._make_cutout()
@@ -1136,16 +1173,19 @@ class CutoutWithSeg:
 
         sh=self.image.shape
         minrow0,maxrow0,mincol0,maxcol0 = self._get_minimal_box()
-        minrow,maxrow,mincol,maxcol     = self._get_seg_box()
+        if self.include_all_seg:
+            minrow,maxrow,mincol,maxcol     = self._get_seg_box()
 
-        if minrow0 < minrow:
-            minrow = minrow0
-        if maxrow0 > maxrow:
-            maxrow=maxrow0
-        if mincol0 < mincol:
-            mincol = mincol0
-        if maxcol0 > maxcol:
-            maxcol=maxcol0
+            if minrow0 < minrow:
+                minrow = minrow0
+            if maxrow0 > maxrow:
+                maxrow=maxrow0
+            if mincol0 < mincol:
+                mincol = mincol0
+            if maxcol0 > maxcol:
+                maxcol=maxcol0
+        else:
+            minrow,maxrow,mincol,maxcol = minrow0,maxrow0,mincol0,maxcol0
 
         if minrow < 0:
             minrow=0

@@ -3,6 +3,11 @@
 
 shearnums 1-8
 psfnums 1-6
+
+this looked ok
+ python plot-shear.py -r mixmc-r17 -p 4 -s 8  --show -n 10 --sratio 1.0,20.0 --s2n 10,400
+
+internal cut at Ts2n > 2 and Tmean < 10
 """
 
 import sys
@@ -27,7 +32,7 @@ parser.add_option('-r','--run',default=None,
 parser.add_option('-s','--shnum',default=None,
                   help='The shear number, required')
 
-parser.add_option('-p','--psfnums',default=None,
+parser.add_option('-p','--psfnums',default='1,2,3,4,5,6',
                   help='restrict to these PSFs, comma separated')
 
 parser.add_option('-f','--field',default='s2n_w',
@@ -35,10 +40,15 @@ parser.add_option('-f','--field',default='s2n_w',
 
 parser.add_option('-n','--nbin',default=40,
                   help="number of logarithmic bins, default %default")
-parser.add_option('--s2n',default='10,800',
-                  help="Max s/n, %default")
-parser.add_option('--Ts2n-min',default=None,
-                  help="Minimum allowed Ts2n, %default")
+
+parser.add_option('--s2n',default='10,800', help="s/n range, %default")
+parser.add_option('--Ts2n',default='2,1.e6', help="Ts2n range, %default")
+parser.add_option('--sratio',default='1.0,10.0',
+                  help='sratio range, %default')
+parser.add_option('--Tmean',default='2,10',
+                  help='Tmean range, %default')
+parser.add_option('--mag',default='0,100',
+                  help='mag range, %default')
 
 parser.add_option('-t','--type',default=None,
                   help="limit to objects best fit by this model")
@@ -46,8 +56,6 @@ parser.add_option('-t','--type',default=None,
 parser.add_option('--show',action='store_true',
                   help="show the plot on the screen")
 
-parser.add_option('--s2',default=None,
-                  help='restrict s2 less than this value')
 
 parser.add_option('--frac',action='store_true',
                   help=("show the fraction relative to the"
@@ -71,34 +79,33 @@ class ShearPlotter(object):
         self.run=options.run
         self.shnum=int(options.shnum)
 
+        self.psfnums=[float(s) for s in options.psfnums.split(',')]
+
         self.nbin=int(options.nbin)
 
-        s2n_range=options.s2n.split(',')
-        self.s2n_range=[float(s) for s in s2n_range]
+        self.s2n_range=[float(s) for s in options.s2n.split(',')]
+        self.sratio_range=[float(s) for s in options.sratio.split(',')]
+        self.Ts2n_range=[float(s) for s in options.Ts2n.split(',')]
+        self.Tmean_range=[float(s) for s in options.Tmean.split(',')]
+        self.mag_range=[float(s) for s in options.mag.split(',')]
 
         self.objtype=options.type
         self.doshow = options.show
 
-        if self.objtype:
-            print 'selecting type:',self.objtype
-
-        self.s2_max=options.s2
-        if self.s2_max:
-            self.s2_max=float(self.s2_max)
-
         self.bin_field=options.field
 
+        reader=files.Reader(run=self.run, 
+                            objtype=self.objtype,
+                            shnums=self.shnum,
+                            psfnums=self.psfnums,
+                            s2n_range=self.s2n_range,
+                            sratio_range=self.sratio_range,
+                            Ts2n_range=self.Ts2n_range,
+                            Tmean_range=self.Tmean_range,
+                            mag_range=self.mag_range,
+                            progress=options.progress)
 
-        data=files.read_output_set(self.run, 
-                                   options.psfnums, 
-                                   self.shnum, 
-                                   objtype=self.objtype,
-                                   s2_max=self.s2_max,
-                                   progress=options.progress)
-        if options.Ts2n_min:
-            w,=where(data['Ts2n'] > float(options.Ts2n_min))
-            data=data[w]
-        self.data=data
+        self.data=reader.get_data()
         
         self.set_bindata()
         self.set_psfnums_string()
@@ -124,7 +131,7 @@ class ShearPlotter(object):
     def get_title(self):
         title=self.run
 
-
+        """
         if self.psfnums_string:
             title='%s-p%s' % (title,self.psfnums_string)
 
@@ -133,11 +140,11 @@ class ShearPlotter(object):
         if self.objtype:
             title = '%s %s' % (title,self.objtype)
 
-        if self.options.s2:
+        if self.sratio_range:
             #title = r'%s $\sigma^2_{psf}/\sigma^2_{gal} < %s$' % (title,self.options.s2)
-            sratio=sqrt(1/self.s2_max)
-            title = r'%s $\sigma_{gal}/\sigma_{psf} > %.2f$' % (title,sratio)
-
+            sr=self.sratio_range
+            title = r'%s %.2f < $\sigma_{gal}/\sigma_{psf} < %.2f$' % (title,sr[0],sr[1])
+        """
         return title
 
 
@@ -148,15 +155,16 @@ class ShearPlotter(object):
 
         bindata=self.bindata
         bin_field=self.bin_field
-        arr=FramedArray(2,1)
+        plt=FramedPlot()
         
-        arr.title=self.get_title()
+        plt.title=self.get_title()
 
-        arr.uniform_limits=1
-        arr.xlog=True
-        arr.xrange=[0.5*bindata[bin_field].min(), 1.5*bindata[bin_field].max()]
-        arr.xlabel=bin_field
-        arr.ylabel = r'$\gamma$'
+        plt.uniform_limits=1
+        plt.xlog=True
+        #plt.xrange=[0.5*bindata[bin_field].min(), 1.5*bindata[bin_field].max()]
+        plt.xrange=self.s2n_range
+        plt.xlabel=bin_field
+        plt.ylabel = r'$\gamma$'
 
         xdata=bindata[bin_field]
         xerr=bindata[bin_field+'_err']
@@ -166,25 +174,32 @@ class ShearPlotter(object):
             g2exp=zeros(xdata.size)+sh2exp[self.shnum]
             g1exp_plt=Curve(xdata, g1exp)
             g2exp_plt=Curve(xdata, g2exp)
-            arr[0,0].add(g1exp_plt)
-            arr[1,0].add(g2exp_plt)
+            plt.add(g1exp_plt)
+            plt.add(g2exp_plt)
 
 
         xerrpts1 = SymmetricErrorBarsX(xdata, bindata['g1'], xerr)
         xerrpts2 = SymmetricErrorBarsX(xdata, bindata['g2'], xerr)
 
         type='filled circle'
-        color='blue'
-        g1pts = Points(xdata, bindata['g1'], type=type, color=color)
-        g1errpts = SymmetricErrorBarsY(xdata, bindata['g1'], bindata['g1_err'], color=color)
-        g2pts = Points(xdata, bindata['g2'], type=type, color=color)
-        g2errpts = SymmetricErrorBarsY(xdata, bindata['g2'], bindata['g2_err'], color=color)
+        g1color='blue'
+        g2color='red'
+        g1pts = Points(xdata, bindata['g1'], type=type, color=g1color)
+        g1errpts = SymmetricErrorBarsY(xdata, bindata['g1'], bindata['g1_err'], color=g1color)
+        g2pts = Points(xdata, bindata['g2'], type=type, color=g2color)
+        g2errpts = SymmetricErrorBarsY(xdata, bindata['g2'], bindata['g2_err'], color=g2color)
 
-        arr[0,0].add( xerrpts1, g1pts, g1errpts )
-        arr[1,0].add( xerrpts2, g2pts, g2errpts )
+        g1pts.label=r'$\gamma_1$'
+        g2pts.label=r'$\gamma_2$'
+
+        key=biggles.PlotKey(0.9,0.5,[g1pts,g2pts],halign='right')
+
+        plt.add( xerrpts1, g1pts, g1errpts )
+        plt.add( xerrpts2, g2pts, g2errpts )
+        plt.add(key)
 
 
-        self.plt=arr
+        self.plt=plt
 
     def make_frac_plot(self):
         if self.shnum not in sh1exp:
@@ -266,8 +281,9 @@ class ShearPlotter(object):
         extra=[]
         if self.objtype:
             extra += [self.objtype]
-        if self.s2_max:
-            extra += ['s2%0.2f' % self.s2_max]
+        if self.sratio_range is not None:
+            sr=self.sratio_range
+            extra += ['srat%0.2f-%.2f' % (sr[0],sr[1])]
         extra += ['v%s' % self.bin_field]
 
         if self.options.frac:

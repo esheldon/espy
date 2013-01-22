@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import os
-from numpy import zeros, where, sqrt
+from numpy import zeros, where, sqrt, array, arange
 
 DEFAULT_VERSION='2012-10-16'
-PSFNUMS=[1,2,3,4,5,6]
-SHNUMS=[1,2,3,4,5,6,7,8]
-CCDS=range(1,62+1)
+PSFNUMS=array([1,2,3,4,5,6])
+SHNUMS=array([1,2,3,4,5,6,7,8])
+CCDS=arange(1,62+1)
 
 
 
@@ -151,7 +151,9 @@ def read_cat(**keys):
         ('mag_auto_r','f8'),('flags','i4'),('class','f4'),('simid','f4')]
     skiplines=9
 
-    print 'reading:',path
+    verbose=keys.get('verbose',True)
+    if verbose:
+        print 'reading:',path
     with recfile.Open(path,delim=' ',dtype=dt0,skiplines=skiplines) as fobj:
         #data=fobj[:]
         data0=fobj.read()
@@ -227,6 +229,157 @@ def write_fits_output(**keys):
     with fitsio.FITS(path,mode='rw',clobber=True) as fobj:
         fobj.write(data, header=header)
 
+
+class Reader(dict):
+    def __init__(self, **keys):
+        """
+        Default to reading everything
+        """
+        
+        self._check_keys(**keys)
+
+    def _check_keys(self, **keys):
+        if 'run' not in keys:
+            raise ValueError("send run=")
+
+        for k in keys:
+            self[k] = keys[k]
+
+        self['verbose']=keys.get('verbose',False)
+        self['progress']=keys.get('progress',False)
+
+        psfnums=keys.get('psfnums',None)
+        shnums=keys.get('shnums',None)
+        ccds=keys.get('ccds',None)
+
+        if psfnums is None:
+            self['psfnums']=PSFNUMS.copy()
+        else:
+            self['psfnums']=array(self['psfnums'],ndmin=1,dtype='i2')
+
+        if shnums is None:
+            self['shnums']=SHNUMS.copy()
+        else:
+            self['shnums']=array(self['shnums'],ndmin=1,dtype='i2')
+
+        if ccds is None:
+            self['ccds']=CCDS.copy()
+        else:
+            self['ccds']=array(self['ccds'],ndmin=1,dtype='i2')
+
+    def _load_data(self):
+        from esutil.numpy_util import combine_arrlist
+        ntot=len(self['shnums'])*len(self['psfnums'])*len(self['ccds'])
+
+        itot=1
+        if self['progress']:
+            from progressbar import ProgressBar
+            prog=ProgressBar(width=70, color='green')
+
+        datalist=[]
+        for shnum in self['shnums']:
+            shlist=[]
+            for psfnum in self['psfnums']:
+                for ccd in self['ccds']:
+                    if self['progress']:
+                        prog.update(frac=float(itot)/ntot)
+                        itot += 1
+
+                    data0=self.read_one(shnum,psfnum,ccd)
+                    if data0 is not None:
+                        data=self.select(data0)
+                        if data is not None:
+                            datalist.append(data)
+                    del data0
+
+        if len(datalist) == 0:
+            if self['verbose']:
+                print 'no data read or passed cuts'
+            self._data=None
+        else:
+            self._data=combine_arrlist(datalist)
+
+    def get_data(self):
+        if not hasattr(self, '_data'):
+            self._load_data()
+        return self._data
+
+    def select(self, data0):
+        from esutil.numpy_util import strmatch
+
+        logic = (data0['flags']==0) | (data0['flags']==65536)
+        if 'objtype' in self:
+            if self['objtype'] is not None:
+                logic=logic & strmatch(data0['model'],self['objtype'])
+
+        for name in ['sratio','Ts2n','s2','Tmean','mag']:
+            rname='%s_range' % name
+            if name=='mag':
+                name='mag_auto_r'
+            if rname in self:
+                r=self[rname]
+                logic=logic & ((data0[name] > r[0]) & (data0[name] < r[1]))
+
+        w,=where(logic)
+        if w.size == 0:
+            data=None
+        else:
+            data=data0[w]
+        return data
+
+    def read_one(self, shnum, psfnum, ccd):
+        fname=get_output_path(run=self['run'], 
+                              psfnum=psfnum, 
+                              shnum=shnum, 
+                              ccd=ccd, ftype='shear')
+        columns=self.get('columns',None)
+        if os.path.exists(fname):
+            data0=read_fits_output(run=self['run'], 
+                                   psfnum=psfnum, 
+                                   shnum=shnum, 
+                                   ccd=ccd, 
+                                   ftype='shear',
+                                   columns=columns, 
+                                   verbose=self['verbose'])
+
+            if 'ccd' not in data0.dtype.names:
+                data0=self.collate_one(data0, shnum, psfnum, ccd)
+        else:
+            data0=None
+
+        return data0           
+
+    def collate_one(self, data0, shnum, psfnum, ccd):
+        from esutil.numpy_util import match
+        if self['verbose']:
+            print '    collating with catalog'
+        cat=read_cat(run=self['run'],
+                     shnum=shnum,
+                     psfnum=psfnum,
+                     ccd=ccd,
+                     verbose=self['verbose'])
+
+        extra=[('mag_auto_r','f8'),
+               ('shnum','i2'),
+               ('psfnum','i2'),
+               ('ccd','i2'),
+               ('sratio','f8')]
+        dt=data0.dtype.descr + extra
+
+        data=zeros(data0.size, dtype=dt)
+        for n in data0.dtype.names:
+            data[n] = data0[n]
+
+        mcat,mshear=match(cat['id'], data0['id'])
+        if mshear.size != data0.size:
+            raise ValueError("not all matched!")
+
+        data['mag_auto_r'][mshear] = cat['mag_auto_r'][mcat]
+        data['shnum'] = shnum
+        data['psfnum'] = psfnum
+        data['ccd'] = ccd
+        data['sratio'] = sqrt(1./data0['s2'])
+        return data
 
 def read_output_set(run, psfnums, shnums, 
                     objtype=None, 

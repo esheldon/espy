@@ -3,162 +3,148 @@
     %prog [options] script1 script2 script3 ...
 """
 
-import socket
 import sys
 from sys import stderr
-import yaml
 import os
-import signal 
 import subprocess
 import time
 import datetime
 from optparse import OptionParser
 
-import wq
-
-
 parser=OptionParser(__doc__)
-parser.add_option("-p","--port", default=None, help="port for socket")
-parser.add_option("--poll", default=30,
-        help=("time between polls of wq status when we are at max allowed"
-              "jobs, default %default"))
-parser.add_option("-r","--req",default=None,help="over-ride requirements")
-parser.add_option("-n", "--njobs", default=50, 
+parser.add_option("-p","--polltime", default=30,
+        help=("time between polls of the queue status "
+              "default %default"))
+parser.add_option("-n", "--maxjobs", default=150, 
                   help="max number of jobs, default %default")
-parser.add_option("-s", "--sleep-time", default=.2, 
-                  help=("minimum time to sleep between individual submisions."
-                        "default %default"))
 parser.add_option("-f", "--force", action="store_true",
                   help="force starting of all jobs, even if a log file is present.")
 
 parser.add_option("-d", "--dryrun", action='store_true', 
                   help="dry run.  Just print number of jobs and exit.")
+parser.add_option("-q", "--queue", default=None,
+                  help="only count jobs in this queue")
 
-parser.add_option("--rand", action="store_true",help="randomize the order of files")
-
-pars={'host':wq.DEFAULT_HOST,      # Symbolic name meaning all available interfaces
-      'port':wq.DEFAULT_PORT,
-      'max_buffsize':wq.DEFAULT_MAX_BUFFSIZE}
-
-
-def socket_connect(sock, conninfo, crash_on_timeout=False):
-    # crash will only happen if timeouts have been enabled, otherwise we just
-    # wait
-    if crash_on_timeout:
-        sock.connect(conninfo)
-    else:
-        while True:
-            try:
-                sock.connect(conninfo)
-                break
-            except socket.timeout:
-                pass
+parser.add_option("--rand", action="store_true",
+                  help="randomize the order of files")
 
 
-def send_message(message, timeout=None, crash_on_timeout=False):
-    if len(message) == 0:
-        raise ValueError("message must have len > 0")
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # make sure to set timeout *before* calling connect()
-    if timeout is not None:
-        sock.settimeout(timeout)
-
-    conninfo = (pars['host'], pars['port'])
-    socket_connect(sock, conninfo, crash_on_timeout=crash_on_timeout)
-
-    rdict=None
-    try:
-        jmess=yaml.dump(message)
-
-        wq.server.socket_send(sock, jmess)
-        data = wq.server.socket_recieve(sock, pars['max_buffsize'])
-
-        sock.close()
-
-        try:
-            rdict = yaml.load(data)
-        except:
-            print 'YAML err:'
-            print data
-            sys.exit(1)
-
-        if 'error' in rdict:
-            raise RuntimeError("Error reported by server: %s" % rdict['error'])
-
-        if 'response' not in rdict:
-            raise RuntimeError("Internal error. Expected a response and got screwed.")
-
-    except:
-        es=sys.exc_info()
-        print 'caught exception type:', es[0],'details:',es[1]
-        rdict=None
-    finally:
-        sock.close()
-
-    if rdict is None:
-        sys.exit(1)
-
-    return rdict
-
-
+EXPECTED_FIELD_COUNT=11
 
 class JobLister(dict):
-    """
-    usage: wq ls [options]
-
-    print the job list to stdout.  
-    
-    If -u/--user is sent, the listing is restricted to that user/users.
-
-    If -f/--full is sent, the full job listing is given.  This is a yaml
-    document that can be read and processed to provide a customised listing.\n"""
-
-    def __init__(self, user):
+    def __init__(self, user, queue=None):
         self.user=user
-        self.execute()
-    def execute(self):
-        message={}
-        message['command'] = 'ls'
-        while True:
-            try:
-                resp = send_message(message)
-                break
-            except:
-                print >>stderr,("error listing jobs, trying "
-                                "again after 30 seconds")
-                time.sleep(30)
+        self.queue=queue
 
-        self.jobs = [r for r in resp['response'] if r['user'] == self.user]
-        self.njobs = len(self.jobs)
+    def get_job_list(self):
+        if not hasattr(self,'_jobs'):
+            self.find_jobs()
+        return self._jobs
 
-def get_log_fname(fname):
-    return fname+'.wqlog'
+    def get_njobs(self):
+        jobs=self.get_job_list()
+        return len(jobs)
 
-def submit_job(job_fname, req):
-    """
-    Put the job in the background
+    def find_jobs(self):
 
-    Use os.system because it disconnects from
-    the python script
-    """
-    log_fname = get_log_fname(job_fname)
-    command="""
-        nohup wq -p "{port}" sub {req} "{jobf}" 2>&1 > "{logf}" &
-    """.format(port=pars['port'],
-               jobf=job_fname,
-               logf=log_fname,
-               req=req)
-    os.system(command)
-   
+        qstat0=self.get_qstat()
+        qstat=self.filter(qstat0)
 
-def get_req(options):
-    if options.req:
-        req = """ -r "%s" """ % options.req
-    else:
-        req=""
+        self._jobs = qstat
 
-    return req
+    def get_qstat(self):
+        """
+        Run qstat and return lines associated with the user
+
+        This returns a list of lists
+        """
+        command='qstat -u {user}'.format(user=self.user)
+        pobj=subprocess.Popen(command, 
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              shell=True)
+        stdout_ret, stderr_ret = pobj.communicate()
+        tmp=stdout_ret.split('\n')
+
+        out=[]
+        for line in tmp:
+            out.append( qs.split() )
+
+        return out
+
+    def filter(self, qstat0):
+        """
+        remove the header and empty lines
+
+        If the queue was sent, select on it
+        """
+        qstat=[]
+        for ls in qstat0:
+            if len(ls) == EXPECTED_FIELD_COUNT:
+                if ls[1] == self.user:
+                    if self.queue is not None:
+                        if ls[2]==self.queue:
+                            qstat.append(ls)
+                    else:
+                        qstat.append(ls)
+        return qstat
+
+class Submitter(object):
+    def __init__(self, user, maxjobs, flist, polltime, 
+                 queue=None, dryrun=False, force=False):
+        self.user=user
+        self.maxjobs=maxjobs
+        self.flist=flist
+        self.polltime=int(polltime)
+
+        self.queue=queue
+        self.dryrun=dryrun
+        self.force=force
+
+
+    def submit_jobs(self):
+        print >>stderr,"submitting jobs for user: %s" % user
+        print >>stderr,"number in list:           %s" % len(flist)
+        print >>stderr,"will limit to maxjobs:    %s" % maxjobs
+
+        if self.dryrun:
+            return
+
+        nfiles=len(self.flist)
+
+        lister=JobLister(self.user, queue=self.queue)
+        diffjobs=0
+        for i,fname in enumerate(self.flist):
+            perc=100.*(i+1)/float(nfiles)
+
+            logf=self.get_log_fname(fname)
+            if not os.path.exists(logf) or self.force:
+                if diffjobs <= 0:
+                    lister.find_jobs()
+                    diffjobs = maxjobs - lister.get_njobs()
+                    while diffjobs <= 0:
+                        time.sleep(self.polltime)
+                        lister.find_jobs()
+                        diffjobs = maxjobs - lister.get_njobs()
+                    print >>stderr,("Found %s jobs  "
+                                    "diffjobs: %s" % (lister.get_njobs(),diffjobs))
+
+                date = datetime.datetime.now().strftime('%H:%M:%S')
+                print >>stderr,\
+                  "    submitting %s %s %s/%s (%i%%)" % (fname,date,i+1,nfiles,perc)
+                self.submit_job(fname)
+
+                diffjobs -= 1
+
+    def get_log_fname(self, fname):
+        dotloc=fname.find('.')
+        if dotloc==-1:
+            return fname+'.out'
+        else:
+            return fname[0:dotloc]+'.out'
+
+    def submit_job(self, fname):
+        command="qsub {fname}".format(fname=fname)
+        os.system(command)
 
 def randomize_flist(flist):
     import random
@@ -167,71 +153,28 @@ def randomize_flist(flist):
         d[random.randint(0,2000000000)] = f
     return [d[k] for k in d]
 
-def go(flist, options):
-
-    nfiles=len(flist)
-    maxjobs=int(options.njobs)
-    polltime=int(options.poll)
-    sleep_time=float(options.sleep_time)
-
-    req=get_req(options)
-    if options.rand:
-        flist=randomize_flist(flist)
-
-    user=os.environ['USER']
-
-    print >>stderr,"submitting jobs for user: %s" % user
-    print >>stderr,"number in list:           %s" % len(flist)
-    print >>stderr,"will limit to maxjobs:    %s" % maxjobs
-    if options.dryrun:
-        return
-
-    diffjobs=0
-    for i,fname in enumerate(flist):
-        perc=100.*(i+1)/float(nfiles)
-
-        logf=get_log_fname(fname)
-        if not os.path.exists(logf) or options.force:
-            if diffjobs <= 0:
-                lister=JobLister(user)
-                diffjobs = maxjobs - lister.njobs
-                while diffjobs <= 0:
-                    time.sleep(polltime)
-                    lister=JobLister(user)
-                    diffjobs = maxjobs - lister.njobs
-                print >>stderr,("Found %s jobs  "
-                                "diffjobs: %s" % (lister.njobs,diffjobs))
-
-            date = datetime.datetime.now().strftime('%H:%M:%S')
-            print >>stderr,\
-              "    submitting %s %s %s/%s (%i%%)" % (fname,date,i+1,nfiles,perc)
-            submit_job(fname,req)
-
-            diffjobs -= 1
-
-            # this helps when the file system is slow
-            os.system('wq &> /dev/null')
-
-            # minimum time in case above is fast
-            time.sleep(sleep_time)
-
 
 def main():
-    """
-    Just to provide a clean exit when we get keyboard interrupts
-    """
-
     try:
+        user=os.environ['USER']
         options, flist = parser.parse_args(sys.argv[1:])
 
         if len(flist) == 0:
             parser.print_help()
             sys.exit(1)
 
-        if options.port is not None:
-            pars['port'] = int(options.port)
+        if options.rand:
+            flist=randomize_flist(flist)
 
-        go(flist, options)
+        submitter=Submitter(user, 
+                            int(options.maxjobs), 
+                            flist, 
+                            int(options.polltime),
+                            dryrun=options.dryrun, 
+                            force=options.force,
+                            queue=options.queue)
+        submitter.submit_jobs()
+
     except KeyboardInterrupt:
         sys.exit(1)
 

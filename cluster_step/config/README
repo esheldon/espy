@@ -1,6 +1,17 @@
 todo
 
-- try LM PSF fitting (psf1 shear4)
+- try cutting mag to SDSS vs. hst
+
+- try LM PSF fitting (psf4 shear4)
+    - r15 looks better in some ways.  But still biased high at high s/n 
+        also very biased in the shear component that should be zero
+            - try one gauss?  Try getting best fit from different
+            random starts?
+    - r16 gmix1
+        looks almost the same
+    - r17
+        don't use full seg region
+
 - double walkers (psf1 shear4)
 - non-linear fitting at high S/N?  Tried it
     before and it sucked
@@ -74,3 +85,26 @@ mixmc-r11
     - prior vs mag but more bins in mag
 mixmc-r12
     - using coellip 2 gauss from gmix fit for psf
+
+mixmc-r13
+    - do admom with sub-pixel and then render psf at the correct pixel gmix2
+      psf.  Looks about the same
+mixmc-r14:
+    - nwalkers = 40
+
+mixmc-r15
+    - lm fitter, gmix2 psf
+mixmc-r16
+    - lm fitter, gmix1 psf
+    - running again with 4 random tries per
+        - made little difference
+    - same as above but drawing from prior
+
+mixmc-r17
+    - don't grow out beyond minimal box
+        - next step will be to actually trim where
+            the model is < nsigma*skysig and rerun
+
+mixmc-r18
+    - tried using prior in likelihood; the shear was
+    biased very *high*

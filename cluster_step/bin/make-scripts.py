@@ -18,20 +18,24 @@ parser.add_option('--run-admom',action='store_true',
                   help="Force a re-run of adaptive moments")
 parser.add_option('--run-psf',action='store_true',
                   help="Force a re-run of psf")
+parser.add_option('--vers',default='work',
+                  help="version for espy and gmix image")
 
 parser.add_option('--pbs1',action='store_true',
                   help="instead of a script do a pbs script for each ccd")
 parser.add_option('--walltime1',default='8:00:00',
                   help="walltime for pbs1")
+parser.add_option('--nobuffer',action='store_true',
+                  help="run with python -u")
 
 # don't need to source bashrc because pbs will load environment
 _template="""#!/bin/bash
-module unload espy && module load espy/work
-module unload gmix_image && module load gmix_image/work
+module unload espy && module load espy/%(vers)s
+module unload gmix_image && module load gmix_image/%(vers)s
 
 logfile="%(logfile)s"
 echo "host: `hostname`" > "$logfile"
-python -u $ESPY_DIR/cluster_step/bin/%(cmd)s %(run)s %(psfnum)s %(shnum)s %(ccd)s 2>&1 > "$logfile"
+%(python)s $ESPY_DIR/cluster_step/bin/%(cmd)s %(run)s %(psfnum)s %(shnum)s %(ccd)s 2>&1 > "$logfile"
 """
 
 
@@ -47,12 +51,12 @@ if [[ "Y${PBS_O_WORKDIR}" != "Y" ]]; then
     cd $PBS_O_WORKDIR
 fi
 
-module unload espy && module load espy/work
-module unload gmix_image && module load gmix_image/work
+module unload espy && module load espy/%(vers)s
+module unload gmix_image && module load gmix_image/%(vers)s
 
 logfile="%(base)s.out"
 echo "host: `hostname`" > "$logfile"
-python -u $ESPY_DIR/cluster_step/bin/%(cmd)s %(run)s %(psfnum)s %(shnum)s %(ccd)s 2>&1 > "$logfile"
+%(python)s $ESPY_DIR/cluster_step/bin/%(cmd)s %(run)s %(psfnum)s %(shnum)s %(ccd)s 2>&1 > "$logfile"
 """
 
 
@@ -140,15 +144,21 @@ def write_pbs(run,ftype,psfnum,shnum):
         fobj.write(text)
 
 
-def write_script(run,ftype,psfnum,shnum,ccd,cmd):
+def write_script(run,ftype,psfnum,shnum,ccd,cmd,vers,nobuffer):
     sfile=files.get_script_path(run=run,psfnum=psfnum,shnum=shnum,
                                 ccd=ccd,ftype=ftype)
 
     logfile=sfile.replace('.sh','.out')
 
+    if nobuffer:
+        python='python -u'
+    else:
+        python='python'
     print 'writing:',sfile
     with open(sfile,'w') as fobj:
-        d={'cmd':cmd,
+        d={'python':python,
+           'cmd':cmd,
+           'vers':vers,
            'run':run, 
            'psfnum':psfnum,
            'shnum':shnum,
@@ -160,16 +170,23 @@ def write_script(run,ftype,psfnum,shnum,ccd,cmd):
 
     os.system('chmod u+x "%s"' % sfile)
 
-def write_pbs1(run,ftype,psfnum,shnum,ccd,cmd,walltime):
+def write_pbs1(run,ftype,psfnum,shnum,ccd,cmd,walltime,vers,nobuffer):
     sfile=files.get_script_path(run=run,psfnum=psfnum,shnum=shnum,
                                 ccd=ccd,ftype=ftype)
     pbsfile=sfile.replace(".sh",".pbs")
 
     base=os.path.basename(pbsfile).replace('.pbs','')
 
+    if nobuffer:
+        python='python -u'
+    else:
+        python='python'
+
     print 'writing:',pbsfile
     with open(pbsfile,'w') as fobj:
-        d={'cmd':cmd,
+        d={'python':python,
+           'cmd':cmd,
+           'vers':vers,
            'run':run, 
            'psfnum':psfnum,
            'shnum':shnum,
@@ -210,8 +227,10 @@ def main():
             for ccd in files.CCDS:
                 if options.pbs1:
                     write_pbs1(run,ftype,psfnum,shnum,ccd,cmd,
-                               options.walltime1)
+                               options.walltime1,options.vers,
+                               options.nobuffer)
                 else:
-                    write_script(run,ftype,psfnum,shnum,ccd,cmd)
+                    write_script(run,ftype,psfnum,shnum,ccd,cmd,options.vers,
+                                 options.nobuffer)
 
 main()
