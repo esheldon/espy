@@ -1,4 +1,4 @@
-run: mixmc-rtest
+run: mixmc-rtest2
 version: "2012-10-16"
 
 star_minmag: 18
@@ -8,8 +8,8 @@ cutout_size: 28
 seg_padding: 5
 
 psf_models: ['admom']
-#psf_admom_nsub: 16
-#object_nsub: 16
+psf_admom_nsub: 16
+object_nsub: 8
 
 em_maxiter: 10000
 em_tol: 1.0e-6

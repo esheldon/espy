@@ -1,4 +1,4 @@
-run: mixmc-rtest
+run: mixmc-r14
 version: "2012-10-16"
 
 star_minmag: 18
@@ -7,10 +7,7 @@ star_maxmag: 20
 cutout_size: 28
 seg_padding: 5
 
-psf_models: ['admom']
-#psf_admom_nsub: 16
-#object_nsub: 16
-
+psf_models: ['gmix2']
 em_maxiter: 10000
 em_tol: 1.0e-6
 
@@ -19,7 +16,7 @@ psf_interp: 'median'
 
 # step and burnin are *per walker*
 # 40 guarantees convergence but 20 works as well for the most part
-nwalkers: 20
+nwalkers: 40
 nstep: 200
 burnin: 400
 
@@ -27,19 +24,17 @@ iter: true
 mca_a: 3.0 # about 35% acceptance
 
 fitmodel: ['gexp','gdev']
-#fitmodel: ['gexp']
 
-shear_s2n_min: 100
+shear_s2n_min: 10
 
-#gprior_type: 'fits-vs-mag-gexponly'
-gprior_type: 'old'
+gprior_type: 'fits-vs-mag-gexponly'
 
 
 # draw the g1,g2 starting points from the gprior
 draw_gprior: true
 
 # for filling areas not in object with noise
-seed: 3117
+seed: 5050
 
 comment: |
     gmix2 psf

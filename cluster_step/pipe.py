@@ -2,15 +2,16 @@ import os
 from sys import stdout, stderr
 import pprint
 from math import ceil
-from numpy import where, sqrt, random, zeros, arange, median
+from numpy import where, sqrt, random, zeros, arange, median, random
 
 from . import files
 from . import prior
 
 import gmix_image
-from gmix_image.gmix import GMix
+from gmix_image.gmix import GMix, GMixCoellip
 from gmix_image.gmix_mcmc import MixMCStandAlone, MixMCPSF
 from gmix_image.gmix_em import GMixEMPSF
+from gmix_image.gmix_fit import GMixFitSimple
 
 CLUSTERSTEP_GAL=1
 CLUSTERSTEP_STAR=2
@@ -65,6 +66,8 @@ class Pipe(dict):
                              "shnum=, ccd=")
 
     def _set_priors(self):
+        if self['gprior_type'] is None:
+            return
         priors={}
         if self['gprior_type'] == 'old':
             priors['gexp']=gmix_image.priors.GPrior(A=12.25,
@@ -101,7 +104,9 @@ class Pipe(dict):
         self.gpriors=gpriors
 
     def get_gprior(self, index, fitmodel):
-        if self['gprior_type']=='fits-vs-mag-gexponly':
+        if self['gprior_type']==None:
+            gprior=None
+        elif self['gprior_type']=='fits-vs-mag-gexponly':
             gprior=self.get_gprior_vs_mag(index, fitmodel)
         else:
             gprior=self.gpriors[fitmodel]
@@ -170,8 +175,12 @@ class Pipe(dict):
         cen=[self.cat['row'][index], self.cat['col'][index]]
         id=self.cat['id'][index]
 
+        padding=self.get('seg_padding',0)
+        include_all_seg=self.get('include_all_seg',True)
+
         cutout=CutoutWithSeg(self.image, self.seg, cen, id, size,
-                             padding=self['seg_padding'])
+                             include_all_seg=include_all_seg,
+                             padding=padding)
 
         return cutout
 
@@ -269,7 +278,12 @@ class Pipe(dict):
         """
         if not hasattr(self,'ares') or run_admom:
             self.run_admom()
-            self.plot_admom_sizemag()
+            try:
+                self.plot_admom_sizemag()
+            except:
+                # some systems at nersc don't even have X installed
+                # and biggles always trys to load it
+                print 'failed to make sizemag plots'
         if not hasattr(self,'psfres') or run_psf:
             self.run_psf()
 
@@ -282,8 +296,13 @@ class Pipe(dict):
 
         out['id'][:] = self.cat['id'][wgal]
         out['simid'][:] = self.cat['simid'][wgal]
+        out['psfnum'][:] = self['psfnum']
+        out['shnum'][:] = self['shnum']
+        out['ccd'][:] = self['ccd']
+        out['mag_auto_r'][:] = self.cat['mag_auto_r'][wgal]
         out['row_range'][:] = self.ares['row_range'][wgal]
         out['col_range'][:] = self.ares['col_range'][wgal]
+        out['flags'][:] = 2**16
 
         for igal in xrange(wgal.size):
             from esutil.numpy_util import aprint
@@ -296,15 +315,24 @@ class Pipe(dict):
 
             im=c.subimage
 
-            gmix_psf=self.get_gmix_psf()
+            ares0=ares[index].copy()
+            if self['psf_interp']=='median-render':
+                gmix_psf=self.fit_gmix_psf_rendered(im.shape, 
+                                                    ares0['wrow']-ares0['row_range'][0],
+                                                    ares0['wcol']-ares0['col_range'][0])
 
-            res=self.fit_shear_models(index, im, ares[index].copy(), gmix_psf)
+            else:
+                gmix_psf=self.get_gmix_psf()
+
+            if gmix_psf is None:
+                # flags will be non-zero
+                continue
+
+            res=self.fit_shear_models(index, im, ares0, gmix_psf)
             self.copy_shear_results(out, res, gmix_psf, igal)
 
         self.shear_res=out
-        files.write_fits_output(data=out,
-                                ftype='shear',
-                                **self)
+        files.write_fits_output(data=out, ftype='shear', **self)
 
 
     def fit_shear_models(self, index, im, ares, gmix_psf):
@@ -317,12 +345,19 @@ class Pipe(dict):
             fitter=self.run_shear_model(index, im, ares, gmix_psf, fitmodel)
 
             res0 = fitter.get_result()
-            if len(fitmodels) > 1:
-                print '  model: %s prob: %.6f aic: %.6f bic: %.6f Ts/n: %.6f ' % \
+            print '  model: %s prob: %.6f aic: %.6f bic: %.6f Ts/n: %.6f ' % \
                     (fitmodel,res0['fit_prob'],res0['aic'],res0['bic'],res0['Ts2n'])
             if res0['aic'] < aic:
                 res=res0
                 aic = res0['aic']
+
+        if False:
+            import images
+            images.multiview(im*0.01,nonlinear=0.4)
+            key=raw_input('hit a key: ')
+            if key=='q':
+                stop
+
 
         if len(fitmodels) > 1:
             print '    best model:',res['model']
@@ -333,9 +368,6 @@ class Pipe(dict):
         Run the shear model though the mixmc code
         """
 
-        nwalkers=self['nwalkers']
-        burnin=self['burnin']
-        nstep=self['nstep']
 
         ares={'wrow':ares0['wrow']-ares0['row_range'][0],
               'wcol':ares0['wcol']-ares0['col_range'][0],
@@ -344,18 +376,49 @@ class Pipe(dict):
               'Icc':ares0['Icc'],
               'whyflag':ares0['whyflag']}
  
-        gprior=self.get_gprior(index, fitmodel)
+        cen_width=self.get('cen_width',1.0)
+        fitstyle=self.get('fitstyle','mcmc')
+        if fitstyle=='lm':
+            fitter=self.run_lm(index, im, self['ivar'], gmix_psf, fitmodel,
+                               ares,cen_width)
 
-        fitter=MixMCStandAlone(im, self['ivar'],
-                               gmix_psf, gprior, fitmodel,
-                               nwalkers=nwalkers,
-                               nstep=nstep,
-                               burnin=burnin,
-                               mca_a=self['mca_a'],
-                               iter=self.get('iter',False),
-                               draw_gprior=self['draw_gprior'],
-                               ares=ares,
-                               make_plots=False)
+        else:
+            nsub=self.get('object_nsub',None)
+            gprior=self.get_gprior(index, fitmodel)
+
+            nwalkers=self['nwalkers']
+            burnin=self['burnin']
+            nstep=self['nstep']
+            fitter=MixMCStandAlone(im, self['ivar'],
+                                   gmix_psf, gprior, fitmodel,
+                                   nwalkers=nwalkers,
+                                   nstep=nstep,
+                                   burnin=burnin,
+                                   mca_a=self['mca_a'],
+                                   iter=self.get('iter',False),
+                                   draw_gprior=self['draw_gprior'],
+                                   ares=ares,
+                                   cen_width=cen_width,
+                                   nsub=nsub,
+                                   make_plots=False)
+        return fitter
+
+    def run_lm(self, index, im, ivar, gmix_psf, fitmodel, ares, cen_width):
+        aic=9.999e9
+
+        # can be None
+        gprior=self.get_gprior(index, fitmodel)
+        gprior_like=self['gprior_like']
+        for i in xrange(4):
+            fitter0=GMixFitSimple(im, ivar,
+                                  gmix_psf, fitmodel,
+                                  ares,cen_width=cen_width,
+                                  gprior=gprior,
+                                  gprior_like=gprior_like)
+            res=fitter0.get_result()
+            if res['aic'] < aic:
+                aic=res['aic']
+                fitter=fitter0
         return fitter
 
     def get_fitmodels(self):
@@ -367,12 +430,65 @@ class Pipe(dict):
     def get_gmix_psf(self):
         """
         Get a psf model
+
+        ares is not necessarily used
         """
         if self['psf_interp']=='random':
             return self.get_random_gmix_psf()
-        elif self['psf_interp']in ['mean','median']:
+        elif self['psf_interp'] in ['mean','median']:
             return self.get_mean_gmix_psf()
+        else:
+            raise ValueError("bad psf interp: '%s'" % self['psf_interp'])
 
+    def fit_gmix_psf_rendered(self, shape, row, col):
+        im=self.render_psf(shape, row, col)
+        im *= (10000./im.sum())
+
+        skysig=1.0
+        im += skysig*(random.randn(im.size).reshape(im.shape))
+
+        ngauss=self.get_model_ngauss(self['psf_render_fit_model'])
+
+        print '  fitting rendered psf'
+        ntry=1
+        while ntry <= 20:
+            res=gmix_image.gmix_fit.quick_fit_psf_coellip(im, skysig, ngauss,
+                                                          cen=[row,col])
+            if res is None:
+                # admom failed
+                continue
+            if res.flags==0:
+                break
+            ntry += 1
+
+        if res is None or res.flags != 0:
+            print "could not fit psf"
+            return None
+
+        return res.get_gmix()
+
+
+    def render_psf(self, shape, row, col):
+        """
+        Render the mean model at the indicated position
+        """
+        import images
+        mpsf_gmix=self.get_mean_gmix_psf()
+        mpsf_gmix.set_cen(row,col)
+
+
+        nsub=self['psf_admom_nsub']
+        print '  rendering psf at:',row,col,'nsub:',nsub
+        im=gmix_image.render.gmix2image(mpsf_gmix, 
+                                        shape,
+                                        nsub=nsub)
+        #print mpsf_gmix
+        #print 'im sum:',im.sum()
+        #print im.max(),im.min()
+        #print shape
+        #images.multiview(im)
+        #stop
+        return im
     def _set_best_psf_model(self):
         if self['psf_models'][0]=='admom':
             self._best_psf_model='admom'
@@ -418,7 +534,7 @@ class Pipe(dict):
             allpars=self.psfres[model+'_pars'][wpsf]
 
             for i in xrange(len(pars)):
-                if self['psf_interp']=='median':
+                if self['psf_interp'] in ['median','median-render']:
                     pars[i]=median(allpars[:,i])
                 else:
                     pars[i]=allpars[:,i].mean()
@@ -430,6 +546,8 @@ class Pipe(dict):
         if model=='gturb':
             # note the MixMCPSF uses e1,e2 not g1,g2
             gmix=GMix(pars, model='gturb')
+        elif model in ['gmix1','gmix2','gmix3']:
+            gmix=GMixCoellip(pars)
         else:
             # assum pars are full [pi,ri,ci,irri,irci,icci,...]
             gmix=GMix(pars)
@@ -481,6 +599,7 @@ class Pipe(dict):
                 Icc=ares['Icc'][index]
                 whyflag=ares['whyflag'][index]
                 aresi = {'wrow':wrow,'wcol':wcol,'Irr':Irr,'Irc':Irc,'Icc':Icc,
+                         'e1':ares['e1'][index],'e2':ares['e2'][index],
                          'whyflag':whyflag}
 
                 c=self.get_zerod_cutout(index)
@@ -489,6 +608,8 @@ class Pipe(dict):
 
                 if model in ['em1','em2','em2cocen']:
                     self.run_em_psf(im, aresi, model, out, ipsf)
+                elif model in ['gmix1','gmix2','gmix3']:
+                    self.run_gmix_fit_psf(im, aresi, model, out, ipsf)
                 elif model=='gturb':
                     self.run_turb_psf(im, aresi, out, ipsf)
                 else:
@@ -541,17 +662,26 @@ class Pipe(dict):
 
         self._set_psfres(psfres)
 
-    def run_em_psf(self, im, aresi, model, out, ipsf):
-        cocenter=False
-        if model=='em1':
+    def get_model_ngauss(self, model):
+        if model in ['em1','gmix1']:
             ngauss=1
-        elif model=='em2':
+        elif model in ['em2','gmix2']:
             ngauss=2
         elif model=='em2cocen':
             ngauss=2
-            cocenter=True
+        elif model in ['em3','gmix3']:
+            ngauss=3
         else:
             raise ValueError("bad psf model: '%s'" % model)
+
+        return ngauss
+
+    def run_em_psf(self, im, aresi, model, out, ipsf):
+        ngauss=self.get_model_ngauss(model)
+        if 'cocen' in model:
+            cocenter=True
+        else:
+            cocenter=False
         gpsf=GMixEMPSF(im, self['ivar'], ngauss,
                        ares=aresi, 
                        maxiter=self['em_maxiter'], 
@@ -582,6 +712,42 @@ class Pipe(dict):
                 key=raw_input("hit a key (q to quit): ")
                 if key=='q':
                     stop
+
+    def run_gmix_fit_psf(self, im, aresi, model, out, ipsf):
+        cocenter=False
+        if model=='gmix1':
+            ngauss=1
+        elif model=='gmix2':
+            ngauss=2
+        elif model=='gmix3':
+            ngauss=3
+        else:
+            raise ValueError("bad psf model: '%s'" % model)
+
+        ntry=1
+        while ntry <= 4:
+            res=gmix_image.gmix_fit.quick_fit_psf_coellip(im, self['skysig'], 
+                                                          ngauss, ares=aresi)
+            if res is None:
+                # admom failed
+                continue
+            if res.flags==0:
+                break
+            ntry += 1
+
+        out[model+'_flags'][ipsf] = res.flags
+        out[model+'_numiter'][ipsf] = res.numiter
+        out[model+'_ntry'][ipsf] = ntry
+
+        out[model+'_pars'][ipsf,:] = res.pars
+        if res.flags==0:
+            out[model+'_perr'][ipsf,:] = res.perr
+            out[model+'_pcov'][ipsf,:,:] = res.pcov
+            stats=res.get_stats()
+            out[model+'_prob'][ipsf] = stats['fit_prob']
+            out[model+'_aic'][ipsf] = stats['aic']
+            out[model+'_bic'][ipsf] = stats['bic']
+
 
     def run_turb_psf(self,im, aresi, out, ipsf):
 
@@ -618,10 +784,11 @@ class Pipe(dict):
             im=c.subimage
             cen=c.subcen
 
+            nsub=self.get('psf_admom_nsub',1)
             res = admom.admom(im, cen[0], cen[1],
                               sigsky=self['skysig'],
                               guess=4.0,
-                              nsub=1)
+                              nsub=nsub)
 
             if res['whyflag'] != 0:
                 #print res['whyflag'],'%.16g %.16g' % (cen[0]-res['wrow'], cen[1]-res['wcol'])
@@ -811,6 +978,7 @@ class Pipe(dict):
 
     def get_psf_struct(self, n):
         model_npars={'em1':6,'em2':2*6,'em2cocen':2*6,
+                     'gmix1':6, 'gmix2':2*2+4,'gmix3':2*3+4,
                      'gturb':6,'admom':6}
         dt= [('simid','i4'),
              ('id','i4'),
@@ -839,6 +1007,11 @@ class Pipe(dict):
                         dt += [(model+'_'+dti[0], dti[1], dti[2])]
                     else:
                         dt += [(model+'_'+dti[0], dti[1])]
+                if 'em' in model:
+                    dt += [(model+'_fdiff','f8')]
+                if 'gmix' in model:
+                    dt += [(model+'_perr','f8',npars),
+                           (model+'_pcov','f8',(npars,npars))]
 
         data=zeros(n, dtype=dt)
 
@@ -849,6 +1022,14 @@ class Pipe(dict):
                 data[model+'_pars']=-9999.
                 data[model+'_aic'] = 1.e9
                 data[model+'_bic'] = 1.e9
+            elif model in ['gmix1','gmix2','gmix3']:
+                data[model+'_ntry']=9999
+                data[model+'_pars']=-9999.
+                data[model+'_perr']=9999.
+                data[model+'_pcov']=9999.
+                data[model+'_aic'] = 1.e9
+                data[model+'_bic'] = 1.e9
+
             elif model=='gturb':
                 data['gturb_aic'] = 1.e9
                 data['gturb_bic'] = 1.e9
@@ -864,11 +1045,13 @@ class Pipe(dict):
         e1psf,e2psf,Tpsf=gmix_psf.get_e1e2T()
         Tobj=res['Tmean']
         s2 = Tpsf/Tobj
+        sratio=sqrt(Tobj/Tpsf)
 
         out['Tpsf'][igal] = Tpsf
         out['e1psf'][igal] = e1psf
         out['e2psf'][igal] = e2psf
         out['s2'][igal] = s2
+        out['sratio'][igal] = sratio
 
         #out['pars_psf'][igal] = gmix_psf.get_pars()
 
@@ -881,6 +1064,10 @@ class Pipe(dict):
         npars=6
         dt=[('simid','i4'),
             ('id','i4'),
+            ('psfnum','i2'),
+            ('shnum','i2'),
+            ('ccd','i2'),
+            ('mag_auto_r','f8'),
             ('row_range','f8',2),
             ('col_range','f8',2),
             ('model','S20'),
@@ -889,6 +1076,7 @@ class Pipe(dict):
             ('e2psf','f8'),
             ('Tpsf','f8'),
             ('s2','f8'),
+            ('sratio','f8'),
             ('g','f8',2),
             ('gsens','f8',2),
             ('gcov','f8',(2,2)),
@@ -910,6 +1098,8 @@ class Pipe(dict):
            ]
 
         data=zeros(n, dtype=dt)
+        data['gcov']=9999
+        data['pcov']=9999
         return data
 
 class NoSegMatches(Exception):
@@ -919,13 +1109,16 @@ class NoSegMatches(Exception):
         return self.value
 
 class CutoutWithSeg:
-    def __init__(self, image, seg, cen, id, minsize, padding=0):
+    def __init__(self, image, seg, cen, id, minsize, 
+                 include_all_seg=True, padding=0):
         self.image=image
         self.padding=padding
         self.seg=seg
         self.cen=cen
         self.minsize=minsize
         self.id=id
+
+        self.include_all_seg=include_all_seg
 
         self._set_box()
         self._make_cutout()
@@ -980,16 +1173,19 @@ class CutoutWithSeg:
 
         sh=self.image.shape
         minrow0,maxrow0,mincol0,maxcol0 = self._get_minimal_box()
-        minrow,maxrow,mincol,maxcol     = self._get_seg_box()
+        if self.include_all_seg:
+            minrow,maxrow,mincol,maxcol     = self._get_seg_box()
 
-        if minrow0 < minrow:
-            minrow = minrow0
-        if maxrow0 > maxrow:
-            maxrow=maxrow0
-        if mincol0 < mincol:
-            mincol = mincol0
-        if maxcol0 > maxcol:
-            maxcol=maxcol0
+            if minrow0 < minrow:
+                minrow = minrow0
+            if maxrow0 > maxrow:
+                maxrow=maxrow0
+            if mincol0 < mincol:
+                mincol = mincol0
+            if maxcol0 > maxcol:
+                maxcol=maxcol0
+        else:
+            minrow,maxrow,mincol,maxcol = minrow0,maxrow0,mincol0,maxcol0
 
         if minrow < 0:
             minrow=0
