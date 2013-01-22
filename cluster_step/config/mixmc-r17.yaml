@@ -1,0 +1,30 @@
+run: mixmc-r17
+version: "2012-10-16"
+
+star_minmag: 18
+star_maxmag: 20
+
+cutout_size: 28
+include_all_seg: false
+
+psf_models: ['gmix1']
+
+# should be 'random', 'mean', 'median'
+psf_interp: 'median'
+
+fitstyle: 'lm'
+fitmodel: ['gexp','gdev']
+
+shear_s2n_min: 10
+
+# draw from this
+gprior_type: 'fits-vs-mag-gexponly'
+
+# false means just draw from prior
+gprior_like: false
+
+# for filling areas not in object with noise
+seed: 9824
+
+comment: |
+    do not use all seg.  lm fitter, gmix1 psf
