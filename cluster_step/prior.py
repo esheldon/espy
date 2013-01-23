@@ -2,6 +2,8 @@ import numpy
 from numpy import diag, where, cos, sin, exp, sqrt, zeros, random
 from math import pi
 
+from esutil.random import srandu
+
 class GPrior(object):
     """
     This is the base class.  You need to over-ride a few of
@@ -272,7 +274,7 @@ class GPriorExpFitter:
         self.Aprior=Aprior
         self.Awidth=Awidth
 
-    def __call__(self, pars):
+    def get_ydiff(self, pars):
         w,=where(pars < 0)
         if w.size > 0:
             return zeros(self.xvals.size) + numpy.inf
@@ -291,6 +293,13 @@ class GPriorExpFitter:
         ydiff_tot[-1] = (self.Aprior-pars[0])/self.Awidth
         return ydiff_tot
 
+    def get_lnprob(self, pars):
+        ydiff=self.get_ydiff(pars)
+        lnprob = -0.5*(ydiff**2).sum()
+
+        return lnprob
+
+
 
 class GPriorDevFitter:
     def __init__(self, xvals, yvals):
@@ -308,6 +317,76 @@ class GPriorDevFitter:
         model=gprior1d_dev_vec(pars, self.xvals)
         return model-self.yvals
 
+
+def fit_gprior_exp_mcmc(xdata, ydata, a=0.25, g0=0.1, gmax=0.87):
+    """
+    Input is the histogram data, should be close to
+    normalized
+    """
+    from scipy.optimize import leastsq
+    import mcmc
+    nwalkers=200
+    burnin=100
+    nstep=100
+
+    print 'fitting exp'
+
+    A=ydata.sum()*(xdata[1]-xdata[0])
+
+    pcen=[A,a,g0,gmax]
+    npars=4
+    guess=zeros( (nwalkers,npars) )
+    guess[:,0] = pcen[0]*(1.+0.1*srandu(nwalkers))
+    guess[:,1] = pcen[1]*(1.+0.1*srandu(nwalkers))
+    guess[:,2] = pcen[2]*(1.+0.1*srandu(nwalkers))
+    guess[:,3] = pcen[3]*(1.+0.1*srandu(nwalkers))
+
+    gfitter=GPriorExpFitter(xdata, ydata, Aprior=A, Awidth=1.0)
+
+    print 'pcen:',pcen
+
+    import emcee
+    sampler = emcee.EnsembleSampler(nwalkers, 
+                                    npars,
+                                    gfitter.get_lnprob,
+                                    a=3)
+
+    pos, prob, state = sampler.run_mcmc(guess, burnin)
+    sampler.reset()
+    pos, prob, state = sampler.run_mcmc(pos, nstep)
+
+    trials  = sampler.flatchain
+
+    pars,pcov=mcmc.extract_stats(trials)
+
+    dof=xdata.size-pars.size
+
+    d=diag(pcov)
+    perr = sqrt(d)
+
+    res={'A':pars[0],
+         'A_err':perr[0],
+         'a':pars[1],
+         'a_err':perr[1],
+         'g0':pars[2],
+         'g0_err':perr[2],
+         'gmax': pars[3],
+         'gmax_err':perr[3],
+         'pars':pars,
+         'pcov':pcov,
+         'perr':perr}
+
+
+    fmt="""
+A:    %(A).6g +/- %(A_err).6g
+a:    %(a).6g +/- %(a_err).6g
+g0:   %(g0).6g +/- %(g0_err).6g
+gmax: %(gmax).6g +/- %(gmax_err).6g
+    """.strip()
+
+    print fmt % res
+
+    return res
 
 
 
@@ -330,7 +409,7 @@ def fit_gprior_exp(xdata, ydata, a=0.25, g0=0.1, gmax=0.87, fix_gmax=False):
         gfitter=GPriorExpFitter(xdata, ydata, Aprior=A, Awidth=1.0)
 
     print 'pstart:',pstart
-    res = leastsq(gfitter, pstart, full_output=1)
+    res = leastsq(gfitter.get_ydiff, pstart, full_output=1)
 
     pars, pcov0, infodict, errmsg, ier = res
 
@@ -347,7 +426,7 @@ def fit_gprior_exp(xdata, ydata, a=0.25, g0=0.1, gmax=0.87, fix_gmax=False):
 
     dof=xdata.size-pars.size
 
-    ydiff=gfitter(pars)
+    ydiff=gfitter.get_ydiff(pars)
     s_sq = (ydiff**2).sum()/dof
     pcov = pcov0 * s_sq 
 

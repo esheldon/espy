@@ -32,12 +32,55 @@ def get_prior_dir(**keys):
 def get_prior_path(**keys):
     dir=get_prior_dir(**keys)
     objtype=keys['type']
-    name='pofe-fits-%s.fits' % objtype
+    old=keys.get('old',False)
+    if old:
+        name='pofe-fits-%s-old.fits' % objtype
+    else:
+        name='pofe-fits-%s.fits' % objtype
     return os.path.join(dir, name)
 def read_prior(**keys):
     import fitsio
     path=get_prior_path(**keys)
     return fitsio.read(path)
+
+def read_prior_original(**keys):
+    from esutil import recfile
+
+    dir=get_prior_dir()
+    old=keys.get('old',False)
+
+    if old:
+        name='pe_dist.dat'
+        # julia writes integers as floating format
+        dt0=[('chip','f8'),
+             ('simid','f8'),
+             ('mag','f8'),
+             ('ellipb','f8'),
+             ('phib','f8'),
+             ('g','f8',2)]
+        skiplines=7
+    else:
+        # julia writes integers as floating format
+        dt0=[('chip','f8'),
+             ('simid','f8'),
+             ('mag','f8'),
+             ('ellipb','f8'),
+             ('phib','f8'),
+             ('g','f8',2),
+             ('n','f8'),
+             ('scale','f8'),
+             ('snr','f8')]
+
+        name='pe_dist_snr.dat'
+        skiplines=10
+
+    path=os.path.join(dir,name)
+
+    with recfile.Recfile(path, mode='r', delim=' ', dtype=dt0, skiplines=skiplines) as fobj:
+        data=fobj[:]
+
+    return data
+
 
 def get_input_path(**keys):
     """

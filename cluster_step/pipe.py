@@ -76,7 +76,9 @@ class Pipe(dict):
                                                     D=13.)
             priors['gdev'] = priors['gexp']
             self.gpriors=priors
-        elif self['gprior_type']=='fits-vs-mag-gexponly':
+        elif self['gprior_type'] == 'fits-vs-mag-gexponly':
+            self.set_priors_vs_mag_exponly()
+        elif self['gprior_type'] == 'fits-vs-mag':
             self.set_priors_vs_mag()
         else:
             priors['gexp']=prior.GPriorExp(self['gprior_pars_exp'])
@@ -85,7 +87,47 @@ class Pipe(dict):
 
     
     def set_priors_vs_mag(self):
-        prior_pars=files.read_prior(type='gexp')
+        """
+        Note we use the GPriorExp for both dev and exp, but
+        different galaxies were used to train it
+        """
+        exp_prior_pars=files.read_prior(type='gexp')
+        dev_prior_pars=files.read_prior(type='gdev')
+
+        gpriors={}
+
+        exp_plist=[]
+        dev_plist=[]
+        for i in xrange(exp_prior_pars.size):
+            exp_pdict={}
+            dev_pdict={}
+
+            pexp=prior.GPriorExp(exp_prior_pars['pars'][i])
+            pdev=prior.GPriorExp(dev_prior_pars['pars'][i])
+
+            exp_pdict['gprior'] = pexp
+            exp_pdict['minmag'] = exp_prior_pars['minmag'][i]
+            exp_pdict['maxmag'] = exp_prior_pars['maxmag'][i]
+
+            dev_pdict['gprior'] = pdev
+            dev_pdict['minmag'] = dev_prior_pars['minmag'][i]
+            dev_pdict['maxmag'] = dev_prior_pars['maxmag'][i]
+
+
+            exp_plist.append(exp_pdict)
+            dev_plist.append(dev_pdict)
+
+        gpriors['gexp']=exp_plist
+        gpriors['gdev']=dev_plist
+
+        self.gpriors=gpriors
+
+
+    def set_priors_vs_mag_exponly(self):
+        """
+        deprecated
+        """
+        prior_pars=files.read_prior(type='gexp', old=True)
 
         gpriors={}
         plist=[]
@@ -106,7 +148,7 @@ class Pipe(dict):
     def get_gprior(self, index, fitmodel):
         if self['gprior_type']==None:
             gprior=None
-        elif self['gprior_type']=='fits-vs-mag-gexponly':
+        elif self['gprior_type'] in ['fits-vs-mag','fits-vs-mag-gexponly']:
             gprior=self.get_gprior_vs_mag(index, fitmodel)
         else:
             gprior=self.gpriors[fitmodel]

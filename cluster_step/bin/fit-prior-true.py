@@ -21,7 +21,7 @@ from biggles import FramedPlot, FramedArray, Table, Points, PlotKey, \
 from optparse import OptionParser
 parser=OptionParser(__doc__)
 
-parser.add_option('-b','--binsize',default=0.02,
+parser.add_option('-b','--binsize',default=0.04,
                   help="bin size, default %default")
 parser.add_option('-s','--show',action='store_true',
                   help="show the plot on the screen")
@@ -30,25 +30,6 @@ parser.add_option('-t','--type',default=None,
 parser.add_option('--evals',action='store_true',
                   help="assume the values are e instead of g")
 
-def get_data():
-    import recfile
-    import lensing
-    dir=files.get_prior_dir()
-    path=os.path.join(dir, 'pe_dist.dat')
-
-    # julia writes integers as floating format
-    dt0=[('chip','f8'),
-         ('simid','f8'),
-         ('mag','f8'),
-         ('ellipb','f8'),
-         ('phib','f8'),
-         ('g','f8',2)]
-
-    with recfile.Recfile(path, mode='r', delim=' ', dtype=dt0, skiplines=7) as fobj:
-        data=fobj[:]
-
-
-    return data
         
 class FitRunner(object):
     def __init__(self):
@@ -82,9 +63,17 @@ class FitRunner(object):
         st=zeros(nbin, dtype=dt)
         return st
 
+    def get_data(self):
+        data=files.read_prior_original()
+        if self.objtype=='gdev':
+            w,=where(data['n'] > 2)
+        else:
+            w,=where(data['n'] < 2)
+        self.data=data[w]
+
     def go(self):
         print 'fitting:',self.objtype
-        self.data=get_data()
+        self.get_data()
 
         #eu.plotting.bhist(self.data['mag'], binsize=0.2)
         #stop
@@ -159,7 +148,6 @@ class FitRunner(object):
         import fitsio
         outfile=files.get_prior_path(type=self.objtype)
         print 'writing:',outfile
-        stop
         with fitsio.FITS(outfile, mode='rw', clobber=True) as fobj:
             fobj.write(st)
 
@@ -209,7 +197,7 @@ class FitRunner(object):
         if self.objtype=='gdev':
             res=prior.fit_gprior_dev(h['center'], hvals)
         else:
-            res=prior.fit_gprior_exp(h['center'], hvals,gmax=0.4)
+            res=prior.fit_gprior_exp(h['center'], hvals)
 
         return res
 
