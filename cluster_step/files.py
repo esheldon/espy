@@ -245,6 +245,7 @@ class Reader(dict):
         for k in keys:
             self[k] = keys[k]
 
+        self['setname'] = keys.get('setname','use1')
         self['verbose']=keys.get('verbose',False)
         self['progress']=keys.get('progress',False)
 
@@ -266,6 +267,8 @@ class Reader(dict):
             self['ccds']=CCDS.copy()
         else:
             self['ccds']=array(self['ccds'],ndmin=1,dtype='i2')
+
+        self['prob_range']=self.get('prob_range',[0,1])
 
     def _load_data(self):
         from esutil.numpy_util import combine_arrlist
@@ -306,16 +309,24 @@ class Reader(dict):
 
     def select(self, data0):
         from esutil.numpy_util import strmatch
+        from .select import Selector
 
-        logic = (data0['flags']==0) | (data0['flags']==65536)
+        selector=Selector()
+
+        logic=selector.get_logic(data0, self['setname'])
+
+
+        # these can be applied in addition to the set logic
         if 'objtype' in self:
             if self['objtype'] is not None:
                 logic=logic & strmatch(data0['model'],self['objtype'])
 
-        for name in ['sratio','Ts2n','s2','Tmean','mag']:
+        for name in ['sratio','Ts2n','s2','Tmean','mag','prob']:
             rname='%s_range' % name
             if name=='mag':
                 name='mag_auto_r'
+            if name=='prob':
+                name='fit_prob'
             if rname in self:
                 r=self[rname]
                 logic=logic & ((data0[name] > r[0]) & (data0[name] < r[1]))

@@ -27,6 +27,8 @@ parser.add_option('-s','--show',action='store_true',
                   help="show the plot on the screen")
 parser.add_option('-t','--type',default=None,
                   help="object type")
+parser.add_option('--evals',action='store_true',
+                  help="assume the values are e instead of g")
 
 def get_data():
     import recfile
@@ -60,6 +62,7 @@ class FitRunner(object):
         self.show=options.show
 
         self.options=options
+        self.evals=options.evals
 
 
     def get_dtype(self, npars):
@@ -112,8 +115,8 @@ class FitRunner(object):
             st['perr'][i] = fitres['perr']
             st['pcov'][i] = fitres['pcov']
 
-        self.write_data(st)
         self.plot_fits(st)
+        self.write_data(st)
 
     def plot_fits(self,st):
         import biggles
@@ -156,6 +159,7 @@ class FitRunner(object):
         import fitsio
         outfile=files.get_prior_path(type=self.objtype)
         print 'writing:',outfile
+        stop
         with fitsio.FITS(outfile, mode='rw', clobber=True) as fobj:
             fobj.write(st)
 
@@ -171,14 +175,33 @@ class FitRunner(object):
         data=self.data
         binsize=self.binsize
 
-        h1=histogram(data['g'][w,0], binsize=binsize, min=-1., max=1., more=more)
-        h2=histogram(data['g'][w,1], binsize=binsize, min=-1., max=1., more=more)
+        if self.evals:
+            import lensing
+            # assum g is actually e
+            e1=data['g'][w,0]
+            e2=data['g'][w,1]
+            g1=zeros(e1.size,dtype='f8')
+            g2=zeros(e1.size,dtype='f8')
+            for i in xrange(g1.size):
+                g1[i],g2[i] =lensing.util.e1e2_to_g1g2(e1[i],e2[i])
+        else:
+            g1=data['g'][w,0]
+            g2=data['g'][w,1]
 
-        gtot = sqrt(data['g'][w,0]**2 + data['g'][w,1]**2)
+        h1=histogram(g1, binsize=binsize, min=-1., max=1., more=more)
+        h2=histogram(g2, binsize=binsize, min=-1., max=1., more=more)
+
+        gtot = sqrt(g1**2 + g2**2)
 
         h=histogram(gtot, binsize=binsize, min=0., max=1., more=more)
         #h=histogram(gtot, binsize=binsize, more=more)
 
+        if False:
+            import biggles
+            hp=biggles.Histogram(h['hist'], x0=h['low'][0], binsize=binsize)
+            plt=biggles.FramedPlot()
+            plt.add(hp)
+            plt.show()
         return h1, h2, h
 
     def do_fit(self, h):
@@ -186,7 +209,7 @@ class FitRunner(object):
         if self.objtype=='gdev':
             res=prior.fit_gprior_dev(h['center'], hvals)
         else:
-            res=prior.fit_gprior_exp(h['center'], hvals)
+            res=prior.fit_gprior_exp(h['center'], hvals,gmax=0.4)
 
         return res
 

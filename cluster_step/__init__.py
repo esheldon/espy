@@ -2,6 +2,7 @@ from . import files
 from . import pipe
 from . import stats
 from . import fitters
+from . import select
 
 from .files import PSFNUMS, SHNUMS, CCDS, DEFAULT_VERSION
 sh1exp={1:0,    2:0,    3:0,    4:0,    5:0.03, 6:0.06, 7:0.09, 8:0.15}

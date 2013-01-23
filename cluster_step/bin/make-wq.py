@@ -18,6 +18,7 @@ parser.add_option('-n','--notgroups',default=None,
 parser.add_option('-p','--priority',default='med',
                   help='priority for queue')
 
+parser.add_option('--byexp',action='store_true')
 
 parser.add_option('--run-admom',action='store_true',
                   help="Force a re-run of adaptive moments")
@@ -53,13 +54,10 @@ priority: %(pri)s\n"""
 def get_cmd(ftype, options):
     if ftype=='admom':
         cmd='run-admom.py'
-        byexp=True
     elif ftype=='psf':
         cmd='run-psf.py'
-        byexp=True
     elif ftype=='shear':
         cmd='run-shear.py'
-        byexp=False
     else:
         raise ValueError("bad ftype: '%s'" % ftype)
 
@@ -68,7 +66,7 @@ def get_cmd(ftype, options):
     if options.run_psf:
         cmd = '%s --run-psf' % cmd
 
-    return cmd, byexp
+    return cmd
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -82,7 +80,7 @@ def main():
 
     conf = files.read_config(run)
 
-    cmd,byexp=get_cmd(ftype,options)
+    cmd=get_cmd(ftype,options)
 
     groups=''
     if options.groups is not None:
@@ -99,7 +97,7 @@ def main():
 
     for psfnum in files.PSFNUMS:
         for shnum in files.SHNUMS:
-            if byexp:
+            if options.byexp:
                 wqfile=files.get_wq_path(run=run,psfnum=psfnum,shnum=shnum,
                                          ftype=ftype)
                 job_name='%s-p%s-s%s-%s' % (run,psfnum,shnum,ftype)

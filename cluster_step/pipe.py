@@ -302,7 +302,6 @@ class Pipe(dict):
         out['mag_auto_r'][:] = self.cat['mag_auto_r'][wgal]
         out['row_range'][:] = self.ares['row_range'][wgal]
         out['col_range'][:] = self.ares['col_range'][wgal]
-        out['flags'][:] = 2**16
 
         for igal in xrange(wgal.size):
             from esutil.numpy_util import aprint
@@ -325,7 +324,8 @@ class Pipe(dict):
                 gmix_psf=self.get_gmix_psf()
 
             if gmix_psf is None:
-                # flags will be non-zero
+                out['flags'][index] = 2**16
+                print 'gmix_psf is None'
                 continue
 
             res=self.fit_shear_models(index, im, ares0, gmix_psf)
@@ -652,6 +652,7 @@ class Pipe(dict):
         psfres['row_range'][:]    = self.ares['row_range'][wpsf]
         psfres['col_range'][:]    = self.ares['col_range'][wpsf]
 
+        psfres['admom_s2n'][:]    = self.ares['s2n'][wpsf]
         psfres['admom_flags'][:]  = self.ares['whyflag'][wpsf]
         psfres['admom_pars'][:,0] = 1.0
         psfres['admom_pars'][:,1] = self.ares['wrow'][wpsf]
@@ -738,6 +739,8 @@ class Pipe(dict):
         out[model+'_flags'][ipsf] = res.flags
         out[model+'_numiter'][ipsf] = res.numiter
         out[model+'_ntry'][ipsf] = ntry
+
+        out[model+'_s2n'][ipsf] = res.get_weighted_s2n()
 
         out[model+'_pars'][ipsf,:] = res.pars
         if res.flags==0:
@@ -996,7 +999,8 @@ class Pipe(dict):
                      ('gturb_bic','f8')]
 
             elif model=='admom':
-                dt+=[('admom_flags','i4'),
+                dt+=[('admom_s2n','f8'),
+                     ('admom_flags','i4'),
                      ('admom_pars','f8',npars)]
             else:
                 for dti in [('flags','i4'),('numiter','i4'),
@@ -1010,7 +1014,8 @@ class Pipe(dict):
                 if 'em' in model:
                     dt += [(model+'_fdiff','f8')]
                 if 'gmix' in model:
-                    dt += [(model+'_perr','f8',npars),
+                    dt += [(model+'_s2n','f8'),
+                           (model+'_perr','f8',npars),
                            (model+'_pcov','f8',(npars,npars))]
 
         data=zeros(n, dtype=dt)
@@ -1022,7 +1027,7 @@ class Pipe(dict):
                 data[model+'_pars']=-9999.
                 data[model+'_aic'] = 1.e9
                 data[model+'_bic'] = 1.e9
-            elif model in ['gmix1','gmix2','gmix3']:
+            elif 'gmix' in model:
                 data[model+'_ntry']=9999
                 data[model+'_pars']=-9999.
                 data[model+'_perr']=9999.

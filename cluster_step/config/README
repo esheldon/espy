@@ -41,7 +41,6 @@ ideas about psf:
     - use brighter stars
 
 
-
 mixmc-r01
     - using the old gprior
     - using EM and two gaussians
@@ -57,6 +56,7 @@ mixmc-r03
 mixmc-r04
     - median model
         - does look better
+
 mixmc-r05
     - nwalkers==40
     - ran p1
@@ -94,6 +94,7 @@ mixmc-r14:
 
 mixmc-r15
     - lm fitter, gmix2 psf
+
 mixmc-r16
     - lm fitter, gmix1 psf
     - running again with 4 random tries per
@@ -108,3 +109,6 @@ mixmc-r17
 mixmc-r18
     - tried using prior in likelihood; the shear was
     biased very *high*
+
+mixmc-r19
+    - same as r17 but using admom.  See no difference really

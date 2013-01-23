@@ -37,56 +37,49 @@ parser.add_option('-n','--nbin',default=10,
                   help=('number of bins for logarithmic binning in s/n '
                         ', default %default'))
 
-parser.add_option('--s2n',default='10,800', help="s/n range, %default")
-parser.add_option('--Ts2n',default='2,200', help="Ts2n range, %default")
-parser.add_option('--sratio',default='1.0,10.0',
+parser.add_option('--s2n',default='10,200', help="s/n range, %default")
+
+parser.add_option('--sratio',default='1.0,1.e6',
                   help='sratio range, %default')
-parser.add_option('--Tmean',default='2,1.e6',
-                  help='Tmean range, %default')
-parser.add_option('--mag',default='0,100',
-                  help='mag range, %default')
-
-
-parser.add_option('-t','--type',default=None,
-                  help="limit to objects best fit by this model")
 
 parser.add_option('-f','--field',default='s2n_w',
                   help="field for S/N, default %default")
 
-"""
-        # starting point for labels
-        self.lab1_loc=[1.-0.075, 0.1]
-        self.lab1_halign='right'
-        self.lab1_yshift=0.075
+parser.add_option('-s','--set',default='use1',
+                  help="selection set")
 
-        self.lab2_loc=[0.075,0.075]
-        self.lab2_halign='left'
-        self.lab2_yshift=+0.075
+def get_labels(run, psfnums, setname, nobj, sratio_range):
 
-        self.lab3_loc=[1-0.075,1-0.075]
-        self.lab3_halign='right'
-        self.lab3_yshift=-0.075
 
-def get_s2n_label(s2n_range):
-    labs=r'$%.2f < %s < %.2f$' % (s2n_range[0],
-                                  s2n_field,
-                                  s2n_range[1])
-    yshift=1*self.lab2_yshift
-    lab=PlotLabel(self.lab2_loc[0],self.lab2_loc[1]+yshift,
-                  labs,
-                  halign=self.lab2_halign)
-    return lab
+    run_mess='run: %s' % run
+    set_mess='set: %s' % setname
+    nobj_mess='nobj: %s' % nobj
 
-"""
+    if sratio_range[1] > 1000:
+        srat_mess = r'$\sigma_{gal}/\sigma_{psf} > %.2f$' % sratio_range[0]
+    else:
+        srat_mess=r'$%.2f < \sigma_{gal}/\sigma_{psf} < %.2f$' % tuple(sratio_range)
 
-def get_labels(fitter):
-    psflab=fitter.get_psf_label()
-    typelab=fitter.get_objtype_label()
-    sizelab=fitter.get_size_label()
-    runlab=fitter.get_run_label()
+    pstr=[str(s) for s in psfnums]
+    pstr=','.join(pstr)
+    pmess="p: %s" % pstr
 
-    return [psflab,typelab,sizelab, runlab]
+    halign='left'
+    x=0.05
+    y=0.9
+    inc=-0.075
+
+    runlab=PlotLabel(x, y, run_mess, halign=halign)
+    y += inc
+    pnumlab=PlotLabel(x, y, pmess, halign=halign)
+    y += inc
+    setlab=PlotLabel(x, y, set_mess, halign=halign)
+    y += inc
+    sratlab=PlotLabel(x, y, srat_mess, halign=halign)
+    y += inc
+    nobjlab=PlotLabel(x, y, nobj_mess, halign=halign)
     
+    return (runlab,pnumlab,setlab,sratlab,nobjlab)
 
 def get_symmetric_range(data1, err1, data2, err2):
     minval1=(data1-err1).min()
@@ -100,7 +93,7 @@ def get_symmetric_range(data1, err1, data2, err2):
     rng=max(abs(minval), abs(maxval))
     return array([-1.1*rng,1.1*rng])
 
-def doplot(fitters, st, s2n_field):
+def doplot(fitters, st, s2n_field, setname, s2n_range, sratio_range, psfnums, nobj):
     tab=Table(2,1)
 
     color1='blue'
@@ -121,7 +114,7 @@ def doplot(fitters, st, s2n_field):
 
     key=PlotKey(0.9,0.2,[m1pts,m2pts], halign='right')
 
-    xrng=array( [0.5*st['s2n'].min(), 1.5*st['s2n'].max()] )
+    xrng=array( [0.5*s2n_range[0], 1.5*s2n_range[1]])
     cyrng=get_symmetric_range(st['c1'],st['c1_err'],st['c2'],st['c2_err'])
     myrng=get_symmetric_range(st['m1'],st['m1_err'],st['m2'],st['m2_err'])
 
@@ -155,10 +148,14 @@ def doplot(fitters, st, s2n_field):
 
 
 
-    #labels=get_labels(fitters[0])
+    labels=get_labels(fitters[0].run,
+                      psfnums,
+                      setname,
+                      nobj,
+                      sratio_range)
 
     mplt.add( mallow, zplt, m1pts, m1errpts, m2pts, m2errpts, key )
-    #mplt.add(*labels)
+    mplt.add(*labels)
 
     cplt.add( callow, zplt, c1pts, c1errpts, c2pts, c2errpts )
 
@@ -224,22 +221,15 @@ def main():
     run=options.run
     s2n_range=[float(s) for s in options.s2n.split(',')]
     sratio_range=[float(s) for s in options.sratio.split(',')]
-    Ts2n_range=[float(s) for s in options.Ts2n.split(',')]
-    Tmean_range=[float(s) for s in options.Tmean.split(',')]
-    mag_range=[float(s) for s in options.mag.split(',')]
-    psfnums=[float(s) for s in options.psfnums.split(',')]
-    objtype=options.type
+    psfnums=[int(s) for s in options.psfnums.split(',')]
 
     s2n_field=options.field
 
     reader=files.Reader(run=run, 
-                        objtype=objtype,
                         psfnums=psfnums,
                         s2n_range=s2n_range,
                         sratio_range=sratio_range,
-                        Ts2n_range=Ts2n_range,
-                        Tmean_range=Tmean_range,
-                        mag_range=mag_range,
+                        setname=options.set,
                         progress=True)
 
     data=reader.get_data()
@@ -259,7 +249,7 @@ def main():
 
     st = get_stats(fitters)
     aprint(st,fancy=True)
-    doplot(fitters, st, s2n_field)
+    doplot(fitters, st, s2n_field, options.set, s2n_range,sratio_range, psfnums, data.size)
     
 
 main()
