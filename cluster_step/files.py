@@ -284,6 +284,7 @@ class Reader(dict):
     def _check_keys(self, **keys):
         if 'run' not in keys:
             raise ValueError("send run=")
+        self['ignore_missing']=keys.get('ignore_missing',False)
 
         for k in keys:
             self[k] = keys[k]
@@ -402,6 +403,8 @@ class Reader(dict):
             else:
                 data=data0
         else:
+            if not self['ignore_missing']:
+                raise RuntimeError("missing file: %s" % fname)
             data=None
 
         return data           

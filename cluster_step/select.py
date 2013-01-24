@@ -9,9 +9,11 @@ class Selector(object):
         logic = (data['flags']==0) | (data['flags'] == 2**16)
 
         logic=logic & (data['s2n_w'] > 10) & (data['s2n_w'] < 1.e6)
-        logic=logic & (data['Ts2n'] > 2)   & (data['Ts2n'] < 1.e6)
-        #logic=logic & (data['Ts2n'] > 0)   & (data['Ts2n'] < 1.e6)
-        logic=logic & (data['Tmean'] > 2)  & (data['Ts2n'] < 1.e6)
+
+        # has minimal effect for use1
+        #logic=logic & (data['Ts2n'] > 2)   & (data['Ts2n'] < 1.e6)
+        # has minimal effect for use1
+        #logic=logic & (data['Tmean'] > 2)  & (data['Ts2n'] < 1.e6)
 
         if setname=='use0':
             # default set
@@ -37,7 +39,7 @@ class Selector(object):
         elif setname=='use4':
             isexp=strmatch(data['model'],'gexp')
             Ts2n20=(data['Ts2n'] > 20)
-            logic = logic & isexp & Ts2n_20
+            logic = logic & isexp & Ts2n20
 
         elif setname=='use5':
             # same as use1 but with Ts2n > 3.5

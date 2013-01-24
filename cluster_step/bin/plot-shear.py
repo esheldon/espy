@@ -53,6 +53,8 @@ parser.add_option('--frac',action='store_true',
 
 parser.add_option('-P','--progress',action='store_true',
                   help="show the progress bar")
+parser.add_option('--ignore-missing',action='store_true',
+                  help="ignore missing files")
 
 
 parser.add_option('-y','--yrange',default=None,
@@ -94,6 +96,7 @@ class ShearPlotter(object):
                             s2n_range=self.s2n_range,
                             sratio_range=self.sratio_range,
                             setname=self.setname,
+                            ignore_missing=options.ignore_missing,
                             progress=options.progress)
 
         self.data=reader.get_data()

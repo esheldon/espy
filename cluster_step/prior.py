@@ -165,44 +165,6 @@ class GPriorExp(GPrior):
         """
         return gprior2d_exp_scalar(self.pars, g)
 
-class GPriorDev(GPrior):
-    def __init__(self, pars):
-        """
-        [A,b,c]
-        """
-        super(GPriorDev,self).__init__(pars)
-
-    def prior2d_gabs(self, g):
-        """
-        Get the 2d prior for the input |g| value(s)
-        """
-        return gprior2d_dev_vec(self.pars, g)
-
-    def prior2d_gabs_scalar(self, g):
-        """
-        Get the 2d prior for the input |g| scalar value
-        """
-        return gprior2d_dev_scalar(self.pars, g)
-
-
-
-
-def gprior2d_dev_vec(pars, g):
-    A=pars[0]
-    b=pars[1]
-    c=pars[2]
-    return A*exp( -b*g - c*g**2 )
-
-def gprior1d_dev_vec(pars, g):
-    return 2*pi*g*gprior2d_dev_vec(pars, g)
-
-def gprior2d_dev_scalar(pars, g):
-    from math import exp
-    A=pars[0]
-    b=pars[1]
-    c=pars[2]
-    return A*exp( -b*g - c*g**2 )
-
 
 def gprior2d_exp_vec(pars, g):
     A=pars[0]
@@ -300,28 +262,10 @@ class GPriorExpFitter:
         return lnprob
 
 
-
-class GPriorDevFitter:
-    def __init__(self, xvals, yvals):
-        """
-        Input is the histogram data
-        """
-        self.xvals=xvals
-        self.yvals=yvals
-
-    def __call__(self, pars):
-        w,=where(pars < 0)
-        if w.size > 0:
-            return zeros(self.xvals.size) + numpy.inf
-
-        model=gprior1d_dev_vec(pars, self.xvals)
-        return model-self.yvals
-
-
 def fit_gprior_exp_mcmc(xdata, ydata, a=0.25, g0=0.1, gmax=0.87):
     """
-    Input is the histogram data, should be close to
-    normalized
+    This works much better than the lm fitter
+    Input is the histogram data.
     """
     from scipy.optimize import leastsq
     import mcmc
@@ -358,8 +302,6 @@ def fit_gprior_exp_mcmc(xdata, ydata, a=0.25, g0=0.1, gmax=0.87):
     trials  = sampler.flatchain
 
     pars,pcov=mcmc.extract_stats(trials)
-
-    dof=xdata.size-pars.size
 
     d=diag(pcov)
     perr = sqrt(d)
@@ -468,6 +410,69 @@ g0:   %(g0).6g +/- %(g0_err).6g
     print fmt % res
 
     return res
+
+
+
+
+class GPriorDev(GPrior):
+    def __init__(self, pars):
+        """
+        I'm not using this for anything right now.  In clusterstep
+        the exp model works better in all cases pretty much.
+        [A,b,c]
+        """
+        super(GPriorDev,self).__init__(pars)
+
+    def prior2d_gabs(self, g):
+        """
+        Get the 2d prior for the input |g| value(s)
+        """
+        return gprior2d_dev_vec(self.pars, g)
+
+    def prior2d_gabs_scalar(self, g):
+        """
+        Get the 2d prior for the input |g| scalar value
+        """
+        return gprior2d_dev_scalar(self.pars, g)
+
+
+
+
+def gprior2d_dev_vec(pars, g):
+    A=pars[0]
+    b=pars[1]
+    c=pars[2]
+    return A*exp( -b*g - c*g**2 )
+
+def gprior1d_dev_vec(pars, g):
+    return 2*pi*g*gprior2d_dev_vec(pars, g)
+
+def gprior2d_dev_scalar(pars, g):
+    from math import exp
+    A=pars[0]
+    b=pars[1]
+    c=pars[2]
+    return A*exp( -b*g - c*g**2 )
+
+
+
+class GPriorDevFitter:
+    def __init__(self, xvals, yvals):
+        """
+        Input is the histogram data
+        """
+        self.xvals=xvals
+        self.yvals=yvals
+
+    def __call__(self, pars):
+        w,=where(pars < 0)
+        if w.size > 0:
+            return zeros(self.xvals.size) + numpy.inf
+
+        model=gprior1d_dev_vec(pars, self.xvals)
+        return model-self.yvals
+
+
 
 def fit_gprior_dev(xdata, ydata):
     """

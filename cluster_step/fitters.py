@@ -3,40 +3,30 @@ import cluster_step
 from cluster_step import files, stats
 
 
-from esutil.numpy_util import aprint
 from esutil.stat import wmom
 
 from fitting import LineFitter
+from mcmc import PolyFitter
 
 class BiasFitter(object):
-    def __init__(self, data, run, **keys):
+    def __init__(self, data, order=1, s2n_field='s2n_w', fitter='mcmc'):
+        #from esutil.numpy_util import aprint
 
-        self.keys=keys
         self.data=data
-        self.run     = run
-
-        self.s2n_field=keys.get('s2n_field','s2n_w')
-
-        # starting point for labels
-        self.lab1_loc=[1.-0.075, 0.1]
-        self.lab1_halign='right'
-        self.lab1_yshift=0.075
-
-        self.lab2_loc=[0.075,0.075]
-        self.lab2_halign='left'
-        self.lab2_yshift=+0.075
-
-        self.lab3_loc=[1-0.075,1-0.075]
-        self.lab3_halign='right'
-        self.lab3_yshift=-0.075
+        self.order=order
+        self.s2n_field=s2n_field
+        self.fitter=fitter
 
         self.organize_data()
         self.set_averages()
 
-        aprint(self.avg, fancy=True)
+        #aprint(self.avg, fancy=True)
 
         self.g1ind=arange(8)
         self.g2ind=arange(8)
+
+        if self.fitter not in ['lm','mcmc']:
+            raise ValueError("bad fitter type: '%s'" % self.fitter)
         self.do_fits()
 
     def organize_data(self):
@@ -72,7 +62,15 @@ class BiasFitter(object):
 
         self.avg=out
 
+    def get_g1poly(self):
+        return self.g1fit.get_poly()
+    def get_g2poly(self):
+        return self.g2fit.get_poly()
+
     def do_fits(self):
+
+        if self.order > 1 and self.fitter=='lm':
+            raise ValueError("implement poly lm fitter")
 
         g1true=self.avg['g1true'][self.g1ind]
         g1vals=self.avg['g1'][self.g1ind]
@@ -85,12 +83,28 @@ class BiasFitter(object):
         g1diff=g1vals-g1true
         g2diff=g2vals-g2true
 
-        self.g1fit=LineFitter(g1true, g1diff, g1err)
-        self.g2fit=LineFitter(g2true, g2diff, g2err)
+        if self.fitter=='lm':
+            self.g1fit=LineFitter(g1true, g1diff, g1err)
+            self.g2fit=LineFitter(g2true, g2diff, g2err)
+        else:
+            nwalkers=200
+            burnin=100
+            nstep=100
+
+            self.g1fit=PolyFitter(self.order, g1true,g1diff,nwalkers,burnin,nstep,
+                                  yerr=g1err, guess=[0.01,0.001])
+            self.g2fit=PolyFitter(self.order, g2true,g2diff,nwalkers,burnin,nstep,
+                                  yerr=g2err, guess=[0.01,0.001])
 
 
-        print self.g1fit
-        print self.g2fit
+        self.g1true=g1true
+        self.g2true=g2true
 
+        self.g1=g1vals
+        self.g2=g2vals
+        self.g1err=g1err
+        self.g2err=g2err
 
+        self.g1diff=g1diff
+        self.g2diff=g2diff
 

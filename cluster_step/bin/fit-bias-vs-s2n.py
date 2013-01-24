@@ -93,7 +93,7 @@ def get_symmetric_range(data1, err1, data2, err2):
     rng=max(abs(minval), abs(maxval))
     return array([-1.1*rng,1.1*rng])
 
-def doplot(fitters, st, s2n_field, setname, s2n_range, sratio_range, psfnums, nobj):
+def doplot(run, st, s2n_field, setname, s2n_range, sratio_range, psfnums, nobj):
     tab=Table(2,1)
 
     color1='blue'
@@ -148,7 +148,7 @@ def doplot(fitters, st, s2n_field, setname, s2n_range, sratio_range, psfnums, no
 
 
 
-    labels=get_labels(fitters[0].run,
+    labels=get_labels(run,
                       psfnums,
                       setname,
                       nobj,
@@ -177,18 +177,21 @@ def get_stats(fitters):
     st=zeros(len(fitters), dtype=dt)
 
     for i,bf in enumerate(fitters):
-        if bf.g1fit.perr is not None:
+        res1=bf.g1fit.get_result()
+        res2=bf.g2fit.get_result()
+        if res1['perr'] is not None:
             #st['s2n'][i] = bf.s2n_min
             st['s2n'][i] = bf.avg['s2n'].mean()
-            st['m1'][i] = bf.g1fit.pars[0]
-            st['m1_err'][i] = bf.g1fit.perr[0]
-            st['c1'][i] = bf.g1fit.pars[1]
-            st['c1_err'][i] = bf.g1fit.perr[1]
 
-            st['m2'][i] = bf.g2fit.pars[0]
-            st['m2_err'][i] = bf.g2fit.perr[0]
-            st['c2'][i] = bf.g2fit.pars[1]
-            st['c2_err'][i] = bf.g2fit.perr[1]
+            st['m1'][i] = res1['pars'][0]
+            st['m1_err'][i] = res1['perr'][0]
+            st['c1'][i] = res1['pars'][1]
+            st['c1_err'][i] = res1['perr'][1]
+
+            st['m2'][i] = res2['pars'][0]
+            st['m2_err'][i] = res2['perr'][0]
+            st['c2'][i] = res2['pars'][1]
+            st['c2_err'][i] = res2['perr'][1]
 
     w,=where(st['s2n'] != 0)
     st=st[w]
@@ -238,18 +241,34 @@ def main():
 
     fitters=[]
     for i in xrange(len(s2n_minvals)):
+        import mcmc
         w,=where((data[s2n_field] > s2n_minvals[i])
                  &
                  (data[s2n_field] < s2n_maxvals[i]))
 
         print s2n_minvals[i],s2n_maxvals[i],w.size
 
-        bf=BiasFitter(data[w], run, s2n_field=options.field)
+        bf=BiasFitter(data[w], s2n_field=options.field)
         fitters.append(bf)
+        print bf.g1fit
+        print bf.g2fit
+
+        print 'g1 guess:',bf.g1fit.guess
+        print 'g2 guess:',bf.g2fit.guess
+
+        print bf.g1fit.x,bf.g1fit.y
+        print bf.g2fit.x,bf.g2fit.y
+        stop
+
+        plt1=mcmc.plot_results(bf.g1fit.trials)
+        plt2=mcmc.plot_results(bf.g2fit.trials)
+        stop
+
+
 
     st = get_stats(fitters)
     aprint(st,fancy=True)
-    doplot(fitters, st, s2n_field, options.set, s2n_range,sratio_range, psfnums, data.size)
+    doplot(run, st, s2n_field, options.set, s2n_range,sratio_range, psfnums, data.size)
     
 
 main()

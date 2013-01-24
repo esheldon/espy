@@ -18,7 +18,8 @@ Revision History:
 """
 
 import numpy
-from numpy import array, zeros, sqrt, arange, isfinite, where, diag
+from numpy import array, zeros, ones, sqrt, arange, isfinite, \
+        where, diag, log
 from numpy.random import randn
 from sys import stdout
 import os
@@ -530,69 +531,54 @@ def plot_results6(res, burnin, sigma_clip=True):
 
     tab.show()
 
-def plot_burnin(vals, loglike, burnin, ylabel=None, show=True):
-    import biggles
 
-    tab=biggles.Table(2,1)
-
-    ind=arange(vals.size)
-
-    bplt=biggles.FramedPlot()
-    pts = biggles.Curve(ind, vals, type='solid')
-    bpts = biggles.Curve(ind[0:burnin], vals[0:burnin], type='solid',
-                         color='red')
-    bplt.add(pts,bpts)
-    bplt.xlabel = 'trial #'
-    if ylabel:
-        bplt.ylabel=ylabel
-
-    lplt=biggles.FramedPlot()
-
-    mlike=loglike.max()
-    llikemod = loglike-loglike.max()
-
-    lpts=biggles.Curve(ind, llikemod, type='solid')
-    blpts=biggles.Curve(ind[0:burnin], llikemod[0:burnin],
-                        type='solid',color='red')
-
-    lplt.add(lpts,blpts)
-    lplt.xlabel='trial #'
-    lplt.ylabel='log(like)'
-
-    tab[0,0] = bplt
-    tab[1,0] = lplt
-
-    if show:
-        tab.show()
-    return tab
-
-
-def plot_results(res, burnin):
+def plot_results(trials, binfac=0.2, names=None, show=True):
     import biggles
     import esutil
-    means,cov = extract_stats(res, burnin)
+
+    biggles.configure( 'default', 'fontsize_min', 1)
+
+    means,cov = extract_stats(trials)
     errs=sqrt(diag(cov)) 
-    plot_burnin(res,burnin)
 
-    npar = len(means)
-    for i in xrange(npar):
-        bsize = 0.2*errs[i]
+    npars=len(means)
 
-        hdict = esutil.stat.histogram(res['pars'][burnin:, i], 
+    nrow,ncol=get_grid(npars)
+    plt=biggles.Table(nrow,ncol)
+    plt.aspect_ratio=float(nrow)/ncol
+
+    for i in xrange(npars):
+        row=i/ncol
+        col=i % ncol
+
+        bsize = binfac*errs[i]
+
+        hdict = esutil.stat.histogram(trials[:, i], 
                                       binsize=bsize, 
                                       more=True)
         hplot = biggles.Histogram(hdict['hist'], 
                                   x0=hdict['low'][0], 
                                   binsize=bsize)
-        plt=biggles.FramedPlot()
-        plt.xlabel='par %s' % i
-        plt.add(hplot)
+        plti=biggles.FramedPlot()
+        if names is not None:
+            name=names[i]
+        else:
+            name=r'$p_{%d}$' % i
+
+        plti.xlabel=name
+        plti.add(hplot)
             
-        lab = r'$<p%d> = %0.4g \pm %0.4g$' % (i,means[i],errs[i])
+        lab = r'$<%s> = %0.4g \pm %0.4g$' % (name,means[i],errs[i])
         plab = biggles.PlotLabel(0.1,0.9,lab,halign='left')
 
-        plt.add(plab)
+        plti.add(plab)
+
+        plt[row,col]=plti
+    
+    if show:
         plt.show()
+
+    return plt
 
 def test(burnin=100, nstep=10000, doplot=False, hardcopy=False):
     """
@@ -725,6 +711,175 @@ def test_line(nstep=10000, doplot=False):
     return data
                         
    
+def get_grid(ntot):
+    sq=int(sqrt(ntot))
+    if ntot==sq*sq:
+        return (sq,sq)
+    elif ntot <= sq*(sq+1):
+        return (sq,sq+1)
+    else:
+        return (sq+1,sq+1)
+
+
+class PolyFitter(object):
+    def __init__(self, order, x, y, nwalkers, burnin, nstep, 
+                 guess=None, a=3, yerr=None, ivar=None):
+
+        self.order=order
+        self.x=array(x, dtype='f8', ndmin=1, copy=False)
+        self.y=array(y, dtype='f8', ndmin=1, copy=False)
+
+        self.nwalkers=nwalkers
+        self.burnin=burnin
+        self.nstep=nstep
+        self.a=a
+
+        self.guess=guess
+
+        if yerr is not None:
+            ivar=1./yerr**2
+            self.ivar=array(ivar, dtype='f8', ndmin=1, copy=False)
+        elif ivar is not None:
+            self.ivar=array(ivar, dtype='f8', ndmin=1, copy=False)
+        else:
+            self.ivar=ones(self.x.size, dtype='f8')
+        
+        if ((self.x.size != self.y.size)
+                or
+                (self.x.size != self.ivar.size)):
+            raise ValueError("x,y, and yerr/ivar must be same size")
+
+        self._go()
+
+    def get_result(self):
+        return self._result
+
+    def get_poly(self):
+        return numpy.poly1d(self._result['pars'])
+
+    def _get_guess(self):
+        from esutil.random import srandu
+
+        if self.guess is not None:
+            guess0=array(self.guess, dtype='f8', ndmin=1, copy=True)
+            if guess0.size != (self.order+1):
+                raise ValueError("guess should be length order+1")
+        else:
+            guess0=numpy.polyfit(self.x, self.y, self.order)
+            self.guess=guess0
+
+
+        npars=len(guess0)
+        nwalkers=self.nwalkers
+        guess=zeros((nwalkers,npars))
+
+        for i in xrange(npars):
+            if guess0[i]==0:
+                guess[:,i] = guess0[i]+0.1*srandu(nwalkers)
+            else:
+                guess[:,i] = guess0[i]*(1+0.1*srandu(nwalkers))
+
+        return guess
+
+    def _go(self):
+        import emcee
+        guess=self._get_guess()
+        npars=guess.shape[1]
+        sampler = emcee.EnsembleSampler(self.nwalkers, 
+                                        npars,
+                                        self.loglike,
+                                        a=self.a)
+
+        pos, prob, state = sampler.run_mcmc(guess, self.burnin)
+        sampler.reset()
+        pos, prob, state = sampler.run_mcmc(pos, self.nstep)
+
+        self.trials  = sampler.flatchain
+        
+        self._calc_stats()
+
+    def _calc_stats(self):
+        pars,pcov=extract_stats(self.trials)
+        perr=sqrt(diag(pcov))
+
+        npars=len(pars)
+
+        loglike=self.loglike(pars)
+
+        chi2=loglike/(-0.5)
+        dof=self.x.size-npars
+        chi2per = chi2/dof
+
+        aic = -2*loglike + 2*npars
+        bic = -2*loglike + npars*log(self.x.size)
+
+        res={'pars':pars,
+             'perr':perr,
+             'pcov':pcov,
+             'loglike':loglike,
+             'chi2': chi2,
+             'dof':dof,
+             'chi2per':chi2per}
+        try:
+            import scipy.stats
+            prob = scipy.stats.chisqprob(chi2, dof)
+
+            res['prob']=prob
+        except:
+            pass
+
+        self._result=res
+
+
+    def loglike(self, pars):
+        from numpy import poly1d
+
+        ply=poly1d(pars)
+        model=ply(self.x)
+        chi2 = self.ivar*(self.y-model)**2
+        return -0.5*chi2.sum()
+
+    def plot_trials(self):
+        import biggles
+        import esutil as eu
+
+        npars=len(self._result['pars'])
+
+        trials=self.trials
+
+        for i in xrange(npars):
+            row=i/ncol
+            col=i % ncol
+
+            std=trials[:,i].std()
+            binsize=0.2*std
+
+            plti,hi=eu.plotting.bhist(trials[:,i], binsize=binsize, show=False,
+                                      gethist=True)
+
+
+
+    def __repr__(self):
+        pars=self._result['pars']
+        perr=self._result['perr']
+        npars=len(pars)
+
+        rep=[]
+        header=[]
+        for i in xrange(npars):
+            h="p%d" % i
+            power=npars-i-1
+            if power>0:
+                h += " x^%d" % power
+            header.append(h)
+
+            r= "  p%d: %.4g +/- %.4g" % (i,pars[i],perr[i])
+            rep.append(r)
+        
+        header=' + '.join(header)
+        rep = [header] + rep
+        rep='\n'.join(rep)
+        return rep
 
 
 

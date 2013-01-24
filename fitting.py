@@ -23,6 +23,7 @@ class LineFitter:
             diff = (model-self.y)/self.yerr
 
         return diff
+
     def dofit(self):
         res=scipy.optimize.leastsq(self.errfunc, self.guess,
                                        full_output=1)
@@ -45,6 +46,10 @@ class LineFitter:
                 # only do if non negative
                 self.perr = numpy.sqrt(d)
 
+    def get_result(self):
+        return {'pars':self.pars,
+                'pcov':self.pcov,
+                'perr':self.perr}
     def scale_leastsq_cov(self, pars, pcov):
         """
         Scale the covariance matrix returned from leastsq; this will
@@ -55,7 +60,13 @@ class LineFitter:
         return pcov * s_sq 
 
 
+    def get_poly(self):
+        return numpy.poly1d(self.pars)
+
     def __call__(self, x):
+        """
+        pars order same as for numpy.poly1d
+        """
         return self.pars[0]*self.x + self.pars[1]
 
     def __repr__(self):

@@ -1,5 +1,5 @@
 """
-Don't get fooled!  kappa is not a linear function of n!
+Don't get fooled!  kappa(n) is not accurately represented by a polynomial!
 
 The lookup table is faster and more accurate
 """
@@ -20,10 +20,10 @@ class KappaTable(object):
     def __init__(self):
         if KappaTable._table is None:
             npoints=100
-            nmin=0.25
-            nmaxa=8.0
-            nvals=numpy.logspace(numpy.log10(0.25), 
-                                 numpy.log10(8.0), 
+            nmin=0.1
+            nmax=10.0
+            nvals=numpy.logspace(numpy.log10(nmin), 
+                                 numpy.log10(nmax), 
                                  npoints)
             table=numpy.zeros(npoints, dtype=[('n','f8'),('kappa','f8')])
 
@@ -72,24 +72,7 @@ class KappaFinder(object):
     def __repr__(self):
         return '%.16g' % self._kappa
 
-
-class KappaApprox(object):
-    _ply=numpy.poly1d([9.06733525e-08,-4.62271203e-06,1.04365771e-04,
-                       -1.37472817e-03, 1.17184236e-02,-6.77862447e-02, 
-                       2.71475361e-01, -7.54487848e-01, 1.43751841e+00, 
-                       -1.82717720e+00,  1.47845721e+00,  1.29710871e+00,
-                       -1.66880136e-01])
-    def __init__(self):
-        pass
-    def __call__(self, n):
-        return KappaApprox._ply(n)
-
-
-def _find_approx_kappa_vs_n(nvals, kappas, order):
-    pcoeff=numpy.polyfit(nvals, kappas, order) 
-    return pcoeff
-
-def plot_kappa_vs_n(show=False, order=5):
+def plot_kappa_vs_n(show=False):
     import biggles
     np=1000
 
@@ -102,7 +85,6 @@ def plot_kappa_vs_n(show=False, order=5):
     for i in xrange(np):
         kappas[i] = kfinder(nvals[i])
     
-    tab=biggles.Table(2,1)
 
     plt=biggles.FramedPlot()
     plt.xlabel='sersic n'
@@ -112,33 +94,10 @@ def plot_kappa_vs_n(show=False, order=5):
 
     pts=biggles.Points(nvals, kappas, type='filled circle',
                        size=0.5, color='blue')
-
-    pcoeff=_find_approx_kappa_vs_n(nvals, kappas, order)
-    print pcoeff
-    ply=numpy.poly1d(pcoeff)
-
-    yfit=ply(nvals)
-    c=biggles.Curve(nvals, yfit)
-
-    plt.add(pts,c)
-
-    tab[0,0]=plt
-
-    fplt=biggles.FramedPlot()
-    fplt.xlabel='sersic n'
-    fplt.ylabel=r'$\Delta \kappa/\kappa$'
-    fplt.xlog=True
-    fdiff=(yfit-kappas)/kappas
-    fdiff_pts=biggles.Points(nvals, fdiff, type='filled circle',
-                            size=0.5)
-    lab=biggles.PlotLabel(0.9,0.9,'order: %s' % order,
-                          halign='right')
-    fplt.add(fdiff_pts,lab)
-
-    tab[1,0] = fplt
-
+    plt.add(pts)
+    
     if show:
-        tab.show()
+        plt.show()
 
     f=os.path.expanduser('~/tmp/kappa-vs-n.eps')
     print f
@@ -152,7 +111,6 @@ def test_speed():
     nmax=8.0
     nvals= nmin + (nmax-nmin)*numpy.random.random(np)
 
-    kapprox=KappaApprox()
     kfinder=KappaFinder()
     ktable=KappaTable()
 
@@ -164,25 +122,19 @@ def test_speed():
 
     t0=time.time()
     for i in xrange(np):
-        k=kapprox(nvals[i])
-    tm=time.time()-t0
-    print 'approx:',tm,'per:',tm/float(np)
-
-    t0=time.time()
-    for i in xrange(np):
         k=ktable(nvals[i])
     tm=time.time()-t0
     print 'table:',tm,'per:',tm/float(np)
 
 def test_accuracy():
     import biggles
-    np=100
+    np=10000
 
-    nmin=0.25
-    nmax=8.0
+    nmin=0.1
+    nmax=10.0
+
     nvals= nmin + (nmax-nmin)*numpy.random.random(np)
 
-    kapprox=KappaApprox()
     kfinder=KappaFinder()
     ktable=KappaTable()
 
@@ -194,17 +146,16 @@ def test_accuracy():
         kfvals[i]=kfinder(nvals[i])
 
     for i in xrange(np):
-        kavals[i]=kapprox(nvals[i])
-
-    for i in xrange(np):
         ktvals[i]=ktable(nvals[i])
 
     plt=biggles.FramedPlot()
+    plt.xlog=True
+    plt.xlabel='sersic n'
+    plt.ylable=r'$\Delta \kappa/\kappa$'
+    plt.title='lookup table'
 
-    #fpts=biggles.Points(nvals, kfvals, color='red', type='filled circle', size=0.5)
-    apts=biggles.Points(nvals, kavals/kfvals-1, color='blue', type='filled diamond', size=0.5)
     tpts=biggles.Points(nvals, ktvals/kfvals-1, color='magenta', type='circle', size=0.5)
 
-    plt.add(apts, tpts)
+    plt.add(tpts)
 
     plt.show()
