@@ -52,7 +52,8 @@ class Pipe(dict):
         for k in conf:
             self[k]=conf[k]
         
-        self._set_priors()
+        self._set_gpriors()
+        self._set_Tpriors()
 
         random.seed(self['seed'])
         self._load_data()
@@ -65,9 +66,24 @@ class Pipe(dict):
             raise ValueError("send run=, psfnum=, "
                              "shnum=, ccd=")
 
-    def _set_priors(self):
-        if self['gprior_type'] is None:
+    def _set_Tpriors(self):
+        self['Tprior_type'] = self.get('Tprior_type',None)
+        Tprior_type=self['Tprior_type']
+
+        if Tprior_type is None:
+            self.Tpriors=None
             return
+
+        if Tprior_type == 'fits-vs-mag':
+            self._set_Tpriors_vs_mag()
+        else:
+            raise ValueError("bad Tprior type: '%s'" % Tprior_type)
+
+    def _set_gpriors(self):
+        if self['gprior_type'] is None:
+            self.gpriors=None
+            return
+
         priors={}
         if self['gprior_type'] == 'old':
             priors['gexp']=gmix_image.priors.GPrior(A=12.25,
@@ -79,14 +95,14 @@ class Pipe(dict):
         elif self['gprior_type'] == 'fits-vs-mag-nosplit':
             self.set_priors_vs_mag_exponly()
         elif self['gprior_type'] == 'fits-vs-mag':
-            self.set_priors_vs_mag()
+            self._set_gpriors_vs_mag()
         else:
             priors['gexp']=prior.GPriorExp(self['gprior_pars_exp'])
             priors['gdev']=prior.GPriorDev(self['gprior_pars_dev'])
             self.gpriors=priors
 
     
-    def set_priors_vs_mag(self):
+    def _set_gpriors_vs_mag(self):
         """
         Note we use the GPriorExp for both dev and exp, but
         different galaxies were used to train it
@@ -97,30 +113,80 @@ class Pipe(dict):
         gpriors={}
 
         exp_plist=[]
-        dev_plist=[]
         for i in xrange(exp_prior_pars.size):
             exp_pdict={}
-            dev_pdict={}
 
             pexp=prior.GPriorExp(exp_prior_pars['pars'][i])
-            pdev=prior.GPriorExp(dev_prior_pars['pars'][i])
 
             exp_pdict['gprior'] = pexp
             exp_pdict['minmag'] = exp_prior_pars['minmag'][i]
             exp_pdict['maxmag'] = exp_prior_pars['maxmag'][i]
 
+            exp_plist.append(exp_pdict)
+
+
+        dev_plist=[]
+        for i in xrange(dev_prior_pars.size):
+            dev_pdict={}
+
+            pdev=prior.GPriorExp(dev_prior_pars['pars'][i])
+
             dev_pdict['gprior'] = pdev
             dev_pdict['minmag'] = dev_prior_pars['minmag'][i]
             dev_pdict['maxmag'] = dev_prior_pars['maxmag'][i]
 
-
-            exp_plist.append(exp_pdict)
             dev_plist.append(dev_pdict)
+
 
         gpriors['gexp']=exp_plist
         gpriors['gdev']=dev_plist
 
         self.gpriors=gpriors
+
+
+    def _set_Tpriors_vs_mag(self):
+        exp_pars=files.read_sprior(type='gexp')
+        dev_pars=files.read_sprior(type='gdev')
+
+        Tpriors={}
+
+        exp_plist=[]
+        for i in xrange(exp_pars.size):
+            pdict={}
+
+            sigma_mean=exp_pars['pars'][i,1]
+            sigma_width=exp_pars['pars'][i,2]
+
+            p=prior.TPrior(sigma_mean, sigma_width)
+
+            pdict['Tprior'] = p
+            pdict['minmag'] = exp_pars['minmag'][i]
+            pdict['maxmag'] = exp_pars['maxmag'][i]
+
+            exp_plist.append(pdict)
+
+
+        dev_plist=[]
+        for i in xrange(dev_pars.size):
+            pdict={}
+
+            sigma_mean=dev_pars['pars'][i,1]
+            sigma_width=dev_pars['pars'][i,2]
+
+            p=prior.TPrior(sigma_mean, sigma_width)
+
+            pdict['Tprior'] = p
+            pdict['minmag'] = dev_pars['minmag'][i]
+            pdict['maxmag'] = dev_pars['maxmag'][i]
+
+            dev_plist.append(pdict)
+
+
+        Tpriors['gexp']=exp_plist
+        Tpriors['gdev']=dev_plist
+
+        self.Tpriors=Tpriors
+
 
 
     def set_priors_vs_mag_exponly(self):
@@ -169,6 +235,30 @@ class Pipe(dict):
                 raise ValueError("not possible error finding mag: nan?")
 
         return gprior
+
+
+    def get_Tprior(self, index, fitmodel):
+        if self.Tpriors==None:
+            Tprior=None
+
+        mag=self.cat['mag_auto_r'][index]
+
+        Tprior=None
+        for pdict in self.Tpriors[fitmodel]:
+            if mag >= pdict['minmag'] and mag <= pdict['maxmag']:
+                Tprior=pdict['Tprior']
+
+        if Tprior is None:
+            if mag < self.Tpriors[fitmodel][0]['minmag']:
+                Tprior=self.Tpriors[fitmodel][0]['Tprior']
+            elif mag > self.Tpriors[fitmodel][-1]['maxmag']:
+                Tprior=self.Tpriors[fitmodel][-1]['Tprior']
+            else:
+                raise ValueError("not possible error finding mag: nan?")
+
+        return Tprior
+
+
 
 
     def _load_data(self):
@@ -427,6 +517,7 @@ class Pipe(dict):
         else:
             nsub=self.get('object_nsub',None)
             gprior=self.get_gprior(index, fitmodel)
+            Tprior=self.get_Tprior(index, fitmodel)
 
             nwalkers=self['nwalkers']
             burnin=self['burnin']
@@ -442,6 +533,7 @@ class Pipe(dict):
                                    ares=ares,
                                    cen_width=cen_width,
                                    nsub=nsub,
+                                   Tprior=Tprior,
                                    make_plots=False)
         return fitter
 

@@ -62,7 +62,7 @@ class FitRunner(object):
     def get_data(self):
         data=files.read_prior_original()
         if self.objtype=='gdev':
-            w,=where(data['n'] > 2)
+            w,=where(data['n'] > 3)
         else:
             w,=where(data['n'] < 2)
         self.data=data[w]
@@ -77,11 +77,30 @@ class FitRunner(object):
         # that is where samples changed from SDSS to HST
         #maglims=[0.0,20.0,20.5,21.0,21.5,22.0,22.5,23.0,
         #         23.5,24.0,30.0]
-        maglims=[18.0,20.0,20.5,21.0,21.5,22.0,22.5,23.0,
-                 23.5,24.0,24.5]
-        maglims=[18.0,19.0,20.0,20.25,20.5,20.75,21.0,
-                 21.25,21.50,21.75,22.0,22.25,22.5,22.75,
-                 23.0,23.25,23.5,23.75,24.0,24.25,24.5]
+        #maglims=[18.0,20.0,20.5,21.0,21.5,22.0,22.5,23.0,
+        #         23.5,24.0,24.5]
+        #maglims=[18.0,19.0,20.0,20.25,20.5,20.75,21.0,
+        #         21.25,21.50,21.75,22.0,22.25,22.5,22.75,
+        #         23.0,23.25,23.5,23.75,24.0,24.25,24.5]
+        #maglims=[18.0,19.0,20.0,20.25,20.5,20.75,21.0,
+        #         21.25,21.50,21.75,22.0,22.25,22.5,22.75,
+        #         23.0,23.5,24.5]
+
+
+        if self.objtype=='gexp':
+            maglims=[18.0,19.0,20.0,20.25,20.5,20.75,21.0,
+                     21.25,21.50,21.75,22.0,22.25,22.5,22.75,
+                     23.0,23.25,23.5,23.75,24.0,24.25,24.5]
+        else:
+            maglims=[18.0,19.0,20.0,20.25,20.5,20.75,21.0,
+                     21.25,21.50,21.75,22.0,22.25,22.5,22.75,
+                     23.0,23.5,24.0,24.5]
+            #maglims=[18.0,19.0,20.0,20.25,20.5,20.75,21.0,
+            #         21.25,21.50,21.75,22.0,22.25,22.5,22.75,
+            #         23.0,23.5,24.5]
+
+
+
         nbin=len(maglims)-1
 
         st=self.get_struct(nbin)
@@ -132,7 +151,18 @@ class FitRunner(object):
 
             tab[i,0] = plt
 
-        tab.show()
+        if self.show:
+            tab.show()
+
+        d=files.get_prior_dir()
+        d=os.path.join(d, 'plots')
+        epsfile='pofe-pars-%s.eps' % self.objtype
+        epsfile=os.path.join(d,epsfile)
+        eu.ostools.makedirs_fromfile(epsfile)
+        print epsfile
+        tab.write_eps(epsfile)
+        os.system('converter -d 100 %s' % epsfile)
+
 
     def write_data(self, st):
         import fitsio
@@ -165,6 +195,7 @@ class FitRunner(object):
             g1=data['g'][w,0]
             g2=data['g'][w,1]
 
+        gtot = sqrt(g1**2 + g2**2)
 
         sigma=gtot.std()
         binsize=0.2*sigma
@@ -173,10 +204,9 @@ class FitRunner(object):
         h1=histogram(g1, binsize=binsize, min=-1., max=1., more=more)
         h2=histogram(g2, binsize=binsize, min=-1., max=1., more=more)
 
-        gtot = sqrt(g1**2 + g2**2)
 
-        h=histogram(gtot, binsize=binsize, min=0., max=1., more=more)
-        #h=histogram(gtot, binsize=binsize, more=more)
+        #h=histogram(gtot, binsize=binsize, min=0., max=1., more=more)
+        h=histogram(gtot, binsize=binsize, more=more)
 
         if False:
             import biggles
@@ -188,8 +218,12 @@ class FitRunner(object):
 
     def do_fit(self, h):
         hvals=h['hist'].astype('f8')
-        #res=prior.fit_gprior_exp(h['center'], hvals, gmax=0.7)
-        res=prior.fit_gprior_exp_mcmc(h['center'], hvals, gmax=0.7)
+
+        yerr=sqrt(hvals)
+        yerr=yerr.clip(1.0, yerr.max())
+        ivar=1./yerr**2
+
+        res=prior.fit_gprior_exp_mcmc(h['center'], hvals, ivar, gmax=0.7, Awidth=0.1, gmax_min=0.5)
 
         return res
 
@@ -225,7 +259,8 @@ class FitRunner(object):
         g1rand,g2rand=gprior.sample2d(nrand)
         grand=gprior.sample1d(nrand)
 
-        hrand=histogram(grand, binsize=binsize, min=0., max=1., more=True)
+        #hrand=histogram(grand, binsize=binsize, min=0., max=1., more=True)
+        hrand=histogram(grand, binsize=binsize, min=h['low'][0], max=h['high'][-1], more=True)
         h1rand=histogram(g1rand, binsize=binsize, min=-1., max=1., more=True)
 
         #fbinsize=xfit[1]-xfit[0]
@@ -274,6 +309,15 @@ class FitRunner(object):
         
         if self.show:
             tab.show()
+
+        d=files.get_prior_dir()
+        d=os.path.join(d, 'plots')
+        epsfile='pofe-%.2f-%.2f-%s.eps' % (minmag,maxmag,self.objtype)
+        epsfile=os.path.join(d,epsfile)
+        eu.ostools.makedirs_fromfile(epsfile)
+        print epsfile
+        tab.write_eps(epsfile)
+        os.system('converter -d 100 %s' % epsfile)
 
         return tab
 

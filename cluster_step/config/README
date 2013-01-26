@@ -3,7 +3,7 @@ todo
 - REDO gprior stuff
     - use fewer bins for dev, as we did for sprior
     - use sqrt(n) errors
-    - variable binsize
+    * variable binsize
     - figure out why it is worse with the split
 
 - try cutting mag to SDSS vs. hst

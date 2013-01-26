@@ -25,11 +25,15 @@ parser.add_option('--run-admom',action='store_true',
 parser.add_option('--run-psf',action='store_true',
                   help="Force a re-run of psf")
 
+parser.add_option('--vers',default='work',
+                  help="version for espy and gmix image")
+
 _wqtemplate_byccd="""
 command: |
     source ~/.bashrc
-    module unload espy && module load espy/work
-    module unload gmix_image && module load gmix_image/work
+    module unload espy && module load espy/%(vers)s
+    module unload gmix_image && module load gmix_image/%(vers)s
+
     python $ESPY_DIR/cluster_step/bin/%(cmd)s %(run)s %(psfnum)s %(shnum)s %(ccd)s
 
 %(notgroups)s
@@ -39,8 +43,9 @@ priority: %(pri)s\n"""
 _wqtemplate_byexp="""
 command: |
     source ~/.bashrc
-    module unload espy && module load espy/work
-    module unload gmix_image && module load gmix_image/work
+    module unload espy && module load espy/%(vers)s
+    module unload gmix_image && module load gmix_image/%(vers)s
+
     parallel "python $ESPY_DIR/cluster_step/bin/%(cmd)s %(run)s %(psfnum)s %(shnum)s {}" ::: {1..62}
 
 %(groups)s
@@ -111,6 +116,7 @@ def main():
                        'shnum':shnum,
                        'groups':groups,
                        'notgroups':notgroups,
+                       'vers':options.vers,
                        'pri':options.priority}
 
                     text=_wqtemplate_byexp % d
@@ -132,6 +138,7 @@ def main():
                            'ccd':ccd,
                            'groups':groups,
                            'notgroups':notgroups,
+                           'vers':options.vers,
                            'pri':options.priority}
 
                         text=_wqtemplate_byccd % d

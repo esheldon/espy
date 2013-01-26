@@ -80,6 +80,8 @@ class FitRunner(object):
         # sigma = sqrt(T/2) = sqrt(fac/2)*re
         self.sigma = sqrt(fac/2)*self.data['scale']
 
+        #self.sigma = fac*self.data['scale']**2
+
     def go(self):
         print 'fitting:',self.objtype
         self.load_data()
@@ -90,7 +92,7 @@ class FitRunner(object):
         #maglims=[18.0,20.0,20.5,21.0,21.5,22.0,22.5,23.0,
         #         23.5,24.0,24.5]
         if self.objtype=='gexp':
-            self.binfac=0.2
+            self.binfac=0.15
             maglims=[18.0,19.0,20.0,20.25,20.5,20.75,21.0,
                      21.25,21.50,21.75,22.0,22.25,22.5,22.75,
                      23.0,23.25,23.5,23.75,24.0,24.25,24.5]
@@ -188,6 +190,14 @@ class FitRunner(object):
 
         mean=sigma_vals.mean()
         sigma=sigma_vals.std()
+
+        for i in xrange(3):
+            w,=where(sigma_vals < (mean+4.*sigma))
+
+            sigma_vals=sigma_vals[w]
+
+            mean=sigma_vals.mean()
+            sigma=sigma_vals.std()
 
         binsize=sigma*self.binfac
         self.binsize=binsize
