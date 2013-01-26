@@ -67,7 +67,7 @@ class JobLister(dict):
 
         out=[]
         for line in tmp:
-            out.append( qs.split() )
+            out.append( line.split() )
 
         return out
 
@@ -102,9 +102,9 @@ class Submitter(object):
 
 
     def submit_jobs(self):
-        print >>stderr,"submitting jobs for user: %s" % user
-        print >>stderr,"number in list:           %s" % len(flist)
-        print >>stderr,"will limit to maxjobs:    %s" % maxjobs
+        print >>stderr,"submitting jobs for user: %s" % self.user
+        print >>stderr,"number in list:           %s" % len(self.flist)
+        print >>stderr,"will limit to maxjobs:    %s" % self.maxjobs
 
         if self.dryrun:
             return
@@ -120,11 +120,11 @@ class Submitter(object):
             if not os.path.exists(logf) or self.force:
                 if diffjobs <= 0:
                     lister.find_jobs()
-                    diffjobs = maxjobs - lister.get_njobs()
+                    diffjobs = self.maxjobs - lister.get_njobs()
                     while diffjobs <= 0:
                         time.sleep(self.polltime)
                         lister.find_jobs()
-                        diffjobs = maxjobs - lister.get_njobs()
+                        diffjobs = self.maxjobs - lister.get_njobs()
                     print >>stderr,("Found %s jobs  "
                                     "diffjobs: %s" % (lister.get_njobs(),diffjobs))
 
