@@ -23,11 +23,12 @@ burnin: 400
 iter: true
 mca_a: 3.0 # about 35% acceptance
 
+fitstyle: 'mcmc'
 fitmodel: ['gexp','gdev']
 
 shear_s2n_min: 10
 
-gprior_type: 'fits-vs-mag-gexponly'
+gprior_type: 'fits-vs-mag-nosplit'
 
 
 # draw the g1,g2 starting points from the gprior

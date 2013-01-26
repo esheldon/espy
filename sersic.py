@@ -6,14 +6,38 @@ The lookup table is faster and more accurate
 import os
 import numpy
 
-def get_kappa(n):
+def get_kappa(n, table=False):
     """
     I=A*exp( -kappa*( (r/re)^{1/n} - 1 ) )
 
     kappa is chosen such that re is the half life radius.
     """
-    ktable=KappaTable()
-    return ktable(n)
+    if table:
+        kf=KappaTable()
+    else:
+        kf=KappaFinder()
+    return kf(n)
+
+def re2T_factor(n):
+    """
+    T = re2T_factor*r_e^2
+    """
+    n=int(n)
+    if n==4:
+        fac = 78.2035/3.60728
+    elif n==1:
+        fac = 4.0506/1.90166
+    else:
+        raise ValueError("n must be 1 or 4")
+
+    return fac
+
+def T2re_factor(n):
+    """
+    r_e = T2re_factor*T
+    """
+    fac = 1./re2T_factor(n)
+    return rac
 
 class KappaTable(object):
     _table=None

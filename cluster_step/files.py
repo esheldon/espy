@@ -29,19 +29,35 @@ def get_prior_dir(**keys):
     dir=os.path.join(vdir, 'pofe')
     return dir
 
-def get_prior_path(**keys):
+def get_gprior_path(**keys):
     dir=get_prior_dir(**keys)
-    objtype=keys['type']
-    old=keys.get('old',False)
-    if old:
-        name='pofe-fits-%s-old.fits' % objtype
+    nosplit=keys.get('nosplit',False)
+    if nosplit:
+        name='pofe-fits-nosplit.fits' % objtype
     else:
+        objtype=keys['type']
         name='pofe-fits-%s.fits' % objtype
     return os.path.join(dir, name)
-def read_prior(**keys):
+
+def read_gprior(**keys):
     import fitsio
-    path=get_prior_path(**keys)
+    path=get_gprior_path(**keys)
+    print 'reading:',path
     return fitsio.read(path)
+
+def get_sprior_path(**keys):
+    dir=get_prior_dir(**keys)
+    objtype=keys['type']
+    name='pofs-fits-%s.fits' % objtype
+    return os.path.join(dir, name)
+
+def read_sprior(**keys):
+    import fitsio
+    path=get_sprior_path(**keys)
+    print 'reading:',path
+    return fitsio.read(path)
+
+
 
 def read_prior_original(**keys):
     from esutil import recfile
@@ -277,6 +293,41 @@ class Reader(dict):
     def __init__(self, **keys):
         """
         Default to reading everything
+
+        parameters
+        ----------
+        run:
+            run identifier
+
+        psfnums: optional
+            restrict to these psf numbers.  Can be scalar or sequence
+        shnums: optional
+            restrict to these shear numbers.  Can be scalar or sequence
+        ccds: optional
+            restrict to these ccd numbers.  Can be scalar or sequence
+        setname: string, optional
+            The set name, e.g. 'use3'.  Default 'use1'
+            Set names represent a set of cuts.
+        sratio_range: sequence, optional
+            Min and max sratio values.
+        s2n_range: sequence, optional
+            Min and max s2n values.
+        Ts2n_range: sequence, optional
+            Min and max Ts2n values.
+        Tmean: sequence, optional
+            Min and max Tmean range
+        mag: sequence, optional
+            Min and max mag range
+        prob: sequence, optional
+            Min and max fit_prob range
+
+        verbose: bool
+            Set True to be more verbose
+        progress: bool
+            Set True to show progress bar
+        ignore_missing: bool
+            Set to True to ignore missing files.
+
         """
         
         self._check_keys(**keys)
@@ -365,12 +416,14 @@ class Reader(dict):
             if self['objtype'] is not None:
                 logic=logic & strmatch(data0['model'],self['objtype'])
 
-        for name in ['sratio','Ts2n','s2','Tmean','mag','prob']:
+        for name in ['sratio','s2n','Ts2n','s2','Tmean','mag','prob']:
             rname='%s_range' % name
             if name=='mag':
                 name='mag_auto_r'
             if name=='prob':
                 name='fit_prob'
+            if name=='s2n':
+                name='s2n_w'
             if rname in self:
                 r=self[rname]
                 logic=logic & ((data0[name] > r[0]) & (data0[name] < r[1]))

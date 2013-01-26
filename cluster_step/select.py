@@ -1,4 +1,5 @@
 from numpy import where
+
 class Selector(object):
     def __init__(self):
         pass
@@ -60,18 +61,5 @@ class Selector(object):
         logic=self.get_logic(data, setname)
         w,=where(logic)
         return w
-
-#parser.add_option('--s2n',default='10,200', help="s/n range, %default")
-#parser.add_option('--Ts2n',default='2,1.e6', help="Ts2n range, %default")
-#parser.add_option('--sratio',default='1.0,1.e6',
-#                  help='sratio range, %default')
-#parser.add_option('--Tmean',default='2,1.e6',
-#                  help='Tmean range, %default')
-#parser.add_option('--mag',default='0,100',
-#                  help='mag range, %default')
-#parser.add_option('--prob',default='0,1',
-#                  help='fit_prob range, %default')
-#parser.add_option('-t','--type',default=None,
-#                  help="limit to objects best fit by this model")
 
 

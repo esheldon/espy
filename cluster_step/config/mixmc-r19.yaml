@@ -18,7 +18,7 @@ fitmodel: ['gexp','gdev']
 shear_s2n_min: 10
 
 # draw from this
-gprior_type: 'fits-vs-mag-gexponly'
+gprior_type: 'fits-vs-mag-nosplit'
 
 # false means just draw from prior
 gprior_like: false

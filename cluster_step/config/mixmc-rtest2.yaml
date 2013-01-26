@@ -31,7 +31,7 @@ fitmodel: ['gexp','gdev']
 
 shear_s2n_min: 100
 
-#gprior_type: 'fits-vs-mag-gexponly'
+#gprior_type: 'fits-vs-mag-nosplit'
 gprior_type: 'old'
 
 

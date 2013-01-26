@@ -253,16 +253,11 @@ def main():
         print bf.g1fit
         print bf.g2fit
 
-        print 'g1 guess:',bf.g1fit.guess
-        print 'g2 guess:',bf.g2fit.guess
+        #print bf.g1fit.x,bf.g1fit.y
+        #print bf.g2fit.x,bf.g2fit.y
 
-        print bf.g1fit.x,bf.g1fit.y
-        print bf.g2fit.x,bf.g2fit.y
-        stop
-
-        plt1=mcmc.plot_results(bf.g1fit.trials)
-        plt2=mcmc.plot_results(bf.g2fit.trials)
-        stop
+        #plt1=mcmc.plot_results(bf.g1fit.trials)
+        #plt2=mcmc.plot_results(bf.g2fit.trials)
 
 
 

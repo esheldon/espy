@@ -1,5 +1,11 @@
 todo
 
+- REDO gprior stuff
+    - use fewer bins for dev, as we did for sprior
+    - use sqrt(n) errors
+    - variable binsize
+    - figure out why it is worse with the split
+
 - try cutting mag to SDSS vs. hst
 
 - try LM PSF fitting (psf4 shear4)
@@ -112,3 +118,7 @@ mixmc-r18
 
 mixmc-r19
     - same as r17 but using admom.  See no difference really
+
+mixmc-r20
+    - using different priors for exp and dev.  This looks worse
+    than r11 to me.

@@ -87,7 +87,8 @@ class BiasFitter(object):
             self.g1fit=LineFitter(g1true, g1diff, g1err)
             self.g2fit=LineFitter(g2true, g2diff, g2err)
         else:
-            nwalkers=200
+            #nwalkers=200
+            nwalkers=40
             burnin=100
             nstep=100
 

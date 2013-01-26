@@ -23,8 +23,6 @@ from biggles import FramedPlot, FramedArray, Table, Points, PlotKey, \
 from optparse import OptionParser
 parser=OptionParser(__doc__)
 
-parser.add_option('-b','--binsize',default=0.04,
-                  help="bin size, default %default")
 parser.add_option('-s','--show',action='store_true',
                   help="show the plot on the screen")
 parser.add_option('-t','--type',default=None,
@@ -41,7 +39,6 @@ class FitRunner(object):
         if self.objtype not in ['gexp','gdev']:
             raise ValueError("send objtype gexp or gdev")
 
-        self.binsize=float(options.binsize)
         self.show=options.show
 
         self.options=options
@@ -74,8 +71,6 @@ class FitRunner(object):
         print 'fitting:',self.objtype
         self.get_data()
 
-        #eu.plotting.bhist(self.data['mag'], binsize=0.2)
-        #stop
 
 
         # it is important that a bin starts at 23 since
@@ -141,7 +136,7 @@ class FitRunner(object):
 
     def write_data(self, st):
         import fitsio
-        outfile=files.get_prior_path(type=self.objtype)
+        outfile=files.get_gprior_path(type=self.objtype)
         print 'writing:',outfile
         with fitsio.FITS(outfile, mode='rw', clobber=True) as fobj:
             fobj.write(st)
@@ -156,7 +151,6 @@ class FitRunner(object):
         w,=where((data['mag'] > minmag) & (data['mag'] < maxmag))
         more=True
         data=self.data
-        binsize=self.binsize
 
         if self.evals:
             import lensing
@@ -170,6 +164,11 @@ class FitRunner(object):
         else:
             g1=data['g'][w,0]
             g2=data['g'][w,1]
+
+
+        sigma=gtot.std()
+        binsize=0.2*sigma
+        self.binsize=binsize
 
         h1=histogram(g1, binsize=binsize, min=-1., max=1., more=more)
         h2=histogram(g2, binsize=binsize, min=-1., max=1., more=more)

@@ -27,7 +27,7 @@ fitmodel: ['gexp','gdev']
 
 shear_s2n_min: 10
 
-gprior_type: 'fits-vs-mag-gexponly'
+gprior_type: 'fits-vs-mag-nosplit'
 
 
 # draw the g1,g2 starting points from the gprior

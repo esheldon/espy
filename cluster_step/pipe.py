@@ -76,7 +76,7 @@ class Pipe(dict):
                                                     D=13.)
             priors['gdev'] = priors['gexp']
             self.gpriors=priors
-        elif self['gprior_type'] == 'fits-vs-mag-gexponly':
+        elif self['gprior_type'] == 'fits-vs-mag-nosplit':
             self.set_priors_vs_mag_exponly()
         elif self['gprior_type'] == 'fits-vs-mag':
             self.set_priors_vs_mag()
@@ -91,8 +91,8 @@ class Pipe(dict):
         Note we use the GPriorExp for both dev and exp, but
         different galaxies were used to train it
         """
-        exp_prior_pars=files.read_prior(type='gexp')
-        dev_prior_pars=files.read_prior(type='gdev')
+        exp_prior_pars=files.read_gprior(type='gexp')
+        dev_prior_pars=files.read_gprior(type='gdev')
 
         gpriors={}
 
@@ -127,7 +127,7 @@ class Pipe(dict):
         """
         deprecated
         """
-        prior_pars=files.read_prior(type='gexp', old=True)
+        prior_pars=files.read_gprior(nosplit=True)
 
         gpriors={}
         plist=[]
@@ -148,7 +148,7 @@ class Pipe(dict):
     def get_gprior(self, index, fitmodel):
         if self['gprior_type']==None:
             gprior=None
-        elif self['gprior_type'] in ['fits-vs-mag','fits-vs-mag-gexponly']:
+        elif self['gprior_type'] in ['fits-vs-mag','fits-vs-mag-nosplit']:
             gprior=self.get_gprior_vs_mag(index, fitmodel)
         else:
             gprior=self.gpriors[fitmodel]
@@ -371,7 +371,7 @@ class Pipe(dict):
                 continue
 
             res=self.fit_shear_models(index, im, ares0, gmix_psf)
-            self.copy_shear_results(out, res, gmix_psf, igal)
+            self.copy_shear_results(out, res, gmix_psf, igal, ares0)
 
         self.shear_res=out
         files.write_fits_output(data=out, ftype='shear', **self)
@@ -1083,11 +1083,11 @@ class Pipe(dict):
 
         return data
 
-    def copy_shear_results(self, out, res, gmix_psf, igal):
+    def copy_shear_results(self, out, res, gmix_psf, igal, ares0):
         """
         Copy results into existing "out" structure
         """
-        out['s2n_admom'][igal] = self.ares['s2n'][igal]
+        out['s2n_admom'][igal] = ares0['s2n']
 
         e1psf,e2psf,Tpsf=gmix_psf.get_e1e2T()
         Tobj=res['Tmean']
@@ -1117,7 +1117,7 @@ class Pipe(dict):
             ('mag_auto_r','f8'),
             ('row_range','f8',2),
             ('col_range','f8',2),
-            ('model','S20'),
+            ('model','S5'),
             ('flags','i4'),
             ('e1psf','f8'),
             ('e2psf','f8'),
@@ -1129,7 +1129,6 @@ class Pipe(dict):
             ('gcov','f8',(2,2)),
             ('pars','f8',npars),
             ('pcov','f8',(npars,npars)),
-            #('pars_psf','f8',npars_psf),
             ('Tmean','f8','f8'),
             ('Terr','f8','f8'),
             ('Ts2n','f8','f8'),

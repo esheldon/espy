@@ -19,10 +19,11 @@ Revision History:
 
 import numpy
 from numpy import array, zeros, ones, sqrt, arange, isfinite, \
-        where, diag, log
+        where, diag, exp, log
 from numpy.random import randn
 from sys import stdout
 import os
+from sys import stderr
 
 
 def extract_stats(data, weights=None):
@@ -99,6 +100,7 @@ def print_stats(means, cov, names=None):
         else:
             name='%s' % i
         print '%s: %.16g +/- %.16g' % (name,means[i],sqrt(cov[i,i]))
+
 def extract_maxlike_stats(data, burnin):
     nuse = data.size-burnin
     npar = data['pars'].shape[1]
@@ -505,38 +507,17 @@ class MCMCTester:
 
 
 
-def plot_results6(res, burnin, sigma_clip=True):
-    import biggles
-    import esutil
-    tab = biggles.Table(2,3)
-    means,cov= extract_stats(res, burnin)
-    errs = sqrt(diag(cov)) 
-    for i in xrange(6):
-        irow = i//3
-        icol = i % 3
-        binsize=errs[i]*0.2
-        min = means[i]-4.0*errs[i]
-        max = means[i]+4.0*errs[i]
-        hdict = esutil.stat.histogram(res['pars'][burnin:, i], 
-                                      binsize=binsize, 
-                                      min=min,max=max,
-                                      more=True)
 
-        hplot = biggles.Histogram(hdict['hist'], x0=hdict['low'][0], binsize=binsize)
-        plt=biggles.FramedPlot()
-        plt.add(hplot)
-        plt.xlabel = 'parameter %i' % i
-
-        tab[irow,icol] = plt
-
-    tab.show()
-
-
-def plot_results(trials, binfac=0.2, names=None, show=True):
+def plot_results(trials, **keys):
     import biggles
     import esutil
 
-    biggles.configure( 'default', 'fontsize_min', 1)
+    fontsize_min=keys.get('fontsize_min',1)
+    biggles.configure( 'default', 'fontsize_min', fontsize_min)
+
+    binfac=keys.get('binfac',0.2)
+    names=keys.get('names',None)
+    show=keys.get('show',True)
 
     means,cov = extract_stats(trials)
     errs=sqrt(diag(cov)) 
@@ -566,6 +547,10 @@ def plot_results(trials, binfac=0.2, names=None, show=True):
             name=r'$p_{%d}$' % i
 
         plti.xlabel=name
+
+        hmax=hdict['hist'].max()
+        plti.yrange=[-0.05*hmax, 1.2*hmax]
+
         plti.add(hplot)
             
         lab = r'$<%s> = %0.4g \pm %0.4g$' % (name,means[i],errs[i])
@@ -720,10 +705,374 @@ def get_grid(ntot):
     else:
         return (sq+1,sq+1)
 
+class EmceeFitter(object):
+    """
+    Base class to fit the using emcee
 
+    the user must over-ride these functions
+        - get_guess() - return array of shape (nwalkers,ndims)
+        - get_lnprob(pars) - return the log likelihood for the input pars
+        - get_npoints() - return total number of data points
+            this is for doing statistics such as the chisq probability
+    
+    """
+    def __init__(self, nwalkers, burnin, nstep, a):
+
+        self._nwalkers=nwalkers
+        self._burnin=burnin
+        self._nstep=nstep
+        self._a=a
+
+    def get_result(self):
+        """
+        A dictionary with the results
+        
+        pars,pcov,perr,lnprob,aic,bic,chi2,dof,chi2per,prob
+        """
+        return self._result
+
+    def get_trials(self):
+        """
+        Return all points in the chain
+        """
+        return self._trials
+
+    def get_lnprobs(self):
+        """
+        Return all log probabilities in the chain
+        """
+        return self._sampler.lnprobability.reshape(self._nwalkers*self._nstep)
+
+    def get_guess(self):
+        """
+        array shape (nwalkers,ndims)
+        """
+        raise RuntimeError("over-ride")
+
+    def get_npoints(self):
+        """
+        Total number of data points
+        """
+        raise RuntimeError("over-ride")
+
+    def get_lnprob(self, pars):
+        """
+        scalar log likelihood or probability
+        """
+        raise RuntimeError("over-ride")
+
+    def _run_trials(self):
+        import emcee
+
+        guess=self.get_guess()
+        npars=guess.shape[1]
+
+        sampler = emcee.EnsembleSampler(self._nwalkers, 
+                                        npars,
+                                        self.get_lnprob,
+                                        a=self._a)
+
+        pos, prob, state = sampler.run_mcmc(guess, self._burnin)
+        sampler.reset()
+        pos, prob, state = sampler.run_mcmc(pos, self._nstep)
+
+        self._trials  = sampler.flatchain
+        self._sampler = sampler 
+
+        self._calc_stats()
+
+    def _calc_stats(self):
+        pars,pcov=extract_stats(self._trials)
+        perr=sqrt(diag(pcov))
+
+        npars=len(pars)
+
+        lnprob=self.get_lnprob(pars)
+
+        npts=self.get_npoints()
+
+        chi2=lnprob/(-0.5)
+        dof=npts-npars
+        chi2per = chi2/dof
+
+        aic = -2*lnprob + 2*npars
+        bic = -2*lnprob + npars*log(npts)
+
+        res={'pars':pars,
+             'perr':perr,
+             'pcov':pcov,
+             'lnprob':lnprob,
+             'aic':aic,
+             'bic':bic,
+             'chi2': chi2,
+             'dof':dof,
+             'chi2per':chi2per}
+        try:
+            import scipy.stats
+            prob = scipy.stats.chisqprob(chi2, dof)
+
+            res['prob']=prob
+        except:
+            pass
+
+        self._result=res
+
+    def plot_trials(self, **keys):
+        plt=plot_results(self._trials, **keys)
+        return plt
+
+    def __repr__(self):
+        pars=self._result['pars']
+        perr=self._result['perr']
+        npars=len(pars)
+
+        rep=[]
+        for i in xrange(npars):
+            r= "  p%d: %.4g +/- %.4g" % (i,pars[i],perr[i])
+            rep.append(r)
+        
+        rep='\n'.join(rep)
+        return rep
+
+
+class LogNormalFitter(EmceeFitter):
+    def __init__(self, x, y, guess, nwalkers, burnin, nstep, a=2, **keys):
+
+        super(LogNormalFitter,self).__init__(nwalkers, burnin, nstep, a)
+
+        self._x=array(x, dtype='f8', ndmin=1, copy=False)
+        self._y=array(y, dtype='f8', ndmin=1, copy=False)
+        self._guess0=guess
+
+        self._xmax=self._x.max()
+
+        if self._guess0 is not None:
+            self._guess0=array(self._guess0, dtype='f8', ndmin=1, copy=False)
+
+        self._yerr=keys.get('yerr',None)
+        self._ivar=keys.get('ivar',None)
+
+        self._width=keys.get('width',False)
+        if self._width is not None:
+            self._width=array(self._width, dtype='f8', ndmin=1, copy=False)
+
+        self._set_ivar()
+
+        self._check_data()
+        self._check_guess_and_width()
+
+        self._set_full_guess()
+
+        self._lowval=-9.999e20
+        self._run_trials()
+
+    def get_model(self):
+        """
+        Get a normalized lognormal model at the expectation value of the
+        parameters.  This function integrates to unity.
+        
+            model = lnf.get_model()
+            y = model(x)
+
+        To get the scaled function with the right overall normalization
+
+            y=model.scaled(x)
+        """
+        from esutil.random import LogNormal
+
+        pars=self._result['pars']
+        A=pars[0]
+        mean=pars[1]
+        sigma=pars[2]
+
+        return LogNormal(mean, sigma, norm=A)
+   
+    def get_guess(self):
+        """
+        over-ride for base class
+        """
+        return self._guess
+
+    def get_npoints(self):
+        """
+        over-ride for base class
+        """
+        return self._x.size
+
+    def get_lnprob(self, pars):
+        w,=where(pars <= 1.e-6)
+        if w.size > 0:
+            return self._lowval
+        if pars[1] > self._xmax:
+            return self._lowval
+
+
+        model=self._get_model_at_pars(pars)
+
+        chi2=((model-self._y)**2)*self._ivar
+        lnprob = -0.5*chi2.sum()
+
+        if self._width is not None:
+            w=self._width
+            g=self._guess0
+            lnprior=( (pars-self._guess0)/self._width )**2
+            lnprior = -0.5*lnprior.sum()
+            
+            lnprob += lnprior
+
+        return lnprob
+
+    def _get_model_at_pars(self, pars):
+        from esutil.random import LogNormal
+        A=pars[0]
+        mean=pars[1]
+        sigma=pars[2]
+
+        ln=LogNormal(mean, sigma, norm=A)
+        return ln.scaled(self._x)
+
+        # some optimizations here; could construct with norm=A and call
+        # scaled(x).  This way we avoid some error checking that has already
+        # been done
+
+        #lnobj=LogNormal(mean, sigma)
+        #lnprob=lnobj._lnprob(self._x)
+
+        #prob=exp(lnprob)
+
+        #return A*prob
+
+    def plot_trials(self, **keys):
+        names=['A','mean','sigma']
+        keys['names']=names
+        plt=plot_results(self._trials, **keys)
+        return plt
+
+    def _set_ivar(self):
+        if self._yerr is not None:
+            ivar=1./self._yerr**2
+            self._ivar=array(ivar, dtype='f8', ndmin=1, copy=False)
+        elif self._ivar is not None:
+            self._ivar=array(self._ivar, dtype='f8', ndmin=1, copy=False)
+        else:
+            self._ivar=None
+
+    def _check_data(self):
+        wbad,=where(numpy.isfinite(self._x) == False)
+        if wbad.size!=0:
+            raise ValueError("%d x values are not finite" % wbad.size)
+        wbad,=where(numpy.isfinite(self._y) == False)
+        if wbad.size!=0:
+            raise ValueError("%d y values are not finite" % wbad.size)
+
+        if self._x.size != self._y.size:
+            raise ValueError("x,y must be same size")
+
+        if self._ivar is not None:
+            wbad,=where(numpy.isfinite(self._ivar) == False)
+            if wbad.size!=0:
+                raise ValueError("%d ivar values are not finite" % wbad.size)
+
+            if (self._x.size != self._ivar.size) and (self._ivar.size != 1):
+                raise ValueError("x,y, and yerr/ivar must be same size")
+
+        wbad,=where(self._x <= 0)
+        if wbad.size != 0:
+            raise ValueError("x values must all be > 0")
+
+    def _check_guess_and_width(self):
+        # make sure there is a guess for each dimension
+        guess0=self._guess0
+        if guess0.size != 3:
+            raise ValueError("guess should be length 3 for [norm,mean,sigma]")
+
+        wbad,=where(numpy.isfinite(guess0) == False)
+        if wbad.size != 0:
+            mess=[]
+            mess.append("bad guess:")
+            for i in wbad:
+                mess.append("  %i %g" % (i,guess0[i]))
+            mess='\n'.join(mess)
+            raise ValueError(mess)
+
+        if self._width is not None:
+            if self._width.size != 3:
+                raise ValueError("width should be length 3 for [norm,mean,sigma]")
+            wbad,=where(numpy.isfinite(self._width) == False)
+            if wbad.size != 0:
+                raise ValueError("Some width are not finite: [%s, %s, %s]" % tuple(self._width))
+
+
+    def _set_full_guess(self):
+        from esutil.random import srandu
+
+        guess0=self._guess0
+
+        npars=len(guess0)
+        nwalkers=self._nwalkers
+        guess=zeros((nwalkers,npars))
+
+        for i in xrange(npars):
+            if guess0[i]==0:
+                guess[:,i] = guess0[i]+0.1*srandu(nwalkers)
+            else:
+                guess[:,i] = guess0[i]*(1+0.1*srandu(nwalkers))
+
+        self._guess=guess
+
+def test_lognormal():
+    import biggles
+    import esutil as eu
+    from esutil.random import LogNormal, srandu
+    from esutil.stat import histogram
+
+    n=1000
+    nwalkers=100
+    burnin=100
+    nstep=100
+
+    mean=8
+    sigma=3
+    ln=LogNormal(mean,sigma)
+    vals=ln.sample(n)
+
+    binsize=0.5
+
+    plt=eu.plotting.bhist(vals, binsize=binsize,show=False)
+
+    h=histogram(vals, binsize=binsize,more=True)
+    herr=sqrt(h['hist'])
+    herr=herr.clip(1.0, herr.max())
+
+    guess=[n*(1. + .1*srandu()),
+           mean*(1. + .1*srandu()),
+           sigma*(1. + .1*srandu())]
+    guess=[n*binsize,mean,sigma]
+
+    print 'guess:',guess
+    nlf=LogNormalFitter(h['center'], h['hist'], guess, nwalkers, burnin, nstep,
+                        yerr=herr)
+
+    print nlf
+
+    res=nlf.get_result()
+    
+    model=nlf.get_model()
+
+    yvals=model.scaled(h['center'])
+    plt.add(biggles.Curve(h['center'], yvals, color='blue'))
+    plt.show()
+
+
+                        
 class PolyFitter(object):
+    """
+    Fit a polygon to the input points using an affine invariant MCMC chain
+
+    The emcee module is used for the MCMC chain.
+    """
     def __init__(self, order, x, y, nwalkers, burnin, nstep, 
-                 guess=None, a=3, yerr=None, ivar=None):
+                 guess=None, a=2, yerr=None, ivar=None):
 
         self.order=order
         self.x=array(x, dtype='f8', ndmin=1, copy=False)
@@ -734,22 +1083,15 @@ class PolyFitter(object):
         self.nstep=nstep
         self.a=a
 
-        self.guess=guess
+        self.yerr=yerr
+        self.ivar=ivar
 
-        if yerr is not None:
-            ivar=1./yerr**2
-            self.ivar=array(ivar, dtype='f8', ndmin=1, copy=False)
-        elif ivar is not None:
-            self.ivar=array(ivar, dtype='f8', ndmin=1, copy=False)
-        else:
-            self.ivar=ones(self.x.size, dtype='f8')
-        
-        if ((self.x.size != self.y.size)
-                or
-                (self.x.size != self.ivar.size)):
-            raise ValueError("x,y, and yerr/ivar must be same size")
+        self._set_ivar()
 
-        self._go()
+        self._check_data()
+        self._set_guess(guess)
+
+        self._run_trials()
 
     def get_result(self):
         return self._result
@@ -757,17 +1099,58 @@ class PolyFitter(object):
     def get_poly(self):
         return numpy.poly1d(self._result['pars'])
 
-    def _get_guess(self):
+    def _set_ivar(self):
+        if self.yerr is not None:
+            ivar=1./self.yerr**2
+            self.ivar=array(ivar, dtype='f8', ndmin=1, copy=False)
+        elif self.ivar is not None:
+            self.ivar=array(self.ivar, dtype='f8', ndmin=1, copy=False)
+        else:
+            self.ivar=None
+
+    def _check_data(self):
+        wbad,=where(numpy.isfinite(self.x) == False)
+        if wbad.size!=0:
+            raise ValueError("%d x values are not finite" % wbad.size)
+        wbad,=where(numpy.isfinite(self.y) == False)
+        if wbad.size!=0:
+            raise ValueError("%d y values are not finite" % wbad.size)
+
+        if self.x.size != self.y.size:
+            raise ValueError("x,y must be same size")
+
+
+        if self.ivar is not None:
+            wbad,=where(numpy.isfinite(self.ivar) == False)
+            if wbad.size!=0:
+                raise ValueError("%d ivar values are not finite" % wbad.size)
+
+            if (self.x.size != self.ivar.size) and (self.ivar.size != 1):
+                raise ValueError("x,y, and yerr/ivar must be same size")
+
+
+
+    def _check_guess(self,guess):
+        if guess.size != (self.order+1):
+            raise ValueError("guess should be length order+1")
+        wbad,=where(numpy.isfinite(guess) == False)
+        if wbad.size != 0:
+            mess=[]
+            mess.append("bad guess:")
+            for i in wbad:
+                mess.append("  %i %g" % (i,guess[i]))
+            mess='\n'.join(mess)
+            raise ValueError(mess)
+
+    def _set_guess(self, guess0):
         from esutil.random import srandu
 
-        if self.guess is not None:
-            guess0=array(self.guess, dtype='f8', ndmin=1, copy=True)
-            if guess0.size != (self.order+1):
-                raise ValueError("guess should be length order+1")
+        if guess0 is not None:
+            guess0=array(guess0, dtype='f8', ndmin=1, copy=True)
+            self._check_guess(guess0)
         else:
             guess0=numpy.polyfit(self.x, self.y, self.order)
             self.guess=guess0
-
 
         npars=len(guess0)
         nwalkers=self.nwalkers
@@ -779,15 +1162,16 @@ class PolyFitter(object):
             else:
                 guess[:,i] = guess0[i]*(1+0.1*srandu(nwalkers))
 
-        return guess
+        self._guess=guess
 
-    def _go(self):
+    def _run_trials(self):
         import emcee
-        guess=self._get_guess()
+
+        guess=self._guess
         npars=guess.shape[1]
         sampler = emcee.EnsembleSampler(self.nwalkers, 
                                         npars,
-                                        self.loglike,
+                                        self.get_lnprob,
                                         a=self.a)
 
         pos, prob, state = sampler.run_mcmc(guess, self.burnin)
@@ -804,19 +1188,21 @@ class PolyFitter(object):
 
         npars=len(pars)
 
-        loglike=self.loglike(pars)
+        lnprob=self.get_lnprob(pars)
 
-        chi2=loglike/(-0.5)
+        chi2=lnprob/(-0.5)
         dof=self.x.size-npars
         chi2per = chi2/dof
 
-        aic = -2*loglike + 2*npars
-        bic = -2*loglike + npars*log(self.x.size)
+        aic = -2*lnprob + 2*npars
+        bic = -2*lnprob + npars*log(self.x.size)
 
         res={'pars':pars,
              'perr':perr,
              'pcov':pcov,
-             'loglike':loglike,
+             'lnprob':lnprob,
+             'aic':aic,
+             'bic':bic,
              'chi2': chi2,
              'dof':dof,
              'chi2per':chi2per}
@@ -831,12 +1217,15 @@ class PolyFitter(object):
         self._result=res
 
 
-    def loglike(self, pars):
+    def get_lnprob(self, pars):
         from numpy import poly1d
 
         ply=poly1d(pars)
         model=ply(self.x)
-        chi2 = self.ivar*(self.y-model)**2
+        chi2 = (self.y-model)**2
+        if self.ivar is not None:
+            chi2 *= self.ivar
+
         return -0.5*chi2.sum()
 
     def plot_trials(self):

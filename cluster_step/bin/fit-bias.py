@@ -32,11 +32,13 @@ parser.add_option('--fitter',default='mcmc',
                   help="type of fitter, mcmc or lm, default %default")
 
 
+parser.add_option('-y','--yrange',default=None,
+                  help="yrange for plot")
 parser.add_option('--show',action='store_true',
                   help="show the plot on the screen")
 
 
-def doplot(bf, fitter_type='mcmc'):
+def doplot(bf, yrange=None, fitter_type='mcmc'):
     import biggles
     plt=biggles.FramedPlot()
 
@@ -55,13 +57,33 @@ def doplot(bf, fitter_type='mcmc'):
     g1c=biggles.Curve(bf.g1true, ply1(bf.g1true),color=color1)
     g2c=biggles.Curve(bf.g2true, ply2(bf.g2true),color=color2)
 
+    res1=bf.g1fit.get_result()
+    res2=bf.g2fit.get_result()
+    m1_mess=r'$m1: %.4g \pm %.4g$' % (res1['pars'][0],res1['perr'][0])
+    c1_mess=r'$c1: %.4g \pm %.4g$' % (res1['pars'][1],res1['perr'][1])
+    m2_mess=r'$m2: %.4g \pm %.4g$' % (res2['pars'][0],res2['perr'][0])
+    c2_mess=r'$c2: %.4g \pm %.4g$' % (res2['pars'][1],res2['perr'][1])
+
+    y=0.3
+    dec=-0.05
+    m1lab=biggles.PlotLabel(0.1,y,m1_mess,halign='left')
+    y += dec
+    c1lab=biggles.PlotLabel(0.1,y,c1_mess,halign='left')
+    y += dec
+    m2lab=biggles.PlotLabel(0.1,y,m2_mess,halign='left')
+    y += dec
+    c2lab=biggles.PlotLabel(0.1,y,c2_mess,halign='left')
+
     key=biggles.PlotKey(0.9,0.15,[g1pts,g2pts],halign='right')
 
     plt.add(g1pts, gerr1pts, g1c, g2pts, gerr2pts, g2c, key)
+    plt.add(m1lab,c1lab,m2lab,c2lab)
+
     plt.xlabel=r'$\gamma_{true}$'
     plt.ylabel=r'$\Delta \gamma$'
     plt.aspect_ratio=1
-    plt.yrange=[-0.005,0.005]
+    if yrange is not None:
+        plt.yrange=yrange
     plt.show()
 
     if fitter_type=='mcmc':
@@ -84,8 +106,10 @@ def main():
         sys.exit(1)
 
     run=options.run
-
     doshow  = options.show
+    yrange=options.yrange
+    if yrange is not None:
+        yrange=[float(y) for y in yrange.split(',')]
 
     s2n_range=[float(s) for s in options.s2n.split(',')]
     sratio_range=[float(s) for s in options.sratio.split(',')]
@@ -109,6 +133,6 @@ def main():
     print bf.g2fit
 
     if doshow:
-        doplot(bf,fitter_type=options.fitter)
+        doplot(bf,yrange=yrange, fitter_type=options.fitter)
 
 main()
