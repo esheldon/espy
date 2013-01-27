@@ -385,9 +385,14 @@ class Reader(dict):
 
                     data0=self.read_one(shnum,psfnum,ccd)
                     if data0 is not None:
-                        data=self.select(data0)
+                        if self['setname'] is not None:
+                            data=self.select(data0)
+                        else:
+                            data=data0
+
                         if data is not None:
                             datalist.append(data)
+
                     del data0
 
         if len(datalist) == 0:
@@ -687,22 +692,29 @@ def get_output_path(**keys):
         to global variable default_version
     """
     run=keys['run']
+    ftype=keys['ftype']
+
     psfnum=keys['psfnum']
     shnum=keys['shnum']
-    ccd='%02d' % int(keys['ccd'])
-    ftype=keys['ftype']
+    if ftype=='shear-stack':
+        ccd=None
+    else:
+        ccd='%02d' % int(keys['ccd'])
 
     vdir=get_version_dir(**keys)
     dir=os.path.join(vdir, 'shear', run, 'psf%s' % psfnum)
 
-    if ftype in ['admom','psf','shear']:
+    if ftype in ['admom','psf','shear','shear-stack']:
         ext='fits'
     else:
         ext=keys.get('ext',None)
         if ext is None:
             raise ValueError("send ext= for non-standard file types")
 
-    name='{run}-p{psfnum}-s{shnum}-{ccd}-{ftype}.{ext}'
+    if ccd is None:
+        name='{run}-p{psfnum}-s{shnum}-{ftype}.{ext}'
+    else:
+        name='{run}-p{psfnum}-s{shnum}-{ccd}-{ftype}.{ext}'
     name=name.format(run=run,psfnum=psfnum,shnum=shnum,
                      ccd=ccd,ftype=ftype,ext=ext)
 

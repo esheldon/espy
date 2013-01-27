@@ -2,7 +2,8 @@ import os
 from sys import stdout, stderr
 import pprint
 from math import ceil
-from numpy import where, sqrt, random, zeros, arange, median, random
+import numpy
+from numpy import where, sqrt, random, zeros, arange, median, random, array
 
 from . import files
 from . import prior
@@ -13,8 +14,12 @@ from gmix_image.gmix_mcmc import MixMCStandAlone, MixMCPSF
 from gmix_image.gmix_em import GMixEMPSF
 from gmix_image.gmix_fit import GMixFitSimple
 
-CLUSTERSTEP_GAL=1
-CLUSTERSTEP_STAR=2
+CLUSTERSTEP_GAL=2**0
+CLUSTERSTEP_STAR=2**1
+CLUSTERSTEP_PSF_STAR=2**2
+
+UW_BAD_ADMOM=2**0
+UW_TOO_FEW_PIXELS=2**1
 
 class Pipe(dict):
     def __init__(self, **keys):
@@ -1239,6 +1244,863 @@ class Pipe(dict):
         data['gcov']=9999
         data['pcov']=9999
         return data
+
+
+class StackPipe(dict):
+    def __init__(self, **keys):
+        """
+        parameters
+        ----------
+        run:
+            run id
+        psfnum:
+            psf number
+        shnum:
+            shear number
+        ccd:
+            ccd number
+
+        version: optional
+            version id
+
+        bugs
+        ----
+
+        the psf and shear row,col outputs are in the sub-image coordinates
+        Currently need to add row_range[0],col_range[0] to get back to
+        image coords
+
+        """
+
+        self._check_keys(**keys)
+
+        for k in keys:
+            self[k] = keys[k]
+
+        conf=files.read_config(self['run'])
+
+        for k in conf:
+            self[k]=conf[k]
+
+        self._load_data()
+
+    def _check_keys(self, **keys):
+        if ('run' not in keys
+                or 'psfnum' not in keys
+                or 'shnum' not in keys
+                or 'ccd' not in keys):
+            raise ValueError("send run=, psfnum=, "
+                             "shnum=, ccd=")
+
+
+    def _load_data(self):
+        self.cat=files.read_cat(**self)
+        image_orig, self.hdr=files.read_image(**self)
+
+        shear_path=files.get_output_path(ftype='shear', **self)
+        if os.path.exists(shear_path):
+            self.shear_res=files.read_fits_output(ftype='shear',**self)
+
+        self.seg, self.seg_hdr=files.read_image(ftype='seg', **self)
+
+        skypersec=self.hdr['sky']
+        exptime=self.hdr['exptime']
+
+        # assume gain same for both amplifiers
+        gain=self.hdr['gaina']
+        read_noise=self.hdr['rdnoisea']
+
+        # note unit mismatch? Both check out
+        self['sky'] = skypersec*exptime/gain
+        self['skyvar'] = self.hdr['sky'] + read_noise
+        self['skysig'] = sqrt(self['skyvar'])
+        self['ivar'] = 1.0/self['skyvar']
+
+        self.image = image_orig.astype('f8') - self['sky']
+        del image_orig
+
+    def get_cutout(self, index, size=None):
+        if size is None:
+            size=self['cutout_size']
+
+        cen=[self.cat['row'][index], self.cat['col'][index]]
+        id=self.cat['id'][index]
+
+        padding=self.get('seg_padding',0)
+        include_all_seg=self.get('include_all_seg',True)
+
+        cutout=CutoutWithSeg(self.image, self.seg, cen, id, size,
+                             include_all_seg=include_all_seg,
+                             padding=padding)
+
+        return cutout
+
+    def get_full_cutout(self, index, size=None):
+        if size is None:
+            size=self['cutout_size']
+
+        cen=[self.cat['row'][index], self.cat['col'][index]]
+
+        cutout=Cutout(self.image, cen, size)
+
+        return cutout
+
+
+    def get_zerod_cutout(self, index, **keys):
+        try:
+            c=self.get_cutout(index, **keys)
+        except NoSegMatches as excpt:
+            print >>stderr,str(excpt)
+            # sometimes there are no associated
+            # segment pixels!
+            c=self.get_full_cutout(index, **keys)
+            return c
+
+        im=c.subimage
+        seg=c.seg_subimage
+
+        id=self.cat['id'][index]
+        self.zero_seg(im, seg, id)
+
+        return c
+
+    def zero_seg(self, im, seg, id):
+        w=where( (seg != id) & (seg != 0) )
+        if w[0].size != 0:
+            im[w] = self['skysig']*random.randn(w[0].size)
+
+
+    def get_stars(self):
+        """
+        Get things labeled as stars.  if good, also trim
+        to those with good adaptive moments
+        """
+        logic=self.cat['class']==CLUSTERSTEP_STAR
+
+        am_logic = self.res['am_flags']==0
+        logic = logic & am_logic
+
+        w,=where(logic)
+        return w
+
+    def get_gals(self):
+        """
+        Get things labeled as galaxies.  if good, also trim
+        to those with good adaptive moments
+        """
+
+        logic=self.cat['class']==CLUSTERSTEP_GAL
+
+        am_logic = self.res['am_flags']==0
+        logic = logic & am_logic
+
+        w,=where(logic)
+        return w
+
+    def get_psf_stars(self):
+        """
+        Get things labeled as stars in the psf star mag range.  if good, also
+        trim to those with good adaptive moments
+        """
+        star_logic = self.cat['class']==CLUSTERSTEP_STAR
+        mag_logic  = ( (self.cat['mag_auto_r'] > self['star_minmag'])
+                       & (self.cat['mag_auto_r'] < self['star_maxmag']))
+        am_logic = self.res['am_flags']==0
+        logic = star_logic & mag_logic & am_logic
+
+        w,=where(logic)
+        return w
+
+    def _get_s2n_bins(self):
+        s2n_bins=numpy.logspace(numpy.log10(self['stack_s2n_min']),
+                                numpy.log10(self['stack_s2n_max']),
+                                self['stack_nbin']+1)
+        return s2n_bins
+
+    def run(self):
+        self._run_admom()
+
+        self.stacks=self.get_stack_struct()
+
+        print 'stacking psf images'
+        self.psf_stack, self.npsf_stack, self.psf_skyvar\
+                = self._stack_psf_stars()
+
+        self._measure_stacked_psf_admom()
+
+        print 'stacking gal images'
+
+        s2n_bins=self._get_s2n_bins()
+        nbin=len(s2n_bins)-1
+        for i in xrange(nbin):
+            s2n_min=s2n_bins[i]
+            s2n_max=s2n_bins[i+1]
+            print 's2n: [%s,%s]' % (s2n_min,s2n_max)
+            gal_stack,nstack,skyvar=self._stack_galaxies(s2n_min, s2n_max)
+
+            self.stacks['s2n_min'][i] = s2n_min
+            self.stacks['s2n_max'][i] = s2n_max
+            self.stacks['nstack'][i] = nstack
+            self.stacks['skyvar'][i] = skyvar
+            self.stacks['images'][i,:,:] = gal_stack
+
+        self._write_data()
+
+    def _write_data(self):
+        import fitsio
+        path=files.get_output_path(ftype='shear', **self)
+        print path
+
+        dir=os.path.dirname(path)
+        if not os.path.exists(dir):
+            try:
+                os.makedirs(dir)
+            except:
+                pass
+
+        psf_header={'skyvar':self.psf_skyvar,
+                    'nstack':self.npsf_stack}
+        with fitsio.FITS(path, mode='rw', clobber=True) as fits:
+            fits.write(self.res)
+            fits.write(self.psf_stack, header=psf_header)
+            fits.write(self.stacks)
+    
+    def _measure_stacked_psf_admom(self):
+        import admom
+        cen=array(self.psf_stack.shape)/2.
+        ares = admom.admom(self.psf_stack, cen[0], cen[1],
+                           sigsky=sqrt(self.psf_skyvar),
+                           guess=4.0,
+                           nsub=1)
+        self.psf_ares=ares
+
+
+    def _stack_psf_stars(self):
+        wpsf=self.get_psf_stars()
+        imstack, nstack, skyvar = self._stack_images(wpsf)
+
+        if False:
+            import images
+            images.multiview(imstack/imstack.max(), nonlinear=1)
+
+        return imstack,nstack,skyvar
+
+    def _stack_galaxies(self, s2n_min, s2n_max):
+        wgal=self.get_gals()
+        logic = ( (self.res['am_s2n'][wgal] > s2n_min) 
+                 &(self.res['am_s2n'][wgal] < s2n_max) )
+
+        T = self.res['am_irr'][wgal] + self.res['am_icc'][wgal]
+        Tpsf = self.psf_ares['Irr'] + self.psf_ares['Icc']
+
+        logic = logic & (T > 1.4*Tpsf)
+
+        wgal2=where(logic)
+        wgal=wgal[wgal2]
+
+        imstack,nstack,skyvar=self._stack_images(wgal)
+
+        if False:
+            import images
+            tit='s2n: [%.2f,%.2f]' % (s2n_min,s2n_max)
+            images.multiview(imstack/imstack.max(), nonlinear=1,
+                            title=tit)
+
+        return imstack, nstack, skyvar
+
+    def _stack_images(self, win):
+        #import admom
+        res=self.res
+        nrow=1+res['row_range'][win,1]-res['row_range'][win,0]
+        ncol=1+res['col_range'][win,1]-res['col_range'][win,0]
+
+        w,=where((nrow==self['cutout_size']) & (ncol==self['cutout_size']))
+        print '  using %s/%s in stack' % (w.size,win.size)
+
+        w=win[w]
+        
+        row=res['am_row'][w]-res['row_range'][w,0]
+        col=res['am_col'][w]-res['col_range'][w,0]
+
+        row_mean=row.mean()
+        col_mean=col.mean()
+
+        print '    <row>:',row_mean,'<col>:',col_mean
+
+        imstack=zeros( (self['cutout_size'], self['cutout_size'] ) )
+        
+        skyvar=0.0
+
+        for i in xrange(w.size):
+            index=w[i]
+            c=self.get_zerod_cutout(index)
+
+            im=c.subimage
+            if im.shape != imstack.shape:
+                raise ValueError("shape incorrect; index error?")
+    
+            drow=row_mean-row[i]
+            dcol=col_mean-col[i]
+
+            imshift= self._shift_image(im, [drow, dcol])
+            """
+            guess=(self.res['am_irr'][index]+self.res['am_icc'][index])/2
+            ares = admom.admom(imshift, row_mean, col_mean,
+                               sigsky=self['skysig'],
+                               guess=guess,
+                               nsub=1)
+
+            print row_mean-ares['wrow']
+            print col_mean-ares['wcol']
+            """
+
+            imstack += imshift
+
+            # sky variances add
+            skyvar += self['skyvar']
+
+        return imstack, w.size, skyvar
+
+    def _shift_image(self, image, shift):
+        import scipy.ndimage
+
+        output = scipy.ndimage.interpolation.shift(image, shift, 
+                                                   output='f8',
+                                                   order=1,
+                                                   mode='constant',
+                                                   cval=0.0)
+        return output
+
+    def _run_admom(self, **keys):
+
+        res=self.get_struct()
+        self.res=res
+
+        for i in xrange(self.cat.size):
+            if (i % 100) == 0:
+                print '%d/%d' % (i+1,self.cat.size)
+            c=self.get_zerod_cutout(i)
+
+            im=c.subimage
+            cen=c.subcen
+            self.res['row_range'][i] = c.row_range
+            self.res['col_range'][i] = c.col_range
+
+            ares=self._do_admom(im, i, cen)
+
+            self.res['am_row'][i] = c.row_range[0] + ares['wrow']
+            self.res['am_col'][i] = c.col_range[0] + ares['wcol']
+
+        w, = where(self.res['am_flags'] != 0)
+        print 'found %d/%d bad admom  %s' % (w.size,res.size,w.size/float(res.size))
+
+
+    def _do_admom(self, im, i, cen):
+        import admom
+        ares = admom.admom(im, cen[0], cen[1],
+                          sigsky=self['skysig'],
+                          guess=4.0,
+                          nsub=1)
+
+        if ares['whyflag'] != 0:
+            print 'index: %4d flag: %s' % (i,ares['whystr'])
+        
+        for n in ares:
+            rn='am_'+n.lower()
+            if (rn in self.res.dtype.names 
+                    and n not in ['row','col','wrow','wcol']):
+                self.res[rn][i] = ares[n]
+
+        # two are differently named
+        self.res['am_flags'][i] = ares['whyflag']
+        self.res['am_flagstr'][i] = ares['whystr']
+
+        return ares
+
+
+    def get_stack_struct(self):
+        imshape=tuple([self['cutout_size']]*2)
+        nbin=self['stack_nbin']
+        dt=[('s2n_min','f8'),
+            ('s2n_max','f8'),
+            ('nstack','i4'),
+            ('skyvar','f8'),
+            ('images', 'f8', imshape)]
+
+        data=zeros(nbin, dtype=dt)
+        return data
+
+    def get_struct(self):
+        sxdt=self.cat.dtype.descr
+
+        dt= [('psfnum','i2'),
+             ('shnum','i2'),
+             ('ccd','i2'),
+             ('row_range','f8',2),
+             ('col_range','f8',2),
+             ('am_row','f8'), # note simid,id in sxdt
+             ('am_col','f8'),
+             ('am_irr','f8'),
+             ('am_irc','f8'),
+             ('am_icc','f8'),
+             ('am_e1','f8'),
+             ('am_e2','f8'),
+             ('am_rho4','f8'),
+             ('am_a4','f8'),
+             ('am_s2','f8'),
+             ('am_uncer','f8'),
+             ('am_s2n','f8'),
+             ('am_numiter','i4'),
+             ('am_flags','i4'),
+             ('am_flagstr','S10'),
+             ('am_shiftmax','f8')]
+        dt=sxdt + dt
+        data=zeros(self.cat.size, dtype=dt)
+        for n in self.cat.dtype.names:
+            data[n][:] = self.cat[n][:]
+
+        data['psfnum'] = self['psfnum']
+        data['shnum'] = self['shnum']
+        data['ccd'] = self['ccd']
+        return data
+
+
+
+class MomentPipe(dict):
+    def __init__(self, **keys):
+        """
+        parameters
+        ----------
+        run:
+            run id
+        psfnum:
+            psf number
+        shnum:
+            shear number
+        ccd:
+            ccd number
+
+        version: optional
+            version id
+
+        bugs
+        ----
+
+        the psf and shear row,col outputs are in the sub-image coordinates
+        Currently need to add row_range[0],col_range[0] to get back to
+        image coords
+
+        """
+
+        self._check_keys(**keys)
+
+        for k in keys:
+            self[k] = keys[k]
+
+        conf=files.read_config(self['run'])
+
+        for k in conf:
+            self[k]=conf[k]
+
+        self._load_data()
+
+    def _check_keys(self, **keys):
+        if ('run' not in keys
+                or 'psfnum' not in keys
+                or 'shnum' not in keys
+                or 'ccd' not in keys):
+            raise ValueError("send run=, psfnum=, "
+                             "shnum=, ccd=")
+
+
+    def _load_data(self):
+        self.cat=files.read_cat(**self)
+        image_orig, self.hdr=files.read_image(**self)
+
+        shear_path=files.get_output_path(ftype='shear', **self)
+        if os.path.exists(shear_path):
+            self.shear_res=files.read_fits_output(ftype='shear',**self)
+
+        self.seg, self.seg_hdr=files.read_image(ftype='seg', **self)
+
+        skypersec=self.hdr['sky']
+        exptime=self.hdr['exptime']
+
+        # assume gain same for both amplifiers
+        gain=self.hdr['gaina']
+        read_noise=self.hdr['rdnoisea']
+
+        # note unit mismatch? Both check out
+        self['sky'] = skypersec*exptime/gain
+        self['skyvar'] = self.hdr['sky'] + read_noise
+        self['skysig'] = sqrt(self['skyvar'])
+        self['ivar'] = 1.0/self['skyvar']
+
+        self.image = image_orig.astype('f8') - self['sky']
+        del image_orig
+
+    def _set_psfres(self, psfres):
+        self.psfres=psfres
+
+    def get_cutout(self, index, size=None):
+        if size is None:
+            size=self['cutout_size']
+
+        cen=[self.cat['row'][index], self.cat['col'][index]]
+        id=self.cat['id'][index]
+
+        padding=self.get('seg_padding',0)
+        include_all_seg=self.get('include_all_seg',True)
+
+        cutout=CutoutWithSeg(self.image, self.seg, cen, id, size,
+                             include_all_seg=include_all_seg,
+                             padding=padding)
+
+        return cutout
+
+    def get_full_cutout(self, index, size=None):
+        if size is None:
+            size=self['cutout_size']
+
+        cen=[self.cat['row'][index], self.cat['col'][index]]
+
+        cutout=Cutout(self.image, cen, size)
+
+        return cutout
+
+
+    def get_zerod_cutout(self, index, **keys):
+        try:
+            c=self.get_cutout(index, **keys)
+        except NoSegMatches as excpt:
+            print >>stderr,str(excpt)
+            # sometimes there are no associated
+            # segment pixels!
+            c=self.get_full_cutout(index, **keys)
+            return c
+
+        im=c.subimage
+        seg=c.seg_subimage
+
+        id=self.cat['id'][index]
+        self.zero_seg(im, seg, id)
+
+        return c
+
+    def zero_seg(self, im, seg, id):
+        w=where( (seg != id) & (seg != 0) )
+        if w[0].size != 0:
+            im[w] = self['skysig']*random.randn(w[0].size)
+
+
+    def get_stars(self):
+        """
+        Get things labeled as stars.  if good, also trim
+        to those with good adaptive moments
+        """
+        logic=self.cat['class']==CLUSTERSTEP_STAR
+
+        w,=where(logic)
+        return w
+
+    def get_gals(self):
+        """
+        Get things labeled as galaxies.  if good, also trim
+        to those with good adaptive moments
+        """
+
+        logic=self.cat['class']==CLUSTERSTEP_GAL
+
+        w,=where(logic)
+        return w
+
+    def get_psf_stars(self):
+        """
+        Get things labeled as stars in the psf star mag range.  if good, also
+        trim to those with good adaptive moments
+        """
+        star_logic = self.cat['class']==CLUSTERSTEP_STAR
+        mag_logic  = ( (self.cat['mag_auto_r'] > self['star_minmag'])
+                       & (self.cat['mag_auto_r'] < self['star_maxmag']))
+
+        logic = star_logic & mag_logic
+
+        w,=where(logic)
+        return w
+
+    
+    def run(self, **keys):
+
+        res=self.get_struct()
+        self.res=res
+
+        for i in xrange(self.cat.size):
+            if (i % 100) == 0:
+                print '%d/%d' % (i+1,self.cat.size)
+            c=self.get_zerod_cutout(i)
+
+            im=c.subimage
+            cen=c.subcen
+            self.res['row_range'][i] = c.row_range
+            self.res['col_range'][i] = c.col_range
+
+            ares=self._do_admom(im, i, cen)
+
+            self.res['am_row'][i] = c.row_range[0] + ares['wrow']
+            self.res['am_col'][i] = c.col_range[0] + ares['wcol']
+
+            acen=[ares['wrow'], ares['wcol']]
+            self._do_uw_moments(im, i, acen)
+
+        w, = where(self.res['uw_flags'] != 0)
+        print 'found %d/%d bad   %s' % (w.size,res.size,w.size/float(res.size))
+
+        files.write_fits_output(data=self.res, ftype='shear', **self)
+
+    def _do_admom(self, im, i, cen):
+        import admom
+        ares = admom.admom(im, cen[0], cen[1],
+                          sigsky=self['skysig'],
+                          guess=4.0,
+                          nsub=1)
+
+        if ares['whyflag'] != 0:
+            print 'index: %4d flag: %s' % (i,ares['whystr'])
+        
+        for n in ares:
+            rn='am_'+n.lower()
+            if (rn in self.res.dtype.names 
+                    and n not in ['row','col','wrow','wcol']):
+                self.res[rn][i] = ares[n]
+
+        # two are differently named
+        self.res['am_flags'][i] = ares['whyflag']
+        self.res['am_flagstr'][i] = ares['whystr']
+
+        return ares
+
+
+    def _do_uw_moments(self, im, i, cen):
+        if self.res['am_flags'][i] != 0:
+            self.res['uw_flags'][i] = UW_BAD_ADMOM
+            return
+
+        nsig=self['uw_nsig']
+        T=self.res['am_irr'][i] + self.res['am_icc'][i]
+
+        arad=sqrt(T/2)
+        rmax = nsig*arad
+        rmax2=rmax**2
+
+        row,col=numpy.ogrid[0:im.shape[0], 0:im.shape[1]]
+        rm=row-cen[0]
+        cm=col-cen[1]
+        rad2=rm**2 + cm**2
+
+        w=where(rad2 <= rmax2)
+        if w[0].size < self['uw_min_pixels']:
+            self.res['uw_flags'][i] += UW_TOO_FEW_PIXELS
+            return
+
+        isum=im[w].sum()
+
+        rr = im*rm**2
+        rc = im*rm*cm
+        cc = im*cm**2
+
+        irrsum = rr[w].sum()
+        ircsum = rc[w].sum()
+        iccsum = cc[w].sum()
+
+        self.res['uw_rmax'][i] = rmax
+        self.res['uw_npix'][i] = w[0].size
+        self.res['uw_isum'][i] = isum
+        self.res['uw_irrsum'][i] = irrsum
+        self.res['uw_ircsum'][i] = ircsum
+        self.res['uw_iccsum'][i] = iccsum
+
+
+    def get_struct(self):
+        sxdt=self.cat.dtype.descr
+        dt= [('psfnum','i2'),
+             ('shnum','i2'),
+             ('ccd','i2'),
+             ('row_range','f8',2),
+             ('col_range','f8',2),
+             ('am_row','f8'), # note simid,id in sxdt
+             ('am_col','f8'),
+             ('am_irr','f8'),
+             ('am_irc','f8'),
+             ('am_icc','f8'),
+             ('am_e1','f8'),
+             ('am_e2','f8'),
+             ('am_rho4','f8'),
+             ('am_a4','f8'),
+             ('am_s2','f8'),
+             ('am_uncer','f8'),
+             ('am_s2n','f8'),
+             ('am_numiter','i4'),
+             ('am_flags','i4'),
+             ('am_flagstr','S10'),
+             ('am_shiftmax','f8'),
+             ('uw_flags','i4'),
+             ('uw_type','i1'), # CLUSTERSTEP_GAL,CLUSTERSTEP_STAR,PSF_STAR
+             ('uw_nsig','f8'),
+             ('uw_rmax','f8'), # nsig*radius from adaptive moments
+             ('uw_npix','i4'),
+             ('uw_isum','f8'),
+             ('uw_irrsum','f8'),
+             ('uw_ircsum','f8'),
+             ('uw_iccsum','f8')]
+
+        dt=sxdt + dt
+        data=zeros(self.cat.size, dtype=dt)
+        for n in self.cat.dtype.names:
+            data[n][:] = self.cat[n][:]
+
+        wpsf=self.get_psf_stars() 
+        data['uw_nsig'] = self['uw_nsig']
+        data['uw_type'] = data['class']
+        data['uw_type'][wpsf] += CLUSTERSTEP_PSF_STAR
+
+        data['psfnum'] = self['psfnum']
+        data['shnum'] = self['shnum']
+        data['ccd'] = self['ccd']
+        return data
+
+
+    def plot_admom_sizemag(self, show=False):
+        """
+        Plot the size-mag.  Show psf stars in a different color.
+        """
+        import biggles
+
+        if not hasattr(self, 'ares'):
+            raise ValueError("run_admom first")
+
+        wstar=self.get_stars()
+        wgal=self.get_gals()
+        wpsf=self.get_psf_stars()
+
+
+        plt=biggles.FramedPlot()
+        sigma=sqrt( (self.ares['Irr']+self.ares['Icc'])/2 )
+        mag=self.cat['mag_auto_r']
+        psize=0.7
+        pstar=biggles.Points(mag[wstar], sigma[wstar], 
+                             type='filled circle', color='red',
+                             size=psize)
+        pgal=biggles.Points(mag[wgal], sigma[wgal], 
+                            type='filled diamond', color='dark green',
+                            size=psize)
+
+        ppsf=biggles.Points(mag[wpsf], sigma[wpsf], 
+                            type='filled circle', color='blue',
+                            size=psize)
+
+        pstar.label='star'
+        pgal.label='gal'
+        ppsf.label='psf star'
+
+        key=biggles.PlotKey(0.95,0.92, [pstar,ppsf,pgal], halign='right')
+
+        plt.add(pstar, ppsf, pgal, key)
+        plt.xlabel='mag_auto_r'
+        plt.ylabel=r'$\sigma_{AM}$ [pixels]'
+        label='%s-p%s-s%s-%s' % (self['run'],self['psfnum'],self['shnum'],
+                                 self['ccd'])
+        plt.add(biggles.PlotLabel(0.05,0.92,label,halign='left'))
+
+        plt.xrange=[16.5,25.5]
+        plt.yrange=[0.75,8]
+        if show:
+            plt.show()
+
+        epsfile=files.get_output_path(ftype='sizemag', ext='eps', **self)
+        self._write_plot(plt, epsfile)
+
+
+
+    def _write_plot(self, plt, epsfile):
+        import converter
+        d=os.path.dirname(epsfile)
+        if not os.path.exists(d):
+            try:
+                os.makedirs(d)
+            except:
+                pass
+        print 'writing eps file:',epsfile
+        plt.write_eps(epsfile)
+
+        converter.convert(epsfile, dpi=100)
+
+
+
+    def show_many_cutouts(self, indices, **keys):
+        for i in indices:
+            self.show_cutout(i, **keys)
+            key=raw_input('hit a key (q to quit): ')
+            if key=='q':
+                return
+
+
+    def show_cutout(self, index, size=None, 
+                    zero_seg=False):
+        import biggles
+        biggles.configure( 'default', 'fontsize_min', 2)
+        if not hasattr(self,'ares'):
+            self.run_admom()
+
+        import biggles
+        import images
+
+        c=self.get_cutout(index, size=size)
+        cz=self.get_zerod_cutout(index, size=size)
+
+        minv=-2.5*self['skysig']
+
+        subimage=c.get_subimage().copy()
+        segsub=c.get_seg_subimage().copy()
+
+        zsubimage=cz.get_subimage().copy()
+
+        objtype='star'
+        if self.cat['class'][index]==CLUSTERSTEP_GAL:
+            objtype='gal'
+
+        s2n=self.ares['s2n'][index]
+        print 'index:',index
+        print 's2n:',s2n
+        print 'ranges:'
+        print '\t',c.row_range
+        print '\t',c.col_range
+        print 'image shape:',subimage.shape
+        print
+
+        # make the other objects always show darker
+        id=self.cat['id'][index]
+        w=where((segsub != id) & (segsub != 0))
+        if w[0].size > 0:
+            segsub[w] = id*10
+
+        implt=images.view(subimage,show=False, min=minv)
+        segplt=images.view(segsub,show=False)
+
+        title='%d %s S/N: %.1f [%d,%d]'
+        title = title % (index, objtype,s2n,subimage.shape[0],subimage.shape[1])
+        implt.title=title
+        segplt.title='seg'
+
+        zplt=images.view(zsubimage,show=False, min=minv)
+        zplt.title='zerod'
+
+        tab=biggles.Table(2,2)
+        tab[0,0]=implt
+        tab[0,1]=segplt
+        tab[1,0]=zplt
+
+        tab.show()
+
 
 class NoSegMatches(Exception):
     def __init__(self, value):

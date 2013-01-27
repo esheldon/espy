@@ -29,11 +29,28 @@ def main():
     shnum=int(args[2])
     ccd=int(args[3])
 
-    pipe=cluster_step.pipe.Pipe(run=run,
-                                psfnum=psfnum,
-                                shnum=shnum,
-                                ccd=ccd)
-    pipe.run_shear(run_admom=options.run_admom,
-                   run_psf=options.run_psf)
+    if 'umom' in run:
+        pipe=cluster_step.pipe.MomentPipe(run=run,
+                                          psfnum=psfnum,
+                                          shnum=shnum,
+                                          ccd=ccd)
+
+        pipe.run()
+    elif 'stack' in run:
+        pipe=cluster_step.pipe.StackPipe(run=run,
+                                         psfnum=psfnum,
+                                         shnum=shnum,
+                                         ccd=ccd)
+
+        pipe.run()
+
+    else:
+        pipe=cluster_step.pipe.Pipe(run=run,
+                                    psfnum=psfnum,
+                                    shnum=shnum,
+                                    ccd=ccd)
+
+        pipe.run_shear(run_admom=options.run_admom,
+                       run_psf=options.run_psf)
 
 main()
