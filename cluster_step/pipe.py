@@ -1669,7 +1669,6 @@ class StackPipe(dict):
 
         """
 
-        self._check_keys(**keys)
 
         for k in keys:
             self[k] = keys[k]
@@ -1681,15 +1680,18 @@ class StackPipe(dict):
         for k in conf:
             self[k]=conf[k]
 
+        self._check_inputs(**keys)
+
         self._load_data()
 
-    def _check_keys(self, **keys):
+    def _check_inputs(self, **keys):
         if ('run' not in keys
                 or 'psfnum' not in keys
                 or 'shnum' not in keys
                 or 'ccd' not in keys):
             raise ValueError("send run=, psfnum=, "
                              "shnum=, ccd=")
+
 
     def _set_boost(self, **keys):
         boost=int(keys.get('stack_boost',1))
@@ -1704,6 +1706,12 @@ class StackPipe(dict):
         shear_path=files.get_output_path(ftype='shear', **self)
         if os.path.exists(shear_path):
             self.shear_res=files.read_fits_output(ftype='shear',**self)
+
+        if 'mixmc_run' in self:
+            self.mixmc_pipe=Pipe(run=self['mixmc_run'],
+                                 psfnum=self['psfnum'], 
+                                 shnum=self['shnum'], 
+                                 ccd=self['ccd'])
 
         self.seg, self.seg_hdr=files.read_image(ftype='seg', **self)
 
@@ -1892,12 +1900,23 @@ class StackPipe(dict):
         return imstack,nstack,skyvar
 
     def _stack_galaxies(self, s2n_min, s2n_max):
-        wgal=self.get_gals()
-        logic = ( (self.res['am_s2n'][wgal] > s2n_min) 
-                 &(self.res['am_s2n'][wgal] < s2n_max) )
-
-        T = self.res['am_irr'][wgal] + self.res['am_icc'][wgal]
+        # adaptive good enough for psf since we know
+        # it is gaussian
         Tpsf = self.psf_ares['Irr'] + self.psf_ares['Icc']
+        if 'mixmc_run' in self:
+            mpipe=self.mixmc_pipe
+            wgal=mpipe.get_gals(s2n_min=mpipe['shear_s2n_min'])
+            mres=mpipe.shear_res
+            T = mres['Tmean']
+            logic = (  (self.res['am_flags'][wgal]==0)
+                     & (self.res['am_s2n'][wgal] > s2n_min) 
+                     & (self.res['am_s2n'][wgal] < s2n_max) )
+        else:
+            wgal=self.get_gals()
+            logic = ( (self.res['am_s2n'][wgal] > s2n_min) 
+                     &(self.res['am_s2n'][wgal] < s2n_max) )
+
+            T = self.res['am_irr'][wgal] + self.res['am_icc'][wgal]
 
         # Tpsf is in the boosted image
         Tpsf *= (1./self['stack_boost']**2)
@@ -1905,7 +1924,7 @@ class StackPipe(dict):
         srat=float(self['stack_sratio'])
         logic = logic & (T > Tpsf* srat**2)
 
-        wgal2=where(logic)
+        wgal2,=where(logic)
         wgal=wgal[wgal2]
 
         imstack,nstack,skyvar=self._stack_images(wgal)

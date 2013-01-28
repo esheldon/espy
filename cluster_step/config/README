@@ -6,7 +6,10 @@ todo
         - stack: does boosting really help?
         - stack: use the outputs from mixmc runs to help with cuts
         - stack: weight by 1/(g1err^2+g2err^2) or something?
-        - mixmc: bin up the mcmc points and add them up.  Weighting?
+
+        - mixmc: bin up the mcmc points and add them up.  But if the likelihood
+          surface is itself biased (<g> or peak) then we need to interpret it
+          correctly.  Weighting?
 
         - really need to move away from cluster step for testing since it has
           sample variance issues.

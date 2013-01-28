@@ -33,7 +33,7 @@ def get_gprior_path(**keys):
     dir=get_prior_dir(**keys)
     nosplit=keys.get('nosplit',False)
     if nosplit:
-        name='pofe-fits-nosplit.fits' % objtype
+        name='pofe-fits-nosplit.fits'
     else:
         objtype=keys['type']
         name='pofe-fits-%s.fits' % objtype

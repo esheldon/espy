@@ -36,8 +36,9 @@ class Plotter(object):
 
         self.options=options
 
-        if options.yrange is not None:
-            self.yrange=[float(y) for y in options.yrange.split(',')]
+        self.yrange=options.yrange
+        if self.yrange is not None:
+            self.yrange=[float(y) for y in self.yrange.split(',')]
 
         if (options.run is None 
                 or options.psfnum is None
@@ -60,13 +61,16 @@ class Plotter(object):
         self._measure_psf_admom()
         self._measure_gals_admom()
         self._measure_gals_gmix()
-        return
+        #return
         
-        g1=self._shear['e1']*0.5
-        g1err=self._shear['e1err']*0.5
-        g2=self._shear['e2']*0.5
-        g2err=self._shear['e2err']*0.5
-        s2n=self._shear['s2n']
+        #sh=self._admom_shear
+        sh=self._gmix_shear
+
+        g1=sh['e1']*0.5
+        g1err=sh['e1err']*0.5
+        g2=sh['e2']*0.5
+        g2err=sh['e2err']*0.5
+        s2n=sh['s2n']
 
         color1='red'
         color2='blue'
@@ -183,6 +187,13 @@ class Plotter(object):
         from gmix_image.util import print_pars
         from esutil.random import srandu
         import esutil as eu
+        import images
+        import biggles
+
+        subtract_median=False
+
+        biggles.configure('screen','width',1100)
+        biggles.configure('screen','height',1100)
 
         print '\n\n\n'
         nbin=self.im_stacks.size
@@ -201,6 +212,13 @@ class Plotter(object):
 
         psf_pixerr=sqrt(self.psf_skyvar)
         psfim =eu.numpy_util.to_native( self.psf_stack )
+
+        if subtract_median:
+            pix2med = tuple( [psfim[:,0:10].ravel(), psfim[:, -10:-1].ravel(), psfim[0:10, :].ravel(), psfim[-10:-1, :].ravel() ])
+            pix2med=numpy.concatenate(pix2med)
+            psfim -= numpy.median(pix2med)
+
+
         psf_counts=psfim.sum()
         psf_Tguess=self.psf_ares['Irr'] + self.psf_ares['Icc']
         while True:
@@ -239,12 +257,33 @@ class Plotter(object):
         gmix_psf = fitter.get_gmix()
         print gmix_psf
 
+        st=zeros(nbin, dtype=[('s2n','f8'),
+                              ('e1','f8'),
+                              ('e1err','f8'),
+                              ('e2','f8'),
+                              ('e2err','f8'),
+                              ('T','f8'),
+                              ('R','f8')])
+
         for i in xrange(nbin):
             print '-'*70
-            print self.im_stacks['s2n_min'][i], self.im_stacks['s2n_max'][i]
+
+            s2n_min=self.im_stacks['s2n_min'][i]
+            s2n_max=self.im_stacks['s2n_max'][i]
+
+            print 's2n: [%.2f,%.2f]' % (s2n_min,s2n_max)
+
 
 
             im=eu.numpy_util.to_native( self.im_stacks['images'][i,:,:] )
+
+            
+            # this is for the really big stacks in rtest3
+            if subtract_median:
+                pix2med = tuple( [im[:,0:10].ravel(), im[:, -10:-1].ravel(), im[0:10, :].ravel(), im[-10:-1, :].ravel() ])
+                pix2med=numpy.concatenate(pix2med)
+                im -= numpy.median(pix2med)
+
             pixerr=numpy.sqrt(self.im_stacks['skyvar'][i])
             ivar=1./self.im_stacks['skyvar'][i]
             
@@ -275,18 +314,21 @@ class Plotter(object):
             col_guess=self._ares_dicts[i]['wcol']
 
             while True:
-                if False:
+                if True:
                     prior=numpy.array( [row_guess,
                                         col_guess,
                                         e1guess+0.05*srandu(),
                                         e2guess+0.05*srandu(),
-                                        Tguess*0.6*(1.+0.1*srandu()),
-                                        Tguess*0.4*(1.+0.1*srandu()),
-                                        Tguess*0.2*(1.+0.1*srandu()),
-                                        counts*0.3*(1.+0.1*srandu()), 
-                                        counts*0.4*(1.+0.1*srandu()), 
-                                        counts*0.3*(1.+0.1*srandu())])
-                elif True:
+                                        Tguess*8.0*(1.+0.1*srandu()),
+                                        Tguess*2.42*(1.+0.1*srandu()),
+                                        Tguess*0.20*(1.+0.1*srandu()),
+                                        counts*0.28*(1.+0.1*srandu()), 
+                                        counts*0.34*(1.+0.1*srandu()), 
+                                        counts*0.38*(1.+0.1*srandu())])
+                    #88.3129658 ,   2.42779593,   0.20018009
+                     #0.28709096,  0.34712239,  0.3875399
+                    #[81.5104     81.4744    0.289612  -0.000497128     13967.1     235.063     19.2695  3.70149e+08  1.75106e+08  2.36254e+08 ]
+                elif False:
                     prior=numpy.array( [row_guess,
                                         col_guess,
                                         e1guess+0.05*srandu(),
@@ -308,12 +350,20 @@ class Plotter(object):
                 #width[0] = 0.01
                 #width[1] = 0.01
 
-                #fitter=gmix_image.gmix_fit.GMixFitCoellip(im, pixerr, prior, width, 
-                #                                          psf=gmix_psf, verbose=False)
-                #flags=fitter.get_flags()
+                #gmix0=gmix_image.GMix(prior, type='coellip')
+                #gmix0=gmix_image.GMixCoellip(prior)
+                #images.multiview(gmix_image.gmix2image(gmix0,im.shape))
 
-                fitter=gmix_image.gmix_fit.GMixFitSimple(im, 1./pixerr**2, gmix_psf, 'gexp',
-                                                         self._ares_dicts[i])
+
+                #gmix=gmix0.convolve(gmix_psf)
+                #images.multiview(gmix_image.gmix2image(gmix,im.shape))
+
+                fitter=gmix_image.gmix_fit.GMixFitCoellip(im, pixerr, prior, width, 
+                                                          psf=gmix_psf, verbose=False)
+                flags=fitter.get_flags()
+
+                #fitter=gmix_image.gmix_fit.GMixFitSimple(im, 1./pixerr**2, gmix_psf, 'gexp',
+                #                                         self._ares_dicts[i])
                 res=fitter.get_result()
                 flags=res['flags']
 
@@ -327,8 +377,39 @@ class Plotter(object):
             print_pars(prior,front='prior: ')
             print_pars(res['pars'], front='pars: ')
             print_pars(res['perr'], front='perr: ')
+
+
+            model=fitter.get_model()
+            #images.multiview(im/im.max(), nonlinear=1)
+            images.compare_images(im/im.max(), model/model.max(),title=('%s %s' % (s2n_min,s2n_max)),
+                                 nonlinear=1)
+            stop
+
+
+            pars=res['pars']
+            perr=res['perr']
+
+            e1err2=( 0.32**2 + perr[2]**2)/self.im_stacks['nstack'][i]
+            e2err2=( 0.32**2 + perr[3]**2)/self.im_stacks['nstack'][i]
+
+            e1err=sqrt(e1err2)
+            e2err=sqrt(e2err2)
+
+
+
+            st['s2n'][i] = (s2n_min+s2n_max)/2.
+            st['e1'][i] = pars[2]
+            st['e1err'][i] = e1err
+            st['e2'][i] = pars[3]
+            st['e2err'][i] = e2err
+            #st['R'][i] = R
+            st['T'][i] = pars[4]
+
+
+            #stop
             #print 'chi2per:',res['chi2per']
 
+        self._gmix_shear=st
 
 
 
