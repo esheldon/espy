@@ -451,22 +451,6 @@ def get_color_image(imr, img, imb, **keys):
 
 
 
-def rebin(im, factor, dtype=None):
-    factor=int(factor)
-    s = im.shape
-    if ( (s[0] % factor) != 0
-            or (s[1] % factor) != 0):
-        raise ValueError("shape in each dim (%d,%d) must be "
-                   "divisible by factor (%d)" % (s[0],s[1],factor))
-
-    newshape=array(s)/factor
-    if dtype is None:
-        a=im
-    else:
-        a=im.astype(dtype)
-
-    return a.reshape(newshape[0],factor,newshape[1],factor,).sum(1).sum(2)/factor/factor
-
 
 def scale_image(im, **keys):
     nonlinear=keys.get('nonlinear',None)
@@ -548,13 +532,52 @@ def imprint(im, stream=stdout, fmt=None):
                 stream.write(" ")
         stream.write("\n")
 
+def rebin(im, factor, dtype=None):
+    """
+    Rebin the image so there are fewer pixels.  The pixels are simply
+    averaged.
+    """
+    factor=int(factor)
+    s = im.shape
+    if ( (s[0] % factor) != 0
+            or (s[1] % factor) != 0):
+        raise ValueError("shape in each dim (%d,%d) must be "
+                   "divisible by factor (%d)" % (s[0],s[1],factor))
+
+    newshape=array(s)/factor
+    if dtype is None:
+        a=im
+    else:
+        a=im.astype(dtype)
+
+    return a.reshape(newshape[0],factor,newshape[1],factor,).sum(1).sum(2)/factor/factor
+
+def boost( a, factor):
+    """
+    Resize an array to larger shape, simply duplicating values.
+    """
+    from numpy import mgrid
+    
+    factor=int(factor)
+    if factor < 1:
+        raise ValueError("boost factor must be >= 1")
+
+    newshape=array(a.shape)*factor
+
+    slices = [ slice(0,old, float(old)/new) for old,new in zip(a.shape,newshape) ]
+    coordinates = mgrid[slices]
+    indices = coordinates.astype('i')   #choose the biggest smaller integer index
+    return a[tuple(indices)]
 
 def expand(image, new_dims, padval=0, verbose=False):
     """
 
-    Expand an image to the specified size.  Pad with the specified value
-    (default 0).  If the new dims are all less than the existing image, the
-    original image is returned.
+    Expand an image to the specified size.  The extra pixels are set to the
+    padval value.  Note this does not change the pixel scale, just adds new
+    pixels.  See boost to change the pixel scale.
+    
+    If the new dims are all less than the existing image, the original image is
+    returned.
 
     """
 
@@ -574,5 +597,6 @@ def expand(image, new_dims, padval=0, verbose=False):
         return new_image
     else:
         return image
+
 
 

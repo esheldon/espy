@@ -76,15 +76,18 @@ class Combiner(object):
                 im_stacks['images'] += im_stacks_i['images']
                 im_stacks['nstack'] += im_stacks_i['nstack']
                 im_stacks['skyvar'] += im_stacks_i['skyvar']
+
+                #print im_stacks['images'][3,:,:].sum(),numpy.sqrt(im_stacks['skyvar'][3])
         
         res=eu.numpy_util.combine_arrlist(reslist)
 
+        boost=psf_h['boost']
         self._write_data(res, 
                          psf_stack, npsf_stack, psf_skyvar,
-                         im_stacks)
+                         im_stacks, boost)
 
     def _write_data(self, res, psf_stack, npsf_stack, psf_skyvar,
-                    im_stacks):
+                    im_stacks, boost):
         import fitsio
         path=files.get_output_path(ftype='shear-stack',
                                    run=self.run,
@@ -93,7 +96,8 @@ class Combiner(object):
 
 
         psf_header={'skyvar':psf_skyvar,
-                    'nstack':npsf_stack}
+                    'nstack':npsf_stack, 
+                    'boost':boost}
         print path
         with fitsio.FITS(path, mode='rw', clobber=True) as fits:
             fits.write(res)

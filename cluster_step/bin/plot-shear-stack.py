@@ -26,12 +26,18 @@ parser.add_option('-s','--shnum',default=None,
 
 parser.add_option('-p','--psfnum',default=None,
                   help='The psf number, required')
+parser.add_option('-y','--yrange',default=None,
+                  help='yrange for plot')
+
 
 class Plotter(object):
     def __init__(self):
         options,args = parser.parse_args(sys.argv[1:])
 
         self.options=options
+
+        if options.yrange is not None:
+            self.yrange=[float(y) for y in options.yrange.split(',')]
 
         if (options.run is None 
                 or options.psfnum is None
@@ -43,7 +49,7 @@ class Plotter(object):
         self.psfnum=int(options.psfnum)
         self.shnum=int(options.shnum)
 
-        self.nsub=16
+        self.nsub=1
 
         self._read_data()
 
@@ -53,6 +59,8 @@ class Plotter(object):
         #self._measure_gals_uw()
         self._measure_psf_admom()
         self._measure_gals_admom()
+        self._measure_gals_gmix()
+        return
         
         g1=self._shear['e1']*0.5
         g1err=self._shear['e1err']*0.5
@@ -90,6 +98,9 @@ class Plotter(object):
 
         plt.xlog=True
         plt.xrange=[0.8*s2n.min(), 1.2*s2n.max()]
+        if self.yrange is not None:
+            plt.yrange=self.yrange
+        plt.title=self.run
         plt.show()
 
 
@@ -108,7 +119,9 @@ class Plotter(object):
                               ('e1err','f8'),
                               ('e2','f8'),
                               ('e2err','f8'),
+                              ('T','f8'),
                               ('R','f8')])
+        self._ares_dicts=[]
         for i in xrange(nbin):
             print '-'*70
             s2n_min=self.im_stacks['s2n_min'][i]
@@ -146,8 +159,11 @@ class Plotter(object):
             st['e2'][i] = e2
             st['e2err'][i] = err
             st['R'][i] = R
+            st['T'][i] = T
 
-        self._shear = st
+            self._ares_dicts.append(ares)
+
+        self._admom_shear = st
 
 
     def _measure_psf_admom(self):
@@ -160,6 +176,161 @@ class Plotter(object):
                            nsub=self.nsub)
         self.psf_ares=ares
         pprint.pprint(self.psf_ares)
+
+
+    def _measure_gals_gmix(self):
+        import gmix_image
+        from gmix_image.util import print_pars
+        from esutil.random import srandu
+        import esutil as eu
+
+        print '\n\n\n'
+        nbin=self.im_stacks.size
+
+        """
+        psf_pars=numpy.array( [1.0, 
+                               self.psf_ares['wrow'], 
+                               self.psf_ares['wcol'],
+                               self.psf_ares['Irr'], 
+                               self.psf_ares['Irc'], 
+                               self.psf_ares['Icc']] )
+
+        gmix_psf=gmix_image.gmix.GMixCoellip(psf_pars)
+        """
+
+
+        psf_pixerr=sqrt(self.psf_skyvar)
+        psfim =eu.numpy_util.to_native( self.psf_stack )
+        psf_counts=psfim.sum()
+        psf_Tguess=self.psf_ares['Irr'] + self.psf_ares['Icc']
+        while True:
+            e1guess=0.0
+            e2guess=0.0
+            if False:
+                psf_prior=numpy.array( [psfim.shape[0]/2.*(1.+0.1*srandu()), 
+                                        psfim.shape[1]/2.*(1.+0.1*srandu()), 
+                                        e1guess+0.05*srandu(),
+                                        e2guess+0.05*srandu(),
+                                        psf_Tguess*0.6*(1.+0.1*srandu()),
+                                        psf_Tguess*0.4*(1.+0.1*srandu()),
+                                        psf_Tguess*0.2*(1.+0.1*srandu()),
+                                        psf_counts*0.3*(1.+0.1*srandu()), 
+                                        psf_counts*0.4*(1.+0.1*srandu()), 
+                                        psf_counts*0.3*(1.+0.1*srandu())])
+            elif True:
+                psf_prior=numpy.array( [psfim.shape[0]/2.*(1.+0.1*srandu()), 
+                                        psfim.shape[1]/2.*(1.+0.1*srandu()), 
+                                        e1guess+0.05*srandu(),
+                                        e2guess+0.05*srandu(),
+                                        psf_Tguess*(1.+0.1*srandu()),
+                                        psf_counts*(1.+0.1*srandu())] )
+
+            psf_width=numpy.abs(psf_prior)*1.e6
+            fitter=gmix_image.gmix_fit.GMixFitCoellip(psfim, psf_pixerr, psf_prior, psf_width, 
+                                                      verbose=False)
+            flags=fitter.get_flags()
+            if flags==0:
+                break
+        
+        psf_pars=fitter.get_pars()
+        psf_perr=fitter.get_perr()
+        print_pars(psf_pars, front='psf pars: ')
+        print_pars(psf_perr, front='psf perr: ')
+        gmix_psf = fitter.get_gmix()
+        print gmix_psf
+
+        for i in xrange(nbin):
+            print '-'*70
+            print self.im_stacks['s2n_min'][i], self.im_stacks['s2n_max'][i]
+
+
+            im=eu.numpy_util.to_native( self.im_stacks['images'][i,:,:] )
+            pixerr=numpy.sqrt(self.im_stacks['skyvar'][i])
+            ivar=1./self.im_stacks['skyvar'][i]
+            
+            counts=im.sum() 
+            #im /= counts
+            #im += 0.0001*numpy.random.randn(im.size).reshape(im.shape)
+            #pixerr=0.0001
+            #pixerr /= counts
+            #counts=1.
+            #import images
+            #images.multiview(im)
+            #stop
+
+
+            #print 'counts: %s pixerr: %s' % (counts,pixerr)
+
+            #pixerr=sqrt(counts)
+
+            #e1guess=self._admom_shear['e1'][i]
+            #e2guess=self._admom_shear['e2'][i]
+            e1guess=0.0
+            e2guess=0.0
+            #e1guess=0.2
+            #e2guess=0.2
+            Tguess = self._admom_shear['T'][i]
+
+            row_guess=self._ares_dicts[i]['wrow']
+            col_guess=self._ares_dicts[i]['wcol']
+
+            while True:
+                if False:
+                    prior=numpy.array( [row_guess,
+                                        col_guess,
+                                        e1guess+0.05*srandu(),
+                                        e2guess+0.05*srandu(),
+                                        Tguess*0.6*(1.+0.1*srandu()),
+                                        Tguess*0.4*(1.+0.1*srandu()),
+                                        Tguess*0.2*(1.+0.1*srandu()),
+                                        counts*0.3*(1.+0.1*srandu()), 
+                                        counts*0.4*(1.+0.1*srandu()), 
+                                        counts*0.3*(1.+0.1*srandu())])
+                elif True:
+                    prior=numpy.array( [row_guess,
+                                        col_guess,
+                                        e1guess+0.05*srandu(),
+                                        e2guess+0.05*srandu(),
+                                        Tguess*0.5*(1.+0.1*srandu()),
+                                        Tguess*0.5*(1.+0.1*srandu()),
+                                        counts*0.5*(1.+0.1*srandu()), 
+                                        counts*0.5*(1.+0.1*srandu())])
+                elif False:
+                    prior=numpy.array( [row_guess,
+                                        col_guess,
+                                        e1guess+0.05*srandu(),
+                                        e2guess+0.05*srandu(),
+                                        Tguess*(1.+0.05*srandu()), 
+                                        counts*(1.0+0.05*srandu())] )
+
+
+                width=numpy.abs(prior)*1.e6
+                #width[0] = 0.01
+                #width[1] = 0.01
+
+                #fitter=gmix_image.gmix_fit.GMixFitCoellip(im, pixerr, prior, width, 
+                #                                          psf=gmix_psf, verbose=False)
+                #flags=fitter.get_flags()
+
+                fitter=gmix_image.gmix_fit.GMixFitSimple(im, 1./pixerr**2, gmix_psf, 'gexp',
+                                                         self._ares_dicts[i])
+                res=fitter.get_result()
+                flags=res['flags']
+
+
+                if flags==0:
+                    break
+                else:
+                    print flags
+
+            res=fitter.get_result()
+            print_pars(prior,front='prior: ')
+            print_pars(res['pars'], front='pars: ')
+            print_pars(res['perr'], front='perr: ')
+            #print 'chi2per:',res['chi2per']
+
+
+
 
     def _measure_psf_uw(self):
         import fimage

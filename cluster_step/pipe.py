@@ -1246,6 +1246,410 @@ class Pipe(dict):
         return data
 
 
+
+class FFTStackPipe(dict):
+    def __init__(self, **keys):
+        """
+        works similarly to the stack and shift method
+
+        parameters
+        ----------
+        run:
+            run id
+        psfnum:
+            psf number
+        shnum:
+            shear number
+        ccd:
+            ccd number
+
+        version: optional
+            version id
+
+        ideas:
+            shifting - non-linear make sense?  Different altogether?  
+            
+            Fourier space so centroid doesn't matter (no shifting)?
+
+            does boosting really help?
+        """
+
+        self._check_keys(**keys)
+
+        for k in keys:
+            self[k] = keys[k]
+
+        self._set_boost(**keys)
+
+        conf=files.read_config(self['run'])
+
+        for k in conf:
+            self[k]=conf[k]
+
+        self._load_data()
+
+    def _check_keys(self, **keys):
+        if ('run' not in keys
+                or 'psfnum' not in keys
+                or 'shnum' not in keys
+                or 'ccd' not in keys):
+            raise ValueError("send run=, psfnum=, "
+                             "shnum=, ccd=")
+
+    def _set_boost(self, **keys):
+        boost=int(keys.get('stack_boost',1))
+        if boost < 1:
+            raise ValueError("stack_boost must be >= 1")
+        self['stack_boost']=boost
+
+    def _load_data(self):
+        self.cat=files.read_cat(**self)
+        image_orig, self.hdr=files.read_image(**self)
+
+        shear_path=files.get_output_path(ftype='shear', **self)
+        if os.path.exists(shear_path):
+            self.shear_res=files.read_fits_output(ftype='shear',**self)
+
+        self.seg, self.seg_hdr=files.read_image(ftype='seg', **self)
+
+        skypersec=self.hdr['sky']
+        exptime=self.hdr['exptime']
+
+        # assume gain same for both amplifiers
+        gain=self.hdr['gaina']
+        read_noise=self.hdr['rdnoisea']
+
+        # note unit mismatch? Both check out
+        self['sky'] = skypersec*exptime/gain
+        self['skyvar'] = self.hdr['sky'] + read_noise
+        self['skysig'] = sqrt(self['skyvar'])
+        self['ivar'] = 1.0/self['skyvar']
+
+        self.image = image_orig.astype('f8') - self['sky']
+        del image_orig
+
+    def get_cutout(self, index, size=None):
+        if size is None:
+            size=self['cutout_size']
+
+        cen=[self.cat['row'][index], self.cat['col'][index]]
+        id=self.cat['id'][index]
+
+        padding=self.get('seg_padding',0)
+        include_all_seg=self.get('include_all_seg',True)
+
+        cutout=CutoutWithSeg(self.image, self.seg, cen, id, size,
+                             include_all_seg=include_all_seg,
+                             padding=padding)
+
+        return cutout
+
+    def get_full_cutout(self, index, size=None):
+        if size is None:
+            size=self['cutout_size']
+
+        cen=[self.cat['row'][index], self.cat['col'][index]]
+
+        cutout=Cutout(self.image, cen, size)
+
+        return cutout
+
+
+    def get_zerod_cutout(self, index, **keys):
+        try:
+            c=self.get_cutout(index, **keys)
+        except NoSegMatches as excpt:
+            print >>stderr,str(excpt)
+            # sometimes there are no associated
+            # segment pixels!
+            c=self.get_full_cutout(index, **keys)
+            return c
+
+        im=c.subimage
+        seg=c.seg_subimage
+
+        id=self.cat['id'][index]
+        self.zero_seg(im, seg, id)
+
+        return c
+
+    def zero_seg(self, im, seg, id):
+        w=where( (seg != id) & (seg != 0) )
+        if w[0].size != 0:
+            im[w] = self['skysig']*random.randn(w[0].size)
+
+
+    def get_stars(self):
+        """
+        Get things labeled as stars.  if good, also trim
+        to those with good adaptive moments
+        """
+        logic=self.cat['class']==CLUSTERSTEP_STAR
+
+        am_logic = self.res['am_flags']==0
+        logic = logic & am_logic
+
+        w,=where(logic)
+        return w
+
+    def get_gals(self):
+        """
+        Get things labeled as galaxies.  if good, also trim
+        to those with good adaptive moments
+        """
+
+        logic=self.cat['class']==CLUSTERSTEP_GAL
+
+        am_logic = self.res['am_flags']==0
+        logic = logic & am_logic
+
+        w,=where(logic)
+        return w
+
+    def get_psf_stars(self):
+        """
+        Get things labeled as stars in the psf star mag range.  if good, also
+        trim to those with good adaptive moments
+        """
+        star_logic = self.cat['class']==CLUSTERSTEP_STAR
+        mag_logic  = ( (self.cat['mag_auto_r'] > self['star_minmag'])
+                       & (self.cat['mag_auto_r'] < self['star_maxmag']))
+        am_logic = self.res['am_flags']==0
+        logic = star_logic & mag_logic & am_logic
+
+        w,=where(logic)
+        return w
+
+    def _get_s2n_bins(self):
+        s2n_bins=numpy.logspace(numpy.log10(self['stack_s2n_min']),
+                                numpy.log10(self['stack_s2n_max']),
+                                self['stack_nbin']+1)
+        return s2n_bins
+
+    def run(self):
+        self._run_admom()
+
+        self.stacks=self.get_stack_struct()
+
+        print 'stacking psf images'
+        self.psf_stack, self.npsf_stack, self.psf_skyvar\
+                = self._stack_psf_stars()
+
+        self._measure_stacked_psf_admom()
+
+        print 'stacking gal images'
+
+        s2n_bins=self._get_s2n_bins()
+        nbin=len(s2n_bins)-1
+        for i in xrange(nbin):
+            s2n_min=s2n_bins[i]
+            s2n_max=s2n_bins[i+1]
+            print 's2n: [%s,%s]' % (s2n_min,s2n_max)
+            gal_stack,nstack,skyvar=self._stack_galaxies(s2n_min, s2n_max)
+
+            self.stacks['s2n_min'][i] = s2n_min
+            self.stacks['s2n_max'][i] = s2n_max
+            self.stacks['nstack'][i] = nstack
+            self.stacks['skyvar'][i] = skyvar
+            self.stacks['images_real'][i,:,:] = gal_stack.real
+            self.stacks['images_imag'][i,:,:] = gal_stack.imag
+
+        self._write_data()
+
+    def _write_data(self):
+        import fitsio
+        path=files.get_output_path(ftype='shear', **self)
+        print path
+
+        dir=os.path.dirname(path)
+        if not os.path.exists(dir):
+            try:
+                os.makedirs(dir)
+            except:
+                pass
+
+        psf_header={'skyvar':self.psf_skyvar,
+                    'nstack':self.npsf_stack,
+                    'boost':self['stack_boost']}
+        with fitsio.FITS(path, mode='rw', clobber=True) as fits:
+            fits.write(self.res)
+            fits.write(self.psf_stack.real, header=psf_header)
+            fits.write(self.psf_stack.imag, header=psf_header)
+            fits.write(self.stacks)
+    
+    def _measure_stacked_psf_admom(self):
+        import admom
+
+        psf=numpy.fft.fft(self.psf_stack).real
+
+        cen=array(psf.shape)/2.
+        guess=4.0*self['stack_boost']**2
+        ares = admom.admom(psf, cen[0], cen[1],
+                           sigsky=sqrt(self.psf_skyvar),
+                           guess=guess,
+                           nsub=1)
+        self.psf_ares=ares
+
+
+    def _stack_psf_stars(self):
+        wpsf=self.get_psf_stars()
+        imstack, nstack, skyvar = self._stack_images(wpsf)
+
+        return imstack,nstack,skyvar
+
+    def _stack_galaxies(self, s2n_min, s2n_max):
+        wgal=self.get_gals()
+        logic = ( (self.res['am_s2n'][wgal] > s2n_min) 
+                 &(self.res['am_s2n'][wgal] < s2n_max) )
+
+        T = self.res['am_irr'][wgal] + self.res['am_icc'][wgal]
+        Tpsf = self.psf_ares['Irr'] + self.psf_ares['Icc']
+
+        # Tpsf is in the boosted image
+        Tpsf *= (1./self['stack_boost']**2)
+
+        srat=float(self['stack_sratio'])
+        logic = logic & (T > Tpsf* srat**2)
+
+        wgal2=where(logic)
+        wgal=wgal[wgal2]
+
+        imstack,nstack,skyvar=self._stack_images(wgal)
+
+        return imstack, nstack, skyvar
+
+    def _stack_images(self, win):
+        import images
+        res=self.res
+        nrow=1+res['row_range'][win,1]-res['row_range'][win,0]
+        ncol=1+res['col_range'][win,1]-res['col_range'][win,0]
+
+        w,=where((nrow==self['cutout_size']) & (ncol==self['cutout_size']))
+        print '  using %s/%s in stack' % (w.size,win.size)
+
+        w=win[w]
+        
+        size=self['cutout_size']*self['stack_boost']
+        imstack=zeros( (size,size), dtype=numpy.complex64)
+        
+        skyvar=0.0
+
+        for i in xrange(w.size):
+            index=w[i]
+            c=self.get_zerod_cutout(index)
+
+            im=c.subimage
+    
+            if self['stack_boost'] != 1:
+                im = images.boost(im, self['stack_boost'])
+
+            if im.shape != imstack.shape:
+                raise ValueError("shape incorrect; index error?")
+
+            imstack += numpy.fft.fft(im)
+
+            # sky variances add
+            skyvar += self['skyvar']
+
+        return imstack, w.size, skyvar
+
+    def _run_admom(self, **keys):
+
+        res=self.get_struct()
+        self.res=res
+
+        for i in xrange(self.cat.size):
+            if (i % 100) == 0:
+                print '%d/%d' % (i+1,self.cat.size)
+            c=self.get_zerod_cutout(i)
+
+            im=c.subimage
+            cen=c.subcen
+            self.res['row_range'][i] = c.row_range
+            self.res['col_range'][i] = c.col_range
+
+            ares=self._do_admom(im, i, cen)
+
+            self.res['am_row'][i] = c.row_range[0] + ares['wrow']
+            self.res['am_col'][i] = c.col_range[0] + ares['wcol']
+
+        w, = where(self.res['am_flags'] != 0)
+        print 'found %d/%d bad admom  %s' % (w.size,res.size,w.size/float(res.size))
+
+
+    def _do_admom(self, im, i, cen):
+        import admom
+        ares = admom.admom(im, cen[0], cen[1],
+                           sigsky=self['skysig'],
+                           guess=4.0,
+                           nsub=1)
+
+        if ares['whyflag'] != 0:
+            print 'index: %4d flag: %s' % (i,ares['whystr'])
+        
+        for n in ares:
+            rn='am_'+n.lower()
+            if (rn in self.res.dtype.names 
+                    and n not in ['row','col','wrow','wcol']):
+                self.res[rn][i] = ares[n]
+
+        # two are differently named
+        self.res['am_flags'][i] = ares['whyflag']
+        self.res['am_flagstr'][i] = ares['whystr']
+
+        return ares
+
+
+    def get_stack_struct(self):
+        size=self['cutout_size']*self['stack_boost']
+        imshape=tuple([size]*2)
+        nbin=self['stack_nbin']
+        dt=[('s2n_min','f8'),
+            ('s2n_max','f8'),
+            ('nstack','i4'),
+            ('skyvar','f8'),
+            ('images_real', 'f8', imshape),
+            ('images_imag', 'f8', imshape)]
+
+        data=zeros(nbin, dtype=dt)
+        return data
+
+    def get_struct(self):
+        sxdt=self.cat.dtype.descr
+
+        dt= [('psfnum','i2'),
+             ('shnum','i2'),
+             ('ccd','i2'),
+             ('row_range','f8',2),
+             ('col_range','f8',2),
+             ('am_row','f8'), # note simid,id in sxdt
+             ('am_col','f8'),
+             ('am_irr','f8'),
+             ('am_irc','f8'),
+             ('am_icc','f8'),
+             ('am_e1','f8'),
+             ('am_e2','f8'),
+             ('am_rho4','f8'),
+             ('am_a4','f8'),
+             ('am_s2','f8'),
+             ('am_uncer','f8'),
+             ('am_s2n','f8'),
+             ('am_numiter','i4'),
+             ('am_flags','i4'),
+             ('am_flagstr','S10'),
+             ('am_shiftmax','f8')]
+        dt=sxdt + dt
+        data=zeros(self.cat.size, dtype=dt)
+        for n in self.cat.dtype.names:
+            data[n][:] = self.cat[n][:]
+
+        data['psfnum'] = self['psfnum']
+        data['shnum'] = self['shnum']
+        data['ccd'] = self['ccd']
+        return data
+
+
+
 class StackPipe(dict):
     def __init__(self, **keys):
         """
@@ -1263,19 +1667,14 @@ class StackPipe(dict):
         version: optional
             version id
 
-        bugs
-        ----
-
-        the psf and shear row,col outputs are in the sub-image coordinates
-        Currently need to add row_range[0],col_range[0] to get back to
-        image coords
-
         """
 
         self._check_keys(**keys)
 
         for k in keys:
             self[k] = keys[k]
+
+        self._set_boost(**keys)
 
         conf=files.read_config(self['run'])
 
@@ -1292,6 +1691,11 @@ class StackPipe(dict):
             raise ValueError("send run=, psfnum=, "
                              "shnum=, ccd=")
 
+    def _set_boost(self, **keys):
+        boost=int(keys.get('stack_boost',1))
+        if boost < 1:
+            raise ValueError("stack_boost must be >= 1")
+        self['stack_boost']=boost
 
     def _load_data(self):
         self.cat=files.read_cat(**self)
@@ -1459,7 +1863,8 @@ class StackPipe(dict):
                 pass
 
         psf_header={'skyvar':self.psf_skyvar,
-                    'nstack':self.npsf_stack}
+                    'nstack':self.npsf_stack,
+                    'boost':self['stack_boost']}
         with fitsio.FITS(path, mode='rw', clobber=True) as fits:
             fits.write(self.res)
             fits.write(self.psf_stack, header=psf_header)
@@ -1468,9 +1873,10 @@ class StackPipe(dict):
     def _measure_stacked_psf_admom(self):
         import admom
         cen=array(self.psf_stack.shape)/2.
+        guess=4.0*self['stack_boost']**2
         ares = admom.admom(self.psf_stack, cen[0], cen[1],
                            sigsky=sqrt(self.psf_skyvar),
-                           guess=4.0,
+                           guess=guess,
                            nsub=1)
         self.psf_ares=ares
 
@@ -1493,7 +1899,11 @@ class StackPipe(dict):
         T = self.res['am_irr'][wgal] + self.res['am_icc'][wgal]
         Tpsf = self.psf_ares['Irr'] + self.psf_ares['Icc']
 
-        logic = logic & (T > 1.4*Tpsf)
+        # Tpsf is in the boosted image
+        Tpsf *= (1./self['stack_boost']**2)
+
+        srat=float(self['stack_sratio'])
+        logic = logic & (T > Tpsf* srat**2)
 
         wgal2=where(logic)
         wgal=wgal[wgal2]
@@ -1509,7 +1919,7 @@ class StackPipe(dict):
         return imstack, nstack, skyvar
 
     def _stack_images(self, win):
-        #import admom
+        import images
         res=self.res
         nrow=1+res['row_range'][win,1]-res['row_range'][win,0]
         ncol=1+res['col_range'][win,1]-res['col_range'][win,0]
@@ -1522,12 +1932,17 @@ class StackPipe(dict):
         row=res['am_row'][w]-res['row_range'][w,0]
         col=res['am_col'][w]-res['col_range'][w,0]
 
+        row *= self['stack_boost']
+        col *= self['stack_boost']
+
         row_mean=row.mean()
         col_mean=col.mean()
 
+
         print '    <row>:',row_mean,'<col>:',col_mean
 
-        imstack=zeros( (self['cutout_size'], self['cutout_size'] ) )
+        size=self['cutout_size']*self['stack_boost']
+        imstack=zeros( (size,size) )
         
         skyvar=0.0
 
@@ -1536,9 +1951,14 @@ class StackPipe(dict):
             c=self.get_zerod_cutout(index)
 
             im=c.subimage
+    
+            if self['stack_boost'] != 1:
+                im = images.boost(im, self['stack_boost'])
+
             if im.shape != imstack.shape:
                 raise ValueError("shape incorrect; index error?")
-    
+
+            # rows are in boosted frame
             drow=row_mean-row[i]
             dcol=col_mean-col[i]
 
@@ -1598,9 +2018,9 @@ class StackPipe(dict):
     def _do_admom(self, im, i, cen):
         import admom
         ares = admom.admom(im, cen[0], cen[1],
-                          sigsky=self['skysig'],
-                          guess=4.0,
-                          nsub=1)
+                           sigsky=self['skysig'],
+                           guess=4.0,
+                           nsub=1)
 
         if ares['whyflag'] != 0:
             print 'index: %4d flag: %s' % (i,ares['whystr'])
@@ -1619,7 +2039,8 @@ class StackPipe(dict):
 
 
     def get_stack_struct(self):
-        imshape=tuple([self['cutout_size']]*2)
+        size=self['cutout_size']*self['stack_boost']
+        imshape=tuple([size]*2)
         nbin=self['stack_nbin']
         dt=[('s2n_min','f8'),
             ('s2n_max','f8'),

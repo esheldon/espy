@@ -1,12 +1,21 @@
 todo
 
+
+    - ideas:
+        - stack: shifting - non-linear make sense?  Different altogether?  
+        - stack: does boosting really help?
+        - stack: use the outputs from mixmc runs to help with cuts
+        - stack: weight by 1/(g1err^2+g2err^2) or something?
+        - mixmc: bin up the mcmc points and add them up.  Weighting?
+
+        - really need to move away from cluster step for testing since it has
+          sample variance issues.
+
 - REDO gprior stuff
     - use fewer bins for dev, as we did for sprior
     - use sqrt(n) errors
     * variable binsize
     - figure out why it is worse with the split
-
-- try cutting mag to SDSS vs. hst
 
 - try LM PSF fitting (psf4 shear4)
     - r15 looks better in some ways.  But still biased high at high s/n 

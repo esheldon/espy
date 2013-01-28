@@ -36,6 +36,15 @@ def main():
                                           ccd=ccd)
 
         pipe.run()
+
+    elif 'fftstack' in run:
+        pipe=cluster_step.pipe.FFTStackPipe(run=run,
+                                            psfnum=psfnum,
+                                            shnum=shnum,
+                                            ccd=ccd)
+
+        pipe.run()
+
     elif 'stack' in run:
         pipe=cluster_step.pipe.StackPipe(run=run,
                                          psfnum=psfnum,

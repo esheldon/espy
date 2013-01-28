@@ -18,6 +18,12 @@ stack_s2n_min: 10
 stack_s2n_max: 200
 stack_nbin: 20
 
+stack_boost: 1
+
+# only stack objects with size sratio larger than psf
+stack_sratio: 1.414
+
+
 # for filling areas not in object with noise
 seed: 1287
 
