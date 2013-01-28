@@ -1,0 +1,32 @@
+run: fftstack-r01
+version: "2012-10-16"
+
+star_minmag: 18
+star_maxmag: 20
+
+cutout_size: 27
+include_all_seg: false
+
+# for getting <e^2>
+gprior_type: 'fits-vs-mag'
+
+#uw_nsig: 4.0
+#uw_min_pixels: 4
+
+# logarithmic binning
+stack_s2n_min: 10
+stack_s2n_max: 200
+stack_nbin: 20
+
+stack_boost: 1
+
+# only stack objects with size sratio larger than psf
+stack_sratio: 1.414
+#stack_sratio: 2.0
+
+
+# for filling areas not in object with noise
+seed: 4205
+
+comment: |
+    new stack pipelien
