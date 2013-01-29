@@ -42,6 +42,10 @@ def main():
                 raise ValueError("expect itrial for bayes orient=random")
             sim.process_bruteforce_trial_by_s2n(is2, ie_or_is2n, itrial)
             return
+    elif 'shd' in run:
+        sim=shapesim.shd_sim.SHDirectSim(run)
+    elif 'mcm-' in run:
+        sim=shapesim.mcm_sim.MCMSim(run)
     else:
         raise ValueError("Don't know about run '%s'" % run)
 
