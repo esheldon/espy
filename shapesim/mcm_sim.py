@@ -1,5 +1,5 @@
 import numpy
-from numpy import sqrt, diag, log10
+from numpy import sqrt, diag, log10, exp
 import gmix_image
 from gmix_image.util import get_estyle_pars, calculate_some_stats, print_pars
 import lensing
@@ -22,7 +22,7 @@ class MCMSim(dict):
         self.simc = read_config(self['sim'])
 
         # for now just set this
-        self.npair=100 # we do two times this, pairs at 90 degrees
+        self.npair=600 # we do two times this, pairs at 90 degrees
 
         self._set_gprior()
 
@@ -42,6 +42,8 @@ class MCMSim(dict):
         wsum=numpy.zeros(2)
         nsum=0
         gvals=self.gprior.sample1d(self.npair)
+
+        gmm_list=[]
         for i,g in enumerate(gvals):
             imd1,imd2=self._make_ring_pair(g, is2, is2n)
             print '%d/%d' % (i+1,self.npair)
@@ -51,74 +53,181 @@ class MCMSim(dict):
             mcm1=self._run_mcm(imd1)
             mcm2=self._run_mcm(imd2)
 
+            gmm1=mcm1.get_like_mixture(ngauss=3)
+            gmm2=mcm2.get_like_mixture(ngauss=3)
+
+            gmm_list += [gmm1,gmm2]
+
+            #lnp_surf2 = self._get_gmm_loglike_surface(gmm2)
+            #lnp_surf += lnp_surf2
+            #print 'maxlike:',self._get_maxlike_loc(lnp_surf)
+
+
             res1=mcm1.get_result()
             res2=mcm2.get_result()
 
-            gsum += res1['gsum']
             gsum_means += res1['g']
             nsum_means += 1
 
-            nsum += res1['nsum']
             wsum[0] += (1./res1['gcov'][0,0])
             wsum[1] += (1./res1['gcov'][1,1])
 
-            gsum += res2['gsum']
             gsum_means += res2['g']
             nsum_means += 1
 
-            nsum += res2['nsum']
             wsum[0] += (1./res2['gcov'][0,0])
             wsum[1] += (1./res2['gcov'][1,1])
 
-            mn,err=gsum/nsum,sqrt(1./wsum)
-            mnm=gsum_means/nsum_means
-            print '  g1:  %s +/- %s    g2:  %s +/- %s' % (mn[0],err[0],mn[1],err[1])
-            print '  g1m: %s +/- %s    g2m: %s +/- %s' % (mnm[0],err[0],mnm[1],err[1])
-
-            """
-            h2d1 = mcm1.get_like_hist(ng1=500,ng2=500)
-            h2d2 = mcm2.get_like_hist(ng1=500,ng2=500)
-            if i == 0:
-                h2d=copy.deepcopy(h2d1)
-                h2d['hist'] = h2d['hist'].astype('f8')
-                h2d['hist'][:,:] = 1.0
-
-            w=numpy.where(h2d1['hist'] > 0)
-            if w[0].size > 0:
-                h2d['hist'][w] *= h2d1['hist'][w]
-            w=numpy.where(h2d2['hist'] > 0)
-            if w[0].size > 0:
-                h2d['hist'][w] *= h2d2['hist'][w]
-
-            print 'maxlike:',self._get_maxlike_loc(h2d)
-            """
+            err=sqrt(1./wsum)
+            mn=gsum_means/nsum_means
+            print '  g1m: %s +/- %s    g2m: %s +/- %s' % (mn[0],err[0],mn[1],err[1])
 
 
+        #lnp_surf = self._get_cum_loglike_surf(gmm_list)
+
+        self._ng1=200
+        self._ng2=200
+        g1range=[mn[0]-8.*err[0], mn[0]+8.*err[0]]
+        g2range=[mn[1]-8.*err[1], mn[1]+8.*err[1]]
+        """
+        lnp_surf_slow,g1max_slow,g2max_slow = \
+            self._get_cum_loglike_surf_slow(gmm_list, 
+                                            g1range=g1range, 
+                                            g2range=g2range)
+        """
+        lnp_surf = \
+            self._get_cum_loglike_surf(gmm_list, 
+                                       g1range=g1range, 
+                                       g2range=g2range)
+
+        self.lnp_surf = lnp_surf - lnp_surf.max()
+        #lnp_surf_slow = lnp_surf_slow - lnp_surf_slow.max()
+
+        g1max,g2max=self._get_maxlike_loc(lnp_surf)
+        print 'maxlike:     ',g1max,g2max
+        #print 'maxlike_slow:',g1max_slow,g2max_slow
+
+        self._test_gmm_mean(gmm_list)
         if True:
             import images
-            plt=images.multiview(h2d['hist'],
-                                 xdr=[h2d['xcenter'][0], h2d['xcenter'][-1]],
-                                 ydr=[h2d['ycenter'][0], h2d['ycenter'][-1]],
-                                 xlabel='g1', ylabel='g2', levels=8,
+            #plt=images.multiview(exp(self.lnp_surf),show=False)
+            #plt=images.multiview(self.lnp_surf-self.lnp_surf.min(),
+            plt=images.multiview(exp(self.lnp_surf),
+                                 xdr=g2range, 
+                                 ydr=g1range,
+                                 xlabel='g2', ylabel='g1',
                                  show=False)
+            plt_log=images.multiview(self.lnp_surf,
+                                 xdr=g2range, 
+                                 ydr=g1range,
+                                 xlabel='g2', ylabel='g1',
+                                 show=False)
+
             fname='/tmp/test.png'
+            fname_log='/tmp/test-log.png'
             print fname
+            print fname_log
             plt.write_img(1024,1024,fname)
+            plt_log.write_img(1024,1024,fname_log)
 
         #trials=shd.get_trials()
         #shapesim.write_output(self['run'], is2, is2n, trials)
 
-    def _get_maxlike_loc(self, h2d):
-        h=h2d['hist']
-        rows,cols=numpy.mgrid[0:h.shape[0], 0:h.shape[1]]
-        rows=rows.ravel()
-        cols=cols.ravel()
+    def _test_gmm_rand_ml(self, gmm_list):
+        maxlike=-9999.9e40
 
-        w=h.argmax()
-        row,col=rows[w],cols[w]
+    def _test_gmm_mean(self, gmm_list):
+        wsum=0.0
+        g1censum = 0.0
+        g2censum = 0.0
+        for i,gmm in enumerate(gmm_list):
+            wsum += gmm.weights_.sum()
+            g1censum += (gmm.means_[:,0]*gmm.weights_).sum()
+            g2censum += (gmm.means_[:,1]*gmm.weights_).sum()
 
-        g1=h2d['xcenter'][row]
-        g2=h2d['ycenter'][col]
+
+        g1mean=g1censum/wsum
+        g2mean=g2censum/wsum
+
+        print 'From gauss mix:'
+        print '  g1m: %s  g2m: %s ' % (g1mean,g2mean)
+
+    def _get_cum_loglike_surf_slow(self, gmm_list, g1range=[-1,1], g2range=[-1,1]):
+        g1range=numpy.array(g1range).clip(-1.,1.)
+        g2range=numpy.array(g2range).clip(-1.,1.)
+
+        lnp_surf = numpy.zeros( (self._ng1,self._ng2) )
+
+        g1vals = numpy.linspace(g1range[0], g1range[1], self._ng1)
+        g2vals = numpy.linspace(g2range[0], g2range[1], self._ng2)
+
+        g1g2=numpy.zeros( (1,2) )
+
+        print 'accumulating loglike grid'
+
+        max_lnprob=-9999.e40
+        for i1 in xrange(self._ng1):
+            g1=g1vals[i1]
+            print i1
+            for i2 in xrange(self._ng2):
+                g2=g2vals[i2]
+
+                g1g2[0,0] = g1
+                g1g2[0,1] = g2
+                lnp=0.0
+                for gmm in gmm_list:
+                    lnp += gmm.score(g1g2)
+
+                lnp_surf[i1,i2] = lnp
+
+                if lnp > max_lnprob:
+                    max_lnprob = lnp
+                    g1max = g1
+                    g2max = g2
+        return lnp_surf, g1max, g2max
+
+    def _get_cum_loglike_surf(self, gmm_list, g1range=[-1,1], g2range=[-1,1]):
+        import esutil as eu
+
+        g1range=numpy.array(g1range).clip(-1.,1.)
+        g2range=numpy.array(g2range).clip(-1.,1.)
+
+        self._g1range=g1range
+        self._g2range=g2range
+        mg=numpy.mgrid[0:self._ng1, 0:self._ng2]
+        self._rows = mg[0].copy()
+        self._cols = mg[1].copy()
+        self._g1grid = eu.numpy_util.arrscl(self._rows, g1range[0], g1range[1])
+        self._g2grid = eu.numpy_util.arrscl(self._cols, g2range[0], g2range[1])
+        
+        self._g1g2_points = numpy.zeros( (self._ng1*self._ng2, 2) )
+        self._g1g2_points[:,0] = self._g1grid.ravel()
+        self._g1g2_points[:,1] = self._g2grid.ravel()
+
+        print 'accumulating loglike'
+        for i,gmm in enumerate(gmm_list):
+            lnp= self._get_gmm_loglike_surface(gmm)
+            if i==0:
+                lnp_surf=lnp
+            else:
+                lnp_surf += lnp
+
+        print
+        return lnp_surf
+
+    def _get_gmm_loglike_surface(self, gmm):
+        surf=gmm.score(self._g1g2_points)
+        surf=surf.reshape(self._ng1, self._ng2)
+        return surf
+
+    def _get_maxlike_loc(self, lnprob):
+
+        w=lnprob.argmax()
+        #row=(self._rows.ravel())[w]
+        #col=(self._cols.ravel())[w]
+
+        g1=( self._g1grid.ravel() )[w]
+        g2=( self._g2grid.ravel() )[w]
 
         return g1,g2
 
@@ -276,6 +385,8 @@ class MCM:
 
     def get_result(self):
         return self._result
+    def get_trials(self):
+        self._trials
 
     def _get_convolved_gmix(self, epars):
         """
@@ -449,7 +560,8 @@ class MCM:
         return ares
 
     def get_like_mixture(self, ngauss=3, niter=100, min_covar=1.0e-06):
-        from scikits.learn import mixture
+        #from scikits.learn import mixture
+        from sklearn import mixture
 
         g1vals=self._trials[:,2]
         g2vals=self._trials[:,3]
@@ -457,8 +569,20 @@ class MCM:
         data[:,0] = g1vals
         data[:,1] = g2vals
 
-        gmm=mixture.GMM(n_states=ngauss,cvtype='full')
-        gmm.fit(data, n_iter=niter, min_covar=min_covar)
+        #gmm=mixture.GMM(n_states=ngauss,cvtype='full')
+        #gmm.fit(data, n_iter=niter, min_covar=min_covar)
+        gmm=mixture.GMM(n_components=ngauss,covariance_type='full',min_covar=min_covar)
+        #gmm=mixture.DPGMM(n_components=ngauss,covariance_type='full',min_covar=min_covar)
+        gmm.fit(data)
+
+        if not hasattr('gmm','covars_'):
+            gmm.covars_ = gmm._get_covars()
+            """
+            for i,prec in enumerate(gmm.precs_):
+                cov = numpy.linalg.inv(prec)
+                gmm.covars_.append(cov)
+            """
+
 
         return gmm
 
@@ -642,30 +766,37 @@ class MCM:
                              ydr=[h2d['ycenter'][0], h2d['ycenter'][-1]],
                              xlabel='g1', ylabel='g2', levels=levels)
             if True:
-                gmm=self.get_like_mixture(ngauss=4)
-                print gmm.weights
-                print gmm.means
+                gmm=self.get_like_mixture(ngauss=3)
+                print gmm.weights_
+                print gmm.means_
 
-                covmean=0*gmm.covars[0].copy()
-                for i,cov in enumerate(gmm.covars):
-                    covmean += gmm.weights[i]*cov
+                covmean=0*gmm.covars_[0].copy()
+                for i,cov in enumerate(gmm.covars_):
+                    covmean += gmm.weights_[i]*cov
+                """
+                covmean=0*gmm.precs_[0].copy()
+                for i,prec in enumerate(gmm.precs_):
+                    cov = numpy.linalg.inv(prec)
+                    covmean += gmm.weights_[i]*cov
+                """
 
-                wsum=gmm.weights.sum()
+                wsum=gmm.weights_.sum()
                 covmean /= wsum
 
                 print 'weighted means'
-                print (gmm.means[:,0]*gmm.weights).sum()/wsum,
-                print (gmm.means[:,1]*gmm.weights).sum()/wsum
+                print (gmm.means_[:,0]*gmm.weights_).sum()/wsum,
+                print (gmm.means_[:,1]*gmm.weights_).sum()/wsum
                 
                 print 'weighted error'
                 print sqrt(diag(covmean))
 
-                rnd=gmm.rvs(g1vals.size)
+                rnd=gmm.sample(g1vals.size*10)
                 print rnd.shape
                 rh2d = eu.stat.histogram2d(rnd[:,0], rnd[:,1], nx=nx, ny=ny,
                                            xmin=h2d['xlow'][0], xmax=h2d['xhigh'][-1],
                                            ymin=h2d['ylow'][0], ymax=h2d['yhigh'][-1],
                                            more=True)
+                rh2d['hist'] = rh2d['hist']*float(g1vals.size)/float(rh2d['hist'].sum())
                 images.compare_images(h2d['hist'], rh2d['hist'])
 
         if False: 
