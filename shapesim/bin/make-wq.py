@@ -71,11 +71,14 @@ def main():
 
 
     if options.bytrial:
-        orient=cs.get('orient','rand')
-        if orient == 'ring':
-            ntrial = cs['nring']
+        if 'stack-' in run:
+            ntrial=c['nsplit']
         else:
-            ntrial = cs['ntrial']
+            orient=cs.get('orient','rand')
+            if orient == 'ring':
+                ntrial = cs['nring']
+            else:
+                ntrial = cs['ntrial']
 
 
     wqd = shapesim.get_wq_dir(run, bytrial=options.bytrial)

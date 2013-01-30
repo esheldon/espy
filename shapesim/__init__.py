@@ -8,5 +8,6 @@ from . import bayesfit_sim
 
 from . import shd_sim
 from . import mcm_sim
+from . import stack_sim
 
 from . import plotting

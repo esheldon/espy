@@ -22,33 +22,39 @@ class MCMSim(dict):
         self.simc = read_config(self['sim'])
 
         # for now just set this
-        self.npair=600 # we do two times this, pairs at 90 degrees
+        #self.npair=6000 # we do two times this, pairs at 90 degrees
 
         self._set_gprior()
 
         simpars=self.get('simpars',{})
         self.shapesim = ShapeSim(self['sim'], **simpars)
 
-    def process_trials(self, is2, is2n, itrial=None):
-        if itrial is not None:
-            raise ValueError("implement itrial")
+    def get_npair(self, is2n):
+        s2n = shapesim.get_s2n(self, is2n)
+        s2n_fac = self['s2n_fac']
+        nellip = shapesim.get_s2n_nrepeat(s2n, fac=s2n_fac)
 
-        #g1range=[0.04-0.04, 0.04+0.04]
-        #g2range=[0.04, 0.04]
+        if nellip < self['min_gcount']:
+            nellip=self['min_gcount']
+        return nellip
+
+
+    def process_trial(self, is2, is2n, itrial):
+
         gsum=numpy.zeros(2)
         gsum_means=numpy.zeros(2)
         nsum_means=numpy.zeros(2)
 
         wsum=numpy.zeros(2)
         nsum=0
-        gvals=self.gprior.sample1d(self.npair)
+
+        npair=self.get_npair(is2n)
+        gvals=self.gprior.sample1d(npair)
 
         gmm_list=[]
         for i,g in enumerate(gvals):
             imd1,imd2=self._make_ring_pair(g, is2, is2n)
-            print '%d/%d' % (i+1,self.npair)
-            #print imd1['ares']['e1'],imd1['ares']['e2'],
-            #print imd2['ares']['e1'],imd2['ares']['e2']
+            print '%d/%d' % (i+1,npair)
 
             mcm1=self._run_mcm(imd1)
             mcm2=self._run_mcm(imd2)
@@ -57,11 +63,6 @@ class MCMSim(dict):
             gmm2=mcm2.get_like_mixture(ngauss=3)
 
             gmm_list += [gmm1,gmm2]
-
-            #lnp_surf2 = self._get_gmm_loglike_surface(gmm2)
-            #lnp_surf += lnp_surf2
-            #print 'maxlike:',self._get_maxlike_loc(lnp_surf)
-
 
             res1=mcm1.get_result()
             res2=mcm2.get_result()
@@ -83,35 +84,23 @@ class MCMSim(dict):
             print '  g1m: %s +/- %s    g2m: %s +/- %s' % (mn[0],err[0],mn[1],err[1])
 
 
-        #lnp_surf = self._get_cum_loglike_surf(gmm_list)
 
         self._ng1=200
         self._ng2=200
         g1range=[mn[0]-8.*err[0], mn[0]+8.*err[0]]
         g2range=[mn[1]-8.*err[1], mn[1]+8.*err[1]]
-        """
-        lnp_surf_slow,g1max_slow,g2max_slow = \
-            self._get_cum_loglike_surf_slow(gmm_list, 
-                                            g1range=g1range, 
-                                            g2range=g2range)
-        """
-        lnp_surf = \
-            self._get_cum_loglike_surf(gmm_list, 
-                                       g1range=g1range, 
-                                       g2range=g2range)
+        lnp_surf = self._get_cum_loglike_surf(gmm_list, 
+                                              g1range=g1range, 
+                                              g2range=g2range)
 
         self.lnp_surf = lnp_surf - lnp_surf.max()
-        #lnp_surf_slow = lnp_surf_slow - lnp_surf_slow.max()
 
         g1max,g2max=self._get_maxlike_loc(lnp_surf)
         print 'maxlike:     ',g1max,g2max
-        #print 'maxlike_slow:',g1max_slow,g2max_slow
 
         self._test_gmm_mean(gmm_list)
-        if True:
+        if False:
             import images
-            #plt=images.multiview(exp(self.lnp_surf),show=False)
-            #plt=images.multiview(self.lnp_surf-self.lnp_surf.min(),
             plt=images.multiview(exp(self.lnp_surf),
                                  xdr=g2range, 
                                  ydr=g1range,
@@ -133,8 +122,7 @@ class MCMSim(dict):
         #trials=shd.get_trials()
         #shapesim.write_output(self['run'], is2, is2n, trials)
 
-    def _test_gmm_rand_ml(self, gmm_list):
-        maxlike=-9999.9e40
+        #shapesim.write_output(self['run'], is2, is2n, out, itrial=itrial)
 
     def _test_gmm_mean(self, gmm_list):
         wsum=0.0

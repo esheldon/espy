@@ -1,3 +1,8 @@
+"""
+One giant fit over all galaxies with two extra parameters for shear
+
+Doesn't seem to work, completely degenerate or I have a bug
+"""
 import numpy
 import gmix_image
 import lensing

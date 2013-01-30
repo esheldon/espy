@@ -965,7 +965,10 @@ def write_output(run, is2, ie, data, itrial=None, fs=None):
     if 'hdfs' not in f:
         d=os.path.dirname(f)
         if not os.path.exists(d):
-            os.makedirs(d)
+            try:
+                os.makedirs(d)
+            except:
+                pass
     eu.io.write(f, data, clobber=True)
 
 def read_output(run, is2, ie, itrial=None, verbose=False, fs=None):

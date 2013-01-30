@@ -45,7 +45,22 @@ def main():
     elif 'shd' in run:
         sim=shapesim.shd_sim.SHDirectSim(run)
     elif 'mcm-' in run:
+        if itrial is None:
+            raise ValueError("send itrial for mcm")
         sim=shapesim.mcm_sim.MCMSim(run)
+        sim.process_trial(is2, ie_or_is2n, itrial)
+
+        return
+
+    elif 'stack-' in run:
+        if itrial is None:
+            raise ValueError("send itrial for stack")
+        sim=shapesim.stack_sim.StackSim(run, is2, ie_or_is2n, itrial)
+        sim.go()
+        sim.write()
+
+        return
+
     else:
         raise ValueError("Don't know about run '%s'" % run)
 
