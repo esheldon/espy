@@ -1,0 +1,35 @@
+run: shd-gg11r01
+sim: sim-gg11
+
+runtype: bys2n
+
+# need to set this for the trials to work.
+seed: 747
+
+s2n_method: admom
+s2n_fac: 40
+
+# minimum number of random ellipticities to use.
+# need decent count to sample the prior surface
+min_gcount: 600
+
+s2n_psf: 1.0e+8
+s2nvals: [40,50,60,70,80,90,100,120,140,160,180,200,250,300,350,400,500,600,700]
+
+
+# step and burnin are *per walker*
+# at least this many walkers
+nwalkers: 50
+nstep: 100 # steps per walker
+burnin: 100 # burnin per walker.
+
+# actually using admom for now
+ngauss_psf: 1
+fitmodel: 'gauss'
+
+mca_a: 2.0
+
+make_plots: True
+
+comments: |
+    Doing more s2 compared to gdt03
