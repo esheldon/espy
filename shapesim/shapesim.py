@@ -204,7 +204,8 @@ class ShapeSim(dict):
         Generate a convolved image with the input parameters and the psf and
         object models listed in the config.
         """
-        if self['objmodel'] in ['gexp','gdev']:
+        # new thing using the gmix_image code for gaussian objects
+        if self['objmodel'] in ['gexp','gdev','gauss']:
             return self.new_gmix_convolved_image(s2, obj_ellip, obj_theta)
 
         psfmodel = self['psfmodel']
@@ -258,7 +259,10 @@ class ShapeSim(dict):
             
         e1psf = self['psf_e1']
         e2psf = self['psf_e2']
-        Tpsf=self['Tpsf']
+        if 'Tpsf' in self:
+            Tpsf  = self['Tpsf']
+        else:
+            Tpsf  = 2*self['psf_sigma']**2
         if psfmodel in ['gauss','gturb']:
             psfpars=[-9., -9., e1psf, e2psf, Tpsf, 1.0]
             if psfmodel=='gauss':
@@ -277,7 +281,6 @@ class ShapeSim(dict):
         shear=self.get_shear()
 
         if shear is not None:
-            shear = self.get_shear()
             shape = shape0 + shear
         else:
             shape=shape0
@@ -287,6 +290,8 @@ class ShapeSim(dict):
             obj_gmix=gmix_image.GMixExp(objpars)
         elif objmodel=='gdev':
             obj_gmix=gmix_image.GMixDev(objpars)
+        elif objmodel=='gauss':
+            obj_gmix=gmix_image.GMixCoellip(objpars)
         else:
             raise ValueError("unsupported gmix object type: '%s'" % objmodel)
 

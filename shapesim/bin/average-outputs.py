@@ -27,15 +27,20 @@ if len(args) < 1:
 
 run=args[0]
 
-skip1=options.skip1
-if skip1 is None:
-    skip1=[]
-else:
-    skip1 = [int(v) for v in skip1.split(',')]
-skip2=options.skip2
-if skip2 is None:
-    skip2=[]
-else:
-    skip2 = [int(v) for v in skip2.split(',')]
 
-shapesim.shapesim.make_averaged_outputs(run, skip1=skip1, skip2=skip2)
+if 'stack-' in run:
+    shapesim.stack_sim.make_all_combined_outputs(run)
+else:
+
+    skip1=options.skip1
+    if skip1 is None:
+        skip1=[]
+    else:
+        skip1 = [int(v) for v in skip1.split(',')]
+    skip2=options.skip2
+    if skip2 is None:
+        skip2=[]
+    else:
+        skip2 = [int(v) for v in skip2.split(',')]
+
+    shapesim.shapesim.make_averaged_outputs(run, skip1=skip1, skip2=skip2)

@@ -15,15 +15,15 @@ gprior_type: 'fits-vs-mag'
 
 # logarithmic binning
 stack_s2n_min: 10
-stack_s2n_max: 200
-stack_nbin: 5
+stack_s2n_max: 1000
+stack_nbin: 10
 
-stack_boost: 4
+stack_boost: 1
 
 # only stack objects with size sratio larger than psf
-mixmc_run: "mixmc-r11"
+#mixmc_run: "mixmc-r11"
 
-stack_sratio: 1.0
+stack_sratio: 2.0
 
 # for filling areas not in object with noise
 seed: 5090

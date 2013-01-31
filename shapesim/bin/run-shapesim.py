@@ -55,10 +55,16 @@ def main():
     elif 'stack-' in run:
         if itrial is None:
             raise ValueError("send itrial for stack")
-        sim=shapesim.stack_sim.StackSim(run, is2, ie_or_is2n, itrial)
-        sim.go()
-        sim.write()
 
+        if 'admom' in run:
+            sim=shapesim.stack_sim.AdmomSim(run, is2=is2, is2n=ie_or_is2n, itrial=itrial)
+            sim.run()
+            sim.write()
+        else:
+            sim=shapesim.stack_sim.StackSim(run, is2=is2, is2n=ie_or_is2n, itrial=itrial)
+            sim.generate_stacks()
+            sim.fit_stacks()
+            sim.write()
         return
 
     else:

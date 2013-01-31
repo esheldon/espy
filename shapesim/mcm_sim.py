@@ -373,6 +373,11 @@ class MCM:
 
     def get_result(self):
         return self._result
+
+    def get_gmix(self):
+        epars=get_estyle_pars(self._result['pars'])
+        return self._get_convolved_gmix(epars)
+
     def get_trials(self):
         self._trials
 
@@ -508,6 +513,7 @@ class MCM:
                       'gsum':gsum,
                       'nsum':self._trials.shape[0],
                       'pars':pars,
+                      'perr':sqrt(diag(pcov)),
                       'pcov':pcov,
                       'Tmean':Tmean,
                       'Terr':Terr,

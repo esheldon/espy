@@ -16,7 +16,7 @@ gprior_type: 'fits-vs-mag'
 # logarithmic binning
 stack_s2n_min: 10
 stack_s2n_max: 200
-stack_nbin: 20
+stack_nbin: 10
 
 stack_boost: 1
 

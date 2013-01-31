@@ -36,6 +36,7 @@ class Plotter(object):
 
         self.options=options
 
+        self.Rshear = 1.-0.126228
         self.yrange=options.yrange
         if self.yrange is not None:
             self.yrange=[float(y) for y in self.yrange.split(',')]
@@ -56,8 +57,8 @@ class Plotter(object):
 
     def doplot(self):
         import biggles
-        #self._measure_psf_uw()
-        #self._measure_gals_uw()
+        self._measure_psf_uw()
+        self._measure_gals_uw()
         self._measure_psf_admom()
         self._measure_gals_admom()
         self._measure_gals_gmix()
@@ -66,25 +67,27 @@ class Plotter(object):
         #sh=self._admom_shear
         sh=self._gmix_shear
 
-        g1=sh['e1']*0.5
-        g1err=sh['e1err']*0.5
-        g2=sh['e2']*0.5
-        g2err=sh['e2err']*0.5
+        sh1=sh['e1']*0.5/self.Rshear
+        #sh1err=sh['e1err']*0.5
+        sh1err=0.16/sqrt(self.im_stacks['nstack'])
+        sh2=sh['e2']*0.5/self.Rshear
+        #sh2err=sh['e2err']*0.5
+        sh2err=0.16/sqrt(self.im_stacks['nstack'])
         s2n=sh['s2n']
 
         color1='red'
         color2='blue'
-        e1_pts=biggles.Points(s2n,g1, type='filled circle',
+        e1_pts=biggles.Points(s2n,sh1, type='filled circle',
                               color=color1)
 
 
-        e1err_pts=biggles.SymmetricErrorBarsY(s2n,g1,g1err,
+        e1err_pts=biggles.SymmetricErrorBarsY(s2n,sh1,sh1err,
                                               color=color1)
 
-        e2_pts=biggles.Points(s2n, g2, type='filled circle',
+        e2_pts=biggles.Points(s2n, sh2, type='filled circle',
                               color=color2)
 
-        e2err_pts=biggles.SymmetricErrorBarsY(s2n,g2,g2err,
+        e2err_pts=biggles.SymmetricErrorBarsY(s2n,sh2,sh2err,
                                               color=color2)
 
         plt=biggles.FramedPlot()
@@ -92,12 +95,13 @@ class Plotter(object):
         plt.add(e1_pts,e1err_pts,e2_pts,e2err_pts)
 
         if self.shnum in sh1exp:
-            g1exp=zeros(g1.size)+sh1exp[self.shnum]
-            g2exp=zeros(g1.size)+sh2exp[self.shnum]
-            g1exp_plt=biggles.Curve(s2n, g1exp)
-            g2exp_plt=biggles.Curve(s2n, g2exp)
-            plt.add(g1exp_plt)
-            plt.add(g2exp_plt)
+            sh1_exp     = zeros(sh1.size)+sh1exp[self.shnum]
+            sh2_exp     = zeros(sh1.size)+sh2exp[self.shnum]
+            sh1_exp_plt = biggles.Curve(s2n, sh1_exp)
+            sh2_exp_plt = biggles.Curve(s2n, sh2_exp)
+
+            plt.add(sh1_exp_plt)
+            plt.add(sh2_exp_plt)
 
 
         plt.xlog=True
@@ -148,13 +152,16 @@ class Plotter(object):
                                Tpsf, e1p, e2p, a4p)
             
             e1,e2,R,flags=corr
+
+            sh1=0.5*e1/self.Rshear
+            sh2=0.5*e2/self.Rshear
+
             uncer=ares['uncer']/R
 
-            err2=( 0.32**2 + uncer**2)/self.im_stacks['nstack'][i]
-            err=sqrt(err2)
+            err=0.16/sqrt(self.im_stacks['nstack'][i])
 
-            mess='e1: %s +/- %s e2: %s +/- %s R: %s  flags: %s'
-            mess=mess % (e1,err,e2,err,R,flags)
+            mess='sh1: %s +/- %s sh2: %s +/- %s R: %s  flags: %s'
+            mess=mess % (sh1,err,sh2,err,R,flags)
             print mess
 
             st['s2n'][i] = (s2n_min+s2n_max)/2.
@@ -190,7 +197,6 @@ class Plotter(object):
         import images
         import biggles
 
-        subtract_median=False
 
         biggles.configure('screen','width',1100)
         biggles.configure('screen','height',1100)
@@ -212,11 +218,6 @@ class Plotter(object):
 
         psf_pixerr=sqrt(self.psf_skyvar)
         psfim =eu.numpy_util.to_native( self.psf_stack )
-
-        if subtract_median:
-            pix2med = tuple( [psfim[:,0:10].ravel(), psfim[:, -10:-1].ravel(), psfim[0:10, :].ravel(), psfim[-10:-1, :].ravel() ])
-            pix2med=numpy.concatenate(pix2med)
-            psfim -= numpy.median(pix2med)
 
 
         psf_counts=psfim.sum()
@@ -278,11 +279,6 @@ class Plotter(object):
             im=eu.numpy_util.to_native( self.im_stacks['images'][i,:,:] )
 
             
-            # this is for the really big stacks in rtest3
-            if subtract_median:
-                pix2med = tuple( [im[:,0:10].ravel(), im[:, -10:-1].ravel(), im[0:10, :].ravel(), im[-10:-1, :].ravel() ])
-                pix2med=numpy.concatenate(pix2med)
-                im -= numpy.median(pix2med)
 
             pixerr=numpy.sqrt(self.im_stacks['skyvar'][i])
             ivar=1./self.im_stacks['skyvar'][i]
@@ -314,7 +310,7 @@ class Plotter(object):
             col_guess=self._ares_dicts[i]['wcol']
 
             while True:
-                if True:
+                if False:
                     prior=numpy.array( [row_guess,
                                         col_guess,
                                         e1guess+0.05*srandu(),
@@ -328,7 +324,7 @@ class Plotter(object):
                     #88.3129658 ,   2.42779593,   0.20018009
                      #0.28709096,  0.34712239,  0.3875399
                     #[81.5104     81.4744    0.289612  -0.000497128     13967.1     235.063     19.2695  3.70149e+08  1.75106e+08  2.36254e+08 ]
-                elif False:
+                elif True:
                     prior=numpy.array( [row_guess,
                                         col_guess,
                                         e1guess+0.05*srandu(),
@@ -379,11 +375,10 @@ class Plotter(object):
             print_pars(res['perr'], front='perr: ')
 
 
-            model=fitter.get_model()
+            #model=fitter.get_model()
             #images.multiview(im/im.max(), nonlinear=1)
-            images.compare_images(im/im.max(), model/model.max(),title=('%s %s' % (s2n_min,s2n_max)),
-                                 nonlinear=1)
-            stop
+            #images.compare_images(im/im.max(), model/model.max(),title=('%s %s' % (s2n_min,s2n_max)),
+            #                     nonlinear=1)
 
 
             pars=res['pars']
@@ -406,6 +401,17 @@ class Plotter(object):
             st['T'][i] = pars[4]
 
 
+            sh1=0.5*st['e1'][i]/self.Rshear
+            sh2=0.5*st['e2'][i]/self.Rshear
+
+            err=0.16/sqrt(self.im_stacks['nstack'][i])
+
+            mess='sh1: %s +/- %s sh2: %s +/- %s'
+            mess=mess % (sh1,err,sh2,err)
+            print mess
+
+
+
             #stop
             #print 'chi2per:',res['chi2per']
 
@@ -419,7 +425,7 @@ class Plotter(object):
         res=fimage.fmom(self.psf_stack)
         pprint.pprint(res)
 
-        self.psf_res=res
+        self.psf_res_uw=res
 
     def _measure_gals_uw(self):
         import fimage
@@ -434,20 +440,26 @@ class Plotter(object):
 
             res=fimage.fmom(im)
 
-            irr=res['cov'][0]-self.psf_res['cov'][0]
-            irc=res['cov'][1]-self.psf_res['cov'][1]
-            icc=res['cov'][2]-self.psf_res['cov'][2]
+            irr=res['cov'][0]-self.psf_res_uw['cov'][0]
+            irc=res['cov'][1]-self.psf_res_uw['cov'][1]
+            icc=res['cov'][2]-self.psf_res_uw['cov'][2]
 
             T=irr+icc
 
             e1=(icc-irr)/T
             e2=2*irc/T
+
+            sh1=0.5*e1/self.Rshear
+            sh2=0.5*e2/self.Rshear
+
+            err=0.16/sqrt(self.im_stacks['nstack'][i])
             
-            print e1,e2
+            print 'uw  sh1: %.6f +/- %.6f  sh2: %.6f +/- %.6f' % (sh1,err,sh2,err)
 
 
     def _read_data(self):
         import fitsio
+        import images
         path=files.get_output_path(ftype='shear-stack',
                                    run=self.run,
                                    psfnum=self.psfnum,
@@ -461,6 +473,36 @@ class Plotter(object):
             self.psf_skyvar=self.psf_h['skyvar']
 
             self.im_stacks=fits[3].read()
+
+        return 
+        subtract_median=False
+
+        images.multiview(self.psf_stack,title='psf')
+
+        edg=3
+
+        if subtract_median:
+            psf=self.psf_stack
+            pix2med = tuple( [psf[:,0:edg].ravel(), psf[:, -edg:-1].ravel(), psf[0:edg, :].ravel(), psf[-edg:-1, :].ravel() ])
+            pix2med=numpy.concatenate(pix2med)
+            self.psf_stack -= numpy.median(pix2med)
+
+            images.multiview(self.psf_stack,title='psf after')
+
+        for i in xrange(self.im_stacks.size):
+
+            images.multiview(self.im_stacks['images'][i,:,:],title='%d before' % (i+1))
+            
+            if subtract_median:
+
+                im=self.im_stacks['images'][i,:,:]
+                pix2med = tuple( [im[:,0:edg].ravel(), im[:, -edg:-1].ravel(), im[0:edg, :].ravel(), im[-edg:-1, :].ravel() ])
+                pix2med=numpy.concatenate(pix2med)
+
+                self.im_stacks['images'][i,:,:] -= numpy.median(pix2med)
+
+                images.multiview(self.im_stacks['images'][i,:,:],title='%d after' % (i+1))
+
 
 def main():
     c=Plotter()

@@ -1,5 +1,6 @@
 import esutil as eu
-from numpy import tanh, arctanh, sqrt
+import numpy
+from numpy import tanh, arctanh, sqrt, where
 from numpy.random import random as randu
 import copy
 
@@ -74,6 +75,12 @@ def g2e(g):
         delta=(a^2-b^2)/(a^2+b^2) 
         g=(a-b)/(a+2)
     """
+    if isinstance(g,numpy.ndarray):
+        e=numpy.zeros(g.size)
+        for i in xrange(g.size):
+            e[i] = g2e(g[i])
+            return e
+
     if g >= 1:
         raise ShapeRangeError("ellipticity must be < 1, "
                               "found %.16g" % g)
@@ -86,21 +93,33 @@ e2gamma=e2g
 gamma2e=g2e
 
 def e1e2_to_g1g2(e1, e2):
-    e = sqrt(e1**2 + e2**2)
-    if e == 0:
-        return 0.,0.
-    g = e2g(e)
-    fac = g/e
-    g1, g2 = fac*e1, fac*e2
+    if isinstance(e1,numpy.ndarray):
+        g1=numpy.zeros(e1.size)
+        g2=numpy.zeros(e1.size)
+        for i in xrange(e1.size):
+            g1[i],g2[i] = e1e2_to_g1g2(e1[i],e2[i])
+    else: 
+        e = sqrt(e1**2 + e2**2)
+        if e == 0:
+            return 0.,0.
+        g = e2g(e)
+        fac = g/e
+        g1, g2 = fac*e1, fac*e2
     return g1,g2
 
 def g1g2_to_e1e2(g1, g2):
-    g = sqrt(g1**2 + g2**2)
-    if g == 0:
-        return 0.,0.
-    e = g2e(g)
-    fac = e/g
-    e1, e2 = fac*g1, fac*g2
+    if isinstance(g1,numpy.ndarray):
+        e1=numpy.zeros(g1.size)
+        e2=numpy.zeros(g1.size)
+        for i in xrange(g1.size):
+            e1[i],e2[i] = g1g2_to_e1e2(g1[i],g2[i])
+    else: 
+        g = sqrt(g1**2 + g2**2)
+        if g == 0:
+            return 0.,0.
+        e = g2e(g)
+        fac = e/g
+        e1, e2 = fac*g1, fac*g2
     return e1,e2
 
 def e1e2_to_eta1eta2(e1,e2):
