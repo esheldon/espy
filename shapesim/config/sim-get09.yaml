@@ -1,8 +1,8 @@
-name: sim-get05
+name: sim-get09
 
 dotrim: false
 
-orient: ring
+orient: random
 
 psfmodel: gturb
 
@@ -13,7 +13,7 @@ psf_e2: 0.0
 
 objmodel: gexp
 
-shear: [0.04,0.0]
+shear: [0.04,0.00]
 
 mins2: 0.5
 maxs2: 2.0

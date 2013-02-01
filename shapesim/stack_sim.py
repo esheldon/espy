@@ -12,14 +12,13 @@ as gauss model.
         * made both psf and object *much* bigger but got same bias!  But making
         the object bigger relative to the PSF did change the bias.
 
+        * made objects round and I see no bias (and no need for Rshear)
+
         * for gauss, there is no bias if I make the shear pure e2.  If there is
         any component that is e1 I see a bias in both shear1 and shear2.  For "et"
         I still saw the bias for pure e2.
 
         * moved the center around but got same bias
-
-        * trying random orientations instead of ring 90 degree pairs: sim-gg12
-        and stack-gg12r01  looks quite similar
 
         * maybe nsub=16 isn't good enough in sim?  Trying 24.  Nope.
 
@@ -75,14 +74,16 @@ def combine_stacks(run, is2=None, is2n=None):
             combiner.write()
 
 
-def plot_is2_stacks(run, is2, type='uw', true_shear=None):
+def plot_is2_stacks(run, is2=None, type='fit', true_shear=None, 
+                    yrange=None):
     import biggles
     data=load_is2_stacks(run,is2)
     
+    if is2 is None or type is None:
+        raise ValueError("send is2= and type=")
     if type=='uw':
-        # this is unbiased
-        sh1=0.5*data['e1_uw']/RSHEAR_DEFAULT
-        sh2=0.5*data['e2_uw']/RSHEAR_DEFAULT
+        sh1=0.5*data['e1_uw']/data['Rshear']
+        sh2=0.5*data['e2_uw']/data['Rshear']
     elif type=='fit':
         #sh1=0.5*data['pars'][:,2]/RSHEAR_DEFAULT
         #sh2=0.5*data['pars'][:,3]/RSHEAR_DEFAULT
@@ -90,18 +91,20 @@ def plot_is2_stacks(run, is2, type='uw', true_shear=None):
         sh1=0.5*data['pars'][:,2]
         sh2=0.5*data['pars'][:,3]
     elif type=='admom':
-        sh1=0.5*data['e1_admom']/RSHEAR_DEFAULT
-        sh2=0.5*data['e2_admom']/RSHEAR_DEFAULT
+        sh1=0.5*data['e1_admom']/data['Rshear']
+        sh2=0.5*data['e2_admom']/data['Rshear']
     else:
         raise ValueError("bad type: '%s'" % type)
 
-    err=0.16/sqrt(data['nimage'])
+    sherr=0.16/sqrt(data['nimage'])
+    err1=sqrt(sherr**2 + data['perr'][:,2]**2)
+    err2=sqrt(sherr**2 + data['perr'][:,3]**2)
 
     plt=biggles.FramedPlot()
     plt.add( biggles.Points(data['s2n'], sh1, color='blue',type='filled circle'))
-    plt.add( biggles.SymmetricErrorBarsY(data['s2n'], sh1, err, color='blue'))
+    plt.add( biggles.SymmetricErrorBarsY(data['s2n'], sh1, err1, color='blue'))
     plt.add( biggles.Points(data['s2n'], sh2, color='red',type='filled circle'))
-    plt.add( biggles.SymmetricErrorBarsY(data['s2n'], sh2, err, color='red'))
+    plt.add( biggles.SymmetricErrorBarsY(data['s2n'], sh2, err2, color='red'))
 
     plt.title="run: %s  shear type: %s" % (run,type)
 
@@ -110,6 +113,9 @@ def plot_is2_stacks(run, is2, type='uw', true_shear=None):
         t2=data['s2n']*0 + true_shear[1]
         plt.add(biggles.Curve(data['s2n'], t1))
         plt.add(biggles.Curve(data['s2n'], t2))
+
+    if yrange is not None:
+        plt.yrange=yrange
     plt.show()
 
 def load_is2_stacks(run, is2):
@@ -160,7 +166,7 @@ class StackSimBase(dict):
                                  self.simc['maxs2'], 
                                  self.simc['nums2'])[self.is2]
         self.sratio=numpy.sqrt(1./self.s2)
-        self.npair=self._get_npair()
+        self.nimage=self._get_nimage()
 
         self._set_gprior()
 
@@ -196,7 +202,7 @@ class StackSimBase(dict):
         self.verbose=keys.get('verbose',False)
 
 
-    def _get_npair(self):
+    def _get_nimage(self):
         s2n_fac = self['s2n_fac']
         nellip = shapesim.get_s2n_nrepeat(self.s2n, fac=s2n_fac)
 
@@ -225,8 +231,7 @@ class StackSimBase(dict):
         data=self._get_struct(pars.size, psf_pars.size)
 
         data['model'] = self['fitmodel']
-        data['npair'] = self.npair
-        data['nimage'] = self.npair*2
+        data['nimage'] = self.nimage
         data['s2n'] = self.s2n
         data['s2'] = self.s2
         data['sratio'] = self.sratio
@@ -275,7 +280,6 @@ class StackSimBase(dict):
         psf_shape=self._psf_stack.shape
 
         dt=[('model','S5'),
-            ('npair','i4'),
             ('nimage','i4'),
             ('s2n','f8'),  # per object
             ('s2','f8'),
@@ -355,8 +359,11 @@ class StackSimBase(dict):
 
 
         res=self._fitter.get_result()
-        #print 'fit: ',0.5*res['pars'][2]/self.Rshear,0.5*res['pars'][3]/self.Rshear
-        print 'fit: ',0.5*res['pars'][2],0.5*res['pars'][3]
+        sh1,sh2=0.5*res['pars'][2], 0.5*res['pars'][3]
+        err1=0.5*res['perr'][2]
+        err2=0.5*res['perr'][3]
+        print 'fit:  sh1: %.6g +/- %.6g  sh2: %.6g +/- %.6g' % (sh1,err1,sh2,err2)
+        print 'fit/Rshear: ',sh1/self.Rshear,sh2/self.Rshear
 
     def _run_uw(self, image, psf):
         import fimage
@@ -370,8 +377,10 @@ class StackSimBase(dict):
         e1=(icc-irr)/(irr+icc)
         e2=2.*irc/(irr+icc)
 
-        print 'uw:',e1,e2
-        print 'uw/Rshear:',0.5*e1/self.Rshear,0.5*e2/self.Rshear
+        sh1=0.5*e1
+        sh2=0.5*e2
+        print 'uw:',sh1,sh2
+        print 'uw/Rshear:',sh1/self.Rshear,sh2/self.Rshear
         return {'e1':e1, 'e2':e2}
 
     def _fit_stack(self, image_stack, skyvar, ares, psf=None, 
@@ -471,6 +480,9 @@ class StackSimBase(dict):
                                   nonlinear=1,
                                   title=name)
 
+            key=raw_input('hit a key: ')
+            if key=='q':
+                stop
         return fitter
 
 
@@ -493,49 +505,34 @@ class StackSimBase(dict):
         return ares 
 
     def _make_pair(self, g):
-        s2n_psf = self['s2n_psf']
 
-        self.image_list=[]
-        self.ivar_list=[]
-        self.psf_list=[]
-        self.model_list=[]
-        self.ares_list=[]
-        
         # make sure these are totally random
         numpy.random.seed(None)
-        theta = 360.0*numpy.random.random()
+        theta1 = 360.0*numpy.random.random()
+        theta2 = theta1 + 90.0
 
-        if self.simc['orient']=="ring":
-            theta2 = theta + 90.0
-        else:
-            theta2 = 360.0*numpy.random.random()
+        imd1=self._make_image(g, theta1)
+        imd2=self._make_image(g, theta2)
+
+        return imd1,imd2
+
+    def _make_image(self, g, theta):
+        s2n_psf = self['s2n_psf']
 
         ellip=lensing.util.g2e(g)
 
-        ci,ares,psf = self._get_ci_ares_psf(self.s2, ellip, theta, self.s2n, s2n_psf)
-        ci2,ares2,psf2 = self._get_ci_ares_psf(self.s2, ellip, theta2, self.s2n, s2n_psf)
+        ci,ares = self._get_ci_ares_psf(self.s2, ellip, theta, self.s2n, s2n_psf)
 
-        imd1={'image':ci.image,
+        imd={'image':ci.image,
               'psf_image':ci.psf,
               'image_skyvar':ci['skysig']**2,
               'ivar':1./ci['skysig']**2,
               'psf_skyvar':ci['skysig_psf']**2,
               'psf_ivar':1./ci['skysig_psf']**2,
               'ares':ares,
-              'psf':psf,
               'model':self.simc['psfmodel']}
 
-        imd2={'image':ci2.image,
-              'psf_image':ci2.psf,
-              'image_skyvar':ci2['skysig']**2,
-              'ivar':1./ci2['skysig']**2,
-              'psf_skyvar':ci2['skysig_psf']**2,
-              'psf_ivar':1./ci2['skysig_psf']**2,
-              'ares':ares2,
-              'psf':psf2,
-              'model':self.simc['objmodel']}
-
-        return imd1,imd2
+        return imd
 
     def _get_ci_ares_psf(self, s2, ellip, theta, s2n, s2n_psf):
         from fimage.convolved import NoisyConvolvedImage
@@ -553,27 +550,24 @@ class StackSimBase(dict):
               'e1':ci['e1_admom'],
               'e2':ci['e2_admom'],
               'whyflag':0}
-        #print ares
-        # for now only gauss
-        psf=gmix_image.GMix([1.0, 
-                             ci['cen_psf_admom'][0],
-                             ci['cen_psf_admom'][1],
-                             ci['cov_psf_admom'][0],
-                             ci['cov_psf_admom'][1],
-                             ci['cov_psf_admom'][2]])
 
-        return ci, ares, psf
+        return ci, ares
 
     def _set_gprior(self):
-        import cluster_step
-        exp_prior_pars=cluster_step.files.read_gprior(type='gexp')
+        if self.simc['gprior_type']=='fits-vs-mag':
+            import cluster_step
+            exp_prior_pars=cluster_step.files.read_gprior(type='gexp')
 
-        index=3
-        self.gprior=cluster_step.prior.GPriorExp(exp_prior_pars['pars'][3])
-        
-        if index != 3:
-            raise ValueError("re-calculate Rshear")
-        self.Rshear = RSHEAR_DEFAULT
+            index=3
+            self.gprior=cluster_step.prior.GPriorExp(exp_prior_pars['pars'][3])
+            self.Rshear = RSHEAR_DEFAULT
+            
+            if index != 3:
+                raise ValueError("re-calculate Rshear")
+        elif self.simc['gprior_type']=='round':
+            self.Rshear = 1.0
+        else:
+            raise ValueError("expected gprior type 'fits-vs-mag' or 'round'")
 
 class StackSim(StackSimBase):
     """
@@ -593,12 +587,49 @@ class StackSim(StackSimBase):
             raise ValueError("send itrial= to genrate stacks")
 
     def generate_stacks(self):
+        if self.simc['orient']=='ring':
+            self._generate_ring_stacks()
+        else:
+            self._generate_random_stacks()
 
-        gvals=self.gprior.sample1d(self.npair)
+    def _generate_random_stacks(self):
 
+        gvals=self._get_gvals()
         for i,g in enumerate(gvals):
             if (((i+1) % 100) == 0):
-                print '%d/%d' % (i+1,self.npair)
+                print '%d/%d' % (i+1,self.nimage)
+
+            theta=360*numpy.random.random()
+            imd=self._make_image(g,theta)
+
+            if i==0:
+                image_stack  = numpy.zeros(imd['image'].shape)
+                psf_stack    = numpy.zeros(imd['psf_image'].shape)
+                image_skyvar = 0.0
+                psf_skyvar   = 0.0
+
+            image_stack += imd['image']
+            image_skyvar += imd['image_skyvar']
+            psf_stack += imd['psf_image']
+            psf_skyvar += imd['psf_skyvar']
+            
+
+        self._image_stack=image_stack
+        self._image_skyvar=image_skyvar
+        self._psf_stack=psf_stack
+        self._psf_skyvar=psf_skyvar
+
+        if False:
+            import images
+            images.multiview(image_stack)
+
+
+    def _generate_ring_stacks(self):
+
+        gvals=self._get_gvals()
+        for i,g in enumerate(gvals):
+            if (((i+1) % 100) == 0):
+                print '%d/%d' % (i+1,self.nimage)
 
             imd1,imd2=self._make_pair(g)
 
@@ -629,6 +660,18 @@ class StackSim(StackSimBase):
         if False:
             import images
             images.multiview(image_stack)
+
+    def _get_gvals(self):
+        n=self.nimage
+
+        if self.simc['gprior_type']=='round':
+            print 'using round galaxies'
+            gvals=numpy.zeros(n)
+        else:
+            print 'sampling gprior'
+            gvals=self.gprior.sample1d(n)
+
+        return gvals
 
 class StackCombiner(StackSimBase):
     """
@@ -664,7 +707,7 @@ class StackCombiner(StackSimBase):
                 image_skyvar=0.0
                 psf_skyvar=0.0
                 nimage=0
-                npair=0
+                nimage=0
 
             image_stack += data0['image_stack'][0,:,:]
             psf_stack += data0['psf_stack'][0,:,:]
@@ -672,13 +715,13 @@ class StackCombiner(StackSimBase):
             image_skyvar += data0['image_skyvar'][0]
             psf_skyvar += data0['psf_skyvar'][0]
 
-            npair += data0['npair'][0]
+            nimage += data0['nimage'][0]
 
         self._image_stack=image_stack
         self._image_skyvar=image_skyvar
         self._psf_stack=psf_stack
         self._psf_skyvar=psf_skyvar
-        self.npair=npair
+        self.nimage=nimage
 
 
 
@@ -709,6 +752,8 @@ def load_admom_is2_stacks(run, is2):
 class AdmomSim(StackSimBase):
     """
     Send itrial= on construction
+
+    currently assumes a ring test
     """
     def __init__(self, run, **keys):
         super(AdmomSim,self).__init__(run, **keys)
@@ -722,13 +767,13 @@ class AdmomSim(StackSimBase):
         i=0
         j=0
 
-        e1vals=numpy.zeros(self.npair*2)
-        e2vals=numpy.zeros(self.npair*2)
-        gvals=numpy.zeros(self.npair)
+        e1vals=numpy.zeros(self.nimage)
+        e2vals=numpy.zeros(self.nimage)
+        gvals=numpy.zeros(self.nimage/2)
 
-        while i < self.npair:
+        while i < self.nimage:
             if (((i+1) % 100) == 0):
-                print '%d/%d' % (i+1,self.npair)
+                print '%d/%d' % (i+1,self.nimage)
 
             g=self.gprior.sample1d(1)
 

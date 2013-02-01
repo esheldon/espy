@@ -43,6 +43,7 @@ class Shear:
 
         if etot==0:
             self.eta1,self.eta2,self.g1,self.g2=(0.,0.,0.,0.)
+            self.e1,self.e2=(0., 0.)
             return 
 
         eta = atanh(etot)
@@ -67,6 +68,7 @@ class Shear:
 
         if gtot==0:
             self.eta1,self.eta2,self.e1,self.e2=(0.,0.,0.,0.)
+            self.g1,self.g2=(0., 0.)
             return 
 
         eta = 2*atanh(gtot)

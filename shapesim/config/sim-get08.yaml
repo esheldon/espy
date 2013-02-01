@@ -1,4 +1,4 @@
-name: sim-get05
+name: sim-get08
 
 dotrim: false
 
@@ -13,13 +13,18 @@ psf_e2: 0.0
 
 objmodel: gexp
 
-shear: [0.04,0.0]
+shear: [0.04,0.00]
 
+#mins2: 0.05
+#maxs2: 2.05
+#nums2: 6
 mins2: 0.5
 maxs2: 2.0
 nums2: 4
 
-gprior_type: 'fits-vs-mag'
+
+
+gprior_type: 'round'
 
 comments: |
     using for stacking

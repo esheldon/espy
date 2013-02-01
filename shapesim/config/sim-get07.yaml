@@ -19,7 +19,6 @@ mins2: 0.05
 maxs2: 2.05
 nums2: 6
 
-
 gprior_type: 'fits-vs-mag'
 
 comments: |
