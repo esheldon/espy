@@ -53,6 +53,8 @@ finfo['lcat-split']  = {'subdir':'lcat/{sample}',
                         'default_ext':'dat'}
 finfo['scat-split']  = {'subdir':'scat/{sample}',
                         'name':'scat-{sample}-{src_split}.{ext}','default_ext':'dat'}
+finfo['pofz-split']  = {'subdir':'scat/{sample}',
+                        'name':'pofz-{sample}-{src_split}.{ext}','default_ext':'dat'}
 
 # usually we only have the split versions of these
 finfo['lensout']  = {'subdir':'lensout/{sample}',

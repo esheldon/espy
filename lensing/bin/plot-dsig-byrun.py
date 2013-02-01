@@ -30,34 +30,47 @@ parser.add_option('-y','--yrange',default=None,
 parser.add_option('-x','--xrange',default=None,
                   help="xrange for plot")
 
+parser.add_option('-r','--randrun',default=None,
+                  help="compare with the matched, binned random data")
+
 options,args = parser.parse_args(sys.argv[1:])
 
 
-if len(args) < 3:
-    parser.print_help()
-    sys.exit(1)
+def main():
+    if len(args) < 3:
+        parser.print_help()
+        sys.exit(1)
 
-run = args[0]
-bintype = args[1]
-nbin = int(args[2])
+    run = args[0]
+    bintype = args[1]
+    nbin = int(args[2])
 
-yrange=options.yrange
-if yrange is not None:
-    yrange=[float(y) for y in yrange.split(',')]
-xrng=options.xrange
-if xrng is not None:
-    xrng=[float(x) for x in xrng.split(',')]
+    yrng=options.yrange
+    if yrng is not None:
+        yrng=[float(y) for y in yrng.split(',')]
+    xrng=options.xrange
+    if xrng is not None:
+        xrng=[float(x) for x in xrng.split(',')]
+
+    if options.randrun is not None:
+        b = lensing.binning.instantiate_binner(bintype, nbin)
+        for i in xrange(nbin):
+            b.compare_random(run, options.type, i, options.randrun, 
+                             xrange=xrng, yrange=yrng)
+
+        return
 
 
-
-b = lensing.binning.instantiate_binner(bintype, nbin)
-if options.compare_osig:
-    b.plot_dsig_osig_byrun(run, options.type, show=options.show, range4var=[0.5,100.0],
-                           linear=options.linear, yrange=yrange, xrange=xrng)
-elif options.osig:
-    b.plot_osig_byrun_1var(run, options.type, show=options.show)
-else:
-    if options.run2 is not None:
-        b.plot_dsig_2runs(run, options.run2, options.type, show=options.show)
+    b = lensing.binning.instantiate_binner(bintype, nbin)
+    if options.compare_osig:
+        b.plot_dsig_osig_byrun(run, options.type, show=options.show, range4var=[0.5,100.0],
+                               linear=options.linear, yrange=yrng, xrange=xrng)
+    elif options.osig:
+        b.plot_osig_byrun_1var(run, options.type, show=options.show)
     else:
-        b.plot_dsig_byrun_1var(run, options.type, show=options.show)
+        if options.run2 is not None:
+            b.plot_dsig_2runs(run, options.run2, options.type, show=options.show)
+        else:
+            b.plot_dsig_byrun_1var(run, options.type, show=options.show)
+
+main()

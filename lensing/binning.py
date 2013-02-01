@@ -103,6 +103,73 @@ class BinnerBase(dict):
     def bin_label(self, binnum):
         raise RuntimeError("override this method")
 
+    def compare_random(self, lensrun, type, binnum, randrun, **keys):
+        xrng=keys.get('xrange',None)
+        yrng=keys.get('yrange',None)
+
+        extra='randmatch-%s' % randrun
+        data = lensing.files.sample_read(type=type, sample=lensrun, name=self.name())
+        rand = lensing.files.sample_read(type='binned', sample=lensrun, name=self.name(), 
+                                         extra=extra)
+
+        zpts=biggles.Curve( [0.9*data['r'].min(), 1.1*data['r'].max()], [0,0])
+
+        plt=biggles.FramedArray(2,1)
+        plt.aspect_ratio=2
+        plt.xlog=True
+        plt.uniform_limits=1
+        if xrng is not None:
+            plt.xrange=xrng
+        if yrng is not None:
+            plt.yrange=yrng
+
+        plt.xlabel=r'$r [h^{-1} Mpc]$'
+        plt.ylabel=r'$\Delta\Sigma$'
+
+        pts=biggles.Points(data['r'][binnum], data['dsig'][binnum],
+                           type='filled circle')
+        epts=biggles.SymmetricErrorBarsY(data['r'][binnum], data['dsig'][binnum], 
+                                         data['dsigerr'][binnum])
+
+        rpts=biggles.Points(rand['r'][binnum], rand['dsig'][binnum],
+                           type='filled circle',color='red')
+        repts=biggles.SymmetricErrorBarsY(rand['r'][binnum], rand['dsig'][binnum], 
+                                          rand['dsigerr'][binnum],color='red')
+
+        pts.label=r'$\Delta\Sigma_+$'
+        rpts.label=r'$\Delta\Sigma^{rand}_+$'
+
+        key=biggles.PlotKey(0.9,0.9,[pts,rpts],halign='right')
+        lab=biggles.PlotLabel(0.1,0.9,self.bin_label(binnum),halign='left')
+
+        plt[0,0].add(zpts,pts,epts,rpts,repts,key,lab)
+
+
+        opts=biggles.Points(data['r'][binnum], data['osig'][binnum],
+                            type='filled circle')
+        oepts=biggles.SymmetricErrorBarsY(data['r'][binnum], data['osig'][binnum], 
+                                          data['dsigerr'][binnum])
+
+        orpts=biggles.Points(rand['r'][binnum], rand['osig'][binnum],
+                             type='filled circle',color='red')
+        orepts=biggles.SymmetricErrorBarsY(rand['r'][binnum], rand['osig'][binnum], 
+                                           rand['dsigerr'][binnum],color='red')
+
+        opts.label=r'$\Delta\Sigma_\times$'
+        orpts.label=r'$\Delta\Sigma^{rand}_\times$'
+
+        okey=biggles.PlotKey(0.9,0.9,[opts,orpts],halign='right')
+
+        plt[1,0].add(zpts,opts,oepts,orpts,orepts,okey)
+            
+        epsfile=lensing.files.sample_file(type=type+'-plots',
+                                          sample=lensrun,
+                                          name=self.name(),
+                                          extra='%s-%02i' % (randrun,binnum),
+                                          ext='eps')
+        plt.write_eps(epsfile)
+        converter.convert(epsfile, dpi=self.dpi, verbose=True)
+
     def plot_dsig_osig_byrun_bin(self, run, type, binnum, **keys):
         """
 
@@ -203,7 +270,7 @@ class BinnerBase(dict):
             epsfile=lensing.files.sample_file(type=type+'-plots',
                                               sample=run,
                                               name=self.name(),
-                                              extra='-osig-comp-%02i' % binnum,
+                                              extra='osig-comp-%02i' % binnum,
                                               ext='eps')
             stdout.write("Plotting to file: %s\n" % epsfile)
             plt.write_eps(epsfile)
@@ -345,6 +412,10 @@ class BinnerBase(dict):
             nrow = 4
             ncol = 4
             aspect_ratio = 1.0
+        elif self['nbin'] == 2:
+            nrow=2
+            ncol=1
+            aspect_ratio=2.0
         else:
             raise ValueError("Unsupported nbin: %s" % self['nbin'])
 

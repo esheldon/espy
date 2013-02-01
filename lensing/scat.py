@@ -61,6 +61,8 @@ class DR8Catalog(dict):
         for k in conf:
             self[k] = conf[k]
 
+        self['detrend']=self.get('detrend',False)
+
         #if not self['detrend']:
         #    raise ValueError("expected detrend")
         if 'dr8regauss' not in self['catalog']:
@@ -103,6 +105,8 @@ class DR8Catalog(dict):
         nzl = zlvals.size
 
         keep,zphot_matches = self.select()
+        self._keep=keep
+        self._zphot_matches=zphot_matches
 
         print("creating output struct")
         dt = lensing.files.scat_dtype(self['sigmacrit_style'], nzl=nzl)
@@ -214,20 +218,29 @@ class DR8Catalog(dict):
 
         # sample 5 didn't have range
         print("Getting R logic")
-        Rrange = self.get('Rrange',[1.0/3.0,1.0])
-        R_logic = ((R > Rrange[0]) & (R < Rrange[1]))
-        wR = where1(match_logic & R_logic)
-        print("R in %s: %i/%i" % (Rrange, wR.size, wmatch.size))
+        if 'Rcut' in self:
+            R_logic = (R > self['Rcut'])
+            wR = where1(match_logic & R_logic)
+            print("R > %s: %i/%i" % (self['Rcut'], wR.size, wmatch.size))
+        elif 'Rrange' in self:
+            Rrange = self['Rrange']
+            R_logic = ((R > Rrange[0]) & (R < Rrange[1]))
+            wR = where1(match_logic & R_logic)
+            print("R in %s: %i/%i" % (Rrange, wR.size, wmatch.size))
+        else:
+            raise ValueError("need Rcut or Rrange")
+
 
         # sample 5 didn't have this cut
-        print("Getting erange logic")
-        erange = self.get('erange',[-4,4])
-        erange_logic = ((e1 > erange[0]) 
-                        & (e1 < erange[1])
-                        & (e2 > erange[0])
-                        & (e2 < erange[1]) )
-        we=where1(match_logic & erange_logic)
-        print("erange %s: %i/%i" % (erange,wR.size, wmatch.size))
+        if 'erange' in self:
+            print("Getting erange logic")
+            erange = self.get('erange',[-4,4])
+            erange_logic = ((e1 > erange[0]) 
+                            & (e1 < erange[1])
+                            & (e2 > erange[0])
+                            & (e2 < erange[1]) )
+            we=where1(match_logic & erange_logic)
+            print("erange %s: %i/%i" % (erange,wR.size, wmatch.size))
 
 
         print("Getting flag logic")
@@ -237,7 +250,10 @@ class DR8Catalog(dict):
 
 
         # combined logic
-        wgood=where1(match_logic & R_logic & erange_logic & flag_logic)
+        if 'erange' in self:
+            wgood=where1(match_logic & R_logic & erange_logic & flag_logic)
+        else:
+            wgood=where1(match_logic & R_logic & flag_logic)
 
         print("Found %s/%s good objects" % (wgood.size, m.size))
 
@@ -246,11 +262,76 @@ class DR8Catalog(dict):
         matches = m[wgood]
         return wgood, matches
 
+    def create_pofz_files(self, fs='nfs'):
+        """
+        For joseph clampett.  Note nfs
+        """
+        filter=self['filter']
+        zlvals=lensing.sigmacrit.make_zlvals(self['dzl'], 
+                                             self['zlmin'], 
+                                             self['zlmax'])
+        nzl = zlvals.size
+
+        pzcols = self.pzcols
+        print(pzcols)
+
+        keep,zphot_matches = self.select()
+
+        zphot_matchname = 'match_zphot%s' % self['pzrun']
+
+        nsplit = self['nsplit']
+        print('splitting into:',self['nsplit'])
+
+        ntot = zphot_matches.size
+        nper = ntot/nsplit
+        nleft = ntot % nsplit
+
+        dir=lensing.files.sample_dir(sample=self['sample'], type='pofz', fs='nfs')
+        if not os.path.exists(dir):
+            print('making dir:',dir)
+            os.makedirs(dir)
+
+        tmp=pzcols['pofz'][0:10]
+        dt=[('photoid','i8'),
+            ('ra','f8'),
+            ('dec','f8'),
+            ('pofz','f8',tmp.shape[1])]
+        for i in xrange(nsplit):
+
+            beg = i*nper
+            end = (i+1)*nper
+            if i == (nsplit-1):
+                end += nleft
+
+            pzind=zphot_matches[beg:end]
+            rgind=keep[beg:end]
+
+            pofz = pzcols['pofz'][pzind]
+            photoid = pzcols['photoid'][pzind]
+
+            ra=self.rgcols['ra'][rgind]
+            dec=self.rgcols['dec'][rgind]
+
+            print(photoid.size)
+            fname=lensing.files.sample_file(sample=self['sample'], type='pofz', fs='nfs', src_split=i)
+            print(fname)
+
+            if os.path.exists(fname):
+                os.remove(fname)
+
+            out=numpy.zeros(photoid.size, dtype=dt)
+            out['photoid'] = photoid
+            out['ra']      = ra
+            out['dec']     = dec
+            out['pofz']    = pofz
+
+            with eu.recfile.Open(fname, mode='w', delim=' ') as fobj:
+                fobj.write(out)
 
     def add_scinv(self, clobber=False, chunksize=100000):
         """
 
-        Add a column to the REGAUSS db that is the man scinv as a function of
+        Add a column to the REGAUSS db that is the mean scinv as a function of
         lens redshift.
 
         scinv are created using the *corrected* p(z).  This is separate so I

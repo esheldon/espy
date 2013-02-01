@@ -65,7 +65,7 @@ def main():
     # bin criteria.  Then match the randoms redshift histogram
     conf=lensing.files.cascade_config(lensrun)
     # this is where z is, may be a different name in the collated data
-    lcat = lensing.files.lcat_read(sample=conf['lens_sample'])
+    #lcat = lensing.files.lcat_read(sample=conf['lens_sample'])
     data = lensing.files.collated_read(sample=lensrun)
     rand = lensing.files.collated_read(sample=randrun)
     print('rand names:',rand.dtype.names)
@@ -107,7 +107,8 @@ def main():
         w = b.select_bin(data, binnum)
 
         print("matching hist with weights")
-        weights = weighting.hist_match(rand['z'], lcat['z'][w], binsize)
+        #weights = weighting.hist_match(rand['z'], lcat['z'][w], binsize)
+        weights = weighting.hist_match(rand['z'], data['z'][w], binsize)
 
 
         effnum = weights.sum()
@@ -117,7 +118,9 @@ def main():
         print("combining randoms with weights")
         comb = lensing.outputs.average_lensums(rand, weights=weights)
 
-        weighting.plot_results1d(rand['z'], lcat['z'][w], weights, binsize, 
+        #weighting.plot_results1d(rand['z'], lcat['z'][w], weights, binsize, 
+        #                         epsfile=epsfile, title=tit, show=show)
+        weighting.plot_results1d(rand['z'], data['z'][w], weights, binsize, 
                                  epsfile=epsfile, title=tit, show=show)
 
         #wstruct=zeros(1, dtype=[('weights','f8',weights.size)])

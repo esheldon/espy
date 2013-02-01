@@ -1,14 +1,20 @@
 """
 
-For shear=[0.04,,0.00] Getting <e> of 0.0785 at all s/n instead of 0.08
+For fits and shear=[0.04,,0.00] Getting <e> of 0.0785 at all s/n instead of
+0.08 For unweighted moments corrected by 1/Rshear I get the right answer.  The
+residuals of model and image look very good.  See similar bias for "et" model
+as gauss model.
 
     - max like bias some how? no, tried mcmc
     - working in e instead of g?  no
     - pixel problem
-        * made both psf and object *much* bigger but got same bias!
 
-        * there is no bias if I make the shear pure e2.  If there is
-        any component that is e1 I see a bias in both shear1 and shear2
+        * made both psf and object *much* bigger but got same bias!  But making
+        the object bigger relative to the PSF did change the bias.
+
+        * for gauss, there is no bias if I make the shear pure e2.  If there is
+        any component that is e1 I see a bias in both shear1 and shear2.  For "et"
+        I still saw the bias for pure e2.
 
         * moved the center around but got same bias
 
@@ -69,16 +75,20 @@ def combine_stacks(run, is2=None, is2n=None):
             combiner.write()
 
 
-def plot_is2_stacks(run, is2, type='uw'):
+def plot_is2_stacks(run, is2, type='uw', true_shear=None):
     import biggles
     data=load_is2_stacks(run,is2)
     
     if type=='uw':
+        # this is unbiased
         sh1=0.5*data['e1_uw']/RSHEAR_DEFAULT
         sh2=0.5*data['e2_uw']/RSHEAR_DEFAULT
     elif type=='fit':
-        sh1=0.5*data['pars'][:,2]/RSHEAR_DEFAULT
-        sh2=0.5*data['pars'][:,3]/RSHEAR_DEFAULT
+        #sh1=0.5*data['pars'][:,2]/RSHEAR_DEFAULT
+        #sh2=0.5*data['pars'][:,3]/RSHEAR_DEFAULT
+        # wierd, this gives a closer answer for ngauss=2,3!
+        sh1=0.5*data['pars'][:,2]
+        sh2=0.5*data['pars'][:,3]
     elif type=='admom':
         sh1=0.5*data['e1_admom']/RSHEAR_DEFAULT
         sh2=0.5*data['e2_admom']/RSHEAR_DEFAULT
@@ -93,8 +103,13 @@ def plot_is2_stacks(run, is2, type='uw'):
     plt.add( biggles.Points(data['s2n'], sh2, color='red',type='filled circle'))
     plt.add( biggles.SymmetricErrorBarsY(data['s2n'], sh2, err, color='red'))
 
-    plt.title="shear type: %s" % type
+    plt.title="run: %s  shear type: %s" % (run,type)
 
+    if true_shear is not None:
+        t1=data['s2n']*0 + true_shear[0]
+        t2=data['s2n']*0 + true_shear[1]
+        plt.add(biggles.Curve(data['s2n'], t1))
+        plt.add(biggles.Curve(data['s2n'], t2))
     plt.show()
 
 def load_is2_stacks(run, is2):
@@ -153,8 +168,8 @@ class StackSimBase(dict):
         self.shapesim = ShapeSim(self['sim'], **simpars)
 
         self.nsub=1
-        self.ngauss_psf=1
-        self.ngauss_obj=1
+        self.ngauss_psf=3
+        self.ngauss_obj=3
 
     def fit_stacks(self):
         self._fit_stacks()
@@ -324,7 +339,7 @@ class StackSimBase(dict):
 
         self._ares=ares
         self._psf_ares=psf_ares
-        print 'admom e1:',self._ares['e1corr'],'e2:',self._ares['e2corr']
+        print 'admom sh1:',0.5*e1corr/self.Rshear,'e2:',0.5*e2corr/self.Rshear
 
 
         psf_fitter = self._fit_stack(self._psf_stack, self._psf_skyvar, psf_ares, 
@@ -340,7 +355,8 @@ class StackSimBase(dict):
 
 
         res=self._fitter.get_result()
-        print 'fit: ',res['pars'][2],res['pars'][3]
+        #print 'fit: ',0.5*res['pars'][2]/self.Rshear,0.5*res['pars'][3]/self.Rshear
+        print 'fit: ',0.5*res['pars'][2],0.5*res['pars'][3]
 
     def _run_uw(self, image, psf):
         import fimage
@@ -355,7 +371,7 @@ class StackSimBase(dict):
         e2=2.*irc/(irr+icc)
 
         print 'uw:',e1,e2
-        print 'uw/Rshear:',e1/self.Rshear,e2/self.Rshear
+        print 'uw/Rshear:',0.5*e1/self.Rshear,0.5*e2/self.Rshear
         return {'e1':e1, 'e2':e2}
 
     def _fit_stack(self, image_stack, skyvar, ares, psf=None, 
@@ -370,6 +386,7 @@ class StackSimBase(dict):
 
 
         if psf is not None:
+            # MCM is a pure likelihood code, no gprior
             from .mcm_sim import MCM
             fitter=MCM(image_stack, 1./skyvar, psf, self.gprior, 'gauss', 
                        200, 200, 200, ares=ares)
@@ -408,7 +425,6 @@ class StackSimBase(dict):
                                     counts*0.34*(1.+0.1*srandu()), 
                                     counts*0.38*(1.+0.1*srandu())])
             elif ngauss==2:
-                # appropriate for stacking gaussians
                 prior=numpy.array( [row_guess+0.01*srandu(),
                                     col_guess+0.01*srandu(),
                                     e1guess+0.05*srandu(),
@@ -430,6 +446,7 @@ class StackSimBase(dict):
             width=numpy.abs(prior)*1.e6
 
             fitter=gmix_image.gmix_fit.GMixFitCoellip(image_stack, sqrt(skyvar), prior, width, 
+                                                      model='coellip',
                                                       nsub=self.nsub, psf=psf, verbose=False)
             flags=fitter.get_flags()
 
@@ -445,10 +462,10 @@ class StackSimBase(dict):
             print_pars(res['pars'], front='pars: ')
             print_pars(res['perr'], front='perr: ')
 
-        model=fitter.get_model()
-        #images.multiview(im/im.max(), nonlinear=1)
         if False:
             import images
+            model=fitter.get_model()
+            #images.multiview(im/im.max(), nonlinear=1)
             images.compare_images(image_stack/image_stack.max(), 
                                   model/model.max(),
                                   nonlinear=1,

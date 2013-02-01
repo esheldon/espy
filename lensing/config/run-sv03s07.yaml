@@ -21,4 +21,4 @@ comment: |
 
     sources:
         src r < 21.5. has scinv per source on grid [0.02,0.41], dz 0.015
-        same as 05 but with detrended <e> vs R
+        similar to 05 but with erange and full Rrange
