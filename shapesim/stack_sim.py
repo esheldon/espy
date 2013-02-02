@@ -14,9 +14,19 @@ much noiser, don't get me wrong... radically noisier
 
     - try same aperture for both object and psf
         - circular 4 sigma - looks biased
-        - circular 5 sigma - looks decent
-            get05r02
+        - circular 5 sigma
+            get05r02 - looks decent but biased at same level as the
+                max like solution.   Starting to get noisy.  I think
+                it must be 
+                    - circularity
+                    - just radius
         - might be circularity: 4 sigma box
+            - get05r03 - looks biased
+                - re-running at 5 sigma - similar to circular
+        - 12.5 fixed, just to see if it is less noisy than full box
+            looks reasonable, a little biased.  Will run more stats
+            overnight and need to do proper comparison with full box
+            - get05r04
         - 5 sigma box
     - try fixed circular/box aperture
         - try 12.5 (image radius) 
@@ -119,8 +129,10 @@ def plot_is2_stacks(run, is2=None, type='fit', true_shear=None,
     if type=='sums':
         sh1=0.5*data['e1_bysum']/data['Rshear']
         sh2=0.5*data['e2_bysum']/data['Rshear']
-        err1=0.16/sqrt(data['nimage'])
-        err2=err1
+
+        SN=0.16/sqrt(data['nimage'])
+        err1=sqrt(SN**2 + data['perr'][:,2]**2)
+        err2=sqrt(SN**2 + data['perr'][:,3]**2)
     elif type=='fmom':
         if 'e1_fmom' in data.dtype.names:
             sh1=0.5*data['e1_fmom']/data['Rshear']
@@ -737,14 +749,23 @@ class StackSimBase(dict):
         row = row.astype('f8') - row0
         col = col.astype('f8') - col0
 
-        rad2=row**2 + col**2
 
         rmax2=rmax**2
 
-        w=numpy.where(rad2 <= rmax2)
+        trim_box=self.get('trim_box',False)
+
+        if trim_box:
+            w=numpy.where(  (row < rmax)
+                          & (row > (-rmax))
+                          & (col < rmax)
+                          & (col> (-rmax)))
+
+        else:
+            rad2=row**2 + col**2
+            w=numpy.where(rad2 <= rmax2)
+
         if w[0].size == 0:
             raise ValueError("rmax %s too small, no pixels" % rmax)
-
         #print rmax,image.shape[0]/2.
 
         image=image[w]
