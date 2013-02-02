@@ -1,13 +1,48 @@
 """
 
-For fits and shear=[0.04,,0.00] Getting <e> of 0.0785 at all s/n instead of
-0.08 For unweighted moments corrected by 1/Rshear I get the right answer.  The
-residuals of model and image look very good.  See similar bias for "et" model
-as gauss model.
+unweighted seems to be unbiased when stacked!  Maybe we don't care
+that they are noisy when we may be dominated by other effects.  It *is*
+much noiser, don't get me wrong... radically noisier
+    
+    - run with more trials to see if it is actually biased
 
-    - max like bias some how? no, tried mcmc
-    - working in e instead of g?  no
-    - pixel problem
+    - try trimming to 4-sigma to reduce noise.  Might be more biased since this
+    is effectively a weight function.  Looks biased low, perhaps because of
+    the gaussian weighting underestimating the needed region.
+
+    WOW! much much less noisy, but way biased :)
+
+    - try same aperture for both object and psf
+        - circular 4 sigma - looks biased
+        - circular 5 sigma - looks decent
+            get05r02
+        - might be circularity: 4 sigma box
+        - 5 sigma box
+    - try fixed circular/box aperture
+        - try 12.5 (image radius) 
+        - try 10.0
+    - try fixed square aperture
+
+    - try with same exact fixed aperture for both galaxies and stars.  Most
+    galaxies are using radius of ~9, so let's set it to 10
+
+    - found bug in cluster step version of this, fixed part of it; see how the
+    result looks.  Don't expect it to be great: there are much bigger problems
+    there.
+
+
+For fits and shear=[0.04,,0.00] Getting <e> of 0.0785 at all s/n instead of
+0.08 For unweighted moments corrected by 1/Rshear I think it does better
+(although noisier).  The residuals of model and image look very good.  See
+similar bias for "et" model as gauss model.
+
+    - is it straight percentage?  If I increase the shear is the ratio
+    off by the same?  Why is no sensitivity correction needed, because
+    we do a fit instead of moments?
+
+    * max like bias some how? no, tried mcmc
+    * working in e instead of g?  no
+    * pixel problem
 
         * made both psf and object *much* bigger but got same bias!  But making
         the object bigger relative to the PSF did change the bias.
@@ -22,7 +57,7 @@ as gauss model.
 
         * maybe nsub=16 isn't good enough in sim?  Trying 24.  Nope.
 
-        - maybe it is fortran itself? nope
+        * maybe it is fortran itself? nope
             * used gmix_image for sims.
             * added more padding around image
 
@@ -75,32 +110,46 @@ def combine_stacks(run, is2=None, is2n=None):
 
 
 def plot_is2_stacks(run, is2=None, type='fit', true_shear=None, 
-                    yrange=None):
+                    xlog=False,yrange=None, ignore_missing=False):
     import biggles
     data=load_is2_stacks(run,is2)
     
     if is2 is None or type is None:
         raise ValueError("send is2= and type=")
-    if type=='uw':
-        sh1=0.5*data['e1_uw']/data['Rshear']
-        sh2=0.5*data['e2_uw']/data['Rshear']
+    if type=='sums':
+        sh1=0.5*data['e1_bysum']/data['Rshear']
+        sh2=0.5*data['e2_bysum']/data['Rshear']
+        err1=0.16/sqrt(data['nimage'])
+        err2=err1
+    elif type=='fmom':
+        if 'e1_fmom' in data.dtype.names:
+            sh1=0.5*data['e1_fmom']/data['Rshear']
+            sh2=0.5*data['e2_fmom']/data['Rshear']
+        else:
+            sh1=0.5*data['e1_uw']/data['Rshear']
+            sh2=0.5*data['e2_uw']/data['Rshear']
+        err1=0.16/sqrt(data['nimage'])
+        err2=err1
     elif type=='fit':
         #sh1=0.5*data['pars'][:,2]/RSHEAR_DEFAULT
         #sh2=0.5*data['pars'][:,3]/RSHEAR_DEFAULT
         # wierd, this gives a closer answer for ngauss=2,3!
         sh1=0.5*data['pars'][:,2]
         sh2=0.5*data['pars'][:,3]
+        err1=0.5*data['perr'][:,2]
+        err2=0.5*data['perr'][:,3]
     elif type=='admom':
         sh1=0.5*data['e1_admom']/data['Rshear']
         sh2=0.5*data['e2_admom']/data['Rshear']
+        err1=0.5*data['perr'][:,2]
+        err2=0.5*data['perr'][:,3]
     else:
         raise ValueError("bad type: '%s'" % type)
 
-    sherr=0.16/sqrt(data['nimage'])
-    err1=sqrt(sherr**2 + data['perr'][:,2]**2)
-    err2=sqrt(sherr**2 + data['perr'][:,3]**2)
 
     plt=biggles.FramedPlot()
+    plt.xlog=xlog
+
     plt.add( biggles.Points(data['s2n'], sh1, color='blue',type='filled circle'))
     plt.add( biggles.SymmetricErrorBarsY(data['s2n'], sh1, err1, color='blue'))
     plt.add( biggles.Points(data['s2n'], sh2, color='red',type='filled circle'))
@@ -116,9 +165,10 @@ def plot_is2_stacks(run, is2=None, type='fit', true_shear=None,
 
     if yrange is not None:
         plt.yrange=yrange
+    plt.xrange=[0.9*data['s2n'].min(), 1.1*data['s2n'].max()]
     plt.show()
 
-def load_is2_stacks(run, is2):
+def load_is2_stacks(run, is2, ignore_missing=False):
     """
     load stacks for the input is2
     """
@@ -133,9 +183,18 @@ def load_is2_stacks(run, is2):
 
     data=[]
     for is2n in xrange(num_s2n):
-        data0 = shapesim.read_output(run, is2, is2n, verbose=True)
+        fname=shapesim.get_output_url(run, is2, is2n)
+        if not os.path.exists(fname):
+            if not ignore_missing:
+                raise ValueError("file not found: %s" % fname)
+            else:
+                continue
 
+        data0 = shapesim.read_output(run, is2, is2n, verbose=True)
         data.append(data0)
+
+    if len(data) == 0:
+        raise ValueError("no data read")
 
     data=eu.numpy_util.combine_arrlist(data)
     return data
@@ -213,6 +272,8 @@ class StackSimBase(dict):
 
     def _set_result(self):
 
+        sdata=self._stack_data
+
         res=self._fitter.get_result()
         pres=self._psf_fitter.get_result()
 
@@ -258,26 +319,50 @@ class StackSimBase(dict):
         data['dof'] = res['dof']
         data['fit_prob'] = res['fit_prob']
 
-        data['e1_uw'] = self.res_uw['e1']
-        data['e2_uw'] = self.res_uw['e2']
+        data['e1_fmom'] = self.res_fmom['e1']
+        data['e2_fmom'] = self.res_fmom['e2']
         data['e1_admom'] = self._ares['e1corr']
         data['e2_admom'] = self._ares['e2corr']
 
+        if 'imsum' in sdata:
+            data['imsum'] = sdata['imsum']
+            """
+            data['rowcen2_sum'] = sdata['rowcen2_sum']
+            data['rowcolcen_sum'] = sdata['rowcolcen_sum']
+            data['colcen2_sum'] = sdata['colcen2_sum']
+            """
+            data['row2_sum'] = sdata['row2_sum']
+            data['rowcol_sum'] = sdata['rowcol_sum']
+            data['col2_sum'] = sdata['col2_sum']
+
+            data['psf_imsum'] = sdata['psf_imsum']
+            """
+            data['psf_rowcen2_sum'] = sdata['psf_rowcen2_sum']
+            data['psf_rowcolcen_sum'] = sdata['psf_rowcolcen_sum']
+            data['psf_colcen2_sum'] = sdata['psf_colcen2_sum']
+            """
+            data['psf_row2_sum'] = sdata['psf_row2_sum']
+            data['psf_rowcol_sum'] = sdata['psf_rowcol_sum']
+            data['psf_col2_sum'] = sdata['psf_col2_sum']
+
+            data['e1_bysum'] = self.res_sums['e1']
+            data['e2_bysum'] = self.res_sums['e2']
+
         data['s2n_stack'] = s2n
-        data['image_stack'][0,:,:] = self._image_stack
-        data['image_skyvar'] = self._image_skyvar
+        data['image_stack'][0,:,:] = sdata['image_stack']
+        data['image_skyvar'] = sdata['image_skyvar']
 
         data['psf_s2n_stack'] = psf_s2n
-        data['psf_stack'][0,:,:] = self._psf_stack
-        data['psf_skyvar'] = self._psf_skyvar
+        data['psf_stack'][0,:,:] = sdata['psf_stack']
+        data['psf_skyvar'] = sdata['psf_skyvar']
 
         data['Rshear'] = self.Rshear
         self._data=data
 
 
     def _get_struct(self, npars, psf_npars):
-        shape=self._image_stack.shape
-        psf_shape=self._psf_stack.shape
+        shape=self._stack_data['image_stack'].shape
+        psf_shape=self._stack_data['psf_stack'].shape
 
         dt=[('model','S5'),
             ('nimage','i4'),
@@ -305,8 +390,28 @@ class StackSimBase(dict):
             ('dof','i4'),         # degrees of freedom
             ('fit_prob','f8'),    # probability of the fit happening randomly
 
-            ('e1_uw','f8'),
-            ('e2_uw','f8'),
+            ('imsum','f8'),
+            #('rowcen2_sum','f8'),
+            #('rowcolcen_sum','f8'),
+            #('colcen2_sum','f8'),
+            ('row2_sum','f8'),
+            ('rowcol_sum','f8'),
+            ('col2_sum','f8'),
+
+            ('psf_imsum','f8'),
+            #('psf_rowcen2_sum','f8'),
+            #('psf_rowcolcen_sum','f8'),
+            #('psf_colcen2_sum','f8'),
+            ('psf_row2_sum','f8'),
+            ('psf_rowcol_sum','f8'),
+            ('psf_col2_sum','f8'),
+
+            ('e1_bysum','f8'),
+            ('e2_bysum','f8'),
+
+
+            ('e1_fmom','f8'),
+            ('e2_fmom','f8'),
             ('e1_admom','f8'),
             ('e2_admom','f8'),
 
@@ -327,10 +432,14 @@ class StackSimBase(dict):
     def _fit_stacks(self):
         import admom
 
-        self.res_uw=self._run_uw(self._image_stack, self._psf_stack)
+        sdata=self._stack_data
 
-        ares = self._run_admom(self._image_stack, self._image_skyvar)
-        psf_ares = self._run_admom(self._psf_stack, self._psf_skyvar)
+        self.res_fmom=self._run_fmom(sdata['image_stack'], sdata['psf_stack'])
+        if 'imsum' in sdata:
+            self.res_sums=self._run_sums_shear()
+
+        ares = self._run_admom(sdata['image_stack'], sdata['image_skyvar'])
+        psf_ares = self._run_admom(sdata['psf_stack'], sdata['psf_skyvar'])
         
         T=ares['Irr']+ares['Icc']
         Tpsf=psf_ares['Irr'] + psf_ares['Icc']
@@ -346,12 +455,12 @@ class StackSimBase(dict):
         print 'admom sh1:',0.5*e1corr/self.Rshear,'e2:',0.5*e2corr/self.Rshear
 
 
-        psf_fitter = self._fit_stack(self._psf_stack, self._psf_skyvar, psf_ares, 
+        psf_fitter = self._fit_stack(sdata['psf_stack'], sdata['psf_skyvar'], psf_ares, 
                                      ngauss=self.ngauss_psf, name='PSF')
 
         psf_gmix=psf_fitter.get_gmix()
 
-        fitter=self._fit_stack(self._image_stack, self._image_skyvar, ares, psf=psf_gmix, 
+        fitter=self._fit_stack(sdata['image_stack'], sdata['image_skyvar'], ares, psf=psf_gmix, 
                                ngauss=self.ngauss_obj, name='Images')
 
         self._fitter=fitter
@@ -362,10 +471,13 @@ class StackSimBase(dict):
         sh1,sh2=0.5*res['pars'][2], 0.5*res['pars'][3]
         err1=0.5*res['perr'][2]
         err2=0.5*res['perr'][3]
+        fmt='%15.6f'
+        print_pars(res['pars'], front='pars: ', fmt='%15.6f')
+        print_pars(res['perr'], front='perr: ', fmt='%15.6f')
         print 'fit:  sh1: %.6g +/- %.6g  sh2: %.6g +/- %.6g' % (sh1,err1,sh2,err2)
         print 'fit/Rshear: ',sh1/self.Rshear,sh2/self.Rshear
 
-    def _run_uw(self, image, psf):
+    def _run_fmom(self, image, psf):
         import fimage
         res=fimage.fmom(image)
         pres=fimage.fmom(psf)
@@ -379,9 +491,10 @@ class StackSimBase(dict):
 
         sh1=0.5*e1
         sh2=0.5*e2
-        print 'uw:',sh1,sh2
-        print 'uw/Rshear:',sh1/self.Rshear,sh2/self.Rshear
+        print 'fmom:       ',sh1,sh2
+        print 'fmom/Rshear:',sh1/self.Rshear,sh2/self.Rshear
         return {'e1':e1, 'e2':e2}
+
 
     def _fit_stack(self, image_stack, skyvar, ares, psf=None, 
                         ngauss=1, name=''):
@@ -422,7 +535,21 @@ class StackSimBase(dict):
         counts=image_stack.sum()
 
         while True:
-            if ngauss==3:
+            if ngauss==4:
+                prior=numpy.array( [row_guess+0.01*srandu(),
+                                    col_guess+0.01*srandu(),
+                                    e1guess+0.05*srandu(),
+                                    e2guess+0.05*srandu(),
+                                    Tguess*16.0*(1.+0.1*srandu()),
+                                    Tguess*8.0*(1.+0.1*srandu()),
+                                    Tguess*2.42*(1.+0.1*srandu()),
+                                    Tguess*0.20*(1.+0.1*srandu()),
+                                    counts*0.10*(1.+0.1*srandu()), 
+                                    counts*0.20*(1.+0.1*srandu()), 
+                                    counts*0.25*(1.+0.1*srandu()), 
+                                    counts*0.31*(1.+0.1*srandu())])
+
+            elif ngauss==3:
                 prior=numpy.array( [row_guess+0.01*srandu(),
                                     col_guess+0.01*srandu(),
                                     e1guess+0.05*srandu(),
@@ -524,13 +651,36 @@ class StackSimBase(dict):
         ci,ares = self._get_ci_ares_psf(self.s2, ellip, theta, self.s2n, s2n_psf)
 
         imd={'image':ci.image,
-              'psf_image':ci.psf,
-              'image_skyvar':ci['skysig']**2,
-              'ivar':1./ci['skysig']**2,
-              'psf_skyvar':ci['skysig_psf']**2,
-              'psf_ivar':1./ci['skysig_psf']**2,
-              'ares':ares,
-              'model':self.simc['psfmodel']}
+             'psf_image':ci.psf,
+             'image_skyvar':ci['skysig']**2,
+             'ivar':1./ci['skysig']**2,
+             'psf_skyvar':ci['skysig_psf']**2,
+             'psf_ivar':1./ci['skysig_psf']**2,
+             'model':self.simc['psfmodel'],
+             'flags':0}
+
+        ares = self._run_admom(ci.image, ci['skysig']**2)
+
+        if ares['whyflag'] != 0:
+            imd['flags'] = ares['whyflag']
+            return imd
+
+        psf_ares = self._run_admom(ci.psf, ci['skysig_psf']**2)
+        if psf_ares['whyflag'] != 0:
+            imd['flags'] = psf_ares['whyflag']
+            return imd
+
+        imd['ares'] = ares
+        imd['psf_ares'] = psf_ares
+
+        rmax=self._get_sums_aperture(ares, psf_ares)
+        sums=self._get_sums(ci.image, ares, rmax)
+        imd.update(sums)
+
+        psf_sums=self._get_sums(ci.psf, psf_ares,rmax)
+
+        for k in psf_sums:
+            imd['psf_'+k] = psf_sums[k]
 
         return imd
 
@@ -552,6 +702,91 @@ class StackSimBase(dict):
               'whyflag':0}
 
         return ci, ares
+
+    def _get_sums_aperture(self, ares, psf_ares):
+        if 'trim_nsig' in self:
+            nsig=self['trim_nsig']
+            rad=sqrt( max(ares['Irr'],ares['Icc']) )
+            rad_psf=sqrt( max(psf_ares['Irr'],psf_ares['Icc']) )
+            rad=max(rad, rad_psf)
+
+            nsig=float(nsig)
+
+            rmax = nsig*rad
+            if rmax < 4:
+                rmax=4
+
+        elif 'trim_rad' in self:
+            rmax=float(self['trim_rad'])
+        else:
+            rmax=1.e9
+
+        minrad=self.get('trim_min_rad',4)
+        if rmax < minrad:
+            rmax=minrad
+        return rmax
+
+    def _get_sums(self, image, ares, rmax):
+
+        row0=ares['wrow']
+        col0=ares['wcol']
+
+        dims=image.shape
+        row,col=numpy.mgrid[0:dims[0], 0:dims[1]]
+
+        row = row.astype('f8') - row0
+        col = col.astype('f8') - col0
+
+        rad2=row**2 + col**2
+
+        rmax2=rmax**2
+
+        w=numpy.where(rad2 <= rmax2)
+        if w[0].size == 0:
+            raise ValueError("rmax %s too small, no pixels" % rmax)
+
+        #print rmax,image.shape[0]/2.
+
+        image=image[w]
+        row=row[w]
+        col=col[w]
+
+        imsum=image.sum()
+        row2_sum = (image*row**2).sum()
+        rowcol_sum = (image*row*col).sum()
+        col2_sum = (image*col**2).sum()
+
+        return {'imsum':imsum,
+                'row2_sum':row2_sum,
+                'rowcol_sum':rowcol_sum,
+                'col2_sum':col2_sum}
+
+    def _run_sums_shear(self):
+        
+        sd=self._stack_data
+        psf_imsum=sd['psf_imsum']
+        psf_irr = sd['psf_row2_sum']/psf_imsum
+        psf_irc = sd['psf_rowcol_sum']/psf_imsum
+        psf_icc = sd['psf_col2_sum']/psf_imsum
+
+        imsum=sd['imsum']
+        irrO = sd['row2_sum']/imsum
+        ircO = sd['rowcol_sum']/imsum
+        iccO = sd['col2_sum']/imsum
+
+        irr = irrO - psf_irr
+        irc = ircO - psf_irc
+        icc = iccO - psf_icc
+
+        e1=(icc-irr)/(irr+icc)
+        e2=2.*irc/(irr+icc)
+
+        sh1=0.5*e1
+        sh2=0.5*e2
+        print 'sums:       ',sh1,sh2
+        print 'sums/Rshear:',sh1/self.Rshear,sh2/self.Rshear
+        return {'e1':e1, 'e2':e2}
+
 
     def _set_gprior(self):
         if self.simc['gprior_type']=='fits-vs-mag':
@@ -594,30 +829,86 @@ class StackSim(StackSimBase):
 
     def _generate_random_stacks(self):
 
+        sdata={}
+
         gvals=self._get_gvals()
-        for i,g in enumerate(gvals):
+
+        i=0
+        while i < self.nimage:
             if (((i+1) % 100) == 0):
                 print '%d/%d' % (i+1,self.nimage)
 
+            g=gvals[i]
             theta=360*numpy.random.random()
             imd=self._make_image(g,theta)
 
+            if imd['flags'] != 0:
+                print 'bad'
+                continue
+
             if i==0:
-                image_stack  = numpy.zeros(imd['image'].shape)
-                psf_stack    = numpy.zeros(imd['psf_image'].shape)
-                image_skyvar = 0.0
-                psf_skyvar   = 0.0
+                sdata['image_stack']  = numpy.zeros(imd['image'].shape)
+                sdata['psf_stack']    = numpy.zeros(imd['psf_image'].shape)
+                sdata['image_skyvar'] = 0.0
+                sdata['psf_skyvar']   = 0.0
 
-            image_stack += imd['image']
-            image_skyvar += imd['image_skyvar']
-            psf_stack += imd['psf_image']
-            psf_skyvar += imd['psf_skyvar']
-            
+                sdata['imsum']=0.0
+                """
+                sdata['rowcen2_sum'] = 0.0
+                sdata['rowcolcen_sum'] = 0.0
+                sdata['colcen2_sum'] = 0.0
+                """
 
-        self._image_stack=image_stack
-        self._image_skyvar=image_skyvar
-        self._psf_stack=psf_stack
-        self._psf_skyvar=psf_skyvar
+                sdata['row2_sum'] = 0.0
+                sdata['rowcol_sum'] = 0.0
+                sdata['col2_sum'] = 0.0
+
+                sdata['psf_imsum']=0.0
+                """
+                sdata['psf_rowcen2_sum'] = 0.0
+                sdata['psf_rowcolcen_sum'] = 0.0
+                sdata['psf_colcen2_sum'] = 0.0
+                """
+
+                sdata['psf_row2_sum'] = 0.0
+                sdata['psf_rowcol_sum'] = 0.0
+                sdata['psf_col2_sum'] = 0.0
+
+
+
+
+            sdata['image_stack'] += imd['image']
+            sdata['image_skyvar'] += imd['image_skyvar']
+            sdata['psf_stack'] += imd['psf_image']
+            sdata['psf_skyvar'] += imd['psf_skyvar']
+
+            sdata['imsum'] += imd['imsum']
+            """
+            sdata['rowcen2_sum'] += imd['rowcen2_sum']
+            sdata['rowcolcen_sum'] += imd['rowcolcen_sum']
+            sdata['colcen2_sum'] += imd['colcen2_sum']
+            """
+
+            sdata['row2_sum'] += imd['row2_sum']
+            sdata['rowcol_sum'] += imd['rowcol_sum']
+            sdata['col2_sum'] += imd['col2_sum']
+
+            sdata['psf_imsum'] += imd['psf_imsum']
+            """
+            sdata['psf_rowcen2_sum'] += imd['psf_rowcen2_sum']
+            sdata['psf_rowcolcen_sum'] += imd['psf_rowcolcen_sum']
+            sdata['psf_colcen2_sum'] += imd['psf_colcen2_sum']
+            """
+
+            sdata['psf_row2_sum'] += imd['psf_row2_sum']
+            sdata['psf_rowcol_sum'] += imd['psf_rowcol_sum']
+            sdata['psf_col2_sum'] += imd['psf_col2_sum']
+
+
+            i+= 1
+           
+
+        self._stack_data=sdata
 
         if False:
             import images
@@ -626,36 +917,111 @@ class StackSim(StackSimBase):
 
     def _generate_ring_stacks(self):
 
+        sdata={}
         gvals=self._get_gvals()
-        for i,g in enumerate(gvals):
+        
+        i=0
+        while i < self.nimage:
             if (((i+1) % 100) == 0):
                 print '%d/%d' % (i+1,self.nimage)
 
+            g=gvals[i]
             imd1,imd2=self._make_pair(g)
+            if imd1['flags'] != 0 or imd2['flags'] != 0:
+                print 'bad'
+                continue
 
             if i==0:
-                image_stack  = numpy.zeros(imd1['image'].shape)
-                psf_stack    = numpy.zeros(imd1['psf_image'].shape)
-                image_skyvar = 0.0
-                psf_skyvar   = 0.0
+                sdata['image_stack']  = numpy.zeros(imd1['image'].shape)
+                sdata['psf_stack']    = numpy.zeros(imd1['psf_image'].shape)
+                sdata['image_skyvar'] = 0.0
+                sdata['psf_skyvar']   = 0.0
 
-            image_stack += imd1['image']
-            image_stack += imd2['image']
+                sdata['imsum']=0.0
+                """
+                sdata['rowcen2_sum'] = 0.0
+                sdata['rowcolcen_sum'] = 0.0
+                sdata['colcen2_sum'] = 0.0
+                """
 
-            image_skyvar += imd1['image_skyvar']
-            image_skyvar += imd2['image_skyvar']
+                sdata['row2_sum'] = 0.0
+                sdata['rowcol_sum'] = 0.0
+                sdata['col2_sum'] = 0.0
 
-            psf_stack += imd1['psf_image']
-            psf_stack += imd2['psf_image']
+                sdata['psf_imsum']=0.0
+                """
+                sdata['psf_rowcen2_sum'] = 0.0
+                sdata['psf_rowcolcen_sum'] = 0.0
+                sdata['psf_colcen2_sum'] = 0.0
+                """
 
-            psf_skyvar += imd1['psf_skyvar']
-            psf_skyvar += imd2['psf_skyvar']
-            
+                sdata['psf_row2_sum'] = 0.0
+                sdata['psf_rowcol_sum'] = 0.0
+                sdata['psf_col2_sum'] = 0.0
 
-        self._image_stack=image_stack
-        self._image_skyvar=image_skyvar
-        self._psf_stack=psf_stack
-        self._psf_skyvar=psf_skyvar
+
+
+            sdata['image_stack'] += imd1['image']
+            sdata['image_skyvar'] += imd1['image_skyvar']
+            sdata['psf_stack'] += imd1['psf_image']
+            sdata['psf_skyvar'] += imd1['psf_skyvar']
+
+
+            sdata['imsum'] += imd1['imsum']
+            """
+            sdata['rowcen2_sum'] += imd1['rowcen2_sum']
+            sdata['rowcolcen_sum'] += imd1['rowcolcen_sum']
+            sdata['colcen2_sum'] += imd1['colcen2_sum']
+            """
+
+            sdata['row2_sum'] += imd1['row2_sum']
+            sdata['rowcol_sum'] += imd1['rowcol_sum']
+            sdata['col2_sum'] += imd1['col2_sum']
+
+            sdata['psf_imsum'] += imd1['psf_imsum']
+            """
+            sdata['psf_rowcen2_sum'] += imd1['psf_rowcen2_sum']
+            sdata['psf_rowcolcen_sum'] += imd1['psf_rowcolcen_sum']
+            sdata['psf_colcen2_sum'] += imd1['psf_colcen2_sum']
+            """
+
+            sdata['psf_row2_sum'] += imd1['psf_row2_sum']
+            sdata['psf_rowcol_sum'] += imd1['psf_rowcol_sum']
+            sdata['psf_col2_sum'] += imd1['psf_col2_sum']
+
+
+
+            sdata['image_stack'] += imd2['image']
+            sdata['image_skyvar'] += imd2['image_skyvar']
+            sdata['psf_stack'] += imd2['psf_image']
+            sdata['psf_skyvar'] += imd2['psf_skyvar']
+
+            sdata['imsum'] += imd2['imsum']
+            """
+            sdata['rowcen2_sum'] += imd2['rowcen2_sum']
+            sdata['rowcolcen_sum'] += imd2['rowcolcen_sum']
+            sdata['colcen2_sum'] += imd2['colcen2_sum']
+            """
+
+            sdata['row2_sum'] += imd2['row2_sum']
+            sdata['rowcol_sum'] += imd2['rowcol_sum']
+            sdata['col2_sum'] += imd2['col2_sum']
+ 
+            sdata['psf_imsum'] += imd2['psf_imsum']
+            """
+            sdata['psf_rowcen2_sum'] += imd2['psf_rowcen2_sum']
+            sdata['psf_rowcolcen_sum'] += imd2['psf_rowcolcen_sum']
+            sdata['psf_colcen2_sum'] += imd2['psf_colcen2_sum']
+            """
+
+            sdata['psf_row2_sum'] += imd2['psf_row2_sum']
+            sdata['psf_rowcol_sum'] += imd2['psf_rowcol_sum']
+            sdata['psf_col2_sum'] += imd2['psf_col2_sum']
+
+            i += 1
+ 
+        
+        self._stack_data=sdata
 
         if False:
             import images
@@ -695,6 +1061,7 @@ class StackCombiner(StackSimBase):
         """
         nsplit=self['nsplit']
 
+        sdata={}
         for isplit in xrange(nsplit):
             data0=shapesim.read_output(self['run'], 
                                        self.is2, 
@@ -702,26 +1069,70 @@ class StackCombiner(StackSimBase):
                                        itrial=isplit,
                                        verbose=self.verbose)
             if isplit==0:
-                image_stack=numpy.zeros(data0['image_stack'][0,:,:].shape)
-                psf_stack=numpy.zeros(data0['psf_stack'][0,:,:].shape)
-                image_skyvar=0.0
-                psf_skyvar=0.0
-                nimage=0
-                nimage=0
+                sdata['image_stack']  = numpy.zeros(data0['image_stack'][0,:,:].shape)
+                sdata['psf_stack']    = numpy.zeros(data0['psf_stack'][0,:,:].shape)
 
-            image_stack += data0['image_stack'][0,:,:]
-            psf_stack += data0['psf_stack'][0,:,:]
+                sdata['image_skyvar'] = 0.0
+                sdata['psf_skyvar']   = 0.0
 
-            image_skyvar += data0['image_skyvar'][0]
-            psf_skyvar += data0['psf_skyvar'][0]
+                nimage = 0
+                if 'imsum' in data0.dtype.names:
+                    sdata['imsum']=0.0
+                    """
+                    sdata['rowcen2_sum'] = 0.0
+                    sdata['rowcolcen_sum'] = 0.0
+                    sdata['colcen2_sum'] = 0.0
+                    """
+
+                    sdata['row2_sum'] = 0.0
+                    sdata['rowcol_sum'] = 0.0
+                    sdata['col2_sum'] = 0.0
+
+                    sdata['psf_imsum']=0.0
+                    """
+                    sdata['psf_rowcen2_sum'] = 0.0
+                    sdata['psf_rowcolcen_sum'] = 0.0
+                    sdata['psf_colcen2_sum'] = 0.0
+                    """
+
+                    sdata['psf_row2_sum'] = 0.0
+                    sdata['psf_rowcol_sum'] = 0.0
+                    sdata['psf_col2_sum'] = 0.0
+
+
+            sdata['image_stack'] += data0['image_stack'][0,:,:]
+            sdata['psf_stack'] += data0['psf_stack'][0,:,:]
+            sdata['image_skyvar'] += data0['image_skyvar'][0]
+            sdata['psf_skyvar'] += data0['psf_skyvar'][0]
 
             nimage += data0['nimage'][0]
 
-        self._image_stack=image_stack
-        self._image_skyvar=image_skyvar
-        self._psf_stack=psf_stack
-        self._psf_skyvar=psf_skyvar
+            if 'imsum' in data0.dtype.names:
+                sdata['imsum'] += data0['imsum'][0]
+                """
+                sdata['rowcen2_sum'] += data0['rowcen2_sum'][0]
+                sdata['rowcolcen_sum'] += data0['rowcolcen_sum'][0]
+                sdata['colcen2_sum'] += data0['colcen2_sum'][0]
+                """
+
+                sdata['row2_sum'] += data0['row2_sum'][0]
+                sdata['rowcol_sum'] += data0['rowcol_sum'][0]
+                sdata['col2_sum'] += data0['col2_sum'][0]
+
+                sdata['psf_imsum'] += data0['psf_imsum'][0]
+                """
+                sdata['psf_rowcen2_sum'] += data0['psf_rowcen2_sum'][0]
+                sdata['psf_rowcolcen_sum'] += data0['psf_rowcolcen_sum'][0]
+                sdata['psf_colcen2_sum'] += data0['psf_colcen2_sum'][0]
+                """
+
+                sdata['psf_row2_sum'] += data0['psf_row2_sum'][0]
+                sdata['psf_rowcol_sum'] += data0['psf_rowcol_sum'][0]
+                sdata['psf_col2_sum'] += data0['psf_col2_sum'][0]
+
+
         self.nimage=nimage
+        self._stack_data=sdata
 
 
 

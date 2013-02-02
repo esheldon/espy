@@ -80,7 +80,7 @@ def view(image, **keys):
         x=None
         y=None
 
-    def_contour_color='white'
+    def_contour_color='black'
     if 'dens' in type:
         d = biggles.Density(im, ranges)
         plt.add(d)

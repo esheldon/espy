@@ -10,12 +10,13 @@ s2n_method: admom
 
 # this sim is random orientations , need larger s2n_fac
 #s2n_fac: 40
-s2n_fac: 160
+#s2n_fac: 160
+s2n_fac: 300
 
 # minimum number of random ellipticities to use per split.
 # for ring tests you get double this since pairs are made
 #min_gcount: 600
-min_gcount: 2400
+min_gcount: 4000
 
 # how many different jobs running at a given s/n and s2 for the above
 # min_gcount and s2n_fac

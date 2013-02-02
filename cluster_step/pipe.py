@@ -2332,9 +2332,9 @@ class MomentPipe(dict):
         rmax = nsig*arad
         rmax2=rmax**2
 
-        row,col=numpy.ogrid[0:im.shape[0], 0:im.shape[1]]
-        rm=row-cen[0]
-        cm=col-cen[1]
+        row,col=numpy.mgrid[0:im.shape[0], 0:im.shape[1]]
+        rm=row.astype('f8')-cen[0]
+        cm=col.astype('f8')-cen[1]
         rad2=rm**2 + cm**2
 
         w=where(rad2 <= rmax2)
