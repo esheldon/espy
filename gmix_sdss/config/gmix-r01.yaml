@@ -24,4 +24,4 @@ iter: true
 max_cmodelmag_r: 22.0
 
 make_plots: false
-make_psf_plots: true
+make_psf_plots: false

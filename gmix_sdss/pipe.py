@@ -1,3 +1,13 @@
+"""
+TODO
+    output structure
+        - mark the best model!
+    multiple psf models?
+
+    need to have separate result,flags return
+    since sometimes we return a fitter sometimes
+    there is not fitter
+"""
 from sys import stderr
 
 import numpy
@@ -11,6 +21,11 @@ import admom
 
 
 from . import files
+
+AM_PSF_FAILED=2**0
+PSF_FAILED=2**1
+AM_OBJ_FAILED=2**2
+LM_OBJ_FAILED=2**3
 
 class GMixSweep(dict):
     def __init__(self, gmix_run, run, camcol, **keys):
@@ -29,14 +44,7 @@ class GMixSweep(dict):
             biggles.configure("screen","height",1100)
 
 
-    def process(self):
-        
-        min_field=self.objs['field'].min()
-        max_field=self.objs['field'].max()
-        for field in xrange(min_field, max_field+1):
-            self._process_field(field)
-
-    def _process_field(self, field):
+    def process_field(self, field):
         w,=numpy.where(self.objs['field']==field)
         if w.size==0:
             return
@@ -49,6 +57,13 @@ class GMixSweep(dict):
             index=w[i]
             res=self._process_object(index, psfield, psf_kl)
 
+    def process_camcol(self):
+        
+        min_field=self.objs['field'].min()
+        max_field=self.objs['field'].max()
+        for field in xrange(min_field, max_field+1):
+            self.process_field(field)
+
     def _process_object(self, index, psfield, psf_kl):
 
         obj=self.objs[index]
@@ -58,14 +73,17 @@ class GMixSweep(dict):
             fnum=sdsspy.FILTERNUM[filt]
 
             psf_res=self._measure_psf(obj,psf_kl,fnum)
-            if psf_res is None:
+            # copy result
+            if flags['flags'] != 0:
+                result[filt] = psf_res
                 continue
 
             psf_gmix=psf_res.get_gmix()
             res=self._measure_obj(obj, psfield, fnum, psf_gmix)
-
             result[filt] = res
         
+            # copy result
+
         return result
 
     def _get_sigma_guess(self, psf_gmix, m_rr_cc):
@@ -128,11 +146,12 @@ class GMixSweep(dict):
         ares=self._run_admom(im, row, col, sigma_guess, 1.0)
         if ares is None:
             print >>stderr,'failed to get psf admom'
-            return None
+            return {'flags':AM_PSF_FAILED}
 
         res = self._fit_psf_model(im, ares, self['psf_model'], skysig)
         if res is None:
             print >>stderr,'failed to fit psf model'
+            return {'flags':PSF_FAILED}
 
         return res
 
@@ -198,11 +217,12 @@ class GMixSweep(dict):
         ares=self._run_admom(im, row, col, sigma_guess, skysig)
         if ares is None:
             print >>stderr,'failed to run object admom'
-            return None
+            return {'flags':AM_OBJ_FAILED}
 
+        flags=0
         mag=None
 
-        results={'ares':ares}
+        results={'flags':0,'ares':ares}
         for fitter_type in self['obj_fitters']:
             results[fitter_type] = {}
             for model in self['obj_models']:
@@ -427,4 +447,17 @@ class GMixSweep(dict):
 
         self.gpriors=gpriors
 
+
+    def _get_struct(self, nobj):
+        dt=[('photoid','i8'),
+            ('run','i2'),
+            ('rerun','i2'),
+            ('camcol','i2'),
+            ('field','i2'),
+            ('id','i2'),
+            ('flags','i4'),
+
+            ('am_flags','i4'),
+            ('am_s2n','f8')]
+            
 
