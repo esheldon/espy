@@ -282,6 +282,7 @@ class ShapeSim(dict):
 
         if shear is not None:
             shape = shape0 + shear
+            #shape = shear + shape0
         else:
             shape=shape0
 

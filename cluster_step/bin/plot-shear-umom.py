@@ -33,9 +33,6 @@ parser.add_option('-s','--shnum',default=None,
 parser.add_option('-p','--psfnums',default='1,2,3,4,5,6',
                   help='restrict to these PSFs, comma separated')
 
-parser.add_option('-f','--field',default='s2n_w',
-                  help="bin by this field, default s2n_w")
-
 parser.add_option('-n','--nbin',default=20,
                   help="number of logarithmic bins, default %default")
 
@@ -87,8 +84,6 @@ class ShearPlotter(object):
 
         self.doshow = options.show
 
-        self.bin_field=options.field
-
         reader=files.Reader(run=self.run, 
                             shnums=self.shnum,
                             psfnums=self.psfnums,
@@ -96,11 +91,13 @@ class ShearPlotter(object):
                             sratio_range=self.sratio_range,
                             setname=None,
                             ignore_missing=options.ignore_missing,
+                            verbose=True,
                             progress=options.progress)
 
         self.data=reader.get_data()
         
         self.set_bindata()
+
         if self.options.frac:
             self.make_frac_plot()
         else:
@@ -123,31 +120,26 @@ class ShearPlotter(object):
         print R
 
         data=self.data
-        wstar,=where( (data['am_flags']==0) 
+        wstar,=where( (data['uw_flags']==0) 
                         & ((data['uw_type'] & CLUSTERSTEP_PSF_STAR) != 0) )
 
-        wgal,=where( (data['am_flags']==0) 
+        #s2n_min=700
+        #s2n_max=1000
+        s2n_min=70
+        s2n_max=80
+        Tadmom=data['am_irr']+data['am_icc']
+        wgal,=where( (data['uw_flags']==0) 
                         & ((data['uw_type'] & CLUSTERSTEP_GAL) != 0)
-                        & (data['am_s2n'] > 100) & (data['am_s2n'] < 200))
+                        & (Tadmom > 12)
+                        & (data['am_s2n'] > s2n_min) 
+                        & (data['am_s2n'] < s2n_max))
 
-        am_star_irr_mean=data['am_irr'][wstar].mean()
-        am_star_irc_mean=data['am_irc'][wstar].mean()
-        am_star_icc_mean=data['am_icc'][wstar].mean()
-        am_star_T_mean = am_star_irr_mean+am_star_icc_mean
+        print 'ngal:',wgal.size
 
-        am_gal_irr=data['am_irr'][wgal]
-        am_gal_irc=data['am_irc'][wgal]
-        am_gal_icc=data['am_icc'][wgal]
-        am_gal_T = am_gal_irr+am_gal_icc
-
-        wgal2,=where(am_gal_T/am_star_T_mean > 2)
-        wgal=wgal[wgal2]
-
-
-        star_isum=data['uw_isum'][wstar].sum()
-        star_irr = data['uw_irrsum'][wstar].sum()/star_isum
-        star_irc = data['uw_ircsum'][wstar].sum()/star_isum
-        star_icc = data['uw_iccsum'][wstar].sum()/star_isum
+        star_isum = data['uw_isum'][wstar].sum()
+        star_irr  = data['uw_irrsum'][wstar].sum()/star_isum
+        star_irc  = data['uw_ircsum'][wstar].sum()/star_isum
+        star_icc  = data['uw_iccsum'][wstar].sum()/star_isum
 
         gal_isum=data['uw_isum'][wgal].sum()
         gal_irr = data['uw_irrsum'][wgal].sum()/gal_isum
@@ -163,14 +155,6 @@ class ShearPlotter(object):
 
         print 0.5*e1/R, 0.5*e2/R
         stop
-
-        """
-        self.bindata=stats.logbin_shear_data(self.data, self.bin_field, 
-                                             nbin=self.nbin, 
-                                             min=self.s2n_range[0],
-                                             max=self.s2n_range[1])
-        aprint(self.bindata, header=True, page=False, fancy=True)
-        """
 
 
     def get_labels(self):
@@ -219,20 +203,17 @@ class ShearPlotter(object):
     def make_plot(self):
 
         bindata=self.bindata
-        bin_field=self.bin_field
         plt=FramedPlot()
         
         plt.uniform_limits=1
         plt.xlog=True
-        #plt.xrange=[0.5*bindata[bin_field].min(), 1.5*bindata[bin_field].max()]
         plt.xrange=self.s2n_range
-        plt.xlabel=bin_field
+        plt.xlabel='S/N'
         plt.ylabel = r'$\gamma$'
         if self.yrange is not None:
             plt.yrange=self.yrange
 
-        xdata=bindata[bin_field]
-        xerr=bindata[bin_field+'_err']
+        xdata=bindata['s2n']
 
         if self.shnum in sh1exp:
             g1exp=zeros(xdata.size)+sh1exp[self.shnum]
@@ -243,8 +224,6 @@ class ShearPlotter(object):
             plt.add(g2exp_plt)
 
 
-        xerrpts1 = SymmetricErrorBarsX(xdata, bindata['g1'], xerr)
-        xerrpts2 = SymmetricErrorBarsX(xdata, bindata['g2'], xerr)
 
         type='filled circle'
         g1color='blue'
@@ -259,63 +238,14 @@ class ShearPlotter(object):
 
         key=biggles.PlotKey(0.9,0.5,[g1pts,g2pts],halign='right')
 
-        plt.add( xerrpts1, g1pts, g1errpts )
-        plt.add( xerrpts2, g2pts, g2errpts )
+        plt.add( g1pts, g1errpts )
+        plt.add( g2pts, g2errpts )
         plt.add(key)
 
         labels=self.get_labels()
 
         plt.add(*labels)
         plt.aspect_ratio=1
-
-        self.plt=plt
-
-    def make_frac_plot(self):
-        if self.shnum not in sh1exp:
-            raise ValueError("you must know the expected value")
-
-        if sh1exp[self.shnum] != 0:
-            gfield='g1'
-            gtrue=sh1exp[self.shnum]
-        elif sh2exp[self.shnum] != 0:
-            gfield='g2'
-            gtrue=sh2exp[self.shnum]
-        else:
-            raise ValueError("all expected are listed as zero")
-
-        bindata=self.bindata
-        bin_field=self.bin_field
-        plt=FramedPlot()
-        
-        plt.title=self.get_title()
-
-        plt.xlog=True
-        plt.xrange=[0.5*bindata[bin_field].min(), 1.5*bindata[bin_field].max()]
-        plt.xlabel=bin_field
-        ylabel=r'$\Delta \gamma/\gamma$'
-        plt.ylabel = ylabel
-
-        xdata=bindata[bin_field]
-
-        zero=zeros(xdata.size)
-        zero_plt=Curve(xdata, zero)
-        plt.add(zero_plt)
-
-        xfill=[xdata.min(), xdata.max()]
-
-        plt.add( biggles.FillBetween(xfill, [0.004,0.004], 
-                                     xfill, [-0.004,-0.004],
-                                     color='grey80'))
-
-
-        gfrac = bindata[gfield]/gtrue-1
-        gfrac_err = bindata[gfield+'_err']/gtrue
-        type='filled circle'
-        color='blue'
-        gpts = Points(xdata, gfrac, type=type, color=color)
-        gerrpts = SymmetricErrorBarsY(xdata, gfrac, gfrac_err,color=color)
-
-        plt.add( gpts, gerrpts )
 
         self.plt=plt
 

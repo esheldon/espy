@@ -152,9 +152,6 @@ class MCMC:
         Created: 2010-04-02, Erin Sheldon, BNL
     """
     def __init__(self, obj):
-         self.init(obj)
-
-    def init(self, obj):
         self.obj = obj
         self.fobj = None
         self.parguess=None
@@ -220,6 +217,7 @@ class MCMC:
             self.oldpars = self.newpars
             self.oldlike = self.newlike
 
+        self.trials=output
         return output
 
     def result_struct(self, num):
@@ -228,7 +226,9 @@ class MCMC:
         return st
 
     def result_dtype(self, npar):
-        return [('accepted','i1'),('pars',('f8',npar)), ('loglike','f8')]
+        return [('accepted','i1'),
+                ('pars','f8',npar),
+                ('loglike','f8')]
 
     def step(self):
         """

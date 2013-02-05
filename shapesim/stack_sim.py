@@ -12,6 +12,11 @@ much noiser, don't get me wrong... radically noisier
 
     WOW! much much less noisy, but way biased :)
 
+    IMPORTANT NOTE
+        - get same answer doing LM with ngauss=3 for both and fitting turb
+        and exp to the stack with mcmc/gprior stuff (meaning no sensitivity
+        correction)
+
     - try same aperture for both object and psf
         - circular 4 sigma - looks biased
         - circular 5 sigma
@@ -27,6 +32,14 @@ much noiser, don't get me wrong... radically noisier
             looks reasonable, a little biased.  Will run more stats
             overnight and need to do proper comparison with full box
             - get05r04
+
+            can we come up with a generic for the max radius?  It will depend
+            on the profile.  maybe run through first with max like estimator?
+
+        - maybe the image size is just not big enough. Trying 1.5 times the
+            image size. get05r06 with pad_mult 1.5
+            1.5 looks very slightly better.  Try 3 nope.
+
         - 5 sigma box
     - try fixed circular/box aperture
         - try 12.5 (image radius) 
@@ -151,10 +164,14 @@ def plot_is2_stacks(run, is2=None, type='fit', true_shear=None,
         err1=0.5*data['perr'][:,2]
         err2=0.5*data['perr'][:,3]
     elif type=='admom':
-        sh1=0.5*data['e1_admom']/data['Rshear']
-        sh2=0.5*data['e2_admom']/data['Rshear']
-        err1=0.5*data['perr'][:,2]
-        err2=0.5*data['perr'][:,3]
+        sh1=0.5*data['e1_admom']
+        sh2=0.5*data['e2_admom']
+        #err1=0.5*data['perr'][:,2]
+        #err2=0.5*data['perr'][:,3]
+
+        SN=0.16/sqrt(data['nimage'])
+        err1=sqrt(SN**2 + data['perr'][:,2]**2)
+        err2=sqrt(SN**2 + data['perr'][:,3]**2)
     else:
         raise ValueError("bad type: '%s'" % type)
 
@@ -242,11 +259,14 @@ class StackSimBase(dict):
         self._set_gprior()
 
         simpars=self.get('simpars',{})
+        print 'simpars:',simpars
         self.shapesim = ShapeSim(self['sim'], **simpars)
 
         self.nsub=1
         self.ngauss_psf=3
         self.ngauss_obj=3
+        #self.ngauss_psf=1
+        #self.ngauss_obj=1
 
     def fit_stacks(self):
         self._fit_stacks()
@@ -464,7 +484,9 @@ class StackSimBase(dict):
 
         self._ares=ares
         self._psf_ares=psf_ares
-        print 'admom sh1:',0.5*e1corr/self.Rshear,'e2:',0.5*e2corr/self.Rshear
+        print 'Admom R:',R
+        print 'admom sh1: ',0.5*e1corr,            'sh2:       ',0.5*e2corr
+        print 'sh1/Rshear:',0.5*e1corr/self.Rshear,'sh2/Rshear:',0.5*e2corr/self.Rshear
 
 
         psf_fitter = self._fit_stack(sdata['psf_stack'], sdata['psf_skyvar'], psf_ares, 
@@ -512,26 +534,39 @@ class StackSimBase(dict):
                         ngauss=1, name=''):
         return self._fit_stack_lm(image_stack, skyvar, ares, psf=psf, 
                                   ngauss=ngauss, name=name)
-        #return self._fit_stack_mcmc(image_stack, skyvar, ares, psf=psf, 
-        #                            ngauss=ngauss, name=name)
-
+        """
+        if False and psf is None:
+            print 'fittin LM'
+            return self._fit_stack_lm(image_stack, skyvar, ares, psf=psf, 
+                                      ngauss=ngauss, name=name)
+        else:
+            return self._fit_stack_mcmc(image_stack, skyvar, ares, psf=psf, 
+                                        ngauss=ngauss, name=name)
+        """
     def _fit_stack_mcmc(self, image_stack, skyvar, ares, psf=None, 
                         ngauss=1, name=''):
 
 
         if psf is not None:
             # MCM is a pure likelihood code, no gprior
-            from .mcm_sim import MCM
-            fitter=MCM(image_stack, 1./skyvar, psf, self.gprior, 'gauss', 
-                       200, 200, 200, ares=ares)
+            if False:
+                from .mcm_sim import MCM
+                fitter=MCM(image_stack, 1./skyvar, psf, self.gprior, 'gauss', 
+                           200, 200, 200, ares=ares)
+            else:
+                from gmix_image.gmix_mcmc import MixMCStandAlone
+                print 'fittin gexp with gprior'
+                fitter=MixMCStandAlone(image_stack, 1./skyvar, psf, self.gprior, 'gexp', 
+                           nwalkers=200, burnin=200, nstep=200, ares=ares)
+                res=fitter.get_result()
+                print_pars(res['pars'],front='pars with gprior:')
         else:
             from gmix_image.gmix_mcmc import MixMCPSF
-            fitter=MixMCPSF(image_stack, 1./skyvar, 'gauss',ares=ares)
-
-        if self.verbose:
-            res=fitter.get_result()
-            print_pars(res['pars'], front='pars: ')
-            print_pars(res['perr'], front='perr: ')
+            print 'fitting mcmc psf'
+            model='gturb'
+            #model='gauss'
+            fitter=MixMCPSF(image_stack, 1./skyvar, model,
+                            ares=ares, nwalkers=200, burnin=200, nstep=200)
 
         return fitter
 
@@ -824,6 +859,7 @@ class StackSimBase(dict):
             self.Rshear = 1.0
         else:
             raise ValueError("expected gprior type 'fits-vs-mag' or 'round'")
+
 
 class StackSim(StackSimBase):
     """
@@ -1308,4 +1344,4 @@ class AdmomCombiner(AdmomSim):
                                        verbose=self.verbose)
             data_list.append(data0)
 
-        self._data=eu.numpy_util.combine_arrlist(data_list)
+        self._stack_data=eu.numpy_util.combine_arrlist(data_list)

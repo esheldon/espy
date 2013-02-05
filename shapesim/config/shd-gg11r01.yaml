@@ -9,13 +9,13 @@ seed: 747
 s2n_method: admom
 s2n_fac: 40
 
-# minimum number of random ellipticities to use.
-# need decent count to sample the prior surface
-min_gcount: 600
+# for ring we do twice this many
+min_gcount: 300
 
 s2n_psf: 1.0e+8
-s2nvals: [40,50,60,70,80,90,100,120,140,160,180,200,250,300,350,400,500,600,700]
+s2nvals: [10,13,16,20,24,31,38,48,60,75,94,117,146,183,229,286,358,448,560,700]
 
+method: 'emcee'
 
 # step and burnin are *per walker*
 # at least this many walkers

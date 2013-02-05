@@ -1,3 +1,4 @@
+# random orientations
 run: stack-get09r01
 sim: sim-get09
 
@@ -11,12 +12,12 @@ s2n_method: admom
 # this sim is random orientations , need larger s2n_fac
 #s2n_fac: 40
 #s2n_fac: 160
-s2n_fac: 300
+s2n_fac: 640
 
 # minimum number of random ellipticities to use per split.
 # for ring tests you get double this since pairs are made
 #min_gcount: 600
-min_gcount: 4000
+min_gcount: 9600
 
 # how many different jobs running at a given s/n and s2 for the above
 # min_gcount and s2n_fac
@@ -25,7 +26,7 @@ nsplit: 100
 # note s2n psf lower since we stack
 s2n_psf: 100.0
 
-s2nvals: [10,20,30,40,50,60,70,80,90,100,120,150,200,250,300,350,400,500,600,700]
+s2nvals: [10,13,16,20,24,31,38,48,60,75,94,117,146,183,229,286,358,448,560,700]
 
 
 # don't need these

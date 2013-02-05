@@ -4,7 +4,9 @@ version: "2012-10-16"
 star_minmag: 18
 star_maxmag: 20
 
-cutout_size: 27
+cutout_size: 50
+
+use_seg: false
 include_all_seg: false
 
 # for getting <e^2>
@@ -29,4 +31,4 @@ stack_sratio: 1.0
 seed: 1287
 
 comment: |
-    new stack pipelien
+    don't use seg 

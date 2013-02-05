@@ -1,3 +1,4 @@
+# no aperture cut
 run: umom-r01
 version: "2012-10-16"
 
@@ -6,12 +7,13 @@ star_maxmag: 20
 
 cutout_size: 28
 include_all_seg: false
+isolated: false
 
 # for getting <e^2>
 gprior_type: 'fits-vs-mag'
 
-uw_nsig: 4.0
-uw_min_pixels: 4
+#uw_nsig: 4.0
+#uw_min_pixels: 4
 
 # for filling areas not in object with noise
 seed: 3319

@@ -20,6 +20,7 @@ CLUSTERSTEP_PSF_STAR=2**2
 
 UW_BAD_ADMOM=2**0
 UW_TOO_FEW_PIXELS=2**1
+UW_CROWDED=2**2
 
 class Pipe(dict):
     def __init__(self, **keys):
@@ -1965,9 +1966,13 @@ class StackPipe(dict):
         
         skyvar=0.0
 
+        use_seg=self.get('use_seg',True)
         for i in xrange(w.size):
             index=w[i]
-            c=self.get_zerod_cutout(index)
+            if use_seg:
+                c=self.get_zerod_cutout(index)
+            else:
+                c=self.get_full_cutout(index)
 
             im=c.subimage
     
@@ -2271,12 +2276,17 @@ class MomentPipe(dict):
     
     def run(self, **keys):
 
+        use_seg=self.get('use_seg',True)
+
         res=self.get_struct()
         self.res=res
 
+        do_isolated=self.get('isolated',False)
         for i in xrange(self.cat.size):
             if (i % 100) == 0:
                 print '%d/%d' % (i+1,self.cat.size)
+
+            # we might use full below
             c=self.get_zerod_cutout(i)
 
             im=c.subimage
@@ -2284,18 +2294,44 @@ class MomentPipe(dict):
             self.res['row_range'][i] = c.row_range
             self.res['col_range'][i] = c.col_range
 
+            # this modifies self.res with the values, flags, etc.
             ares=self._do_admom(im, i, cen)
+
+            if ares['whyflag'] != 0:
+                # we need a center!
+                self.res['uw_flags'][i] = UW_BAD_ADMOM
+                continue
 
             self.res['am_row'][i] = c.row_range[0] + ares['wrow']
             self.res['am_col'][i] = c.col_range[0] + ares['wcol']
 
             acen=[ares['wrow'], ares['wcol']]
-            self._do_uw_moments(im, i, acen)
+
+            if do_isolated:
+                if not self._is_isolated(c, i):
+                    self.res['uw_flags'][i] += UW_CROWDED
+                    continue
+
+            if not use_seg:
+                cfull=self.get_full_cutout(i)
+                self._do_uw_moments(cfull.subimage, i, acen)
+            else:
+                self._do_uw_moments(im, i, acen)
 
         w, = where(self.res['uw_flags'] != 0)
         print 'found %d/%d bad   %s' % (w.size,res.size,w.size/float(res.size))
 
         files.write_fits_output(data=self.res, ftype='shear', **self)
+
+    def _is_isolated(self, cutout, index):
+        id=self.cat['id'][index]
+        w=where(  (cutout.seg_subimage != id) 
+                & (cutout.seg_subimage != 0))
+        if w[0].size==0:
+            return True
+        else:
+            #print '%s/%s' % (w[0].size, cutout.seg_subimage.size)
+            return False
 
     def _do_admom(self, im, i, cen):
         import admom
@@ -2321,6 +2357,36 @@ class MomentPipe(dict):
 
 
     def _do_uw_moments(self, im, i, cen):
+        """
+        not currently used
+        """
+
+        row,col=numpy.mgrid[0:im.shape[0], 0:im.shape[1]]
+        rm=row.astype('f8')-cen[0]
+        cm=col.astype('f8')-cen[1]
+
+        isum=im.sum()
+
+        irrvals = im*rm**2
+        ircvals = im*rm*cm
+        iccvals = im*cm**2
+
+        irrsum = irrvals.sum()
+        ircsum = ircvals.sum()
+        iccsum = iccvals.sum()
+
+        self.res['uw_rmax'][i] = 9999
+        self.res['uw_isum'][i] = isum
+        self.res['uw_irrsum'][i] = irrsum
+        self.res['uw_ircsum'][i] = ircsum
+        self.res['uw_iccsum'][i] = iccsum
+
+
+
+    def _do_uw_moments_trim(self, im, i, cen):
+        """
+        not currently used
+        """
         if self.res['am_flags'][i] != 0:
             self.res['uw_flags'][i] = UW_BAD_ADMOM
             return
@@ -2399,7 +2465,7 @@ class MomentPipe(dict):
             data[n][:] = self.cat[n][:]
 
         wpsf=self.get_psf_stars() 
-        data['uw_nsig'] = self['uw_nsig']
+        data['uw_nsig'] = self.get('uw_nsig',9999)
         data['uw_type'] = data['class']
         data['uw_type'][wpsf] += CLUSTERSTEP_PSF_STAR
 
@@ -2680,11 +2746,16 @@ class Cutout:
             mess=mess % (cen[0],cen[1],sh[0],sh[1])
             raise ValueError(mess)
 
-        minrow=int(     cen[0]-size/2.-0.5)
-        maxrow=int(ceil(cen[0]+size/2.+0.5))
-        mincol=int(     cen[1]-size/2.-0.5)
-        maxcol=int(ceil(cen[1]+size/2.+0.5))
-
+        #minrow=int(     cen[0]-size/2.-0.5)
+        #maxrow=int(ceil(cen[0]+size/2.+0.5))
+        #mincol=int(     cen[1]-size/2.-0.5)
+        #maxcol=int(ceil(cen[1]+size/2.+0.5))
+        sz2 = (size-1)/2.
+        minrow=int(cen[0]-sz2 )
+        maxrow=int(cen[0]+sz2)
+        mincol=int(cen[1]-sz2)
+        maxcol=int(cen[1]+sz2)
+ 
         if minrow < 0:
             minrow=0
         if maxrow > (sh[0]-1):

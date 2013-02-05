@@ -16,6 +16,8 @@ import cluster_step
 from cluster_step import files
 from cluster_step import sh1exp, sh2exp
 
+import images
+
 from optparse import OptionParser
 parser=OptionParser(__doc__)
 
@@ -61,16 +63,18 @@ class Plotter(object):
         self._measure_gals_uw()
         self._measure_psf_admom()
         self._measure_gals_admom()
-        self._measure_gals_gmix()
+        #self._measure_gals_gmix()
         #return
         
-        #sh=self._admom_shear
-        sh=self._gmix_shear
+        sh=self._admom_shear
+        #sh=self._gmix_shear
 
-        sh1=sh['e1']*0.5/self.Rshear
+        #sh1=sh['e1']*0.5/self.Rshear
+        sh1=sh['e1']*0.5
         #sh1err=sh['e1err']*0.5
         sh1err=0.16/sqrt(self.im_stacks['nstack'])
-        sh2=sh['e2']*0.5/self.Rshear
+        #sh2=sh['e2']*0.5/self.Rshear
+        sh2=sh['e2']*0.5
         #sh2err=sh['e2err']*0.5
         sh2err=0.16/sqrt(self.im_stacks['nstack'])
         s2n=sh['s2n']
@@ -140,6 +144,8 @@ class Plotter(object):
 
             im=self.im_stacks['images'][i,:,:]
             skysig=sqrt(self.im_stacks['skyvar'][i])
+
+            images.multiview(im)
 
             cen=array(im.shape)/2.
             ares = admom.admom(im, cen[0], cen[1],
