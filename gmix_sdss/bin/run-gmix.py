@@ -18,8 +18,8 @@ def main():
     run=int(args[1])
     camcol = int(args[2])
     field=int(args[3])
-    pipe=gmix_sdss.pipe.GMixSweep(gmix_run, run, camcol)
+    pipe=gmix_sdss.pipe.GMixField(gmix_run, run, camcol, field)
 
-    pipe.process_field(field)
+    pipe.go()
 
 main()

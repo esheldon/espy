@@ -6,7 +6,7 @@ TODO
 
     need to have separate result,flags return
     since sometimes we return a fitter sometimes
-    there is not fitter
+    there is no fitter
 """
 from sys import stderr
 
@@ -14,6 +14,7 @@ import numpy
 import sdsspy
 import es_sdsspy
 
+import esutil as eu
 from esutil.random import srandu
 
 import gmix_image
@@ -22,19 +23,23 @@ import admom
 
 from . import files
 
-AM_PSF_FAILED=2**0
-PSF_FAILED=2**1
-AM_OBJ_FAILED=2**2
-LM_OBJ_FAILED=2**3
+NO_ATLAS=2**0
+AM_PSF_FAILED=2**1
+PSF_FAILED=2**2
+AM_OBJ_FAILED=2**3
 
-class GMixSweep(dict):
-    def __init__(self, gmix_run, run, camcol, **keys):
+
+class GMixField(dict):
+    def __init__(self, gmix_run, run, camcol, field):
         
         conf=files.read_config(gmix_run)
         self.update(conf)
 
-        self.run=run
-        self.camcol=camcol
+        self['gmix_run'] = self['run']
+        self['run']=run
+        self['camcol']=camcol
+        self['field']=field
+        self['fnum']=sdsspy.FILTERNUM[self['filter']]
 
         self._load_data()
 
@@ -43,46 +48,41 @@ class GMixSweep(dict):
             biggles.configure("screen","width",1100)
             biggles.configure("screen","height",1100)
 
+    def go(self):
+        if self.objs is not None:
 
-    def process_field(self, field):
-        w,=numpy.where(self.objs['field']==field)
-        if w.size==0:
-            return
+            #self.objs=self.objs[0:3]
+            nobj=self.objs.size
+            st=self._get_struct()
 
-        psfield,psf_kl = self._read_psfield(field)
+            for i in xrange(self.objs.size):
+                stderr.write('%s/%s\n' % ((i+1), nobj))
 
-        print 'field:',field,'objects',w.size
-        for i in xrange(w.size):
-            stderr.write('%s/%s\n' % ((i+1), w.size))
-            index=w[i]
-            res=self._process_object(index, psfield, psf_kl)
+                obj=self.objs[i]
+                res=self._process_object(obj)
 
-    def process_camcol(self):
-        
-        min_field=self.objs['field'].min()
-        max_field=self.objs['field'].max()
-        for field in xrange(min_field, max_field+1):
-            self.process_field(field)
+                self._copy_to_output(st, i, res)
+        else:
+            st=None
 
-    def _process_object(self, index, psfield, psf_kl):
+        files.write_output(data=st,**self)
 
-        obj=self.objs[index]
 
-        result={}
-        for filt in self['filters']:
-            fnum=sdsspy.FILTERNUM[filt]
+    def _process_object(self, obj):
 
-            psf_res=self._measure_psf(obj,psf_kl,fnum)
-            # copy result
-            if flags['flags'] != 0:
-                result[filt] = psf_res
-                continue
+        result = {'flags':0}
 
-            psf_gmix=psf_res.get_gmix()
-            res=self._measure_obj(obj, psfield, fnum, psf_gmix)
-            result[filt] = res
-        
-            # copy result
+        psf_res=self._measure_psf(obj)
+        result['psf_res'] = psf_res
+        result['flags'] += psf_res['flags']
+
+        if psf_res['flags'] == 0:
+            psf_gmix=psf_res['fitter'].get_gmix()
+            res=self._measure_obj(obj, psf_gmix)
+            result['obj_res'] = res
+            result['flags'] += res['flags']
+        else:
+            result['obj_res'] = {'flags':PSF_FAILED}
 
         return result
 
@@ -102,7 +102,7 @@ class GMixSweep(dict):
 
         return sigma_guess
             
-    def _prepare_atlas(self, im, background, row, col):
+    def _prepare_atlas(self, im, background, skysig, row, col):
         """
         Trim empty space, convert to 'f8', and background
         subtract
@@ -116,21 +116,30 @@ class GMixSweep(dict):
             mincol = w2.min()
             maxcol = w2.max()
             
-            im_out=im[minrow:maxrow+1, mincol:maxcol+1].astype('f8')
+            im_out=im[minrow:maxrow+1, mincol:maxcol+1]
             row_out = row-minrow
             col_out = col-mincol
         else:
             # no signal
-            im_out=im.astype('f8')
+            im_out=im
+
+        wb=numpy.where(im_out==background)
+
+        im_out=im_out.astype('f8')
+        if wb[0].size != 0:
+            im_out[wb] += skysig*numpy.random.randn(wb[0].size)
 
         im_out -= background
         return im_out,row_out,col_out
 
-    def _measure_psf(self, obj, psf_kl, fnum):
+    def _measure_psf(self, obj):
+        fnum=self['fnum']
         rowc=obj['rowc'][fnum]
         colc=obj['colc'][fnum]
 
-        psf_im = psf_kl[fnum].rec(rowc, colc, trim=True)
+        psf_im = self.psf_kl[fnum].rec(rowc, colc, trim=True)
+        psf_im=psf_im.astype('f8')
+
         guess_psf=admom.fwhm2mom( obj['psf_fwhm'][fnum], pixscale=0.4)/2.
 
         psf_res=self._fit_psf(psf_im, guess_psf, 1.0)
@@ -153,7 +162,7 @@ class GMixSweep(dict):
             print >>stderr,'failed to fit psf model'
             return {'flags':PSF_FAILED}
 
-        return res
+        return {'flags':0, 'fitter':res}
 
     def _fit_psf_model(self, im, ares, model, skysig):
         if model=='gmix1':
@@ -190,10 +199,16 @@ class GMixSweep(dict):
         return res
 
 
-    def _measure_obj(self, obj, psfield, fnum, psf_gmix):
+    def _measure_obj(self, obj, psf_gmix):
+
+        fnum=self['fnum']
 
         atlas=self._read_atlas(obj)
+        if atlas is None:
+            return {'flags':NO_ATLAS}
+
         background=atlas['SOFT_BIAS']
+        skysig = self.psfield['skysig'][0,fnum]
 
         rowc=obj['rowc'][fnum]
         colc=obj['colc'][fnum]
@@ -201,12 +216,11 @@ class GMixSweep(dict):
         col_notrim = colc - atlas['col0'][fnum] - 0.5
         
         im_notrim=atlas['images'][fnum]
-        im,row,col=self._prepare_atlas(im_notrim, background, 
+        im,row,col=self._prepare_atlas(im_notrim, background, skysig,
                                        row_notrim, col_notrim)
         
         sigma_guess=self._get_sigma_guess(psf_gmix,obj['m_rr_cc'][fnum])
 
-        skysig = psfield['skysig'][0,fnum]
 
         res=self._fit_object(obj, im, skysig, row, col, sigma_guess, psf_gmix)
 
@@ -225,7 +239,9 @@ class GMixSweep(dict):
         results={'flags':0,'ares':ares}
         for fitter_type in self['obj_fitters']:
             results[fitter_type] = {}
+
             for model in self['obj_models']:
+
                 if fitter_type=='lm':
                     print 'lm:',model,
                     fitter=self._fit_object_model_lm(
@@ -235,8 +251,8 @@ class GMixSweep(dict):
                     fitter=self._fit_object_model_mcmc(
                             im, mag, skysig, ares, model, psf_gmix)
                     res=fitter.get_result()
-                    print '  model: %s prob: %.6f aic: %.6f bic: %.6f Ts/n: %.6f ' % \
-                            (model,res['fit_prob'],res['aic'],res['bic'],res['Ts2n'])
+                    print '  model: %s prob: %.6f aic: %.6f bic: %.6f s/n: %.6f Ts/n: %.6f ' % \
+                            (model,res['fit_prob'],res['aic'],res['bic'],res['s2n_w'],res['Ts2n'])
                 else:
                     raise ValueError("bad fitter type '%s'" % fitter_type)
                 results[fitter_type][model] = fitter
@@ -254,6 +270,7 @@ class GMixSweep(dict):
         gprior=self._get_gprior(mag, model)
 
         aic=9.999e9
+        fitter=None
         for i in xrange(self['obj_lm_ntry']):
             fitter0=GMixFitSimple(im, 
                                   ivar,
@@ -263,6 +280,8 @@ class GMixSweep(dict):
                                   cen_width=cen_width,
                                   gprior=gprior)
             res=fitter0.get_result()
+            if res['flags'] != 0:
+                continue
             if res['aic'] < aic:
                 aic=res['aic']
                 fitter=fitter0
@@ -298,6 +317,7 @@ class GMixSweep(dict):
                                make_plots=self['make_plots'])
 
         return fitter
+
     def _run_admom(self, im, row, col, guess, skysig):
 
         i=0
@@ -322,14 +342,14 @@ class GMixSweep(dict):
 
     def _read_psfield(self, field):
         psfield=sdsspy.read('psfield',
-                            run=self.run,
-                            camcol=self.camcol,
+                            run=self['run'],
+                            camcol=self['camcol'],
                             field=field)
         psf_kl = []
         for filter in sdsspy.FILTERCHARS:
             kl = sdsspy.read('psField',
-                             run=self.run,
-                             camcol=self.camcol,
+                             run=self['run'],
+                             camcol=self['camcol'],
                              field=field,
                              filter=filter)
             psf_kl.append(kl)
@@ -341,22 +361,35 @@ class GMixSweep(dict):
         """
         Read atlas images as sky-subtracted, 'f8'
         """
+        from sdsspy.atlas import NoAtlasImageError
 
         field=obj['field']
         id=obj['id']
-        atlas = sdsspy.read('fpAtlas',
-                            run=self.run,
-                            camcol=self.camcol,
-                            field=field,
-                            id=id)
+        try:
+            atlas = sdsspy.read('fpAtlas',
+                                run=self['run'],
+                                camcol=self['camcol'],
+                                field=field,
+                                id=id)
+        except NoAtlasImageError:
+            print >>stderr,"object has not atlas image"
+            atlas=None
         #for i in xrange(5):
         #    im=atlas['images'][i].astype('f8')-atlas['SOFT_BIAS']
         #    atlas['images'][i] = im
         return atlas
 
     def _select(self, objs):
+
+        # first trim the photoObj down to what appears in a data sweep
+        print 'Trimming to sweep objects'
+        sweep_selector=es_sdsspy.select.SweepSelector(objs, 'gal')
+        sweep_ind=sweep_selector.get_indices()
+        if sweep_ind.size == 0:
+            return sweep_ind
+
         print "Selecting objects"
-        s = es_sdsspy.select.Selector(objs)
+        s = es_sdsspy.select.Selector(objs[sweep_ind])
 
         print "  getting resolve logic"
         resolve_logic = s.resolve_logic()
@@ -367,25 +400,40 @@ class GMixSweep(dict):
         print "  getting rmag logic"
         rmag_logic = s.cmodelmag_logic("r", self['max_cmodelmag_r'])
 
-        #rmag_logic=rmag_logic & (s.mags['cmodel_dered'][:,2] <18)
-
         logic = resolve_logic & flag_logic & rmag_logic
 
         keep, = numpy.where(logic)
+
+        if keep.size > 0:
+            keep=sweep_ind[keep]
+
         print "  keeping %i/%i" % (keep.size, objs.size)
 
         return keep
 
     def _load_data(self):
-        objs=sdsspy.read('calibObj.gal', 
-                         run=self.run, 
-                         camcol=self.camcol, 
+        objs=sdsspy.read('photoObj', 
+                         run=self['run'], 
+                         camcol=self['camcol'], 
+                         field=self['field'],
                          lower=True,
                          verbose=True)
-        w=self._select(objs)
-        objs=objs[w]
+        if objs is None:
+            print >>stderr,"no data read"
+            self.objs=objs
+            return
 
+        w=self._select(objs)
+
+        if w.size == 0:
+            print >>stderr,"no objects passed cuts"
+            self.objs=None
+            return
+
+        objs=objs[w]
         self.objs=objs
+
+        self.psfield,self.psf_kl = self._read_psfield(self['field'])
 
     def _get_gprior(self, mag, model):
         if not hasattr(self, 'gpriors'):
@@ -447,17 +495,155 @@ class GMixSweep(dict):
 
         self.gpriors=gpriors
 
+    def _get_psf_npars(self):
+        if self['psf_model'] == 'gmix3':
+            ngauss=3
+        elif self['psf_model'] == 'gmix2':
+            ngauss=2
+        elif self['psf_model'] == 'gmix1':
+            ngauss=1
 
-    def _get_struct(self, nobj):
+        return 2*ngauss+4
+
+    def _copy_to_output(self, st, i, res):
+
+        st['flags'][i] = res['flags']
+
+        if res['psf_res']['flags'] == 0:
+            self._copy_psf_result(st, i, res)
+        if res['obj_res']['flags'] == 0:
+            self._copy_obj_result(st, i, res)
+
+    def _copy_psf_result(self, st, i, res):
+        pres=res['psf_res']['fitter'].get_result()
+        st['psf_pars'][i,:] = pres['pars']
+        st['psf_perr'][i,:] = pres['perr']
+        st['psf_pcov'][i,:,:] = pres['pcov']
+
+        for n in ['flags', 'numiter','loglike','chi2per',
+                  'dof','fit_prob','aic','bic']:
+            nn='psf_%s' % n
+            st[nn][i] = pres[n]
+
+    def _copy_obj_result(self, st, i, res):
+        """
+        We get here as long as adaptive moments didn't fail
+        """
+        ores=res['obj_res']
+        ares=ores['ares']
+        st['am_s2n'][i] = ares['s2n']
+
+        for fitter_type in self['obj_fitters']:
+            for model in self['obj_models']:
+
+                fitter=ores[fitter_type][model]
+                if fitter is None:
+                    continue
+
+                r=fitter.get_result()
+
+                if fitter_type=='lm':
+                    flags=r['flags']
+                else:
+                    flags=0
+
+                if flags == 0:
+                    front='%s_%s' % (fitter_type, model)
+
+
+                    st[front+'_pars'][i,:] = r['pars']
+                    st[front+'_perr'][i,:] = r['perr']
+                    st[front+'_pcov'][i,:] = r['pcov']
+                    for n in r:
+                        if n in ['pars','perr','pcov']:
+                            continue
+
+                        if n=='s2n_w':
+                            nn='s2n'
+                        else:
+                            nn=n
+
+                        nn = '%s_%s' % (front,nn)
+
+                        if nn in st.dtype.names:
+                            st[nn][i] = r[n]
+
+
+    def _get_struct(self):
+
+        nobj=self.objs.size
+
+        npars_psf=self._get_psf_npars()
+        npars=6
+
         dt=[('photoid','i8'),
             ('run','i2'),
             ('rerun','i2'),
             ('camcol','i2'),
             ('field','i2'),
             ('id','i2'),
-            ('flags','i4'),
+            ('filter','S1'),
+            ('fnum','i1'),
 
-            ('am_flags','i4'),
-            ('am_s2n','f8')]
+            ('flags','i4'), # overall flag indicators
+           
+            ('psf_pars','f8',npars_psf),
+            ('psf_perr','f8',npars_psf),
+            ('psf_pcov','f8',(npars_psf,npars_psf)),
+            ('psf_flags','i4'),
+            ('psf_numiter','i4'),
+            ('psf_loglike','f8'),
+            ('psf_chi2per','f8'),
+            ('psf_dof','i4'),
+            ('psf_fit_prob','f8'),
+            ('psf_aic','f8'),
+            ('psf_bic','f8'),
             
+            ('am_s2n','f8')
 
+           ]
+
+        for fitter_type in self['obj_fitters']:
+            for model in self['obj_models']:
+
+                front='%s_%s' % (fitter_type, model)
+
+                dt += [(front+'_flags','i4'),
+                       (front+'_g','f8',2),
+                       (front+'_gcov','f8',(2,2)),
+                       (front+'_pars','f8',npars),
+                       (front+'_perr','f8',npars),
+                       (front+'_pcov','f8',(npars,npars))]
+
+                dt += [(front+'_s2n','f8'),
+                       (front+'_loglike','f8'),
+                       (front+'_chi2per','f8'),
+                       (front+'_dof','i4'),
+                       (front+'_fit_prob','f8'),
+                       (front+'_aic','f8'),
+                       (front+'_bic','f8'),
+                       (front+'_Tmean','f8'),
+                       (front+'_Terr','f8'),
+                       (front+'_Ts2n','f8')
+                      ]
+
+                if fitter_type=='lm':
+                    dt += [(front+'_numiter','i4')]
+
+                if fitter_type=='mcmc':
+                    dt += [(front+'_gsens','f8',2),
+                           (front+'_arate','f8')]
+
+        st=numpy.zeros(nobj, dtype=dt)
+            
+        st['photoid']=sdsspy.get_photoid(self.objs)
+        st['run'] = self.objs['run']
+        st['rerun'] = self.objs['rerun']
+        st['camcol'] = self.objs['camcol']
+        st['field'] = self.objs['field']
+        st['id'] = self.objs['id']
+
+        st['filter'] = self['filter']
+        st['fnum'] = self['fnum']
+
+        return st

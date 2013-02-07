@@ -2,6 +2,7 @@ from __future__ import print_function
 import sdsspy
 import es_sdsspy
 import sdsspy
+import numpy
 
 
 
@@ -227,4 +228,121 @@ class Selector:
 
 
 
+class SweepSelector(object):
+    """
+    Take a photoObj catalog and trim it to be identical to the objects in the
+    sweeps
+    """
+    def __init__(self, objs, type, trim=False):
+        self._type=type
+        self._trim=trim
+        self._objs=objs
+        self._flags=sdsspy.flags.Flags()
+
+        if self._type!='gal':
+            raise ValueError("Only gal implemented currently")
+
+        self._type_info={'gal':{'magcuts':[21., 22., 22., 20.5, 20.1],
+                                'typenum':3}}
+
+        self._do_select()
+
+    def get_logic(self):
+        return self._logic
+    def get_indices(self):
+        return self._indices
+    
+    def _do_select(self):
+        objs=self._objs
+
+        type_logic = self._get_type_logic()
+        mag_logic = self._get_mag_logic()
+        flag_logic=self._get_flag_logic()
+        resolve_logic = self._get_resolve_logic()
+
+        self._logic=type_logic & mag_logic & flag_logic & resolve_logic
+        self._indices, = numpy.where(self._logic)
+
+    def _get_type_logic(self):
+        typenum=self._type_info[self._type]['typenum']
+
+        logic = self._objs['objc_type'] == typenum
+        return logic
+        
+    def _get_flag_logic(self):
+        flags=self._flags
+        objs=self._objs
+
+        oflags = objs['objc_flags']
+
+        bright = flags.val('object1','bright')
+        blended = flags.val('object1','blended')
+        nodeblend = flags.val('object1','nodeblend')
+
+
+        bdb_logic = \
+            ( (oflags & blended) == 0) | ((oflags & nodeblend) != 0)
+
+        bright_logic= ((oflags & bright) == 0)
+
+        logic = bdb_logic & bright_logic
+        if self._trim:
+            edge = flags.val('object1','edge')
+            too_many_peaks = flags.val('object1','deblend_too_many_peaks')
+            badsky=flags.val('object1','badsky')
+            satur=flags.val('object1','satur')
+            satcen=flags.val('object2','satur_center')
+
+            oflags2 = objs['objc_flags2']
+            trim_logic = (
+                ((oflags & too_many_peaks) == 0) 
+                & ((oflags & edge)==0)
+                & ((oflags & badsky) == 0)
+                & ((oflags & satur) == 0)
+                & ((oflags2 & satcen) == 0) )
+
+            logic = logic & trim_logic
+
+        return logic
+
+    def _get_resolve_logic(self):
+        flags=self._flags
+        objs=self._objs
+
+        primary_flag = flags.val('resolve_status','run_primary')
+        return (objs['resolve_status'] & primary_flag) != 0
+
+    def _get_mag_logic(self):
+        magcuts = self._type_info[self._type]['magcuts']
+
+        logic = numpy.zeros(self._objs.size, dtype='bool')
+
+        for i in xrange(5):
+
+            flux=self._objs['modelflux'][:,i]
+            maxflux=flux.max()
+            flux=flux.clip(0.0001, maxflux)
+
+            mag=22.5-2.5*numpy.log10(flux)
+            mag -= self._objs['extinction'][:,i]
+
+            logic = logic | (mag < magcuts[i])
+
+        return logic
+
+def test_sweep_selector(run=756, camcol=3, type='gal'):
+    sweep=sdsspy.read('calibobj.'+type, run=run, camcol=camcol, lower=True)
+
+    fields=numpy.unique(sweep['field'])
+
+    for field in fields:
+        pobj=sdsspy.read('photoObj', run=run, camcol=camcol, field=field, 
+                         lower=True)
+
+        sel=SweepSelector(pobj, type)
+        ind=sel.get_indices()
+
+        w,=numpy.where(sweep['field'] == field)
+        ndiff=w.size-ind.size
+        print('field:',field,'sweep count:',w.size,'photoObj trimmed count:',ind.size,'diff:',ndiff)
 

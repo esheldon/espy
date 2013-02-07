@@ -1,6 +1,7 @@
+# r01 means r-band run number 01
 run: "gmix-r01"
 
-filters: ["r"]
+filter: "r"
 
 
 # ignored for now
