@@ -53,9 +53,7 @@ class GMixField(dict):
         self._load_data()
 
         if self['make_plots'] or self['make_psf_plots']:
-            import biggles
-            biggles.configure("screen","width",1100)
-            biggles.configure("screen","height",1100)
+            self._setup_plotting()
 
     def go(self):
         if self.objs is not None:
@@ -69,9 +67,9 @@ class GMixField(dict):
 
                 obj=self.objs[i]
 
-                # setting this means the image get the same random numbers
-                # added each time; the emcee sampler uses its own internal
-                # random number generator
+                # setting this means the image gets the same random numbers
+                # added each time we run the code; but note the emcee sampler
+                # uses its own internal random number generator
 
                 self._set_object_seed(obj)
 
@@ -529,6 +527,11 @@ class GMixField(dict):
         print 'total time:',tm/60.,'minutes'
         print 'time per object:',tm/self.objs.size
 
+    def _setup_plotting(self):
+        import biggles
+        biggles.configure("screen","width",1100)
+        biggles.configure("screen","height",1100)
+
     def _get_psf_npars(self):
         if self['psf_model'] == 'gmix3':
             ngauss=3
@@ -672,6 +675,9 @@ class GMixField(dict):
                            (front+'_arate','f8')]
 
         st=numpy.zeros(nobj, dtype=dt)
+
+        for n in st.dtype.names:
+            st[n] = -9999
             
         st['photoid']=sdsspy.get_photoid(self.objs)
         st['run'] = self.objs['run']
