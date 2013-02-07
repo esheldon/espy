@@ -1,12 +1,20 @@
 """
 TODO
+    limit to BOSS footprint
+        - its ok to write empty files
+    limit galaxy measure to am s/n > 10 
+        - mag limit stricter as well?
+
+    Produce wq for each field of the minscore runs
+        - add fieldlist method to window in sdsspy
+
     output structure
         - mark the best model!
+
     multiple psf models?
 
-    need to have separate result,flags return
-    since sometimes we return a fitter sometimes
-    there is no fitter
+
+    Collation
 """
 from sys import stderr
 
@@ -19,7 +27,7 @@ from esutil.random import srandu
 
 import gmix_image
 import admom
-
+import time
 
 from . import files
 
@@ -27,6 +35,7 @@ NO_ATLAS=2**0
 AM_PSF_FAILED=2**1
 PSF_FAILED=2**2
 AM_OBJ_FAILED=2**3
+AM_FAINT=2**4  # am s/n < min_s2n
 
 
 class GMixField(dict):
@@ -51,17 +60,25 @@ class GMixField(dict):
     def go(self):
         if self.objs is not None:
 
-            #self.objs=self.objs[0:3]
             nobj=self.objs.size
             st=self._get_struct()
 
+            self._set_start_time()
             for i in xrange(self.objs.size):
                 stderr.write('%s/%s\n' % ((i+1), nobj))
 
                 obj=self.objs[i]
+
+                # setting this means the image get the same random numbers
+                # added each time; the emcee sampler uses its own internal
+                # random number generator
+
+                self._set_object_seed(obj)
+
                 res=self._process_object(obj)
 
                 self._copy_to_output(st, i, res)
+            self._print_time_stats()
         else:
             st=None
 
@@ -120,8 +137,10 @@ class GMixField(dict):
             row_out = row-minrow
             col_out = col-mincol
         else:
-            # no signal
+            print 'no signal found'
             im_out=im
+            row_out=row
+            col_out=col
 
         wb=numpy.where(im_out==background)
 
@@ -131,6 +150,10 @@ class GMixField(dict):
 
         im_out -= background
         return im_out,row_out,col_out
+
+    def _set_object_seed(self, obj):
+        pid=sdsspy.get_photoid(obj)
+        numpy.random.seed(int(pid))
 
     def _measure_psf(self, obj):
         fnum=self['fnum']
@@ -216,6 +239,7 @@ class GMixField(dict):
         col_notrim = colc - atlas['col0'][fnum] - 0.5
         
         im_notrim=atlas['images'][fnum]
+
         im,row,col=self._prepare_atlas(im_notrim, background, skysig,
                                        row_notrim, col_notrim)
         
@@ -233,6 +257,11 @@ class GMixField(dict):
             print >>stderr,'failed to run object admom'
             return {'flags':AM_OBJ_FAILED}
 
+        if ares['s2n'] < self['min_s2n']:
+            mess='s/n %s is less than minimum %s' %(ares['s2n'],self['min_s2n'])
+            print >>stderr,mess
+            return {'flags':AM_FAINT,'ares':ares}
+
         flags=0
         mag=None
 
@@ -243,7 +272,6 @@ class GMixField(dict):
             for model in self['obj_models']:
 
                 if fitter_type=='lm':
-                    print 'lm:',model,
                     fitter=self._fit_object_model_lm(
                             im, mag, skysig, ares, model, psf_gmix)
                 elif fitter_type=='mcmc':
@@ -257,8 +285,6 @@ class GMixField(dict):
                     raise ValueError("bad fitter type '%s'" % fitter_type)
                 results[fitter_type][model] = fitter
 
-            if fitter_type=='lm':
-                print
         return results
 
     def _fit_object_model_lm(self, im, mag, skysig, ares, model, psf_gmix):
@@ -495,6 +521,14 @@ class GMixField(dict):
 
         self.gpriors=gpriors
 
+    def _set_start_time(self):
+        self._t0=time.time()
+
+    def _print_time_stats(self):
+        tm=time.time()-self._t0
+        print 'total time:',tm/60.,'minutes'
+        print 'time per object:',tm/self.objs.size
+
     def _get_psf_npars(self):
         if self['psf_model'] == 'gmix3':
             ngauss=3
@@ -511,6 +545,11 @@ class GMixField(dict):
 
         if res['psf_res']['flags'] == 0:
             self._copy_psf_result(st, i, res)
+
+        if 'ares' in res['obj_res']:
+            ares=res['obj_res']['ares']
+            st['am_s2n'][i] = ares['s2n']
+
         if res['obj_res']['flags'] == 0:
             self._copy_obj_result(st, i, res)
 
@@ -530,8 +569,6 @@ class GMixField(dict):
         We get here as long as adaptive moments didn't fail
         """
         ores=res['obj_res']
-        ares=ores['ares']
-        st['am_s2n'][i] = ares['s2n']
 
         for fitter_type in self['obj_fitters']:
             for model in self['obj_models']:

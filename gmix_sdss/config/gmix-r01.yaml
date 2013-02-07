@@ -1,16 +1,11 @@
-# r01 means r-band run number 01
 run: "gmix-r01"
 
 filter: "r"
 
-
-# ignored for now
 psf_model: 'gmix3'
 
-# ignored for now
 obj_models: ['gexp','gdev']
 obj_fitters: ['lm','mcmc']
-
 
 admom_ntry: 4
 psf_lm_ntry: 4
@@ -23,6 +18,10 @@ mca_a: 3
 iter: true
 
 max_cmodelmag_r: 22.0
+# minimum adaptive moment s/n
+min_s2n: 10
 
 make_plots: false
 make_psf_plots: false
+
+minscore: 0.1
