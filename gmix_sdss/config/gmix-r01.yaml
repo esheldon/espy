@@ -4,8 +4,8 @@ filter: "r"
 
 psf_model: 'gmix3'
 
+obj_fitter: 'lm'
 obj_models: ['gexp','gdev']
-obj_fitters: ['lm','mcmc']
 
 admom_ntry: 4
 psf_lm_ntry: 4

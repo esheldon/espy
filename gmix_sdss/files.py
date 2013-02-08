@@ -1,3 +1,4 @@
+import numpy
 import os
 
 def get_config_dir():
@@ -83,18 +84,23 @@ def get_output_url(**keys):
 
 def read_output(**keys):
     import fitsio
+    verbose=keys.get('verbose',False)
 
     url=get_output_url(**keys)
 
     if not os.path.exists(url):
         raise IOError("file not found: %s" % url)
 
-    fobj=fitsio.FITS(url)
-    if len(fobj)==1:
-        # No objects were selected for this field.  This is OK
-        return numpy.array([])
+    if verbose:
+        print 'reading:',url
 
-    return fobj[1].read()
+    with fitsio.FITS(url) as fobj:
+        if len(fobj)==1:
+            # No objects were selected for this field.  This is OK
+            data=numpy.array([])
+        else:
+            data=fobj[1].read()
+    return data
 
 def write_output(**keys):
     import esutil as eu
@@ -113,12 +119,91 @@ def write_output(**keys):
     print 'writing:',url
     eu.io.write(url, keys['data'], clobber=True)
 
+def get_sweep_dir(**keys):
+    if ('gmix_run' not in keys
+            or 'run' not in keys):
+        raise ValueError("send gmix_run=,run=")
+
+    bdir=get_basedir()
+    d=os.path.join(bdir, 
+                   keys['gmix_run'],
+                   str(keys['run']) )
+    return d
+
+
+def get_sweep_url(**keys):
+    if ('gmix_run' not in keys
+            or 'run' not in keys
+            or 'camcol' not in keys):
+        raise ValueError("send gmix_run=,run=, camcol=")
+
+    d=get_sweep_dir(**keys)
+
+    fname='%(gmix_run)s-sweep-%(run)06d-%(camcol)d.fits' % keys
+
+    url=os.path.join(d,fname)
+    return url
+
+def read_sweep(**keys):
+    import fitsio
+    verbose=keys.get('verbose',False)
+
+    url=get_sweep_url(**keys)
+    if verbose:
+        print 'reading:',url
+
+    with fitsio.FITS(url) as fobj:
+        data=fobj[1].read()
+
+    return data
+
+def get_field_cache_url(**keys):
+    if ('gmix_run' not in keys):
+        raise ValueError("send gmix_run=")
+
+    name='%s-field-cache.fits' % keys['gmix_run']
+    d=get_basedir()
+    url=os.path.join(d, keys['gmix_run'],'field_cache',name)
+    return url
+
+def write_field_cache(**keys):
+    import fitsio
+    if ('gmix_run' not in keys
+            or 'data' not in keys):
+        raise ValueError("send gmix_run=, data=")
+    url=get_field_cache_url(gmix_run=keys['gmix_run'])
+    d=os.path.dirname(url)
+
+    if not os.path.exists(d):
+        try:
+            os.makedirs(d)
+        except:
+            pass
+
+    print 'writing:',url
+    with fitsio.FITS(url,mode='rw',clobber=True) as fobj:
+        fobj.write(keys['data'])
+ 
+def read_field_cache(**keys):
+    import fitsio
+    url=get_field_cache_url(gmix_run=keys['gmix_run'])
+
+    print 'reading:',url
+    if not os.path.exists(url):
+        print 'creating cache'
+        conf=read_config(keys['gmix_run'])
+        fields=get_primary_boss_fields(conf['minscore'])
+        write_field_cache(data=fields, **keys)
+
+    with fitsio.FITS(url) as fobj:
+        data=fobj[1].read()
+    return data
+
 
 def get_primary_boss_fields(minscore, doplot=False):
     """
     Get primary fields and trim to the boss area
     """
-    import numpy
     import sdsspy
     import es_sdsspy
     win=sdsspy.window.Window()

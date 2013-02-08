@@ -56,7 +56,7 @@ class WQWriter(dict):
         self['groups']=groups
         self['notgroups']=notgroups
 
-        self.flist=gmix_sdss.files.get_primary_boss_fields(self['minscore'])
+        self.flist=gmix_sdss.files.read_field_cache(gmix_run=gmix_run)
 
     def make_wq_scripts(self):
 
