@@ -28,31 +28,49 @@ def get_basedir():
         raise ValueError("set GMIX_SDSS environment variable")
     return os.environ['GMIX_SDSS']
 
-def get_wq_dir(**keys):
+def get_wq_basedir(**keys):
+    if 'gmix_run' not in keys:
+        raise ValueError("send gmix_run=")
+
+    bdir=get_basedir()
+    d=os.path.join(bdir, keys['gmix_run'], 'wq')
+    return d
+
+def get_wq_dir_byfield(**keys):
     if ('gmix_run' not in keys
             or 'run' not in keys):
         raise ValueError("send gmix_run=,run=")
 
-    bdir=get_basedir()
-    d=os.path.join(bdir, 
-                   keys['gmix_run'],
-                   'wq',
+    bdir=get_wq_basedir(**keys)
+    d=os.path.join(bdir,
+                   'byfield', 
                    str(keys['run']))
+    return d
+
+def get_wq_dir_bycamcol(**keys):
+
+    bdir=get_wq_basedir(**keys)
+    d=os.path.join(bdir, 'bycamcol')
     return d
 
 def get_wq_url(**keys):
     if ('gmix_run' not in keys
             or 'run' not in keys
-            or 'camcol' not in keys
-            or 'field' not in keys):
-        raise ValueError("send gmix_run=,run=, camcol=, field=")
+            or 'camcol' not in keys):
+        raise ValueError("send gmix_run=,run=, camcol=")
 
-    d=get_wq_dir(**keys)
+    fname='%(gmix_run)s-%(run)06d-%(camcol)d' % keys
+    if 'field' in keys:
+        d=get_wq_dir_byfield(**keys)
+        fname += '-%04d' % keys['field']
+    else:
+        d=get_wq_dir_bycamcol(**keys)
 
-    fname='%(gmix_run)s-%(run)06d-%(camcol)d-%(field)04d.yaml' % keys
+    fname += '.yaml'
 
     url=os.path.join(d,fname)
     return url
+
 
 
 def get_output_dir(**keys):

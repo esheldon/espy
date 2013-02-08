@@ -30,6 +30,24 @@ AM_OBJ_FAILED=2**4
 AM_FAINT=2**5  # am s/n < min_s2n
 IMAGE_TOO_SMALL=2**6
 
+def process_camcol(**keys):
+    flist=files.read_field_cache(gmix_run=keys['gmix_run'])
+    w,=numpy.where(  (flist['run']==keys['run'])
+                   & (flist['camcol']==keys['camcol']) )
+    mess='Processing %s fields in run %s camcol %s'
+    print mess % (w.size, keys['run'], keys['camcol'])
+    if w.size==0:
+        return
+
+    fields=flist['field'][w]
+
+
+    for field in fields:
+        gf=GMixField(keys['gmix_run'],
+                     keys['run'],
+                     keys['camcol'],
+                     field)
+        gf.go()
 
 class GMixField(dict):
     def __init__(self, gmix_run, run, camcol, field):
@@ -570,11 +588,12 @@ class GMixField(dict):
         st['psf_pars'][i,:] = pres['pars']
         st['psf_perr'][i,:] = pres['perr']
         st['psf_pcov'][i,:,:] = pres['pcov']
+        st['psf_sigmean'][i] = numpy.sqrt(pres['Tmean']/2.)
 
-        for n in ['flags', 'numiter','loglike','chi2per',
-                  'dof','fit_prob','aic','bic']:
+        for n in pres:
             nn='psf_%s' % n
-            st[nn][i] = pres[n]
+            if nn in st.dtype.names:
+                st[nn][i] = pres[n]
 
     def _copy_obj_result(self, st, i, res):
         """
@@ -599,12 +618,13 @@ class GMixField(dict):
             if flags == 0:
                 front='%s' % model
 
-                #st[front+'_pars'][i,:] = r['pars']
-                #st[front+'_perr'][i,:] = r['perr']
-                #st[front+'_pcov'][i,:,:] = r['pcov']
+                st[front+'_sigmean'][i] = numpy.sqrt(r['Tmean']/2.)
+
+                s2=st['psf_Tmean'][i]/r['Tmean']
+
+                st[front+'_s2'][i]      = s2
+                st[front+'_sratio'][i]  = numpy.sqrt(1./s2)
                 for n in r:
-                    #if n in ['pars','perr','pcov']:
-                    #    continue
 
                     if n=='s2n_w':
                         nn='s2n'
@@ -724,6 +744,8 @@ class GMixField(dict):
         for n in st.dtype.names:
             if 'flag' in n:
                 st[n] = NO_MEASUREMENT
+            elif 'err' in n or 'cov' in n:
+                st[n] = 9999
             else:
                 st[n] = -9999
             
@@ -767,6 +789,8 @@ def get_dtype(fitter_type, npars, npars_psf, noflags=False, models=['']):
         ('psf_fit_prob','f8'),
         ('psf_aic','f8'),
         ('psf_bic','f8'),
+        ('psf_Tmean','f8'),
+        ('psf_sigmean','f8'),
         
         ('am_s2n','f8') ]
 
@@ -792,8 +816,11 @@ def get_dtype(fitter_type, npars, npars_psf, noflags=False, models=['']):
                (front+'aic','f8'),
                (front+'bic','f8'),
                (front+'Tmean','f8'),
+               (front+'sigmean','f8'),
                (front+'Terr','f8'),
-               (front+'Ts2n','f8')
+               (front+'Ts2n','f8'),
+               (front+'s2','f8'),
+               (front+'sratio','f8')
               ]
 
         if fitter_type=='lm':
