@@ -178,9 +178,23 @@ def read_sweep(**keys):
         print 'reading:',url
 
     with fitsio.FITS(url) as fobj:
-        data=fobj[1].read()
+        if len(fobj)==1:
+            data=numpy.array([])
+        else:
+            data=fobj[1].read()
 
     return data
+
+def get_columns_dir(**keys):
+    if 'gmix_run' not in keys:
+        raise ValueError("send gmix_run=,run=")
+
+    bdir=get_basedir()
+
+    cdir='%s.cols' % keys['gmix_run']
+    d=os.path.join(bdir, cdir)
+    return d
+
 
 def get_field_cache_url(**keys):
     if ('gmix_run' not in keys):

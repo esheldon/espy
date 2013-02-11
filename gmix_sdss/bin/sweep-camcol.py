@@ -17,8 +17,8 @@ def main():
     run=int(args[1])
     camcol=int(args[2])
 
-    gmix_sdss.select.sweep_camcol(gmix_run=gmix_run,
-                                  run=run,
-                                  camcol=camcol)
+    gmix_sdss.sweep.sweep_camcol(gmix_run=gmix_run,
+                                 run=run,
+                                 camcol=camcol)
 
 main()

@@ -28,3 +28,4 @@ minscore: 0.1
 
 skipids: [14620301302090836]
 
+verbose: false

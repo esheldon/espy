@@ -1,3 +1,4 @@
+from sys import stderr
 import os
 import numpy
 import columns
@@ -16,26 +17,35 @@ class ColumnsMaker(dict):
 
     def make_columns(self):
         cols=self._open_for_writing()
+        flist=files.read_field_cache(gmix_run=self['gmix_run'])
 
-        flist=self.flist
         runs=numpy.unique(flist['run'])
+        nrun=len(runs)
 
-        for run in runs:
+        for i,run in enumerate(runs):
+            print >>stderr,'%d/%d  run: %s' % (i+1,nrun,run),
             w,=numpy.where(flist['run']==run)
             camcols=numpy.unique(flist['camcol'][w])
 
             for camcol in camcols:
+                print >>stderr,camcol,
                 
                 data=files.read_sweep(gmix_run=self['gmix_run'],
                                       run=run,
                                       camcol=camcol)
-                cols.write_columns(data) 
+                if data.size > 0: # empty files
+                    cols.write_columns(data) 
+            print >>stderr,""
 
     def _open_for_writing(self):
+        print >>stderr,'opening columns for writing:',self._cdir
         if os.path.exists(self._cdir):
-            raise ValueError("columns dir already exists: %s" % dir)
+            raise ValueError("columns dir already exists: %s" % self._cdir)
 
-        return columns.Columns(self._cdir)
+        cols=columns.Columns(self._cdir)
+        cols.create()
+
+        return cols
 
     def _open_for_reading(self):
         return columns.Columns(self._cdir)

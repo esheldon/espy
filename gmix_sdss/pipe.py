@@ -39,8 +39,15 @@ def process_camcol(**keys):
         return
 
     fields=flist['field'][w]
-    nfield=len(fields)
 
+    if 'start_field' in keys:
+        start_field=int(keys['start_field'])
+        w,=numpy.where(fields >= start_field)
+        if w.size==0:
+            raise ValueError("bad start field: %d" % start_field)
+        fields=fields[w]
+
+    nfield=len(fields)
     for i,field in enumerate(fields):
         print 'processing field %s/%s' % ((i+1),nfield)
         gf=GMixField(keys['gmix_run'],
@@ -76,20 +83,15 @@ class GMixField(dict):
 
             self._set_start_time()
             for i in xrange(self.objs.size):
-            #for i in [228]:
                 if st['photoid'][i] in self['skipids']:
                     print 'skipping:',st['photoid'][i]
                     continue
-                print '%s/%s' % ((i+1), nobj)
+                if self['verbose'] or i==0 or ((i+1) % 10)==0:
+                    print '%s/%s' % ((i+1), nobj)
 
                 obj=self.objs[i]
 
-                # setting this means the image gets the same random numbers
-                # added each time we run the code; but note the emcee sampler
-                # uses its own internal random number generator
-
                 self._set_object_seed(obj)
-
                 res=self._process_object(obj)
 
                 self._copy_to_output(st, i, res)
@@ -279,13 +281,13 @@ class GMixField(dict):
             return {'flags':AM_OBJ_FAILED}
 
         if ares['s2n'] < self['min_s2n']:
-            mess='s/n %s is less than minimum %s' %(ares['s2n'],self['min_s2n'])
-            print mess
+            if self['verbose']:
+                mess='s/n %s is less than minimum %s' %(ares['s2n'],self['min_s2n'])
+                print mess
             return {'flags':AM_FAINT,'ares':ares}
 
         flags=0
         mag=obj['rmag']
-        print 'mag:',mag
 
         results={'flags':0,'ares':ares}
 
@@ -306,8 +308,9 @@ class GMixField(dict):
 
             if fitter is not None:
                 res=fitter.get_result()
-                print '  model: %s prob: %.6f aic: %.6f bic: %.6f s/n: %.6f Ts/n: %.6f ' % \
-                        (model,res['fit_prob'],res['aic'],res['bic'],res['s2n_w'],res['Ts2n'])
+                if self['verbose']:
+                    print '  model: %s prob: %.6f aic: %.6f bic: %.6f s/n: %.6f Ts/n: %.6f ' % \
+                            (model,res['fit_prob'],res['aic'],res['bic'],res['s2n_w'],res['Ts2n'])
 
         return results
 
@@ -422,7 +425,7 @@ class GMixField(dict):
                                 field=field,
                                 id=id)
         except NoAtlasImageError:
-            print "object has not atlas image"
+            print "object has no atlas image"
             atlas=None
         return atlas
 

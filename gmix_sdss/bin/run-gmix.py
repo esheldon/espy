@@ -7,6 +7,8 @@ import gmix_sdss
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
+parser.add_option('--start-field',default=None,
+                  help="start full column processing at this field")
 
 def main():
     options, args = parser.parse_args(sys.argv[1:])
@@ -24,6 +26,7 @@ def main():
     else:
         gmix_sdss.pipe.process_camcol(gmix_run=gmix_run,
                                       run=run,
-                                      camcol=camcol)
+                                      camcol=camcol,
+                                      start_field=options.start_field)
 
 main()
