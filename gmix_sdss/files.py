@@ -48,10 +48,14 @@ def get_wq_dir_byfield(**keys):
     return d
 
 def get_wq_dir_bycamcol(**keys):
-
     bdir=get_wq_basedir(**keys)
     d=os.path.join(bdir, 'bycamcol')
     return d
+def get_wq_dir_sweep(**keys):
+    bdir=get_wq_basedir(**keys)
+    d=os.path.join(bdir, 'sweep')
+    return d
+
 
 def get_wq_url(**keys):
     if ('gmix_run' not in keys
@@ -59,8 +63,11 @@ def get_wq_url(**keys):
             or 'camcol' not in keys):
         raise ValueError("send gmix_run=,run=, camcol=")
 
-    fname='%(gmix_run)s-%(run)06d-%(camcol)d' % keys
-    if 'field' in keys:
+    #fname='%(gmix_run)s-%(run)06d-%(camcol)d' % keys
+    if 'sweep' in keys:
+        d=get_wq_dir_sweep(**keys)
+        fname='%(gmix_run)s-sweep-%(run)06d-%(camcol)d' % keys
+    elif 'field' in keys:
         d=get_wq_dir_byfield(**keys)
         fname += '-%04d' % keys['field']
     else:

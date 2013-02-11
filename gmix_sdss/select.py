@@ -32,7 +32,10 @@ class SweepMaker(dict):
             out=self._get_output(d)
             data_list.append(out)
 
-        data=eu.numpy_util.combine_arrlist(data_list)
+        if len(data_list) == 0:
+            data=None
+        else:
+            data=eu.numpy_util.combine_arrlist(data_list)
 
         print 'writing:',self._url
         eu.io.write(self._url,data,clobber=True)

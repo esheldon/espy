@@ -7,7 +7,6 @@ TODO
 
     Collation
 """
-from sys import stderr
 
 import numpy
 import sdsspy
@@ -40,9 +39,10 @@ def process_camcol(**keys):
         return
 
     fields=flist['field'][w]
+    nfield=len(fields)
 
-
-    for field in fields:
+    for i,field in enumerate(fields):
+        print 'processing field %s/%s' % ((i+1),nfield)
         gf=GMixField(keys['gmix_run'],
                      keys['run'],
                      keys['camcol'],
@@ -76,7 +76,11 @@ class GMixField(dict):
 
             self._set_start_time()
             for i in xrange(self.objs.size):
-                stderr.write('%s/%s\n' % ((i+1), nobj))
+            #for i in [228]:
+                if st['photoid'][i] in self['skipids']:
+                    print 'skipping:',st['photoid'][i]
+                    continue
+                print '%s/%s' % ((i+1), nobj)
 
                 obj=self.objs[i]
 
@@ -91,6 +95,7 @@ class GMixField(dict):
                 self._copy_to_output(st, i, res)
             self._print_time_stats()
         else:
+            # will be must a zeroth header, empty
             st=None
 
         files.write_output(data=st,**self)
@@ -188,12 +193,12 @@ class GMixField(dict):
 
         ares=self._run_admom(im, row, col, sigma_guess, 1.0)
         if ares is None:
-            print >>stderr,'failed to get psf admom'
+            print 'failed to get psf admom'
             return {'flags':AM_PSF_FAILED}
 
         res = self._fit_psf_model(im, ares, self['psf_model'], skysig)
         if res is None:
-            print >>stderr,'failed to fit psf model'
+            print 'failed to fit psf model'
             return {'flags':PSF_FAILED}
 
         return {'flags':0, 'fitter':res}
@@ -255,8 +260,8 @@ class GMixField(dict):
                                        row_notrim, col_notrim)
         
         if im.size <= self['npars']:
-            print >>stderr,"image too small. shape is [%s,%s]" % tuple(im.shape)
-            print >>stderr,"size must be > npars=%d" % self['npars']
+            print "image too small. shape is [%s,%s]" % tuple(im.shape)
+            print "size must be > npars=%d" % self['npars']
             return {'flags':IMAGE_TOO_SMALL}
 
         sigma_guess=self._get_sigma_guess(psf_gmix,obj['m_rr_cc'][fnum])
@@ -270,12 +275,12 @@ class GMixField(dict):
 
         ares=self._run_admom(im, row, col, sigma_guess, skysig)
         if ares is None:
-            print >>stderr,'failed to run object admom'
+            print 'failed to run object admom'
             return {'flags':AM_OBJ_FAILED}
 
         if ares['s2n'] < self['min_s2n']:
             mess='s/n %s is less than minimum %s' %(ares['s2n'],self['min_s2n'])
-            print >>stderr,mess
+            print mess
             return {'flags':AM_FAINT,'ares':ares}
 
         flags=0
@@ -417,11 +422,8 @@ class GMixField(dict):
                                 field=field,
                                 id=id)
         except NoAtlasImageError:
-            print >>stderr,"object has not atlas image"
+            print "object has not atlas image"
             atlas=None
-        #for i in xrange(5):
-        #    im=atlas['images'][i].astype('f8')-atlas['SOFT_BIAS']
-        #    atlas['images'][i] = im
         return atlas
 
     def _select(self, objs):
@@ -469,13 +471,13 @@ class GMixField(dict):
                           lower=True,
                           verbose=True)
         if objs0 is None:
-            print >>stderr,"no data read"
+            print "no data read"
             return
 
         w,mags=self._select(objs0)
 
         if w.size == 0:
-            print >>stderr,"no objects passed cuts"
+            print "no objects passed cuts"
             return
 
         objs0=objs0[w]
@@ -672,97 +674,6 @@ class GMixField(dict):
         return st
 
 
-    def _get_struct_old(self):
-
-        nobj=self.objs.size
-
-        npars_psf=self._get_psf_npars()
-        npars=6
-        self.npars=npars
-
-        dt=[('photoid','i8'),
-            ('run','i2'),
-            ('rerun','i2'),
-            ('camcol','i2'),
-            ('field','i2'),
-            ('id','i2'),
-            ('filter','S1'),
-            ('fnum','i1'),
-            ('cmodelmag_dered_r','f4'),
-
-            ('fitter','S4'),
-            ('flags','i4'), # overall flag indicators
-           
-            ('psf_pars','f8',npars_psf),
-            ('psf_perr','f8',npars_psf),
-            ('psf_pcov','f8',(npars_psf,npars_psf)),
-            ('psf_flags','i4'),
-            ('psf_numiter','i4'),
-            ('psf_loglike','f8'),
-            ('psf_chi2per','f8'),
-            ('psf_dof','i4'),
-            ('psf_fit_prob','f8'),
-            ('psf_aic','f8'),
-            ('psf_bic','f8'),
-            
-            ('am_s2n','f8')
-
-           ]
-
-        fitter_type=self['obj_fitter']
-        for model in self['obj_models']:
-
-            front='%s_' % model
-
-            dt += [(front+'flags','i4'),
-                   (front+'g','f8',2),
-                   (front+'gcov','f8',(2,2)),
-                   (front+'pars','f8',npars),
-                   (front+'perr','f8',npars),
-                   (front+'pcov','f8',(npars,npars)),
-                   (front+'s2n','f8'),
-                   (front+'loglike','f8'),
-                   (front+'chi2per','f8'),
-                   (front+'dof','i4'),
-                   (front+'fit_prob','f8'),
-                   (front+'aic','f8'),
-                   (front+'bic','f8'),
-                   (front+'Tmean','f8'),
-                   (front+'Terr','f8'),
-                   (front+'Ts2n','f8')
-                  ]
-
-            if fitter_type=='lm':
-                dt += [(front+'numiter','i4')]
-
-            if fitter_type=='mcmc':
-                dt += [(front+'gsens','f8',2),
-                       (front+'arate','f8')]
-
-        st=numpy.zeros(nobj, dtype=dt)
-
-        for n in st.dtype.names:
-            if 'flag' in n:
-                st[n] = NO_MEASUREMENT
-            elif 'err' in n or 'cov' in n:
-                st[n] = 9999
-            else:
-                st[n] = -9999
-            
-        st['photoid']=sdsspy.get_photoid(self.objs)
-        st['run'] = self.objs['run']
-        st['rerun'] = self.objs['rerun']
-        st['camcol'] = self.objs['camcol']
-        st['field'] = self.objs['field']
-        st['id'] = self.objs['id']
-
-        st['filter'] = self['filter']
-        st['fnum'] = self['fnum']
-        st['cmodelmag_dered_r'] = self.objs['rmag']
-
-        st['fitter'] = self['obj_fitter']
-
-        return st
 
 def get_dtype(fitter_type, npars, npars_psf, noflags=False, models=['']):
     dt=[('photoid','i8'),

@@ -1,21 +1,21 @@
-run: "gmix-r01"
+run: "gmix-r02"
 
 filter: "r"
 
 psf_model: 'gmix3'
 
-obj_fitter: 'lm'
+obj_fitter: 'mcmc'
 obj_models: ['gexp','gdev']
 
 admom_ntry: 4
 psf_lm_ntry: 4
-obj_lm_ntry: 4
+#obj_lm_ntry: 4
 
-#nwalkers: 20
-#burnin: 200
-#nstep: 200
-#mca_a: 3
-#iter: true
+nwalkers: 20
+burnin: 200
+nstep: 200
+mca_a: 3
+iter: true
 
 max_cmodelmag_r: 22.0
 # minimum adaptive moment s/n
