@@ -1,7 +1,16 @@
 import colorsys
 
-def rainbow(num, type):
+def rainbow(num, type='hex'):
+    """
+    make rainbow colors
 
+    parameters
+    ----------
+    num: integer
+        number of colors
+    type: string, optional
+        'hex' or 'rgb', default hex
+    """
     # not going to 360
     minh = 0.0
     # 270 would go to pure blue

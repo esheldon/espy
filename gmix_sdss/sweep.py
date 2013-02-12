@@ -87,7 +87,7 @@ class SweepMaker(dict):
 
         logic = (objs['flags']==0)
 
-        # we only keep if all models fit succeed
+        # we only keep if all model fits succeed
         for model in self.conf['obj_models']:
             front='%s_' % model
             n=front+'flags'
