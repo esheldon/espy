@@ -44,7 +44,7 @@ class Selector:
     mcs.select()
     mcs.write_columns()
     """
-    def __init__(self, name, version, rmax=22.0):
+    def __init__(self, name, version, type='primgal', rmax=22.0):
         """
         E.g.  Selector('rm','dr8-v2')
         """
@@ -53,7 +53,7 @@ class Selector:
         self.name=name
         self.rmax=rmax
 
-        self.cols = es_sdsspy.sweeps_collate.open_columns('primgal')
+        self.cols = es_sdsspy.sweeps_collate.open_columns(type)
 
         self.logic = None
         self.mag_and_mask_logic = None

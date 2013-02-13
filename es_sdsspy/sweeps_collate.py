@@ -60,15 +60,6 @@ def match_columns(photoid, tags, type='primgal'):
     return struct
 
 class Collator:
-    """
-
-    Collate the regauss outputs into columns.
-
-    Note we put both types ('gal','star') into the same run.  This means if you
-    make indices you'll have to re-make them when the other type is added.
-
-    """
-    
     def __init__(self, type='gal'):
         #if type not in ['gal','primgal']:
         #    raise ValueError("add support for 'star' type")
@@ -204,9 +195,6 @@ class Collator:
         return w
 
     def add_cmodelflux(self):
-        """
-        I forgot to add errors...
-        """
         c = self.open_columns()
         for filt in ['u','g','r','i','z']:
             print("filter:",filt)
@@ -220,6 +208,23 @@ class Collator:
                                                               expflux, expflux_ivar)
             c.write_column('cmodelflux_'+filt, flux, create=True)
             c.write_column('cmodelflux_ivar_'+filt, ivar, create=True)
+
+    def add_inbadfield(self):
+        import es_sdsspy
+        c = self.open_columns()
+
+        m=es_sdsspy.mangle_masks.load('boss','badfield')
+
+        print("reading ra")
+        ra=c['ra'][:]
+        print("reading dec")
+        dec=c['dec'][:]
+ 
+        print("checking mask")
+        cont = m.contains(ra,dec).astype('i1')
+
+        c.write_column('inbadfield', cont)
+
 
 
     def add_dered_err_to_columns(self):
