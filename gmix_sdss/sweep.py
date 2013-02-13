@@ -85,13 +85,29 @@ class SweepMaker(dict):
 
     def _select(self, objs):
 
-        logic = (objs['flags']==0)
+        if self['gmix_run']=='gmix-r02':
+            return self._select_r02(objs)
+        else:
+            logic = (objs['flags']==0)
 
         # we only keep if all model fits succeed
         for model in self.conf['obj_models']:
             front='%s_' % model
             n=front+'flags'
             logic = logic & (objs[n] == 0)
+
+        keep,=numpy.where(logic)
+        return keep
+
+    def _select_r02(self, objs):
+        logic = (objs['flags']==0)
+
+        for model in self.conf['obj_models']:
+            front='%s_' % model
+            n=front+'s2n'
+            # messed up flags for run gmix-r02, just take something
+            # indicative
+            logic = logic & (objs[n] > 0)
 
         keep,=numpy.where(logic)
         return keep

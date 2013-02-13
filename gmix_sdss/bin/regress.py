@@ -16,6 +16,10 @@ parser.add_option('-r','--run',default=None,
                   help="Do runwise regressions")
 parser.add_option('-c','--camcol',default=None,
                   help="Do run/camcol regressions")
+parser.add_option('--s2n',default=None,
+                  help="Field for s/n")
+parser.add_option('--type',default=None,
+                  help="obj type")
 
 
 def main():
@@ -40,11 +44,15 @@ def main():
             reg=gmix_sdss.regress.RunS2NRegressor(gmix_run=gmix_run,
                                                   run=run,
                                                   camcol=camcol,
-                                                  nperbin=nperbin)
+                                                  nperbin=nperbin,
+                                                  s2n_field=options.s2n,
+                                                  objtype=options.type)
         else:
             reg=gmix_sdss.regress.S2NRegressor(gmix_run=gmix_run,
                                                camcol=camcol,
-                                               nperbin=nperbin)
+                                               nperbin=nperbin,
+                                               s2n_field=options.s2n,
+                                               objtype=options.type)
 
         reg.doplot()
 main()
