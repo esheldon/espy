@@ -52,42 +52,4 @@ class StarMask:
             #print 'setting radii'
             self.radii = rad2deg(arccos(1.-self.data['cmcaps']))
 
-def compare_speed(n=100000):
-    from . import sweeps_collate
-    c=sweeps_collate.open_columns('primgal')
 
-    ingood=c['ingood_8192'][:]
-
-    w,=where(ingood==1)
-
-    ra=c['ra'][w[0:n]]
-    dec=c['dec'][w[0:n]]
-
-    m=StarMask()
-    m.load_data()
-    for depth in [5,6,7,8,9,10]:
-        m.depth=depth
-        print 'depth:',depth,' ',
-        cont=m.contains(ra,dec)
-
-def compare_stomp(maxres=8192,n=100000):
-    from . import sweeps_collate
-
-    c=sweeps_collate.open_columns('primgal')
-
-    ingood=c['ingood_%s' % maxres][:]
-
-    w,=where(ingood==1)
-
-    ra=c['ra'][w[0:n]]
-    dec=c['dec'][w[0:n]]
-    intycho_stomp=c['intycho_%s' % maxres][w[0:n]]
-
-    m=StarMask()
-    cont=m.contains(ra,dec)
-
-    stomp_good,=where(intycho_stomp==1)
-    this_good,=where(cont==1)
-
-    print 'stomp:',stomp_good.size
-    print 'this: ',this_good.size

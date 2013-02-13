@@ -223,7 +223,25 @@ class Collator:
         print("checking mask")
         cont = m.contains(ra,dec).astype('i1')
 
-        c.write_column('inbadfield', cont)
+        c.write_column('inbadfield', cont, create=True)
+
+    def add_masks(self):
+        import es_sdsspy
+        masks=['star','basic','good','badfield']
+        c = self.open_columns()
+        print("reading ra")
+        ra=c['ra'][:]
+        print("reading dec")
+        dec=c['dec'][:]
+ 
+        for mask in masks:
+            print("checking mask:",mask)
+            m=es_sdsspy.mangle_masks.load('boss',mask)
+            cont = m.contains(ra,dec).astype('i1')
+
+            colname="in%s" % mask
+            print("writing column:",colname)
+            c.write_column(colname, cont, create=True)
 
 
 

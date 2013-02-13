@@ -2,7 +2,7 @@
 
 Make a star catalog for clustering studies.
 
-Trim the catalog to "intycho==1"
+Trim the catalog to "intycho==1" and psfmag i (17.5,20.5)
 
 I'm re-using flags for galaxies, which is not necessarily appropriate, but
 since this doesn't need to be complete it shouldn't matter
@@ -52,9 +52,9 @@ def make_output(cols, w):
     dt=[('ra','f8'),
         ('dec','f8'),
         ('psfmag_i','f4'),
-        ('ingood','i1'),
-        ('intycho','i1'),
-        ('inbadfield','i1')]
+        ('ingood','i2'),
+        ('instar','i2'),
+        ('inbadfield','i2')]
 
     output=numpy.zeros(w.size, dtype=dt)
 
