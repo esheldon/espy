@@ -18,7 +18,7 @@ def main():
 
     simname=args[0]
     
-    shapesim.fullsim.pointings.make_pointings(simname)
+    shapesim.dessim.pointings.make_pointings(simname)
     
 
 main()

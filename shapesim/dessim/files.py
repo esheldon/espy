@@ -4,7 +4,7 @@ import esutil as eu
 def get_config_dir():
     return os.path.join(os.environ['ESPY_DIR'],
                         'shapesim',
-                        'fullsim',
+                        'dessim',
                         'config')
 
 def get_config_url(simname):
@@ -19,6 +19,16 @@ def read_config(simname):
 def get_original_dir(vers):
     d='/astro/u/esheldon/lensing/catalogs/%s_truth'
     return d % vers
+
+def get_columns_dir(vers):
+    d='/astro/u/esheldon/lensing/catalogs/%s_truth.cols'
+    return d % vers
+def open_columns(vers):
+    import columns
+    cdir=get_columns_dir(vers)
+    return columns.Columns(cdir)
+
+
 
 def get_original_url(vers, fnum):
     d=get_original_dir(vers)
@@ -46,7 +56,7 @@ def read_original_list(vers, fnum_list=None, **keys):
 def get_basedir():
     return os.path.join(os.environ['LENSDIR'],
                         'shapesim',
-                        'fullsim')
+                        'dessim')
 
 def get_simdir(simname):
     d=get_basedir()
@@ -59,4 +69,4 @@ def get_pointings_dir(simname):
 
 def get_pointings_url(simname):
     d=get_pointings_dir(simname)
-    return os.path.join(d, 'pointings.pickle')
+    return os.path.join(d, 'pointings.fits')

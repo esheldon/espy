@@ -1,5 +1,6 @@
 import os
 import sys
+import numpy
 from numpy import where
 import esutil as eu
 import biggles
@@ -9,6 +10,21 @@ import converter
 import cPickle
 
 from . import files
+
+def get_struct():
+    dt =   [('index','i4'),
+            ('crval1','f8'),
+            ('crval2','f8'),
+            ('crpix1','f8'),
+            ('crpix2', 'f8'),
+            ('cd1_1','f8'),
+            ('cd1_2','f8'),
+            ('cd2_2','f8'),
+            ('cd2_1','f8'),
+            ('ctype1','S8'),
+            ('ctype2','S8')]
+
+    return numpy.zeros(1, dtype=dt)
 
 def make_pointings(simname, frac=0.01):
 
@@ -36,8 +52,8 @@ def make_pointings(simname, frac=0.01):
     rra=t['ra'][ind]
     rdec=t['dec'][ind]
 
-    nrow=4096
-    ncol=4096
+    nrow=conf['nrow']
+    ncol=conf['ncol']
     rawidth=4096*pixscale_deg
     decwidth=4096*pixscale_deg
 
@@ -47,7 +63,7 @@ def make_pointings(simname, frac=0.01):
     ncolor=ncenters_ra*ncenters_dec
     colors=pcolors.rainbow(ncolor)
     
-    hdict={}
+    hlist=[]
 
     rastart=ramin + rawidth/2.
     decstart=decmin + decwidth/2.
@@ -63,15 +79,16 @@ def make_pointings(simname, frac=0.01):
             color=colors[itot % ncolor]
             itot += 1
 
+            h=get_struct()
 
-            h={'crval1': ram,
-               'crval2': decm,
-               'crpix1': ncol/2.,
-               'crpix2': nrow/2.,
-               'cd1_1': 0.,
-               'cd2_2': 0.,
-               'ctype1': 'RA---TAN',
-               'ctype2': 'DEC--TAN'}
+            h['crval1'] = ram
+            h['crval2'] = decm
+            h['crpix1'] = ncol/2.
+            h['crpix2'] = nrow/2.
+            h['cd1_1'] = 0.
+            h['cd2_2'] = 0.
+            h['ctype1'] = 'RA---TAN'
+            h['ctype2'] = 'DEC--TAN'
 
             if conf['alt_cd']:
                 h['cd1_2'] = pixscale_deg
@@ -107,8 +124,9 @@ def make_pointings(simname, frac=0.01):
 
 
                     h['index'] = pnum
+                    hlist.append(h)
+
                     pnum += 1
-                    hdict[pnum] = h
 
     plt.xlabel='RA'
     plt.ylabel='DEC'
@@ -124,8 +142,8 @@ def make_pointings(simname, frac=0.01):
     plt.write_img(1200,1200,pngfile)
 
     print purl
-    with open(purl,'w') as fobj:
-        cPickle.dump(hdict, fobj)
+    hdata=eu.numpy_util.combine_arrlist(hlist)
+    eu.io.write(purl, hdata, clobber=True)
 
     return
 

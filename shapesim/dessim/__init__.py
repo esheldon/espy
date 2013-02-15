@@ -1,3 +1,4 @@
 from . import files
 from . import pointings
-from . import image_maker
+from . import catmaker
+from . import gprior

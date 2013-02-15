@@ -1,0 +1,23 @@
+name: "small01"
+orig_vers: "aardvark_v0.5d"
+
+fields: [114, 115, 147, 86]
+
+pixscale: 0.27
+nrow: 4096
+ncol: 4096
+
+# specify null to use the cosmological shear
+shear: [0.00, 0.00]
+
+models: ['gauss']
+model_fracs: [1.0]
+
+# 'orig' means from original catalog
+model_size: ['orig']
+model_flux: ['orig']
+model_ellip: 'cluster-step-nosplit'
+model_mag: 2 # rmag
+
+alt_cd: False
+
