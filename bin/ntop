@@ -44,22 +44,27 @@ class NTop(object):
 
         self.nlines=0
 
-        l='%-10s  %8s %8s' % ('name','rec','trans')
+        l='%-10s  %12s %12s' % ('name','rec','trans')
         print l
         self.nlines+=1
 
         for interface in sorted(stats):
-            rec_rate=self.byte_diff_to_rate( stats[interface]['rec'] )
-            trans_rate=self.byte_diff_to_rate( stats[interface]['trans'] )
+            rec_rate,rec_units=self.byte_diff_to_rate( stats[interface]['rec'] )
+            trans_rate,trans_units=self.byte_diff_to_rate( stats[interface]['trans'] )
 
 
-            l='%-10s  %8.2f %8.2f Mb/s'
-            print l % (interface, rec_rate, trans_rate)
+            l='%-10s  %8.2f %s %8.2f %s'
+            print l % (interface, rec_rate, rec_units,trans_rate,trans_units)
 
             self.nlines += 1
 
     def byte_diff_to_rate(self, diff):
-        return diff/(1024.*1024.)/self.refresh_rate
+        byte_rate = diff/self.refresh_rate
+
+        if byte_rate > 0.1*(1024*1024):
+            return diff/(1024.*1024.)/self.refresh_rate, 'M/s'
+        else:
+            return diff/1024./self.refresh_rate, 'k/s'
 
     def clear(self):
         stdout.write(
