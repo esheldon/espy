@@ -3,6 +3,8 @@ orig_vers: "aardvark_v0.5d"
 
 fields: [114, 115, 147, 86]
 
+filter: 'r'
+teff: 900. # seconds
 pixscale: 0.27
 nrow: 4096
 ncol: 4096
@@ -17,7 +19,10 @@ model_fracs: [1.0]
 model_size: ['orig']
 model_flux: ['orig']
 model_ellip: 'cluster-step-nosplit'
-model_mag: 2 # rmag
+model_ellip_mag: 'r' # rmag used for binning
 
-alt_cd: False
+# leave null to use sizes in catalog
+model_size: null
+
+alt_cd: false
 

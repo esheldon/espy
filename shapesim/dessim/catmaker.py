@@ -4,6 +4,8 @@ import esutil as eu
 from . import files
 from . import gprior
 
+from .util import FILTERNUM, FILTERCHAR, MAGLIMS, TEFF
+
 class SimpleCatalogMaker(dict):
     def __init__(self, simname, pointing):
         """
@@ -14,10 +16,12 @@ class SimpleCatalogMaker(dict):
         are, for now, the same size.
         """
 
-        self['pointing_id']=pointing
-
         conf=files.read_config(simname)
         self.update(conf)
+
+        self['pointing_id']=pointing
+        self['fnum']=FILTERNUM[self['filter']]
+
         pprint.pprint(self)
 
     def go(self):
@@ -27,7 +31,8 @@ class SimpleCatalogMaker(dict):
         self._set_output()
         self._load_ellip_generator()
 
-        self._generate_ellips()
+        self._generate_ellip()
+        self._add_shear()
 
 
     
@@ -45,13 +50,38 @@ class SimpleCatalogMaker(dict):
     def _load_cols(self):
         self._cols=files.open_columns(self['orig_vers'])
 
-    def _generate_ellips(self):
+    def _generate_ellip(self):
         print 'generate intrinsic ellipticities'
-        mags=self._orig_data['tmag'][:,self['model_mag']]
+        fnum=self['fnum']
+        mags=self._orig_data['tmag'][:,fnum]
         g1, g2 = self._ellip_generator.sample2d(mags)
 
         self._data['g1'] = g1
         self._data['g2'] = g2
+
+
+    def _add_shear(self):
+        from lensing.shear import Shear
+
+        data=self._data
+        if self['shear'] is not None:
+            print 'adding constant shear:',self['shear']
+            data['gamma1'] = self['shear'][0]
+            data['gamma2'] = self['shear'][1]
+        else:
+            print 'using cosmological shear'
+
+        for i in xrange(data.size):
+            shear=Shear(g1=data['gamma1'][i],
+                        g2=data['gamma2'][i])
+            shape=Shear(g1=data['g1'][i],
+                        g2=data['g2'][i])
+
+            sheared_shape = shape + shear
+
+            data['g1'][i] = sheared_shape.g1
+            data['g2'][i] = sheared_shape.g2
+
 
     def _load_ellip_generator(self):
         print 'getting ellipticity generator'
@@ -113,15 +143,20 @@ class SimpleCatalogMaker(dict):
         return wp
 
     def _set_output(self):
-        self._data = self._get_struct(self._orig_data.size)
+        data = self._get_struct(self._orig_data.size)
+
+        for n in data.dtype.names:
+            if n in self._orig_data.dtype.names:
+                data[n] = self._orig_data[n]
+        self._data=data
 
     def _get_struct(self, n):
         dt=[('ra','f8'),
             ('dec','f8'),
             ('row','f8'),
             ('col','f8'),
-            ('tmag','f8'),
-            ('flux','f8'),
+            ('tmag','f8',5),
+            ('flux','f8',5),
             ('g1','f8'),
             ('g2','f8'),
             ('gamma1','f8'),
