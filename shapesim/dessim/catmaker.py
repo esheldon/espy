@@ -3,17 +3,17 @@ import numpy
 import esutil as eu
 from . import files
 from . import gprior
+from . import noise
 
-from .util import FILTERNUM, FILTERCHAR, MAGLIMS, TEFF
+from .util import FILTERNUM, FILTERCHAR
 
 class SimpleCatalogMaker(dict):
     def __init__(self, simname, pointing):
         """
         Create a catalog for the input sim and pointing number
 
-        This is "simple" becuase a constant shear is used, and shapes are drawn
-        from a simple shape distribution with random orientations.  All galaxies
-        are, for now, the same size.
+        For now just set the ellipticities.  Will want to scale the
+        fluxes later when we add noise.
         """
 
         conf=files.read_config(simname)
@@ -29,11 +29,31 @@ class SimpleCatalogMaker(dict):
         self._load_cols()
         self._load_orig_data()
         self._set_output()
-        self._load_ellip_generator()
+        self._set_tmag_tflux()
+        self._set_row_col()
+        self._generate_models()
 
+        self._load_ellip_generator()
         self._generate_ellip()
+
+        self._load_size_generator()
+        self._generate_sizes()
+
         self._add_shear()
 
+        self._write()
+
+    def _write(self):
+        url=files.get_catalog_url(self['name'], self['pointing_id'])
+        self._makedir(url)
+        print url
+        eu.io.write(url, self._data, clobber=True)
+
+    def _makedir(self, url):
+        try:
+            eu.ostools.makedirs_fromfile(url)
+        except:
+            pass
 
     
     def _load_pointing(self):
@@ -50,6 +70,18 @@ class SimpleCatalogMaker(dict):
     def _load_cols(self):
         self._cols=files.open_columns(self['orig_vers'])
 
+    def _generate_models(self):
+        if len( self['models'] ) > 1:
+            raise ValueError("implement multiple models")
+        self._data['model'] = self['models'][0]
+
+    def _load_ellip_generator(self):
+        print 'getting ellipticity generator'
+        if self['model_ellip_type'] == 'cluster-step-nosplit':
+            self._ellip_generator = gprior.GPriorVsMagNoSplit()
+        else:
+            raise ValueError("Bad model ellip type: '%s'" % self['model_ellip_type'])
+
     def _generate_ellip(self):
         print 'generate intrinsic ellipticities'
         fnum=self['fnum']
@@ -59,17 +91,59 @@ class SimpleCatalogMaker(dict):
         self._data['g1'] = g1
         self._data['g2'] = g2
 
+    def _set_tmag_tflux(self):
+        tmag=self._orig_data['tmag'][:,self['fnum']]
+        if self['nexp'] > 1:
+            raise ValueError("make sure gain stuff is right")
+        tflux=noise.get_flux(tmag, self['exptime']*self['nexp'])
+
+        self._data['tmag'] = tmag
+        self._data['tflux'] = tflux
+
+    def _set_row_col(self):
+        self._data['row'] = self._row
+        self._data['col'] = self._col
+
+    def _load_size_generator(self):
+        print 'getting size generator'
+        if self['model_size_type'] == 'cluster-step':
+            raise ValueError("implement cluster step size")
+        elif self['model_size_type'] == 'catalog':
+            self._size_generator=None
+        elif self['model_size_type'] == 'fixed':
+            self._size_generator=None
+        else:
+            raise ValueError("Bad model ellip type: '%s'" % self['model_size_type'])
+
+    def _generate_sizes(self):
+        if self['model_size_type']=='fixed':
+            self._data['sigma'] = self['model_sigma'] 
+        elif self['model_size_type'] == 'catalog':
+            flux_radius=self._orig_data['tsize']
+            self._data['sigma'] = self._flux_radius_to_sigma(flux_radius)
+        else:
+            raise ValueError("implement other size generators")
+
+    def _flux_radius_to_sigma(self, flux_radius):
+        """
+        2*flux_radius=FWHM for gaussians
+        """
+        return flux_radius*2/2.3548
 
     def _add_shear(self):
         from lensing.shear import Shear
 
         data=self._data
-        if self['shear'] is not None:
+        if self['shear_type'] == "constant":
+            # over-writing existing cosmolical shear
             print 'adding constant shear:',self['shear']
             data['gamma1'] = self['shear'][0]
             data['gamma2'] = self['shear'][1]
-        else:
+        elif self['shear_type'] == "catalog":
+            # these are already in the gamma1,gamma2 fields
             print 'using cosmological shear'
+        else:
+            raise ValueError("bad shear type: '%s'" % self['shear_type'])
 
         for i in xrange(data.size):
             shear=Shear(g1=data['gamma1'][i],
@@ -83,22 +157,17 @@ class SimpleCatalogMaker(dict):
             data['g2'][i] = sheared_shape.g2
 
 
-    def _load_ellip_generator(self):
-        print 'getting ellipticity generator'
-        if self['model_ellip'] == 'cluster-step-nosplit':
-            self._ellip_generator = gprior.GPriorVsMagNoSplit()
-        else:
-            raise ValueError("Bad model ellip type: '%s'" % self['model_ellip'])
 
     def _load_orig_data(self):
         wp=self._get_objects()
 
         colnames=self._get_colnames()
-        self._orig_data=self._cols.read_columns(colnames, rows=wp,
-                                           verbose=True)
+        self._orig_data=self._cols.read_columns(colnames, 
+                                                rows=wp,
+                                                verbose=True)
 
     def _get_colnames(self):
-        return ['ra','dec','flux','tmag','tsize','gamma1','gamma2']
+        return ['ra','dec','tmag','tsize','gamma1','gamma2']
 
     def _get_objects(self):
 
@@ -126,6 +195,7 @@ class SimpleCatalogMaker(dict):
         dec=cols['dec'][wbox]
         col,row=self._wcs.sky2image(ra, dec, find=False)
 
+           
         print '    trimming'
         wp,=numpy.where(  (col > 0) 
                         & (col <= self['ncol'])
@@ -134,6 +204,7 @@ class SimpleCatalogMaker(dict):
         if wp.size == 0:
             raise ValueError("no objects found in pointing")
 
+ 
         self._row=row[wp]
         self._col=col[wp]
 
@@ -147,7 +218,8 @@ class SimpleCatalogMaker(dict):
 
         for n in data.dtype.names:
             if n in self._orig_data.dtype.names:
-                data[n] = self._orig_data[n]
+                if n not in ['tmag','tflux','row','col']:
+                    data[n] = self._orig_data[n]
         self._data=data
 
     def _get_struct(self, n):
@@ -155,11 +227,17 @@ class SimpleCatalogMaker(dict):
             ('dec','f8'),
             ('row','f8'),
             ('col','f8'),
-            ('tmag','f8',5),
-            ('flux','f8',5),
+            ('tmag','f8'),
+            ('tflux','f8'),
+            ('model','S10'),
             ('g1','f8'),
             ('g2','f8'),
             ('gamma1','f8'),
             ('gamma2','f8')]
+
+        if 'full' in self['models']:
+            raise ValueError("implement full gaussian mixture models")
+        else:
+            dt += [('sigma','f8')]
 
         return numpy.zeros(n, dtype=dt)

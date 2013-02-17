@@ -70,3 +70,18 @@ def get_pointings_dir(simname):
 def get_pointings_url(simname):
     d=get_pointings_dir(simname)
     return os.path.join(d, 'pointings.fits')
+
+def get_data_dir(simname):
+    d=get_simdir(simname)
+
+    return os.path.join(d, 'data')
+
+def get_catalog_url(simname, pointing):
+    d=get_data_dir(simname)
+    fname='%s-%06d-cat.fits' % (simname, pointing)
+    return os.path.join(d, fname)
+
+def get_image_url(simname, pointing):
+    d=get_data_dir(simname)
+    fname='%s-%06d.fits' % (simname, pointing)
+    return os.path.join(d, fname)
