@@ -24,6 +24,7 @@ class ImageMaker(dict):
         self['pointing_id']=pointing
         self['fnum']=FILTERNUM[self['filter']]
 
+        self._load_pointing()
         self._load_catalog()
 
     def go(self):
@@ -32,7 +33,7 @@ class ImageMaker(dict):
 
         nobj=self._data.size
         for i in xrange(nobj):
-            if ((i % 100)==0) or (i==0):
+            if ((i % 1000)==0) or (i==0):
                 print '%d/%d' % (i+1,nobj)
             #print '%d/%d' % (i+1,nobj)
 
@@ -67,10 +68,12 @@ class ImageMaker(dict):
         self._image=image
 
     def _write(self):
+
         url=files.get_image_url(self['name'], self['pointing_id'])
         self._makedir(url)
         print url
-        eu.io.write(url, self._image, clobber=True)
+        eu.io.write(url, self._image, clobber=True, 
+                    header=self._header)
 
     def _makedir(self, url):
         try:
@@ -120,3 +123,22 @@ class ImageMaker(dict):
         for i in xrange(self._data.size):
             self._data['model'][i] = self._data['model'][i].strip()
 
+    def _load_pointing(self):
+        pointings=files.read_pointings(self['name'])
+
+        w,=numpy.where(pointings['index']==self['pointing_id'])
+        if w.size==0:
+            raise ValueError("bad pointing: %d" % self['pointing_id'])
+
+        self._pointing=pointings[w[0]]
+        h={}
+        for n in self._pointing.dtype.names:
+            val=self._pointing[n]
+            if n == 'index':
+                h['pointing'] = val
+            else:
+                h[n] = val
+
+        h['simname'] = self['name']
+
+        self._header=h

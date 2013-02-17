@@ -71,17 +71,39 @@ def get_pointings_url(simname):
     d=get_pointings_dir(simname)
     return os.path.join(d, 'pointings.fits')
 
+def read_pointings(simname):
+    fname=get_pointings_url(simname)
+    return eu.io.read(fname)
+
 def get_data_dir(simname):
     d=get_simdir(simname)
 
     return os.path.join(d, 'data')
 
+def get_pid_format():
+    return '%07d'
+
 def get_catalog_url(simname, pointing):
     d=get_data_dir(simname)
-    fname='%s-%06d-cat.fits' % (simname, pointing)
+    fname='%s-'+get_pid_format()+'-cat.fits'
+    fname = fname % (simname, pointing)
     return os.path.join(d, fname)
 
 def get_image_url(simname, pointing):
     d=get_data_dir(simname)
-    fname='%s-%06d.fits' % (simname, pointing)
+    fname='%s-'+get_pid_format()+'.fits'
+    fname = fname % (simname, pointing)
     return os.path.join(d, fname)
+
+def get_wq_dir(simname):
+    d=get_simdir(simname)
+    return os.path.join(d, 'wq')
+
+def get_wq_url(simname, pointing):
+    d=get_wq_dir(simname)
+    fname='%s-'+get_pid_format()+'.yaml'
+    fname = fname % (simname, pointing)
+    return os.path.join(d, fname)
+
+
+

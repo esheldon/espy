@@ -167,7 +167,7 @@ class SimpleCatalogMaker(dict):
                                                 verbose=True)
 
     def _get_colnames(self):
-        return ['ra','dec','tmag','tsize','gamma1','gamma2']
+        return ['id','ra','dec','tmag','tsize','gamma1','gamma2']
 
     def _get_objects(self):
 
@@ -223,7 +223,8 @@ class SimpleCatalogMaker(dict):
         self._data=data
 
     def _get_struct(self, n):
-        dt=[('ra','f8'),
+        dt=[('id','i4'),
+            ('ra','f8'),
             ('dec','f8'),
             ('row','f8'),
             ('col','f8'),
