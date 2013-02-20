@@ -29,6 +29,8 @@ def get_struct():
 def make_pointings(simname, frac=0.01):
 
     conf=files.read_config(simname)
+
+
     dir = files.get_pointings_dir(simname)
     purl = files.get_pointings_url(simname)
     eu.ostools.makedirs_fromfile(purl)
@@ -37,9 +39,11 @@ def make_pointings(simname, frac=0.01):
 
     pixscale_deg=conf['pixscale']/3600.
 
+    # should use database instead
     t=files.read_original_list(conf['orig_vers'], fnum_list=conf['fields'])
 
     plt,ind=eu.plotting.plotrand(t['ra'], t['dec'],show=False,frac=frac,
+                                 seed=3000,
                                  get_indices=True)
 
     ramin=t['ra'].min()

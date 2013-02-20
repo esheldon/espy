@@ -1,4 +1,4 @@
-name: "small01"
+name: "small02"
 orig_vers: "aardvark_v0.5d"
 
 fields: [114, 115, 147, 86]
@@ -14,7 +14,7 @@ ncol: 4096
 # can be
 #  constant, catalog
 shear_type: "constant"
-shear: [0.00, 0.00]
+shear: [0.10, 0.00]
 
 models: ['gauss']
 model_fracs: [1.0]
@@ -35,8 +35,9 @@ model_size_type: "catalog"
 #model_sigma: 3.0 # sigma=sqrt(T/2)
 
 
-psf_model_type: null
-psf_model_sigma: null
+psf_type: null
+psf_model: null
+psf_fwhm_arcsec: null
 psf_e1: null
 psf_e2: null
 
@@ -47,3 +48,8 @@ noise_type: null
 nsub: 16
 
 alt_cd: false
+
+seed: 3904
+
+comments: |
+    This one has shear

@@ -22,6 +22,8 @@ class SimpleCatalogMaker(dict):
         self['pointing_id']=pointing
         self['fnum']=FILTERNUM[self['filter']]
 
+        numpy.random.seed(self['seed'])
+
         pprint.pprint(self)
 
     def go(self):
@@ -93,9 +95,10 @@ class SimpleCatalogMaker(dict):
 
     def _set_tmag_tflux(self):
         tmag=self._orig_data['tmag'][:,self['fnum']]
-        if self['nexp'] > 1:
-            raise ValueError("make sure gain stuff is right")
-        tflux=noise.get_flux(tmag, self['exptime']*self['nexp'])
+        tflux=noise.get_flux(self['filter'], 
+                             tmag, 
+                             self['exptime'],
+                             units='e')
 
         self._data['tmag'] = tmag
         self._data['tflux'] = tflux
@@ -119,7 +122,7 @@ class SimpleCatalogMaker(dict):
         if self['model_size_type']=='fixed':
             self._data['sigma'] = self['model_sigma'] 
         elif self['model_size_type'] == 'catalog':
-            flux_radius=self._orig_data['tsize']
+            flux_radius=self._orig_data['tsize']/self['pixscale']
             self._data['sigma'] = self._flux_radius_to_sigma(flux_radius)
         else:
             raise ValueError("implement other size generators")

@@ -1,4 +1,4 @@
-name: "small01"
+name: "small03"
 orig_vers: "aardvark_v0.5d"
 
 fields: [114, 115, 147, 86]
@@ -14,7 +14,7 @@ ncol: 4096
 # can be
 #  constant, catalog
 shear_type: "constant"
-shear: [0.00, 0.00]
+shear: [0.10, 0.00]
 
 models: ['gauss']
 model_fracs: [1.0]
@@ -35,15 +35,22 @@ model_size_type: "catalog"
 #model_sigma: 3.0 # sigma=sqrt(T/2)
 
 
-psf_model_type: null
-psf_model_sigma: null
-psf_e1: null
-psf_e2: null
+psf_type: 'constant'
+psf_model: 'gauss'
+# this is ~0.9'' for a gaussian
+psf_sigma: 1.416
+psf_e1: 0.0
+psf_e2: 0.0
 
-# for noise_type 'poisson' we use the exposure time and
-# nominal sky value at 1 second
+# for noise_type 'poisson' we use the exposure time and nominal sky value
 noise_type: null
 
 nsub: 16
 
 alt_cd: false
+
+# same seed as small02 with no PSF for comparison
+seed: 3904
+
+comments: |
+    This one has shear and psf

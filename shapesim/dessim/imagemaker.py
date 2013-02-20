@@ -4,18 +4,24 @@ import esutil as eu
 import gmix_image
 
 from . import files
+from . import noise
 from .util import FILTERNUM, FILTERCHAR
 
 PADDING=5.0
 
+# sigma ~ fwhm/TURB_SIGMA_FAC
+TURB_SIGMA_FAC=1.68
+
 class ImageMaker(dict):
     def __init__(self, simname, pointing):
         """
-        Create an for the input sim and pointing number. The catalog
+
+        Create an image for the input sim and pointing number. The catalog
         should already exist.
 
-        For now just set the ellipticities.  Will want to scale the
-        fluxes later when we add noise.
+        If poisson noise is added, the data type will be int64, otherwise
+        float64
+
         """
 
         conf=files.read_config(simname)
@@ -23,6 +29,9 @@ class ImageMaker(dict):
 
         self['pointing_id']=pointing
         self['fnum']=FILTERNUM[self['filter']]
+
+        # use 2*seed for images, seed for catalogs
+        numpy.random.seed(2*self['seed'])
 
         self._load_pointing()
         self._load_catalog()
@@ -40,7 +49,26 @@ class ImageMaker(dict):
             gmix=self._get_gmix(i)
             self._put_object(gmix)
 
+        if self['noise_type'] is not None:
+            self._add_noise()
         self._write()
+
+    def _add_noise(self):
+        if self['noise_type']=='poisson':
+            self._add_poisson_noise()
+        else:
+            raise ValueError("no other noises implemented")
+
+    def _add_poisson_noise(self):
+        print 'adding poisson noise'
+        sky=noise.get_sky(self['filter'], self['exptime'],units='e')
+        im=self._image
+        im += sky
+
+        pim = numpy.random.poisson(im)
+
+        self._image = pim
+        del im
 
     def _put_object(self, gmix):
         from gmix_image.render import _render
@@ -105,7 +133,7 @@ class ImageMaker(dict):
 
             gmix0=gmix_image.gmix.GMix(pars, type=model)
 
-        if self['psf_model_type'] is not None:
+        if self['psf_type'] is not None:
             psf_gmix=self._get_psf_gmix(i)
             gmix=gmix0.convolve(psf_gmix)
             return gmix
@@ -113,7 +141,31 @@ class ImageMaker(dict):
             return gmix0
 
     def _get_psf_gmix(self, i):
-        raise ValueError("implement psf")
+        if self['psf_type'] != 'constant':
+            raise ValueError("implement non-constant PSF")
+
+
+        if self['psf_model'] == 'gauss':
+            sigma = self['psf_sigma']
+            if not hasattr(self, '_psf_gmix_cache'):
+                fwhm_fac=get_fwhm_fac()
+                fwhm_arcsec = sigma*fwhm_fac*self['pixscale']
+
+                Tpsf = 2*sigma**2
+
+                mess='gauss psf, fwhm: %s arcsec sigma: %s pixels'
+                print mess % (fwhm_arcsec, sigma)
+
+                pars=numpy.array([1.,1.,
+                                  self['psf_e1'],
+                                  self['psf_e2'],
+                                  Tpsf,
+                                  1.0])
+                gmix=gmix_image.gmix.GMixCoellip(pars)
+                self._psf_gmix_cache=gmix
+            return self._psf_gmix_cache
+        else:
+            raise ValueError("implement other PSFs")
 
     def _load_catalog(self):
         url=files.get_catalog_url(self['name'], self['pointing_id'])
@@ -142,3 +194,8 @@ class ImageMaker(dict):
         h['simname'] = self['name']
 
         self._header=h
+
+def get_fwhm_fac():
+    from math import sqrt,log
+    fac = 2*sqrt(2*log(2)) # ~2.35
+    return fac
