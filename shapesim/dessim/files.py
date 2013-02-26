@@ -87,7 +87,7 @@ def get_catalog_url(simname, pointing, type='fits'):
     d=get_data_dir(simname)
     if type=='fits':
         ext='fits'
-    elif type=='gsim':
+    elif type=='ascii':
         ext='dat'
     else:
         raise ValueError("bad catalog type: '%s'" % type)

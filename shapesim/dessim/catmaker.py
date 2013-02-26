@@ -43,13 +43,38 @@ class SimpleCatalogMaker(dict):
 
         self._add_shear()
 
-        self._write()
-
-    def _write(self):
+    def write(self):
         url=files.get_catalog_url(self['name'], self['pointing_id'])
         self._makedir(url)
         print url
         eu.io.write(url, self._data, clobber=True)
+
+    def write_ascii(self):
+        from esutil import recfile
+        url=files.get_catalog_url(self['name'], self['pointing_id'],
+                                  type='ascii')
+        self._makedir(url)
+        data=self._get_ascii_struct(self._data.size)
+        data['model'] = self._data['model']
+        data['row'] = self._data['row']
+        data['col'] = self._data['col']
+
+        g1=self._data['g1']
+        g2=self._data['g2']
+        e1,e2 = lensing.util.g1g2_to_e1e2(g1,g2)
+
+        data['e1'] = e1
+        data['e2'] = e2
+        data['T'] = self._data['T']
+
+        data['psf_model'] = self['psf_model']
+        data['psf_e1'] = self['psf_e1']
+        data['psf_e2'] = self['psf_e2']
+        data['psf_T'] = self['psf_T']
+
+        print url
+        with recfile.Recfile(url,mode='w',delim=' ') as fobj:
+            fobj.write(data)
 
     def _makedir(self, url):
         try:
@@ -225,6 +250,20 @@ class SimpleCatalogMaker(dict):
                     data[n] = self._orig_data[n]
         self._data=data
 
+    def _get_ascii_struct(self, n):
+        dt=[('model','S10'),
+            ('row','f8'),
+            ('col','f8'),
+            ('e1','f8'),
+            ('e2','f8'),
+            ('T','f8'),
+            ('psf_model','S10'),
+            ('psf_e1','f8'),
+            ('psf_e2','f8'),
+            ('psf_T','f8')]
+
+        return numpy.zeros(n, dtype=dt)
+
     def _get_struct(self, n):
         dt=[('id','i4'),
             ('ra','f8'),
@@ -239,9 +278,4 @@ class SimpleCatalogMaker(dict):
             ('gamma1','f8'),
             ('gamma2','f8')]
 
-        if 'full' in self['models']:
-            raise ValueError("implement full gaussian mixture models")
-        else:
-            dt += [('sigma','f8')]
 
-        return numpy.zeros(n, dtype=dt)

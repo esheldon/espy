@@ -9,6 +9,10 @@ import shapesim
 from optparse import OptionParser
 parser=OptionParser(__doc__)
 
+parser.add_option('-a','--ascii',
+                  action='store_true',
+                  help="write an ascii file")
+
 def main():
     options,args = parser.parse_args(sys.argv[1:])
 
@@ -21,6 +25,10 @@ def main():
     
     maker=shapesim.dessim.catmaker.SimpleCatalogMaker(simname, pointing_id)
     maker.go()
+    if options.ascii:
+        maker.write_ascii()
+    else:
+        maker.write()
      
 
 main()
