@@ -1,3 +1,6 @@
+"""
+This algorithm is deeply flawed
+"""
 import os
 import sys
 import numpy
@@ -58,8 +61,10 @@ def make_pointings(simname, frac=0.01):
 
     nrow=conf['nrow']
     ncol=conf['ncol']
-    rawidth=4096*pixscale_deg
-    decwidth=4096*pixscale_deg
+
+    # this is not correct!
+    rawidth=ncol*pixscale_deg
+    decwidth=nrow*pixscale_deg
 
     ncenters_ra = 1 + int( (ramax-ramin)/rawidth )
     ncenters_dec = 1 + int( (decmax-decmin)/decwidth )
