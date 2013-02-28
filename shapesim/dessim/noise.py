@@ -6,8 +6,6 @@ The skies may be brighter than we expect for main survey, but it is hard to
 say.
 
 The zero points look pretty stable though.
-
-I can't find gain values anywhere in the DB, but jiangang is finding ~4.5
 """
 
 from numpy import array
@@ -15,57 +13,51 @@ from .util import FILTERNUM, FILTERCHAR
 
 # these are super rough from reasonably dark times
 # but need to get official "good" data for comparison
-SKY_ELECTRONS_PER_SEC=array([5., 13.0, 37., 70.0, 45.])
+#SKY_ELECTRONS_PER_SEC=array([5., 13.0, 37., 70.0, 45.])
+SKY_ELECTRONS_PER_SEC=array([7.05106,
+                             12.5659,
+                             41.9028,
+                             95.1041,
+                             45.0])
 
-# can't find these anywhere
-GAINS     = array( [4.5,4.5,4.5,4.5,4.5] ) # electrons/adu
+#ZEROPOINTS_ADU = [30.15, 30.34, 30.25, 29.97, 28.1]
+ZEROPOINTS_E = array( [26.5670,
+                       26.3742,
+                       26.3213,
+                       26.2623,
+                       26.3] ) # Y is made up
+MAGLIM = array( [24.9560,
+                 24.4530,
+                 23.7510,
+                 23.2490,
+                 23.0] ) # Y is made up
 
-# m = -2.5 x log10(DN / EXPTIME) + ZEROPOINT
-#   note these are DN(ADU) not electrons.
-# from ~oh/tmp/some-zeropoints.txt, the 90 second exposures
-# except for Y which is the 45 second
-
-ZEROPOINTS_ADU = [30.15, 30.34, 30.25, 29.97, 28.1]
-
-def get_sky(filter, exptime, units='e'):
+def get_sky(filter, exptime):
     """
     Get a sky value in electrons
     """
     fnum=FILTERNUM[filter]
 
     e_per_sec = SKY_ELECTRONS_PER_SEC[fnum]
-    if units.lower() =='e':
-        flux=e_per_sec
-    elif units.upper()=='ADU':
-        flux=e_per_sec/GAINS[fnum]
-    else:
-        raise ValueError("units should be e or ADU")
 
-    return flux*exptime
+    return e_per_sec*exptime
 
-def get_skyvar(filter, exptime, units='e'):
+def get_skyvar(filter, exptime):
     """
-    Get a sky variance
+    Get the background variance: pure sky for now
     """
 
-    sky=get_sky(filter, exptime, units=units)
+    sky=get_sky(filter, exptime)
     return sky
 
-def get_flux(filter, mag, exptime, units='e'):
+def get_flux(filter, mag, exptime):
     """
-    Get flux in electrons or ADU
+    Get flux in electrons
     """
     fnum=FILTERNUM[filter]
-    zp=ZEROPOINTS_ADU[fnum]
+    zp=ZEROPOINTS_E[fnum]
 
     arg=0.4*(zp-mag)
-    adu_per_second=10.**arg
+    e_per_sec=10.**arg
 
-    if units.lower() =='e':
-        flux=adu_per_second*GAINS[fnum]
-    elif units.upper() =='ADU':
-        flux=adu_per_second
-    else:
-        raise ValueError("units should be e or ADU")
-
-    return flux*exptime
+    return e_per_sec*exptime

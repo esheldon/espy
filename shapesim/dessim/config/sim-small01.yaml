@@ -24,7 +24,7 @@ model_fracs: [1.0]
 model_flux_type: 'catalog'
 model_flux: null
 
-model_ellip_type: 'cluster-step-nosplit'
+model_ellip_type: 'cluster-step'
 model_ellip_mag: 'r' # rmag used for binning
 
 # can be
@@ -35,8 +35,8 @@ model_size_type: "catalog"
 #model_sigma: 3.0 # sigma=sqrt(T/2)
 
 
-psf_model_type: null
-psf_model_sigma: null
+psf_type: null
+psf_model: null
 psf_e1: null
 psf_e2: null
 
@@ -47,3 +47,8 @@ noise_type: null
 nsub: 16
 
 alt_cd: false
+
+seed: 3904
+
+comments: |
+    No shear, no psf, no noise

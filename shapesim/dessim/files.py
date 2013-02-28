@@ -10,6 +10,10 @@ def get_config_dir():
 def get_config_url(simname):
     d=get_config_dir()
     return os.path.join(d, 'sim-%s.yaml' % simname)
+def get_gsim_cfg_url(simname):
+    d=get_config_dir()
+    return os.path.join(d, 'sim-%s.cfg' % simname)
+
 
 def read_config(simname):
     import yaml

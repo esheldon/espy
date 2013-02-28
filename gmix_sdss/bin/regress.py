@@ -1,5 +1,8 @@
 """
     %prog [options] gmix_run type nperbin
+
+type should be
+    s2n
 """
 import sys, os
 import gmix_sdss
@@ -9,14 +12,12 @@ parser=OptionParser(__doc__)
 
 parser.add_option('--start',default=None,
                   help="start processing at this run,camcol csv")
-parser.add_option('--index',action='store_true',
-                  help="create the indexes")
 
 parser.add_option('-r','--run',default=None,
                   help="Do runwise regressions")
 parser.add_option('-c','--camcol',default=None,
                   help="Do run/camcol regressions")
-parser.add_option('--s2n',default=None,
+parser.add_option('--s2n',default='s2n',
                   help="Field for s/n")
 parser.add_option('--type',default=None,
                   help="obj type")
@@ -55,4 +56,6 @@ def main():
                                                objtype=options.type)
 
         reg.doplot()
+    else:
+        raise ValueError("only support type s2n for now")
 main()

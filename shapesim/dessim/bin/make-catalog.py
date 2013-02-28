@@ -28,7 +28,7 @@ def main():
     if options.ascii:
         maker.write_ascii()
     else:
-        maker.write()
+        maker.write_fits()
      
 
 main()

@@ -173,6 +173,7 @@ class S2NRegressor(dict):
 
     def _set_fields(self):
         self['fields']=[self['s2n_field'],'g','sratio']
+        print "self['fields']:",self['fields']
 
         if self._conf['obj_fitter']=='mcmc':
             self['fields'] += ['gsens']

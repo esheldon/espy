@@ -24,7 +24,7 @@ model_fracs: [1.0]
 model_flux_type: 'catalog'
 model_flux: null
 
-model_ellip_type: 'cluster-step-nosplit'
+model_ellip_type: 'cluster-step'
 model_ellip_mag: 'r' # rmag used for binning
 
 # can be

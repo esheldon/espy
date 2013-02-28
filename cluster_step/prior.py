@@ -244,6 +244,9 @@ class GPriorExpFitter:
         w,=where(pars < 0)
         if w.size > 0:
             return -9.999e20
+        if pars[3] > 1:
+            return -9.999e20
+
         if self.gmax_min is not None:
             if pars[-1] < self.gmax_min:
                 return -9.999e20

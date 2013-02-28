@@ -1,5 +1,7 @@
 """
 This algorithm is deeply flawed
+
+I'm hitting memory issues too eve
 """
 import os
 import sys

@@ -4,7 +4,7 @@ orig_vers: "aardvark_v0.5d"
 fields: [114, 115, 147, 86]
 
 filter: 'i'
-exptime: 90.0 # only used if noise is being added
+exptime: 900.0 # only used if noise is being added
 
 pixscale: 0.27
 nrow: 4096
@@ -24,7 +24,7 @@ model_fracs: [1.0]
 model_flux_type: 'catalog'
 model_flux: null
 
-model_ellip_type: 'cluster-step-nosplit'
+model_ellip_type: 'cluster-step'
 model_ellip_mag: 'r' # rmag used for binning
 
 # can be

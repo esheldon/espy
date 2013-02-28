@@ -11,9 +11,6 @@ class SimpleCatalogMaker(dict):
     def __init__(self, simname, pointing):
         """
         Create a catalog for the input sim and pointing number
-
-        For now just set the ellipticities.  Will want to scale the
-        fluxes later when we add noise.
         """
 
         conf=files.read_config(simname)
@@ -43,7 +40,7 @@ class SimpleCatalogMaker(dict):
 
         self._add_shear()
 
-    def write(self):
+    def write_fits(self):
         url=files.get_catalog_url(self['name'], self['pointing_id'])
         self._makedir(url)
         print url
@@ -51,11 +48,20 @@ class SimpleCatalogMaker(dict):
 
     def write_ascii(self):
         from esutil import recfile
+        import lensing
         url=files.get_catalog_url(self['name'], self['pointing_id'],
                                   type='ascii')
         self._makedir(url)
         data=self._get_ascii_struct(self._data.size)
+
         data['model'] = self._data['model']
+        w,=numpy.where( data['model'] == 'gdev' )
+        if w.size != 0:
+            data['model'][w] = 'dev'
+        w,=numpy.where( data['model'] == 'gexp' )
+        if w.size != 0:
+            data['model'][w] = 'exp'
+
         data['row'] = self._data['row']
         data['col'] = self._data['col']
 
@@ -65,15 +71,16 @@ class SimpleCatalogMaker(dict):
 
         data['e1'] = e1
         data['e2'] = e2
-        data['T'] = self._data['T']
+        data['sigma'] = self._data['sigma']
+        data['tflux'] = self._data['tflux']
 
         data['psf_model'] = self['psf_model']
         data['psf_e1'] = self['psf_e1']
         data['psf_e2'] = self['psf_e2']
-        data['psf_T'] = self['psf_T']
+        data['psf_sigma'] = self['psf_sigma']
 
         print url
-        with recfile.Recfile(url,mode='w',delim=' ') as fobj:
+        with recfile.Recfile(url,mode='w',delim=' ',ignorenull=True) as fobj:
             fobj.write(data)
 
     def _makedir(self, url):
@@ -99,13 +106,35 @@ class SimpleCatalogMaker(dict):
 
     def _generate_models(self):
         if len( self['models'] ) > 1:
-            raise ValueError("implement multiple models")
-        self._data['model'] = self['models'][0]
+            models = self._draw_random_models()
+            self._data['model'] = models
+        else:
+            self._data['model'] = self['models'][0]
+
+    def _draw_random_models(self):
+        """
+        For now only allow discreet models
+        """
+        if len( self['models'] ) != 2:
+            raise ValueError("only two models for now")
+        fracs = numpy.array(self['model_fracs'])
+        fracs /= fracs.sum()
+
+        rand=numpy.random.random(self._data.size)
+        w0,=numpy.where(rand < fracs[0])
+        w1,=numpy.where(rand > fracs[0])
+
+        models=numpy.zeros(self._data.size, dtype='S5')
+        if w0.size > 0:
+            models[w0] = self['models'][0]
+        if w1.size > 0:
+            models[w1] = self['models'][1]
+        return models
 
     def _load_ellip_generator(self):
         print 'getting ellipticity generator'
-        if self['model_ellip_type'] == 'cluster-step-nosplit':
-            self._ellip_generator = gprior.GPriorVsMagNoSplit()
+        if self['model_ellip_type'] == 'cluster-step':
+            self._ellip_generator = gprior.GPriorVsMag()
         else:
             raise ValueError("Bad model ellip type: '%s'" % self['model_ellip_type'])
 
@@ -113,7 +142,7 @@ class SimpleCatalogMaker(dict):
         print 'generate intrinsic ellipticities'
         fnum=self['fnum']
         mags=self._orig_data['tmag'][:,fnum]
-        g1, g2 = self._ellip_generator.sample2d(mags)
+        g1, g2 = self._ellip_generator.sample2d(mags, self._data['model'])
 
         self._data['g1'] = g1
         self._data['g2'] = g2
@@ -122,8 +151,7 @@ class SimpleCatalogMaker(dict):
         tmag=self._orig_data['tmag'][:,self['fnum']]
         tflux=noise.get_flux(self['filter'], 
                              tmag, 
-                             self['exptime'],
-                             units='e')
+                             self['exptime'])
 
         self._data['tmag'] = tmag
         self._data['tflux'] = tflux
@@ -256,11 +284,12 @@ class SimpleCatalogMaker(dict):
             ('col','f8'),
             ('e1','f8'),
             ('e2','f8'),
-            ('T','f8'),
+            ('sigma','f8'),
+            ('tflux','f8'),
             ('psf_model','S10'),
             ('psf_e1','f8'),
             ('psf_e2','f8'),
-            ('psf_T','f8')]
+            ('psf_sigma','f8')]
 
         return numpy.zeros(n, dtype=dt)
 
@@ -272,10 +301,11 @@ class SimpleCatalogMaker(dict):
             ('col','f8'),
             ('tmag','f8'),
             ('tflux','f8'),
+            ('sigma','f8'),
             ('model','S10'),
             ('g1','f8'),
             ('g2','f8'),
             ('gamma1','f8'),
             ('gamma2','f8')]
 
-
+        return numpy.zeros(n, dtype=dt)

@@ -56,12 +56,14 @@ class ImageMaker(dict):
     def _add_noise(self):
         if self['noise_type']=='poisson':
             self._add_poisson_noise()
+        elif self['noise_type'] == 'gauss':
+            self._add_gaussian_noise()
         else:
             raise ValueError("no other noises implemented")
 
     def _add_poisson_noise(self):
         print 'adding poisson noise'
-        sky=noise.get_sky(self['filter'], self['exptime'],units='e')
+        sky=noise.get_sky(self['filter'], self['exptime'])
         im=self._image
         im += sky
 
@@ -69,6 +71,16 @@ class ImageMaker(dict):
 
         self._image = pim
         del im
+
+    def _add_gaussian_noise(self):
+        print 'adding gaussian noise'
+        sky=noise.get_sky(self['filter'], self['exptime'])
+        im=self._image
+        im += sky
+
+        skyvar=noise.get_skyvar(self['filter'], self['exptime'])
+        skysig=numpy.sqrt(skyvar)
+        im += skysig*numpy.random.randn(im.size).reshape(im.shape)
 
     def _put_object(self, gmix):
         from gmix_image.render import _render
@@ -122,7 +134,7 @@ class ImageMaker(dict):
         else:
             shape=lensing.shear.Shear(g1=obj['g1'],
                                       g2=obj['g2'])
-            T=(obj['sigma']*2)**2
+            T=2*obj['sigma']**2
 
             pars=numpy.array([obj['row'],
                               obj['col'],
@@ -133,7 +145,7 @@ class ImageMaker(dict):
 
             gmix0=gmix_image.gmix.GMix(pars, type=model)
 
-        if self['psf_type'] is not None:
+        if self['psf_type'] is not None and self['psf_model'] is not None:
             psf_gmix=self._get_psf_gmix(i)
             gmix=gmix0.convolve(psf_gmix)
             return gmix
