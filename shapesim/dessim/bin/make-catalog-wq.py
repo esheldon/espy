@@ -30,7 +30,6 @@ command: |
     module unload esutil && module load esutil/%(vers)s
 
     python $ESPY_DIR/shapesim/dessim/bin/make-catalog.py %(simname)s %(pointing)d
-    python $ESPY_DIR/shapesim/dessim/bin/make-image.py %(simname)s %(pointing)d
 
 %(groups)s
 %(notgroups)s

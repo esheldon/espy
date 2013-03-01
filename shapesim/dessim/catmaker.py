@@ -7,6 +7,9 @@ from . import noise
 
 from .util import FILTERNUM, FILTERCHAR
 
+def get_seed(overall_seed, pointing):
+    return overall_seed + pointing
+
 class SimpleCatalogMaker(dict):
     def __init__(self, simname, pointing):
         """
@@ -19,7 +22,8 @@ class SimpleCatalogMaker(dict):
         self['pointing_id']=pointing
         self['fnum']=FILTERNUM[self['filter']]
 
-        numpy.random.seed(self['seed'])
+        seed = get_seed(self['seed'],pointing)
+        numpy.random.seed(seed)
 
         pprint.pprint(self)
 

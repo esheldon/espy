@@ -10,9 +10,6 @@ def get_config_dir():
 def get_config_url(simname):
     d=get_config_dir()
     return os.path.join(d, 'sim-%s.yaml' % simname)
-def get_gsim_cfg_url(simname):
-    d=get_config_dir()
-    return os.path.join(d, 'sim-%s.cfg' % simname)
 
 
 def read_config(simname):
@@ -116,5 +113,16 @@ def get_wq_url(simname, pointing):
     fname = fname % (simname, pointing)
     return os.path.join(d, fname)
 
+def get_gsim_dir(simname):
+    d=get_simdir(simname)
+    return os.path.join(d, 'gsim')
 
+def get_gsim_wq_url(simname,pointing):
+    d=get_gsim_dir(simname)
+    fmt=get_pid_format()
+    pidstr = fmt % pointing
+    return os.path.join(d, '%s-%s.yaml' % (simname,pidstr))
 
+def get_gsim_cfg_url(simname,pointing):
+    name=get_gsim_wq_url(simname,pointing)
+    return name.replace('.yaml','.cfg')
