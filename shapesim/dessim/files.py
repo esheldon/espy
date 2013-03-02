@@ -103,12 +103,12 @@ def get_image_url(simname, pointing):
     fname = fname % (simname, pointing)
     return os.path.join(d, fname)
 
-def get_wq_dir(simname):
+def get_cat_wq_dir(simname):
     d=get_simdir(simname)
-    return os.path.join(d, 'wq')
+    return os.path.join(d, 'wq-cat')
 
-def get_wq_url(simname, pointing):
-    d=get_wq_dir(simname)
+def get_cat_wq_url(simname, pointing):
+    d=get_cat_wq_dir(simname)
     fname='%s-'+get_pid_format()+'.yaml'
     fname = fname % (simname, pointing)
     return os.path.join(d, fname)

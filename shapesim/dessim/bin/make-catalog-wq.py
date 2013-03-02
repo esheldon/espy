@@ -55,13 +55,13 @@ def main():
     if options.notgroups is not None:
         notgroups = 'notgroup: [%s]' % options.notgroups
 
-    d=files.get_wq_dir(simname)
+    d=files.get_cat_wq_dir(simname)
     if not os.path.exists(d):
         os.makedirs(d)
 
     job_name_t=simname+'-'+files.get_pid_format()
     for pointing in pointings:    
-        url=files.get_wq_url(simname,pointing['index'])
+        url=files.get_cat_wq_url(simname,pointing['index'])
 
         job_name=job_name_t % pointing['index']
         text=_wqtemplate % {'simname':simname,

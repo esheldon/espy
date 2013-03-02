@@ -4,7 +4,7 @@ orig_vers: "aardvark_v0.5d"
 fields: [114, 115, 147, 86]
 
 filter: 'i'
-exptime: 900.0 # only used if noise is being added
+exptime: 90.0 # only used if noise is being added
 
 pixscale: 0.27
 nrow: 4096

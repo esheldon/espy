@@ -1,3 +1,6 @@
+"""
+Deprecated, use gsim
+"""
 import numpy
 import lensing
 import esutil as eu

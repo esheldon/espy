@@ -28,6 +28,7 @@ parser.add_option('--vers',default='work',
 
 _wqtemplate="""
 command: |
+    source ~/.bashrc
     module unload gsim && module load gsim/%(vers)s
     config=%(config)s
     catalog=%(catalog)s
@@ -48,12 +49,30 @@ ncol = %(ncol)d
 noise_type = "%(noise_type)s"
 nsub = %(nsub)d
 
-sky = %(sky)f
+sky = %(sky).16g
 
 seed = %(seed)d
+
+# optional WCS
+wcs = {
+    cd1_1 = %(cd1_1).16g
+    cd1_2 = %(cd1_2).16g
+    cd2_1 = %(cd2_1).16g
+    cd2_2 = %(cd2_2).16g
+
+    crval1 = %(crval1).16g
+    crval2 = %(crval2).16g
+
+    crpix1 = %(crpix1).16g
+    crpix2 = %(crpix2).16g
+
+    ctype1 = "%(ctype1)s"
+    ctype2 = "%(ctype2)s"
+}
 """
 
-def write_cfg(simname, pointing, conf):
+def write_cfg(simname, pstruct, conf):
+    pointing=pstruct['index']
     cfg_url=files.get_gsim_cfg_url(simname,pointing)
 
     seed = catmaker.get_seed(conf['seed'],pointing)
@@ -61,12 +80,19 @@ def write_cfg(simname, pointing, conf):
     sky = noise.get_sky(conf['filter'],
                         conf['exptime'])
 
-    text = _cfg_template % {'nrow':conf['nrow'],
-                            'ncol':conf['ncol'],
-                            'noise_type':conf['noise_type'],
-                            'nsub':conf['nsub'],
-                            'sky':sky,
-                            'seed':seed}
+    d={'nrow':conf['nrow'],
+       'ncol':conf['ncol'],
+       'noise_type':conf['noise_type'],
+       'nsub':conf['nsub'],
+       'sky':sky,
+       'seed':seed}
+
+    for n in ['cd1_1','cd1_2','cd2_1','cd2_2',
+              'crval1','crval2','crpix1','crpix2',
+              'ctype1','ctype2']:
+        d[n] = pstruct[n]
+
+    text = _cfg_template % d
 
     print cfg_url
     with open(cfg_url,'w') as fobj:
@@ -118,7 +144,7 @@ def main():
         os.makedirs(d)
 
     for pstruct in pointings:    
-        write_cfg(simname, pstruct['index'], conf)
+        write_cfg(simname, pstruct, conf)
         write_wq(simname,pstruct['index'], conf, options)
 
 main()
