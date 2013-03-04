@@ -104,7 +104,7 @@ class SimpleCatalogMaker(dict):
             print 'no psf, not writing psf catalog'
             return
 
-        flux = self._data['flux'].max()
+        flux = self._data['tflux'].max()
 
         url=files.get_catalog_url(self['name'],
                                   self['pointing_id'],
@@ -118,9 +118,9 @@ class SimpleCatalogMaker(dict):
         data['row'] = self._data['row']
         data['col'] = self._data['col']
 
-        data['e1']    = -9999 # not used
-        data['e2']    = -9999 # not used
-        data['sigma'] = -9999 # not used
+        data['e1']    = -0.0999999 # not used
+        data['e2']    = -0.0999999 # not used
+        data['sigma'] =  0.0999999 # not used
         data['tflux'] = flux
 
         data['psf_model'] = self['psf_model']

@@ -89,9 +89,9 @@ def get_catalog_url(simname, pointing,
                     ftype='fits'):
     d=get_data_dir(simname)
     if ftype=='fits':
-        ext='fits'
+        ext='.fits'
     elif ftype=='ascii':
-        ext='dat'
+        ext='.dat'
     else:
         raise ValueError("bad catalog ftype: '%s'" % ftype)
 
@@ -101,14 +101,17 @@ def get_catalog_url(simname, pointing,
         extra='psf'
     else:
         raise ValueError("bad type: '%s'" % type)
-    fname='%s-'+get_pid_format()+'-cat.'+ext
+    fname=['%s',get_pid_format(),extra+ext]
+    fname='-'.join(fname)
 
     fname = fname % (simname, pointing)
     return os.path.join(d, fname)
 
-def get_image_url(simname, pointing):
+def get_image_url(simname, pointing, type='objects'):
     d=get_data_dir(simname)
     fname='%s-'+get_pid_format()+'.fits'
+    if type=='psf':
+        fname=fname.replace('.fits','-psf.fits')
     fname = fname % (simname, pointing)
     return os.path.join(d, fname)
 

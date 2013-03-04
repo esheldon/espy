@@ -31,9 +31,9 @@ command: |
     source ~/.bashrc
     module unload gsim && module load gsim/%(vers)s
     config=%(config)s
-    catalog=%(catalog)s
-    image=%(image)s
-    gsim "$config" "$catalog" "$image"
+
+    %(obj_command)s
+    %(psf_command)s
 
 %(groups)s
 %(notgroups)s
@@ -108,15 +108,34 @@ def write_wq(simname, pointing, conf, options):
         notgroups = 'notgroup: [%s]' % options.notgroups
 
     cat=files.get_catalog_url(simname,pointing,ftype='ascii')
+    psf_cat=files.get_catalog_url(simname,pointing,type='psf',
+                                  ftype='ascii')
     im=files.get_image_url(simname,pointing)
+    psf_im=files.get_image_url(simname,pointing,type='psf')
 
     cfg_url=files.get_gsim_cfg_url(simname,pointing)
 
     job_name_t=simname+'-'+files.get_pid_format()
     job_name=job_name_t % pointing
+
+    obj_command="""
+    catalog=%(catalog)s
+    image=%(image)s
+    gsim "$config" "$catalog" "$image"
+    """ % {'catalog':cat, 'image':im}
+
+    if conf['psf_type'] is not None:
+        psf_command="""
+    psf_catalog=%(catalog)s
+    psf_image=%(image)s
+    gsim "$config" "$psf_catalog" "$psf_image"
+        """ % {'catalog':psf_cat, 'image':psf_im}
+    else:
+        psf_command=""
+
     text=_wqtemplate % {'config':cfg_url,
-                        'catalog':cat,
-                        'image':im,
+                        'obj_command':obj_command,
+                        'psf_command':psf_command,
                         'job_name':job_name,
                         'priority':options.priority,
                         'groups':groups,
@@ -146,5 +165,6 @@ def main():
     for pstruct in pointings:    
         write_cfg(simname, pstruct, conf)
         write_wq(simname,pstruct['index'], conf, options)
+
 
 main()

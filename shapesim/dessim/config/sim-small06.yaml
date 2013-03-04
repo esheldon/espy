@@ -43,7 +43,7 @@ psf_e1: 0.0
 psf_e2: 0.0
 
 # for noise_type 'poisson' we use the exposure time and nominal sky value
-noise_type: null
+noise_type: 'poisson'
 
 nsub: 16
 
