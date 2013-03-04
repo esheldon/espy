@@ -37,9 +37,9 @@ model_size_type: "catalog"
 
 psf_type: null
 psf_model: null
-psf_fwhm_arcsec: null
-psf_e1: null
-psf_e2: null
+psf_sigma: 0.0
+psf_e1: 0.0
+psf_e2: 0.0
 
 # for noise_type 'poisson' we use the exposure time and
 # nominal sky value at 1 second

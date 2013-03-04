@@ -84,14 +84,23 @@ def get_data_dir(simname):
 def get_pid_format():
     return '%07d'
 
-def get_catalog_url(simname, pointing, type='fits'):
+def get_catalog_url(simname, pointing, 
+                    type='objects', 
+                    ftype='fits'):
     d=get_data_dir(simname)
-    if type=='fits':
+    if ftype=='fits':
         ext='fits'
-    elif type=='ascii':
+    elif ftype=='ascii':
         ext='dat'
     else:
-        raise ValueError("bad catalog type: '%s'" % type)
+        raise ValueError("bad catalog ftype: '%s'" % ftype)
+
+    if type=='objects':
+        extra='cat'
+    elif type=='psf':
+        extra='psf'
+    else:
+        raise ValueError("bad type: '%s'" % type)
     fname='%s-'+get_pid_format()+'-cat.'+ext
 
     fname = fname % (simname, pointing)

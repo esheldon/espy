@@ -51,10 +51,14 @@ class SimpleCatalogMaker(dict):
         eu.io.write(url, self._data, clobber=True)
 
     def write_ascii(self):
+        self.write_gal_ascii()
+        self.write_psf_ascii()
+
+    def write_gal_ascii(self):
         from esutil import recfile
         import lensing
         url=files.get_catalog_url(self['name'], self['pointing_id'],
-                                  type='ascii')
+                                  ftype='ascii')
         self._makedir(url)
         data=self._get_ascii_struct(self._data.size)
 
@@ -73,14 +77,55 @@ class SimpleCatalogMaker(dict):
         g2=self._data['g2']
         e1,e2 = lensing.util.g1g2_to_e1e2(g1,g2)
 
-        data['e1'] = e1
-        data['e2'] = e2
+        data['e1']    = e1
+        data['e2']    = e2
         data['sigma'] = self._data['sigma']
         data['tflux'] = self._data['tflux']
 
         data['psf_model'] = self['psf_model']
-        data['psf_e1'] = self['psf_e1']
-        data['psf_e2'] = self['psf_e2']
+        data['psf_e1']    = self['psf_e1']
+        data['psf_e2']    = self['psf_e2']
+        data['psf_sigma'] = self['psf_sigma']
+
+        print url
+        with recfile.Recfile(url,mode='w',delim=' ',ignorenull=True) as fobj:
+            fobj.write(data)
+
+    def write_psf_ascii(self):
+        """
+        Write a psf at the location of each object.
+
+        Give flux of the brightest object in the field.
+        """
+        from esutil import recfile
+        import lensing
+
+        if self['psf_type'] is None:
+            print 'no psf, not writing psf catalog'
+            return
+
+        flux = self._data['flux'].max()
+
+        url=files.get_catalog_url(self['name'],
+                                  self['pointing_id'],
+                                  type='psf',
+                                  ftype='ascii')
+        self._makedir(url)
+        data=self._get_ascii_struct(self._data.size)
+
+        data['model'] = 'star'
+
+        data['row'] = self._data['row']
+        data['col'] = self._data['col']
+
+        data['e1']    = -9999 # not used
+        data['e2']    = -9999 # not used
+        data['sigma'] = -9999 # not used
+        data['tflux'] = flux
+
+        data['psf_model'] = self['psf_model']
+        data['psf_e1']    = self['psf_e1']
+        data['psf_e2']    = self['psf_e2']
         data['psf_sigma'] = self['psf_sigma']
 
         print url

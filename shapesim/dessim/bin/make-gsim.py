@@ -107,7 +107,7 @@ def write_wq(simname, pointing, conf, options):
     if options.notgroups is not None:
         notgroups = 'notgroup: [%s]' % options.notgroups
 
-    cat=files.get_catalog_url(simname,pointing,type='ascii')
+    cat=files.get_catalog_url(simname,pointing,ftype='ascii')
     im=files.get_image_url(simname,pointing)
 
     cfg_url=files.get_gsim_cfg_url(simname,pointing)
