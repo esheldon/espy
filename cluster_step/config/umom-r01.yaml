@@ -1,0 +1,26 @@
+# no aperture cut
+run: umom-r01
+version: "2012-10-16"
+
+star_minmag: 18
+star_maxmag: 20
+
+cutout_size: 28
+include_all_seg: false
+isolated: false
+
+# for getting <e^2>
+gprior_type: 'fits-vs-mag'
+
+#uw_nsig: 4.0
+#uw_min_pixels: 4
+
+# for filling areas not in object with noise
+seed: 3319
+
+comment: |
+    - Now separate priors for dev and exp.
+    - Using the GPriorExp model for both.  
+    - Do not include entire seg area.
+    - gmix1 psf
+    - median

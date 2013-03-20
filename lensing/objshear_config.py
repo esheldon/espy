@@ -24,6 +24,7 @@ class ObjshearRunConfig(dict):
     """
 
     def __init__(self, run):
+
         conf = lensing.files.cascade_config(run)
         for key in conf:
             self[key] = conf[key]
@@ -43,54 +44,55 @@ class ObjshearRunConfig(dict):
             """ % (l['cosmo_sample'],s['cosmo_sample'])
             raise ValueError(err)
         
+    def make_zlvals(self):
+        import sigmacrit
+        sconf = self['src_config']
+        return sigmacrit.make_zlvals(sconf['dzl'], sconf['zlmin'], sconf['zlmax'])
+
     # inputs to objshear
     def write_config(self):
-
-        lf = lensing.files.sample_file('lcat',self['lens_sample'])
-        if self['src_config']['nsplit'] == 0:
-            cf = lensing.files.sample_file('config',self['run'])
-            sf = lensing.files.sample_file('scat',self['src_sample'])
-            of = lensing.files.sample_file('lensout',self['run'], fs='local')
-
-
-            self._write_config(cf,lf,sf,of)
-        else:
-            for i in xrange(self['src_config']['nsplit']):
-                cf = lensing.files.sample_file('config',self['run'], split=i)
-                sf = lensing.files.sample_file('scat',self['src_sample'], split=i)
-                of = lensing.files.sample_file('lensout',self['run'], split=i, fs='local')
-
-                self._write_config(cf,lf,sf,of)
-
-
-    def _write_config(self, config_file, lfile, sfile, ofile):
-        d = os.path.dirname(config_file)
-        if not os.path.exists(d):
-            print "Making config dir:",d
-            os.makedirs(d)
-        d = os.path.dirname(ofile)
-        if not os.path.exists(d):
-            print "Making lensout output dir:",d
-            os.makedirs(d)
+        fs='hdfs'
+        #lens_file = lensing.files.sample_file(type='lcat',sample=self['lens_sample'],fs=fs)
+        config_file = lensing.files.sample_file(type='config',sample=self['run'], fs=fs)
 
         print 'Writing config file:',config_file
-        fobj = open(config_file,'w')
+        # should automate this type of thing; maybe an
+        # "auto" file class for hdfs that returns the open
+        # file handle for the local file?
+        with eu.hdfs.HDFSFile(config_file) as hdfs_file:
+            with open(hdfs_file.localfile,'w') as local_file:
 
-        fmt='%-17s %s\n'
-        fobj.write(fmt % ("lens_file",lfile))
-        fobj.write(fmt % ("source_file",sfile))
-        fobj.write(fmt % ("output_file",ofile))
+                fmt='%-17s = %s\n'
 
-        for key in ['H0','omega_m','npts']:
-            fobj.write(fmt % (key, self['cosmo_config'][key]))
-        for key in ['nside']:
-            fobj.write(fmt % (key, self[key]))
+                for key in ['H0','omega_m','npts']:
+                    local_file.write(fmt % (key, self['cosmo_config'][key]))
+                for key in ['nside']:
+                    local_file.write(fmt % (key, self[key]))
 
-        for key in ['sigmacrit_style']:
-            fobj.write(fmt % (key,self['src_config'][key]))
-        for key in ['nbin','rmin','rmax']:
-            fobj.write(fmt % (key,self['lens_config'][key]))
+                for key in ['mask_style']:
+                    local_file.write(fmt % (key,self[key]))
 
-        fobj.close()
+                for key in ['sigmacrit_style']:
+                    local_file.write(fmt % (key,self['src_config'][key]))
+                for key in ['nbin','rmin','rmax']:
+                    local_file.write(fmt % (key,self['lens_config'][key]))
 
-       
+                if self['src_config']['sigmacrit_style'] == 2:
+                    zlvals=self.make_zlvals()
+                    #local_file.write(fmt % ('nzl',zlvals.size))
+
+                    local_file.write('zlvals = [')
+                    zlvals.tofile(local_file, sep=' ')
+                    local_file.write(']\n')
+
+                if 'zmin' in self['lens_config']:
+                    local_file.write(fmt % ('min_zlens_interp',self['lens_config']['zmin']))
+
+                for key in ['mag_range','R_range']:
+                    if key in self:
+                        vstr = '[' + ' '.join( ['%s' % v for v in self[key]] ) + ']'
+                        local_file.write(fmt % (key,vstr))
+
+            hdfs_file.put(clobber=True)
+
+      

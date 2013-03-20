@@ -1,0 +1,35 @@
+run: shd-gg11r01
+sim: sim-gg11
+
+runtype: bys2n
+
+# need to set this for the trials to work.
+seed: 747
+
+s2n_method: admom
+s2n_fac: 40
+
+# for ring we do twice this many
+min_gcount: 300
+
+s2n_psf: 1.0e+8
+s2nvals: [10,13,16,20,24,31,38,48,60,75,94,117,146,183,229,286,358,448,560,700]
+
+method: 'emcee'
+
+# step and burnin are *per walker*
+# at least this many walkers
+nwalkers: 50
+nstep: 100 # steps per walker
+burnin: 100 # burnin per walker.
+
+# actually using admom for now
+ngauss_psf: 1
+fitmodel: 'gauss'
+
+mca_a: 2.0
+
+make_plots: True
+
+comments: |
+    Doing more s2 compared to gdt03

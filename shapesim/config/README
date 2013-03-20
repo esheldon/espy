@@ -1,0 +1,580 @@
+gmix-fit
+
+    mixmc
+        mixmc-get03r06
+        mixmc-gdt03r09
+
+    bayesfit
+        gg08r05 fix T/cen, ngrid 22, -0.9,0.9
+        gg08r06 averaged with r05
+        gg08r07 should be consistent with above, just using
+            faster likelihood code.  Looks fine.
+        gg08r08 marginalize over T.    See notes in 
+            bayesfit_sim.py
+
+        gg10r01 Using less cuspy prior distribution
+            - looks worse than gg08r07
+        gg10r02 Marginalize over T
+            - running
+    mcmc/emcee:
+        mcbayes
+            gg10r07 - fixed cen, standard mcmc
+            gg10r10 - emcee, fixed center
+            gg10r11 - emcee, center free with prior
+                doesn't look as good as gg10r07
+            gg10r12 - to be averaged with gg10r11
+            gg10r13 - tried temperature but had wrong formula
+            gg10r14 - increased number *after* burning to 
+                better sample the tail.  This looks pretty good!
+            gg10r15 - same as gg10r14 for averaging
+            gg10r16 - same as gg10r14 for averaging
+
+            older
+            gg10r09 - fixed cen, using emcee plugged into mcmc fitter
+            gg10r08 - fixed cen, using emcee plugged into mcmc fitter
+                using 100 walkers, crap
+            gg10r06 - emcee 100 walkers crap
+            gg10r05 - emcee 100 walkers crap
+            gg10r04 - ??
+            gg10r03 - fixed cen, straight mcmc
+            gg10r02 ??
+            gg10r01 ??
+
+            gg08r03 - old prior, fixed cen, emcee, prior after
+            gg08r04 - old prior, fixed cen, emcee, prior during
+
+            gegt01r01 - new prior, emcee, prior during
+                cenprior 0.1
+            get01r02 - same as above but with min_gcount: 100
+                and npsf gauss 2 to speed things up
+            get01r01 - same as get01r02  for averaging
+            get01r02 - same as get01r02  for averaging
+            get01r03 - same as get01r02  for averaging
+
+            get01r04 - Doing test with new code, make sure not crazy
+
+            gdt01r01 - looks terrible
+            gdt01r02 gdt01r03 gdt01r04 for averaging
+
+            gdt01r05 - improved dev model
+            gdt01r06,,gdt01r07,gdt01r08 for averaging
+                - looks better, less biased than the LM code
+                but still biased
+
+            gdt01r09 - more steps after burning
+                - checked 0 0, not much difference
+            gdt01r10 - more burnin
+                - checked 0 0, not much difference
+            gdt01r11 - more burnin *and* steps
+                - did a full run, might be a little better.
+            gdt01r12 - More walkers: 40 walkers but still
+                400 burning per and 400 steps per
+                ran (1, 1) for a check
+                LOOKS LIKE SHIT
+            
+            Trying to also marginalize over amplitude
+
+            get01r05 - first exp with amp marg
+                - looks better for 0,0, doing a ful run
+                - forgot to use new seed, RERUN
+                    and do some more for averaging tonight
+                    get01r06,get01r07,get01r08
+
+            - first dev with amp marg 
+                gdt01r13 
+                - Doing a full run: looks about the same
+
+                - maybe try temperature higher?
+                    - gdt01r14 - running 0 0  looks crazy
+
+                - maybe try prior after?  Perhaps the 1/prior
+                  causing problems for dev?
+                    - gdt01r15 doing full run
+                    actually looks a little better but noisy
+
+                - might need more walkers with higher dim space
+                    am using the "minimum" of 2*6=12 (althoug
+                    this worked fine for exp!)
+                    -gdt01r16 nwalkers 40, prior during
+                        - running 0,0
+                    looks about the same
+
+            -fix exp to dev?  Just curious, but quick look shows it will
+            greatly underestimate the size. 
+                - running gdt01r18
+                - it did just as well at s/n=20!
+
+            - but that does make me wonder if I should just limit
+            the radius used for calculations?  I forgot to put that in!
+                gdt01r19, same as r13 but trimmed
+                worse: I checked and I was using the underlying T to
+                get image size.
+
+            - fixed bug, now T convolved to get image size
+                gdt01r20.  didn't help, so I'm turning on
+                some other things I think might help: more walkers
+                after prior and using 80 walkers with 200/200
+                no better
+
+            - the average T values are way too big in the gdev fit.
+            Maybe applying some kind of sanity prior would help.
+
+            - also instead of a hard prior at 0 on T, something that goes
+              smoothly to zero?  Trying a fairly tight lognormal prior on T
+                - gdt01r21
+                looks about the same!
+
+                - gdt01r22
+                    even tighter T prior  accidantally used
+                        40/200/200 so it's gonna take twice as long
+                        used fixed width 1.e-6
+                - gdt01r23
+                    Using prior width 0.1*T  This is still quite tight
+                    compared to the mcmc chain distribution for s/n=10
+                    
+                    This does look better indeed
+                - gdt01r24
+                    Using prior width 1*T to see if this just helps prevent
+                    crazy T values.  
+                    
+
+            - gdt02 - 10 gaussians for dev
+                gdt02r01 - straight run
+                gdt02r02 - using log10(T) as variable
+                    - The errors on the shape are larger, but at fixed error
+                    the systematics are better.  Need more statistics
+                    Why is the error larger?
+                gdt02r03 - same as r01 for more statistics
+                gdt02r05 - same as r01 for more statistics
+                gdt02r04 - same as r02 for more statistics
+                gdt02r06 - same as r02 for more statistics
+
+                gdt02r07 - using eta as parametrization: the e values are all
+                    at -1,1 with no prior.  May be because thereis just more
+                    area out there and the likelihoods are hardly different.
+
+                    running with prior during to see if mitigates this.
+
+                Idea: run with prior after and look at the width
+                    of *eta* might be the best indicator, even better
+                    than the width on g. It is so broad it is causing
+                    proglems for the gsens calculation!
+
+                    PROBLEM: the mcmc just doesn't seem to move well
+                    in eta space, often never burned in at low s/n
+
+             Idea:  the error without the prior on g1,g2 may be the
+             best indicator of badness
+                gdt02r08 - prior after and keeping g0 and gcov0 for later use
+
+                - rerun since we added pre-fit and more burnin?
+
+
+
+             get02 - 6 gaussians for exp
+                get02r01
+                get02r02
+                    - using prior after and will look at shear error vs cov0 
+            
+             TODO: add more stats to gdt02r08 and get02r02
+                - gdt02r09,gdt02r10
+
+            Ran with tight prior on T
+
+                gdt02r11 - looks fairly unbiased.  Note implemented doing the
+                fitter as first step since at high s/n convergence was slow
+                gdt02r12 and gdt02r13 for averaging.  Need more!  Note because
+                if wierd errors with file system, probably better to run
+                more smaller s2n_fac, but I'll need *lots* of them!  These
+                three represent 20+40+40. To double would need 5 more 20s
+                gdt02r14,gdt02r15,gdt02r16,gdt02r17,gdt02r18 argh!
+
+
+                get02r03 - also tight prior, running.  Similar to without
+                tight prior.
+
+                also doing get02r04 get02r05 with prior after and raw
+                cov calc for averaging with get02r03
+            
+        gdt03r01,r02 - Keeping track of all pars and will plot vs. Ts2n
+        get03r01,r02 - same as gdt03*
+
+        TODO: try putting a prior on T?  Will this make T s/n be equal
+            for everything noisier than some level?
+
+        mca-gdt02r01 - working in e1,e2 space and no prior, for comparison
+            - not sure what to make of it
+
+    sims
+        et01
+            - am et01r05 with add to cache, 1000 per.
+        dt01
+            - have about 100-200 per as of now.  Some with same seeds.
+
+    ring sims
+
+        gg03
+            - ring, shear g1=0.01, 1000 in ring, but ring/s2 ratios seem
+            incomplete?
+
+            gmix
+                byellip
+                    run        s/n   nrepeat       notes
+                    gg03r01 - 1.e6         1
+                    gg03r02 - 100          1
+                    gg03r03 - 47           1
+                    gg03r04 - 22          10       
+                    gg03r05 - 11          10
+                    gg03r06 - 5           40
+                bys2n
+                    gg03r07
+        gg04 
+            - ring, g1=0.01,g2=-0.01, 100 in ring
+            gmix
+                byellip
+                    run     S/N  nrepeat  notes
+                    rerun for wrong s2n_method
+                    gg04r04 100   algo    done
+                    gg04r05  47   algo    done
+                    gg04r06  22   algo    done
+                    gg04r07  11   algo    done
+                    gg04r08   5   algo    done?
+                    gg04r09 1.e6  algo    done
+
+                by s/n
+                    # these we should re-run with s2n_fac=10
+                    run      ie    e  s2n_method  notes
+                    gg04r01   7 .33     matched   done
+                    gg04r02  19 .80     matched   done
+                    gg04r03   0 .05     matched   done
+            deswl
+                by s/n
+                    run      ie    e  s2n_method  notes
+                    gg04r01   7 .33     matched   done
+                    gg04r02  19 .80     matched   done
+                    gg04r03   0 .05     matched   done
+                byellip
+                    run     S/N  nrepeat  notes
+                    gg04r04 1.e6  algo    todo
+
+        gg05 
+            - ring.  Fewer s2 but will do more trials per run
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    gg05r01   7  .33     matched   s2n_fac=40
+                                                    specific S/N values
+                                                   [5,10,15,20,25,30,40,50,
+                                                    60,70,80,90,100]
+                                                   bytrial for all
+
+                byellip
+                    s2n_fac=80
+                    run     S/N  nrepeat  notes
+                    gg05r02 100   algo    done
+                    gg05r03  75   algo    done
+                    gg05r04  50   algo    done
+                    gg05r05  30   algo    done
+                    gg05r06  20   algo    done
+                    gg05r07  10   algo    done
+
+                    These will admom S/N.  s2n_fac=160
+                    run     S/N  nrepeat  notes
+                    gg05r08 100   algo    todo
+                    gg05r09  75   algo    todo
+                    gg05r10  50   algo    todo
+                    gg05r11  30   algo    todo
+                    gg05r12  20   algo    todo
+                    gg05r13  10   algo    todo
+
+
+
+        et02
+            - ring, shear g1=0.01, 100 in ring
+                - Should have restricted to gen3,gen5 for first ~5 s2 values,
+                  had some swapping.
+
+            gmix
+                byellip (I think these were unweighted S/N)
+                    run       s/n   nrepeat       notes
+                    et02r01  1.e6         1       done
+                    et02r02   100         1       done
+                    et02r03    47         1       done
+                    et02r04    22        10       done
+                    et02r05    11        40       todo
+                    et02r06     5        160      todo
+
+
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    et02r07   0  .05     matched   done
+                    et02r08  19  .80     matched   done
+                    et02r09   7  .33     matched   done
+            deswl
+                byellip
+                    run       s/n   nrepeat       notes
+                    et02r04  1.e6         1       
+
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    et02r01   0  .05     matched   done
+                    et02r02  19  .80     matched   done
+                    et02r03   7  .33     matched   done
+
+        et03
+            - ring, shear g1=0.01, g2=-0.01, 100 in ring
+            with *trimming* for a big speedup.  It is just
+            as accurate!
+
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    et03r01   7  .33     matched   done
+                    et03r02  19  .80     matched   todo
+                    et03r03   0  .05     matched   todo
+                byellip
+                    run     S/N   nrepeat  notes
+                    et03r04 1.e6   algo    done
+                    et03r05  100   algo    done
+                    et03r06   47   algo    done
+                    et03r07   22   algo    done
+                    et03r08   11   algo    combining
+                        did bytrial but probably not necessary
+                    et03r09    5   algo    bytrial, combine and average
+            deswl
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    et03r01   7  .33     matched   todo
+                    et03r02  19  .80     matched   todo
+                    et03r03   0  .05     matched   todo
+                byellip
+                    run     S/N   nrepeat  notes
+                    et03r04 1.e6   algo    todo
+
+        et04
+            - ring.  Fewer s2 but will do more trials per run
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    et04r01   7  .33     matched   s2n_fac=5
+                                                   bytrial is2n <= 3, might 
+                                                   have wanted <=4 with
+                                                   s2n_fac=5
+                    et04r02   7  .33     matched   s2n_fac=20
+                                                   10 specific S/N values
+                                                   [5,10,15,20,25,30,40,60,80,100]
+                                                   bytrial for all
+                                                   done
+
+        Different shears
+        et05r01,et06r01,et07r01,et08r01,et09r01,et10r01
+            .00     .01     .02     .03     .04     .05 
+
+        Same as above but using delta function and admom S/N
+        et05r02,et06r02,et07r02,et08r02,et09r02,et10r02
+            .00     .01     .02     .03     .04     .05 
+        Same as above to increase S/N
+        et05r03,et06r03,et07r03,et08r03,et09r03,et10r03
+            .00     .01     .02     .03     .04     .05 
+
+
+
+
+        edg02 redoing with fewer s2
+            round double gaussian psf
+            g1=0.01,g2=-0.01
+
+            gmix
+                byellip
+                    run        s/n   nrepeat  s2n_method      notes
+                    edg02r01  1.e8      1       matched       done
+
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg02r02  7 0.33    matched    
+
+    edg14r01,edg03r02,edg04r01,edg05r01,edg06r01,edg07r01,edg08r01
+         0.0      .01     0.02     0.03     0.04     0.05     0.06
+    elliptical psf and shear zero
+    psf ellipticities given above
+    s2nvals: [10,20,30,50,75,100]
+
+    # these with admom s2n and delta function
+    edg14r02,edg03r05,edg04r02,edg05r02,edg06r02,edg07r08,edg08r02
+         .00      .01     0.02     0.03     0.04     0.05     0.06
+
+    from 0 to 0.05
+        edg03
+            elliptical double gaussian psf, 
+                e1=0.01,e2=0.00
+                shear=0,0
+
+            gmix
+                byellip
+                    run       s/n   nrepeat  s2n_method      notes
+                    edg03r01  100   algo       matched       todo
+
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg03r02  2 0.26    matched    todo
+                    edg03r03 19 0.80    matched    done OLD SIM
+                    edg03r04  0 0.05    matched    done OLD SIM
+        edg04
+            elliptical double gaussian psf, 
+                e1=0.02,e2=0.02
+                shear=0,0
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg04r01  2 0.26    matched    done
+
+        edg05
+            elliptical double gaussian psf, 
+                e1=0.03,e2=0
+                shear=0,0
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg05r01  2 0.26    matched    done
+        edg06
+            elliptical double gaussian psf, 
+                e1=0.04,e2=0
+                shear=0,0
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg06r01  2 0.26    matched    done
+        edg07
+            elliptical double gaussian psf, 
+                e1=0.05,e2=0
+                shear=0,0
+            gmix
+                by ellip
+                    run       s/n   nrepeat  s2n_method      notes
+                    edg07r02  100   algo       matched       done
+                    edg07r03   75   algo       matched       done
+                    edg07r04   50   algo       matched       todo
+                    edg07r05   30   algo       matched       todo
+                    edg07r06   20   algo       matched       todo
+                    edg07r07   10   algo       matched       todo
+
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg07r01  2 0.26    matched    done
+
+        edg08
+            elliptical double gaussian psf, 
+                e1=0.06,e2=0
+                shear=0,0
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg08r01  2 0.26    matched    done
+
+        edg14
+            elliptical double gaussian psf, 
+                e1=0.06,e2=0
+                shear=0,0
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg14r01  2 0.26    matched    
+
+
+
+    *round* psf and shear increasing.  See above for edg02
+    edg09r01,edg02r02,edg10r01,edg11r01,edg12r01,edg13r01
+         .00      .01      .02      .03      .04      .05
+    # these with admom s2n and delta function
+    edg09r02,edg02r03,edg10r02,edg11r02,edg12r02,edg13r02
+         .00      .01      .02      .03      .04      .05
+    # combine for more S/N
+    edg09r03,edg02r04,edg10r03,edg11r03,edg12r03,edg13r03
+         .00      .01      .02      .03      .04      .05
+
+        edg09
+            round double gaussian psf
+            g1=0.00,g2=0.00
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    edg09r01  7 0.33    matched    todo
+
+
+
+        dt02
+            - ring, shear g1=0.01, g2=0, 100 in ring
+         
+            gmix
+                byellip
+                    run        s/n   nrepeat  s2n_method      notes
+                    dt02r01  1.e8       1         uw 
+                    dt02r04  100   algo    todo
+                    dt02r05   47   algo    todo
+                    dt02r06   22   algo    todo
+                    dt02r07   11   algo    todo
+                    dt02r08    5   algo    todo
+
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    dt02r02   7 0.33    matched    done
+                    dt02r03  19 0.80    matched    died S/N=5
+ 
+            deswl
+                byellip
+                    run        s/n   nrepeat  s2n_method      notes
+                    dt02r02    1.e8     1      matched        died?
+                    
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    dt02r01  19 0.80   matched     
+                    dt02r03   7 0.33   matched     
+        dt03
+            - ring.  Fewer s2 but will do more trials per run
+
+            ncores=4 and groupes [gen3,gen5]
+            gmix
+                by s/n
+                    run      ie    e  s2n_method   notes
+                    dt03r01   7  .33     matched   todo
+                                                   s2n_fac=20
+                                                   10 specific S/N values
+                                                   [5,10,15,20,25,30,40,60,80,100]
+                                                   bytrial all
+                    dt03r02   7  .33     matched   todo
+                                                   retrim_fluxfrac: 0.95
+                                                   (retrim didn't change things much but sped up)
+                                                   s2n_fac=20
+                                                   [5,10,15,20,25,30,40,50,60,70,80,90,100]
+                                                   bytrial all
+
+                    dt03r03   7  .33     matched   same as dt03r02 with s2n_fac=80
+                                                   retrim_fluxfrac: 0.95
+                    dt03r04   7  .33     matched   Same as dt03r03 but another to average
+                                                   with it for more statistics.
+                                                   Also uses new C code for rendering
+                    run dt03r03r04 is the average
+
+                    dt03r05
+                        3 gaussians, delta function as one, admom s2n
+                    same for more stats
+                    dt03r06
+                    dt03r07
+                    dt03r08
+
+
+    low noise runs
+        et01r04
+            - very glad I reran the 03 run with better guesses, this one looks
+              great
+        dt01r05
+
+    noisy runs
+        S/N
+        100
+            et01r05
+                - with noise, we might want to interpolate the par results from
+                  et01r04, let's see first.
+            dt01r06 
+                - only 100 realizations, need more

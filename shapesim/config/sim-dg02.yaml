@@ -1,0 +1,22 @@
+# devauc galaxies, gaussian psf
+# larger psf to avoid simulation problems
+name: sim-dg02
+
+#
+# PSF parameters.
+#
+
+psfmodel: gauss
+psf_sigma: 5.0
+psf_ellip: 0.0
+
+#
+# Object model
+#
+objmodel: dev
+
+#image_nsub: 4
+
+comments: |
+
+    dev obj, gauss psf, low res

@@ -6,10 +6,6 @@ Classes:
     MCMC: A class for running Monte Carlo Markov Chains.
     MCMCTester: A class for testing the MCMC class.
 
-functions:
-    read_results(filename):
-        Read a result structure output by the mcmc code.  
-
 testing:
     test: Run the MCMCTester
     testmany:  Run mutliple realizations of the tester and plot a histogram
@@ -20,93 +16,122 @@ See the docs for these individual classes for more details.
 Revision History:
     Created: 2010-04-02, Erin Sheldon, BNL
 """
+
 import numpy
+from numpy import array, zeros, ones, sqrt, arange, isfinite, \
+        where, diag, exp, log
+from numpy.random import randn
 from sys import stdout
 import os
-
-def read_results(filename):
-    """
-    Name:
-        read_results
-    Purpose:
-        Read a result structure output by the mcmc code.  
-
-    Description:
-
-        The format of the file is binary in the native endian of the machine.
-        The first 4 bytes are a 4-byte integer holding the number of
-        parameters:
-
-            4 byte integer                number of parameters
-
-        then a large block of bytes representing each step in the chain. Each
-        step is represented by npar 8-byte floats for each parameter, followed
-        by an 8-byte float for the likelihood of that step
-
-            npar*8 + 8 bytes              number of steps for each trial
-
-        Thus the number of steps can be computed from the size of the file:
-            
-            nsteps = (nbytes-4)/(npar*8 + 8)
-
-        The result is an array with fields, with data type:
-
-            [('pars',('f8',npar)), ('like','f8')]
+from sys import stderr
 
 
-    """
-    stat = os.stat(filename)
-    nbytes = stat.st_size
+def extract_stats(data, weights=None):
+    if weights is not None:
+        return _extract_weighted_stats(data, weights)
+    else:
+        return _extract_stats(data)
 
-    fobj = open(filename, 'r')
+def _extract_stats(data):
+    ntrials=data.shape[0]
+    npar = data.shape[1]
 
-    npar = numpy.zeros(1, dtype='i4')
-    npar = numpy.fromfile(fobj, dtype='i4', count=1)
-
-    # each row is par0,par1,par2,...,parN,like
-    # where the par and like are 8-byte floats
-    # thus the number of trials is nbytes/(npar*8 + 8)
-    # don't forget to remove 4 bytes for npar at 
-    # the beginning
-
-    nstep = (nbytes-4)/(npar*8 + 8)
-
-    dtype = result_dtype(npar)
-    data = numpy.fromfile(fobj, dtype=dtype, count=nstep)
-
-    fobj.close()
-    return data
-
-def result_dtype(npar):
-    return [('pars',('f8',npar)), ('like','f8')]
-
-def extract_stats(data, burnin, sigma_clip=True):
-    import esutil
-    npar = data['pars'].shape[1]
-
-    means = numpy.zeros(npar,dtype='f8')
-    errs  = numpy.zeros(npar,dtype='f8')
+    means = zeros(npar,dtype='f8')
+    cov = zeros( (npar,npar), dtype='f8')
 
     for i in xrange(npar):
-        if not sigma_clip:
-            means[i] = data['pars'][burnin:, i].mean()
-            errs[i] = data['pars'][burnin:, i].std()
+        means[i] = data[:, i].mean()
+
+    num=ntrials
+
+    for i in xrange(npar):
+        idiff = data[:,i]-means[i]
+        for j in xrange(i,npar):
+            if i == j:
+                jdiff = idiff
+            else:
+                jdiff = data[:,j]-means[j]
+
+            cov[i,j] = (idiff*jdiff).sum()/(num-1)
+
+            if i != j:
+                cov[j,i] = cov[i,j]
+
+    return means, cov
+
+def _extract_weighted_stats(data, weights):
+    if weights.size != data.shape[0]:
+        raise ValueError("weights not same size as data")
+
+    npar = data.shape[1]
+
+    wsum = weights.sum()
+    wsum2 = wsum**2
+
+    means = zeros(npar,dtype='f8')
+    cov = zeros( (npar,npar), dtype='f8')
+
+    for i in xrange(npar):
+        dsum = (data[:, i]*weights).sum()
+        means[i] = dsum/wsum
+
+    for i in xrange(npar):
+        idiff = data[:,i]-means[i]
+        for j in xrange(i,npar):
+            if i == j:
+                jdiff = idiff
+            else:
+                jdiff = data[:,j]-means[j]
+
+            wvar = ( weights*idiff*jdiff ).sum()/wsum
+            cov[i,j] = wvar
+
+            if i != j:
+                cov[j,i] = cov[i,j]
+
+    return means, cov
+
+
+def print_stats(means, cov, names=None):
+    npar=len(means)
+    for i in xrange(npar):
+        if names is not None:
+            name=names[i]
         else:
-            means[i], errs[i] = esutil.stat.sigma_clip(data['pars'][burnin:, i])
+            name='%s' % i
+        print '%s: %.16g +/- %.16g' % (name,means[i],sqrt(cov[i,i]))
 
-    return means, errs
+def extract_maxlike_stats(data, burnin):
+    nuse = data.size-burnin
+    npar = data['pars'].shape[1]
 
-class MCMC():
+    maxi = data['loglike'][burnin:].argmax()
+
+    max_like = zeros(npar,dtype='f8')
+    error    = zeros(npar,dtype='f8')
+
+    for i in xrange(npar):
+        max_like[i] = data['pars'][burnin+maxi, i]
+
+        # variance around this point
+        vi = ( (data['pars'][burnin:, i] - max_like[i])**2 ).sum()
+        vi /= (nuse-1.)
+
+        error[i] = sqrt(vi)
+
+    return max_like, error
+
+class MCMC:
     """
     Class:
         MCMC
     Purpose:
         Run a Monte Carlo Markov Chain (MCMC).  The user inputs an object that
-        has the methods "step" and "likelihood" that can be used to generate
-        the chain
+        has the methods "step" and "loglike" that can be used to generate the
+        chain. Note the loglike method should return the log likelihood
 
     Calling Sequence:
-        m=mcmc.MCMC(obj, log=True)
+        m=mcmc.MCMC(obj)
         result = m.run(nstep, par_guess, seed=None)
 
     Construction:
@@ -114,50 +139,24 @@ class MCMC():
             obj: 
                 An object to use for evaluating likelihoods and taking steps in
                 the chain.  The object must have the methods "step" and
-                "likelihood".  These methods must have the following
+                "loglike".  These methods must have the following
                 signatures:
-                    .newpars = obj.step(pars)
+                    newpars = obj.step(pars)
                         Take a new step and return the new parameters.  
-                    .likelihood = obj.likelihood(pars)
-                        Return the likelihood of the input parameters.
-
-        Optional Inputs:
-            log:  If True, the object returns log likelihoods.  Default
-                is True.
+                    loglike = obj.loglike(pars)
+                        Return the log likelihood of the input parameters.
 
     See docs for the .run method for more details.
 
     Revision History:
         Created: 2010-04-02, Erin Sheldon, BNL
     """
-    def __init__(self, obj, log=True):
-         self.init(obj, log=log)
-
-    def init(self, obj, log=True):
+    def __init__(self, obj):
         self.obj = obj
-        self.log = log
         self.fobj = None
         self.parguess=None
 
-    def open_output(self, filename):
-        if self.parguess is None:
-            raise ValueError("parguess must be set before opening")
-
-        self.fobj = open(filename, 'w')
-        try:
-            npar = len(self.parguess)
-        except:
-            npar = 1
-        npar = numpy.array(npar, dtype='i4')
-        npar.tofile( self.fobj )
- 
-        
-    def close_output(self):
-        if isinstance(self.fobj, file):
-            self.fobj.close()
-            self.fobj=None
-
-    def run(self, nstep, parguess, seed=None, file=None):
+    def run(self, nstep, parguess, seed=None):
         """
         Class:
             MCMC
@@ -166,119 +165,70 @@ class MCMC():
         Purpose:
             Run the MCMC chain.
         Calling Sequence:
-            m=mcmc.MCMC(obj, log=True)
+            m=mcmc.MCMC(obj)
 
             # run the chain
             chain_data = m.run(nstep, par_guess, seed=None)
 
         Inputs:
             nstep: Number of steps in the chain.
-            par_guess:  Starting point for the chain in the n-dimensional
+            parguess:  Starting point for the chain in the n-dimensional
                 parameters space.
 
         Optional Inputs:
             seed: A seed for the random number generator. If not given, 
                 a seed is automatically generated by numpy.random.seed()
 
-            file: 
-                a file name to write the results.  The file will contain a
-                4-byte integer for the number of parameters, followed by the
-                data, 8 byte floats for each parameter and and 8-byte float for
-                the likelihood.  Repeated for each step.  See the read_results
-                function for more info.
-
-                if file is sent, the return value of this method is None
-
         Outputs:
             A rec array holding the chain data.  The data type is
-                [('pars',('f8',npar)), ('like','f8')]
+
+                [('accepted','i1'),('pars',('f8',npar)), ('loglike','f8')]
+
             So output['pars'][i] is the parameters in step i, and
-            output['likelihood'][i] is the likelihood of step i.
+            output['loglike'][i] is the log likelihood of step i.
+            Accepted is 1 if the step was accepted 0 otherwise.
 
             For example:
                 data = m.run(1000)
                 data['pars']
-                data['likelihood']
-
-            If file is sent, then None is returned.
-
+                data['loglike']
 
         """
+
+        self.parguess=array(parguess,dtype='f8')
 
         # If seed sent use it, else just generate one
         numpy.random.seed(seed)
 
-        if not numpy.isscalar(parguess):
-            self.parguess = numpy.array(parguess, dtype='f8')
-            self.npar = self.parguess.size
-        else:
-            self.parguess = parguess
-            self.npar=1
-
-        # these are the results
-        if file is not None:
-            self.open_output(file)
-            output = None
-        else:
-            output = self.result_struct(nstep)
 
         self.oldpars = self.parguess.copy()
-        self.oldlike = self.obj.likelihood(self.oldpars)
+        self.oldlike = self.obj.loglike(self.oldpars)
+        self.npar = self.oldpars.size
+
+        output = self.result_struct(nstep)
 
         for i in xrange(nstep):
             self.step()
 
-            if file is not None:
-                self.write_step()
-            else:
-                output['pars'][i] = self.newpars
-                output['like'][i] = self.newlike
+            output['pars'][i] = self.newpars
+            output['loglike'][i] = self.newlike
+            output['accepted'][i] = self.accepted
 
             self.oldpars = self.newpars
             self.oldlike = self.newlike
 
-        if file is not None:
-            self.close_output()
-        # when writing to a file, will be None
+        self.trials=output
         return output
 
     def result_struct(self, num):
-        dtype = result_dtype(self.npar)
-        st = numpy.zeros(num, dtype=dtype)
+        dtype = self.result_dtype(self.npar)
+        st = zeros(num, dtype=dtype)
         return st
 
-    def write_step(self):
-        parout = numpy.array(self.newpars, dtype='f8', copy=False)
-        parout.tofile(self.fobj)
-        likeout = numpy.array(self.newlike, dtype='f8')
-        likeout.tofile(self.fobj)
-
-
-
-    def get_results(self):
-        """
-        Class:
-            MCMC
-        Method Name:
-            get_results
-        Purpose:
-            return the parameters and likelihood for each trial
-        Calling Sequence:
-            mcmc=mcmc.MCMC(obj, log=True)
-            mcmc.run(nstep, par_guess, seed=None)
-            trials, liklihoods = mcmc.get_results()
-        Outputs:
-            trials, likelihoods:  A tuple containing trials and likelihoods.
-                trials: 
-                    an (npars, nstep) array containing the parameters at each
-                    step in the chain.
-                likelihoods: 
-                    is an (nstep) length array containing the likelihood at
-                    each step in the chain.
-        """
-        return self.pars, self.like
-
-
+    def result_dtype(self, npar):
+        return [('accepted','i1'),
+                ('pars','f8',npar),
+                ('loglike','f8')]
 
     def step(self):
         """
@@ -288,8 +238,8 @@ class MCMC():
             step
         Purpose:
             Take the next step in the MCMC chain.  Calls the .step and
-            .likelihood methods of the object send during construction.  If
-            the new likelihood is not greater than the previous, or a
+            .loglike methods of the object send during construction.  If
+            the new loglike is not greater than the previous, or a
             uniformly generated random number is greater than the the ratio of
             new to old likelihoods, the new step is not used, and the new
             parameters are the same as the old.  Otherwise the new step is
@@ -300,24 +250,23 @@ class MCMC():
         """
         # Take a step and evaluate the likelihood
         newpars = self.obj.step(self.oldpars)
-        newlike = self.obj.likelihood(newpars)
+        newlike = self.obj.loglike(newpars)
 
-        if self.log:
-            likeratio = newlike-self.oldlike
-        else:
-            likeratio = newlike/self.oldlike
+        likeratio = newlike-self.oldlike
 
         randnum = numpy.random.random()
-        if self.log:
-            randnum = numpy.log(randnum)
+        randnum = numpy.log(randnum)
 
-        # keep this step?
-        if not ( (newlike > self.oldlike) | (randnum < likeratio) ):
-            self.newpars=self.oldpars
-            self.newlike=self.oldlike
-        else:
+        # we allow use of -infinity as a sign we are out of bounds
+        if (isfinite(newlike) 
+                and ( (newlike > self.oldlike) | (randnum < likeratio)) ):
             self.newpars=newpars
             self.newlike=newlike
+            self.accepted=1
+        else:
+            self.newpars=self.oldpars
+            self.newlike=self.oldlike
+            self.accepted=0
 
 
 
@@ -358,15 +307,18 @@ class MCMCTester:
             self.npars = 1
 
             self.npoints = ny
-            self.y = numpy.zeros(ny, dtype='f8')
+            self.y = zeros(ny, dtype='f8')
             self.y[:] = val
-            self.y[:] += sigma*numpy.random.standard_normal(ny)
+            self.y[:] += sigma*randn(ny)
 
-            self.yerr = numpy.zeros(ny, dtype='f8')
+            self.yerr = zeros(ny, dtype='f8')
             self.yerr[:] = sigma
 
             self.ivar = 1.0/self.yerr**2
             self.psigma = self.yerr[0]
+
+            #self.parguess=val + 3*sigma*randn()
+            self.parguess=0.
 
             if verbose:
                 stdout.write('  type: "constant"\n')
@@ -386,9 +338,9 @@ class MCMCTester:
 
     # pars must be an array
     def step(self,pars):
-        return pars + self.psigma*numpy.random.standard_normal(self.npars)
+        return pars + self.psigma*randn(self.npars)
 
-    def likelihood(self,pars):
+    def loglike(self,pars):
         if self.type == 'constant':
             chi2 = self.ivar*(self.y-pars)**2
             chi2 = -0.5*chi2.sum()
@@ -396,22 +348,21 @@ class MCMCTester:
             raise ValueError("only support type='constant'")
         return chi2
 
-    def RunTest(self, nstep=10000, file=None):
+    def RunTest(self, nstep=10000):
 
         if self.verbose:
             stdout.write("  nstep: %s\n" % nstep)
 
-        parguess = self.true_pars
 
         m=MCMC(self)
-        self.trials = m.run(nstep, parguess, file=file)
+        self.trials = m.run(nstep, self.parguess)
 
     def RunMultipleTests(self, ntrial, nstep=1000, burnin=100):
         """
         Run multiple tests and save in self.meanvals
         Note default is fewer steps per mcmc
         """
-        self.meanvals = numpy.zeros(ntrial, dtype='f4')
+        self.meanvals = zeros(ntrial, dtype='f4')
 
         for i in xrange(ntrial):
             # create a new realization
@@ -555,34 +506,66 @@ class MCMCTester:
         return self.trials, self.like
 
 
-def plot_results6(res, burnin, sigma_clip=True):
+
+
+def plot_results(trials, **keys):
     import biggles
     import esutil
-    tab = biggles.Table(2,3)
-    means,errs = extract_stats(res, burnin, sigma_clip=sigma_clip)
-    
-    for i in xrange(6):
-        irow = i//3
-        icol = i % 3
-        binsize=errs[i]*0.2
-        min = means[i]-4.0*errs[i]
-        max = means[i]+4.0*errs[i]
-        hdict = esutil.stat.histogram(res['pars'][burnin:, i], 
-                                      binsize=binsize, 
-                                      min=min,max=max,
+
+    fontsize_min=keys.get('fontsize_min',1)
+    biggles.configure( 'default', 'fontsize_min', fontsize_min)
+
+    binfac=keys.get('binfac',0.2)
+    names=keys.get('names',None)
+    show=keys.get('show',True)
+
+    means,cov = extract_stats(trials)
+    errs=sqrt(diag(cov)) 
+
+    npars=len(means)
+
+    nrow,ncol=get_grid(npars)
+    plt=biggles.Table(nrow,ncol)
+    plt.aspect_ratio=float(nrow)/ncol
+
+    for i in xrange(npars):
+        row=i/ncol
+        col=i % ncol
+
+        bsize = binfac*errs[i]
+
+        hdict = esutil.stat.histogram(trials[:, i], 
+                                      binsize=bsize, 
                                       more=True)
+        hplot = biggles.Histogram(hdict['hist'], 
+                                  x0=hdict['low'][0], 
+                                  binsize=bsize)
+        plti=biggles.FramedPlot()
+        if names is not None:
+            name=names[i]
+        else:
+            name=r'$p_{%d}$' % i
 
-        hplot = biggles.Histogram(hdict['hist'], x0=hdict['low'][0], binsize=binsize)
-        plt=biggles.FramedPlot()
-        plt.add(hplot)
-        plt.xlabel = 'parameter %i' % i
+        plti.xlabel=name
 
-        tab[irow,icol] = plt
+        hmax=hdict['hist'].max()
+        plti.yrange=[-0.05*hmax, 1.2*hmax]
 
-    tab.show()
+        plti.add(hplot)
+            
+        lab = r'$<%s> = %0.4g \pm %0.4g$' % (name,means[i],errs[i])
+        plab = biggles.PlotLabel(0.1,0.9,lab,halign='left')
 
+        plti.add(plab)
 
-def test(nstep=10000, doplot=False, hardcopy=False):
+        plt[row,col]=plti
+    
+    if show:
+        plt.show()
+
+    return plt
+
+def test(burnin=100, nstep=10000, doplot=False, hardcopy=False):
     """
     Name:
         test
@@ -591,6 +574,7 @@ def test(nstep=10000, doplot=False, hardcopy=False):
     """
     tc = MCMCTester("constant")
     tc.RunTest(nstep)
+    plot_burnin(tc.trials['pars'], tc.trials['loglike'], burnin)
     tc.CompareResults(doplot=doplot, hardcopy=hardcopy)
 
 def testmany(ntrial):
@@ -648,8 +632,8 @@ def test_line(nstep=10000, doplot=False):
         tab.show()
 
         # get status for chain
-        parfit, errfit = extract_stats(data, burnin)
-
+        parfit, cov = extract_stats(data, burnin)
+        errfit = sqrt(diag(cov))
 
         # plot the histograms and comparison plot
 
@@ -712,6 +696,579 @@ def test_line(nstep=10000, doplot=False):
     return data
                         
    
+def get_grid(ntot):
+    sq=int(sqrt(ntot))
+    if ntot==sq*sq:
+        return (sq,sq)
+    elif ntot <= sq*(sq+1):
+        return (sq,sq+1)
+    else:
+        return (sq+1,sq+1)
+
+class EmceeFitter(object):
+    """
+    Base class to fit the using emcee
+
+    the user must over-ride these functions
+        - get_guess() - return array of shape (nwalkers,ndims)
+        - get_lnprob(pars) - return the log likelihood for the input pars
+        - get_npoints() - return total number of data points
+            this is for doing statistics such as the chisq probability
+    
+    """
+    def __init__(self, nwalkers, burnin, nstep, a):
+
+        self._nwalkers=nwalkers
+        self._burnin=burnin
+        self._nstep=nstep
+        self._a=a
+
+    def get_result(self):
+        """
+        A dictionary with the results
+        
+        pars,pcov,perr,lnprob,aic,bic,chi2,dof,chi2per,prob
+        """
+        return self._result
+
+    def get_trials(self):
+        """
+        Return all points in the chain
+        """
+        return self._trials
+
+    def get_lnprobs(self):
+        """
+        Return all log probabilities in the chain
+        """
+        return self._sampler.lnprobability.reshape(self._nwalkers*self._nstep)
+
+    def get_guess(self):
+        """
+        array shape (nwalkers,ndims)
+        """
+        raise RuntimeError("over-ride")
+
+    def get_npoints(self):
+        """
+        Total number of data points
+        """
+        raise RuntimeError("over-ride")
+
+    def get_lnprob(self, pars):
+        """
+        scalar log likelihood or probability
+        """
+        raise RuntimeError("over-ride")
+
+    def _run_trials(self):
+        import emcee
+
+        guess=self.get_guess()
+        npars=guess.shape[1]
+
+        sampler = emcee.EnsembleSampler(self._nwalkers, 
+                                        npars,
+                                        self.get_lnprob,
+                                        a=self._a)
+
+        pos, prob, state = sampler.run_mcmc(guess, self._burnin)
+        sampler.reset()
+        pos, prob, state = sampler.run_mcmc(pos, self._nstep)
+
+        self._trials  = sampler.flatchain
+        self._sampler = sampler 
+
+        self._calc_stats()
+
+    def _calc_stats(self):
+        pars,pcov=extract_stats(self._trials)
+        perr=sqrt(diag(pcov))
+
+        npars=len(pars)
+
+        lnprob=self.get_lnprob(pars)
+
+        npts=self.get_npoints()
+
+        chi2=lnprob/(-0.5)
+        dof=npts-npars
+        chi2per = chi2/dof
+
+        aic = -2*lnprob + 2*npars
+        bic = -2*lnprob + npars*log(npts)
+
+        res={'pars':pars,
+             'perr':perr,
+             'pcov':pcov,
+             'lnprob':lnprob,
+             'aic':aic,
+             'bic':bic,
+             'chi2': chi2,
+             'dof':dof,
+             'chi2per':chi2per}
+        try:
+            import scipy.stats
+            prob = scipy.stats.chisqprob(chi2, dof)
+
+            res['prob']=prob
+        except:
+            pass
+
+        self._result=res
+
+    def plot_trials(self, **keys):
+        plt=plot_results(self._trials, **keys)
+        return plt
+
+    def __repr__(self):
+        pars=self._result['pars']
+        perr=self._result['perr']
+        npars=len(pars)
+
+        rep=[]
+        for i in xrange(npars):
+            r= "  p%d: %.4g +/- %.4g" % (i,pars[i],perr[i])
+            rep.append(r)
+        
+        rep='\n'.join(rep)
+        return rep
+
+
+class LogNormalFitter(EmceeFitter):
+    def __init__(self, x, y, guess, nwalkers, burnin, nstep, a=2, **keys):
+
+        super(LogNormalFitter,self).__init__(nwalkers, burnin, nstep, a)
+
+        self._x=array(x, dtype='f8', ndmin=1, copy=False)
+        self._y=array(y, dtype='f8', ndmin=1, copy=False)
+        self._guess0=guess
+
+        self._xmax=self._x.max()
+
+        if self._guess0 is not None:
+            self._guess0=array(self._guess0, dtype='f8', ndmin=1, copy=False)
+
+        self._yerr=keys.get('yerr',None)
+        self._ivar=keys.get('ivar',None)
+
+        self._width=keys.get('width',False)
+        if self._width is not None:
+            self._width=array(self._width, dtype='f8', ndmin=1, copy=False)
+
+        self._set_ivar()
+
+        self._check_data()
+        self._check_guess_and_width()
+
+        self._set_full_guess()
+
+        self._lowval=-9.999e20
+        self._run_trials()
+
+    def get_model(self):
+        """
+        Get a normalized lognormal model at the expectation value of the
+        parameters.  This function integrates to unity.
+        
+            model = lnf.get_model()
+            y = model(x)
+
+        To get the scaled function with the right overall normalization
+
+            y=model.scaled(x)
+        """
+        from esutil.random import LogNormal
+
+        pars=self._result['pars']
+        A=pars[0]
+        mean=pars[1]
+        sigma=pars[2]
+
+        return LogNormal(mean, sigma, norm=A)
+   
+    def get_guess(self):
+        """
+        over-ride for base class
+        """
+        return self._guess
+
+    def get_npoints(self):
+        """
+        over-ride for base class
+        """
+        return self._x.size
+
+    def get_lnprob(self, pars):
+        w,=where(pars <= 1.e-6)
+        if w.size > 0:
+            return self._lowval
+        if pars[1] > self._xmax:
+            return self._lowval
+
+
+        model=self._get_model_at_pars(pars)
+
+        chi2=((model-self._y)**2)*self._ivar
+        lnprob = -0.5*chi2.sum()
+
+        if self._width is not None:
+            w=self._width
+            g=self._guess0
+            lnprior=( (pars-self._guess0)/self._width )**2
+            lnprior = -0.5*lnprior.sum()
+            
+            lnprob += lnprior
+
+        return lnprob
+
+    def _get_model_at_pars(self, pars):
+        from esutil.random import LogNormal
+        A=pars[0]
+        mean=pars[1]
+        sigma=pars[2]
+
+        ln=LogNormal(mean, sigma, norm=A)
+        return ln.scaled(self._x)
+
+        # some optimizations here; could construct with norm=A and call
+        # scaled(x).  This way we avoid some error checking that has already
+        # been done
+
+        #lnobj=LogNormal(mean, sigma)
+        #lnprob=lnobj._lnprob(self._x)
+
+        #prob=exp(lnprob)
+
+        #return A*prob
+
+    def plot_trials(self, **keys):
+        names=['A','mean','sigma']
+        keys['names']=names
+        plt=plot_results(self._trials, **keys)
+        return plt
+
+    def _set_ivar(self):
+        if self._yerr is not None:
+            ivar=1./self._yerr**2
+            self._ivar=array(ivar, dtype='f8', ndmin=1, copy=False)
+        elif self._ivar is not None:
+            self._ivar=array(self._ivar, dtype='f8', ndmin=1, copy=False)
+        else:
+            self._ivar=None
+
+    def _check_data(self):
+        wbad,=where(numpy.isfinite(self._x) == False)
+        if wbad.size!=0:
+            raise ValueError("%d x values are not finite" % wbad.size)
+        wbad,=where(numpy.isfinite(self._y) == False)
+        if wbad.size!=0:
+            raise ValueError("%d y values are not finite" % wbad.size)
+
+        if self._x.size != self._y.size:
+            raise ValueError("x,y must be same size")
+
+        if self._ivar is not None:
+            wbad,=where(numpy.isfinite(self._ivar) == False)
+            if wbad.size!=0:
+                raise ValueError("%d ivar values are not finite" % wbad.size)
+
+            if (self._x.size != self._ivar.size) and (self._ivar.size != 1):
+                raise ValueError("x,y, and yerr/ivar must be same size")
+
+        wbad,=where(self._x <= 0)
+        if wbad.size != 0:
+            raise ValueError("x values must all be > 0")
+
+    def _check_guess_and_width(self):
+        # make sure there is a guess for each dimension
+        guess0=self._guess0
+        if guess0.size != 3:
+            raise ValueError("guess should be length 3 for [norm,mean,sigma]")
+
+        wbad,=where(numpy.isfinite(guess0) == False)
+        if wbad.size != 0:
+            mess=[]
+            mess.append("bad guess:")
+            for i in wbad:
+                mess.append("  %i %g" % (i,guess0[i]))
+            mess='\n'.join(mess)
+            raise ValueError(mess)
+
+        if self._width is not None:
+            if self._width.size != 3:
+                raise ValueError("width should be length 3 for [norm,mean,sigma]")
+            wbad,=where(numpy.isfinite(self._width) == False)
+            if wbad.size != 0:
+                raise ValueError("Some width are not finite: [%s, %s, %s]" % tuple(self._width))
+
+
+    def _set_full_guess(self):
+        from esutil.random import srandu
+
+        guess0=self._guess0
+
+        npars=len(guess0)
+        nwalkers=self._nwalkers
+        guess=zeros((nwalkers,npars))
+
+        for i in xrange(npars):
+            if guess0[i]==0:
+                guess[:,i] = guess0[i]+0.1*srandu(nwalkers)
+            else:
+                guess[:,i] = guess0[i]*(1+0.1*srandu(nwalkers))
+
+        self._guess=guess
+
+def test_lognormal():
+    import biggles
+    import esutil as eu
+    from esutil.random import LogNormal, srandu
+    from esutil.stat import histogram
+
+    n=1000
+    nwalkers=100
+    burnin=100
+    nstep=100
+
+    mean=8
+    sigma=3
+    ln=LogNormal(mean,sigma)
+    vals=ln.sample(n)
+
+    binsize=0.5
+
+    plt=eu.plotting.bhist(vals, binsize=binsize,show=False)
+
+    h=histogram(vals, binsize=binsize,more=True)
+    herr=sqrt(h['hist'])
+    herr=herr.clip(1.0, herr.max())
+
+    guess=[n*(1. + .1*srandu()),
+           mean*(1. + .1*srandu()),
+           sigma*(1. + .1*srandu())]
+    guess=[n*binsize,mean,sigma]
+
+    print 'guess:',guess
+    nlf=LogNormalFitter(h['center'], h['hist'], guess, nwalkers, burnin, nstep,
+                        yerr=herr)
+
+    print nlf
+
+    res=nlf.get_result()
+    
+    model=nlf.get_model()
+
+    yvals=model.scaled(h['center'])
+    plt.add(biggles.Curve(h['center'], yvals, color='blue'))
+    plt.show()
+
+
+                        
+class PolyFitter(object):
+    """
+    Fit a polygon to the input points using an affine invariant MCMC chain
+
+    The emcee module is used for the MCMC chain.
+    """
+    def __init__(self, order, x, y, nwalkers, burnin, nstep, 
+                 guess=None, a=2, yerr=None, ivar=None):
+
+        self.order=order
+        self.x=array(x, dtype='f8', ndmin=1, copy=False)
+        self.y=array(y, dtype='f8', ndmin=1, copy=False)
+
+        self.nwalkers=nwalkers
+        self.burnin=burnin
+        self.nstep=nstep
+        self.a=a
+
+        self.yerr=yerr
+        self.ivar=ivar
+
+        self._set_ivar()
+
+        self._check_data()
+        self._set_guess(guess)
+
+        self._run_trials()
+
+    def get_result(self):
+        return self._result
+
+    def get_poly(self):
+        return numpy.poly1d(self._result['pars'])
+
+    def _set_ivar(self):
+        if self.yerr is not None:
+            ivar=1./self.yerr**2
+            self.ivar=array(ivar, dtype='f8', ndmin=1, copy=False)
+        elif self.ivar is not None:
+            self.ivar=array(self.ivar, dtype='f8', ndmin=1, copy=False)
+        else:
+            self.ivar=None
+
+    def _check_data(self):
+        wbad,=where(numpy.isfinite(self.x) == False)
+        if wbad.size!=0:
+            raise ValueError("%d x values are not finite" % wbad.size)
+        wbad,=where(numpy.isfinite(self.y) == False)
+        if wbad.size!=0:
+            raise ValueError("%d y values are not finite" % wbad.size)
+
+        if self.x.size != self.y.size:
+            raise ValueError("x,y must be same size")
+
+
+        if self.ivar is not None:
+            wbad,=where(numpy.isfinite(self.ivar) == False)
+            if wbad.size!=0:
+                raise ValueError("%d ivar values are not finite" % wbad.size)
+
+            if (self.x.size != self.ivar.size) and (self.ivar.size != 1):
+                raise ValueError("x,y, and yerr/ivar must be same size")
+
+
+
+    def _check_guess(self,guess):
+        if guess.size != (self.order+1):
+            raise ValueError("guess should be length order+1")
+        wbad,=where(numpy.isfinite(guess) == False)
+        if wbad.size != 0:
+            mess=[]
+            mess.append("bad guess:")
+            for i in wbad:
+                mess.append("  %i %g" % (i,guess[i]))
+            mess='\n'.join(mess)
+            raise ValueError(mess)
+
+    def _set_guess(self, guess0):
+        from esutil.random import srandu
+
+        if guess0 is not None:
+            guess0=array(guess0, dtype='f8', ndmin=1, copy=True)
+            self._check_guess(guess0)
+        else:
+            guess0=numpy.polyfit(self.x, self.y, self.order)
+            self.guess=guess0
+
+        npars=len(guess0)
+        nwalkers=self.nwalkers
+        guess=zeros((nwalkers,npars))
+
+        for i in xrange(npars):
+            if guess0[i]==0:
+                guess[:,i] = guess0[i]+0.1*srandu(nwalkers)
+            else:
+                guess[:,i] = guess0[i]*(1+0.1*srandu(nwalkers))
+
+        self._guess=guess
+
+    def _run_trials(self):
+        import emcee
+
+        guess=self._guess
+        npars=guess.shape[1]
+        sampler = emcee.EnsembleSampler(self.nwalkers, 
+                                        npars,
+                                        self.get_lnprob,
+                                        a=self.a)
+
+        pos, prob, state = sampler.run_mcmc(guess, self.burnin)
+        sampler.reset()
+        pos, prob, state = sampler.run_mcmc(pos, self.nstep)
+
+        self.trials  = sampler.flatchain
+        
+        self._calc_stats()
+
+    def _calc_stats(self):
+        pars,pcov=extract_stats(self.trials)
+        perr=sqrt(diag(pcov))
+
+        npars=len(pars)
+
+        lnprob=self.get_lnprob(pars)
+
+        chi2=lnprob/(-0.5)
+        dof=self.x.size-npars
+        chi2per = chi2/dof
+
+        aic = -2*lnprob + 2*npars
+        bic = -2*lnprob + npars*log(self.x.size)
+
+        res={'pars':pars,
+             'perr':perr,
+             'pcov':pcov,
+             'lnprob':lnprob,
+             'aic':aic,
+             'bic':bic,
+             'chi2': chi2,
+             'dof':dof,
+             'chi2per':chi2per}
+        try:
+            import scipy.stats
+            prob = scipy.stats.chisqprob(chi2, dof)
+
+            res['prob']=prob
+        except:
+            pass
+
+        self._result=res
+
+
+    def get_lnprob(self, pars):
+        from numpy import poly1d
+
+        ply=poly1d(pars)
+        model=ply(self.x)
+        chi2 = (self.y-model)**2
+        if self.ivar is not None:
+            chi2 *= self.ivar
+
+        return -0.5*chi2.sum()
+
+    def plot_trials(self):
+        import biggles
+        import esutil as eu
+
+        npars=len(self._result['pars'])
+
+        trials=self.trials
+
+        for i in xrange(npars):
+            row=i/ncol
+            col=i % ncol
+
+            std=trials[:,i].std()
+            binsize=0.2*std
+
+            plti,hi=eu.plotting.bhist(trials[:,i], binsize=binsize, show=False,
+                                      gethist=True)
+
+
+
+    def __repr__(self):
+        pars=self._result['pars']
+        perr=self._result['perr']
+        npars=len(pars)
+
+        rep=[]
+        header=[]
+        for i in xrange(npars):
+            h="p%d" % i
+            power=npars-i-1
+            if power>0:
+                h += " x^%d" % power
+            header.append(h)
+
+            r= "  p%d: %.4g +/- %.4g" % (i,pars[i],perr[i])
+            rep.append(r)
+        
+        header=' + '.join(header)
+        rep = [header] + rep
+        rep='\n'.join(rep)
+        return rep
 
 
 
@@ -746,10 +1303,10 @@ class LinFitter:
 
 
     def step(self,pars):
-        newpars = pars + self.err_guess*numpy.random.standard_normal(self.npars)
+        newpars = pars + self.err_guess*randn(self.npars)
         return newpars
     
-    def likelihood(self, pars):
+    def loglike(self, pars):
         yfunc = self.line_func(pars)
         chi2 = self.ivar*(self.y-yfunc)**2
         return -0.5*chi2.sum()
@@ -763,8 +1320,17 @@ def noisy_line(pars, xmin, xmax, nx, yerr):
     x = numpy.linspace(xmin, xmax, nx)
     y = pars[0]*x + pars[1]
 
-    y += yerr*numpy.random.standard_normal(nx)
+    y += yerr*randn(nx)
     
     yerr_vals = numpy.array([yerr]*x.size, dtype='f8')
 
     return x,y,yerr_vals
+
+def gaussfunc(mean,sigma,xvals):
+
+    gnorm = 1.0/numpy.sqrt(2.0*numpy.pi*sigma**2)
+    gauss = numpy.exp(-0.5*(xvals - mean)**2/sigma**2 )
+
+    return gauss*gnorm
+
+

@@ -1,0 +1,122 @@
+#!/usr/bin/env python
+# vim: tabstop=4 expandtab shiftwidth=4
+"""
+    %prog [vnote_filename] 
+
+Description:
+
+    converts vNote files (e.g. from Galaxy S2 Memo app) to text
+
+    Either send a file as the first argument or send on standard input. If
+    filename is '-' that also means read from stdin
+
+Examples:
+
+    vnote2txt vnotefile.vnt
+    cat vnotefile.vnt | vnote2txt
+    cat vnotefile.vnt | vnote2txt -
+    vnote2txt < vnotefile.vnt
+    vnote2txt < vnotefile.vnt > output.txt
+
+Modification History:
+    Original was from here: https://bitbucket.org/eug48/vnote2txt/downloads (2012)
+
+    Erin Sheldon: Hacked up to be more unix like: input a single file (or
+    stdin) and output to stdout
+"""
+
+from __future__ import print_function
+import sys
+from sys import stdin, stderr
+import quopri
+import re
+import unittest
+
+from optparse import OptionParser
+parser=OptionParser(__doc__)
+
+line_pattern = re.compile('([A-Z-]+);?([^:]*):(.*)') # e.g. BODY;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:some note
+
+"""
+Extracts the keys, values and metadata from a vnote file
+"""
+def parse_file(f):
+    values = {}
+    metadata = {}
+    prevline = None
+    for line in f.readlines():
+        # merge quoted-printable soft newlines e.g.
+        # BEGIN:VCARD
+        # BODY;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:=12=34=
+        # =56
+        # END:VCARD
+        if prevline:
+            line = prevline + line
+        prevline = None
+
+        # parse vcard properties
+        parts = line_pattern.findall(line.strip())
+        if len(parts) == 0:
+            print ("unable to parse line: " + line, file=stderr)
+            return None,None
+        else:
+            parts = parts[0]
+        key = parts[0]
+        if len(parts) == 2:
+            values[key] = parts[1]
+        elif len(parts) == 3:
+            values[key] = parts[2]
+            propdict = metadata.setdefault(key, {})
+            for prop in parts[1].split(';'):
+                if len(prop) > 0:
+                    k, v = prop.split('=')
+                    propdict[k] = v
+
+            if propdict.get('ENCODING') == 'QUOTED-PRINTABLE' and values[key].endswith('='):
+                prevline = line.rstrip()[:-1] # reparse
+
+        else:
+            print ("unable to parse line: " + line, file=stderr)
+            return None,None
+
+    return values, metadata
+
+"""
+Returns the content (i.e. the BODY property) of a vnote file, and an error message
+"""
+def process_file(f):
+    values, metadata = parse_file(f)
+
+    # TODO: more integrity checking of the file
+    if values is None:
+        return None, None
+    elif values['BEGIN'] != 'VNOTE' or values['END'] != 'VNOTE' or values['VERSION'] != '1.1':
+        return None, "is not a valid vNote 1.1 file"
+    else:
+        body = values['BODY']
+        if metadata['BODY'].get('ENCODING') == 'QUOTED-PRINTABLE':
+
+            # decode quoted-printable
+            if sys.hexversion >= 0x030000F0:
+                body = body.encode('utf8')
+            body = quopri.decodestring(body, header=False)
+
+
+        return body, None
+
+if __name__ == "__main__":
+    options, args = parser.parse_args(sys.argv[1:])
+    if len(args) < 1 or args[0] == '-':
+        stream=stdin
+    else:
+        stream=open(args[0])
+
+    body, error = process_file(stream)
+    if body is None:
+        if error is None:
+            print("error",file=stderr)
+        else:
+            print(error,file=stderr)
+    else:
+        print(body)
+

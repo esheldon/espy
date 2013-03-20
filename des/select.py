@@ -8,9 +8,14 @@ import des
 import os
 from sys import stdout
 import deswl
-import columns
 import numpy
 from numpy import where
+
+try:
+    import columns
+except:
+    print("could not import columns")
+
 
 import esutil as eu
 from esutil.ostools import path_join
@@ -18,7 +23,7 @@ from esutil.ostools import path_join
 class SizeMagSelector(dict):
     def __init__(self, run):
         self._run=run
-        coldir = deswl.files.wlse_coldir(run)
+        coldir = deswl.files.coldir(run)
         if not os.path.exists(coldir):
             raise ValueError("No such coldir: %s" % coldir)
         self['cols'] = columns.Columns(coldir)

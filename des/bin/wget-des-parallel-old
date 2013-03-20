@@ -1,0 +1,54 @@
+#!/bin/bash
+# run wget-des in parallel
+#
+# Author
+#   Erin Sheldon, Brookhaven National Laboratory
+#
+
+function usage_and_exit {
+    echo "
+Usage
+        wget-des-parallel [-n njobs] type band
+
+Download multiple DES runs simultaneously using gnu parallel.  The
+input list of runs is sent on standard input, e.g.
+
+        cat runlist | wget-des-parallel red i
+        wget-des-parallel red i < runlist
+
+Arguments
+        type: either 'red' or 'coadd' 'commsrc'
+        band: g,r,i,z,Y
+
+Options
+        -n The number of parallel jobs.  Defaults to 3
+        -d The download directory, defaults to \$DESDATA environment
+           variable.
+"
+    exit 45
+}
+if [[ $# -lt 2 ]]; then
+    usage_and_exit
+fi
+
+njobs=3
+dir=""
+while getopts "n:h" Option
+  do
+  case $Option in
+      n)  njobs=$OPTARG ;;
+      d)  dir=$OPTARG ;;
+      [?]) usage_and_exit ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+type=$1
+band=$2
+
+opts=""
+if [[ $dir != "" ]]; then
+    opts="-d ${dir}"
+fi
+
+cat - | parallel -u -j${njobs} "wget-des ${opts} ${type} {} ${band}"

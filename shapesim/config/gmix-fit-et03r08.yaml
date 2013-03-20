@@ -1,0 +1,52 @@
+# et03 is a ring test
+run: gmix-fit-et03r08
+sim: sim-et03
+
+# we will use all the ellip and s2 values and single s/n value
+runtype: byellip
+
+retrim: true
+retrim_fluxfrac: 0.9973
+
+use_cache: true
+add_to_cache: false
+
+# type of parametrization
+ptype: Tfrac
+use_jacob: false
+
+verbose: false
+
+# you need the + or - in exponent
+s2n: 11
+s2n_psf: 1.0e+6
+
+# default 0.4
+s2n_fac: 1
+s2n_method: matched
+s2ncalc_fluxfrac: null
+
+# we should try with higher values to see what happens
+ngauss_psf: 3
+ngauss_obj: 3
+
+coellip_psf: true
+coellip_obj: true
+
+maxtry: 2
+maxtry_psf: 1
+
+# this is for the gaussian PSF fit, since admom gets gaussians too perfectly
+# trying out doing this automatically as needed
+randomize: true
+
+# number of times to retry when a trial fails.  This generates
+# a new trial, unlike max_retry above which retries with a 
+# randomized guess
+itmax: 100
+
+# number of noise relizations per image
+nrepeat: 1
+
+# set to null for new seed each time. Good when adding to the cache
+seed: null

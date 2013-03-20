@@ -1,0 +1,137 @@
+#!/bin/bash
+# Download DES red or coadd files. 
+#
+#  usage:  wget-des [-d dir] type run band
+#
+# type is the file type, "red" or "coadd" "commsrc"
+# band is ignored for type = "commsrc"
+#
+# Data are copied from
+#
+#    ftp://desar.cosmology.illinois.edu/DESFiles/desardata/DES/{type}/${run}/{type}/...
+#
+# By default, data are copied under the $DESDATA directory
+#
+#   $DESDATA/{type}/${run}/{type}/...
+# 
+# But an alternative prefix to the environment variable $DESDATA can be
+# specified with the -d keyword
+#
+# Author
+#   Erin Sheldon, Brookhaven National Laboratory
+#
+
+function usage_and_exit {
+    echo "
+Usage 
+        wget-des [-d dir] type run band
+
+Description
+
+        Download images and catalogs for the input file type, run identifier
+        and band.  The data are, by default, downloaded to 
+        
+            \$DESDATA/{type}/{run}/{type} 
+        
+        where \$DESDATA is an environment variable pointing to the base of your
+        DES data area. You can send the -d keyword to specify an alternative
+        prefix to \$DESDATA.
+
+        The exception is for type commsrc for which the data go to
+            DESDATA/comm/src/{run}/src 
+        and band is ignored; just send junk for that argument
+
+Arguments
+        type: either 'red' or 'coadd'
+        run:  The run identifier
+        band: g,r,i,z,Y
+Options
+        -d The download directory, defaults to \$DESDATA environment
+           variable.
+"
+    exit 45
+}
+
+if [[ $# -lt 3 ]]; then
+    usage_and_exit
+fi
+
+dir=""
+while getopts "n:d:" Option
+  do
+  case $Option in
+      d)  dir=$OPTARG ;;
+      [?]) usage_and_exit ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+if [[ $dir == "" ]]; then
+    if [[ ${DESDATA:+1} == "" ]]; then
+        echo "Either send -d dir or make sure the DESDATA "
+        echo "environment variable is set"
+        exit 45
+    fi
+    dir="$DESDATA"
+fi
+
+download_type="$1"
+run="$2"
+band=$3
+
+case $download_type in
+    "red") 
+        accept="*-${band}-*[0-9].fits.fz,*-${band}-*_cat.fits"
+        proj="DES"
+        type="red"
+        ;;
+    "coadd")
+        accept="*${band}.fits.fz,*${band}_cat.fits"
+        proj="DES"
+        type="coadd"
+        ;;
+    "commsrc")
+        accept="*.fits.fz"
+        proj="DTS"
+        type="src"
+        dir=$dir/comm 
+        ;;
+      *) usage_and_exit
+        ;;
+esac
+
+url="ftp://desar.cosmology.illinois.edu/DESFiles/desardata/${proj}/${type}/${run}/${type}"
+echo "
+    type:    $type
+    run:     $run
+    band:    $band
+    url:     $url
+    dir:     $dir
+"
+
+echo "chdir to dir $dir"
+cd "$dir"
+if [[ "$?" != "0" ]]; then
+    echo "Failed to chdir to: $dir"
+    exit 45
+fi
+
+# No following slash on URL or it won't work!
+# -c means continue downloading, as opposed to name.1 business
+# -nH no host directories
+# use -nv for non-verbose 
+#    --progress=dot:mega     \
+comm="
+wget                        \
+    -c                      \
+    -nv                     \
+    --mirror                \
+    -nH                     \
+    --cut-dirs=3            \
+    --no-parent             \
+    --tries 50              \
+    --accept "$accept"      \
+    \"$url\"
+"
+
+echo $comm

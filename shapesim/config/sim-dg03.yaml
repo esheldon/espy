@@ -1,0 +1,30 @@
+# devauc galaxies, gaussian psf
+# larger psf,  expand_fac_min: 7
+name: sim-dg03
+
+#
+# PSF parameters.
+#
+
+psfmodel: gauss
+psf_sigma: 5.0
+psf_ellip: 0.0
+
+#
+# Object model
+#
+objmodel: dev
+
+# instead of 15
+#objfac: 30
+
+# instead of 1
+#image_nsub: 4
+
+# new parameter
+#expand_fac_min: 7
+#expand_fac_min: 16
+
+comments: |
+
+    dev obj, gauss psf, low res

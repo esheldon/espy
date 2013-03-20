@@ -1,0 +1,28 @@
+
+name: sim-edg04
+
+orient: ring
+nring: 100
+
+# we can trim later
+dotrim: false
+
+psfmodel: dgauss
+psf_sigma: 1.4
+psf_e1: 0.02
+psf_e2: 0.00
+
+psf_sigrat: 2.3
+psf_cenrat: 0.09
+
+objmodel: exp
+
+shear: [0,0]
+
+mins2: 0.5
+maxs2: 2.0
+nums2: 4
+
+mine:  0.05
+maxe:  0.80
+nume:  8

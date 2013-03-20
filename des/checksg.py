@@ -1,173 +1,168 @@
 from __future__ import print_function
 import os
+from sys import stderr
 import esutil as eu
 from esutil.numpy_util import where1
 import deswl
+import numpy
 
-def plot_sg_all_exposures(run, **keys):
-    if 'ptype' not in keys:
-        keys['ptype'] = 'eps'
+class SizeMagPlotter(dict):
+    def __init__(self, run, **keys):
 
-    f=deswl.files.wlse_collated_path('wlse0011t', 'goodlist', ftype='json')
-    flist = eu.io.read(f,verbose=True)
-    # get unique exposures
-    d={}
-    for f in flist:
-        expname = f['exposurename']
-        d[expname] = expname
+        self['run'] = run
+        for k,v in keys.iteritems():
+            self[k] = v
+        if 'ptype' not in self:
+            self['ptype'] = 'png'
 
-    i=1
-    n=len(d)
-    for expname in sorted(d):
-        print('-'*70)
-        print("exposurename: %s  (%d/%d)" % (expname,i,n))
-        plot_sg_by_exposure(run, expname, **keys)
-        i+=1
+        if self['ptype'] in ['png','eps']:
+            self['fext']=self['ptype']
+        else:
+            self['fext']=None
 
-def plot_sg_by_exposure(run, exposurename, **keys):
-    """
+        self._load_columns_if_exist()
 
-    parameters
-    ----------
-    run: string
-        serun
-    exposurename: string
-        des exposurename
-    combine: bool, optional
-        Show a combined plot from all ccds, default False
 
-    And keywords to plot_sg_by_ccd, such as ptype=, fwhm_range=
+    def plot_exposure(self, expname, combine=True):
+        """
+        Plot a size mag diagram for an exposure
 
-    if not combine=True, this forces writing of png or eps to avoid tons of
-    windows
+        parameters
+        ----------
+        expname: string
+            des single epoch exposure name
+        combine: bool, optional
+            Show a combined plot from all ccds, default False
+        """
 
-    """
-
-    import biggles
-
-    combine = keys.get('combine',False)
-    if not combine:
-        # default to png here
-        ptype = keys.get('ptype','png')
-        if ptype == 'screen':
-            raise ValueError("don't send ptype == screen for plots by exposure "
-                             "unless you send combine=True also")
-        for ccd in xrange(1,62+1):
-            plot_sg_by_ccd(run, exposurename, ccd, **keys)
-    else:
-
-        # make a combined plot
+        import biggles
         import pcolors
-        colors = pcolors.rainbow(62, 'hex')
-        tab=None
-        for ccd in xrange(1,62+1):
-            tab=plot_sg_by_ccd(run, exposurename, ccd, star_color=colors[ccd-1], 
-                               tab=tab, show=False, addlabel=False)
 
-        #lab = biggles.PlotLabel(0.05,0.9,'%s-%s' % (run,exposurename), halign='left',color='blue')
-        #tab[0,0].add(lab)
-        tab.title = '%s-%s' % (run,exposurename)
-        
-        subdir = 'checksg'
-        ptype = keys.get('ptype','screen')
-        if ptype == 'screen':
-            tab.show()
-        elif ptype == 'eps':
-            outf = deswl.files.wlse_test_path(run, subdir=subdir, extra=exposurename, ext='eps')
-            makedirs_fromfile(outf)
-            print("writing plot file:",outf)
-            tab.write_eps(outf)
+        if not combine:
+            # default to png here
+            if self['ptype'] == 'screen':
+                raise ValueError("don't use ptype == screen for plots by exposure "
+                                 "unless you send combine=True also")
+            for ccd in xrange(1,62+1):
+                self.plot_ccd(expname, ccd)
         else:
-            outf = deswl.files.wlse_test_path(run, subdir=subdir, extra=exposurename, ext='png')
-            makedirs_fromfile(outf)
-            print("writing plot file:",outf)
-            tab.write_img(800,800,outf)
 
+            # make a combined plot
+            colors = pcolors.rainbow(62, 'hex')
+            tab=None
+            keys={'doplot':False,'addlabel':False}
+            for ccd in xrange(1,62+1):
+                keys['tab'] = tab
+                keys['star_color'] = colors[ccd-1] 
+                tab=self.plot_ccd(expname, ccd, **keys)
 
-def plot_sg_by_ccd(run, exposurename, ccd, star_color='red', show=True, ptype='screen', fwhm_range=None, tab=None, addlabel=True):
-    import biggles
+            tab.title = '%s-%s' % (self['run'],expname)
+            
 
-    f = deswl.files.wlse_path(exposurename,ccd,'stars',serun=run)
-    stars = eu.io.read(f)
-
-    wstar = where1(stars['star_flag'] == 1)
-
-    xrng = 8,17
-
-    # spread model vs mag
-    if tab is None:
-        tab = biggles.Table(2,1)
-        plt1 = biggles.FramedPlot()
-        plt2 = biggles.FramedPlot()
-        tab[0,0] = plt1
-        tab[1,0] = plt2
-
-    if addlabel:
-        lab = biggles.PlotLabel(0.1,0.9,'%s-%s-%0.2d' % (run,exposurename,ccd), halign='left')
-        tab[0,0].add(lab)
-
-    pall1 = biggles.Points(stars['mag'], stars['sg'], type='filled circle', size=0.25)
-    pstar1 = biggles.Points(stars['mag'][wstar], stars['sg'][wstar], 
-                            type='filled circle', size=0.85, color=star_color)
-
-    tab[0,0].add(pall1,pstar1)
-
-
-    tab[0,0].xrange = xrng
-    tab[0,0].yrange = -0.15,1.5
-    tab[0,0].ylabel = 'spread model'
-
-    # fwhm model vs mag: sigma0 is in arcsec
-    fwhm = 2.35*stars['sigma0']
-    pall2 = biggles.Points(stars['mag'], fwhm, type='filled circle', size=0.25)
-    pstar2 = biggles.Points(stars['mag'][wstar], fwhm[wstar],
-                            type='filled circle', size=0.85, color=star_color)
-
-    tab[1,0].add(pall2,pstar2)
-
-    tab[1,0].xrange = xrng
-    if fwhm_range is None:
-        tab[1,0].yrange = 0.6,2
-    else:
-        tab[1,0].yrange = fwhm_range
-        
-    #tab[1,0].ylabel = r'$\sigma_0$'
-    tab[1,0].ylabel = 'FWHM'
-    tab[1,0].xlabel = 'mag model'
-    
-
-    if not isinstance(ptype,list):
-        ptype = [ptype]
-
-    for pt in ptype:
-        if pt == 'eps':
-            ext='eps'
-        elif pt == 'png':
-            ext='png'
-        elif pt == 'screen':
-            pass
-        else:
-            raise ValueError("each ptype should be 'screen','eps','png'")
-
-        if pt == 'screen':
-            if show:
+            subdir = ['checksg','byexp']
+            if self['ptype'] == 'screen':
                 tab.show()
-        else:
-            subdir = ['checksg',exposurename]
-            outf = deswl.files.wlse_test_path(run, subdir=subdir, extra='%02d' % ccd, ext=ext)
-            makedirs_fromfile(outf)
-            print("Writing plot:",outf)
-            if pt == 'eps':
-                tab.write_eps(outf)
             else:
-                tab.write_img(800,800,outf)
+                outf = deswl.files.se_test_path(self['run'], 
+                                                subdir=subdir, 
+                                                extra=expname, fext=self['fext'])
+                eu.ostools.makedirs_fromfile(outf)
+                if self['ptype'] == 'eps':
+                    print("writing plot file:",outf)
+                    tab.write_eps(outf)
+                else:
+                    print("writing plot file:",outf)
+                    tab.write_img(800,800,outf)
 
 
-    return tab
 
-def makedirs_fromfile(f):
-    d = os.path.dirname(f)
-    if not os.path.exists(d):
-        print("making dir:",d)
-        os.makedirs(d)
+    def plot_ccd(self, expname, ccd, 
+                 star_color='red', doplot=True, 
+                 fwhm_range=None, tab=None, addlabel=True, **keys):
+        import biggles
+
+        if self.cols is None:
+            f = deswl.modules.shapelets.get_se_filename('stars',self['run'],expname,ccd)
+            data = eu.io.read(f)
+            magname='mag'
+        else:
+            w=where1((self.expnames == expname) & (self.ccds == ccd))
+            data=self.cols.read_columns(['star_flag','imag','sg','sigma0'],rows=w)
+            magname='imag'
+
+        wstar = where1(data['star_flag'] == 1)
+        print('    expname:',expname,'ccd: %02i' % ccd,'Got',data.size,'objects,',wstar.size,'stars',file=stderr)
+
+        xrng = 8,17
+
+        # spread model vs mag
+        if tab is None:
+            tab = biggles.Table(2,1)
+            plt1 = biggles.FramedPlot()
+            plt2 = biggles.FramedPlot()
+            tab[0,0] = plt1
+            tab[1,0] = plt2
+
+        if addlabel:
+            lab = biggles.PlotLabel(0.1,0.9,'%s-%s-%0.2d' % (self['run'],expname,ccd), 
+                                    halign='left')
+            tab[0,0].add(lab)
+
+        pall1 = biggles.Points(data[magname], data['sg'], type='filled circle', size=0.25)
+        pstar1 = biggles.Points(data[magname][wstar], data['sg'][wstar], 
+                                type='filled circle', size=0.85, color=star_color)
+
+        tab[0,0].add(pall1,pstar1)
+
+
+        tab[0,0].xrange = xrng
+        tab[0,0].yrange = -0.01,0.03
+        tab[0,0].ylabel = 'spread model'
+
+        # fwhm model vs mag: sigma0 is in arcsec
+        fwhm = 2.35*data['sigma0']
+        pall2 = biggles.Points(data[magname], fwhm, type='filled circle', size=0.25)
+        pstar2 = biggles.Points(data[magname][wstar], fwhm[wstar],
+                                type='filled circle', size=0.85, color=star_color)
+
+        tab[1,0].add(pall2,pstar2)
+
+        tab[1,0].xrange = xrng
+        if fwhm_range is None:
+            tab[1,0].yrange = 0.6,2
+        else:
+            tab[1,0].yrange = fwhm_range
+            
+        #tab[1,0].ylabel = r'$\sigma_0$'
+        tab[1,0].ylabel = 'FWHM'
+        tab[1,0].xlabel = 'mag model'
+        
+        
+        if doplot:
+            if self['ptype'] == 'screen':
+                tab.show()
+            else:
+                subdir = ['checksg',expname]
+                outf = deswl.files.se_test_path(self['run'], 
+                                                subdir=subdir, extra='%02d' % ccd, fext=self['fext'])
+                eu.ostools.makedirs_fromfile(outf)
+                print("Writing plot:",outf)
+                if self['ptype'] == 'eps':
+                    tab.write_eps(outf)
+                else:
+                    tab.write_img(800,800,outf)
+
+
+        return tab
+
+
+
+    def _load_columns_if_exist(self):
+        self.cols=None
+        return
+        dir=deswl.files.coldir(self['run'])
+        if not os.path.exists(dir):
+            return
+        self.cols=deswl.files.coldir_open(self['run'])
+
 

@@ -14,9 +14,11 @@ import esutil as eu
 from esutil.ostools import path_join
 from esutil.numpy_util import where1
 
-import sdsspy
-
-import biggles
+try:
+    import sdsspy
+    import biggles
+except:
+    pass
 
 import zphot
 
@@ -188,12 +190,7 @@ Carlos
         photo_sample = self.conf["photo_sample"]
         zcs = zphot.select.ColumnSelector(photo_sample)
 
-        # select with multi-epoch data
-        #
-        # for training means a higher cut in mag to give a smoother transition
-        #
-        #zcs.select(primary=False, for_training=True)
-        zcs.select(primary=False)
+        zcs.select()
 
         indices = zcs.keep_indices.copy()
 
@@ -210,8 +207,13 @@ Carlos
         cmag_r = zcs.cols['cmodelmag_dered_r'][indices]
         cmag_err_r = zcs.cols['cmodelmag_dered_err_r'][indices]
 
-        print("Reading survey_primary, psf_fwhm_r")
-        survey_primary = zcs.cols['survey_primary'][indices]
+        if 'survey_primary' in zcs.cols:
+            # we are doing multi-epoch matching
+            print("Reading survey_primary, psf_fwhm_r")
+            survey_primary = zcs.cols['survey_primary'][indices]
+        else:
+            survey_primary = None
+
         psf_fwhm_r = zcs.cols['psf_fwhm_r'][indices]
 
         extra_columns = None
@@ -299,7 +301,10 @@ Carlos
 
             output['psf_fwhm_r'] = psf_fwhm_r[mphot]
 
-            output['survey_primary'] = survey_primary[mphot]
+            if survey_primary is None:
+                output['survey_primary'] = numpy.ones(mphot.size,dtype='i1')
+            else:
+                output['survey_primary'] = survey_primary[mphot]
 
             for n in extra_columns:
                 output[n] = extra_columns[n][mphot]
@@ -354,7 +359,10 @@ Carlos
 
         """
 
-        maxmatch=100
+        if survey_primary is None:
+            maxmatch=1
+        else:
+            maxmatch=100
         print("Matching to %0.2f arcsec" % (matchrad*3600.,))
         h=eu.htm.HTM(10)
 
@@ -367,10 +375,11 @@ Carlos
                                   maxmatch=maxmatch)
 
         print("Matched: %s/%s" % (mspec.size,spec_ra.size))
-        if mspec.size == 0:
+        if mspec.size == 0 or survey_primary==None:
             return mspec, mphot
-        print("  unique:",numpy.unique(mspec).size)
 
+
+        print("  unique:",numpy.unique(mspec).size)
         print("  getting good flux matches")
 
         h,rev = eu.stat.histogram(mspec, binsize=1, rev=True)
@@ -535,7 +544,10 @@ Carlos
 
     def fname_matched(self, type):
         dir = self.dir_matched
-        long_type = self.types[type]
+        if type == 'all':
+            long_type='all'
+        else:
+            long_type = self.types[type]
         fname = long_type+'-match-'+self.train_sample+'.rec'
         fname = os.path.join(dir, fname)
         return fname
@@ -544,9 +556,12 @@ Carlos
         dir = self.dir_matched
         return path_join(dir, 'plots')
 
-    def seeing_plotfile(self, name):
+    def seeing_plotfile(self, name, greyscale=False):
         dir = self.plotdir()
-        fname = '%s-match-seeing-%s.eps' % (name,self.train_sample)
+        s=self.train_sample
+        if greyscale:
+            s+='-bw'
+        fname = '%s-match-seeing-%s.eps' % (name,s)
         fname=path_join(dir, fname)
         return fname
 
@@ -599,7 +614,10 @@ Carlos
         converter.convert(psfile, dpi=120, verbose=True)
 
 
-    def plot_seeing(self, types=None, yrange=None):
+    def plot_seeing(self, types=['primus','vvds','zcosmos','deep2'], 
+                    greyscale=False, colors=None, ptypes=None,
+                    yrange=None,
+                    data=None):
         """
 
         The BOSS all is normalized to one
@@ -615,7 +633,7 @@ Carlos
 
         binsize=0.025
 
-        if types is None:
+        if types is None or types is 'all':
             name='all'
             # convert keys to a list
             types=list(self.types)
@@ -626,21 +644,28 @@ Carlos
         plt=biggles.FramedPlot()
         ntype=len(types)
         #colors=pcolors.rainbow(ntype, 'hex')
-        colors=pcolors.rainbow(ntype+1, 'hex')
+        if colors is None:
+            if greyscale:
+                colors=['grey80','grey60','grey50','grey40','grey30']
+            else:
+                colors=pcolors.rainbow(ntype+1, 'hex')
+        if ptypes is None:
+            if greyscale:
+                ptypes=['longdashed','dotted','dotdashed','shortdashed', 'solid']
+            else:
+                ptypes=['solid']*len(colors)
 
         allhist=[]
         
-        c = es_sdsspy.sweeps_collate.open_columns('primgal')
-        print("Reading all psf_fwhm")
-        print("  checking window")
-        inbasic = c['inbasic'][:]
-        psf_fwhm = c['psf_fwhm_r'][:]
-        mag = c['cmodelmag_dered_r'][:]
-        print("  psf_fwhm_r shape:",psf_fwhm.shape)
+        if data is None:
+            c = es_sdsspy.sweeps_collate.open_columns('primgal')
+            print("Reading all psf_fwhm,inbasic,mag")
+            data = c.read_columns(['inbasic','psf_fwhm_r','cmodelmag_dered_r'])
 
-        w=where1((inbasic == 1) & (mag < 21.8))
-        print("  keeping: %s/%s" %(w.size,c['inbasic'].size))
-        psf_fwhm = psf_fwhm[w]
+        print("  checking window")
+        w=where1((data['inbasic'] == 1) & (data['cmodelmag_dered_r'] < 21.8))
+        print("  keeping: %s/%s" %(w.size,data.size))
+        psf_fwhm = data['psf_fwhm_r'][w]
         print("median seeing:",numpy.median(psf_fwhm))
         
         b=eu.stat.Binner(psf_fwhm)
@@ -656,7 +681,9 @@ Carlos
 
         print("  histogramming")
         # regular histogram just for the key
-        ph = biggles.Histogram(h, x0=b['low'][0], binsize=binsize, width=2)
+        xx = b['low'][0] + binsize/2 + numpy.arange(len(h))*binsize
+        ph=biggles.Curve(xx,h,width=2)
+        #ph = biggles.Histogram(h, x0=b['low'][0], binsize=binsize, width=2)
         ph.label = 'All BOSS'
 
         #allhist.append(ph)
@@ -709,7 +736,11 @@ Carlos
                     width=1
             else:
                 width=2
-            ph = biggles.Histogram(h, x0=b['low'][0], binsize=binsize, color=colors[i], width=width)
+            #ph = biggles.Histogram(h, x0=b['low'][0], binsize=binsize, 
+            #                       color=colors[i], type=ptypes[i],
+            #                       width=width)
+            xx = b['low'][0] + binsize/2 + numpy.arange(len(h))*binsize
+            ph=biggles.Curve(xx,h,color=colors[i],type=ptypes[i],width=width)
             ph.label = type
 
             allhist.append(ph)
@@ -717,7 +748,10 @@ Carlos
 
         #htot = 0.8*htot/float(htot.max())
         htot = htot/float(htot.sum())
-        ph = biggles.Histogram(htot, x0=b['low'][0], binsize=binsize, width=3, color=colors[-1])
+        xx = b['low'][0] + binsize/2 + numpy.arange(len(h))*binsize
+        ph=biggles.Curve(xx,htot,color=colors[-1],type=ptypes[-1],width=3)
+        #ph = biggles.Histogram(htot, x0=b['low'][0], binsize=binsize, 
+        #                       width=3, type=ptypes[-1],color=colors[-1])
         ph.label = 'Total'
 
         allhist.append(ph)
@@ -741,14 +775,16 @@ Carlos
         #if yrange is None:
         #    yrange = [0.0, 0.45]
         #yrange = [0.0, 1]
-        #plt.yrange = yrange
+        if yrange is not None:
+            plt.yrange = yrange
         plt.xlabel = 'seeing FWHM [arcsec]'
         plt.aspect_ratio=0.7
         plt.show()
 
-        epsfile=self.seeing_plotfile(name)
+        epsfile=self.seeing_plotfile(name,greyscale=greyscale)
         print("Writing eps file:",epsfile)
         plt.write_eps(epsfile)
         converter.convert(epsfile, dpi=120, verbose=True)
 
 
+        return data

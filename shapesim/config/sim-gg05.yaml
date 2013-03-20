@@ -1,0 +1,31 @@
+# I cached this but didn't need to: faster to generate on the fly
+name: sim-gg05
+
+orient: ring
+nring: 100
+
+dotrim: false
+
+psfmodel: gauss
+psf_sigma: 1.4
+psf_ellip: 0.0
+psf_e1: 0.0
+psf_e2: 0.0
+
+objmodel: gauss
+
+shear: [0.01,-0.01]
+
+mins2: 0.5
+maxs2: 2.0
+nums2: 4
+
+mine:  0.05
+maxe:  0.80
+nume:  8
+
+
+comments: |
+
+    gauss obj, gauss psf, low res, analytic convolutions
+    applied shear in e1 direction

@@ -15,6 +15,7 @@ Standalone functions:
 from __future__ import print_function
 import os
 import sys
+import copy
 from sys import stdout
 import numpy
 from numpy import log10,sqrt,linspace,where
@@ -22,6 +23,8 @@ import esutil as eu
 from esutil.ostools import path_join
 from esutil.stat import histogram
 from esutil.numpy_util import where1
+
+import converter
 
 import lensing
 
@@ -43,6 +46,8 @@ def instantiate_binner(type, nbin):
         b = N200Binner(nbin)
     elif type == 'mz':
         b = MZBinner(nbin)
+    elif type == 'vz':
+        b = VoidZBinner(nbin)
     else:
         raise ValueError("unsupported binner type: '%s'" % type)
     return b
@@ -57,6 +62,8 @@ class BinnerBase(dict):
         self['nbin'] = nbin
         self.set_bin_ranges()
 
+        self.dpi=150
+
     def name(self):
         raise RuntimeError("override this method")
 
@@ -66,14 +73,18 @@ class BinnerBase(dict):
         """
 
         name=self.name()
-        d = lensing.files.sample_read('collated',run)
+        d = lensing.files.sample_read(type='collated',sample=run,fs='hdfs')
         res = self.bin(d)
 
-        outdir = lensing.files.sample_dir('binned',run,name=name)
+        outdir = lensing.files.sample_dir(type='binned',sample=run,name=name)
         if not os.path.exists(outdir):
             print("Making output dir:",outdir)
             os.makedirs(outdir)
-        lensing.files.sample_write(res,'binned',run,name=name,clobber=True)
+        lensing.files.sample_write(data=res,
+                                   type='binned',
+                                   sample=run,
+                                   name=name,
+                                   clobber=True)
 
     def bin(self, data):
         raise RuntimeError("override this method")
@@ -89,32 +100,165 @@ class BinnerBase(dict):
 
         return self.lowlim, self.highlim
 
-    def bin_label(binnum):
+    def bin_label(self, binnum):
         raise RuntimeError("override this method")
 
-    def plot_dsig_osig_byrun_bin(self, run, binnum, **keys):
+    def compare_random(self, lensrun, type, binnum, randrun, **keys):
+        xrng=keys.get('xrange',None)
+        yrng=keys.get('yrange',None)
+
+        extra='randmatch-%s' % randrun
+        data = lensing.files.sample_read(type=type, sample=lensrun, name=self.name())
+        rand = lensing.files.sample_read(type='binned', sample=lensrun, name=self.name(), 
+                                         extra=extra)
+
+        zpts=biggles.Curve( [0.9*data['r'].min(), 1.1*data['r'].max()], [0,0])
+
+        plt=biggles.FramedArray(2,1)
+        plt.aspect_ratio=2
+        plt.xlog=True
+        plt.uniform_limits=1
+        if xrng is not None:
+            plt.xrange=xrng
+        if yrng is not None:
+            plt.yrange=yrng
+
+        plt.xlabel=r'$r [h^{-1} Mpc]$'
+        plt.ylabel=r'$\Delta\Sigma$'
+
+        pts=biggles.Points(data['r'][binnum], data['dsig'][binnum],
+                           type='filled circle')
+        epts=biggles.SymmetricErrorBarsY(data['r'][binnum], data['dsig'][binnum], 
+                                         data['dsigerr'][binnum])
+
+        rpts=biggles.Points(rand['r'][binnum], rand['dsig'][binnum],
+                           type='filled circle',color='red')
+        repts=biggles.SymmetricErrorBarsY(rand['r'][binnum], rand['dsig'][binnum], 
+                                          rand['dsigerr'][binnum],color='red')
+
+        pts.label=r'$\Delta\Sigma_+$'
+        rpts.label=r'$\Delta\Sigma^{rand}_+$'
+
+        key=biggles.PlotKey(0.9,0.9,[pts,rpts],halign='right')
+        lab=biggles.PlotLabel(0.1,0.9,self.bin_label(binnum),halign='left')
+
+        plt[0,0].add(zpts,pts,epts,rpts,repts,key,lab)
+
+
+        opts=biggles.Points(data['r'][binnum], data['osig'][binnum],
+                            type='filled circle')
+        oepts=biggles.SymmetricErrorBarsY(data['r'][binnum], data['osig'][binnum], 
+                                          data['dsigerr'][binnum])
+
+        orpts=biggles.Points(rand['r'][binnum], rand['osig'][binnum],
+                             type='filled circle',color='red')
+        orepts=biggles.SymmetricErrorBarsY(rand['r'][binnum], rand['osig'][binnum], 
+                                           rand['dsigerr'][binnum],color='red')
+
+        opts.label=r'$\Delta\Sigma_\times$'
+        orpts.label=r'$\Delta\Sigma^{rand}_\times$'
+
+        okey=biggles.PlotKey(0.9,0.9,[opts,orpts],halign='right')
+
+        plt[1,0].add(zpts,opts,oepts,orpts,orepts,okey)
+            
+        epsfile=lensing.files.sample_file(type=type+'-plots',
+                                          sample=lensrun,
+                                          name=self.name(),
+                                          extra='%s-%02i' % (randrun,binnum),
+                                          ext='eps')
+        plt.write_eps(epsfile)
+        converter.convert(epsfile, dpi=self.dpi, verbose=True)
+
+    def plot_dsig_osig_byrun_bin(self, run, type, binnum, **keys):
         """
 
         Plot a single bin, with dsig and osig.
 
         See lensing.plotting.plot2dsig
         """
+
+        linear=keys.get('linear',False)
+
         name = self.name()
-        data=lensing.files.sample_read('binned',run,name)
+        data=lensing.files.sample_read(type=type,sample=run,name=name)
 
         max_binnum = self['nbin']-1
         if (binnum < 0) or (binnum > max_binnum):
             raise ValueError("binnum is out of range [0,%d]" % max_binnum)
         data = data[binnum]
 
-        if 'plot_label' not in keys:
-            keys['plot_label'] = self.bin_label(binnum)
-        lensing.plotting.plot2dsig(data['r'], 
-                                   data['dsig'], data['dsigerr'],
-                                   data['osig'], data['dsigerr'],
-                                   **keys)
+        keys['plot_label'] = self.bin_label(binnum)
+        keys['xmul'] = 1.1
 
-    def plot_dsig_osig_byrun(self, run, **keys):
+        if linear:
+
+            yrange=keys.get('yrange',None)
+            xrng=keys.get('xrange',None)
+
+            if xrng is None:
+                xrng=eu.plotting.get_log_plot_range(data['r'])
+
+            fac=1.1
+            rfac=data['r']*fac
+            opts=Points(rfac, data['osig'], color='red', type='filled diamond')
+            oepts=SymmetricErrorBarsY(rfac, data['osig'], data['dsigerr'],color='red')
+            oc=Curve(rfac, data['osig'], color='red')
+
+            pts=Points(data['r'], data['dsig'], type='filled circle')
+            c=Curve(data['r'], data['dsig'])
+            epts=SymmetricErrorBarsY(data['r'], data['dsig'], data['dsigerr'])
+
+            opts.label=r'$\Delta\Sigma_\times$'
+            pts.label=r'$\Delta\Sigma_+$'
+
+            zpts=Curve(xrng, [0,0])
+
+            key=PlotKey(0.9,0.9,[pts,opts],halign='right')
+
+            lab=PlotLabel(0.1,0.9,keys['plot_label'],halign='left')
+
+            plt=FramedPlot()
+            plt.xlog=True
+            plt.aspect_ratio=1
+            plt.yrange=yrange
+            plt.xrange=xrng
+            plt.xlabel=lensing.plotting.labels['rproj']
+            plt.ylabel=lensing.plotting.labels['dsig']
+
+            plt.add(zpts,opts,oepts,oc,pts,epts,c,key,lab)
+
+
+            show=keys.get('show',False)
+            if show:
+                plt.show()
+            
+            """
+            keys1=copy.deepcopy(keys)
+            keys1['show']=False
+
+            plt1=lensing.plotting.plot_dsig(r=data['r'], 
+                                            dsig=data['osig'],
+                                            dsigerr=data['dsigerr'],
+                                            ylog=False,
+                                            color='red',
+                                            **keys1)
+
+            plt=lensing.plotting.plot_dsig(comb=data, ylog=False, plt=plt1,**keys,
+                                           label=r'$\Delta\Sigma_+$')
+            """
+
+
+        else:
+            plt=lensing.plotting.plot2dsig(data['r'], 
+                                           data['dsig'], data['dsigerr'],
+                                           data['r'],
+                                           data['osig'], data['dsigerr'],
+                                           **keys)
+
+        return plt
+
+    def plot_dsig_osig_byrun(self, run, type, **keys):
         """
 
         Plot all bins dsig+osig but one at a time, not in
@@ -122,9 +266,18 @@ class BinnerBase(dict):
 
         """
         for binnum in xrange(self['nbin']):
-            self.plot_dsig_osig_byrun_bin(run, binnum, **keys)
+            plt=self.plot_dsig_osig_byrun_bin(run, type, binnum, **keys)
+            epsfile=lensing.files.sample_file(type=type+'-plots',
+                                              sample=run,
+                                              name=self.name(),
+                                              extra='osig-comp-%02i' % binnum,
+                                              ext='eps')
+            stdout.write("Plotting to file: %s\n" % epsfile)
+            plt.write_eps(epsfile)
+            converter.convert(epsfile, dpi=self.dpi, verbose=True)
 
-    def plot_dsig_byrun_1var(self, run, type, dops=False):
+
+    def plot_dsig_byrun_1var(self, run, type, show=False):
         """
 
         Make an array of plots with each plot a bin in one variable.  
@@ -142,12 +295,219 @@ class BinnerBase(dict):
         """
 
         name = self.name()
-        data=lensing.files.sample_read(type,run,name=name)
+        data=lensing.files.sample_read(type=type,sample=run,name=name)
 
         # this is for the screen: currently tuned for my big screen!
         biggles.configure('screen','width', 1140)
         biggles.configure('screen','height', 1140)
         biggles.configure('fontsize_min',1.0)
+        biggles.configure('_HalfAxis','ticks_size',3)
+        biggles.configure('_HalfAxis','subticks_size',1.5)
+        biggles.configure('linewidth',1)
+
+        if self['nbin'] == 12:
+            nrow = 3
+            ncol = 4
+            aspect_ratio = 1.0/1.5
+        elif self['nbin'] == 16:
+            nrow = 4
+            ncol = 4
+            aspect_ratio = 1.0
+        elif self['nbin'] == 2:
+            nrow = 2
+            ncol=1
+            aspect_ratio=1.5
+        else:
+            raise ValueError("Unsupported nbin: %s" % self['nbin'])
+
+        pa = FramedArray(nrow, ncol)
+        pa.aspect_ratio = aspect_ratio
+
+        pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+
+        xrnge = [0.01,60.0]
+        yrnge = [1.e-2,8000]
+        pa.xrange = xrnge
+        pa.yrange = yrnge
+        pa.xlog = True
+        pa.ylog = True
+
+
+        row = -1
+
+        low, high = self.bin_ranges()
+
+        i = 0
+        for i in xrange(self['nbin']):
+            col = i % ncol
+            if col == 0:
+                row += 1
+
+            eu.plotting.bscatter(data['r'][i],
+                                 data['dsig'][i],
+                                 yerr=data['dsigerr'][i],
+                                 xrange=xrnge,
+                                 yrange=yrnge,
+                                 xlog=True,ylog=True,
+                                 show=False, 
+                                 plt=pa[row,col],
+                                 size=2)
+            label = self.bin_label(i)
+            pl = PlotLabel(.85, .85, label, halign='right')
+
+            pa[row,col].add(pl)
+
+
+        if show:
+            pa.show()
+
+        epsfile=lensing.files.sample_file(type=type+'-plots',
+                                          sample=run,
+                                          name=name,
+                                          extra='allplot',
+                                          ext='eps')
+        d = os.path.dirname(epsfile)
+        if not os.path.exists(d):
+            print("making dir:",d)
+            os.makedirs(d)
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        pa.write_eps(epsfile)
+        converter.convert(epsfile, dpi=self.dpi, verbose=True)
+
+
+    def plot_osig_byrun_1var(self, run, type, show=False):
+        """
+
+        Make an array of orthotangential with each plot a bin in one variable.  
+        
+        It is expected that methods like self.bin_label() are meaningfully
+        over-ridden
+
+        parameters
+        ----------
+        run: string
+            The lensing run id
+        type:
+            The type to read, e.g. 'binned', 'corrected'
+
+        """
+
+        name = self.name()
+        data=lensing.files.sample_read(type=type,sample=run,name=name)
+
+        # this is for the screen: currently tuned for my big screen!
+        biggles.configure('screen','width', 1140)
+        biggles.configure('screen','height', 1140)
+        biggles.configure('fontsize_min',1.0)
+        biggles.configure('_HalfAxis','ticks_size',3)
+        biggles.configure('_HalfAxis','subticks_size',1.5)
+        biggles.configure('linewidth',1)
+
+        if self['nbin'] == 12:
+            nrow = 3
+            ncol = 4
+            aspect_ratio = 1.0/1.5
+        elif self['nbin'] == 16:
+            nrow = 4
+            ncol = 4
+            aspect_ratio = 1.0
+        elif self['nbin'] == 2:
+            nrow=2
+            ncol=1
+            aspect_ratio=2.0
+        else:
+            raise ValueError("Unsupported nbin: %s" % self['nbin'])
+
+        pa = FramedArray(nrow, ncol)
+        pa.aspect_ratio = aspect_ratio
+
+        pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+
+        xrnge = [0.01,60.0]
+        yrnge = [-20,20]
+        pa.xrange = xrnge
+        pa.yrange = yrnge
+        pa.xlog = True
+
+
+        row = -1
+
+        low, high = self.bin_ranges()
+
+        i = 0
+        for i in xrange(self['nbin']):
+            col = i % ncol
+            if col == 0:
+                row += 1
+
+            eu.plotting.bscatter(data['r'][i],
+                                 data['osig'][i],
+                                 yerr=data['dsigerr'][i],
+                                 xrange=xrnge,
+                                 yrange=yrnge,
+                                 xlog=True,ylog=False,
+                                 show=False, 
+                                 plt=pa[row,col],
+                                 size=2)
+            label = self.bin_label(i)
+            pl = PlotLabel(.85, .85, label, halign='right')
+
+            pa[row,col].add(pl)
+
+            line=biggles.Curve([xrnge[0],xrnge[1]],[0,0])
+            pa[row,col].add(line)
+
+
+        if show:
+            pa.show()
+
+        epsfile=lensing.files.sample_file(type=type+'-plots',sample=run,name=name,extra='osig-allplot',ext='eps')
+        d = os.path.dirname(epsfile)
+        if not os.path.exists(d):
+            print("making dir:",d)
+            os.makedirs(d)
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        pa.write_eps(epsfile)
+        converter.convert(epsfile, dpi=self.dpi, verbose=True)
+
+    def plot_dsig_2runs(self, run1, run2, type, show=False):
+        """
+
+        Make an array of plots with each plot a bin in one variable.  
+        Overplot a second run.
+        
+        It is expected that methods like self.bin_label() are meaningfully
+        over-ridden
+
+        parameters
+        ----------
+        run: string
+            The lensing run id
+        type:
+            The type to read, e.g. 'binned', 'corrected'
+
+        """
+
+        name = self.name()
+        data1=lensing.files.sample_read(type=type,sample=run1,name=name)
+        data2=lensing.files.sample_read(type=type,sample=run2,name=name)
+        color1='blue'
+        color2='red'
+        sym1='filled circle'
+        sym2='square'
+        width=4
+        size1=2
+        size2=3
+
+        # this is for the screen: currently tuned for my big screen!
+        biggles.configure('screen','width', 1140)
+        biggles.configure('screen','height', 1140)
+        biggles.configure('fontsize_min',1.0)
+        biggles.configure('_HalfAxis','ticks_size',3)
+        biggles.configure('_HalfAxis','subticks_size',1.5)
+        biggles.configure('linewidth',0.6)
 
         if self['nbin'] == 12:
             nrow = 3
@@ -184,37 +544,156 @@ class BinnerBase(dict):
             if col == 0:
                 row += 1
 
-            eu.plotting.bscatter(data['r'][i],
-                                 data['dsig'][i],
-                                 yerr=data['dsigerr'][i],
-                                 xrange=xrnge,
-                                 yrange=yrnge,
-                                 xlog=True,ylog=True,
-                                 show=False, 
-                                 plt=pa[row,col])
+            pdict2=eu.plotting.bscatter(data2['r'][i],
+                                        data2['dsig'][i],
+                                        yerr=data2['dsigerr'][i],
+                                        xrange=xrnge,
+                                        yrange=yrnge,
+                                        xlog=True,ylog=True,
+                                        show=False, 
+                                        plt=pa[row,col],
+                                        color=color2,
+                                        label=run2,
+                                        type=sym2,
+                                        size=size2,width=width,
+                                        dict=True)
+
+            pdict1=eu.plotting.bscatter(data1['r'][i],
+                                        data1['dsig'][i],
+                                        yerr=data1['dsigerr'][i],
+                                        xrange=xrnge,
+                                        yrange=yrnge,
+                                        xlog=True,ylog=True,
+                                        show=False, 
+                                        plt=pa[row,col],
+                                        color=color1,
+                                        type=sym1,
+                                        label=run1,
+                                        size=size1,width=width,
+                                        dict=True)
+
+            if i == (self['nbin']-1):
+                key=PlotKey(0.9,0.2,[pdict1['p'],pdict2['p']],halign='right')
+                pa[row,col].add(key)
+
             label = self.bin_label(i)
             pl = PlotLabel(.85, .85, label, halign='right')
 
             pa[row,col].add(pl)
 
 
-        if dops:
-            #d = lensing.files.lensbin_plot_dir(run,name)
-            #d = lensing.files.sample_dir(type,run,name=name)
-            #epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
-            epsfile=lensing.files.sample_file(type+'-plots',run,name=name,extra='allplot',ext='eps')
-            d = os.path.dirname(epsfile)
-            if not os.path.exists(d):
-                print("making dir:",d)
-                os.makedirs(d)
-            stdout.write("Plotting to file: %s\n" % epsfile)
-            pa.write_eps(epsfile)
-        else:
+        if show:
             pa.show()
+
+        epsfile=lensing.files.sample_file(type=type+'-plots',sample=run1,name=name,extra='allplot-'+run2,ext='eps')
+        d = os.path.dirname(epsfile)
+        if not os.path.exists(d):
+            print("making dir:",d)
+            os.makedirs(d)
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        pa.write_eps(epsfile)
+        converter.convert(epsfile, dpi=self.dpi, verbose=True)
+
+
+
+
+
+class VoidZBinner(BinnerBase):
+    range_type='()'
+
+    def name(self):
+        return 'z-%02d' % self['nbin']
+
+    def set_bin_ranges(self):
+        if self['nbin'] == 4:
+            lowlim  = [0.02,0.05, 0.098, 0.148]
+            highlim = [0.05,0.098,0.148, 0.20]
+        elif self['nbin'] == 2:
+            lowlim  = [0.02,0.1]
+            highlim = [0.1,0.2]
+        elif self['nbin'] == 1:
+            lowlim = [0.02]
+            highlim= [0.20]
+
+        self.lowlim = lowlim
+        self.highlim = highlim
+
+    def bin(self, data):
+        """
+        call also call base method bin_byrun
+        """
+        from math import ceil
+
+        low, high = self.bin_ranges()
+
+        nrbin = data['rsum'][0].size
+        bs = lensbin_struct(nrbin, bintags=['z','radius'], n=self['nbin'])
+
+        i=0
+        for l,h in zip(low,high):
+            zrange = [l,h]
+
+            print("l,h:",l,h)
+            print('%0.2f < z < %0.2f' % tuple(zrange))
+
+            print("    reducing and jackknifing by lens")
+            comb,w = reduce_from_ranges(data,
+                                        'z',
+                                        zrange, 
+                                        range_type=self.range_type,
+                                        getind=True)
+        
+            print("    found",w.size,"in bin")
+            # first copy all common tags
+            for n in comb.dtype.names:
+                bs[n][i] = comb[n][0]
+
+            # now the things we are averaging by lens weight
+            mn,err,sdev = lens_wmom(data,'z',ind=w, sdev=True)
+            bs['z_mean'][i] = mn
+            bs['z_err'][i] = err
+            bs['z_sdev'][i] = sdev
+            bs['z_range'][i] = data['z'][w].min(), data['z'][w].max()
+
+            mn,err,sdev = lens_wmom(data,'radius',ind=w, sdev=True)
+            bs['radius_mean'][i] = mn
+            bs['radius_err'][i] = err
+            bs['radius_sdev'][i] = sdev
+            bs['radius_range'][i] = zrange
+            bs['radius_minmax'][i] = \
+                data['radius'][w].min(), data['radius'][w].max()
+
+            # fix up last one
+            #if i == (bs.size-1):
+            #    bs['lambda_range'][i,1] = ceil(bs['lambda_minmax'][i,1])
+
+            i+=1
+
+        return bs
+
+    def bin_label(self, binnum):
+        zrange = self.bin_ranges(binnum)
+        return r'$%0.2f < z < %0.2f$' % zrange
+
+    def select_bin(self, data, binnum):
+        """
+
+        Although not used by bin(), this is useful for other programs such as
+        the random hist matching and correction code
+
+        """
+        if binnum > self['nbin']:
+            raise ValueError("bin number must be in [0,%d]" % (self['nbin']-1,))
+
+        low, high = self.bin_ranges()
+        logic = get_range_logic(data, 'z', [low[binnum], high[binnum]], self.range_type)
+        return where1(logic)
+
+
 
 
 def define_lambda_bins(sample, lastmin=58.):
-    l=lensing.files.read_original_catalog('lens',sample)
+    l=lensing.files.read_original_catalog(type='lens',sample=sample)
     w=where1(l['z_lambda'] < 0.4)
     l=l[w]
 
@@ -237,7 +716,7 @@ class LambdaBinner(BinnerBase):
         """
         call also call base method bin_byrun
         """
-
+        from math import ceil
         lambda_field = self.lambda_field
         z_field = self.z_field
 
@@ -257,7 +736,10 @@ class LambdaBinner(BinnerBase):
                 print('lambda > %0.2f' % l)
 
             print("    reducing and jackknifing by lens")
-            comb,w = reduce_from_ranges(data,lambda_field,lamrange, range_type=self.range_type,
+            comb,w = reduce_from_ranges(data,
+                                        lambda_field,
+                                        lamrange, 
+                                        range_type=self.range_type,
                                         getind=True)
         
             print("    found",w.size,"in bin")
@@ -277,6 +759,12 @@ class LambdaBinner(BinnerBase):
             bs['lambda_err'][i] = err
             bs['lambda_sdev'][i] = sdev
             bs['lambda_range'][i] = lamrange
+            bs['lambda_minmax'][i] = \
+                data[lambda_field][w].min(), data[lambda_field][w].max()
+
+            # fix up last one
+            if i == (bs.size-1):
+                bs['lambda_range'][i,1] = ceil(bs['lambda_minmax'][i,1])
 
             i+=1
 
@@ -302,7 +790,7 @@ class LambdaBinner(BinnerBase):
         lrange = self.bin_ranges(binnum)
         if lrange[0] is None and lrange[1] is None:
             raise ValueError("expected at least one in range to be not None")
-        elif lrange[1] is None:
+        elif lrange[1] == 1.e6:
             return r'$\lambda\ > %0.1f$' % lrange[0]
         elif lrange[0] is None:
             return r'$\lambda\ < %0.1f$' % lrange[1]
@@ -430,7 +918,7 @@ class LambdaBinner(BinnerBase):
         if self['nbin'] == 12:
             # ran define_bins
             lowlim  = [10.0, 10.4, 11.7, 13.3, 15.1, 17.3, 19.8, 23.0, 27.2, 32.9, 41.6, 58.0]
-            highlim = [10.4, 11.7, 13.3, 15.1, 17.3, 19.8, 23.0, 27.2, 32.9, 41.6, 58.0, None]
+            highlim = [10.4, 11.7, 13.3, 15.1, 17.3, 19.8, 23.0, 27.2, 32.9, 41.6, 58.0, 1.e6]
 
             # ran logbin_linear_edges with nbin=14 and combined last three
             # also made upper exactly 189
@@ -544,7 +1032,7 @@ class N200Binner(BinnerBase):
         return self.lowlim, self.highlim
 
 
-    def plot_dsig_byrun(self, run, dops=False):
+    def plot_dsig_byrun(self, run, show=False):
         """
 
         Run is a run of the lensing code.
@@ -554,7 +1042,7 @@ class N200Binner(BinnerBase):
         """
 
         name = self.name()
-        data=lensing.files.sample_read('binned',run,name=name)
+        data=lensing.files.sample_read(type='binned',sample=run,name=name)
 
         biggles.configure('screen','width', 1140)
         biggles.configure('screen','height', 1140)
@@ -605,19 +1093,16 @@ class N200Binner(BinnerBase):
 
             pa[row,col].add(pl)
 
-
-        if dops:
-            #d = lensing.files.lensbin_plot_dir(run,name)
-            d = lensing.files.sample_dir('binned',run,name=name)
-            if not os.path.exists(d):
-                print("making dir:",d)
-                os.makedirs(d)
-            #epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
-            epsfile=lensing.files.sample_file('binned-plots',run,name=name,extra='-allplot',ext='eps')
-            stdout.write("Plotting to file: %s\n" % epsfile)
-            pa.write_eps(epsfile)
-        else:
+        if show:
             pa.show()
+
+        d = lensing.files.sample_dir(type='binned',sample=run,name=name)
+        if not os.path.exists(d):
+            print("making dir:",d)
+            os.makedirs(d)
+        epsfile=lensing.files.sample_file(type='binned-plots',sample=run,name=name,extra='-allplot',ext='eps')
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        pa.write_eps(epsfile)
 
 
     def bin_label(self, binnum):
@@ -645,10 +1130,13 @@ class MZBinner(dict):
         """
 
         name=self.name()
-        d = lensing.files.sample_read('collated',run)
+        d = lensing.files.sample_read(type='collated',sample=run)
         res = self.bin(d)
 
-        lensing.files.sample_write(res,'binned',run,name=name,clobber=True)
+        lensing.files.sample_write(data=res,
+                                   type='binned',
+                                   sample=run,
+                                   name=name)
 
     def bin(self, data):
 
@@ -703,7 +1191,7 @@ class MZBinner(dict):
         return bs
 
 
-    def plot_dsig_byrun(self, run, dops=False):
+    def plot_dsig_byrun(self, run, show=False):
         """
 
         Run is a run of the lensing code.
@@ -773,15 +1261,15 @@ class MZBinner(dict):
             pa[row,col].add(pl)
 
 
-        if dops:
-            d = lensing.files.lensbin_plot_dir(run,name)
-            if not os.path.exists(d):
-                os.makedirs(d)
-            epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
-            stdout.write("Plotting to file: %s\n" % epsfile)
-            pa.write_eps(epsfile)
-        else:
+        if show:
             pa.show()
+
+        d = lensing.files.lensbin_plot_dir(run,name)
+        if not os.path.exists(d):
+            os.makedirs(d)
+        epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        pa.write_eps(epsfile)
 
 
     def plot_nfwmass_byrun(self,run, 
@@ -790,7 +1278,7 @@ class MZBinner(dict):
                            noerr=False,
                            fudge=None,tag='m200',
                            yrange=None,
-                           dops=False):
+                           show=False):
         """
 
         M200 fit vs M200 true, in z bins
@@ -806,7 +1294,7 @@ class MZBinner(dict):
             ex=None
 
         name=self.name()
-        d = lensing.files.sample_read('fit', run, name=name, extra=ex)
+        d = lensing.files.sample_read(type='fit', sample=run, name=name, extra=ex)
 
         plt = FramedPlot()
         colors = ['blue','magenta','red']
@@ -873,26 +1361,25 @@ class MZBinner(dict):
         if not withlin:
             plt.add(PlotLabel(0.7,0.1,"no linear bias"))
 
-        if dops:
-            d = lensing.files.lensbin_plot_dir(run,name)
-            if not os.path.exists(d):
-                os.makedirs(d)
-            if residual:
-                f = 'fit-m200-residual-vs-true-%s-%s%s.eps' % (run,name,nex)
-            else:
-                f = 'fit-m200-vs-true-%s-%s%s.eps' % (run,name,nex)
-            epsfile = path_join(d, f)
-            stdout.write("Plotting to file: %s\n" % epsfile)
-            plt.write_eps(epsfile)
-
-        else:
+        if show:
             plt.show()
+
+        d = lensing.files.lensbin_plot_dir(run,name)
+        if not os.path.exists(d):
+            os.makedirs(d)
+        if residual:
+            f = 'fit-m200-residual-vs-true-%s-%s%s.eps' % (run,name,nex)
+        else:
+            f = 'fit-m200-vs-true-%s-%s%s.eps' % (run,name,nex)
+        epsfile = path_join(d, f)
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        plt.write_eps(epsfile)
 
 
     def plot_invmass_byrun(self, run, type='',
                            residual=False,
                            yrange=None,
-                           dops=False):
+                           show=False):
 
         """
 
@@ -910,11 +1397,9 @@ class MZBinner(dict):
                 'out' for mass determined from points outside radius
         residual: boolean, optional
             Plot the residual from true value.
-        dops: boolean, optional
-            Make the eps file
         """
         name=self.name()
-        d = lensing.files.sample_read('invert',run,name=name)
+        d = lensing.files.sample_read(type='invert',sample=run,name=name)
 
         plt = FramedPlot()
         colors = ['blue','magenta','red']
@@ -973,20 +1458,19 @@ class MZBinner(dict):
 
         plt.aspect_ratio=1
 
-        if dops:
-            d = lensing.files.lensbin_plot_dir(run,name)
-            if not os.path.exists(d):
-                os.makedirs(d)
-            if residual:
-                f = 'invert-m200'+type+'-residual-vs-true-%s-%s.eps' % (run,name)
-            else:
-                f = 'invert-m200'+type+'-vs-true-%s-%s.eps' % (run,name)
-            epsfile = path_join(d, f)
-            stdout.write("Plotting to file: %s\n" % epsfile)
-            plt.write_eps(epsfile)
-
-        else:
+        if show:
             plt.show()
+
+        d = lensing.files.lensbin_plot_dir(run,name)
+        if not os.path.exists(d):
+            os.makedirs(d)
+        if residual:
+            f = 'invert-m200'+type+'-residual-vs-true-%s-%s.eps' % (run,name)
+        else:
+            f = 'invert-m200'+type+'-vs-true-%s-%s.eps' % (run,name)
+        epsfile = path_join(d, f)
+        stdout.write("Plotting to file: %s\n" % epsfile)
+        plt.write_eps(epsfile)
 
 
 
@@ -1150,7 +1634,7 @@ def mzbin(data, nmass, nz):
 
     return bs
 
-def plot_mzbin_byrun(run, nmass, nz, dops=False):
+def plot_mzbin_byrun(run, nmass, nz, show=False):
     """
 
     Run is a run of the lensing code.
@@ -1219,27 +1703,27 @@ def plot_mzbin_byrun(run, nmass, nz, dops=False):
         pa[row,col].add(pl)
 
 
-    if dops:
-        d = lensing.files.lensbin_plot_dir(run,name)
-        if not os.path.exists(d):
-            os.makedirs(d)
-        epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
-        stdout.write("Plotting to file: %s\n" % epsfile)
-        pa.write_eps(epsfile)
-    else:
+    if show:
         pa.show()
+
+    d = lensing.files.lensbin_plot_dir(run,name)
+    if not os.path.exists(d):
+        os.makedirs(d)
+    epsfile = path_join(d, 'lensbin-%s-%s-allplot.eps' % (run,name))
+    stdout.write("Plotting to file: %s\n" % epsfile)
+    pa.write_eps(epsfile)
 
 def plot_mzbin_invmass_byrun(run, nmass, nz, type='',
                              residual=False,
                              yrange=None,
-                             dops=False):
+                             show=False):
 
     """
     Inverted M200 vs M200 true, in z bins
     """
     name=mzbin_name(nmass,nz)
     conf = lensing.files.read_config(run)
-    d = lensing.files.sample_read('invert',run,name=name)
+    d = lensing.files.sample_read(type='invert',sample=run,name=name)
 
     plt = FramedPlot()
     colors = ['blue','magenta','red']
@@ -1298,20 +1782,19 @@ def plot_mzbin_invmass_byrun(run, nmass, nz, type='',
 
     plt.aspect_ratio=1
 
-    if dops:
-        d = lensing.files.lensbin_plot_dir(run,name)
-        if not os.path.exists(d):
-            os.makedirs(d)
-        if residual:
-            f = 'invert-m200'+type+'-residual-vs-true-%s-%s.eps' % (run,name)
-        else:
-            f = 'invert-m200'+type+'-vs-true-%s-%s.eps' % (run,name)
-        epsfile = path_join(d, f)
-        stdout.write("Plotting to file: %s\n" % epsfile)
-        plt.write_eps(epsfile)
-
-    else:
+    if show:
         plt.show()
+
+    d = lensing.files.lensbin_plot_dir(run,name)
+    if not os.path.exists(d):
+        os.makedirs(d)
+    if residual:
+        f = 'invert-m200'+type+'-residual-vs-true-%s-%s.eps' % (run,name)
+    else:
+        f = 'invert-m200'+type+'-vs-true-%s-%s.eps' % (run,name)
+    epsfile = path_join(d, f)
+    stdout.write("Plotting to file: %s\n" % epsfile)
+    plt.write_eps(epsfile)
 
 
 
@@ -1321,7 +1804,7 @@ def plot_mzbin_mass_byrun(run, nmass, nz,
                           noerr=False,
                           fudge=None,tag='m200',
                           yrange=None,
-                          dops=False):
+                          show=False):
     """
 
     M200 fit vs M200 true, in z bins
@@ -1336,7 +1819,7 @@ def plot_mzbin_mass_byrun(run, nmass, nz,
 
     name=mzbin_name(nmass,nz)
     conf = lensing.files.read_config(run)
-    d = lensing.files.sample_read('fit', run, name=name, extra=ex)
+    d = lensing.files.sample_read(type='fit', sample=run, name=name, extra=ex)
 
     plt = FramedPlot()
     colors = ['blue','magenta','red']
@@ -1403,20 +1886,19 @@ def plot_mzbin_mass_byrun(run, nmass, nz,
     if not withlin:
         plt.add(PlotLabel(0.7,0.1,"no linear bias"))
 
-    if dops:
-        d = lensing.files.lensbin_plot_dir(run,name)
-        if not os.path.exists(d):
-            os.makedirs(d)
-        if residual:
-            f = 'fit-m200-residual-vs-true-%s-%s%s.eps' % (run,name,nex)
-        else:
-            f = 'fit-m200-vs-true-%s-%s%s.eps' % (run,name,nex)
-        epsfile = path_join(d, f)
-        stdout.write("Plotting to file: %s\n" % epsfile)
-        plt.write_eps(epsfile)
-
-    else:
+    if show:
         plt.show()
+
+    d = lensing.files.lensbin_plot_dir(run,name)
+    if not os.path.exists(d):
+        os.makedirs(d)
+    if residual:
+        f = 'fit-m200-residual-vs-true-%s-%s%s.eps' % (run,name,nex)
+    else:
+        f = 'fit-m200-vs-true-%s-%s%s.eps' % (run,name,nex)
+    epsfile = path_join(d, f)
+    stdout.write("Plotting to file: %s\n" % epsfile)
+    plt.write_eps(epsfile)
 
 def combine_mzbin_lensum_from_ranges(data, tag, trange, zrange=None,getind=False):
     logic = (data[tag] >= trange[0]) & (data[tag] < trange[1])
@@ -1562,10 +2044,16 @@ def lensbin_dtype(nrbin, bintags=None):
         for bt in bintags:
             tn = bt+'_range'
             dt.append( (tn,'f8',2) )
+
+            tn = bt+'_minmax'
+            dt.append( (tn,'f8',2) )
+
             tn = bt+'_mean'
             dt.append( (tn,'f8') )
+
             tn = bt+'_err'
             dt.append( (tn,'f8') )
+
             tn = bt+'_sdev'
             dt.append( (tn,'f8') )
 

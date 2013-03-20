@@ -1,0 +1,56 @@
+name: "small05"
+orig_vers: "aardvark_v0.5d"
+
+fields: [114, 115, 147, 86]
+
+filter: 'i'
+exptime: 90.0 # only used if noise is being added
+
+pixscale: 0.27
+nrow: 4096
+ncol: 4096
+
+# specify null to use the cosmological shear
+# can be
+#  constant, catalog
+shear_type: "constant"
+shear: [0.10, 0.00]
+
+models: ['exp','dev']
+model_fracs: [0.60, 0.40]
+
+# can be catalog or fixed.  Set model_flux for fixed
+# for catalog it is generated from tmag and exptime
+model_flux_type: 'catalog'
+model_flux: null
+
+model_ellip_type: 'cluster-step'
+model_ellip_mag: 'r' # rmag used for binning
+
+# can be
+#  fixed: a single size (set model_sigma)
+#  catalog: use the sizes in the truth catalog
+#  cluster-step: Use fit size distributions from cluster step
+model_size_type: "catalog"
+#model_sigma: 3.0 # sigma=sqrt(T/2)
+
+
+psf_type: 'constant'
+psf_model: 'gauss'
+# this is ~0.9'' for a gaussian
+psf_sigma: 1.416
+psf_e1: 0.0
+psf_e2: 0.0
+
+# for noise_type 'poisson' we use the exposure time and nominal sky value
+noise_type: null
+
+nsub: 16
+
+alt_cd: false
+
+# same seed as small02,small03 with no PSF for comparison
+seed: 3904
+
+comments: |
+    This one has shear and psf and noise and model types exp,dev

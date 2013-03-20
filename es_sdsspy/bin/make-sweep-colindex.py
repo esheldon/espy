@@ -4,7 +4,7 @@
 type should be 'gal','primgal','star','primstar'
 """
 import sys
-import sdsspy
+import es_sdsspy
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)

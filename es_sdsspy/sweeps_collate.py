@@ -5,10 +5,15 @@ import esutil as eu
 from esutil.ostools import path_join
 from esutil.numpy_util import where1
 import os
-import columns
 import datetime
 
-from . import stomp_maps
+try:
+    import columns
+except:
+    pass
+
+from . import mangle_masks
+from . import starmask
 
 def columns_dir(type):
     collator = Collator(type)
@@ -55,23 +60,23 @@ def match_columns(photoid, tags, type='primgal'):
     return struct
 
 class Collator:
-    """
-
-    Collate the regauss outputs into columns.
-
-    Note we put both types ('gal','star') into the same run.  This means if you
-    make indices you'll have to re-make them when the other type is added.
-
-    """
-    
     def __init__(self, type='gal'):
-        if type not in ['gal','primgal']:
-            raise ValueError("add support for 'star' type")
+        #if type not in ['gal','primgal']:
+        #    raise ValueError("add support for 'star' type")
 
         self.type=type
+        if type in ['gal','primgal']:
+            self.sweep_type = 'gal'
+        elif type in ['star','primstar']:
+            self.sweep_type = 'star'
+        else:
+            raise ValueError("type should be 'gal','primgal','star','primstar'")
+
         self.minscore=0.1
         self.flags = sdsspy.flags.Flags()
-        self.masktypes = ['basic','good','tycho']
+
+        mt=['basic','good','star']
+        self.masktypes = mt
 
     def run(self, runs=None):
         """
@@ -103,7 +108,7 @@ class Collator:
             print("-"*70)
             for camcol in [1,2,3,4,5,6]:
                 print("  %06i-%i" % (run,camcol))
-                tmp = sdsspy.read('calibobj.'+self.type, run, camcol, 
+                tmp = sdsspy.read('calibobj.'+self.sweep_type, run, camcol, 
                                   lower=True, ensure_native=True)
 
                 if len(tmp) == 0:
@@ -128,6 +133,58 @@ class Collator:
                         c.write_column(name, out_dict[name])
         print("Done")
 
+
+    def create_output(self, st):
+        bands = ['u','g','r','i','z']
+
+        out_dict = {}
+        for d in st.dtype.descr:
+            name = str( d[0] )
+
+            if len(d) == 3:
+                if d[2] == 5:
+                    # ignoring the higher dim stuff
+                    for bandi in xrange(5):
+                        fname = name+'_'+bands[bandi]
+                        out_dict[fname] = st[name][:, bandi]
+            else:
+                out_dict[name] = st[name]
+
+        if 'devflux' in st.dtype.names:
+            #cmodelflux, cmodelflux_ivar = sdsspy.make_cmodelflux(st, doivar=True)
+            cmodelmag_dered, cmodelmag_dered_err = sdsspy.make_cmodelmag(st, dered=True)
+
+        modelflux, modelflux_ivar = sdsspy.dered_fluxes(st['extinction'], 
+                                                        st['modelflux'], 
+                                                        st['modelflux_ivar'])
+        modelmag_dered, modelmag_dered_err = sdsspy.nmgy2mag(modelflux, modelflux_ivar)
+
+        for f in sdsspy.FILTERCHARS:
+            fnum = sdsspy.FILTERNUM[f]
+            if 'devflux' in st.dtype.names:
+                out_dict['cmodelflux_'+f] = cmodelmag_dered[:,fnum]
+                out_dict['cmodelflux_ivar_'+f] = cmodelmag_dered_err[:,fnum]
+                out_dict['cmodelmag_dered_'+f] = cmodelmag_dered[:,fnum]
+                out_dict['cmodelmag_dered_err_'+f] = cmodelmag_dered_err[:,fnum]
+            out_dict['modelmag_dered_'+f] = modelmag_dered[:,fnum]
+            out_dict['modelmag_dered_err_'+f] = modelmag_dered_err[:,fnum]
+
+        out_dict['photoid'] = sdsspy.photoid(st)
+
+        self.set_maskflags(out_dict)
+
+        # we will add an "survey_primary" column if we are not explicitly 
+        # selecting survey_primary
+        if self.type not in ['primgal','primstar']:
+            survey_primary = numpy.zeros(st.size, dtype='i1')
+            w=self.get_primary_indices(st)
+            if w.size > 0:
+                survey_primary[w] = 1
+            out_dict['survey_primary'] = survey_primary
+
+        return out_dict
+
+
     def get_primary_indices(self, objs, run_primary=False):
         if run_primary:
             primary = self.flags.val('resolve_status','run_primary')
@@ -138,9 +195,6 @@ class Collator:
         return w
 
     def add_cmodelflux(self):
-        """
-        I forgot to add errors...
-        """
         c = self.open_columns()
         for filt in ['u','g','r','i','z']:
             print("filter:",filt)
@@ -154,6 +208,41 @@ class Collator:
                                                               expflux, expflux_ivar)
             c.write_column('cmodelflux_'+filt, flux, create=True)
             c.write_column('cmodelflux_ivar_'+filt, ivar, create=True)
+
+    def add_inbadfield(self):
+        import es_sdsspy
+        c = self.open_columns()
+
+        m=es_sdsspy.mangle_masks.load('boss','badfield')
+
+        print("reading ra")
+        ra=c['ra'][:]
+        print("reading dec")
+        dec=c['dec'][:]
+ 
+        print("checking mask")
+        cont = m.contains(ra,dec).astype('i1')
+
+        c.write_column('inbadfield', cont, create=True)
+
+    def add_masks(self):
+        import es_sdsspy
+        masks=['star','basic','good','badfield']
+        c = self.open_columns()
+        print("reading ra")
+        ra=c['ra'][:]
+        print("reading dec")
+        dec=c['dec'][:]
+ 
+        for mask in masks:
+            print("checking mask:",mask)
+            m=es_sdsspy.mangle_masks.load('boss',mask)
+            cont = m.contains(ra,dec).astype('i1')
+
+            colname="in%s" % mask
+            print("writing column:",colname)
+            c.write_column(colname, cont, create=True)
+
 
 
     def add_dered_err_to_columns(self):
@@ -194,67 +283,20 @@ class Collator:
 
             
 
-    def create_output(self, st):
-        bands = ['u','g','r','i','z']
-
-        out_dict = {}
-        for d in st.dtype.descr:
-            name = str( d[0] )
-
-            if len(d) == 3:
-                if d[2] == 5:
-                    # ignoring the higher dim stuff
-                    for bandi in xrange(5):
-                        fname = name+'_'+bands[bandi]
-                        out_dict[fname] = st[name][:, bandi]
-            else:
-                out_dict[name] = st[name]
-
-        cmodelflux, cmodelflux_ivar = sdsspy.make_cmodelflux(st, doivar=True)
-
-        cmodelmag_dered, cmodelmag_dered_err = sdsspy.make_cmodelmag(st, dered=True)
-
-        modelflux, modelflux_ivar = sdsspy.dered_fluxes(st['extinction'], 
-                                                        st['modelflux'], 
-                                                        st['modelflux_ivar'])
-        modelmag_dered, modelmag_dered_err = sdsspy.nmgy2mag(modelflux, modelflux_ivar)
-
-        for f in sdsspy.FILTERCHARS:
-            fnum = sdsspy.FILTERNUM[f]
-            out_dict['cmodelflux_'+f] = cmodelmag_dered[:,fnum]
-            out_dict['cmodelflux_ivar_'+f] = cmodelmag_dered_err[:,fnum]
-            out_dict['cmodelmag_dered_'+f] = cmodelmag_dered[:,fnum]
-            out_dict['cmodelmag_dered_err_'+f] = cmodelmag_dered_err[:,fnum]
-            out_dict['modelmag_dered_'+f] = modelmag_dered[:,fnum]
-            out_dict['modelmag_dered_err_'+f] = modelmag_dered_err[:,fnum]
-
-        out_dict['photoid'] = sdsspy.photoid(st)
-
-        self.set_maskflags(out_dict)
-
-        # we will add an "survey_primary" column if we are not explicitly 
-        # selecting survey_primary
-        if self.type not in ['primgal','primstar']:
-            survey_primary = numpy.zeros(st.size, dtype='i1')
-            w=self.get_primary_indices(st)
-            if w.size > 0:
-                survey_primary[w] = 1
-            out_dict['survey_primary'] = survey_primary
-
-        return out_dict
 
     def create_indices(self):
         c = self.open_columns()
 
         cnames = ['cmodelmag_dered_r','modelmag_dered_r',
                   'run','camcol','ra','dec','thing_id','photoid',
-                  'inbasic','ingood','intycho']
+                  'inbasic','ingood','instar']
         if self.type not in ['primgal','primstar']:
             cnames += ['survey_primary']
 
         for n in cnames:
-            print("Creating index for:",n)
-            c[n].create_index(force=True)
+            if n in c:
+                print("Creating index for:",n)
+                c[n].create_index(force=True)
 
 
 
@@ -282,10 +324,9 @@ class Collator:
         dir=path_join(dir ,self.type+'.cols')
         return dir
 
-
     
     def set_maskflags(self, new):
-        self.load_masks()
+        self.load_masks(self.masktypes)
         ra = new['ra']
         dec = new['dec']
         print("        Checking mask: ",end='')
@@ -294,18 +335,56 @@ class Collator:
             name = 'in'+masktype
             print(" ",name,end='')
 
-            inside[:] = self.masks[masktype].Contains(ra,dec,'eq')
+            inside[:] = self.masks[masktype].contains(ra,dec)
             new[name] = inside.copy()
      
         print("")
 
 
+    def redo_maskflags(self, masktypes=None):
+        """
+        This loads the columns, reads ra,dec and recreates
+        the mask flags
+        """
+        if masktypes is None:
+            masktypes=self.masktypes
+        if isinstance(masktypes,basestring):
+            masktypes=[masktypes]
+        self.load_masks(masktypes)
+        print("will do masks:",masktypes)
 
-    def load_masks(self):
+        c = self.open_columns()
+        print("reading ra")
+        ra = c['ra'][:]
+        print("reading dec")
+        dec = c['dec'][:]
+
+        for masktype in masktypes:
+            colname = 'in'+masktype
+            colname = colname.replace('-','_')
+            print("Checking",masktype)
+
+            inside = self.masks[masktype].contains(ra,dec)
+            print("writing column:",colname)
+            c.write_column(colname, inside.astype('i1'), create=True)
+            print("creating index")
+            c[colname].create_index(force=True)
+ 
+    def load_masks(self, masktypes):
         if not hasattr(self,'masks'):
             self.masks = {}
-            for masktype in self.masktypes:
-                self.masks[masktype] = stomp_maps.load('boss',masktype)
+            for masktype in masktypes:
+                print('masktype:',masktype,('badfield' in masktype))
+                if 'badfield' in masktype:
+                    print("loading",masktype,"as veto mask")
+                    veto=True
+                else:
+                    veto=False
+
+                if masktype == 'star':
+                    self.masks[masktype] = starmask.StarMask()
+                else:
+                    self.masks[masktype] = mangle_masks.load('boss',masktype,veto=veto)
 
 
 

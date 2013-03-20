@@ -56,7 +56,7 @@ parser.add_option("-b","--background",action="store_true",dest="background",
                   "Note the temporary file will be left in /tmp. default: %default")
 
 
-if sys.platform == "linux2":
+if sys.platform[0:5] == "linux":
     #open_programs = ["gv","evince"]
     open_programs = ["evince","gv"]
 elif sys.platform == "darwin":
@@ -74,7 +74,7 @@ def get_message(args):
 
 def view_psfile(psfile, background=False):
     if not os.path.exists(psfile):
-        stderr.write("file not found: %s\n", psfile)
+        stderr.write("file not found: %s\n" % psfile)
         return
 
     for prog in open_programs:
@@ -86,7 +86,7 @@ def view_psfile(psfile, background=False):
             return
         except:
             pass
-    stderr.write("Could not view file: %s\n", psfile)
+    stderr.write("Could not view file: %s\n" % psfile)
     stderr.write("    viewer not found perhaps?\n")
 
 

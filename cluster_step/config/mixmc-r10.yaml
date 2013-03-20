@@ -1,0 +1,40 @@
+run: mixmc-r10
+version: "2012-10-16"
+
+star_minmag: 18
+star_maxmag: 20
+
+cutout_size: 28
+seg_padding: 5
+
+psf_models: ['em2']
+em_maxiter: 10000
+em_tol: 1.0e-6
+
+# should be 'random', 'mean', 'median'
+psf_interp: 'median'
+
+# step and burnin are *per walker*
+# 40 guarantees convergence but 20 works as well for the most part
+nwalkers: 20
+nstep: 200
+burnin: 400
+
+iter: true
+mca_a: 3.0 # about 35% acceptance
+
+fitmodel: ['gexp','gdev']
+
+shear_s2n_min: 10
+
+gprior_type: 'fits-vs-mag-nosplit'
+
+
+# draw the g1,g2 starting points from the gprior
+draw_gprior: true
+
+# for filling areas not in object with noise
+seed: 7309
+
+comment: |
+    Using new priors

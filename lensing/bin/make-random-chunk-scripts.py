@@ -1,10 +1,9 @@
 """
-    %prog sample nchunk
+    %prog sample
 
 Description:
 
-    Make condor scripts for generation of random lcat in chunks.
-
+    Make wq scripts for generation of random lcat in chunks.
 """
 from __future__ import print_function
 import sys, os
@@ -12,69 +11,63 @@ import lensing
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
+
+parser.add_option("--gen-radec", action='store_true', 
+                  help=("For this sample we generate the ra,dec points"))
+
+parser.add_option("-g", "--group", default=None, help=("Groups for wq"))
+
 options,args = parser.parse_args(sys.argv[1:])
 
-if len(args) < 2:
+if len(args) < 1:
     parser.print_help()
     sys.exit(1)
 
 sample = args[0]
-nchunk = int(args[1])
 
 c = lensing.lcat.instantiate_sample(sample)
 
+nsplit = c['nsplit']
+nperchunk = c['nrand']/nsplit
+nleft = c['nrand'] % nsplit
 
-nperchunk = c['nrand']/nchunk
-nleft = c['nrand'] % nchunk
-
-dir = lensing.files.sample_dir('lcat',sample)
-dir=os.path.join(dir, 'condor')
+dir='/data/esheldon/lensing/lcat/%s/wq' % sample
 if not os.path.exists(dir):
     os.makedirs(dir)
 
-for i in xrange(nchunk):
-    extra_name='chunk%02d' % i
-    script_base='gen-%s' % extra_name
-    script_fname=os.path.join(dir, script_base+'.sh')
-    condor_fname=os.path.join(dir, script_base+'.condor')
-    print(condor_fname)
+group=options.group
+if group:
+    group='group: ['+group+']'
+else:
+    group=''
 
-    nrand = nperchunk
-    if (i == (nchunk-1)):
-        nrand += nleft
+for i in xrange(nsplit):
+    chunk_name='chunk%03d' % i
+    script_base='gen-%s' % chunk_name
+    wq_fname=os.path.join(dir, script_base+'.yaml')
+    print(wq_fname)
 
-    script="""#!/bin/bash
-script_dir=~esheldon/python/lensing/bin
-python -u $script_dir/make-objshear-input.py -n {nrand} -e {extra_name} lcat {sample} {nchunk}
-echo Done
-    \n""".format(sample=sample,
-                 nchunk=nchunk,
-                 nrand=nrand,
-                 extra_name=extra_name)
+    if options.gen_radec:
+        nrand = nperchunk
+        if (i == (nsplit-1)):
+            nrand += nleft
+        opts='-n {nrand} -e {extra_name}'.format(nrand=nrand,
+                                                    extra_name=chunk_name)
+    else:
+        opts='--split {split}'.format(split=i)
 
-    condor_script="""
-Universe        = vanilla
-Notification    = Error
-GetEnv          = True
-Notify_user     = esheldon@bnl.gov
-Requirements    = (CPU_Experiment == "astro") && (TotalSlots == 12 || TotalSlots == 8) && (Machine  != "astro0033.rcf.bnl.gov")
-+Experiment     = "astro"
-Initialdir      = {dir}
-
-Executable      = {script_base}.sh
-Output          = {script_base}.out
-Error           = {script_base}.err
-Log             = {script_base}.log
-
-Queue
+    text="""
+command: |
+    source ~/.bashrc
+    script_dir=${{ESPY_DIR}}/lensing/bin
+    python -u ${{script_dir}}/make-objshear-input.py {options} lcat {sample}
+    echo Done
     
-    \n""".format(dir=dir, script_base=script_base)
+job_name: {job_name}
+{group}
+\n""".format(sample=sample, options=opts, job_name=script_base, group=group)
 
 
 
-    with open(script_fname,'w') as fobj:
-        fobj.write(script)
-    with open(condor_fname,'w') as fobj:
-        fobj.write(condor_script)
-
-    os.system('chmod 755 '+script_fname)
+    with open(wq_fname,'w') as fobj:
+        fobj.write(text)

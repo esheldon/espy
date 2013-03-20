@@ -10,7 +10,7 @@ Description:
 
     The install configuration is assumed to be in
 
-        $MODULEHOME/install-config/$module.install
+        $MODULESHOME/install-config/$module.install
 
     But this can be given using the command line input using the
     --config-url option
@@ -65,7 +65,7 @@ Description:
                 create_module_file: 
                     A string to write to the file
 
-                        $MODULEHOME/modulefiles/product_name/version
+                        $MODULESHOME/modulefiles/product_name/version
 
                     This info is used by module for loading the product and
                     it's dependencies.  You can over-ride this location
@@ -173,19 +173,18 @@ parser=OptionParser(__doc__)
 
 parser.add_option("--config-url",dest="config_url",
                   help="Where to find an installation configuration file. "+\
-                  "Default is $MODULEHOME/install-config/product.install. "+\
+                  "Default is $MODULESHOME/install-config/product.install. "+\
                   "Only file system paths currently supported.")
-
-parser.add_option("--install-dir",
-                  default=None,
-                  dest="install_dir",
-                  help="Install under this directory into {install_dir}/version.  '-r' is historical.")
-
 parser.add_option("--module-dir",
                   default=None,
                   dest="module_dir",
-                  help="Put module files under this directory as {module_name}/{version}.")
-
+                  help=("Put module files under this directory as {module_name}/{version}. "
+                        "default is $MODULESHOME/modulefiles"))
+parser.add_option("--install-dir",
+                  default=None,
+                  dest="install_dir",
+                  help=("Install under this directory into {install_dir}/version.  default is "
+                        "$MODULE_INSTALLS/{flavor}/{module_name}. '-r' is historical."))
 
 parser.add_option("-y","--noprompt",action="store_true",
         dest="noprompt",
@@ -221,7 +220,7 @@ class ModuleInstaller(object):
                 version         The version of the product, e.g. v1.5.1
                 default_version The default version to use, e.g. trunk
                 module_dir      The location to install module files, default
-                                is ${MODULEHOME}/modulefiles/modulename/version
+                                is ${MODULESHOME}/modulefiles/modulename/version
                 install_config  A config file containing relevant installation
                                 info. In the future will support remote urls.
                 nodeclare       Don't declare the product.  Useful for local
@@ -295,6 +294,7 @@ class ModuleInstaller(object):
         if prompt is None:
             prompt=self.prompt
 
+        self.MakeTempDir()
         self.Get()
         self.Extract()
         #self.InstallDeps(prompt=prompt)
@@ -304,18 +304,19 @@ class ModuleInstaller(object):
         #self.Declare()
         self.Cleanup()
 
-    
-    def Get(self):
-        """
-        Creates the build_dir, changes into that directory, and gets the
-        data.  The CWD remains the build_dir after running this program
-        """
-
+    def MakeTempDir(self):
         if self.verbose:
             stdout.write('\nCreating temporary build dir...  ')
         self.build_dir=self.TempBuildDir()
         if self.verbose:
             stdout.write('%s\n' % self.build_dir)
+   
+    def Get(self):
+        """
+        cd to the build_dir and get the data.  Remains in the 
+        build dir after running this program
+        """
+
 
         # from here on out everything references the build dir except for
         # the install dir
@@ -350,6 +351,8 @@ class ModuleInstaller(object):
                 URLLibGet(url)
             except:
                 URLLib2Get(url)
+        elif self.get_method is None:
+            pass
         else:
             raise ValueError("Unsupported get_method: '%s'" % self.get_method)
 
@@ -1218,12 +1221,6 @@ def DefaultModuleDir():
     path=os.path.join(path, 'modulefiles')
     return path
 
-
-
-def DefaultInstallDir(self):
-    flavor_dir=FlavorDir()
-    install_dir=os.path.join(flavor_dir, self.name, self.version)
-    return install_dir
 
 
 

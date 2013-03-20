@@ -1,136 +1,167 @@
 #!/usr/bin/env python
-"""dfall [options]
+"""
+        dfall [options]
 
-  Run df on all automounted disks and print the sorted result.
-  Uses the /etc/auto.mount to get a list of auto-mounted disks"""
+Run df on all /data disks on the astro cluster.  Return the results
+sorted and show totals for the entire system."""
 
 import os
 import sys
+import datetime
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
 
-parser.add_option("-s","--sortby",default="avail", dest="sortby",
+parser.add_option("-s","--sortby",default="name", dest="sortby",
     help="Specify the sort ordering.  Default is '%default'.  Possibilities are 'size','used','avail','perc','name'. The secondary sort is by name, e.g. avail-name")
-parser.add_option("-P","--portability",action="store_true",
-                  dest="portable",default=False,
-                  help="Use the POSIX output format, which is more easily parsed by a machine.  This is the same as the -P option to df on linux except the header is not printed.")
 
+parser.add_option("-d","--date",action='store_true',
+                  help="print the date at the end")
 
 #
 # Some data
 #
-prefix = 'mount'
-dlist_name = '/etc/auto.'+prefix
-blocksize='1G'
-# How to order the sorting
+
+NMACHINE=44
+MACHINE_SKIP=['astro0012','astro0013','astro0014',
+              'astro0015','astro0016','astro0017',
+              'astro0018','astro0019','astro0020',
+              'astro0034']
+# How to perform the sorting
+sortmap = {'size':  {'sortf': lambda d: '%010d-%s' % (d['size'],d['machine']), 'reverse':False},
+           'used':  {'sortf': lambda d: '%010d-%s' % (d['used'],d['machine']), 'reverse':False},
+           'avail': {'sortf': lambda d: '%010d-%s' % (d['avail'],d['machine']), 'reverse':False},
+           'perc':  {'sortf': lambda d: '%010d-%s' % (d['percnum'],d['machine']), 'reverse':False},
+           'name':  {'sortf': lambda d: d['machine'], 'reverse':False}}
+
+
+
 sort_reverse = \
         {'size':True,'used':True,'avail':True,'perc':False,'name':False}
 
-
-def ExtractInfo(line):
+def size2rep(size):
     """
-    This extracts the required info from a line in the auto.mount file
+    Decide whether or not to include a decimal place
     """
-    line = line.strip()
-    lsplit = line.split()
-    if len(lsplit) == 3:
-        (disk, options, mountpoint) = lsplit
-        location = '/'+prefix+'/'+disk
-        return (disk, location)
+    if size >= 10:
+        return '%d' % size
     else:
-        return (None,None)
+        return '%0.1f' % size
 
-def Df(location, portable=False):
-    """
-    Run df and parse the output
-    """
-
-    # auto-mount the disk
-    os.popen('cd '+location)
-    # run df for display
-    if portable:
-        command = 'df -P --block-size='+blocksize+' '+location
+def get_human_rep(size):
+    # not following df here, where only T seems to use 1000
+    tsize=size/1000./1000./1000.
+    gsize=size/1000./1000.
+    msize=size/1000.
+    ksize=size
+    if tsize >= 1.0:
+        rep=size2rep(tsize)
+        rep += 'T'
+    elif gsize >= 1.0:
+        rep=size2rep(gsize)
+        rep += 'G'
+    elif msize >= 1.0:
+        rep=size2rep(msize)
+        rep += 'M'
     else:
-        command = 'df -h '+location
-    display_line = os.popen(command).readlines()
+        rep='%dK' % ksize
 
-    # should be at least a header and one other line
-    if len(display_line) >= 2:
-        header = display_line[0]
-        display_line = display_line[1:]
-        display_line = ''.join(display_line)
-    else:
-        return None
+    return rep
 
-    # run df again for parsing/sorting
-    command = 'df -P --block-size='+blocksize+' '+location
-    res = os.popen(command)
-    res = res.readlines()
 
-    # Skip the header
-    if len(res) < 2:
-        return None
+def dfall():
 
-    res = res[1]
-    res = res.split()
-    size = int(res[1])
-    used = int(res[2])
-    avail = int(res[3])
-    perc = res[4]
+    dflist=[]
+    for i in xrange(1,NMACHINE+1):
 
-    tdict = {'loc': location,
-             'size':size,
-             'used':used,
-             'avail':avail,
-             'perc':perc,
-             'displine': display_line,
-             'header':header}
+        machine = 'astro%04d' % i
+        if machine in MACHINE_SKIP:
+            continue
+        command='ssh %s "df /data | grep data"' % machine
+        si,so=os.popen2(command)
+        df=so.read().strip()
+        if df == '':
+            print 'Could not get df for machine %s' % machine
+        else:
+            dfd = {}
+            df=df.split()
+            dfd['machine'] = machine
+            dfd['filesystem'] = '%s:/data' % machine
+            dfd['size']    = int(df[1])
+            dfd['size_human']  = get_human_rep(dfd['size'])
+            dfd['used']    = int(df[2])
+            dfd['used_human']  = get_human_rep(dfd['used'])
+            dfd['avail']   = int(df[3])
+            dfd['avail_human']  = get_human_rep(dfd['avail'])
+            dfd['perc']    = df[4]
 
-    return tdict
+            dfd['percnum'] = int( dfd['perc'].replace('%','') )
 
-def MakeKey(tdict, sortby=None):
-    if sortby is None:
-        sortby = 'avail'
+            dflist.append(dfd)
+    return dflist
+
+
+def print_dfall(dflist, sortby, dodate=False):
+    from operator import itemgetter
+
+    if dodate:
+        date = str(datetime.datetime.now())
+        date=date[0:date.find('.')]
+        print date
+        print
+
+    print 'Filesystem            Size  Used Avail Use%'
+
+    fmt='%-21s %4s  %4s %5s %4s'
+
+    size_tot=0
+    used_tot=0
+    avail_tot=0
+
+    #for d in dflist:
+    for d in sorted(dflist, reverse=sortmap[sortby]['reverse'], 
+                    key=sortmap[sortby]['sortf']):
+        print fmt % (d['filesystem'],
+                     d['size_human'],
+                     d['used_human'],
+                     d['avail_human'],
+                     d['perc'])
+
+        size_tot += d['size']
+        used_tot += d['used']
+        avail_tot += d['avail']
+
+    size_tot_human = get_human_rep(size_tot)
+    used_tot_human = get_human_rep(used_tot)
+    avail_tot_human = get_human_rep(avail_tot)
+    use_perc_tot = int(used_tot/float(size_tot)*100.)
+    use_perc_tot_human = '%3s%%' % use_perc_tot
+
+    print '-'*43
+    print fmt % ('totals',
+                 size_tot_human,
+                 used_tot_human,
+                 avail_tot_human,
+                 use_perc_tot_human)
+
+
+
+
+def make_key(tdict, sortby):
     key = '%010s-%s' % (tdict[sortby], tdict['name'])
     return key
 
 
 def main():
-    options, args = parser.parse_args(sys.argv[1:])
-    sortby = options.sortby
-    portable=options.portable
 
-    if sortby not in sort_reverse:
-        sys.stderr.write("Bad SORTBY specification: %s\n" % sortby)
+    options, args = parser.parse_args(sys.argv[1:])
+
+    if options.sortby not in sort_reverse:
+        print "Bad SORTBY specification:",options.sortby
         sys.exit(45)
 
-    disklist = open(dlist_name, 'r')
-
-    ddict = {}
-    for line in disklist:
-        line = line.strip()
-        (diskname, location) = ExtractInfo(line)
-        if diskname is None:
-            return
-
-        tdict = Df(location, portable=portable)
-        if tdict is None:
-            return
-
-        tdict['name'] = diskname
-
-        key = MakeKey(tdict, sortby=sortby)
-        ddict[key] = tdict
-
-    if not portable:
-        sys.stdout.write(ddict[key]['header'])
-
-    for key in sorted(ddict, reverse=sort_reverse[sortby]):
-        sys.stdout.write(ddict[key]['displine'])
-
-    disklist.close()
-
+    dflist = dfall()
+    print_dfall(dflist, options.sortby, dodate=options.date)
 
 
 # run the main program

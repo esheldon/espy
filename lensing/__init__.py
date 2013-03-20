@@ -3,56 +3,82 @@
 quick version
 -------------
 
-I'll go through each below, but for now assume you have a lens run called l07
-and a randoms run called r01, and the config files are set up, and scinv
+I'll go through each below, but for now assume you have a lens run called rm03s06
+and a randoms run called r03s06, and the config files are set up, and scinv
 exists.
 
+Note for not randoms we will go ahead and combine the collated lens splits
+
     # if the scat are not already generated
-    /bin/make-objshear-input.py scat scat_sample
+    /bin/make-objshear-input.py -t scat -s scat_sample
 
     #
-    # now generate the lens samples and processing scripts, condor
+    # now generate the lens samples and wq scripts
     #
-    /bin/make-objshear-input.py lcat l07
-    /bin/make-objshear-proc.py l07
+
+    # note lcat are now always split
+    /bin/make-objshear-input.py -t lcat -s rm03
+
+    # creates config,shear,src_reduce,collate
+    /bin/make-objshear-proc.py rm03s06
 
     # in the $LENSDIR/proc/run directory
-    condor_submit run-l07.condor
+    incsub run-${run}-[0-9]*.yaml
+    
+    # we then need to reduce across sources at fixed lens split
+    incsub run-${run}-src-reduce-*.yaml
 
-    /bin/reduce-lensout.py l07
-    /bin/collate-reduced.py l07
+    # and then collate each of the lens splits
+    incsub run-${run}-collate-*.yaml
 
-    # bin by lambda into 12 bins, must have defined this binnign
-    /bin/bin-lenses.py l07 lambda 12
+    # for lenses we need to combine the collations
+    python $ESPY_DIR/lensing/bin/combine-collated-chunks.py rm03s06
+
+
+    # This would bin by lambda into 12 bins, must have defined this binning
+    /bin/bin-lenses.py rm03s06 lambda 12
+
     # plot the binning (not corrected, jackknife yet)
-    /bin/plot-dsig-byrun.py -t binned l07 lambda 12
+    /bin/plot-dsig-byrun.py -t binned rm03s06 lambda 12
 
     #
-    # now randoms
+    # now randoms with sample svrand01. For randoms we will not do the final
+    # collation across lenses because of memory constraints
     #
 
-    # generation of randoms is slow, so do it in chunks, here 100
-    /bin/make-random-chunk-scripts.py r01 100
+    # generation of randoms is slow, so do it in chunks.
+    # make sure to put nsplit into the lcat yaml file.
+    # for pre-generated ra/dec
+    /bin/make-random-chunk-scripts.py svrand01
+    # things are different when generating the ra/dec
+    /bin/make-random-chunk-scripts.py --gen-radec svrand01
 
-    # scripts are in the $LENSDIR/lcat/r01/condor
-    for f in *.condor; do echo "$f"; condor_submit "$f"; done
+    # scripts are in the $LENSDIR/lcat/{run}/wq
 
-    # then combine them
-    /bin/combine-random-chunks.py r01 100
+    # you can combine them if you want, but if you have
+    # done splits the wq scripts will work with them
+    #/bin/combine-random-chunks.py svrand01
 
-    # now make the scripts, condor
-    /bin/make-objshear-proc.py r01
+    # 
+    # now make the associated run and the wq scripts
+    # let's call the run simply run-svrand01s05
+    # we need to reduce across sources then concatenate
+    # the lens splits together
+    /bin/make-objshear-proc.py -t config,shear,src_reduce,lens_concat svrand01s05
 
-    # in the $LENSDIR/proc/r01 directory
-    condor_submit run-r01.condor
+    # now
+    # - submit the shear wq scripts 
+    # - submit the src reduce wq scripts (reduce across sources at fixed lens split)
+    # - Optionally: submit the lens concat script
+    # - collate the results in the splits
+    # - Optionally: combine the collated splits
 
-    # and combine same as lenses
-    /bin/reduce-lensout.py r01
-    /bin/collate-reduced.py r01
+    #
+    # match randoms to the lens bins this can eat tons of memory, so probably
+    # want to get an interactive job on a high mem machine, maybe 48G machine
+    #
 
-
-    # match randoms to those bins
-    /bin/match-randoms.py -t lambda -n 12 l07 r01
+    /bin/match-randoms.py -t lambda -n 12 sv01s05 svrand01s05
 
     # correct from randoms
     /bin/correct-shear.py
@@ -73,6 +99,9 @@ sweeps_reduct/regauss/04.cols by running
 
     /bin/add-scinv.py
 
+Sometimes you can just copy a scinv{sample}.col 
+or symlink if selection criteria have not changed
+
 Then create input catalogs. 
 
     /bin/make-objshear-input.py scat scat_sample
@@ -85,25 +114,24 @@ Note this requires dealing with catalog names in these
     lensing.scat.create_input(sample)
 
 Then create a lensing run yaml in $ESPY_DIR/lensing/config/ and run
-the config, script, and condor file creators using 
+the config, wq file creators using 
 
     /bin/make-objshear-proc.py
 
 The files go under ~/lensing/proc/run
 
 Make sure to install objshear under ~/exports/objshear-work
-    python build.py --prefix=~/exports/objshear-work install
+    python build.py --sdssmask --prefix=~/exports/objshear-work install
 
 
 Then submit the scripts
-
-    condor_submit run-04-035.condor
+    incsub run-{run}-*.yaml
 
 Since the results are split by source chunks, you then need
 to "reduce" the lens outputs, and collate with the original
 catalog
 
-    /bin/reduce-lensout.py
+    wq sub -b run-{run}-reduce.yaml
     /bin/collate-reduced.py
 
 You can then bin up the results. Youll need to use a binner
@@ -180,6 +208,9 @@ is actually specific to mz binning right now
 """
 
 from . import util
+from . import shear
+from .shear import Shear
+from .util import ShapeRangeError
 
 from . import rotation
 
@@ -192,13 +223,26 @@ from . import convert
 from . import objshear_config
 from . import scripts
 from . import condor
+from . import wqsubmit
 
 
-from . import regauss
-from . import regauss_test
-from . import regauss_sim
+try:
+    from . import regauss
+    from . import regauss_test
+    from . import regauss_sim
+except:
+    pass
 
-from . import princeton
+try:
+    from . import gmix_sdss
+except:
+    pass
+
+try:
+    from . import princeton
+except:
+    pass
+
 from . import files
 from . import pbslens
 

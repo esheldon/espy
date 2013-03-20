@@ -5,11 +5,11 @@
  "psf_ellip": 0.0,
  "conv":      "fft",
  "fft_nsub":  5,
- "mins2":     0.1,
- "maxs2":     2.5,
+ "mins2":     0.01,
+ "maxs2":     1.75,
  "ns2":       20,
  "mine":      0.05,
  "maxe":      0.8,
- "nume":      20,
+ "nume":      100,
  "comments":  "low res exponential disk, sub-sampling in fft"}
 

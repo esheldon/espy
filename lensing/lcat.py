@@ -17,33 +17,48 @@ import esutil as eu
 from esutil.ostools import path_join
 from esutil.numpy_util import where1
 
-import es_sdsspy
-from es_sdsspy import stomp_maps
+try:
+    import cosmology
+except:
+    from esutil import cosmology
+try:
+    import es_sdsspy
+    from es_sdsspy import stomp_maps
+except:
+    pass
 
-import cosmology
+from . import binning
 
-def instantiate_sample(sample):
+
+def instantiate_sample(**keys):
+    sample=keys['sample']
     conf = lensing.files.read_config('lcat',sample)
+
     if conf['catalog'] in ['redmapper-random','maxbcg-random']:
-        return SDSSRandom(sample)
+        return SDSSRandom(sample, **keys)
+
     elif conf['catalog'][0:9] == 'redmapper':
-        # proper is the old version
-        return RedMapper(sample)
-    elif conf['catalog'] == 'ProPer':
-        return RedMapper(sample)
+        return RedMapper(sample, **keys)
+
     elif conf['catalog'] == 'maxbcg-full':
         return MaxBCG(sample)
+
     elif conf['catalog'] == 'desmocks-2.13':
         return DESMockLensCatalog(sample)
+
+    elif conf['catalog'] in ['sdss-voids-01','sdss-voids-02']:
+        return SDSSVoids(sample)
+    elif conf['catalog'] in ['sdss-voids-rand-01']:
+        return SDSSVoidsRandom(sample)
     else:
         raise ValueError("don't know about catalog %s" % conf['catalog'])
 
-def create_input(sample, **keys):
+def create_input(**keys):
     """
-    e.g.  create_input('01')
+    e.g.  create_input(sample='sv01')
     """
 
-    c = instantiate_sample(sample)
+    c = instantiate_sample(**keys)
     c.create_objshear_input(**keys)
 
 def plot_coverage(sample):
@@ -56,9 +71,9 @@ def original_file(sample):
     c = instantiate_sample(sample)
     return c.original_file()
 
-def read_original(sample):
-    c = instantiate_sample(sample)
-    return c.read_original()
+def read_original(**keys):
+    c = instantiate_sample(**keys)
+    return c.read_original(**keys)
 
 
 def output_array(num):
@@ -69,6 +84,9 @@ def output_array(num):
 
 class LcatBase(dict):
     def __init__(self, sample, **keys):
+
+        for k in keys:
+            self[k] = keys[k]
 
         conf = lensing.files.read_config('lcat',sample)
         for k in conf:
@@ -81,10 +99,182 @@ class LcatBase(dict):
         return lensing.files.lcat_read(sample=self['sample'])
 
     def file(self):
-        fname = lensing.files.sample_file('lcat',self['sample'])
+        fname = lensing.files.sample_file(type='lcat',sample=self['sample'], ext='dat')
         return fname
 
+    def read_original(self, **keys):
+        infile = self.original_file()
+        stdout.write("Reading original catalog: %s\n" % infile)
+        data = eu.io.read(infile, lower=True, ensure_native=True)
+        return data
 
+    def original_dir(self):
+        catdir = lensing.files.catalog_dir()
+        d = path_join(catdir, self['catalog'])
+        return str(d)
+    def original_file(self, ext='fits'):
+        d = self.original_dir()
+        f='%s.%s' % (self['catalog'],ext)
+        infile = path_join(d, f)
+        return infile
+
+
+class SDSSVoids(LcatBase):
+    def __init__(self, sample, **keys):
+
+        # this copies each key to self[key]
+        LcatBase.__init__(self, sample, **keys)
+
+    def convert2fits(self):
+        import recfile
+        if self['catalog'] == "sdss-voids-01":
+            # ID    ra        dec         redshift      radius
+            dt=[('id','i8'),('ra','f8'),('dec','f8'),('z','f8'),('radius','f8')]
+        elif self['catalog'] == "sdss-voids-02":
+            # RA, dec, redshift, radius (Mpc/h), void ID
+            #216.60 0.81 0.03606 5.81 701
+            dt=[('ra','f8'),('dec','f8'),('z','f8'),('radius','f8'),('id','i8')]
+        else:
+            raise ValueError("unknown catalog: %s" % self['catalog'])
+
+        
+        f=self.original_file(ext='txt')
+        fout=self.original_file()
+        print("reading:",f)
+
+        with recfile.Recfile(f, skiplines=1, delim=' ',dtype=dt) as robj:
+            data = robj[:]
+
+        print("writing:",fout)
+        output = eu.numpy_util.add_fields(data, [('zindex','i8')])
+        output['zindex'] = numpy.arange(output.size)
+        eu.io.write(fout, output, clobber=True)
+
+
+    def create_objshear_input(self, **keys):
+
+        nsplit=self['nsplit']
+        if nsplit != 1:
+            raise ValueError("expected nsplit=1 for SDSSVoids")
+
+        data = self.read_original()
+        orig_size = data.size
+        zindex = numpy.arange(orig_size,dtype='i8')
+
+        zmin = self['zmin']
+        zmax = self['zmax']
+
+        good=where1(  (data['z'] > zmin) & (data['z'] < zmax) )
+        print("  z cut: %s/%s: %s" % (data.size-good.size,
+                                      orig_size,
+                                      (data.size-good.size)/float(orig_size)) )
+        if good.size == 0:
+            stop
+
+        print("Actually trimming the bad z for speed")
+        data = data[good]
+        zindex = zindex[good]
+
+        #maskflags = self.get_maskflags(data['ra'][0:5], data['dec'][0:5], data['z'][0:5])
+        maskflags = self.get_maskflags(data['ra'], data['dec'], data['z'])
+        quad_logic = es_sdsspy.stomp_maps.quad_logic(maskflags)
+
+        good = where1(quad_logic)
+        print("  quad mask cut: %s/%s: %s" % (data.size-good.size,
+                                              orig_size,
+                                              (data.size-good.size)/float(orig_size)) )
+
+        if good.size == 0:
+            stop
+
+        print('creating output array')
+        output = output_array(good.size)
+
+        print('copying data')
+        output['zindex']    = zindex[good]
+        output['ra']        = data['ra'][good]
+        output['dec']       = data['dec'][good]
+        output['z']         = data['z'][good]
+        output['maskflags'] = maskflags[good]
+        lensing.files.lcat_write(sample=self['sample'], data=output, lens_split=0)
+
+    def get_maskflags(self, ra, dec, z):
+        """
+
+        Run the stomp edge checking code.
+
+        There are two checks: quadrant checking at full rmax, and a hard edge
+        cut at rmax_hard.
+
+        """
+
+        wbad=where1(ra < 0)
+        if wbad.size > 0:
+            print("bad ra:",ra[wbad])
+            stop
+
+        # get radius for edge check
+        cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])
+        print(cconf)
+        
+        c = cosmology.Cosmo(H0=cconf['H0'], omega_m=cconf['omega_m'])
+
+        print("    Getting radii. z range of inputs is [%.2f, %.2f]" % (z.min(), z.max()))
+        # Da is in Mpc
+        Da = c.Da(0.0, z)
+
+        # radius in *degrees*
+        radius = self['rmax']/Da*180./PI
+
+        self.basic_map = \
+            es_sdsspy.stomp_maps.load('boss','basic', maxres=2048)
+
+        print("    Getting basic quadrant maskflags at full rmax: %0.2f" % self['rmax'])
+        print("    radii are in range [%f,%f]" % (radius.min(), radius.max()))
+        maskflags = self.basic_map.Contains(ra, dec, "eq", radius)
+        w=es_sdsspy.stomp_maps.quad_check(maskflags)
+        print("    Keeping %d/%d quad" % (w.size,ra.size))
+
+        maskflags = numpy.array(maskflags, dtype='i8')
+        return maskflags
+
+    def plot_z_radius(self):
+        import biggles
+        import converter
+        data=self.read_original()
+        plt=eu.plotting.bscatter(data['z'],data['radius'],show=False)
+
+        zb = binning.VoidZBinner(4)
+        ll, hl = zb.bin_ranges()
+
+        c1=biggles.Curve([ll[0]]*2, [6,60])
+        c2=biggles.Curve([ll[1]]*2, [6,60])
+        c3=biggles.Curve([ll[2]]*2, [6,60])
+        c4=biggles.Curve([ll[3]]*2, [6,60])
+        c5=biggles.Curve([hl[3]]*2, [6,60])
+
+        plt.add(c1,c2,c3,c4,c5)
+
+        w1=where1( (data['z'] > ll[0]) & (data['z'] < hl[0]) )
+        w2=where1( (data['z'] > ll[1]) & (data['z'] < hl[1]) )
+        w3=where1( (data['z'] > ll[2]) & (data['z'] < hl[2]) )
+        w4=where1( (data['z'] > ll[3]) & (data['z'] < hl[3]) )
+
+        type='filled circle'
+        size=1
+        plt.add(biggles.Points(data['z'][w1],data['radius'][w1],color='blue',type=type,size=size))
+        plt.add(biggles.Points(data['z'][w2],data['radius'][w2],color='red',type=type,size=size))
+        plt.add(biggles.Points(data['z'][w3],data['radius'][w3],color='magenta',type=type,size=size))
+        plt.add(biggles.Points(data['z'][w4],data['radius'][w4],color='brown',type=type,size=size))
+        plt.xlabel='z'
+        plt.ylabel='radius'
+        #plt.show()
+
+        f=self.original_file().replace('.fits','-z-rad.eps')
+        print(f)
+        plt.write_eps(f)
+        converter.convert(f, dpi=100, verbose=True)
+        
 
 class SDSSRandom(LcatBase):
     """
@@ -99,6 +289,7 @@ class SDSSRandom(LcatBase):
     """
     def __init__(self, sample, **keys):
 
+        # this copies each key to self[key]
         LcatBase.__init__(self, sample, **keys)
 
         if self['catalog'] not in ['maxbcg-random','redmapper-random']:
@@ -114,8 +305,10 @@ class SDSSRandom(LcatBase):
         self['mapname'] = 'boss'
         self['maptype'] = 'basic'
         self['tycho_maptype'] = 'tycho'
+        # we might want to increase this!
+        self['maxres'] = 2048
 
-    def read_original(self):
+    def read_original(self, **keys):
         """
         For randoms, the lens input is the catalog
         """
@@ -124,8 +317,12 @@ class SDSSRandom(LcatBase):
 
     def load_stomp_maps(self):
         if not hasattr(self, 'basic_map'):
-            self.basic_map = es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'])
-            self.tycho_map = es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'])
+            self.basic_map = \
+                es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'], 
+                                          maxres=self['maxres'])
+            self.tycho_map = \
+                es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'],
+                                          maxres=self['maxres'])
 
     def create_objshear_input(self, nrand=None, extra=None):
         """
@@ -183,7 +380,7 @@ class SDSSRandom(LcatBase):
                 output['maskflags'][n:n+wgood.size] = maskflags[wgood]
                 n += wgood.size
 
-        lensing.files.lcat_write(self['sample'], output, extra=extra)
+        lensing.files.lcat_write(sample=self['sample'], data=output, extra=extra)
 
     def get_maskflags(self, ra, dec, z, hard=False):
         """
@@ -274,7 +471,7 @@ class SDSSRandom(LcatBase):
             plt.show()
 
         if dops:
-            d = lensing.files.sample_dir('lcat',self['sample'])
+            d = lensing.files.sample_dir(type='lcat',sample=self['sample'])
             d = os.path.join(d,'plots')
             if not os.path.exists(d):
                 os.makedirs(d)
@@ -283,30 +480,161 @@ class SDSSRandom(LcatBase):
             plt.write_eps(epsfile)
         return plt
 
+
+class SDSSVoidsRandom(LcatBase):
+    """
+    This is used for the randoms generated by Peter Sutter for the
+    voids.  It is ~DR7
+    """
+    def __init__(self, sample, **keys):
+
+        # this copies each key to self[key]
+        LcatBase.__init__(self, sample, **keys)
+
+        if self['catalog'] not in ['sdss-voids-rand-01']:
+            raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
+
+        cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])
+        self.cosmo = cosmology.Cosmo(omega_m=cconf['omega_m'], H0=cconf['H0'])
+
+        self.zgen = eu.random.Generator(self.cosmo.dV, 
+                                        xrange=[self['zmin'],self['zmax']], 
+                                        nx=1000, 
+                                        method='cut')
+        self['mapname'] = 'boss'
+        self['maptype'] = 'basic'
+        self['tycho_maptype'] = 'tycho'
+        # we might want to increase this!
+        self['maxres'] = 2048
+
+    def load_stomp_maps(self):
+        if not hasattr(self, 'basic_map'):
+            self.basic_map = \
+                es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'], 
+                                          maxres=self['maxres'])
+            self.tycho_map = \
+                es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'],
+                                          maxres=self['maxres'])
+
+    def read_original(self, **keys):
+        keys['sample'] = self['sample']
+        return lensing.files.lcat_read(**keys)
+
+    def read_raw(self):
+        dir = lensing.files.catalog_dir()
+        dir = path_join(dir, self['catalog'])
+        f='%s.fits' % self['catalog']
+        infile = path_join(dir, f)
+        stdout.write("Reading raw ra,dec: %s\n" % infile)
+        data = eu.io.read(infile, lower=True, ensure_native=True)
+
+    def create_objshear_input(self, lens_split=None):
+        """
+        To work in chunks, send nrand= and extra=chunknum
+        """
+
+        nsplit=self['nsplit']
+        if lens_split is None:
+            raise ValueError("send lens_split=")
+        print("doing lens_split %s: %s/%s" % (lens_split,lens_split+1,nsplit))
+
+        self.load_stomp_maps()
+
+        strict_edgecut = self['strict_edgecut']
+
+        fname = self.file()
+
+        n=0
+
+        data=self.read_raw()
+        zindex = numpy.arange(data.size,dtype='i8')
+
+        # do in chunks so we can see the progress
+        npersplit = data.size/nsplit
+        nleft = data.size % nsplit
+
+        data = data[lens_split*npersplit:(lens_split+1)*npersplit]
+        zindex = zindex[lens_split*npersplit:(lens_split+1)*npersplit]
+        #data = data[0:100]
+        #zindex = zindex[0:100]
+
+        print("Generating z in [%0.2f,%0.2f]" % (self['zmin'],self['zmax']))
+        z = self.zgen.genrand(data.size)
+
+
+        print(" -> maskflags, max radius: %0.1f" % self['rmax'])
+        maskflags = self.get_maskflags(data['ra'],data['dec'],z)
+
+        quad_logic = es_sdsspy.stomp_maps.quad_logic(maskflags, strict=strict_edgecut)
+
+        wgood = where1(quad_logic)
+
+        print(" -> good ones:",wgood.size)
+
+        data      = data[wgood]
+        zindex    = zindex[wgood]
+        z         = z[wgood]
+        maskflags = maskflags[wgood]
+
+        dt = lensing.files.lcat_dtype()
+        output = numpy.zeros(wgood.size, dtype=dt)
+        output['zindex'][:]    = zindex
+        output['ra'][:]        = data['ra']
+        output['dec'][:]       = data['dec']
+        output['z'][:]         = z
+        output['maskflags'][:] = maskflags
+
+        lensing.files.lcat_write(sample=self['sample'], data=output, lens_split=lens_split)
+
+
+    def get_maskflags(self, ra, dec, z, hard=False):
+        """
+
+        Run the stomp edge checking code. This uses the basic map, while the
+        points themselves are generated from the tycho map
+
+        """
+
+        self.load_stomp_maps()
+
+        # Da is in Mpc
+        Da = self.cosmo.Da(0.0, z)
+
+        # radius in *degrees*
+        if hard:
+            rmax = self['rmax_hard']
+        else:
+            rmax = self['rmax']
+        radius = rmax/Da*180./PI
+        
+        maskflags = self.basic_map.Contains(ra, dec, "eq", radius)
+
+        return numpy.array(maskflags, dtype='i8')
+
+
+
 class RedMapper(LcatBase):
     def __init__(self, sample, **keys):
 
+        # this copies each key to self[key]
         LcatBase.__init__(self, sample, **keys)
 
-        if self['catalog'] not in ['redmapper-dr8-3.4-like','redmapper-dr8-3.4-nord','ProPer']:
+        if self['catalog'] not in ['redmapper-dr8-3.4-like',
+                                   'redmapper-dr8-3.4-nord',
+                                   'redmapper-dr8-3.14',
+                                   'redmapper-dr8-3.14-cen2']:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
         self['mapname'] = 'boss'
         self['maptype'] = 'basic'
         self['tycho_maptype'] = 'tycho'
+        # we might want to increase this!
+        self['maxres'] = 2048
 
-    def get_lambda_field(self):
-        if self['catalog'] == 'ProPer':
-            lambda_field = 'lambda_zred'
-        else:
-            lambda_field = 'lambda_chisq'
-        return lambda_field
 
     def create_objshear_input(self, **keys):
         
         strict_edgecut = self.get('strict_edgecut',False)
-        
-        lambda_field = self.get_lambda_field()
 
         z_field = 'z_lambda'
 
@@ -328,7 +656,7 @@ class RedMapper(LcatBase):
 
 
         # trim poorly understood low lambda stuff
-        lambda_logic = self.lambda_logic(data[lambda_field])
+        lambda_logic = self.lambda_logic(data['lambda_chisq'])
 
         # make sure in the tycho window and two adjacent quadrants
         # not hitting edge (or no edge if strict=True)
@@ -336,8 +664,10 @@ class RedMapper(LcatBase):
         md = self.get_maskflags(data['ra'], data['dec'], data[z_field])
 
         tycho_logic = (md['in_tycho'] == 1)
-        quad_logic = es_sdsspy.stomp_maps.quad_logic(md['maskflags'], strict=strict_edgecut)
-        hard_edge_logic = es_sdsspy.stomp_maps.quad_logic(md['maskflags_hard'], strict=True)
+        quad_logic = es_sdsspy.stomp_maps.quad_logic(md['maskflags'], 
+                                                     strict=strict_edgecut)
+        hard_edge_logic = es_sdsspy.stomp_maps.quad_logic(md['maskflags_hard'], 
+                                                          strict=True)
 
         good = where1(lambda_logic & tycho_logic & quad_logic & hard_edge_logic)
         print("Finally kept: %d/%d" % (good.size,data.size))
@@ -351,7 +681,7 @@ class RedMapper(LcatBase):
         output['dec']       = data['dec'][good]
         output['z']         = data[z_field][good]
         output['maskflags'] = md['maskflags'][good]
-        lensing.files.lcat_write(self['sample'], output)
+        lensing.files.lcat_write(sample=self['sample'], data=output)
 
     def lambda_logic(self, lam):
         print("Cutting lambda > %0.2f" % self['lambda_min'])
@@ -378,8 +708,12 @@ class RedMapper(LcatBase):
 
     def load_stomp_maps(self):
         if not hasattr(self, 'basic_map'):
-            self.basic_map = es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'])
-            self.tycho_map = es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'])
+            self.basic_map = \
+                es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'], 
+                                          maxres=self['maxres'])
+            self.tycho_map = \
+                es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'],
+                                          maxres=self['maxres'])
 
     def get_maskflags(self, ra, dec, z, types=['tycho','rmax','rmax_hard']):
         """
@@ -455,14 +789,11 @@ class RedMapper(LcatBase):
 
     def original_file(self):
         d = self.original_dir()
-        if self['catalog'] == 'ProPer':
-            f = 'dr8_proper_v3.2_lamgt10.fit'
-        else:
-            f='%s.fits' % self['catalog']
+        f='%s.fits' % self['catalog']
         infile = path_join(d, f)
         return infile
 
-    def read_original(self):
+    def read_original(self, **keys):
         infile = self.original_file()
         stdout.write("Reading original catalog: %s\n" % infile)
         data = eu.io.read(infile, lower=True, ensure_native=True)
@@ -581,7 +912,7 @@ class RedMapper(LcatBase):
             plt.show()
 
         if dops:
-            d = lensing.files.sample_dir('lcat',self['sample'])
+            d = lensing.files.sample_dir(type='lcat',sample=self['sample'])
             d = os.path.join(d,'plots')
             if not os.path.exists(d):
                 os.makedirs(d)
@@ -669,7 +1000,7 @@ class RedMapper(LcatBase):
             plt.show()
 
         if dops:
-            d = lensing.files.sample_dir('lcat',self['sample'])
+            d = lensing.files.sample_dir(type='lcat',sample=self['sample'])
             d = os.path.join(d,'plots')
             if not os.path.exists(d):
                 os.makedirs(d)
@@ -718,7 +1049,7 @@ class MaxBCG(LcatBase):
         output['dec']       = data['dec'][good]
         output['z']         = data['photoz_cts'][good]
         output['maskflags'] = self.get_maskflags(output['ra'],output['dec'],output['z'])
-        lensing.files.lcat_write(self['sample'], output)
+        lensing.files.lcat_write(sample=self['sample'], data=output)
 
     def ngals_logic(self, ngals):
         print("Cutting ngals >= %d" % self['ngals_r200_min'])
@@ -785,7 +1116,7 @@ class MaxBCG(LcatBase):
         infile = path_join(d, f)
         return infile
 
-    def read_original(self):
+    def read_original(self, **keys):
         infile = self.original_file()
         stdout.write("Reading original catalog: %s\n" % infile)
         data = eu.io.read(infile, lower=True, ensure_native=True)
@@ -864,7 +1195,7 @@ class MaxBCG(LcatBase):
             plt.show()
 
         if dops:
-            d = lensing.files.sample_dir('lcat',self['sample'])
+            d = lensing.files.sample_dir(type='lcat',sample=self['sample'])
             d = os.path.join(d,'plots')
             if not os.path.exists(d):
                 os.makedirs(d)
@@ -894,7 +1225,7 @@ class DESMockLensCatalog(dict):
             raise ValueError("The config sample '%s' doesn't match input '%s'" % (self['sample'],sample))
 
     def file(self):
-        fname = lensing.files.sample_file('lcat',self['sample'])
+        fname = lensing.files.sample_file(type='lcat',sample=self['sample'])
         return fname
 
     def read(self, split=None):
@@ -915,7 +1246,7 @@ class DESMockLensCatalog(dict):
         output['z'] = data['z']
         #output['dc'] = -9999.0
 
-        lensing.files.lcat_write(self['sample'], output)
+        lensing.files.lcat_write(sample=self['sample'], data=output)
 
 
     def original_dir(self):
@@ -929,7 +1260,7 @@ class DESMockLensCatalog(dict):
         infile = path_join(d, f)
         return infile
 
-    def read_original(self):
+    def read_original(self, **keys):
         infile = self.original_file()
         if not os.path.exists(infile):
             raise ValueError("File not found: %s\n" % infile)

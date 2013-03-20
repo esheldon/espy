@@ -1,0 +1,183 @@
+#!/usr/bin/env python
+"""
+    %prog [options] script1 script2 script3 ...
+"""
+
+import sys
+from sys import stderr
+import os
+import subprocess
+import time
+import datetime
+from optparse import OptionParser
+
+parser=OptionParser(__doc__)
+parser.add_option("-p","--polltime", default=30,
+        help=("time between polls of the queue status "
+              "default %default"))
+parser.add_option("-n", "--maxjobs", default=150, 
+                  help="max number of jobs, default %default")
+parser.add_option("-f", "--force", action="store_true",
+                  help="force starting of all jobs, even if a log file is present.")
+
+parser.add_option("-d", "--dryrun", action='store_true', 
+                  help="dry run.  Just print number of jobs and exit.")
+parser.add_option("-q", "--queue", default=None,
+                  help="only count jobs in this queue")
+
+parser.add_option("--rand", action="store_true",
+                  help="randomize the order of files")
+
+
+EXPECTED_FIELD_COUNT=11
+
+class JobLister(dict):
+    def __init__(self, user, queue=None):
+        self.user=user
+        self.queue=queue
+
+    def get_job_list(self):
+        if not hasattr(self,'_jobs'):
+            self.find_jobs()
+        return self._jobs
+
+    def get_njobs(self):
+        jobs=self.get_job_list()
+        return len(jobs)
+
+    def find_jobs(self):
+
+        qstat0=self.get_qstat()
+        qstat=self.filter(qstat0)
+
+        self._jobs = qstat
+
+    def get_qstat(self):
+        """
+        Run qstat and return lines associated with the user
+
+        This returns a list of lists
+        """
+        command='qstat -u {user}'.format(user=self.user)
+        pobj=subprocess.Popen(command, 
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              shell=True)
+        stdout_ret, stderr_ret = pobj.communicate()
+        tmp=stdout_ret.split('\n')
+
+        out=[]
+        for line in tmp:
+            out.append( line.split() )
+
+        return out
+
+    def filter(self, qstat0):
+        """
+        remove the header and empty lines
+
+        If the queue was sent, select on it
+        """
+        qstat=[]
+        for ls in qstat0:
+            if len(ls) == EXPECTED_FIELD_COUNT:
+                if ls[1] == self.user:
+                    if self.queue is not None:
+                        if ls[2]==self.queue:
+                            qstat.append(ls)
+                    else:
+                        qstat.append(ls)
+        return qstat
+
+class Submitter(object):
+    def __init__(self, user, maxjobs, flist, polltime, 
+                 queue=None, dryrun=False, force=False):
+        self.user=user
+        self.maxjobs=maxjobs
+        self.flist=flist
+        self.polltime=int(polltime)
+
+        self.queue=queue
+        self.dryrun=dryrun
+        self.force=force
+
+
+    def submit_jobs(self):
+        print >>stderr,"submitting jobs for user: %s" % self.user
+        print >>stderr,"number in list:           %s" % len(self.flist)
+        print >>stderr,"will limit to maxjobs:    %s" % self.maxjobs
+
+        if self.dryrun:
+            return
+
+        nfiles=len(self.flist)
+
+        lister=JobLister(self.user, queue=self.queue)
+        diffjobs=0
+        for i,fname in enumerate(self.flist):
+            perc=100.*(i+1)/float(nfiles)
+
+            logf=self.get_log_fname(fname)
+            if not os.path.exists(logf) or self.force:
+                if diffjobs <= 0:
+                    lister.find_jobs()
+                    diffjobs = self.maxjobs - lister.get_njobs()
+                    while diffjobs <= 0:
+                        time.sleep(self.polltime)
+                        lister.find_jobs()
+                        diffjobs = self.maxjobs - lister.get_njobs()
+                    print >>stderr,("Found %s jobs  "
+                                    "diffjobs: %s" % (lister.get_njobs(),diffjobs))
+
+                date = datetime.datetime.now().strftime('%H:%M:%S')
+                print >>stderr,\
+                  "    submitting %s %s %s/%s (%i%%)" % (fname,date,i+1,nfiles,perc)
+                self.submit_job(fname)
+
+                diffjobs -= 1
+
+    def get_log_fname(self, fname):
+        dotloc=fname.find('.')
+        if dotloc==-1:
+            return fname+'.out'
+        else:
+            return fname[0:dotloc]+'.out'
+
+    def submit_job(self, fname):
+        command="qsub {fname}".format(fname=fname)
+        os.system(command)
+
+def randomize_flist(flist):
+    import random
+    d={}
+    for f in flist:
+        d[random.randint(0,2000000000)] = f
+    return [d[k] for k in d]
+
+
+def main():
+    try:
+        user=os.environ['USER']
+        options, flist = parser.parse_args(sys.argv[1:])
+
+        if len(flist) == 0:
+            parser.print_help()
+            sys.exit(1)
+
+        if options.rand:
+            flist=randomize_flist(flist)
+
+        submitter=Submitter(user, 
+                            int(options.maxjobs), 
+                            flist, 
+                            int(options.polltime),
+                            dryrun=options.dryrun, 
+                            force=options.force,
+                            queue=options.queue)
+        submitter.submit_jobs()
+
+    except KeyboardInterrupt:
+        sys.exit(1)
+
+
+
+main()

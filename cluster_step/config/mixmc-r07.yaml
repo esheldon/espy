@@ -1,0 +1,42 @@
+run: mixmc-r07
+version: "2012-10-16"
+
+star_minmag: 18
+star_maxmag: 20
+
+cutout_size: 28
+seg_padding: 5
+
+psf_models: ['admom']
+em_maxiter: 10000
+em_tol: 1.0e-6
+
+# should be 'random', 'mean', 'median'
+psf_interp: 'median'
+
+# step and burnin are *per walker*
+# 40 guarantees convergence but 20 works as well for the most part
+nwalkers: 20
+nstep: 200
+burnin: 400
+
+iter: true
+mca_a: 3.0 # about 35% acceptance
+
+fitmodel: ['gexp','gdev']
+
+shear_s2n_min: 10
+
+gprior_type: 'fits'
+gprior_pars_exp: [1.0, 13.68, 0.051, 0.87]
+gprior_pars_dev: [1.0, 8.0, 9.5e-7]
+
+
+# draw the g1,g2 starting points from the gprior
+draw_gprior: true
+
+# for filling areas not in object with noise
+seed: 163
+
+comment: |
+    same as r06 but just fixing psf to admom

@@ -38,11 +38,11 @@ class LensCondor(dict):
 
 
     def write_allone(self):
-        d=files.sample_dir('condor',self['run'])
+        d=files.sample_dir(type='condor',sample=self['run'])
         if not os.path.exists(d):
             os.makedirs(d)
 
-        d = files.sample_dir('condor',self['run'])
+        d = files.sample_dir(type='condor',sample=self['run'])
         script_file=files.sample_file('condor',self['run'])
 
         print("writing all in one script:",script_file)
@@ -61,7 +61,7 @@ class LensCondor(dict):
                 fobj.write(text)
 
     def write_scripts(self):
-        d=files.sample_dir('condor',self['run'])
+        d=files.sample_dir(type='condor',sample=self['run'])
         if not os.path.exists(d):
             os.makedirs(d)
 
@@ -76,7 +76,7 @@ class LensCondor(dict):
                 f.write('\n')
 
     def script_text(self, split):
-        d = files.sample_dir('condor',self['run'])
+        d = files.sample_dir(type='condor',sample=self['run'])
         script_file=files.sample_file('script',self['run'],split=split)
         script_base = os.path.basename(script_file).replace('.sh','')
 

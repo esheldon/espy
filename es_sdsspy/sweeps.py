@@ -19,7 +19,11 @@ from esutil.ostools import getenv_check, path_join
 import datetime
 import pprint
 
-import columns
+try:
+    import columns
+except:
+    pass
+
 import copy
 
 flagdict = {'read_failed':2**0,
@@ -667,12 +671,12 @@ class SweepExtractor:
     def __init__(self, photoid, allow_nomatch=False):
         self.photoid=photoid
 
-        run,rerun,camcol,field,id=sdsspy.photoid_extract(photoid)
-        self.run=run
-        self.rerun=rerun
-        self.camcol=camcol
-        self.field=field
-        self.id=id
+        ids=sdsspy.photoid_extract(photoid)
+        self.run=ids['run']
+        self.rerun=ids['rerun']
+        self.camcol=ids['camcol']
+        self.field=ids['field']
+        self.id=ids['id']
 
         self.allow_nomatch = allow_nomatch
 

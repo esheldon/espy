@@ -1,0 +1,195 @@
+#!/usr/bin/env python
+"""
+    %prog [options]
+
+Make a web page pointing to the exposure mosaics.  Some info for each is also put into a table.
+"""
+
+import sys
+import os
+import glob
+
+import fitsio
+import desdb
+
+from optparse import OptionParser
+parser=OptionParser(__doc__)
+
+
+class RGBMosaicList(object):
+    def __init__(self, rebin=24):
+        self.rebin=rebin
+
+        self._df=desdb.files.DESFiles()
+
+        self._set_mosaic_basedir()
+
+        if not os.path.exists(self._basedir):
+            os.makedirs(self._basedir)
+
+        self._set_exposure_list()
+
+
+    def make_list(self):
+        html_name=self.get_html_file()
+        print 'writing:',html_name
+        with open(html_name,'w') as fobj:
+            fobj.write(_head)
+
+            for expname in self._explist:
+                print expname
+                meta=self._get_meta(expname)
+
+                exp_html,exp_html_rel=self._get_mosaic_html(expname)
+
+                entry='<a href="%s">image map</a>' % exp_html_rel
+
+                meta['entry']=entry
+
+                row="""
+    <tr>
+      <td>%(gexpname)s</td>
+      <td>%(rexpname)s</td>
+      <td>%(iexpname)s</td>
+      <td>%(gexptime)d</td>
+      <td>%(rexptime)d</td>
+      <td>%(iexptime)d</td>
+      <td>%(crval1).6f</td>
+      <td>%(crval2).6f</td>
+      <td>%(entry)s</td>
+    <tr>\n"""
+                row=row % meta
+                fobj.write(row)
+            fobj.write(_foot)
+
+
+    def _get_mosaic_html(self, expname):
+
+        
+        dir=os.path.join(self._basedir,expname)
+        reldir=os.path.join('./',expname)
+
+        name='%s_irg_mosaic%02d.html' % (expname,self.rebin)
+
+        relpath=os.path.join(reldir,name)
+        path=os.path.join(dir,name)
+
+        return path, relpath
+
+    def _set_exposure_list(self):
+        explist0=glob.glob(self._basedir+'/DECam_*')
+        explist=[]
+        for exposure in explist0:
+            if os.path.isdir(exposure):
+                explist.append(os.path.basename(exposure))
+        explist.sort()
+        self._explist=explist
+
+    def _get_meta(self,expname):
+        import yaml
+        yaml_file=os.path.join(self._basedir, expname, '%s.yaml' % expname)
+        data=yaml.load(open(yaml_file))
+
+        path=self._df.name(type='red_image', 
+                           run=data['grun'],
+                           expname=data['gexposure'],
+                           ccd=1)
+        gh=fitsio.read_header(path,ext=1)
+
+        path=self._df.name(type='red_image', 
+                           run=data['rrun'],
+                           expname=data['rexposure'],
+                           ccd=1)
+        rh=fitsio.read_header(path,ext=1)
+ 
+        path=self._df.name(type='red_image', 
+                           run=data['irun'],
+                           expname=data['iexposure'],
+                           ccd=1)
+        ih=fitsio.read_header(path,ext=1)
+        
+        gexptime=gh['exptime']
+        rexptime=rh['exptime']
+        iexptime=ih['exptime']
+        crval1=rh['crval1']
+        crval2=rh['crval2']
+
+        meta={'gexpname':data['gexposure'],
+              'rexpname':data['rexposure'],
+              'iexpname':data['iexposure'],
+              'gexptime':gexptime,
+              'rexptime':rexptime,
+              'iexptime':iexptime,
+              'crval1':crval1,
+              'crval2':crval2}
+
+        return meta
+
+    def _set_mosaic_basedir(self):
+        desdata=os.environ['DESDATA']
+        self._basedir = os.path.join(desdata,'jpg','OPS','color-mosaic')
+
+    def get_html_file(self):
+        return os.path.join(self._basedir, 'color-mosaics.html')
+
+_head="""
+<html>
+  <head>
+      <style type="text/css">
+            table.simple {
+                    border-width: 1px;
+                    border-collapse: collapse;
+            }
+
+            table.simple th {
+                    background-color: #faf0e6;
+                    padding: 7px;
+                    border-width: 1px;
+                    border-style: inset;
+            }
+            table.simple td {
+                    padding: 7px;
+                    border-width: 1px;
+                    border-style: inset;
+            }
+      </style>
+  </head>
+  <body>
+
+  <h1>Color mosaics of full pointings</h1>
+  Color mosaics of full pointings.  Click on individual CCDs to zoom.
+  <p> 
+  g,r,i band exposures were taken such that alignment between bands was quite<br>
+  close. Only a small shift was need to register the images.
+  <p>
+  Note images in the north may have tracking errors.
+  <p>
+  <table class=simple>
+    <tr>
+      <th>g Exposure</th>
+      <th>r Exposure</th>
+      <th>i Exposure</th>
+      <th>g exp time</th>
+      <th>r exp time</th>
+      <th>i exp time</th>
+      <th>RA</th>
+      <th>DEC</th>
+      <th>mosaic</th>
+    </tr>
+
+
+"""
+ 
+_foot="""
+  </table>
+  </body>
+</html>
+"""
+
+def main():
+    options,args = parser.parse_args(sys.argv[1:])
+
+    ml=RGBMosaicList()
+    ml.make_list()
+
+main()

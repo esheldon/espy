@@ -1,9 +1,0 @@
-You are not closing your statements, and it turns out they don't close
-themselves automatically.  Eventually you run out of statements, since there is
-a fixed limit.
-
-The problem is do_query() which returns the results but not the statement.  I
-think this is a flaw in how the java wrapping is implemented; the garbage
-collection is never releasing those.
-
-I'm testing of the cx_Oracle one has this problem.

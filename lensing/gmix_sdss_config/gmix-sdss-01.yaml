@@ -1,0 +1,73 @@
+sample: 01
+
+psf:
+    trials:
+        - 
+            ngauss: 2
+            randomize: true
+            eguess: null
+            uniform_p: False
+        - 
+            ngauss: 2
+            randomize: true
+            eguess: [0,0]
+            uniform_p: False
+
+        - 
+            ngauss: 3
+            randomize: true
+            eguess: null
+            uniform_p: False
+        - 
+            ngauss: 3
+            randomize: true
+            eguess: [0,0]
+            uniform_p: False
+
+    trials4:
+        - 
+            ngauss: 2
+            randomize: false
+            eguess: null
+            uniform_p: False
+        - 
+            ngauss: 2
+            randomize: true
+            eguess: null
+            uniform_p: False
+
+
+
+    trials2:
+        - 
+            ngauss: 2
+            randomize: true
+            eguess: null
+            uniform_p: False
+        - 
+            ngauss: 2
+            randomize: true
+            eguess: [0.0,0.0]
+            uniform_p: False
+
+    trials3:
+        - 
+            ngauss: 2
+            randomize: true
+            eguess: null
+            uniform_p: False
+        - 
+            ngauss: 2
+            randomize: true
+            eguess: null
+            uniform_p: true
+        - 
+            ngauss: 2
+            randomize: true
+            eguess: [0.0,0.0]
+            uniform_p: False
+        - 
+            ngauss: 2
+            randomize: true
+            eguess: [0.0,0.0]
+            uniform_p: true

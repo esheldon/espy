@@ -1,0 +1,171 @@
+#!/usr/bin/env python
+"""
+    %prog [options]
+
+description:
+
+    Writes out some wq data as a table.  You should write this to a file called
+    wqdata.txt.  You should also call this function with the -w option to write out
+    the wrapper html file that will include it and refresh.  You should use the
+    .shtml extension.
+
+        wq2html -w > index.shtml
+        while [ 1 ]; do
+            wq2html > wqdata.txt
+            sleep 30
+        done
+"""
+
+import sys
+import subprocess
+
+from optparse import OptionParser
+parser=OptionParser(__doc__)
+parser.add_option("-w","--wrapper",action='store_true',
+                  help="instead of the table data, write the "
+                  "wrapper that includes it.  You should write "
+                  "this to a file with shtml extension for "
+                  "server side includes")
+parser.add_option("-r","--refresh",default=30,
+                  help="refresh rate in seconds for the wrapper "
+                       "file.  Default %default")
+
+def get_ls():
+    lscmd='wq ls'
+    ls_pobj = subprocess.Popen(lscmd, 
+                               stdout=subprocess.PIPE, 
+                               stderr=subprocess.PIPE, 
+                               shell=True)
+
+    ls_stdout, ls_stderr = ls_pobj.communicate()
+    ls_stdout=ls_stdout.split('\n')
+    ls_summary_line = ls_stdout[-2]
+
+    ls_data = [ls_summary_line] + [''] + ls_stdout[0:-2]
+    ls_data = '\n'.join(ls_data)
+    return ls_data
+    #return ls_summary_line, ls_stdout[0:-3]
+
+def get_stat():
+    statcmd='wq stat'
+    stat_pobj = subprocess.Popen(statcmd, 
+                                 stdout=subprocess.PIPE, 
+                                 stderr=subprocess.PIPE, 
+                                 shell=True)
+
+    stat_stdout, stat_stderr = stat_pobj.communicate()
+    stat_stdout=stat_stdout.split('\n')
+    stat_summary_line = stat_stdout[-2]
+
+    stat_data = [stat_summary_line] + [''] + stat_stdout[1:-3]
+    stat_data = '\n'.join(stat_data)
+    return stat_data
+    #return stat_summary_line, stat_stdout[1:-3]
+
+def get_users():
+    statcmd='wq users'
+    stat_pobj = subprocess.Popen(statcmd, 
+                                 stdout=subprocess.PIPE, 
+                                 stderr=subprocess.PIPE, 
+                                 shell=True)
+
+    stat_stdout, stat_stderr = stat_pobj.communicate()
+    return stat_stdout
+
+def print_wrapper(refresh):
+    text="""
+<html>
+  </head>
+    <title>WQ Status</title>
+    <meta http-equiv="refresh" content="%s" > 
+    <style type="text/css">
+
+        body { 
+            /*color: #00ff00; */
+            /*color: white; */
+            color: #dcdccc;
+            /*background-color: black;*/
+            background-color: #1f1f1f;
+        }
+
+        table.simple {
+            border-width: 1px;
+            border-collapse: collapse;
+        }
+
+        table.simple th {
+            padding: 7px;
+            border-width: 1px;
+            border-style: inset;
+        }
+        table.simple td {
+            vertical-align: top;
+            padding: 7px;
+            border-width: 1px;
+            border-style: inset;
+        }
+
+
+        table.inside td {
+            padding: 0px;
+            border-width: 1px;
+            border-style: inset;
+        }
+
+
+    </style>
+
+  </head>
+  <body>
+    <!--#include virtual="wqdata.txt" -->
+  </body>
+</html>
+    """ % refresh
+    print text
+
+def print_table():
+    ls_data = get_ls()
+    stat_data = get_stat()
+    user_data=get_users()
+
+    table="""
+        <table class="simple">
+        <tr>
+            <td>
+<pre>
+%(ls_data)s
+</pre>
+            </td>
+            <td>
+                <table class="simple" padding=0>
+                    <tr>
+                        <td>
+<pre>
+%(stat_data)s
+</pre>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+<pre>
+%(user_data)s
+</pre>
+                        </td>
+                    </tr>
+        </tr>
+        </table>
+
+    """ % {'ls_data':ls_data,'stat_data':stat_data,'user_data':user_data}
+
+    print table
+
+def main():
+    options, args = parser.parse_args(sys.argv[1:])
+
+    if options.wrapper:
+        print_wrapper(options.refresh)
+    else:
+        print_table()
+
+
+main()

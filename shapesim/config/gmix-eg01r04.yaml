@@ -1,0 +1,42 @@
+# single gaussian for object, no noise
+run: gmix-eg01r04
+sim: sim-eg01
+
+
+# negative for no noise.  Note this is the adaptive moments S/N
+s2n: -9999
+
+# we should try with higher values to see what happens
+ngauss_psf: 1
+ngauss: 1
+
+# maximum iterations inside gmix_image
+gmix_maxiter: 4000
+# minimum fractional diff between iterations to indicate convergence
+gmix_tol: 1.e-6
+
+# number of times to retry with randomized guess
+max_retry: 5
+
+# number of trials at each s2 and ellip.  Orientations will be random
+# and if s2n is > 0 above, noise added to the image
+ntrial: 100
+
+# number of times to retry when a trial fails.  This generates
+# a new trial, unlike max_retry above which retries with a 
+# randomized guess
+itmax: 100
+
+# realizations of the object will be on a grid in these ranges s2 is an
+# approximate size ratio relative to the PSF
+
+mins2: 0.15
+maxs2: 1.75
+mine:  0.05
+maxe:  0.80
+
+# number of the above to realize
+nums2: 20
+nume:  20
+
+seed: 512

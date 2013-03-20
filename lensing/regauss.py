@@ -23,37 +23,44 @@ classes:
 from __future__ import print_function
 import os, sys
 import glob
-import sdsspy
-from sdsspy.atlas.atlas import NoAtlasImageError
-import es_sdsspy
-import columns
+
+
 import numpy
 from numpy import where,sqrt
 import esutil as eu
 from esutil.numpy_util import where1
 from esutil.ostools import path_join, expand_path
 
-import biggles
-from biggles import FramedPlot, PlotKey, Table, PlotLabel, Points, \
-            SymmetricErrorBarsY as SymErrY, SymmetricErrorBarsX as SymErrX
-
 import images
-import fimage
-from fimage.conversions import mom2fwhm
-import admom
 
-import zphot
+try:
 
-def open_columns(procrun, sweeptype='gal'):
+    import sdsspy
+    from sdsspy.atlas.atlas import NoAtlasImageError
+    import es_sdsspy
+    import biggles
+
+    import fimage
+    from fimage.conversions import mom2fwhm
+
+    import admom
+    import zphot
+    import columns
+except:
+    print("could not import external modules")
+
+
+
+def open_columns(procrun, sweeptype):
     coll = Collator(procrun, sweeptype)
     return coll.open_columns()
 
-def output_dir(procrun, sweeptype='gal'):
+def output_dir(procrun, sweeptype):
     coll = Collator(procrun, sweeptype)
     return coll.output_dir()
 
 
-def zphot_match(procrun, pzrun, sweeptype='gal'):
+def zphot_match(procrun, pzrun, sweeptype):
     '''
     add a match index into photoz column databases
 
@@ -243,12 +250,16 @@ class RegaussSweep:
         self.verbosity = keys.get('verbosity',1)
 
     def select(self):
+        """
+        """
+        #raise RuntimeError("use mangle mask")
         print("Selecting objects")
         s = es_sdsspy.select.Selector(self.objs)
         print("  getting resolve logic")
         resolve_logic = s.resolve_logic()
-        print("  getting tycho logic")
-        tycho_logic = s.mask_logic('tycho')
+
+        print("  getting mask logic")
+        mask_logic = s.mask_logic('basic')
 
         print("  getting flag logic")
         flag_logic = s.flag_logic()
@@ -260,7 +271,9 @@ class RegaussSweep:
             rmag_logic = s.modelmag_logic("r", self.rmax)
 
         logic = \
-            resolve_logic & tycho_logic & flag_logic & rmag_logic
+            resolve_logic & mask_logic & flag_logic & rmag_logic
+        #logic = \
+        #    resolve_logic & flag_logic & rmag_logic
 
         keep = where1(logic)
         print("  keeping %i/%i" % (keep.size, self.objs.size))
@@ -331,8 +344,11 @@ class RegaussSweep:
                 data['Irr'][fnum]     = s['Irr']
                 data['Irc'][fnum]     = s['Irc']
                 data['Icc'][fnum]     = s['Icc']
+                data['e1'][fnum]     = s['e1'] # just added these
+                data['e2'][fnum]     = s['e2']
                 data['a4'][fnum]      = s['a4']
                 data['uncer'][fnum]   = s['uncer']
+                data['s2n'][fnum]   = s['s2n']
                 data['amflags'][fnum] = s['whyflag']
                 data['amflags_str'][fnum] = s['whystr']
                 data['numiter'][fnum] = s['numiter']
@@ -390,6 +406,9 @@ class RegaussSweep:
         print("    copying from objs")
         eu.numpy_util.copy_fields(self.objs, self.output)
 
+        mm=sdsspy.nmgy2mag(self.objs['modelflux'][:,2])
+        self.output['modelmag_dered_r'] = mm-self.objs['extinction'][:,2]
+
         # set defaults
         output = self.output
 
@@ -432,6 +451,7 @@ class RegaussSweep:
             ('thing_id','i4'),
             ('ra','f8'),  # do we need these?
             ('dec','f8'),
+            ('modelmag_dered_r','f4'),
 
             ('has_atlas','i1'), # zero for no atlas
 
@@ -440,8 +460,12 @@ class RegaussSweep:
             ('Irr','5f8'),
             ('Irc','5f8'),
             ('Icc','5f8'),
+            ('eq','5f8'),
+            ('e1','5f8'), # just added these uncorrected shapes
+            ('e2','5f8'),
             ('a4','5f8'),
             ('uncer','5f8'),
+            ('s2n','5f8'),
             ('numiter','5i1'),
             ('amflags','5i2'),
             ('amflags_str','5S5'),
@@ -758,59 +782,16 @@ class Collator:
 
     """
     
-    def __init__(self, procrun, sweeptype='gal'):
-        if sweeptype != 'gal':
-            raise ValueError("add support for 'star' type")
+    def __init__(self, procrun, sweeptype, fs='nfs', coldir=None):
 
         self.proctype='regauss'
         self.sweeptype=sweeptype
         self.procrun=procrun
+        self.fs = fs
+        self.coldir=coldir
 
         self.sweep_cols = es_sdsspy.sweeps.open_columns(sweeptype)
 
-    def add_rotated_e1e2(self, filters=['u','g','r','i','z'], system='eq'):
-        from . import rotation
-        rotator = rotation.SDSSRotator(system)
-        c=self.open_columns()
-        print("reading id info")
-        runs    = c['run'][:]
-        camcols = c['camcol'][:]
-        fields  = c['field'][:]
-
-
-        for filter in filters:
-            print("filter: '%s'" % filter)
-
-            e1col='e1_rg_'+system+'_'+filter
-            e2col='e2_rg_'+system+'_'+filter
-            rotcol='rot_'+system+'_'+filter
-
-            print("  Reading corrflags,e1,e2")
-
-            flags = c['corrflags_rg_'+filter][:]
-            e1pix = c['e1_rg_'+filter][:]
-            e2pix = c['e2_rg_'+filter][:]
-            print("  selecting corrflags == 0")
-            w=where1(flags == 0)
-            print("    found: %i/%i" % (w.size,flags.size))
-            print("  rotating")
-            te1, te2, tangle = rotator.rotate(runs[w], camcols[w], fields[w], filter,
-                                              e1pix[w], e2pix[w], getrot=True)
-
-            e1new = numpy.zeros(e1pix.size, dtype='f8') - 9999.
-            e2new = e1new.copy()
-            angles = e1new.copy()
-
-            e1new[w] = te1
-            e2new[w] = te2
-            angles[w] = tangle
-
-            print("writing new column:",e1col)
-            c.write_column(e1col, e1new, create=True)
-            print("writing new column:",e2col)
-            c.write_column(e2col, e2new, create=True)
-            print("writing rotation column:",rotcol)
-            c.write_column(rotcol, angles, create=True)
 
 
     def collate_as_columns_byband(self):
@@ -820,6 +801,7 @@ class Collator:
         """
 
         c = self.open_columns()
+
         print("Will write in coldir:", c.dir)
         if c.dir_exists():
             raise ValueError("Columns already exist, start from scratch")
@@ -849,6 +831,7 @@ class Collator:
         print("Done")
 
 
+
     def create_output(self, st):
         bands = ['u','g','r','i','z']
 
@@ -857,7 +840,11 @@ class Collator:
             name = str( d[0] )
 
             if len(d) == 3:
-                if d[2] == 5:
+                if isinstance(d[2],tuple):
+                    sz=d[2][0]
+                else:
+                    sz=d[2]
+                if sz == 5:
                     for bandi in xrange(5):
                         fname = name+'_'+bands[bandi]
                         out_dict[fname] = st[name][:, bandi]
@@ -878,57 +865,190 @@ class Collator:
         Irc_psf = st['Irc_psf']
         Icc_psf = st['Icc_psf']
         T_psf = st['Irr_psf'] + st['Icc_psf']
-        modelmag_dered = self.sweep_cols['modelmag_dered'][w]
-        if 'devflux' in self.objs.dtype.names:
-            cmodelmag_dered = self.sweep_cols['cmodelmag_dered'][w]
-        else:
-            cmodelmag_dered = modelmag_dered.copy()
-            cmodelmag_dered[:] = -9999
+
+        if 'e1' not in st.dtype.names:
+            e1,e2 = self.make_e1e2(st)
 
         print("    Copying ellip,mags")
         for f in sdsspy.FILTERCHARS:
             fnum = sdsspy.FILTERNUM[f]
             out_dict['e1_psf_'+f] = (Icc_psf[:,fnum]-Irr_psf[:,fnum])/T_psf[:,fnum]
             out_dict['e2_psf_'+f] = 2*Irc_psf[:,fnum]/T_psf[:,fnum]
-            out_dict['cmodelmag_dered_'+f] = cmodelmag_dered[:,fnum]
-            out_dict['modelmag_dered_'+f] = modelmag_dered[:,fnum]
+
+            out_dict['modelmag_dered_'+f] = self.sweep_cols['modelmag_dered_'+f][w]
+            ext = self.sweep_cols['extinction_'+f][w]
+            out_dict['extinction_'+f] = ext
+
+            cmodelname = 'cmodelmag_dered_'+f
+            if cmodelname in self.sweep_cols:
+                out_dict[cmodelname] = self.sweep_cols[cmodelname][w]
+
+            if self.sweeptype == 'star':
+                flux = self.sweep_cols['psfflux_'+f][w]
+                ivar = self.sweep_cols['psfflux_ivar_'+f][w]
+                flux_dered = sdsspy.dered_fluxes(ext, flux)
+                mag_dered = sdsspy.nmgy2mag(flux_dered)
+
+                out_dict['psfflux_'+f] = flux
+                out_dict['psfflux_ivar_'+f] = ivar
+                out_dict['psfmag_dered_'+f] = mag_dered
+
+            if 'e1' not in st.dtype.names:
+                out_dict['e1_'+f] = e1[:,fnum]
+                out_dict['e2_'+f] = e2[:,fnum]
 
 
         out_dict['photoid'] = sdsspy.photoid(st)
 
         return out_dict
 
+    def replace_e1e2(self):
+        """
+        I had a bug calculating e1,e2 first time.  This will replace it
+        """
+        c = self.open_columns()
+        for band in ['u','g','r','i','z']:
+            print('band:',band)
+            e1col = 'e1_'+band
+            e2col = 'e2_'+band
+
+            print("  reading Irr")
+            Irr = c['Irr_'+band][:]
+            print("  reading Irc")
+            Irc = c['Irc_'+band][:]
+            print("  reading Icc")
+            Icc = c['Icc_'+band][:]
+            print("  reading flags")
+            flags = c['amflags_'+band][:]
+
+            T = Irr + Icc
+
+            e1 = 0*Irr.copy() -9999
+            e2 = e1.copy()
+
+            w,=numpy.where( (flags==0) & (T > 0) )
+            if w.size > 0:
+                e1[w] = (Icc[w]-Irr[w])/T[w]
+                e2[w] = 2*Irc[w]/T[w]
+
+            print("  writing new column:",e1col)
+            c.write_column(e1col, e1, create=True)
+            print("  writing new column:",e2col)
+            c.write_column(e2col, e2, create=True)
+
+    def make_e1e2(self, st):
+        """
+        We forgot to put regular e1,e2 in struct
+        """
+        Irr = st['Irr']
+        Irc = st['Irc']
+        Icc = st['Icc']
+        T = Irr + Icc
+
+        e1 = 0*Irr.copy() -9999
+        e2 = e1.copy()
+
+        wg=numpy.where( T > 0 )
+        if wg[0].size > 0:
+            e1[wg] = (Icc[wg]-Irr[wg])/T[wg]
+            e2[wg] = 2*Irc[wg]/T[wg]
+        return e1,e2
+
+
+    def add_rotated_e1e2(self, filters=['u','g','r','i','z'], 
+                         system='eq', 
+                         detrend=False,
+                         rmag_max=21.8):
+        from . import rotation
+        rotator = rotation.SDSSRotator(system)
+        c=self.open_columns()
+        print("reading id info")
+        runs    = c['run'][:]
+        camcols = c['camcol'][:]
+        fields  = c['field'][:]
+
+        if self.sweeptype == 'gal':
+            if detrend:
+                rmstr='%0.1f' % rmag_max
+                rmstr = rmstr.replace('.','')
+                e1name = 'e1_rg_dt'+rmstr
+                e2name = 'e2_rg_dt'+rmstr
+                flagname = 'dt'+rmstr+'_flag'
+                rotname='rot_dt'+rmstr
+            else:
+                e1name = 'e1_rg'
+                e2name = 'e2_rg'
+                flagname = 'corrflags_rg'
+                rotname='rot'
+        else:
+            e1name = 'e1'
+            e2name = 'e2'
+            flagname = 'amflags'
+
+        for filter in filters:
+            print("filter: '%s'" % filter)
+
+            e1col=e1name + '_'+system+'_'+filter
+            e2col=e2name + '_'+system+'_'+filter
+            rotcol=rotname+'_'+system+'_'+filter
+
+            print("  Reading flags,e1,e2")
+
+            flags = c[flagname+'_'+filter][:]
+            e1pix = c[e1name+'_'+filter][:]
+            e2pix = c[e2name+'_'+filter][:]
+            print("  selecting flags == 0")
+            w=where1(flags == 0)
+            print("    found: %i/%i" % (w.size,flags.size))
+            print("  rotating")
+            te1, te2, tangle = rotator.rotate(runs[w], camcols[w], fields[w], filter,
+                                              e1pix[w], e2pix[w], getrot=True)
+
+            e1new = numpy.zeros(e1pix.size, dtype='f8') - 9999.
+            e2new = e1new.copy()
+            angles = e1new.copy()
+
+            e1new[w] = te1
+            e2new[w] = te2
+            angles[w] = tangle
+
+            print("writing new column:",e1col)
+            c.write_column(e1col, e1new, create=True)
+            print("writing new column:",e2col)
+            c.write_column(e2col, e2new, create=True)
+            print("writing rotation column:",rotcol)
+            c.write_column(rotcol, angles, create=True)
+
+
     def create_indices(self):
         c = self.open_columns()
+        print('creating indices in coldir:',c.dir)
 
-        cnames = ['run','camcol','thing_id','photoid',
-                  'cmodelmag_dered_r',
-                  'amflags_r','amflags_i',
-                  'amflags_rg_r','amflags_rg_i',
-                  'corrflags_lin',
-                  'corrflags_rg',
-                  'R_lin_r','R_lin_i',
-                  'R_rg_r','R_rg_i',
-                  'e1_lin_r','e1_lin_i',
-                  'e2_lin_r','e2_lin_i',
-                  'e1_rg_r','e1_rg_i',
-                  'e2_rg_r','e2_rg_i']
-        '''
-        cnames = ['corrflags_lin_r','corrflags_lin_i',
-                  'corrflags_rg_r','corrflags_rg_i',
-                  'R_lin_r','R_lin_i',
-                  'R_rg_r','R_rg_i',
-                  'e1_lin_r','e1_lin_i',
-                  'e2_lin_r','e2_lin_i',
-                  'e1_rg_r','e1_rg_i',
-                  'e2_rg_r','e2_rg_i']
-        '''
-
-
+        if self.sweeptype == 'gal':
+            cnames = ['run','camcol','thing_id','photoid',
+                      'cmodelmag_dered_r',
+                      'amflags_r','amflags_i',
+                      'amflags_rg_r','amflags_rg_i',
+                      'corrflags_lin',
+                      'corrflags_rg',
+                      'R_lin_r','R_lin_i',
+                      'R_rg_r','R_rg_i',
+                      'e1_lin_r','e1_lin_i',
+                      'e2_lin_r','e2_lin_i',
+                      'e1_rg_r','e1_rg_i',
+                      'e2_rg_r','e2_rg_i']
+        else:
+            cnames = ['run','camcol','thing_id','photoid',
+                      'modelmag_dered_r',
+                      'psfmag_dered_r',
+                      'amflags_r','amflags_i',
+                      'e1_r','e2_r',
+                      'e1_i','e2_i']
 
         for n in cnames:
-            print("Creating index for:",n)
-            c[n].create_index(force=True)
+            if n in c:
+                print("Creating index for:",n)
+                c[n].create_index(force=True)
 
 
 
@@ -948,6 +1068,7 @@ class Collator:
         out['date'] = date
         out['proctype'] = self.proctype
         out['procrun'] = self.procrun
+        out['sweeptype'] = self.sweeptype
 
   
         return out
@@ -962,22 +1083,33 @@ class Collator:
         return columns.Columns(d)
 
     def columns_dir(self):
-        p=es_sdsspy.sweeps.Proc(self.proctype,self.procrun) 
-        return p.columns_dir()
+        if self.coldir is None:
+            p=es_sdsspy.sweeps.Proc(self.proctype,self.procrun,self.sweeptype) 
+            d = p.columns_dir()
+        else:
+            d=self.coldir
+        return d
 
     def output_dir(self):
-        p=es_sdsspy.sweeps.Proc(self.proctype,self.procrun) 
-        return p.output_dir()
+        if self.fs == 'hdfs':
+            d = 'hdfs:///user/esheldon/sweep-reduce/regauss/%s' % self.procrun
+        else:
+            p=es_sdsspy.sweeps.Proc(self.proctype,self.procrun,self.sweeptype) 
+            d = p.output_dir()
+        return d
 
     def file_list(self):
         indir = self.output_dir()
-        #pattern='sweepgal-%s-%s-collate-[0-9][0-9][0-9].fits' % (self.proctype,self.procrun)
         pattern='regauss-{sweeptype}-{procrun}-*-*-*.rec'
         pattern=pattern.format(sweeptype=self.sweeptype, procrun=self.procrun)
 
-        print("Searching for pattern:",pattern)
         pattern = os.path.join(indir,pattern)
-        files = glob.glob(pattern)
+        print("Searching for pattern:",pattern)
+        if pattern[0:4] == 'hdfs':
+            files=eu.hdfs.ls(pattern)
+            files = ['hdfs://' + f for f in files]
+        else:
+            files = glob.glob(pattern)
 
         files.sort()
         return files

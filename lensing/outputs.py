@@ -19,6 +19,9 @@ def add_lensums(l1, l2):
 
     The rows of l1 must correspond to those of l2; zindex must match
 
+    Note we now do the combination from the splits using the c program
+    redshear, but this could still be useful
+
     """
 
     w=where1(l1['zindex'] != l2['zindex'])
@@ -289,8 +292,8 @@ def load_test_data():
     import lensing
     run='08'
     rrun='r01'
-    l=lensing.files.sample_read('collated',run)
-    r=lensing.files.sample_read('collated',rrun)
+    l=lensing.files.sample_read(type='collated',sample=run)
+    r=lensing.files.sample_read(type='collated',sample=rrun)
 
     return l,r
 

@@ -1,0 +1,60 @@
+# dt03 is a ring test, shear (0.01,-0.01)
+run: gmix-fit-dt03rtest
+sim: sim-dt03
+
+runtype: bys2n
+
+# trim the image before adding noise
+retrim: true
+# !!!  I checked it works with no noise
+retrim_fluxfrac: 0.95
+
+# this works in the algorithm for determining number of trials
+# default 0.4!
+s2n_fac: 80
+
+# optimal S/N estimat
+s2n_method: matched
+
+# argh, this is worse, stupid
+#s2ncalc_fluxfrac: 0.95
+s2ncalc_fluxfrac: null
+
+
+ie: 7 # 0.33
+#s2nvals: [5,10,15,20,25,30,40,50,60,70,80,90,100]
+s2nvals: [1.0e+8]
+#s2nvals: [50]
+
+s2n_psf: 1.0e+8
+
+use_cache: true
+add_to_cache: false
+
+# type of parametrization
+ptype: Tfrac
+use_jacob: false
+
+verbose: false
+
+# we should try with higher values to see what happens
+ngauss_psf: 3
+ngauss_obj: 4
+
+coellip_psf: true
+coellip_obj: true
+
+maxtry: 2
+maxtry_psf: 1
+
+# this is for the gaussian PSF fit, since admom gets gaussians too perfectly
+# trying out doing this automatically as needed
+randomize: true
+
+# number of times to retry when a trial fails.  This generates
+# a new trial, unlike max_retry above which retries with a 
+# randomized guess
+itmax: 100
+
+# set to null for new seed each time. Good when adding to the cache
+seed: null

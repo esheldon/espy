@@ -1,0 +1,123 @@
+#!/usr/bin/env python
+"""
+        loadall [options]
+
+Run uptime on all /data disks on the astro cluster to get the load average.
+Also show totals for the entire system.
+"""
+
+import os
+import sys
+import datetime
+
+from optparse import OptionParser
+
+parser=OptionParser(__doc__)
+parser.add_option("-d","--date",action='store_true',
+                  help="print the date at the end")
+
+NMACHINE=44
+#NMACHINE=10
+MACHINE_SKIP=['astro0012','astro0013','astro0014',
+              'astro0015','astro0016','astro0017',
+              'astro0018','astro0019','astro0020',
+              'astro0034']
+
+def get_loads():
+
+    uplist=[]
+    for i in xrange(1,NMACHINE+1):
+
+        machine = 'astro%04d' % i
+        if machine in MACHINE_SKIP:
+            continue
+
+        """
+        8
+         13:52:27 up 17 days, 20:08,  0 users,  load average: 8.23, 8.07, 7.13
+        """
+        command="""
+            ssh %s 'grep processor /proc/cpuinfo | wc -l; uptime'
+        """.strip()
+        #command="""
+        #    ssh %s uptime | awk '{printf "%s %%5.2f %%5.2f %%5.2f\\n",$10,$11,$12}'
+        #""".strip()
+        command = command % machine
+
+        si,so=os.popen2(command)
+        data=so.read().strip()
+        data=data.split('\n')
+        if len(data) != 2:
+            print 'Could not get uptime for machine %s' % machine
+        else:
+            nc = int(data[0])
+            ds=data[1].split()
+            load1 = float(ds[-3].replace(',',''))
+            load5 = float(ds[-2].replace(',',''))
+            load15 = float(ds[-1].replace(',',''))
+
+            #uplist.append(uptime_with_name)
+            uplist.append({'machine':machine,
+                           'nc':nc,
+                           'l1':load1,
+                           'l5':load5,
+                           'l15':load15,
+                           'l1per':load1/nc,
+                           'l5per':load5/nc,
+                           'l15per':load15/nc})
+
+    return uplist
+
+def print_loads(uplist, dodate=False):
+
+    cores_tot = 0
+    l1_tot = 0.0
+    l5_tot = 0.0
+    l15_tot = 0.0
+
+    head1 = 'host      cores         load/core'
+    head2 = '                   1m    5m   15m'
+
+    lines=[]
+    if dodate:
+        date = str(datetime.datetime.now())
+        date=date[0:date.find('.')]
+        lines += [date,'']
+
+    #lines += [head1,head2]
+    lines += [head1]
+    for data in uplist:
+        cores_tot += data['nc']
+        l1_tot += data['l1']
+        l5_tot += data['l5']
+        l15_tot += data['l15']
+
+        line = \
+            '%(machine)s   %(nc)3d %(l1per)5.2f %(l5per)5.2f %(l15per)5.2f'
+        line = line % data
+        lines.append(line)
+
+    fmt='totals      %(nc)3d %(l1per)5.2f %(l5per)5.2f %(l15per)5.2f'
+    summary = fmt % {'nc':cores_tot, 
+                     'l1per':l1_tot/cores_tot,
+                     'l5per':l5_tot/cores_tot,
+                     'l15per':l15_tot/cores_tot}
+    lsum=len(summary)
+    
+    sep='-'*lsum
+    lines += [sep,summary,head2]
+    text = '\n'.join(lines)
+
+    print text
+
+
+
+def main():
+
+    options, args = parser.parse_args(sys.argv[1:])
+
+    uplist = get_loads()
+    print_loads(uplist,dodate=options.date)
+
+
+main()

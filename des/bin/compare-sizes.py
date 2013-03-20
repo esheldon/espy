@@ -15,7 +15,7 @@ if len(sys.argv) < 2:
 
 run=sys.argv[1]
 
-cols=deswl.files.wlse_coldir_open(run)
+cols=deswl.files.coldir_open(run)
 
 collate_dir= deswl.files.wlse_collated_dir(run)
 plotdir=path_join(collate_dir,'plots')

@@ -29,12 +29,18 @@ def photoz_dir():
     return os.environ['PHOTOZ_DIR']
 
 def read_config(type, id):
-    f = config_file(type,id)
+    for ext in ['yaml','json']:
+        f = config_file(type,id,ext=ext)
+        if os.path.exists(f):
+            break
+
+    if not os.path.exists(f):
+        raise ValueError("no file for type: '%s' id '%s'" % (type,id))
     return eu.io.read(f)
 
-def config_file(type, id):
+def config_file(type, id, ext='yaml'):
     dir = config_dir()
-    f = '%s-%s.json' % (type,id)
+    f = '%s-%s.%s' % (type,id,ext)
     return os.path.join(dir,f)
  
 def cascade_config(pzrun):

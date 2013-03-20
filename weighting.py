@@ -1,7 +1,15 @@
 """
 
-generate inputs for the weighting-cdim code, run it, and return the results.
-Note this is only for the "calcweights" code
+Multiple methods
+----------------
+hist_match: 
+    simply derive weights so that the boxcar histograms are proportionalkk
+
+hist_match_remove:
+    remove objects until the boxcar histograms match.
+
+WeightCalculator:
+    A class wrapping the nearest neighbor weighting code
 
 """
 
@@ -246,11 +254,10 @@ class WeightCalculator(dict):
         """
 
         Generate a set of weights for data set 1 such that the distribution of
-        observables are matched to dataset 2.  Use "nnear1" nearest neighbors
-        on the first pass to remove zero weight objects from dataset 1, nnear2
-        for the second.
+        observables are matched to dataset 2.  Use "n_near" nearest neighbors
+        for a single pass.  See also the calc_2pass method.
 
-        For 1 pass like this, you man want to ensure the domains of the two
+        For 1 pass like this, you may want to ensure the domains of the two
         inputs overalap in a sensible way.  In principle the 2 pass method can
         do this for you, but it needs to be tuned.
 

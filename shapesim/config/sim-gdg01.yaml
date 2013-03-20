@@ -1,0 +1,21 @@
+name: sim-gdg01
+
+#
+# PSF parameters.
+#
+
+psfmodel: dgauss
+psf_sigma: 1.4
+psf_ellip: 0.0
+
+psf_sigrat: 2.3
+psf_cenrat: 0.09
+
+#
+# Object model
+#
+objmodel: gauss
+
+comments: |
+
+    gauss obj, dgauss psf, low res

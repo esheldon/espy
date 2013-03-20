@@ -1,5 +1,5 @@
 # vim: set filetype=python :
-default_version='20110522'
+default_version='20121222'
 
 # Note I had problems downloading from the ftp site, although it seemed sporadic
 url="""'http://ftp.gnu.org/gnu/parallel/parallel-%s.tar.bz2' % self.version"""
@@ -18,7 +18,10 @@ create_module_file='''"""#%%Module
 module-whatis	"gnu parallel"
 conflict parallel
 
-prepend-path PATH %s/bin
+set PRODUCT_DIR %s
+setenv PARALLEL_DIR $PRODUCT_DIR
+
+prepend-path PATH $PRODUCT_DIR/bin
 """ % self.install_dir'''
 
 

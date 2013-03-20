@@ -1,0 +1,32 @@
+# different gprior parameters
+name: sim-gg11
+
+dotrim: false
+
+orient: ring
+
+psfmodel: gauss
+# T = 2*1.4**2 = 3.9
+psf_sigma: 1.4
+psf_ellip: 0.0
+psf_e1: 0.0
+psf_e2: 0.0
+
+objmodel: gauss
+
+shear: [0.08,0.0]
+
+mins2: 0.5
+maxs2: 2.0
+nums2: 4
+
+gprior_type: 'fits-vs-mag'
+
+comments: |
+
+    more in ring since at low s/n we see the prior
+
+    gauss obj, gauss psf, low res, analytic convolutions
+    applied shear in e1 direction
+
+    this one is new where we generate the total ellipticities and s2 separately
