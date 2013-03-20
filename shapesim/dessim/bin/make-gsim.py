@@ -31,6 +31,7 @@ command: |
     source ~/.bashrc
     module unload gsim && module load gsim/%(vers)s
     config=%(config)s
+    psf_config=%(psf_config)s
 
     %(obj_command)s
     %(psf_command)s
@@ -71,17 +72,24 @@ wcs = {
 }
 """
 
-def write_cfg(simname, pstruct, conf):
+def write_cfg(simname, pstruct, conf, type='objects'):
     pointing=pstruct['index']
-    cfg_url=files.get_gsim_cfg_url(simname,pointing)
+    cfg_url=files.get_gsim_cfg_url(simname,pointing,type=type)
 
     seed = catmaker.get_seed(conf['seed'],pointing)
 
     sky = noise.get_sky(conf['filter'],
                         conf['exptime'])
 
-    d={'nrow':conf['nrow'],
-       'ncol':conf['ncol'],
+    if type=='objects':
+        nrow=conf['nrow']
+        ncol=conf['ncol']
+    else:
+        nrow=conf['psf_nrow']
+        ncol=conf['psf_ncol']
+
+    d={'nrow':nrow,
+       'ncol':ncol,
        'noise_type':conf['noise_type'],
        'nsub':conf['nsub'],
        'sky':sky,
@@ -114,6 +122,7 @@ def write_wq(simname, pointing, conf, options):
     psf_im=files.get_image_url(simname,pointing,type='psf')
 
     cfg_url=files.get_gsim_cfg_url(simname,pointing)
+    psf_cfg_url=files.get_gsim_cfg_url(simname,pointing,type='psf')
 
     job_name_t=simname+'-'+files.get_pid_format()
     job_name=job_name_t % pointing
@@ -128,12 +137,13 @@ def write_wq(simname, pointing, conf, options):
         psf_command="""
     psf_catalog=%(catalog)s
     psf_image=%(image)s
-    gsim "$config" "$psf_catalog" "$psf_image"
+    gsim "$psf_config" "$psf_catalog" "$psf_image"
         """ % {'catalog':psf_cat, 'image':psf_im}
     else:
         psf_command=""
 
     text=_wqtemplate % {'config':cfg_url,
+                        'psf_config':psf_cfg_url,
                         'obj_command':obj_command,
                         'psf_command':psf_command,
                         'job_name':job_name,
@@ -164,6 +174,7 @@ def main():
 
     for pstruct in pointings:    
         write_cfg(simname, pstruct, conf)
+        write_cfg(simname, pstruct, conf, type='psf')
         write_wq(simname,pstruct['index'], conf, options)
 
 

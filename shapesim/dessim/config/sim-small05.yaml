@@ -42,6 +42,12 @@ psf_sigma: 1.416
 psf_e1: 0.0
 psf_e2: 0.0
 
+# number of stars in the psf image
+psf_nrow: 512
+psf_ncol: 512
+psf_nstar_row: 16
+psf_nstar_col: 16
+
 # for noise_type 'poisson' we use the exposure time and nominal sky value
 noise_type: null
 

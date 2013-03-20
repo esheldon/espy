@@ -98,7 +98,7 @@ def get_catalog_url(simname, pointing,
     if type=='objects':
         extra='cat'
     elif type=='psf':
-        extra='psf'
+        extra='psfcat'
     else:
         raise ValueError("bad type: '%s'" % type)
     fname=['%s',get_pid_format(),extra+ext]
@@ -135,6 +135,12 @@ def get_gsim_wq_url(simname,pointing):
     pidstr = fmt % pointing
     return os.path.join(d, '%s-%s.yaml' % (simname,pidstr))
 
-def get_gsim_cfg_url(simname,pointing):
+def get_gsim_cfg_url(simname,pointing, type='objects'):
     name=get_gsim_wq_url(simname,pointing)
-    return name.replace('.yaml','.cfg')
+    if type=='objects':
+        name=name.replace('.yaml','.cfg')
+    elif type=='psf':
+        name=name.replace('.yaml','-psf.cfg')
+    else:
+        raise ValueError("bad cfg type: '%s'" % type)
+    return name

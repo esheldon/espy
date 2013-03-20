@@ -93,9 +93,10 @@ class SimpleCatalogMaker(dict):
 
     def write_psf_ascii(self):
         """
-        Write a psf at the location of each object.
+        Write a grid of psfs at different central sub-pixel
+        locations
 
-        Give flux of the brightest object in the field.
+        Give them all the flux of the brightest object in the field.
         """
         from esutil import recfile
         import lensing
@@ -111,12 +112,29 @@ class SimpleCatalogMaker(dict):
                                   type='psf',
                                   ftype='ascii')
         self._makedir(url)
-        data=self._get_ascii_struct(self._data.size)
+
+        nrow=self['psf_nrow']
+        ncol=self['psf_ncol']
+        nstar_row = self['psf_nstar_row']
+        nstar_col = self['psf_nstar_col']
+        nstars=nstar_row*nstar_col
+
+        data=self._get_ascii_struct(nstars)
+
+        rows_per_star=nrow/float(nstar_row)
+        cols_per_star=nrow/float(nstar_col)
+
+        irow,icol = numpy.mgrid[0:nstar_row, 0:nstar_col]
+        row = rows_per_star*(0.5 + irow)
+        col = cols_per_star*(0.5 + icol)
+
+        row += numpy.random.random(nstars).reshape(nstar_row,nstar_col)
+        col += numpy.random.random(nstars).reshape(nstar_row,nstar_col)
 
         data['model'] = 'star'
 
-        data['row'] = self._data['row']
-        data['col'] = self._data['col']
+        data['row'] = row.ravel()
+        data['col'] = col.ravel()
 
         data['e1']    = -0.0999999 # not used
         data['e2']    = -0.0999999 # not used

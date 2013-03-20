@@ -1,5 +1,5 @@
 # vim: set filetype=python :
-default_version='2.3'
+default_version='2.4'
 
 #url="""
 #'http://heasarc.gsfc.nasa.gov/docs/software/fitsio/ccfits/CCfits-%s.tar.gz' % self.version"""
