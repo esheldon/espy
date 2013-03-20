@@ -15,7 +15,7 @@ usage="""
     Converts latex document, figures, bbl into apj submission format.  ApJ
     requires the manuscript to be called ms.tex, all figures to be named
     figN.eps where N runs from 1 to the number of figures in order of
-    appearance in the text.  The documentclass declaration must be
+    appearance in the text.  The documentclass declaration is set to
             \documentclass[12pt,preprint]{aastex}
     Other documentclass statements are commented.  \\newpage calls are also
     commented. 
@@ -147,7 +147,8 @@ def ProcessTexFile(texfname):
             line = line.replace('\\bibliography{','%\\bibliography{')
 
         if dclass_grep.match(line):
-            line = line.replace('\\documentclass{','%\\documentclass{')
+            print 'commenting documentclass'
+            line = line.replace('\documentclass','%\documentclass')
 
         if newpage_grep.match(line):
             line = line.replace('\\newpage','%\\newpage')
