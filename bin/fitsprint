@@ -68,7 +68,10 @@ def get_columns(columns_in):
     return columns
 
 def get_colnames(hdu, columns):
-    allnames=[c.lower() for c in hdu.colnames]
+    allnames=[c.lower() for c in hdu.get_colnames()]
+    if columns is None:
+        return allnames
+
     colnames=[]
     if isinstance(columns[0],basestring):
         for name in columns:
@@ -179,7 +182,7 @@ def main():
 
 
     fobj=fitsio.FITS(fname, lower=True)
-    nrows = fobj[ext].info['nrows']
+    nrows=fobj[ext].get_nrows()
 
     if wstring is not None:
         w=fobj[ext].where(wstring)

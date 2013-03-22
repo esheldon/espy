@@ -116,7 +116,7 @@ class Submitter(object):
         for i,fname in enumerate(self.flist):
             perc=100.*(i+1)/float(nfiles)
 
-            logf=self.get_log_fname(fname)
+            logf=self.get_log_fname(fname,'.pbslog')
             if not os.path.exists(logf) or self.force:
                 if diffjobs <= 0:
                     lister.find_jobs()
@@ -135,12 +135,8 @@ class Submitter(object):
 
                 diffjobs -= 1
 
-    def get_log_fname(self, fname):
-        dotloc=fname.find('.')
-        if dotloc==-1:
-            return fname+'.out'
-        else:
-            return fname[0:dotloc]+'.out'
+    def get_log_fname(self, fname, new_ext):
+        return fname + '.pbslog'
 
     def submit_job(self, fname):
         command="qsub {fname}".format(fname=fname)
