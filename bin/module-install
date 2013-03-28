@@ -193,7 +193,6 @@ parser.add_option("-y","--noprompt",action="store_true",
 
 parser.add_option("--force",action="store_true",
         dest="force",
-        default=False,
         help="Force use of listed install_dir even if it already "
             "exists. Useful if must install into another pacakges root, as with basemap into matplotlib.  Default %default")
 
@@ -220,7 +219,7 @@ class ModuleInstaller(object):
                 version         The version of the product, e.g. v1.5.1
                 default_version The default version to use, e.g. trunk
                 module_dir      The location to install module files, default
-                                is ${MODULESHOME}/modulefiles/modulename/version
+                                is ${MODULESHOME}/modulefiles
                 install_config  A config file containing relevant installation
                                 info. In the future will support remote urls.
                 nodeclare       Don't declare the product.  Useful for local

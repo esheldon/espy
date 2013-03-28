@@ -10,21 +10,7 @@ url="""
 source_type = 'tar'
 install_method = 'scons'
 
-# figure out how many processors we can use
-# this will work on unix/posix only I think
-try:
-    nproc = os.sysconf('SC_NPROCESSORS_ONLN')
-    if not isinstance(nproc,int) or nproc <= 0:
-        nproc=1
-
-    # only use half
-    nproc=nproc/2
-    if nproc < 1:
-        nproc=1
-except:
-    nproc=1
-#build_flags = 'IMPORT_PATHS=True WITH_LAPACK=False WITH_UPS=True WITH_OPENMP=False -j %s' % nproc
-build_flags = 'WITH_OPENMP=False SHARED=True -j %s' % nproc
+build_flags = 'WITH_OPENMP=False SHARED=True INST_INT=True -j 1'
 
 # for the modules system
 create_module_file='''"""#%%Module
