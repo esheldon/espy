@@ -136,6 +136,58 @@ class Selector:
 
         c.write_column('inbadfield', cont)
 
+    def add_colc_nmgypercount(self):
+        """
+        self.cols is the sweeps
+        """
+        import es_sdsspy
+        d = files.input_coldir(self.name, self.version)
+
+        ccols = Columns(d)
+        print("cluster input cols:",ccols.dir)
+        scols = self.cols
+        print("sweep columns:",scols.dir)
+
+
+        print("reading sweep photoid")
+        spid = scols['photoid'][:]
+        print("reading cluster input photoid")
+        cpid = ccols['photoid'][:]
+
+        print("matching")
+        ms,mc = esutil.numpy_util.match(spid, cpid)
+
+        n=cpid.size
+        if mc.size != n:
+            raise ValueError("not all matched: %d/%d" % (mt.size/n))
+
+        # problem is the columns code always sorts the requested
+        # indices so we will have lost order information.  Need
+        # to pre-sort both sets of indices according to the sweep
+        # row number
+        print("ordering matches with sweep cols")
+        s=ms.argsort()
+        ms = ms[s]
+        mc = mc[s]
+
+        for colname in ['colc','nmgypercount']:
+            data=numpy.zeros((n,5),dtype='f4')
+            for i,band in enumerate(['u','g','r','i','z']):
+
+                scolname='%s_%s' % (colname,band)
+                print("    %s" % scolname)
+
+                sdata=scols[scolname][ms]
+                data[mc,i] = sdata
+
+                del sdata
+
+            print("writing: %s" % colname)
+            ccols.write_column(colname, data)
+            del data
+
+
+
     def select(self):
         # for shorthand notation
         c = self.cols

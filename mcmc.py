@@ -1097,7 +1097,10 @@ class PolyFitter(object):
         return self._result
 
     def get_poly(self):
-        return numpy.poly1d(self._result['pars'])
+        return self._ply
+
+    def __call__(self, x):
+        return self._ply(x)
 
     def _set_ivar(self):
         if self.yerr is not None:
@@ -1215,6 +1218,11 @@ class PolyFitter(object):
             pass
 
         self._result=res
+        try:
+            self._ply=numpy.poly1d(res['pars'])
+        except:
+            print 'could not set poly'
+            self._ply=None
 
 
     def get_lnprob(self, pars):
