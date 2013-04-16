@@ -1,0 +1,24 @@
+sample:             "gmix01"
+
+# r01 is LM, r02 is bayesian mcmc
+catalog:            "gmix-r02"
+
+# 2 is individual using p(z)
+sigmacrit_style:    2
+
+# 11 is 21.5, 12 is 21.8
+pzrun:              "11"
+
+# redshift range over which we support interpolation of sigma crit
+zlmin:              0.02
+zlmax:              0.41
+dzl:                0.015
+
+detrend:            true
+
+# this is redundant with the cosmo_sample declaration in the run file
+# we have to demand consistency
+cosmo_sample:       "01"
+
+# number of splits to use; combine later
+nsplit:             100

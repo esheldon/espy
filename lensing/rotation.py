@@ -19,7 +19,9 @@ except:
 def read_rotfile(run, type='eq'):
     f = rotfile(run, type)
     print("Reading rotation:",f)
-    return eu.io.read(f, lower=True)
+    # read subset to avoid mwrfits bug writing fieldid
+    columns=['camcol','field','cos2angle','sin2angle','angle']
+    return eu.io.read(f, columns=columns, lower=True)
 def rotfile(run, type='eq'):
     d = rotdir(type)
     f = '%srot-%06i-301.fits' % (type, run)
