@@ -12,11 +12,6 @@ import gmix_sdss
 from optparse import OptionParser
 parser=OptionParser(__doc__)
 
-parser.add_option('--start',default=None,
-                  help="start processing at this run,camcol csv")
-
-parser.add_option('-r','--run',default=None,
-                  help="Do runwise regressions")
 parser.add_option('--nbin',default=40, help="number of bins")
 
 
@@ -40,8 +35,7 @@ def main():
         reg.doplot()
     elif regress_type=='epsf':
         reg=gmix_sdss.regress.EPSFRegressor(gmix_run=gmix_run,
-                                           camcol=camcol,
-                                           nbin=nbin)
+                                            camcol=camcol)
         reg.doplot()
     else:
         raise ValueError("only support type s2n,epsf for now")

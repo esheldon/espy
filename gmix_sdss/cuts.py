@@ -9,44 +9,44 @@ S2N_NBIN = 40
 import numpy
 
 class Selector(object):
-    def __init__(self, cols, camcol, do_sratio_cut=True):
+    def __init__(self, cols, do_sratio_cut=True):
         """
         send a Columns instance
         """
 
         self.cols=cols
-        self.camcol=camcol
         self.sratio_cut=do_sratio_cut
 
-        self._do_select()
 
-    def _do_select(self):
+    def do_select(self, camcol=None):
         cols=self.cols
 
         print 'loading select columns'
-        print '    camcol'
-        camcol = cols['camcol'][:]
         print '    sratio'
         sratio = cols['sratio'][:]
         print '    s2n'
         s2n    = cols['s2n'][:]
 
-        print 'getting logic'
-        logic=(  (camcol==self.camcol) 
-               & (s2n > S2N_MIN)
+        logic=(  (s2n > S2N_MIN)
                & (s2n < S2N_MAX)
                & (sratio > SRATIO_MIN) )
 
-        print 'where'
+        if camcol is not None:
+            print '    selecting camcol',camcol
+            camcols = cols['camcol'][:]
+            logic = logic & (camcols==camcol)
+
+        print 'first cut'
         w,=numpy.where(logic)
         s2n=s2n[w]
         sratio=sratio[w]
 
-        print 'psf pars'
+        print '    psf pars (subset only)'
         ppars_rec=cols['psf_pars'][w]
         psf_e1=ppars_rec[:,2]
         psf_e2=ppars_rec[:,3]
 
+        print 'second cut'
         w2,=numpy.where(  (psf_e1 > PSF_EMIN)
                         & (psf_e1 < PSF_EMAX)
                         & (psf_e2 > PSF_EMIN)

@@ -84,6 +84,7 @@ def detrend_g_vs_s2n(**keys):
     """
     gmix_run=, camcol=, sratio=
     s2n=, g1=, g2=
+    sratio=
     """
     fdata=read_fit_file(**keys)
 
@@ -281,8 +282,8 @@ class S2NRegressor(dict):
     def _load_data(self):
         cols=collate.open_columns(self['gmix_run'])
 
-        selector=cuts.Selector(cols, self['camcol'],
-                               do_sratio_cut=False)
+        selector=cuts.Selector(cols, do_sratio_cut=False)
+        selector.do_select(camcol=self['camcol'])
 
         ind=selector.indices
         self._data=selector.data
@@ -297,14 +298,12 @@ class EPSFRegressor(dict):
 
         if ('gmix_run' not in self 
                 or 'camcol' not in self):
-            raise ValueError("send gmix_run=,nbin=,camcol=")
+            raise ValueError("send gmix_run=,camcol=")
 
         if self['camcol'] is None:
             raise ValueError("send camcol for PSF ellip regress")
 
         self['ebinsize'] = 0.01
-
-        self['s2n_nbin'] =40
 
         self._conf=files.read_config(self['gmix_run'])
 
@@ -417,7 +416,9 @@ class EPSFRegressor(dict):
 
     def _load_data(self):
         cols=collate.open_columns(self['gmix_run'])
-        selector=cuts.Selector(cols, self['camcol'])
+
+        selector=cuts.Selector(cols)
+        selector.do_select(camcol=self['camcol'])
 
         ind=selector.indices
         self._data=selector.data

@@ -45,27 +45,24 @@ def read_original(sample):
     return c.read_original()
 
 
-class GenericCatalog(dict):
+class GenericSrcCatalog(dict):
     def __init__(self, sample, fs='hdfs'):
         conf = lensing.files.read_config('scat', sample)
         for k in conf:
             self[k] = conf[k]
 
+        # not all configs have this option
+        self['detrend']=self.get('detrend',False)
+
         self.open_all_columns()
         if self['sigmacrit_style'] != 2:
             raise ValueError("Expected sigmacrit_style 2")
 
-    def open_all_columns(self):
-        print("opening source columns for procrun:",self['procrun'],"sweeptype:",self['sweeptype'])
-        self.scols = lensing.regauss.open_columns(str(self['procrun']), str(self['sweeptype']))
-        print("  #rows:",self.scols['photoid'].size)
-        print("opening zphot columns for pzrun:",self['pzrun'])
-        self.pzcols = zphot.weighting.open_pofz_columns(str(self['pzrun']))
-        print("  #rows:",self.pzcols['photoid'].size)
+    def scinv_colname(self):
+        return 'scinv%s' % self['sample']
 
 
-
-class DR8RegaussCatalog(dict):
+class DR8RegaussCatalog(GenericSrcCatalog):
     """
 
     Before using, make sure you have matched the regauss cols with your chosen
@@ -78,10 +75,11 @@ class DR8RegaussCatalog(dict):
     def __init__(self, sample, fs='hdfs'):
         super(DR8RegaussCatalog,self).__init__(sample, fs=fs)
 
-        self['detrend']=self.get('detrend',False)
 
         if 'dr8regauss' not in self['catalog']:
             raise ValueError("Expected dr8regauss as catalog")
+
+        self.open_all_columns()
 
 
     def get_colnames(self):
@@ -106,8 +104,6 @@ class DR8RegaussCatalog(dict):
         flagname += '_'+self['filter']
         return e1name,e2name,errname,flagname,magname,Rname
     
-    def scinv_colname(self):
-        return 'scinv%s' % self['sample']
 
     def create_objshear_input(self):
         filter=self['filter']
