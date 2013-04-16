@@ -369,7 +369,7 @@ class DR8RegaussCatalog(dict):
         print("\nopening columns '%s'" % self['procrun'])
         cols = regauss.open_columns(self['procrun'],self['sweeptype'])
 
-        # the colum which will hold the inverse critical density.
+        # the column which will hold the inverse critical density.
         # depending on keywords, we might want to raise an error
         colname = 'scinv%s' % self['sample']
         print("Writing to column:\n",colname)

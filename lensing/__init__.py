@@ -235,7 +235,7 @@ except:
     pass
 
 try:
-    from . import gmix_sdss
+    from . import gmix_sdss_old
 except:
     pass
 

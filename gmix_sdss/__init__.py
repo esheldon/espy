@@ -10,7 +10,7 @@
     /bin/collate.py gmix-r02
 - match to the photozs
     bin/match-zphot.py gmix-r02 12
-(- in scat.py from the lensing package, use add-scinv
+(- run /lensing/bin/add-scinv.py from the lensing package, 
     will require a cosmology declared in a config)
 
 - Run the /bin/regress.py with type s2n to create the polynomial fits used to
