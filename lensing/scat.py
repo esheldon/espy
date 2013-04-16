@@ -24,7 +24,7 @@ except:
 def instantiate_sample(sample):
     conf = lensing.files.read_config('scat', sample)
     if 'dr8regauss' in conf['catalog']:
-        c = DR8Catalog(sample)
+        c = DR8RegaussCatalog(sample)
     else:
         c = DESMockSrcCatalog(sample)
     return c
@@ -45,8 +45,27 @@ def read_original(sample):
     return c.read_original()
 
 
+class GenericCatalog(dict):
+    def __init__(self, sample, fs='hdfs'):
+        conf = lensing.files.read_config('scat', sample)
+        for k in conf:
+            self[k] = conf[k]
 
-class DR8Catalog(dict):
+        self.open_all_columns()
+        if self['sigmacrit_style'] != 2:
+            raise ValueError("Expected sigmacrit_style 2")
+
+    def open_all_columns(self):
+        print("opening source columns for procrun:",self['procrun'],"sweeptype:",self['sweeptype'])
+        self.scols = lensing.regauss.open_columns(str(self['procrun']), str(self['sweeptype']))
+        print("  #rows:",self.scols['photoid'].size)
+        print("opening zphot columns for pzrun:",self['pzrun'])
+        self.pzcols = zphot.weighting.open_pofz_columns(str(self['pzrun']))
+        print("  #rows:",self.pzcols['photoid'].size)
+
+
+
+class DR8RegaussCatalog(dict):
     """
 
     Before using, make sure you have matched the regauss cols with your chosen
@@ -57,20 +76,13 @@ class DR8Catalog(dict):
 
     """
     def __init__(self, sample, fs='hdfs'):
-        conf = lensing.files.read_config('scat', sample)
-        for k in conf:
-            self[k] = conf[k]
+        super(DR8RegaussCatalog,self).__init__(sample, fs=fs)
 
         self['detrend']=self.get('detrend',False)
 
-        #if not self['detrend']:
-        #    raise ValueError("expected detrend")
         if 'dr8regauss' not in self['catalog']:
             raise ValueError("Expected dr8regauss as catalog")
-        if self['sigmacrit_style'] != 2:
-            raise ValueError("Expected sigmacrit_style 2")
 
-        self.open_all_columns()
 
     def get_colnames(self):
         if self['detrend']:
@@ -115,25 +127,25 @@ class DR8Catalog(dict):
         print("extracting ra,dec,g1,g2,err and copying into output")
 
         print("  reading ra,dec,g1,g2,err")
-        output['ra'][:] = self.rgcols['ra'][keep]
-        output['dec'][:] = self.rgcols['dec'][keep]
+        output['ra'][:] = self.scols['ra'][keep]
+        output['dec'][:] = self.scols['dec'][keep]
 
         e1name,e2name,errname,flagname,magname,Rname=self.get_colnames()
         # the code requires no minus sign for matt's simulations, but
         # does seem to require one for my shapes converted to equatorial
         print("Adding minus sign to e1")
         print(e1name)
-        output['g1'][:] = -self.rgcols[e1name][keep]/2
+        output['g1'][:] = -self.scols[e1name][keep]/2
         print(e2name)
-        output['g2'][:] =  self.rgcols[e2name][keep]/2
-        output['err'][:] = self.rgcols[errname][keep]/2
+        output['g2'][:] =  self.scols[e2name][keep]/2
+        output['err'][:] = self.scols[errname][keep]/2
 
-        output['mag'][:] = self.rgcols[magname][keep]
-        output['R'][:] = self.rgcols[Rname][keep]
+        output['mag'][:] = self.scols[magname][keep]
+        output['R'][:] = self.scols[Rname][keep]
 
         scinvcol = self.scinv_colname()
         print("  reading",scinvcol)
-        output['scinv'][:] = self.rgcols[scinvcol][keep]
+        output['scinv'][:] = self.scols[scinvcol][keep]
         
         if self['nsplit'] > 0:
             self.split(data=output)
@@ -182,7 +194,7 @@ class DR8Catalog(dict):
         """
 
         scinvcol = self.scinv_colname()
-        if scinvcol not in self.rgcols:
+        if scinvcol not in self.scols:
             raise ValueError("you need to run add-scinv for this sample")
 
         # first make sure scinv column exists
@@ -190,24 +202,24 @@ class DR8Catalog(dict):
         filter = self['filter']
 
         match_column = 'match_zphot%s' % self['pzrun']
-        if match_column not in self.rgcols:
+        if match_column not in self.scols:
             raise ValueError("First use regauss.zphot_match() to match zphot and regauss")
 
         e1name,e2name,errname,flagname,magname,Rname=self.get_colnames()
 
         print("reading:",match_column)
-        m = self.rgcols[match_column][:]
+        m = self.scols[match_column][:]
         print("Reading R")
-        R = self.rgcols[Rname][:]
+        R = self.scols[Rname][:]
 
 
         print("reading e1:",e1name)
-        e1 = self.rgcols[e1name][:]
+        e1 = self.scols[e1name][:]
         print("reading e2:",e2name)
-        e2 = self.rgcols[e2name][:]
+        e2 = self.scols[e2name][:]
 
         print("Reading corrflags:",flagname)
-        flags = self.rgcols[flagname][:]
+        flags = self.scols[flagname][:]
 
 
         # note this is *not* in a where statement!
@@ -309,8 +321,8 @@ class DR8Catalog(dict):
             pofz = pzcols['pofz'][pzind]
             photoid = pzcols['photoid'][pzind]
 
-            ra=self.rgcols['ra'][rgind]
-            dec=self.rgcols['dec'][rgind]
+            ra=self.scols['ra'][rgind]
+            dec=self.scols['dec'][rgind]
 
             print(photoid.size)
             fname=lensing.files.sample_file(sample=self['sample'], type='pofz', fs='nfs', src_split=i)
@@ -437,8 +449,8 @@ class DR8Catalog(dict):
 
     def open_all_columns(self):
         print("opening regauss columns for procrun:",self['procrun'],"sweeptype:",self['sweeptype'])
-        self.rgcols = lensing.regauss.open_columns(str(self['procrun']), str(self['sweeptype']))
-        print("  #rows:",self.rgcols['photoid'].size)
+        self.scols = lensing.regauss.open_columns(str(self['procrun']), str(self['sweeptype']))
+        print("  #rows:",self.scols['photoid'].size)
         print("opening zphot columns for pzrun:",self['pzrun'])
         self.pzcols = zphot.weighting.open_pofz_columns(str(self['pzrun']))
         print("  #rows:",self.pzcols['photoid'].size)

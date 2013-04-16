@@ -90,7 +90,8 @@ First you need a catalog class for each catalog type.
 See 
 
     lensing.lcat.RedMapper
-    lensing.scat.DR8Catalog
+    lensing.scat.DR8RegaussCatalog
+    lensing.scat.DR8GMixCatalog
 
 And an associated yaml config file with a sample name.
 
