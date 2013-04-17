@@ -3,7 +3,11 @@ import os
 from . import files
 
 class WQLens(dict):
-    def __init__(self, run, groups=None, priority="med", notgroups=None):
+    def __init__(self, run, version, 
+                 groups=None, priority="med", notgroups=None):
+
+        self['version'] = version
+
         conf = files.cascade_config(run)
         for key in conf:
             self[key] = conf[key]
@@ -82,7 +86,8 @@ class WQLens(dict):
                            'groups':self['groups'],
                            'notgroups':self['notgroups'],
                            'priority':self['priority'],
-                           'job_name':job_name}
+                           'job_name':job_name,
+                           'version':self['version']}
         return s
 
 
@@ -167,7 +172,8 @@ class WQLens(dict):
                             'notgroups':self['notgroups'],
                             'priority':self['priority'],
                             'job_name':job_name,
-                            'extra':''}
+                            'extra':'',
+                            'version':self['version']}
         return s
 
     def reduce_src_text(self, lens_split):
@@ -199,7 +205,8 @@ class WQLens(dict):
                             'notgroups':self['notgroups'],
                             'priority':self['priority'],
                             'extra':extra,
-                            'job_name':job_name}
+                            'job_name':job_name,
+                            'version':self['version']}
         return s
 
 
@@ -254,7 +261,7 @@ _shear_script="""
 command: |
     source ~esheldon/.bashrc
 
-    module load sobjshear/work
+    module load sobjshear/%(version)s
 
     config=%(config_file)s
     scat=%(scat)s
@@ -301,7 +308,7 @@ _reduce_script="""
 command: |
     source ~esheldon/.bashrc
 
-    module load sobjshear/work
+    module load sobjshear/%(version)s
 
     config="%(config_file)s"
     pattern="%(pattern)s"

@@ -8,6 +8,8 @@ def write_configs(run):
     rc.write_config()
 
 
+MASK_STYLES = {None:1, 'sdss':2}
+
 class ObjshearRunConfig(dict):
     """
 
@@ -44,12 +46,17 @@ class ObjshearRunConfig(dict):
     def write_config(self):
         fs='hdfs'
         config_file = lensing.files.sample_file(type='config',
-                                                sample=self['run'], fs=fs)
+                                                sample=self['run'],
+                                                fs=fs)
 
         print 'Writing config file:',config_file
         # should automate this type of thing; maybe an
         # "auto" file class for hdfs that returns the open
         # file handle for the local file?
+
+        masktype=self['lens_config']['masktype']
+        mask_style=MASK_STYLES[masktype]
+
         with eu.hdfs.HDFSFile(config_file) as hdfs_file:
             with open(hdfs_file.localfile,'w') as local_file:
 
@@ -60,8 +67,7 @@ class ObjshearRunConfig(dict):
                 for key in ['nside']:
                     local_file.write(fmt % (key, self[key]))
 
-                for key in ['mask_style']:
-                    local_file.write(fmt % (key,self[key]))
+                local_file.write(fmt % ("mask_style",mask_style))
 
                 for key in ['sigmacrit_style']:
                     local_file.write(fmt % (key,self['src_config'][key]))

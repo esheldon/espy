@@ -691,6 +691,7 @@ def cascade_config(run):
         """ % (scosmo, lcosmo)
         raise ValueError(mess)
 
+    conf['cosmo_config'] = read_config('cosmo', scosmo)
     return conf
 
 

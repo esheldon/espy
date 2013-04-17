@@ -32,6 +32,7 @@ from . import binning
 
 def instantiate_sample(**keys):
     sample=keys['sample']
+    del keys['sample']
     conf = lensing.files.read_config('lcat',sample)
 
     if conf['catalog'] in ['redmapper-random','maxbcg-random']:
@@ -97,10 +98,6 @@ class LcatBase(dict):
 
     def read(self):
         return lensing.files.lcat_read(sample=self['sample'])
-
-    def file(self):
-        fname = lensing.files.sample_file(type='lcat',sample=self['sample'], ext='dat')
-        return fname
 
     def read_original(self, **keys):
         infile = self.original_file()
@@ -196,7 +193,8 @@ class SDSSVoids(LcatBase):
         output['dec']       = data['dec'][good]
         output['z']         = data['z'][good]
         output['maskflags'] = maskflags[good]
-        lensing.files.lcat_write(sample=self['sample'], data=output, lens_split=0)
+        lensing.files.lcat_write(sample=self['sample'], data=output, 
+                                 lens_split=0)
 
     def get_maskflags(self, ra, dec, z):
         """
@@ -337,8 +335,6 @@ class SDSSRandom(LcatBase):
         self.load_stomp_maps()
 
         strict_edgecut = self.get('strict_edgecut',False)
-
-        fname = self.file()
 
         print("Generating",nrand,"random points "
               "with z in [%0.2f,%0.2f]" % (self['zmin'],self['zmax']))
@@ -542,8 +538,6 @@ class SDSSVoidsRandom(LcatBase):
 
         strict_edgecut = self['strict_edgecut']
 
-        fname = self.file()
-
         n=0
 
         data=self.read_raw()
@@ -635,11 +629,14 @@ class RedMapper(LcatBase):
 
     def create_objshear_input(self, **keys):
         
+        nsplit=self['nsplit']
+        if nsplit != 1:
+            raise ValueError("expected nsplit=1 for RedMapper")
+
         strict_edgecut = self.get('strict_edgecut',False)
 
         z_field = 'z_lambda'
 
-        fname = self.file()
 
         data = self.read_original()
 
@@ -682,7 +679,8 @@ class RedMapper(LcatBase):
         output['dec']       = data['dec'][good]
         output['z']         = data[z_field][good]
         output['maskflags'] = md['maskflags'][good]
-        lensing.files.lcat_write(sample=self['sample'], data=output)
+        lensing.files.lcat_write(sample=self['sample'], data=output,
+                                 lens_split=0)
 
     def lambda_logic(self, lam):
         print("Cutting lambda > %0.2f" % self['lambda_min'])
@@ -1024,7 +1022,6 @@ class MaxBCG(LcatBase):
 
 
     def create_objshear_input(self, **keys):
-        fname = self.file()
 
         data = self.read_original()
 
@@ -1225,15 +1222,11 @@ class DESMockLensCatalog(dict):
         if self['sample'] != sample:
             raise ValueError("The config sample '%s' doesn't match input '%s'" % (self['sample'],sample))
 
-    def file(self):
-        fname = lensing.files.sample_file(type='lcat',sample=self['sample'])
-        return fname
 
     def read(self, split=None):
         return lensing.files.lcat_read(sample=self['sample'], split=split)
 
     def create_objshear_input(self, **keys):
-        fname = self.file()
 
         data = self.read_original()
 

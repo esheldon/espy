@@ -17,10 +17,10 @@ Note for not randoms we will go ahead and combine the collated lens splits
     #
 
     # note lcat are now always split
-    /bin/make-objshear-input.py -t lcat -s rm03
+    /bin/make-objshear-input.py -t lcat -s rm05gmix01
 
     # creates config,shear,src_reduce,collate
-    /bin/make-objshear-proc.py rm03s06
+    /bin/make-objshear-proc.py rm05gmix01
 
     # in the $LENSDIR/proc/run directory
     incsub run-${run}-[0-9]*.yaml
@@ -32,14 +32,14 @@ Note for not randoms we will go ahead and combine the collated lens splits
     incsub run-${run}-collate-*.yaml
 
     # for lenses we need to combine the collations
-    python $ESPY_DIR/lensing/bin/combine-collated-chunks.py rm03s06
+    python $ESPY_DIR/lensing/bin/combine-collated-chunks.py rm05gmix01
 
 
     # This would bin by lambda into 12 bins, must have defined this binning
-    /bin/bin-lenses.py rm03s06 lambda 12
+    /bin/bin-lenses.py rm05gmix01 lambda 12
 
     # plot the binning (not corrected, jackknife yet)
-    /bin/plot-dsig-byrun.py -t binned rm03s06 lambda 12
+    /bin/plot-dsig-byrun.py -t binned rm05gmix01 lambda 12
 
     #
     # now randoms with sample svrand01. For randoms we will not do the final
@@ -95,18 +95,10 @@ See
 
 And an associated yaml config file with a sample name.
 
-Then you must make sure you have source scinv in the
-sweeps_reduct/regauss/04.cols by running
-
-    /bin/add-scinv.py
-
-Sometimes you can just copy a scinv{sample}.col 
-or symlink if selection criteria have not changed
-
 Then create input catalogs. 
 
-    /bin/make-objshear-input.py scat scat_sample
-    /bin/make-objshear-input.py lcat lcat_sample
+    /bin/make-objshear-input.py -t scat -s scat_sample
+    /bin/make-objshear-input.py -t lcat -s lcat_sample
 
 For random lcat this can be *very* slow so be prepared.
 Note this requires dealing with catalog names in these

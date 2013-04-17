@@ -1,9 +1,11 @@
 """
-    %prog [options] run
+    %prog [options] run version
 
 Description:
 
     Create config and shear/reduce wq scripts
+
+    version is the code version, e.g. gsens
 
     types is by default 
         config,shear
@@ -54,13 +56,15 @@ if len(args) < 1:
     sys.exit(1)
 
 run = args[0]
+version=args[1]
 types=options.types.split(',')
 
 
 if 'config' in types:
     lensing.objshear_config.write_configs(run)
 
-wql=lensing.wqsubmit.WQLens(run,groups=options.groups,
+wql=lensing.wqsubmit.WQLens(run, version,
+                            groups=options.groups,
                             notgroups=options.notgroups, 
                             priority=options.priority)
 
