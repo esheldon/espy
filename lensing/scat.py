@@ -143,7 +143,7 @@ class DR8GMixCatalog(GenericSrcCatalog):
 
         print("  ra,dec")
         ra = self.scols['ra'][keep]
-        output['dec'][:] = ra
+        output['ra'][:] = ra
         del ra
 
         dec = self.scols['dec'][keep]
