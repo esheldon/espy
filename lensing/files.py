@@ -563,7 +563,10 @@ def scat_read_ascii(**keys):
         nzl = zlvals.size
     else:
         nzl=None
-    dt = scat_dtype(style, nzl=nzl)
+    if 'gmix' in sample:
+        dt = scat_gmix_dtype(style, nzl=nzl)
+    else:
+        dt = scat_dtype(style, nzl=nzl)
 
     file=scat_file(**keys)
     print("reading scat file:",file,file=stderr)
@@ -636,6 +639,28 @@ def scat_dtype(sigmacrit_style, nzl=None):
 
     return dt
 
+def scat_gmix_dtype(sigmacrit_style, nzl=None):
+    dt=[('ra','f8'),
+        ('dec','f8'),
+        ('g1','f8'),
+        ('g2','f8'),
+        ('gcov11','f8'),
+        ('gcov12','f8'),
+        ('gcov22','f8'),
+        ('gsens1','f8'),
+        ('gsens2','f8')]
+
+    if sigmacrit_style == 1:
+        dt += [('z','f8')]
+    elif sigmacrit_style == 2:
+        if nzl == None:
+            raise ValueError('you must send nzl for sigmacrit_style of 2')
+        dt += [('scinv','f8',nzl)]
+    else:
+        raise ValueError("sigmacrit_style should be in [1,2]")
+
+    return dt
+
 
 
 
@@ -648,10 +673,23 @@ def cascade_config(run):
 
     ls = conf['lens_sample']
     conf['lens_config'] = read_config('lcat',ls)
+
     ss = conf['src_sample']
     conf['src_config'] = read_config('scat',ss)
-    cs=conf['lens_config']['cosmo_sample']
-    conf['cosmo_config'] = read_config('cosmo',cs)
+
+    
+    conf['scinv_config'] = read_config('scinv',
+                                       conf['src_config']['scinv_sample'])
+
+    scosmo = conf['scinv_config']['cosmo_sample']
+    lcosmo = conf['lens_config']['cosmo_sample']
+    if scosmo != lcosmo:
+        mess="""
+        mismatch between source scinv cosmo and lens cosmo
+            scinv cosmo: %s
+            lens cosmo:  %s
+        """ % (scosmo, lcosmo)
+        raise ValueError(mess)
 
     return conf
 

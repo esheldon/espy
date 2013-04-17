@@ -622,7 +622,8 @@ class RedMapper(LcatBase):
         if self['catalog'] not in ['redmapper-dr8-3.4-like',
                                    'redmapper-dr8-3.4-nord',
                                    'redmapper-dr8-3.14',
-                                   'redmapper-dr8-3.14-cen2']:
+                                   'redmapper-dr8-3.14-cen2',
+                                   'redmapper-dr8-5.20']:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
         self['mapname'] = 'boss'

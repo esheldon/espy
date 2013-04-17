@@ -14,6 +14,38 @@ def open_columns(gmix_run=None):
     print 'opening:',d
     return columns.Columns(d)
 
+def add_radec(gmix_run):
+    import es_sdsspy
+    gmix_cols=open_columns(gmix_run)
+    sweep_cols=es_sdsspy.sweeps_collate.open_columns('primgal')
+
+    print("reading gmix photoid")
+    gmix_pid = gmix_cols['photoid'][:]
+    print("reading sweeps photoid")
+    sweeps_pid = sweep_cols['photoid'][:]
+
+    print("matching")
+    mg,ms = eu.numpy_util.match(gmix_pid, sweeps_pid)
+
+    if mg.size != gmix_pid.size:
+        raise RuntimeError("some did not match: "
+                           "%d/%d" % (mg.size,gmix_pid.size))
+
+    del gmix_pid
+    del sweeps_pid
+
+    print("reading ra")
+    ra = sweep_cols['ra'][ms]
+    print("writing ra")
+    gmix_cols.write_column('ra', ra, create=True)
+    del ra
+
+    print("reading dec")
+    dec = sweep_cols['dec'][ms]
+    print("writing dec")
+    gmix_cols.write_column('dec', dec, create=True)
+    del dec
+
 class ColumnsMaker(dict):
     def __init__(self, **keys):
         self.update(keys)

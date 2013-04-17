@@ -32,28 +32,19 @@ class ObjshearRunConfig(dict):
         if self['run'] != run:
             raise ValueError("mismatch between run ids: %s %s" \
                              % (run,self['run']))
-
-        # make sure the cosmology is consistent
-        l = self['lens_config']
-        s = self['src_config']
-        if (l['cosmo_sample'] != s['cosmo_sample']):
-            err= """
-            cosmo sample mismatch:
-                lcat config: %s
-                scat config: %s
-            """ % (l['cosmo_sample'],s['cosmo_sample'])
-            raise ValueError(err)
         
     def make_zlvals(self):
         import sigmacrit
-        sconf = self['src_config']
-        return sigmacrit.make_zlvals(sconf['dzl'], sconf['zlmin'], sconf['zlmax'])
+        sconf = self['scinv_config']
+        return sigmacrit.make_zlvals(sconf['dzl'],
+                                     sconf['zlmin'],
+                                     sconf['zlmax'])
 
     # inputs to objshear
     def write_config(self):
         fs='hdfs'
-        #lens_file = lensing.files.sample_file(type='lcat',sample=self['lens_sample'],fs=fs)
-        config_file = lensing.files.sample_file(type='config',sample=self['run'], fs=fs)
+        config_file = lensing.files.sample_file(type='config',
+                                                sample=self['run'], fs=fs)
 
         print 'Writing config file:',config_file
         # should automate this type of thing; maybe an
@@ -79,18 +70,19 @@ class ObjshearRunConfig(dict):
 
                 if self['src_config']['sigmacrit_style'] == 2:
                     zlvals=self.make_zlvals()
-                    #local_file.write(fmt % ('nzl',zlvals.size))
 
                     local_file.write('zlvals = [')
                     zlvals.tofile(local_file, sep=' ')
                     local_file.write(']\n')
 
                 if 'zmin' in self['lens_config']:
-                    local_file.write(fmt % ('min_zlens_interp',self['lens_config']['zmin']))
+                    st=fmt % ('min_zlens_interp',self['lens_config']['zmin'])
+                    local_file.write(st)
 
                 for key in ['mag_range','R_range']:
                     if key in self:
-                        vstr = '[' + ' '.join( ['%s' % v for v in self[key]] ) + ']'
+                        ls=['%s' % v for v in self[key]]
+                        vstr = '[' + ' '.join(ls) + ']'
                         local_file.write(fmt % (key,vstr))
 
             hdfs_file.put(clobber=True)

@@ -14,6 +14,8 @@ from gmix_sdss.cuts import SRATIO_MIN
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
+parser.add_option('--sratio-min',default=1.0,
+                  help="min sratio")
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -23,6 +25,7 @@ def main():
         sys.exit(45)
 
     gmix_run = args[0]
+    sratio_min=float(options.sratio_min)
 
     cols=gmix_sdss.collate.open_columns(gmix_run)
 
@@ -36,7 +39,7 @@ def main():
     camcol = cols['camcol'][:]
 
     selector=gmix_sdss.cuts.Selector(cols)
-    selector.do_select()
+    selector.do_select(sratio_min=sratio_min)
 
     w=selector.indices
 
@@ -51,7 +54,7 @@ def main():
                                                    gmix_run=gmix_run,
                                                    camcol=col,
                                                    s2n=s2n[wcol],
-                                                   sratio=SRATIO_MIN)
+                                                   sratio=sratio_min)
         gdt[wcol,0] = g1
         gdt[wcol,1] = g2
 

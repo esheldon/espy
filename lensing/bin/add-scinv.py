@@ -11,6 +11,8 @@ import sys
 import lensing
 from optparse import OptionParser
 
+raise RuntimeError("don't use this")
+
 parser=OptionParser(__doc__)
 options,args = parser.parse_args(sys.argv[1:])
 

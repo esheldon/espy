@@ -17,6 +17,10 @@ from . import files
 from . import cuts
 from .cuts import SRATIO_MIN,PSF_EMIN,PSF_EMAX,S2N_MIN,S2N_MAX
 
+# value used for epsf regressions
+SRATIO_MIN_EPSF=1.0
+S2N_MIN_EPSF=20.0
+
 def get_plot_dir(**keys):
     if 'gmix_run' not in keys:
         raise ValueError("send gmix_run=")
@@ -113,9 +117,7 @@ class S2NRegressor(dict):
 
         self._conf=files.read_config(self['gmix_run'])
 
-
         self['s2n_label'] = 'S/N'
-        self._set_sratio_thresh()
 
     def _dofit(self, x, y, yerr):
         import mcmc
@@ -149,15 +151,15 @@ class S2NRegressor(dict):
         arr.uniform_limits = 1
         arr.title=self._get_title()
 
-        #colors=pcolors.rainbow(len(self['sratio_thresh']))
-        colors=['red','tan3','green4','blue']
+        colors=['tan3','green4','blue','red']
         types=['filled triangle','filled circle','filled square',
                'filled diamond']
         pts_arr1=[]
 
         xmin=9999.e9
         xmax=-9999e9
-        for i,srthresh in enumerate(self['sratio_thresh']):
+        thresholds=self.get_sratio_thresh()
+        for i,srthresh in enumerate(thresholds):
 
             print 'sratio thresh:',srthresh
             w,=numpy.where(data['sratio'] > srthresh)
@@ -255,8 +257,9 @@ class S2NRegressor(dict):
         return self._data
 
 
-    def _set_sratio_thresh(self):
-        self['sratio_thresh']=[0.5,1.0,1.5,2.0]
+    def get_sratio_thresh(self):
+        #return [0.5,1.0,1.5,2.0]
+        return [2.0,1.5,1.0,0.5]
 
     def _get_epsfile(self):
         type='s2n'
@@ -283,6 +286,7 @@ class S2NRegressor(dict):
         cols=collate.open_columns(self['gmix_run'])
 
         selector=cuts.Selector(cols, do_sratio_cut=False)
+        # using defaults with broad cuts
         selector.do_select(camcol=self['camcol'])
 
         ind=selector.indices
@@ -306,8 +310,6 @@ class EPSFRegressor(dict):
         self['ebinsize'] = 0.01
 
         self._conf=files.read_config(self['gmix_run'])
-
-        SRATIO_MIN = 1.0
 
         self._load_data()
         self._correct_vs_s2n()
@@ -339,12 +341,15 @@ class EPSFRegressor(dict):
 
         lab1=biggles.PlotLabel(0.1,0.9,r'$\gamma_1, e_1^{PSF}$')
         lab2=biggles.PlotLabel(0.1,0.9,r'$\gamma_2, e_2^{PSF}$')
+
+        dlab=biggles.PlotLabel(0.95,0.2,'detrended',halign='right')
         cutstr=self._get_cut_string()
-        cutlab=biggles.PlotLabel(0.9,0.1,cutstr,
+        cutlab=biggles.PlotLabel(0.95,0.1,cutstr,
                                 halign='right')
 
         arr[0,0].add(lab1)
         arr[1,0].add(lab2)
+        arr[1,0].add(dlab)
         arr[1,0].add(cutlab)
 
         z=biggles.Curve([-1,1],[0,0])
@@ -355,7 +360,7 @@ class EPSFRegressor(dict):
 
     def _get_cut_string(self):
         s=r'$S/N > %d \sigma_{gal}/\sigma_{PSF} > %.2f'
-        s = s % (S2N_MIN,SRATIO_MIN)
+        s = s % (S2N_MIN_EPSF,SRATIO_MIN_EPSF)
         return s
 
     def _get_sym_range(self, x1, x2):
@@ -372,11 +377,13 @@ class EPSFRegressor(dict):
         data=self._data
 
         bs11=eu.stat.Binner(data['psf_e1'], data['g'][:,0])
-        bs11.dohist(binsize=self['ebinsize'], min=PSF_EMIN, max=PSF_EMAX)
+        bs11.dohist(binsize=self['ebinsize'], 
+                    min=PSF_EMIN, max=PSF_EMAX)
         bs11.calc_stats()
 
         bs22=eu.stat.Binner(data['psf_e2'], data['g'][:,1])
-        bs22.dohist(binsize=self['ebinsize'], min=PSF_EMIN, max=PSF_EMAX)
+        bs22.dohist(binsize=self['ebinsize'], 
+                    min=PSF_EMIN, max=PSF_EMAX)
         bs22.calc_stats()
 
         w,=numpy.where(bs11['hist'] > 0)
@@ -409,7 +416,8 @@ class EPSFRegressor(dict):
         g1,g2=detrend_g_vs_s2n(s2n=data['s2n'], 
                                g1=data['g'][:,0],
                                g2=data['g'][:,1],
-                               sratio=SRATIO_MIN, **self)
+                               sratio=SRATIO_MIN_EPSF,
+                               **self)
 
         data['g'][:,0] = g1
         data['g'][:,1] = g2
@@ -418,7 +426,12 @@ class EPSFRegressor(dict):
         cols=collate.open_columns(self['gmix_run'])
 
         selector=cuts.Selector(cols)
-        selector.do_select(camcol=self['camcol'])
+        # using default broad cuts
+        selector.do_select(camcol=self['camcol'],
+                           sratio_min=SRATIO_MIN_EPSF,
+                           s2n_min=S2N_MIN_EPSF)
+
+
 
         ind=selector.indices
         self._data=selector.data

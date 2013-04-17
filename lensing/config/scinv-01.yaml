@@ -1,0 +1,6 @@
+sample:       "01"
+cosmo_sample: "01"
+pzrun:        "11"
+zlmin:        0.02
+zlmax:        0.41
+dzl:          0.015

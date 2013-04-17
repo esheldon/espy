@@ -25,8 +25,12 @@ def instantiate_sample(sample):
     conf = lensing.files.read_config('scat', sample)
     if 'dr8regauss' in conf['catalog']:
         c = DR8RegaussCatalog(sample)
-    else:
+    elif 'gmix' in conf['catalog']:
+        c = DR8GMixCatalog(sample)
+    elif 'desmocks' in conf['catalog']:
         c = DESMockSrcCatalog(sample)
+    else:
+        raise ValueError('bad catalog: %s' % conf['catalog'])
     return c
 
 def create_input(sample):
@@ -44,6 +48,12 @@ def read_original(sample):
     c = instantiate_sample(sample)
     return c.read_original()
 
+def scinv_colname(scinv_sample):
+    return 'scinv%s' % scinv_sample
+
+def zphot_matchname(pzrun):
+    zphot_matchname = 'match_zphot%s' % pzrun
+    return zphot_matchname 
 
 class GenericSrcCatalog(dict):
     def __init__(self, sample, fs='hdfs'):
@@ -51,6 +61,8 @@ class GenericSrcCatalog(dict):
         for k in conf:
             self[k] = conf[k]
 
+        self['scinv_config'] = \
+            lensing.files.read_config('scinv', conf['scinv_sample'])
         # not all configs have this option
         self['detrend']=self.get('detrend',False)
 
@@ -58,8 +70,137 @@ class GenericSrcCatalog(dict):
         if self['sigmacrit_style'] != 2:
             raise ValueError("Expected sigmacrit_style 2")
 
-    def scinv_colname(self):
-        return 'scinv%s' % self['sample']
+
+    def open_all_columns(self):
+        raise RuntimeError("over-ride open_all_columns")
+    def create_objshear_input(self):
+        raise RuntimeError("over-ride create_objshear_input")
+
+    def read(self, split=None):
+        return lensing.files.scat_read_ascii(sample=self['sample'], split=split)
+
+    def split(self, data=None):
+        """
+        Split the source file into nsplit parts
+        """
+        
+        nsplit = self['nsplit']
+        if nsplit == 0:
+            return
+
+        print('splitting into:',self['nsplit'])
+
+        if data is None:
+            data = self.read()
+
+
+        ntot = data.size
+        nper = ntot/nsplit
+        nleft = ntot % nsplit
+
+        for i in xrange(nsplit):
+
+            beg = i*nper
+            end = (i+1)*nper
+            if i == (nsplit-1):
+                end += nleft
+            sdata = data[beg:end]
+
+            lensing.files.scat_write_ascii(sample=self['sample'],
+                                           data=sdata, src_split=i)
+
+
+class DR8GMixCatalog(GenericSrcCatalog):
+    def __init__(self, sample, fs='hdfs'):
+        super(DR8GMixCatalog,self).__init__(sample, fs=fs)
+
+        if 'gmix' not in self['catalog']:
+            raise ValueError("Expected gmix as catalog")
+
+    def create_objshear_input(self):
+        """
+        - Trim to selected
+        - extract columns
+        - write to file or split files
+        """
+        keep = self.select()
+
+        sconf=self['scinv_config']
+        zlvals=lensing.sigmacrit.make_zlvals(sconf['dzl'], 
+                                             sconf['zlmin'], 
+                                             sconf['zlmax'])
+        nzl = zlvals.size
+
+        print("creating output struct")
+        dt = lensing.files.scat_gmix_dtype(self['sigmacrit_style'], nzl=nzl)
+        output = numpy.zeros(keep.size, dtype=dt)
+
+        scinvcol = scinv_colname(self['scinv_sample'])
+        print("  reading",scinvcol)
+        scinv = self.scols[scinvcol][keep]
+        output['scinv'][:] = scinv
+        del scinv
+
+        print("  ra,dec")
+        ra = self.scols['ra'][keep]
+        output['dec'][:] = ra
+        del ra
+
+        dec = self.scols['dec'][keep]
+        output['dec'][:] = dec
+        del dec
+
+        print("reading g")
+        g=self.scols['g_dt_eq'][keep]
+        output['g1'] = g[:,0]
+        output['g2'] = g[:,1]
+        del g
+
+        print("reading gcov")
+        gcov=self.scols['gcov'][keep]
+        output['gcov11'] = gcov[:,0,0]
+        output['gcov12'] = gcov[:,0,1]
+        output['gcov22'] = gcov[:,1,1]
+
+        del gcov
+
+        print("reading gsens")
+        gsens=self.scols['gsens'][keep]
+        output['gsens1'][:] = gsens[:,0]
+        output['gsens2'][:] = gsens[:,1]
+
+        del gsens
+
+        # the code requires no minus sign for matt's simulations, but
+        # does seem to require one for my shapes converted to equatorial
+        print("Adding minus sign to g1")
+        output['g1'] *= (-1)
+
+        
+        if self['nsplit'] > 0:
+            self.split(data=output)
+        else:
+            lensing.files.scat_write_ascii(sample=self['sample'], data=output)
+
+    def select(self):
+        import gmix_sdss
+        selector=gmix_sdss.cuts.Selector(self.scols)
+        selector.do_select(pzrun=self['pzrun'],
+                           s2n_min=self['s2n_range'][0],
+                           s2n_max=self['s2n_range'][1],
+                           sratio_min=self['sratio_min'])
+
+        print("kept",selector.indices.size)
+        return selector.indices
+
+    def open_all_columns(self):
+        import gmix_sdss
+        self.scols = gmix_sdss.collate.open_columns(self['catalog'])
+        print("  #rows:",self.scols['photoid'].size)
+
+        print("opening zphot columns for pzrun:",self['pzrun'])
+        self.pzcols = zphot.weighting.open_pofz_columns(str(self['pzrun']))
+        print("  #rows:",self.pzcols['photoid'].size)
 
 
 class DR8RegaussCatalog(GenericSrcCatalog):
@@ -67,10 +208,6 @@ class DR8RegaussCatalog(GenericSrcCatalog):
 
     Before using, make sure you have matched the regauss cols with your chosen
     photoz sample using lensing.regauss.zphot_match()
-
-    Run add_scinv() before running create_objshear_input()
-    (or /bin/add-scinv.py before /bin/make-objshear-input.py)
-
     """
     def __init__(self, sample, fs='hdfs'):
         super(DR8RegaussCatalog,self).__init__(sample, fs=fs)
@@ -139,7 +276,7 @@ class DR8RegaussCatalog(GenericSrcCatalog):
         output['mag'][:] = self.scols[magname][keep]
         output['R'][:] = self.scols[Rname][keep]
 
-        scinvcol = self.scinv_colname()
+        scinvcol = scinv_colname(self['scinv_sample'])
         print("  reading",scinvcol)
         output['scinv'][:] = self.scols[scinvcol][keep]
         
@@ -148,38 +285,7 @@ class DR8RegaussCatalog(GenericSrcCatalog):
         else:
             lensing.files.scat_write_ascii(sample=self['sample'], data=output)
 
-    def split(self, data=None):
-        """
-        Split the source file into nsplit parts
-        """
-        
-        nsplit = self['nsplit']
-        if nsplit == 0:
-            return
 
-        print('splitting into:',self['nsplit'])
-
-        if data is None:
-            data = self.read()
-
-
-        ntot = data.size
-        nper = ntot/nsplit
-        nleft = ntot % nsplit
-
-        for i in xrange(nsplit):
-
-            beg = i*nper
-            end = (i+1)*nper
-            if i == (nsplit-1):
-                end += nleft
-            sdata = data[beg:end]
-
-            lensing.files.scat_write_ascii(sample=self['sample'], data=sdata, src_split=i)
-
-
-    def read(self, split=None):
-        return lensing.files.scat_read_ascii(sample=self['sample'], split=split)
 
     def select(self):
         """
@@ -189,7 +295,7 @@ class DR8RegaussCatalog(GenericSrcCatalog):
 
         """
 
-        scinvcol = self.scinv_colname()
+        scinvcol = scinv_colname(self['scinv_sample'])
         if scinvcol not in self.scols:
             raise ValueError("you need to run add-scinv for this sample")
 
@@ -336,113 +442,6 @@ class DR8RegaussCatalog(GenericSrcCatalog):
             with eu.recfile.Open(fname, mode='w', delim=' ') as fobj:
                 fobj.write(out)
 
-    def add_scinv(self, clobber=False, chunksize=100000):
-        """
-
-        Add a column to the REGAUSS db that is the mean scinv as a function of
-        lens redshift.
-
-        scinv are created using the *corrected* p(z).  This is separate so I
-        can run them in parallel.
-
-        This will be particular to the source sample, and will have name
-        scinv{sample}
-
-        The zlvals will be in the meta data, although they are
-        easily generated using sigmcrit.make_zlvals(dzl, zlmin, zlmax)
-
-        Procedure
-        ---------
-        - get the correction factor N(z)/sumpofz(z)
-            calls zphot.weighting.pofz_correction(pzrun)
-
-        - for each p(z) multiply by that factor
-        - generate mean inverse critical density.
-
-
-        """
-
-        print("\nopening columns '%s'" % self['procrun'])
-        cols = regauss.open_columns(self['procrun'],self['sweeptype'])
-
-        # the column which will hold the inverse critical density.
-        # depending on keywords, we might want to raise an error
-        colname = 'scinv%s' % self['sample']
-        print("Writing to column:\n",colname)
-        if colname in cols:
-            if not clobber:
-                raise ValueError("Column already exists")
-            else:
-                print("  removing column")
-                cols[colname].delete()
-
-        # get the matches
-        zphot_matchname = 'match_zphot%s' % self['pzrun']
-        if zphot_matchname not in cols:
-            raise ValueError("zphot match column not found: '%s'" % zphot_matchname)
-
-        # get the source z vals
-        pzconf = zphot.cascade_config(self['pzrun'])
-        cosmo = files.read_config('cosmo', self['cosmo_sample'])
-
-        """
-        wo = zphot.weighting.WeightedOutputs()
-        pofz_file = wo.zhist_file(self['pzrun'])
-        print("reading summed p(z)")
-        sumpofz_struct = eu.io.read(pofz_file)
-        zs = (sumpofz_struct['zmin']+sumpofz_struct['zmax'])/2.
-        """
-
-        #
-        # correction factor to apply to all p(z)
-        #
-        print("getting p(z) correction function\n")
-        corrstruct = eu.io.read(zphot.weighting.pofz_correction_file(self['pzrun']))
-        zs = (corrstruct['zmax']+corrstruct['zmin'])/2.
-        corr = corrstruct['corr']
-
-
-        print("")
-        scalc = sigmacrit.ScinvCalculator(zs, self['dzl'], self['zlmin'], self['zlmax'],
-                                          H0=cosmo['H0'], omega_m=cosmo['omega_m'])
-
-        zlvals = scalc.zlvals
-
-
-
-        print("opening corresponding p(z) columns: '%s'\n" % self['pzrun'])
-        pzcols = zphot.weighting.open_pofz_columns(self['pzrun'])
-
-        # work on chunks
-        print("using chunksize:",chunksize)
-        ntot = cols['run'].size
-        nchunk = ntot/chunksize
-        if (ntot % chunksize) > 0:
-            nchunk += 1
-
-        print("nchunk:",nchunk)
-        for i in xrange(nchunk):
-            imin = i*chunksize
-            imax = (i+1)*chunksize
-            print("  ",imin,imax)
-            match = cols[zphot_matchname][imin:imax]
-            
-            nrows = match.size
-            scinv = numpy.zeros((nrows, zlvals.size), dtype='f8') -9999.
-
-            w=where1(match >= 0)
-            print("    ",w.size,"with good matches")
-            if w.size > 0:
-                # read the p(z) for the matches
-                pofz = pzcols['pofz'][match[w]]
-
-                pofz = pofz[:]*corr[:]
-
-                for j in xrange(w.size):
-                    scinv[w[j], :] = scalc.calc_mean_scinv(pofz[j])
-            # metadata only gets written once
-            cols.write_column(colname, scinv, meta={'zlvals':zlvals})
-
     def open_all_columns(self):
         print("opening regauss columns for procrun:",self['procrun'],"sweeptype:",self['sweeptype'])
         self.scols = lensing.regauss.open_columns(str(self['procrun']), str(self['sweeptype']))
@@ -506,6 +505,8 @@ class DESMockSrcCatalog(dict):
         return lensing.files.scat_read_ascii(sample=self['sample'], split=split)
 
     def add_scinv(self):
+        raise RuntimeError("note using scinv configs not, need to update "
+                           "this.  see gmix_sdss/bin/add-scinv.py")
         from . import sigmacrit
         import zphot
         if 'zlmin' not in self or 'zlmax' not in self or 'dzl' not in self:
