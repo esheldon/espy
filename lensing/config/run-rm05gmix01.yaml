@@ -1,0 +1,15 @@
+run:           "rm05gmix01"
+lens_sample:   "rm05"
+src_sample:    "gmix01"
+
+# for healpix
+nside:         64
+
+comment: | 
+
+    lenses:
+
+        Red mapper "redmapper-dr8-5.20"
+
+    sources:
+        s/n  in [20,300] sratio > 1
