@@ -1007,7 +1007,7 @@ class RedMapperRandom(LcatBase):
 
         wgood = where1(quad_logic)
 
-        print("    keeping: %d/%d",(wgood.size,data.size))
+        print("    keeping: %d/%d" %(wgood.size,data.size))
 
         data      = data[wgood]
         maskflags = maskflags[wgood]
