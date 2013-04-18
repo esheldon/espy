@@ -1,0 +1,6 @@
+run:           "sdssrand04"
+lens_sample:   "sdssrand03"
+src_sample:    "gmix01"
+
+# for healpix
+nside:         64
