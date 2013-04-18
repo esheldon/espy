@@ -80,7 +80,7 @@ def read_original(**keys):
     return c.read_original(**keys)
 
 
-def output_array(num):
+def make_output_array(num):
     dt = lensing.files.lcat_dtype()
     output = numpy.zeros(num, dtype=dt)
     return output
@@ -97,10 +97,24 @@ class LcatBase(dict):
             self[k] = conf[k]
 
         if self['sample'] != sample:
-            raise ValueError("The config sample '%s' doesn't match input '%s'" % (self['sample'],sample))
+            raise ValueError("The config sample '%s' doesn't "
+                             "match input '%s'" % (self['sample'],sample))
 
     def read(self):
         return lensing.files.lcat_read(sample=self['sample'])
+
+
+    def z_logic(self, z):
+        print("Cutting z to [%f, %f]" % (self['zmin'],self['zmax']))
+        logic = (z > self['zmin']) & (z < self['zmax']) 
+
+        w=where1(logic)
+        print("    Keeping %d/%d" % (w.size,z.size))
+        if w.size == 0:
+            raise ValueError("No objects passed z cut")
+
+        return logic
+
 
     def read_original(self, **keys):
         infile = self.original_file()
@@ -160,7 +174,7 @@ class SDSSVoids(LcatBase):
 
         data = self.read_original()
         orig_size = data.size
-        zindex = numpy.arange(orig_size,dtype='i8')
+        zindex = numpy.arange(orig_size,dtype='i4')
 
         zmin = self['zmin']
         zmax = self['zmax']
@@ -189,7 +203,7 @@ class SDSSVoids(LcatBase):
             stop
 
         print('creating output array')
-        output = output_array(good.size)
+        output = make_output_array(good.size)
 
         print('copying data')
         output['zindex']    = zindex[good]
@@ -221,7 +235,8 @@ class SDSSVoids(LcatBase):
         
         c = cosmology.Cosmo(H0=cconf['H0'], omega_m=cconf['omega_m'])
 
-        print("    Getting radii. z range of inputs is [%.2f, %.2f]" % (z.min(), z.max()))
+        print("    Getting radii. z range of inputs "
+              "is [%.2f, %.2f]" % (z.min(), z.max()))
         # Da is in Mpc
         Da = c.Da(0.0, z)
 
@@ -231,7 +246,8 @@ class SDSSVoids(LcatBase):
         self.basic_map = \
             es_sdsspy.stomp_maps.load('boss','basic', maxres=2048)
 
-        print("    Getting basic quadrant maskflags at full rmax: %0.2f" % self['rmax'])
+        print("    Getting basic quadrant maskflags "
+              "at full rmax: %0.2f" % self['rmax'])
         print("    radii are in range [%f,%f]" % (radius.min(), radius.max()))
         maskflags = self.basic_map.Contains(ra, dec, "eq", radius)
         w=es_sdsspy.stomp_maps.quad_check(maskflags)
@@ -264,10 +280,14 @@ class SDSSVoids(LcatBase):
 
         type='filled circle'
         size=1
-        plt.add(biggles.Points(data['z'][w1],data['radius'][w1],color='blue',type=type,size=size))
-        plt.add(biggles.Points(data['z'][w2],data['radius'][w2],color='red',type=type,size=size))
-        plt.add(biggles.Points(data['z'][w3],data['radius'][w3],color='magenta',type=type,size=size))
-        plt.add(biggles.Points(data['z'][w4],data['radius'][w4],color='brown',type=type,size=size))
+        plt.add(biggles.Points(data['z'][w1],data['radius'][w1],
+                               color='blue',type=type,size=size))
+        plt.add(biggles.Points(data['z'][w2],data['radius'][w2],
+                               color='red',type=type,size=size))
+        plt.add(biggles.Points(data['z'][w3],data['radius'][w3],
+                               color='magenta',type=type,size=size))
+        plt.add(biggles.Points(data['z'][w4],data['radius'][w4],
+                               color='brown',type=type,size=size))
         plt.xlabel='z'
         plt.ylabel='radius'
         #plt.show()
@@ -367,7 +387,6 @@ class SDSSRandom(LcatBase):
             maskflags = self.get_maskflags(ra,dec,z)
             quad_logic      = get_quad_logic(maskflags,strict=strict_edgecut)
 
-            #wgood = es_sdsspy.stomp_maps.quad_check(maskflags, strict=strict_edgecut)
             if 'rmax_hard' in self:
                 wgood = where1(quad_logic & hard_edge_logic)
             else:
@@ -375,7 +394,8 @@ class SDSSRandom(LcatBase):
 
             print(" -> good ones:",wgood.size)
             if wgood.size > 0:
-                output['zindex'][n:n+wgood.size] = numpy.arange(n,n+wgood.size,dtype='i8')
+                output['zindex'][n:n+wgood.size] = \
+                        numpy.arange(n,n+wgood.size,dtype='i4')
                 output['ra'][n:n+wgood.size] = ra[wgood]
                 output['dec'][n:n+wgood.size] = dec[wgood]
                 output['z'][n:n+wgood.size] = z[wgood]
@@ -548,7 +568,7 @@ class SDSSVoidsRandom(LcatBase):
         n=0
 
         data=self.read_raw()
-        zindex = numpy.arange(data.size,dtype='i8')
+        zindex = numpy.arange(data.size,dtype='i4')
 
         # do in chunks so we can see the progress
         npersplit = data.size/nsplit
@@ -627,11 +647,18 @@ class RedMapper(LcatBase):
                                    'redmapper-dr8-5.20']:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
+        cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])
+        self.cosmo = cosmology.Cosmo(omega_m=cconf['omega_m'], H0=cconf['H0'])
+
         self['mapname'] = 'boss'
         self['maptype'] = 'basic'
         self['tycho_maptype'] = 'tycho'
         # we might want to increase this!
         self['maxres'] = 2048
+
+        self.basic_map = es_sdsspy.stomp_maps.load(self['mapname'],
+                                                   self['maptype'], 
+                                                   maxres=self['maxres'])
 
 
     def create_objshear_input(self, **keys):
@@ -643,171 +670,65 @@ class RedMapper(LcatBase):
 
         strict_edgecut = self.get('strict_edgecut',False)
 
-        z_field = 'z_lambda'
-
+        z_field = self['z_field']
 
         data = self.read_original()
 
         # keep index into original data
         orig_size = data.size
-        zindex = numpy.arange(orig_size,dtype='i8')
+        zindex = numpy.arange(orig_size,dtype='i4')
 
         # trim z for speed
         z_logic = self.z_logic(data[z_field])
 
-        print("Actually trimming the bad z for speed")
         w=where1(z_logic)
         data = data[w]
         zindex = zindex[w]
 
-
-        # trim poorly understood low lambda stuff
-        lambda_logic = self.lambda_logic(data['lambda_chisq'])
-
         # make sure in the tycho window and two adjacent quadrants
         # not hitting edge (or no edge if strict=True)
 
-        md = self.get_maskflags(data['ra'], data['dec'], data[z_field])
+        maskflags = self.get_maskflags(data['ra'], data['dec'], data[z_field])
 
-        tycho_logic = (md['in_tycho'] == 1)
-        quad_logic = get_quad_logic(md['maskflags'], 
-                                                     strict=strict_edgecut)
-        hard_edge_logic = get_quad_logic(md['maskflags_hard'], 
-                                         strict=True)
+        quad_logic = get_quad_logic(maskflags, strict=strict_edgecut)
 
-        good = where1(lambda_logic & tycho_logic & quad_logic & hard_edge_logic)
+        good = where1(quad_logic)
         print("Finally kept: %d/%d" % (good.size,data.size))
 
         print('creating output array')
-        output = output_array(good.size)
+        output = make_output_array(good.size)
 
         print('copying data')
         output['zindex']    = zindex[good]
         output['ra']        = data['ra'][good]
         output['dec']       = data['dec'][good]
         output['z']         = data[z_field][good]
-        output['maskflags'] = md['maskflags'][good]
+        output['maskflags'] = maskflags[good]
         lensing.files.lcat_write(sample=self['sample'], data=output,
                                  lens_split=0)
 
-    def lambda_logic(self, lam):
-        print("Cutting lambda > %0.2f" % self['lambda_min'])
-        logic = lam > self['lambda_min']
-
-        w=where1(logic)
-        print("    Keeping %d/%d" % (w.size,lam.size))
-        if w.size == 0:
-            raise ValueError("No objects passed z cut")
-
-        return logic
-
-
-    def z_logic(self, z):
-        print("Cutting z to [%f, %f]" % (self['zmin'],self['zmax']))
-        logic = (z > self['zmin']) & (z < self['zmax']) 
-
-        w=where1(logic)
-        print("    Keeping %d/%d" % (w.size,z.size))
-        if w.size == 0:
-            raise ValueError("No objects passed z cut")
-
-        return logic
-
     def load_stomp_maps(self):
         if not hasattr(self, 'basic_map'):
-            self.basic_map = \
-                es_sdsspy.stomp_maps.load(self['mapname'],self['maptype'], 
-                                          maxres=self['maxres'])
             self.tycho_map = \
                 es_sdsspy.stomp_maps.load(self['mapname'],self['tycho_maptype'],
                                           maxres=self['maxres'])
 
-    def get_maskflags(self, ra, dec, z, types=['tycho','rmax','rmax_hard']):
-        """
+    def get_maskflags(self, ra, dec, z):
+        # Da and rmax in Mpc
+        print("maskflags, max radius: %0.1f" % self['rmax'])
 
-        Run the stomp edge checking code.
+        Da = self.cosmo.Da(0.0, z)
 
-        There are two checks: quadrant checking at full rmax, and a hard edge
-        cut at rmax_hard.
-
-        """
-
-        self.load_stomp_maps()
-
-        # get radius for edge check
-        cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])
-        print(cconf)
+        rmax = self['rmax']
+        radius = rmax/Da*180./PI
         
-        c = cosmology.Cosmo(H0=cconf['H0'], omega_m=cconf['omega_m'])
+        maskflags = self.basic_map.Contains(ra, dec, "eq", radius)
 
-        print("    Getting radii. z range of inputs is [%.2f, %.2f]" % (z.min(), z.max()))
-        # Da is in Mpc
-        Da = c.Da(0.0, z)
-
-        # radius in *degrees*
-        radius = self['rmax']/Da*180./PI
-        radius_hard = self['rmax_hard']/Da*180./PI
-
-        in_tycho=None
-        maskflags_hard=None
-        maskflags=None
-        
-        if 'tycho' in types:
-            print("    Ensuring in tycho window")
-            in_tycho = self.tycho_map.Contains(ra, dec, "eq")
-
-            w=where1(in_tycho == 1)
-            print("    Keeping %d/%d" % (w.size,ra.size))
-            in_tycho = numpy.array(in_tycho, dtype='i8')
-
-        if 'rmax_hard' in types:
-            # two types of edge checks
-            print("    Getting basic maskflags at rmax_hard: %0.2f" % self['rmax_hard']) 
-            print("    radii are in range [%f,%f]" % (radius_hard.min(), radius_hard.max()))
-            maskflags_hard = self.basic_map.Contains(ra, dec, "eq", radius_hard)
-            whard=es_sdsspy.stomp_maps.quad_check(maskflags_hard, strict=True)
-            print("    Keeping %d/%d from hard cut" % (whard.size,ra.size))
-            maskflags_hard = numpy.array(maskflags_hard, dtype='i8')
-
-        if 'rmax' in types:
-            print("    Getting basic quadrant maskflags at full rmax: %0.2f" % self['rmax'])
-            print("    radii are in range [%f,%f]" % (radius.min(), radius.max()))
-            maskflags = self.basic_map.Contains(ra, dec, "eq", radius)
-            w=es_sdsspy.stomp_maps.quad_check(maskflags)
-            print("    Keeping %d/%d quad" % (w.size,ra.size))
-
-            maskflags = numpy.array(maskflags, dtype='i8')
-
-        out={}
-        if in_tycho is not None:
-            out['in_tycho'] = in_tycho
-        if maskflags_hard is not None:
-            out['maskflags_hard'] = maskflags_hard
-        if maskflags is not None:
-            out['maskflags'] = maskflags
-
-        return out
+        return numpy.array(maskflags, dtype='i8')
 
 
-    def original_dir(self):
-        catdir = lensing.files.catalog_dir()
-        d = path_join(catdir, self['catalog'])
-        return str(d)
-
-    def original_file(self):
-        d = self.original_dir()
-        f='%s.fits' % self['catalog']
-        infile = path_join(d, f)
-        return infile
-
-    def read_original(self, **keys):
-        infile = self.original_file()
-        stdout.write("Reading original catalog: %s\n" % infile)
-        data = eu.io.read(infile, lower=True, ensure_native=True)
-        return data
-
-
-    def plot_coverage_bybin(self, binner, region='both', show=True, dops=True, rand=None):
+    def plot_coverage_bybin(self, binner, region='both', 
+                            show=True, dops=True, rand=None):
         import pcolors
         import biggles
         import converter
@@ -1065,21 +986,28 @@ class RedMapperRandom(LcatBase):
         n=0
 
         data=self.read_original()
+        ntot=data.size
 
         npersplit = data.size/nsplit
 
         start = lens_split*npersplit
         end   = (lens_split+1)*npersplit
         data = data[start:end]
+        print('lens_split',lens_split)
+        print('    keeping: %d/%d' % (data.size,ntot))
 
-        print(" -> maskflags, max radius: %0.1f" % self['rmax'])
+        # trim z for speed was not implemented in rmrand01
+        z_logic = self.z_logic(data['z'])
+        w=where1(z_logic)
+        data=data[w]
+
         maskflags = self.get_maskflags(data['ra'],data['dec'],data['z'])
 
         quad_logic = get_quad_logic(maskflags, strict=strict_edgecut)
 
         wgood = where1(quad_logic)
 
-        print(" -> good ones:",wgood.size)
+        print("    keeping: %d/%d",(wgood.size,data.size))
 
         data      = data[wgood]
         maskflags = maskflags[wgood]
@@ -1098,7 +1026,8 @@ class RedMapperRandom(LcatBase):
 
 
     def get_maskflags(self, ra, dec, z):
-        # Da is in Mpc
+        # Da and rmax in Mpc
+        print("maskflags, max radius: %0.1f" % self['rmax'])
         Da = self.cosmo.Da(0.0, z)
 
         rmax = self['rmax']
@@ -1127,7 +1056,7 @@ class MaxBCG(LcatBase):
 
         # keep index into original data
         orig_size = data.size
-        zindex = numpy.arange(orig_size,dtype='i8')
+        zindex = numpy.arange(orig_size,dtype='i4')
 
         # trim not well understood low ngals stuff
         ngals_logic = self.ngals_logic(data['ngals_r200'])
@@ -1139,7 +1068,7 @@ class MaxBCG(LcatBase):
         print("Finally kept: %d/%d" % (good.size,data.size))
 
         print('creating output array')
-        output = output_array(good.size)
+        output = make_output_array(good.size)
 
         print('copying data')
         output['zindex']    = zindex[good]
@@ -1331,10 +1260,10 @@ class DESMockLensCatalog(dict):
         data = self.read_original()
 
         print('creating output array')
-        output = output_array(data.size)
+        output = make_output_array(data.size)
 
         print('copying data')
-        output['zindex'] = numpy.arange(data.size,dtype='i8')
+        output['zindex'] = numpy.arange(data.size,dtype='i4')
         output['ra'] = data['ra']
         output['dec'] = data['dec']
         output['z'] = data['z']

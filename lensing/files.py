@@ -502,18 +502,12 @@ def lcat_read_old(sample=None, extra=None, file=None, old=False):
 
     return data
 
-def lcat_dtype(old=False):
-    if not old:
-        dt=[('zindex','i8'),
-            ('ra','f8'),
-            ('dec','f8'),
-            ('z','f8'),
-            ('maskflags','i8')]
-    else:
-        dt=[('zindex','i8'),
-            ('ra','f8'),
-            ('dec','f8'),
-            ('z','f8')]
+def lcat_dtype(**keys):
+    dt=[('zindex','i4'),
+        ('ra','f8'),
+        ('dec','f8'),
+        ('z','f8'),
+        ('maskflags','i8')]
 
     return dt
 

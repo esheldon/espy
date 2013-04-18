@@ -18,11 +18,8 @@ rmax:          36.567
 # if true, use a strict edge cut
 strict_edgecut: false
 
-zmin:          0.1
-zmax:          0.5
-
-# hard edge cut, in Mpc/h
-rmax_hard: 1.0
+zmin:          0.08
+zmax:          0.41
 
 masktype: sdss
 

@@ -76,6 +76,7 @@ def main():
         text="""
 command: |
     source ~/.bashrc
+    module unload espy && module load espy/work
     dir=${{ESPY_DIR}}/lensing/bin
     python -u ${{dir}}/make-objshear-input.py {options} -t lcat -s {sample}
     echo Done

@@ -16,15 +16,10 @@ strict_edgecut: false
 
 # not much usefulness for lenses beyond z=0.4
 # the randoms eli gave me are cut at 0.1
-zmin:          0.1
+zmin:          0.08
 zmax:          0.4
 
-# Note this is actually lower than the current lower bound in
-# this version of redmapper, so has no effect
-lambda_min: 10.
-
-# hard edge cut, in Mpc/h
-rmax_hard: 1.0
+z_field: "z_lambda"
 
 masktype: sdss
 
