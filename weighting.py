@@ -139,20 +139,25 @@ def plot_results1d(data1, data2, weights1, binsize,
     if show:
         arr.show()
 
-def hist_match(data1, data2, binsize):
+def hist_match(data1, data2, binsiz, weights1=None):
     """
     The simplest method for histogram matching
 
     Generate a set of weights for data set 1 such that the distribution of
     observables are matched to dataset 2.  
 
+    You can send a set of additional weights for set 1 with weights1=
     """
 
     weights1 = zeros(data1.size)
     min2=data2.min()
     max2=data2.max()
 
-    h1,rev1 = histogram(data1, binsize=binsize, min=min2, max=max2, rev=True)
+    bs1 = histogram(data1, binsize=binsize, min=min2, max=max2, rev=True,
+                    weights=weights1, more=True)
+
+    h1=bs1['hist']
+    rev1=bs1['rev']
     h2 = histogram(data2, min=min2, max=max2, binsize=binsize)
 
     if h1.size != h2.size:

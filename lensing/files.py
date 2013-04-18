@@ -120,6 +120,8 @@ finfo['fit']       = {'subdir':'lensout/{sample}/binned-{name}',
 # this config is objshear_config not the yaml files
 finfo['config']   = {'subdir':'proc/{sample}', 'name':'run-{sample}.cfg'}
 
+finfo['wq-genrand-split'] = {'subdir':'proc/{sample}/genrand',
+                             'name':'run-{sample}-{lens_split}-genrand.yaml'}
 finfo['wq-split']   = {'subdir':'proc/{sample}', 
                        'name':'run-{sample}-{lens_split}-{src_split}.yaml'}
 
@@ -554,12 +556,13 @@ def scat_read_ascii(**keys):
         raise ValueError("usage: data=scat_read_ascii(sample=, [, src_split=]")
 
     conf = read_config('scat', sample)
+    sconf = read_config('scinv', conf['scinv_sample'])
     style=conf['sigmacrit_style']
     if style not in [1,2]:
         raise ValueError("sigmacrit_style should be in [1,2]")
 
     if style == 2:
-        zlvals=sigmacrit.make_zlvals(conf['dzl'], conf['zlmin'], conf['zlmax'])
+        zlvals=sigmacrit.make_zlvals(sconf['dzl'],sconf['zlmin'],sconf['zlmax'])
         nzl = zlvals.size
     else:
         nzl=None

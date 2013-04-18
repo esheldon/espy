@@ -41,21 +41,19 @@ def main():
     lsample = conf['lens_config']['sample']
     nbin = conf['lens_config']['nbin']
 
-    if lens_split is not None:
-        lens_split=int(lens_split)
-        # in this case zindex must be in the catalog, so we can match
-        cat = lensing.lcat.read_original(sample=lsample, lens_split=lens_split)
-        if 'zindex' not in cat.dtype.names:
-            raise ValueError("when collating splits, zindex must be in "
-                             "'original' catalog")
-        reduced_file = lensing.files.sample_file(type='src-reduced',
-                                                 sample=run,
-                                                 lens_split=lens_split,
-                                                 fs='hdfs')
-        outfile = lensing.files.collated_file(sample=run,lens_split=lens_split)
-    else:
-        reduced_file = lensing.files.reduced_file(sample=run)
-        outfile = lensing.files.collated_file(sample=run)
+    nsplit=conf['lens_config']['nsplit']
+    cat = lensing.lcat.read_original(sample=lsample, lens_split=lens_split)
+
+    lens_split=int(lens_split)
+    # in this case zindex must be in the catalog, so we can match
+    if nsplit > 1 and 'zindex' not in cat.dtype.names:
+        raise ValueError("when collating nsplit > 1, zindex must be in "
+                         "'original' catalog")
+    reduced_file = lensing.files.sample_file(type='src-reduced',
+                                             sample=run,
+                                             lens_split=lens_split,
+                                             fs='hdfs')
+    outfile = lensing.files.collated_file(sample=run,lens_split=lens_split)
 
     print("will collate to file:",outfile)
 
@@ -74,7 +72,7 @@ def main():
 
             reduced=robj.read()
 
-            if lens_split is not None:
+            if nsplit > 1:
                 rind, cind = eu.numpy_util.match(reduced['zindex'],cat['zindex'])
                 if rind.size != reduced.size:
                     raise ValueError("all zindex did not match")

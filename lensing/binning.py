@@ -313,6 +313,18 @@ class BinnerBase(dict):
             nrow = 4
             ncol = 4
             aspect_ratio = 1.0
+        elif self['nbin']== 10:
+            nrow=2
+            ncol=5
+            aspect_ratio=2./5.
+        elif self['nbin']== 9:
+            nrow=3
+            ncol=3
+            aspect_ratio=1.0
+        elif self['nbin'] == 6:
+            nrow=2
+            ncol=3
+            aspect_ratio=2./3.
         elif self['nbin'] == 2:
             nrow = 2
             ncol=1
@@ -412,6 +424,14 @@ class BinnerBase(dict):
             nrow = 4
             ncol = 4
             aspect_ratio = 1.0
+        elif self['nbin']== 10:
+            nrow=2
+            ncol=5
+            aspect_ratio=2./5.
+        elif self['nbin']== 9:
+            nrow=3
+            ncol=3
+            aspect_ratio=1.
         elif self['nbin'] == 2:
             nrow=2
             ncol=1
@@ -693,7 +713,7 @@ class VoidZBinner(BinnerBase):
 
 
 def define_lambda_bins(sample, lastmin=58.):
-    l=lensing.files.read_original_catalog(type='lens',sample=sample)
+    l=lensing.lcat.read_original(sample=sample)
     w=where1(l['z_lambda'] < 0.4)
     l=l[w]
 
@@ -919,26 +939,15 @@ class LambdaBinner(BinnerBase):
             # ran define_bins
             lowlim  = [10.0, 10.4, 11.7, 13.3, 15.1, 17.3, 19.8, 23.0, 27.2, 32.9, 41.6, 58.0]
             highlim = [10.4, 11.7, 13.3, 15.1, 17.3, 19.8, 23.0, 27.2, 32.9, 41.6, 58.0, 1.e6]
-
-            # ran logbin_linear_edges with nbin=14 and combined last three
-            # also made upper exactly 189
-            """
-            lowlim = [  10.00009882,   12.52914267,   15.69778647,   19.66778627,
-                      24.64180651,   30.87376584,   38.68179945,   48.46449947,
-                      60.72126278,   76.07778464,   95.31799984,  119.42410174]
-
-            highlim = [  12.52914267,   15.69778647,   19.66778627,   24.64180651,
-                       30.87376584,   38.68179945,   48.46449947,   60.72126278,
-                       76.07778464,   95.31799984,  119.42410174,  234.87844989]
-            """
-
-        elif self['nbin'] == 16:
-            # ran logbin_linear_edges with nbin=18 and combined last three
-            # also made upper exactly 189
-
-            lowlim  = [10.00, 11.77, 13.86, 16.31, 19.20, 22.59, 26.60, 31.30, 36.85, 43.37, 51.05, 60.09, 70.73, 83.26, 98.00, 115.35]
-            highlim = [11.77, 13.86, 16.31, 19.20, 22.59, 26.60, 31.30, 36.85, 43.37, 51.05, 60.09, 70.73, 83.26, 98.00, 115.35, 189.00]
-
+        elif self['nbin'] == 10:
+            lowlim=[20.0, 21.5, 24.2, 27.0, 30.4, 34.4, 39.5, 46.3, 56.1, 75.0]
+            highlim=[21.5, 24.2, 27.0, 30.4, 34.4, 39.5, 46.3, 56.1, 75.0, 1.e6]
+        elif self['nbin']==9:
+            lowlim=[20.0, 21.3, 24.4, 27.7, 31.7, 36.6, 43.3, 53.0, 71.0]
+            highlim=[21.3, 24.4, 27.7, 31.7, 36.6, 43.3, 53.0, 71.0, 1.e6]
+        elif self['nbin'] == 6:
+            lowlim = [20.0, 20.8, 25.9, 32.2, 41.3, 58.0]
+            highlim = [20.8, 25.9, 32.2, 41.3, 58.0, 1.e6]
         else:
             raise ValueError("Unsupported nbin: %d\n", self['nbin'])
 

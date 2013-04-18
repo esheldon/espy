@@ -5,9 +5,9 @@ Description:
 
     Bin lenses.  
     
-    run is, e.g., l08.
+    run is, e.g., rm05gmix01
     
-    type is the type of binning, e.g. lambda, run is the lensing run, e.g. 07,
+    type is the type of binning, e.g. lambda, 
     and nbin is the number of bins
 """
 import sys

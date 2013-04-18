@@ -3,7 +3,6 @@
 
 Description:
 
-    Make condor scripts for generation of random lcat in chunks.
 
 """
 from __future__ import print_function

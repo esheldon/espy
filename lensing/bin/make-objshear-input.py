@@ -28,8 +28,7 @@ parser.add_option("-n",dest="nrand",default=None,
                        "you must send an extra name in this case")
 
 parser.add_option("--split",default=None,
-                  help=("split number 0 to nsplit-1.  For use when random ra,dec "
-                        "have been pre-generated, e.g. sdss voids"))
+                  help=("split number 0 to nsplit-1."))
 
 parser.add_option("-e",dest="extra_name",default=None,
                   help="an extra name to add to the output file")
@@ -43,18 +42,22 @@ if options.type is None or options.sample is None:
 type = options.type
 sample = options.sample
 
+split=options.split
+if split is not None:
+    split=int(split)
+
+nrand=options.nrand
+if nrand is not None:
+    nrand=int(nrand)
+
 if type == 'scat':
     # this will also run split() on the sample
     lensing.scat.create_input(sample=sample)
 elif type == 'lcat':
-    if options.split is not None:
-        lensing.lcat.create_input(sample=sample, lens_split=int(options.split))
-    elif options.nrand is not None:
-        lensing.lcat.create_input(sample=sample, 
-                                  nrand=int(options.nrand), 
-                                  extra=options.extra_name)
-    else:
-        lensing.lcat.create_input(sample=sample)
+    lensing.lcat.create_input(sample=sample, 
+                              lens_split=split,
+                              nrand=nrand,
+                              extra=options.extra_name)
 else:
     raise ValueError("type must be 'scat' or 'lcat'")
 

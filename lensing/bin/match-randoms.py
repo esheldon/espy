@@ -30,9 +30,9 @@ parser.add_option("-t",dest="bintype",default=None,
 parser.add_option("-n",dest="nbin",default=None,
                   help="The number of bins, default %default")
 parser.add_option("-b",dest="binsize",default=0.01,
-                  help="Binsize to use in z for hist matching, default %default")
+    help="Binsize to use in z for hist matching, default %default")
 parser.add_option("-s",dest="show",action="store_true", default=False,
-                  help="Show histogram comparisons on the screen. default %default")
+    help="Show histogram comparisons on the screen. default %default")
 
 
 def makedir_fromfile(path):
@@ -107,7 +107,6 @@ def main():
         w = b.select_bin(data, binnum)
 
         print("matching hist with weights")
-        #weights = weighting.hist_match(rand['z'], lcat['z'][w], binsize)
         weights = weighting.hist_match(rand['z'], data['z'][w], binsize)
 
 

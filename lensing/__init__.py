@@ -20,7 +20,8 @@ Note for not randoms we will go ahead and combine the collated lens splits
     /bin/make-objshear-input.py -t lcat -s rm05gmix01
 
     # creates config,shear,src_reduce,collate
-    /bin/make-objshear-proc.py rm05gmix01
+    # version can be gsens, mom etc.
+    /bin/make-objshear-proc.py rm05gmix01 gsens
 
     # in the $LENSDIR/proc/run directory
     incsub run-${run}-[0-9]*.yaml
@@ -42,33 +43,37 @@ Note for not randoms we will go ahead and combine the collated lens splits
     /bin/plot-dsig-byrun.py -t binned rm05gmix01 lambda 12
 
     #
-    # now randoms with sample svrand01. For randoms we will not do the final
+    # now randoms with sample rmrand01. For randoms we will not do the final
     # collation across lenses because of memory constraints
     #
 
     # generation of randoms is slow, so do it in chunks.
     # make sure to put nsplit into the lcat yaml file.
     # for pre-generated ra/dec
-    /bin/make-random-chunk-scripts.py svrand01
+
+    /bin/make-random-chunk-scripts.py rmrand01
+
     # things are different when generating the ra/dec
-    /bin/make-random-chunk-scripts.py --gen-radec svrand01
+    /bin/make-random-chunk-scripts.py --gen-radec rmrand01
 
     # scripts are in the $LENSDIR/lcat/{run}/wq
 
     # you can combine them if you want, but if you have
     # done splits the wq scripts will work with them
-    #/bin/combine-random-chunks.py svrand01
+    #/bin/combine-random-chunks.py rmrand01
 
     # 
     # now make the associated run and the wq scripts
-    # let's call the run simply run-svrand01s05
+    # let's call the run simply run-rmrand01gmix01
     # we need to reduce across sources then concatenate
     # the lens splits together
-    /bin/make-objshear-proc.py -t config,shear,src_reduce,lens_concat svrand01s05
+
+    /bin/make-objshear-proc.py rmrand01gmix01 gsens
 
     # now
     # - submit the shear wq scripts 
-    # - submit the src reduce wq scripts (reduce across sources at fixed lens split)
+    # - submit the src reduce wq scripts (reduce across sources at 
+    #   fixed lens split)
     # - Optionally: submit the lens concat script
     # - collate the results in the splits
     # - Optionally: combine the collated splits
@@ -78,7 +83,7 @@ Note for not randoms we will go ahead and combine the collated lens splits
     # want to get an interactive job on a high mem machine, maybe 48G machine
     #
 
-    /bin/match-randoms.py -t lambda -n 12 sv01s05 svrand01s05
+    /bin/match-randoms.py -t lambda -n 12 rm05gmix01 rmrand01gmix01
 
     # correct from randoms
     /bin/correct-shear.py

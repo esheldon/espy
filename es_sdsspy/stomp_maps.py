@@ -34,7 +34,7 @@ try:
 except:
     pass
 
-def quad_check(maskflags, strict=False, reverse=False):
+def do_quad_check(maskflags, strict=False, reverse=False):
     """
     if strict=False
         We will keep anything that has two adjacent quadrants contained
@@ -47,7 +47,9 @@ def quad_check(maskflags, strict=False, reverse=False):
 
     return w
 
-def quad_logic(maskflags, strict=False, reverse=False):
+quad_check = do_quad_check
+
+def get_quad_logic(maskflags, strict=False, reverse=False):
     """
     if strict=False
         We will keep anything that has two adjacent quadrants contained
@@ -76,39 +78,7 @@ def quad_logic(maskflags, strict=False, reverse=False):
 
     return logic
 
-def quad_check_old(maskflags, strict=False):
-    """
-    if strict=False
-        We will keep anything that has two adjacent quadrants contained
-    if strict=True
-        We demand *all* quandrants are unmasked
-    """
-
-    maskflags = numpy.array(maskflags, ndmin=1, copy=False)
-
-    if not strict:
-        check1 = \
-            ( (maskflags & FIRST_QUADRANT_OK) != 0 ) & \
-            ( (maskflags & SECOND_QUADRANT_OK) != 0 )
-        check2 = \
-            ( (maskflags & SECOND_QUADRANT_OK) != 0 ) & \
-            ( (maskflags & THIRD_QUADRANT_OK) != 0 )
-        check3 = \
-            ( (maskflags & THIRD_QUADRANT_OK) != 0 ) & \
-            ( (maskflags & FOURTH_QUADRANT_OK) != 0 )
-        check4 = \
-            ( (maskflags & FOURTH_QUADRANT_OK) != 0 ) & \
-            ( (maskflags & FIRST_QUADRANT_OK) != 0 )
-        w, = where( check1 | check2 | check3 | check4  )
-    else:
-        w, = where(  ( (maskflags & FIRST_QUADRANT_OK) != 0 )
-                   & ( (maskflags & SECOND_QUADRANT_OK) != 0 )
-                   & ( (maskflags & THIRD_QUADRANT_OK) != 0 )
-                   & ( (maskflags & FOURTH_QUADRANT_OK) != 0 ) )
-
-    return w
-
-
+quad_logic = get_quad_logic
 
 
 def map_dir():
