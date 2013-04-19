@@ -45,7 +45,8 @@ def plothist_weights(weights):
 
 
 def plot_results1d(data1, data2, weights1, binsize, 
-                   xmin=None, xmax=None, xlabel=None, title=None, epsfile=None, show=True):
+                   xmin=None, xmax=None, xlabel=None, title=None,
+                   epsfile=None, pngfile=None, show=True):
     """
     compare the histograms at the input binsize
 
@@ -135,37 +136,52 @@ def plot_results1d(data1, data2, weights1, binsize,
     if epsfile is not None:
         print("writing eps file:",epsfile)
         arr.write_eps(epsfile)
+    if pngfile is not None:
+        print("writing png file:",pngfile)
+        arr.write_img(800,800,pngfile)
 
     if show:
         arr.show()
 
-def hist_match(data1, data2, binsiz, weights1=None):
+def hist_match(data1, data2, binsize, extra_weights1=None):
     """
-    The simplest method for histogram matching
-
     Generate a set of weights for data set 1 such that the distribution of
     observables are matched to dataset 2.  
 
-    You can send a set of additional weights for set 1 with weights1=
+    This is the simplest method for histogram matching and just works
+    in rectangular bins
+
+    parameters
+    ----------
+    data1:
+        This data set is to be matched by weighting to data2
+    data2:
+        The data to be matched against
+    binsize:
+        The binsize to use for the histogram
+    extra_weights1:
+        An extra set of weights to apply to data1.  The returned weights
+        will include this weight
     """
 
     weights1 = zeros(data1.size)
     min2=data2.min()
     max2=data2.max()
 
-    bs1 = histogram(data1, binsize=binsize, min=min2, max=max2, rev=True,
-                    weights=weights1, more=True)
+    if extra_weights1 is not None:
+        bs1 = histogram(data1, binsize=binsize, min=min2, max=max2, rev=True,
+                        weights=extra_weights1)
+        h1=bs1['whist']
+        rev1=bs1['rev']
+    else:
+        h1,rev1=histogram(data1, binsize=binsize, min=min2, max=max2, rev=True)
 
-    h1=bs1['hist']
-    rev1=bs1['rev']
     h2 = histogram(data2, min=min2, max=max2, binsize=binsize)
 
     if h1.size != h2.size:
         raise ValueError("histogram sizes don't match: %d/%d" % (h1.size,h2.size))
 
     ratio = zeros(h1.size)
-    #w=where1(h2 > 0)
-    #ratio[w] = (h1[w]*1.0)/h2[w]
     w=where1(h1 > 0)
     ratio[w] = (h2[w]*1.0)/h1[w]
 
@@ -178,6 +194,8 @@ def hist_match(data1, data2, binsiz, weights1=None):
 
             weights1[w1] = ratio[i]
 
+    if extra_weights1 is not None:
+        weights1 *= extra_weights1
     return weights1
 
 def hist_match_remove(data1, data2, binsize):
@@ -227,6 +245,9 @@ class WeightCalculator(dict):
 
         self.weight_data=None
         self.num_data=None
+
+    def get_weights(self):
+        return self.weight_data['weight']
 
     def dtype1(self):
         return [('junk1','f8'),('junk2','f8'),('weight','f8'), ('data','f8')]

@@ -36,30 +36,19 @@ def main():
 
     print("processing",nsplit,"lens splits")
 
-    # chunks are not the same size, so we need an initial pass
-    ntot=0
-    ii=0
-    for ipass in [1,2]:
-        if ipass==1:
-            print('pass 1 to get sizes')
-        else:
-            print('now copying')
-        for i in xrange(nsplit):
-            t=lensing.files.collated_read(sample=run,lens_split=i,
-                                          verbose=False)
-            if ipass == 1:
-                print(t.size)
-                ntot += t.size
-            else:
-                if i == 0:
-                    print('-'*70)
-                    print('ntot:',ntot)
-                    descr=eu.numpy_util.descr_to_native(t.dtype.descr)
-                    data = numpy.zeros(ntot, dtype=descr)
-                    print(data.dtype.descr)
+    print(outfile)
+    with eu.hdfs.HDFSFile(outfile,verbose=True) as hdfs_obj:
+        print("opening:",hdfs_obj.localfile)
+        with fitsio.FITS(hdfs_obj.localfile,'rw',clobber=True) as fobj:
 
-                data[ii:ii+t.size] = t
-                ii += t.size
+            for i in xrange(nsplit):
+                t=lensing.files.collated_read(sample=run,
+                                              lens_split=i,
+                                              verbose=False)
+                if i==0:
+                    fobj.write(t)
+                else:
+                    fobj[-1].append(t)
 
-    eu.io.write(outfile, data, clobber=True, verbose=True)
+        hdfs_obj.put(clobber=True)
 main()

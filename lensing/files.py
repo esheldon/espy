@@ -411,6 +411,7 @@ def collated_file(**keys):
     keys['fs'] = 'hdfs'
     keys['type'] = 'collated'
     return sample_file(**keys)
+
 def collated_read(**keys):
     fname=collated_file(**keys)
     verbose=keys.get('verbose',True)

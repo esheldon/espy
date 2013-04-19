@@ -5,7 +5,10 @@
 Description:
 
     Match redshift histograms between the lenses
-    and random.  Writes out a file holding the lens averages."""
+    and random.  Writes out a file holding the lens averages.
+    
+    bintype and nbin are required
+"""
 
 from __future__ import print_function
 
@@ -17,20 +20,22 @@ import converter
 
 import fitsio
 
-import esutil as eu
-
-import numpy
-from numpy import where, zeros, ones
+from numpy import zeros
 
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
+parser.add_option("-w","--extra-weights",default=None,
+                  help="field in randoms to use as extra weight")
 parser.add_option("-t",dest="bintype",default=None,
                   help="The type of binning, default %default")
+
 parser.add_option("-n",dest="nbin",default=None,
                   help="The number of bins, default %default")
+
 parser.add_option("-b",dest="binsize",default=0.01,
     help="Binsize to use in z for hist matching, default %default")
+
 parser.add_option("-s",dest="show",action="store_true", default=False,
     help="Show histogram comparisons on the screen. default %default")
 
@@ -54,21 +59,26 @@ def main():
     bintype=options.bintype
     nbin=int(options.nbin)
     binsize=float(options.binsize)
+    extra_weights=options.extra_weights
     show=options.show
 
     if bintype is None or nbin is None:
         raise ValueError("currently demand some kind of binning")
 
+    conf=lensing.files.cascade_config(lensrun)
+    z_field=conf['lens_config']['z_field']
+    print('z_field:',z_field)
+
     b = lensing.binning.instantiate_binner(bintype, nbin)
 
     # read collated lens catalog and select lenses with the
     # bin criteria.  Then match the randoms redshift histogram
-    conf=lensing.files.cascade_config(lensrun)
+
     # this is where z is, may be a different name in the collated data
-    #lcat = lensing.files.lcat_read(sample=conf['lens_sample'])
     data = lensing.files.collated_read(sample=lensrun)
     rand = lensing.files.collated_read(sample=randrun)
-    print('rand names:',rand.dtype.names)
+
+    z=data[z_field]
 
     output = lensing.binning.lensbin_struct(data['rsum'][0].size, n=nbin)
 
@@ -77,6 +87,7 @@ def main():
                                            sample=lensrun,
                                            name=b.name(),
                                            extra=outextra)
+
     print("opening weights file for writing:",weights_file)
     wfits=fitsio.FITS(weights_file,'rw',clobber=True)
 
@@ -92,13 +103,12 @@ def main():
         print("-"*70)
         print("%s/%s: " % (binnum+1,nbin), b.bin_label(binnum))
 
-        eps_extra='%02d-randmatch-%s' % (binnum,randrun)
+        png_extra='%02d-randmatch-%s' % (binnum,randrun)
 
-        epsfile=lensing.files.sample_file(type='binned-plots',
+        pngfile=lensing.files.sample_file(type='binned-plots',
                                           sample=lensrun,
                                           name=b.name(),
-                                          extra=eps_extra, ext='eps')
-        pngfile=epsfile.replace('.eps','.png')
+                                          extra=png_extra, ext='png')
 
 
         tit=b.bin_label(binnum)
@@ -107,7 +117,12 @@ def main():
         w = b.select_bin(data, binnum)
 
         print("matching hist with weights")
-        weights = weighting.hist_match(rand['z'], data['z'][w], binsize)
+        if extra_weights:
+            ew=rand[extra_weights]
+            weights = weighting.hist_match(rand['z'], z[w], binsize,
+                                           extra_weights1=ew)
+        else:
+            weights = weighting.hist_match(rand['z'], z[w], binsize)
 
 
         effnum = weights.sum()
@@ -117,19 +132,15 @@ def main():
         print("combining randoms with weights")
         comb = lensing.outputs.average_lensums(rand, weights=weights)
 
-        #weighting.plot_results1d(rand['z'], lcat['z'][w], weights, binsize, 
-        #                         epsfile=epsfile, title=tit, show=show)
-        weighting.plot_results1d(rand['z'], data['z'][w], weights, binsize, 
-                                 epsfile=epsfile, title=tit, show=show)
+        weighting.plot_results1d(rand['z'], z[w], weights, binsize, 
+                                 pngfile=pngfile, title=tit, show=show)
 
-        #wstruct=zeros(1, dtype=[('weights','f8',weights.size)])
         wstruct=zeros(weights.size, dtype=[('weights','f8')])
         wstruct['weights'] = weights
 
         # a new extension for each bin
         wfits.write(wstruct)
 
-        converter.convert(epsfile, dpi=120, verbose=True)
         html_file.write('    <img src="%s"><p>\n' % os.path.basename(pngfile))
 
 
