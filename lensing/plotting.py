@@ -399,6 +399,7 @@ def plot_dsig(**keys):
 
     if ylog:
         od['plt'] = plt
+        return od
     else:
         return plt
 

@@ -92,7 +92,10 @@ def doplot(binned_data, corr_data, rand, label, show=False):
     cplt.aspect_ratio=1
 
 
-    ddict = lensing.plotting.plot_dsig(corr_data,show=False)
+    ddict = lensing.plotting.plot_dsig(r=corr_data['r'],
+                                       dsig=corr_data['dsig'],
+                                       dsigerr=corr_data['dsigerr'],
+                                       show=False)
     ddict['p'].label = 'corrected'
     dplt = ddict['plt']
 
