@@ -1,13 +1,21 @@
 """
 
-quick version
--------------
+process
+-------
 
-I'll go through each below, but for now assume you have a lens run called rm03s06
-and a randoms run called r03s06, and the config files are set up, and scinv
-exists.
+Note when not doing randoms we will go ahead and combine the collated lens
+splits
 
-Note for not randoms we will go ahead and combine the collated lens splits
+    First you need a catalog class for each catalog type.
+    See 
+
+    lensing.lcat.RedMapper
+    lensing.scat.DR8RegaussCatalog
+    lensing.scat.DR8GMixCatalog
+
+    And an associated yaml config file with a sample name.
+    Also for actual runs you need another config.  There
+    are also scinv config and cosmo config.
 
     # if the scat are not already generated
     /bin/make-objshear-input.py -t scat -s scat_sample
@@ -56,13 +64,8 @@ Note for not randoms we will go ahead and combine the collated lens splits
     # things are different when generating the ra/dec
     /bin/make-random-chunk-scripts.py --gen-radec rmrand01
 
-    # scripts are in the $LENSDIR/lcat/{run}/wq
+    # scripts are in $LENSDIR/proc/{sample}/genrand/
 
-    # you can combine them if you want, but if you have
-    # done splits the wq scripts will work with them
-    #/bin/combine-random-chunks.py rmrand01
-
-    # 
     # now make the associated run and the wq scripts
     # let's call the run simply run-rmrand01gmix01
     # we need to reduce across sources then concatenate
@@ -73,10 +76,10 @@ Note for not randoms we will go ahead and combine the collated lens splits
     # now
     # - submit the shear wq scripts 
     # - submit the src reduce wq scripts (reduce across sources at 
-    #   fixed lens split)
-    # - Optionally: submit the lens concat script
-    # - collate the results in the splits
-    # - Optionally: combine the collated splits
+    #   fixed lens split) *reduce*.yaml
+    # - collate the results in the splits by submitting the *collate*.yaml
+    # - combine the collated splits
+    #       combine-collated-chunks.py rmrand01gmix01
 
     #
     # match randoms to the lens bins this can eat tons of memory, so probably
@@ -84,81 +87,11 @@ Note for not randoms we will go ahead and combine the collated lens splits
     #
 
     /bin/match-randoms.py -t lambda -n 12 rm05gmix01 rmrand01gmix01
+    # if you have additional weights in the randoms collated file
+    /bin/match-randoms.py -w rmweight -t lambda -n 12 rm05gmix01 rmrand01gmix01
 
     # correct from randoms
     /bin/correct-shear.py
-
-Detailed version
-----------------
-
-First you need a catalog class for each catalog type.
-See 
-
-    lensing.lcat.RedMapper
-    lensing.scat.DR8RegaussCatalog
-    lensing.scat.DR8GMixCatalog
-
-And an associated yaml config file with a sample name.
-
-Then create input catalogs. 
-
-    /bin/make-objshear-input.py -t scat -s scat_sample
-    /bin/make-objshear-input.py -t lcat -s lcat_sample
-
-For random lcat this can be *very* slow so be prepared.
-Note this requires dealing with catalog names in these
-
-    lensing.lcat.create_input(sample)
-    lensing.scat.create_input(sample)
-
-Then create a lensing run yaml in $ESPY_DIR/lensing/config/ and run
-the config, wq file creators using 
-
-    /bin/make-objshear-proc.py
-
-The files go under ~/lensing/proc/run
-
-Make sure to install objshear under ~/exports/objshear-work
-    python build.py --sdssmask --prefix=~/exports/objshear-work install
-
-
-Then submit the scripts
-    incsub run-{run}-*.yaml
-
-Since the results are split by source chunks, you then need
-to "reduce" the lens outputs, and collate with the original
-catalog
-
-    wq sub -b run-{run}-reduce.yaml
-    /bin/collate-reduced.py
-
-You can then bin up the results. Youll need to use a binner
-from binning.py or make a new one.
-
-    /bin/bin-lenses.py  type run nbin
-
-    # also plots
-    binner = N200Binner(nbin)
-
-    binner.plot_dsig_byrun(run)
-
-Then you need to run some randoms for corrections.  This involves
-makine a new lcat.  Currently we have
-
-    lcat.SDSSRandom
-
-Then run as usual, reduce, collate, etc.
-
-You must match the randoms to lenses using
-
-    /bin/match-randoms.py
-
-currently only for binned samples.  Then corrections are made with
-
-    /bin/correct-shear.py
-
-although this needs work.
-
 
 Make some plots
 
