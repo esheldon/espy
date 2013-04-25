@@ -93,7 +93,7 @@ splits
     # correct from randoms
     /bin/correct-shear.py
 
-Make some plots
+    # 
 
 You can then fit NFW or NFW+lin masses
 
