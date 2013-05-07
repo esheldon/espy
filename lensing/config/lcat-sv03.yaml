@@ -19,6 +19,8 @@ strict_edgecut: false
 zmin:          0.02
 zmax:          0.4
 
+z_field: "z"
+
 masktype: sdss
 
 nsplit: 1

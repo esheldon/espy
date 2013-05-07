@@ -1,6 +1,7 @@
 import numpy
 import esutil
-from scikits.learn import mixture
+#from scikits.learn import mixture
+from sklearn import mixture
 
 class GaussMix(mixture.GMM):
     """
@@ -11,17 +12,23 @@ class GaussMix(mixture.GMM):
     Simpler calls for 1-d data.
 
     construction
-        __init__(self, n_states=1, cvtype='diag')
+        __init__(self, n_components=1, covariance_type='diag')
 
 
     """
 
-    def fit1d(self, data1d, **keywords):
-        """
-        Important keyword is min_covar, size of smallest
-        possible gaussian
-        """
-        self.fit(data1d.reshape(data1d.size, 1), **keywords)
+    #  no longer needed
+    #def fit1d(self, data1d, **keywords):
+    #    """
+    #    Important keyword is min_covar, size of smallest
+    #    possible gaussian
+    #    """
+    #    self.fit(data1d.reshape(data1d.size, 1), **keywords)
+
+    def sample1d(self, n):
+        samples=self.sample(n)
+        return samples[:,0]
+
     def score1d(self, xvals, state=None):
         import numpy as np
         from numpy import log, pi as PI

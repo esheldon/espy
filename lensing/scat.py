@@ -164,12 +164,17 @@ class DR8GMixCatalog(GenericSrcCatalog):
 
         del gcov
 
-        print("reading gsens")
-        gsens=self.scols['gsens'][keep]
-        output['gsens1'][:] = gsens[:,0]
-        output['gsens2'][:] = gsens[:,1]
+        if 'gsens' in self.scols:
+            print("reading gsens")
+            gsens=self.scols['gsens'][keep]
+            output['gsens1'][:] = gsens[:,0]
+            output['gsens2'][:] = gsens[:,1]
+            del gsens
+        else:
+            print('gsens column not found, using 1.0')
+            output['gsens1'][:] = 1.0
+            output['gsens2'][:] = 1.0
 
-        del gsens
 
         # the code requires no minus sign for matt's simulations, but
         # does seem to require one for my shapes converted to equatorial

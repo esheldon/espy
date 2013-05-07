@@ -35,6 +35,8 @@ def main():
     run = args[0]
     # this can be None for now
     lens_split = options.lens_split
+    if lens_split is not None:
+        lens_split=int(lens_split)
 
 
     conf = lensing.files.cascade_config(run)
@@ -44,7 +46,6 @@ def main():
     nsplit=conf['lens_config']['nsplit']
     cat = lensing.lcat.read_original(sample=lsample, lens_split=lens_split)
 
-    lens_split=int(lens_split)
     # in this case zindex must be in the catalog, so we can match
     if nsplit > 1 and 'zindex' not in cat.dtype.names:
         raise ValueError("when collating nsplit > 1, zindex must be in "

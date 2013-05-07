@@ -23,6 +23,7 @@ import esutil as eu
 from esutil.ostools import path_join
 from esutil.stat import histogram
 from esutil.numpy_util import where1
+from esutil.ostools import makedirs_fromfile
 
 import converter
 
@@ -250,6 +251,8 @@ class BinnerBase(dict):
 
 
         else:
+            if 'yrange' in keys:
+                keys['yrange2'] = keys['yrange']
             plt=lensing.plotting.plot2dsig(data['r'], 
                                            data['dsig'], data['dsigerr'],
                                            data['r'],
@@ -272,6 +275,7 @@ class BinnerBase(dict):
                                               name=self.name(),
                                               extra='osig-comp-%02i' % binnum,
                                               ext='eps')
+            makedirs_fromfile(epsfile)
             stdout.write("Plotting to file: %s\n" % epsfile)
             plt.write_eps(epsfile)
             converter.convert(epsfile, dpi=self.dpi, verbose=True)

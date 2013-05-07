@@ -202,6 +202,15 @@ def compare_images(im1, im2, **keys):
     show=keys.get('show',True)
     skysig=keys.get('skysig',None)
     dof=keys.get('dof',None)
+    cross_sections=keys.get('cross_sections',True)
+    ymin=keys.get('min',None)
+    ymax=keys.get('max',None)
+
+    nrow=2
+    if cross_sections:
+        ncol=3
+    else:
+        ncol=2
 
     label1=keys.get('label1','im1')
     label2=keys.get('label2','im2')
@@ -221,10 +230,9 @@ def compare_images(im1, im2, **keys):
     resid = im2-im1
 
     # will only be used if type is contour
-    tab=biggles.Table(2,3)
+    tab=biggles.Table(nrow,ncol)
     if 'title' in keys:
         tab.title=keys['title']
-    #tab=biggles.Table(3,2)
 
     tkeys=copy.deepcopy(keys)
     tkeys['show']=False
@@ -232,6 +240,7 @@ def compare_images(im1, im2, **keys):
     im2plt=view(im2, **tkeys)
 
     tkeys['nonlinear']=None
+    # this has no effect
     tkeys['min'] = resid.min()
     tkeys['max'] = resid.max()
     residplt=view(resid, **tkeys)
@@ -245,7 +254,9 @@ def compare_images(im1, im2, **keys):
     else:
         chi2perpix = (resid**2).sum()/im1.size
         lab = biggles.PlotLabel(0.1,0.1,
-                    r'noerr $\chi^2/N$: %0.2e' % chi2perpix,halign='left')
+                                r'noerr $\chi^2/N$: %0.2e' % chi2perpix,
+                                color='red',
+                                halign='left')
     residplt.add(lab)
 
     im1plt.title=label1
@@ -254,42 +265,46 @@ def compare_images(im1, im2, **keys):
 
 
     # cross-sections
-    im1rows = im1[:,cen[1]]
-    im1cols = im1[cen[0],:]
-    im2rows = im2[:,cen[1]]
-    im2cols = im2[cen[0],:]
-    resrows = resid[:,cen[1]]
-    rescols = resid[cen[0],:]
+    if cross_sections:
+        im1rows = im1[:,cen[1]]
+        im1cols = im1[cen[0],:]
+        im2rows = im2[:,cen[1]]
+        im2cols = im2[cen[0],:]
+        resrows = resid[:,cen[1]]
+        rescols = resid[cen[0],:]
 
-    him1rows = biggles.Histogram(im1rows, color='blue')
-    him1cols = biggles.Histogram(im1cols, color='blue')
-    him2rows = biggles.Histogram(im2rows, color='orange')
-    him2cols = biggles.Histogram(im2cols, color='orange')
-    hresrows = biggles.Histogram(resrows, color='red')
-    hrescols = biggles.Histogram(rescols, color='red')
+        him1rows = biggles.Histogram(im1rows, color='blue')
+        him1cols = biggles.Histogram(im1cols, color='blue')
+        him2rows = biggles.Histogram(im2rows, color='orange')
+        him2cols = biggles.Histogram(im2cols, color='orange')
+        hresrows = biggles.Histogram(resrows, color='red')
+        hrescols = biggles.Histogram(rescols, color='red')
 
-    him1rows.label = label1
-    him2rows.label = label2
-    hresrows.label = labelres
-    key = biggles.PlotKey(0.1,0.9,[him1rows,him2rows,hresrows]) 
+        him1rows.label = label1
+        him2rows.label = label2
+        hresrows.label = labelres
+        key = biggles.PlotKey(0.1,0.9,[him1rows,him2rows,hresrows]) 
 
-    rplt=biggles.FramedPlot()
-    rplt.add( him1rows, him2rows, hresrows,key )
-    rplt.xlabel = 'Center Rows'
+        rplt=biggles.FramedPlot()
+        rplt.add( him1rows, him2rows, hresrows,key )
+        rplt.xlabel = 'Center Rows'
 
-    cplt=biggles.FramedPlot()
-    cplt.add( him1cols, him2cols, hrescols )
-    cplt.xlabel = 'Center Columns'
+        cplt=biggles.FramedPlot()
+        cplt.add( him1cols, him2cols, hrescols )
+        cplt.xlabel = 'Center Columns'
 
-    rplt.aspect_ratio=1
-    cplt.aspect_ratio=1
+        rplt.aspect_ratio=1
+        cplt.aspect_ratio=1
 
-
-    tab[0,0] = im1plt
-    tab[0,1] = im2plt
-    tab[0,2] = residplt
-    tab[1,0] = rplt
-    tab[1,1] = cplt
+        tab[0,0] = im1plt
+        tab[0,1] = im2plt
+        tab[0,2] = residplt
+        tab[1,0] = rplt
+        tab[1,1] = cplt
+    else:
+        tab[0,0] = im1plt
+        tab[0,1] = im2plt
+        tab[1,0] = residplt
 
     if show:
         tab.show()

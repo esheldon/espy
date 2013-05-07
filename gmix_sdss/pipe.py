@@ -29,6 +29,14 @@ AM_OBJ_FAILED=2**4
 AM_FAINT=2**5  # am s/n < min_s2n
 IMAGE_TOO_SMALL=2**6
 
+
+_npars_psf={'em1':1*6,
+            'em2':2*6,
+            'em3':3*6,
+            'gmix1':2*1+4,
+            'gmix2':2*2+4,
+            'gmix3':2*3+4}
+
 def process_camcol(**keys):
     flist=files.read_field_cache(gmix_run=keys['gmix_run'])
     w,=numpy.where(  (flist['run']==keys['run'])
@@ -198,14 +206,21 @@ class GMixField(dict):
             print 'failed to get psf admom'
             return {'flags':AM_PSF_FAILED}
 
-        res = self._fit_psf_model(im, ares, self['psf_model'], skysig)
+        if 'em' in self['psf_model']:
+            res = self._fit_psf_model_em(im, ares, self['psf_model'], skysig)
+        else:
+            res = self._fit_psf_model_lm(im, ares, self['psf_model'], skysig)
+
         if res is None:
             print 'failed to fit psf model'
             return {'flags':PSF_FAILED}
 
         return {'flags':0, 'fitter':res}
 
-    def _fit_psf_model(self, im, ares, model, skysig):
+    def _fit_psf_model_lm(self, im, ares, model, skysig):
+        """
+        Returns the fitter object
+        """
         if model=='gmix1':
             ngauss=1
         elif model=='gmix2':
@@ -216,7 +231,7 @@ class GMixField(dict):
             raise ValueError("bad psf model: '%s'" % model)
 
         ntry=1
-        res=None
+        gm=None
         while ntry <= self['psf_lm_ntry']:
             tmp=gmix_image.gmix_fit.quick_fit_psf_coellip(im, 
                                                           skysig, 
@@ -225,19 +240,48 @@ class GMixField(dict):
             if tmp is None:
                 continue
             if tmp.flags==0:
-                res=tmp
+                gm=tmp
                 break
             ntry += 1
 
-        if self['make_psf_plots'] and res is not None:
+        if self['make_psf_plots'] and gm is not None:
             import images
-            model=gmix_image.render.gmix2image(res.get_gmix(),im.shape)
+            model=gmix_image.render.gmix2image(gm.get_gmix(),im.shape)
             images.compare_images(im,model,label1='image',label2='model')
             key=raw_input('hit a key (q to quit): ')
             if key=='q':
                 stop
 
-        return res
+        return gm
+
+    def _fit_psf_model_em(self, im, ares, model, skysig):
+        """
+        Returns the fitter object
+        """
+        if model=='em1':
+            ngauss=1
+        elif model=='em2':
+            ngauss=2
+        elif model=='em3':
+            ngauss=3
+        else:
+            raise ValueError("bad psf model: '%s'" % model)
+
+        ivar=1./skysig**2
+        gm=GMixEMPSF(im, ivar, ngauss,
+                     ares=ares,
+                     maxtry_em=self['psf_em_ntry'])
+        res=gm.get_result()
+
+        if self['make_psf_plots'] and res['flags']==0:
+            import images
+            model=gmix_image.render.gmix2image(gm.get_gmix(),im.shape)
+            images.compare_images(im,model,label1='image',label2='model')
+            key=raw_input('hit a key (q to quit): ')
+            if key=='q':
+                stop
+
+        return gm
 
 
     def _measure_obj(self, obj, psf_gmix):
@@ -565,14 +609,7 @@ class GMixField(dict):
         biggles.configure("screen","height",1100)
 
     def _get_psf_npars(self):
-        if self['psf_model'] == 'gmix3':
-            ngauss=3
-        elif self['psf_model'] == 'gmix2':
-            ngauss=2
-        elif self['psf_model'] == 'gmix1':
-            ngauss=1
-
-        return 2*ngauss+4
+        return _npars_pars[self['psf_model']]
 
     def _copy_to_output(self, st, i, res):
 
@@ -590,10 +627,21 @@ class GMixField(dict):
 
     def _copy_psf_result(self, st, i, res):
         pres=res['psf_res']['fitter'].get_result()
-        st['psf_pars'][i,:] = pres['pars']
-        st['psf_perr'][i,:] = pres['perr']
-        st['psf_pcov'][i,:,:] = pres['pcov']
-        st['psf_sigmean'][i] = numpy.sqrt(pres['Tmean']/2.)
+        if 'gmix' in self['psf_model']:
+            st['psf_pars'][i,:] = pres['pars']
+            st['psf_perr'][i,:] = pres['perr']
+            st['psf_pcov'][i,:,:] = pres['pcov']
+            st['psf_sigmean'][i] = numpy.sqrt(pres['Tmean']/2.)
+        else:
+            gmix=res['psf_res'].get_gmix()
+            pars=gmix.get_pars()
+            # not exactly right for non-cocentric gaussians
+            T=gmix.get_T()
+
+            st['psf_pars'][i,:] = pars
+            st['psf_Tmean'][i] = T
+            st['psf_sigmean'][i] = numpy.sqrt(T/2.)
+
 
         for n in pres:
             nn='psf_%s' % n
@@ -668,6 +716,9 @@ class GMixField(dict):
         st['field'] = self.objs['field']
         st['id'] = self.objs['id']
 
+        st['ra'] = self.objs['ra']
+        st['dec'] = self.objs['dec']
+
         st['filter'] = self['filter']
         st['fnum'] = self['fnum']
         st['cmodelmag_dered_r'] = self.objs['rmag']
@@ -685,28 +736,34 @@ def get_dtype(fitter_type, npars, npars_psf, noflags=False, models=['']):
         ('camcol','i2'),
         ('field','i2'),
         ('id','i2'),
+        ('ra','f8'),
+        ('dec','f8'),
         ('filter','S1'),
         ('fnum','i1'),
         ('cmodelmag_dered_r','f4'),
 
         ('fitter','S4'),
         ('flags','i4'), # overall flag indicators
-       
-        ('psf_pars','f8',npars_psf),
-        ('psf_perr','f8',npars_psf),
-        ('psf_pcov','f8',(npars_psf,npars_psf)),
-        ('psf_flags','i4'),
-        ('psf_numiter','i4'),
-        ('psf_loglike','f8'),
-        ('psf_chi2per','f8'),
-        ('psf_dof','i4'),
-        ('psf_fit_prob','f8'),
-        ('psf_aic','f8'),
-        ('psf_bic','f8'),
-        ('psf_Tmean','f8'),
-        ('psf_sigmean','f8'),
-        
-        ('am_s2n','f8') ]
+        ('am_s2n','f8')]
+
+    psf_fields=[('psf_flags','i4'),
+                ('psf_pars','f8',npars_psf),
+                ('psf_numiter','i4')]
+
+    if 'gmix' in self['psf_model']:
+        psf_fields+=[('psf_perr','f8',npars_psf),
+                     ('psf_pcov','f8',(npars_psf,npars_psf))]
+
+    psf_fields+=[('psf_loglike','f8'),
+                 ('psf_chi2per','f8'),
+                 ('psf_dof','i4'),
+                 ('psf_fit_prob','f8'),
+                 ('psf_aic','f8'),
+                 ('psf_bic','f8'),
+                 ('psf_Tmean','f8'),
+                 ('psf_sigmean','f8')]
+
+    dt += psf_fields
 
     for model in models:
 

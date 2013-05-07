@@ -25,7 +25,7 @@ splits
     #
 
     # note lcat are now always split
-    /bin/make-objshear-input.py -t lcat -s rm05gmix01
+    /bin/make-objshear-input.py -t lcat -s rm05
 
     # creates config,shear,src_reduce,collate
     # version can be gsens, mom etc.
@@ -40,7 +40,7 @@ splits
     # and then collate each of the lens splits
     incsub run-${run}-collate-*.yaml
 
-    # for lenses we need to combine the collations
+    # combine the collations
     python $ESPY_DIR/lensing/bin/combine-collated-chunks.py rm05gmix01
 
 
@@ -51,8 +51,7 @@ splits
     /bin/plot-dsig-byrun.py -t binned rm05gmix01 lambda 12
 
     #
-    # now randoms with sample rmrand01. For randoms we will not do the final
-    # collation across lenses because of memory constraints
+    # now randoms with sample rmrand01.
     #
 
     # generation of randoms is slow, so do it in chunks.

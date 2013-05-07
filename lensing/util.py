@@ -180,3 +180,17 @@ def randomize_e1e2(e1start,e2start):
     return e1rand, e2rand
 
 
+def rotate_shape(e1, e2, theta, units='degrees'):
+    from math import cos, sin, radians
+
+    if units=='degrees':
+        twotheta=2*radians(theta)
+    else:
+        twotheta=2*theta
+
+    cos2angle=cos(twotheta)
+    sin2angle=sin(twotheta)
+    e1rot =  e1*cos2angle + e2*sin2angle
+    e2rot = -e1*sin2angle + e2*cos2angle
+
+    return e1rot,e2rot
