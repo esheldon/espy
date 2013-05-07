@@ -16,6 +16,7 @@ import esutil as eu
 from esutil.random import srandu
 
 import gmix_image
+from gmix_image.gmix_em import GMixEMPSF
 import admom
 import time
 
@@ -48,7 +49,7 @@ def process_camcol(**keys):
 
     fields=flist['field'][w]
 
-    if 'start_field' in keys:
+    if 'start_field' in keys and keys['start_field'] is not None:
         start_field=int(keys['start_field'])
         w,=numpy.where(fields >= start_field)
         if w.size==0:
@@ -415,22 +416,22 @@ class GMixField(dict):
 
         return fitter
 
-    def _run_admom(self, im, row, col, guess, skysig):
+    def _run_admom(self, im, row, col, guess0, skysig):
 
         i=0
-        Tguess=4.
 
         res=None
         while i < self['admom_ntry']: 
+            guess = guess0*(1.+0.05*srandu())
+            row = row+0.4*srandu()
+            col = col+0.4*srandu()
+
             tmp = admom.admom(im, row, col,
                               sigsky=skysig,
                               guess=guess)
             if tmp['whyflag']==0:
                 res=tmp
                 break
-            row = row*(1.+0.01*srandu())
-            col = col*(1.+0.01*srandu())
-            guess = guess*(1.+0.01*srandu())
 
             i += 1
 
@@ -609,7 +610,7 @@ class GMixField(dict):
         biggles.configure("screen","height",1100)
 
     def _get_psf_npars(self):
-        return _npars_pars[self['psf_model']]
+        return _npars_psf[self['psf_model']]
 
     def _copy_to_output(self, st, i, res):
 
@@ -633,7 +634,7 @@ class GMixField(dict):
             st['psf_pcov'][i,:,:] = pres['pcov']
             st['psf_sigmean'][i] = numpy.sqrt(pres['Tmean']/2.)
         else:
-            gmix=res['psf_res'].get_gmix()
+            gmix=res['psf_res']['fitter'].get_gmix()
             pars=gmix.get_pars()
             # not exactly right for non-cocentric gaussians
             T=gmix.get_T()
@@ -698,7 +699,10 @@ class GMixField(dict):
         npars=6
         self.npars=npars
 
-        dt=get_dtype(self['obj_fitter'],npars,npars_psf,
+        dt=get_dtype(self['obj_fitter'],
+                     npars,
+                     npars_psf,
+                     self['psf_model'],
                      models=self['obj_models'])
 
         st=numpy.zeros(nobj, dtype=dt)
@@ -729,7 +733,7 @@ class GMixField(dict):
 
 
 
-def get_dtype(fitter_type, npars, npars_psf, noflags=False, models=['']):
+def get_dtype(fitter_type, npars, npars_psf, psf_model, noflags=False, models=['']):
     dt=[('photoid','i8'),
         ('run','i2'),
         ('rerun','i2'),
@@ -750,7 +754,7 @@ def get_dtype(fitter_type, npars, npars_psf, noflags=False, models=['']):
                 ('psf_pars','f8',npars_psf),
                 ('psf_numiter','i4')]
 
-    if 'gmix' in self['psf_model']:
+    if 'gmix' in psf_model:
         psf_fields+=[('psf_perr','f8',npars_psf),
                      ('psf_pcov','f8',(npars_psf,npars_psf))]
 

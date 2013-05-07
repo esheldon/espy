@@ -63,15 +63,16 @@ def get_wq_url(**keys):
             or 'camcol' not in keys):
         raise ValueError("send gmix_run=,run=, camcol=")
 
-    #fname='%(gmix_run)s-%(run)06d-%(camcol)d' % keys
     if 'sweep' in keys:
         d=get_wq_dir_sweep(**keys)
         fname='%(gmix_run)s-sweep-%(run)06d-%(camcol)d' % keys
-    elif 'field' in keys:
-        d=get_wq_dir_byfield(**keys)
-        fname += '-%04d' % keys['field']
     else:
-        d=get_wq_dir_bycamcol(**keys)
+        fname='%(gmix_run)s-%(run)06d-%(camcol)d' % keys
+        if 'field' in keys:
+            d=get_wq_dir_byfield(**keys)
+            fname += '-%04d' % keys['field']
+        else:
+            d=get_wq_dir_bycamcol(**keys)
 
     fname += '.yaml'
 
