@@ -1,0 +1,21 @@
+run:           "sv03gmix04"
+lens_sample:   "sv03"
+src_sample:    "gmix04"
+
+# for healpix
+nside:         64
+
+comment: | 
+
+    lenses:
+
+        SDSS voids from peter Melchior
+        New ones that are actually centered
+
+        nbin 21
+
+        r min max [0.02,70]
+
+    sources:
+        LM fitting
+        s/n  in [20,300] sratio > sqrt(2)

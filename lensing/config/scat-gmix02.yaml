@@ -1,0 +1,23 @@
+sample:             "gmix02"
+
+# r02 is bayesian mcmc
+catalog:            "gmix-r02"
+
+# 2 is individual using p(z)
+sigmacrit_style:    2
+
+# 11 is 21.5, 12 is 21.8
+pzrun:              "11"
+
+s2n_range: [20.0, 300.0]
+
+# sratio sqrt(2) equivalent to R > 1/3
+sratio_min: 1.414
+
+detrend: true
+
+# implies a cosmo sample and pzrun and binning scheme
+scinv_sample: "01"
+
+# number of splits to use; combine later
+nsplit:             100
