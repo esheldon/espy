@@ -285,7 +285,9 @@ class S2NRegressor(dict):
     def _load_data(self):
         cols=collate.open_columns(self['gmix_run'])
 
-        selector=cuts.Selector(cols, do_sratio_cut=False)
+        selector=cuts.Selector(cols,
+                               self._conf['psf_model'],
+                               do_sratio_cut=False)
         # using defaults with broad cuts
         selector.do_select(camcol=self['camcol'])
 
@@ -425,7 +427,7 @@ class EPSFRegressor(dict):
     def _load_data(self):
         cols=collate.open_columns(self['gmix_run'])
 
-        selector=cuts.Selector(cols)
+        selector=cuts.Selector(cols, self._conf['psf_model'])
         # using default broad cuts
         selector.do_select(camcol=self['camcol'],
                            sratio_min=SRATIO_MIN_EPSF,

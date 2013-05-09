@@ -14,14 +14,13 @@ parser.add_option('-n','--notgroups',default=None,
 parser.add_option('-p','--priority',default='med',
                   help='priority for queue')
 parser.add_option('--vers',default='work',
-                  help="version for espy and gmix image")
+                  help="version for espy")
 
 
 _wq_template="""
 command: |
     source ~/.bashrc
     module unload espy && module load espy/%(vers)s
-    module unload gmix_image && module load gmix_image/%(vers)s
 
     python $ESPY_DIR/gmix_sdss/bin/sweep-camcol.py %(gmix_run)s %(run)s %(camcol)s
 

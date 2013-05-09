@@ -11,12 +11,13 @@ S2N_NBIN = 40
 
 
 class Selector(object):
-    def __init__(self, cols, do_sratio_cut=True):
+    def __init__(self, cols, psf_model, do_sratio_cut=True):
         """
         send a Columns instance
         """
 
         self.cols=cols
+        self.psf_model=psf_model
         self.sratio_cut=do_sratio_cut
 
     def do_select(self,
@@ -78,8 +79,12 @@ class Selector(object):
 
         print '    psf pars (subset only)'
         ppars_rec=cols['psf_pars'][w]
-        psf_e1=ppars_rec[:,2]
-        psf_e2=ppars_rec[:,3]
+        if 'em' in self.psf_model:
+            # not quite right since they may be non-cocentric
+            psf_e1,psf_e2=_extract_psf_e1e2_full(ppars_rec)
+        else:
+            psf_e1=ppars_rec[:,2]
+            psf_e2=ppars_rec[:,3]
 
         print 'epsf cut [%.2f,%.2f]' % (psf_emin,psf_emax)
         w2,=numpy.where(  (psf_e1 > psf_emin)
@@ -107,3 +112,37 @@ class Selector(object):
         self.indices=w
 
 
+def _extract_psf_e1e2_full(pars):
+    """
+    not exactly right for non-cocentric
+    """
+    nobj=pars.shape[0]
+    ngauss=pars.shape[1]/6
+
+    irrsum=numpy.zeros(nobj)
+    ircsum=numpy.zeros(nobj)
+    iccsum=numpy.zeros(nobj)
+    #psum=numpy.zeros(nobj)
+
+    # sum irr*p, irc*p, icc*p
+    # e1=(icc-irr)/(icc+irr)
+    for i in xrange(ngauss):
+        start=i*6
+        end=(i+1)*6
+
+        pt=pars[:,start]
+        irrt=pars[:,start+3]
+        irct=pars[:,start+4]
+        icct=pars[:,start+5]
+
+        #psum += pt
+        irrsum += pt*irrt
+        ircsum += pt*irct
+        iccsum += pt*icct
+
+    Tsum=irrsum+iccsum
+
+    e1=(iccsum-irrsum)/Tsum
+    e2=2*ircsum/Tsum
+
+    return e1,e2
