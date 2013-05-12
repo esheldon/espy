@@ -55,8 +55,9 @@ class SweepMaker(dict):
         dt=pipe.get_dtype(self.conf['obj_fitter'],
                           npars,
                           npars_psf,
+                          self.conf['psf_model'],
                           noflags=True,
-                          models=[''])
+                          models=['']) # [''] because we pick the best
         dt.append( ('model','S4') )
 
         st=numpy.zeros(data.size, dtype=dt)

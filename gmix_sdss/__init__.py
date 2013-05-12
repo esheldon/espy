@@ -26,13 +26,13 @@ Details
         /bin/make-sweep-wq.py gmix-r02
 - collate to columns
         /bin/collate.py gmix-r02
-- add ra dec
+- add ra dec if needed
         /bin/add-radec.py gmix-r02
 
 - Run
         /bin/regress.py
     with type s2n to create the polynomial fits used to
-    detrend the data.  Only written for sratio_min=1 currently
+    detrend the data.
 
 - detrend the ellipticities
         /bin/detrend.py gmix-r02
