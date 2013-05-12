@@ -123,6 +123,9 @@ def qstat(stdscr, username, queue, refresh_rate, dark, light):
         PrintStats(curses, win1, stats, username)
         ii=0
         for line in sout:
+            ls=line.split()
+            if len(ls)>=10 and ls[9]=='C':
+                continue
             if ii < maxy3 and ii > 1:
                 if queue and ii > 4:
                     if not check_queue(line, queue):

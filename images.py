@@ -117,6 +117,75 @@ def view(image, **keys):
 
     return plt
 
+def make_combined_mosaic(imlist):
+    """
+    only works if all images are same size
+
+    Also should be "sky subtracted" for best
+    effect when the grid is not fully packed
+    """
+    nimage=len(imlist)
+    nrow,ncol=get_grid(nimage)
+    shape=imlist[0].shape
+
+    imtot=numpy.zeros( (nrow*shape[0], ncol*shape[1]) )
+
+    for i in xrange(nimage):
+        im=imlist[i]
+        row=i/ncol
+        col=i % ncol
+
+        rstart = row*shape[0]
+        rend   = (row+1)*shape[0]
+
+        cstart = col*shape[1]
+        cend   = (col+1)*shape[1]
+
+        imtot[rstart:rend, cstart:cend] = im
+
+    return imtot
+
+
+def view_mosaic(imlist, combine=False, **keys):
+    import biggles
+
+    if combine:
+        imtot=make_combined_mosaic(imlist)
+        return view(imtot, **keys)
+
+    nimage=len(imlist)
+    nrow,ncol=get_grid(nimage)
+    tab=biggles.Table(nrow,ncol)
+
+    tkeys={}
+    tkeys.update(keys)
+    tkeys['show']=False
+
+    for i in xrange(nimage):
+        im=imlist[i]
+        row=i/ncol
+        col=i % ncol
+
+        implt=view(im, **tkeys)
+        tab[row,col] = implt
+
+    show=keys.get('show',True)
+    if show:
+        tab.show()
+    
+    return tab
+
+def get_grid(ntot):
+    from math import sqrt
+    sq=int(sqrt(ntot))
+    if ntot==sq*sq:
+        return (sq,sq)
+    elif ntot <= sq*(sq+1):
+        return (sq,sq+1)
+    else:
+        return (sq+1,sq+1)
+
+
 def bytescale(im):
     """ 
     The input should be between [0,1]
@@ -250,11 +319,15 @@ def compare_images(im1, im2, **keys):
             dof=im1.size
         chi2per = (resid**2).sum()/skysig**2/dof
         lab = biggles.PlotLabel(0.1,0.1,
-                    r'$\chi^2/dof$: %0.2f' % chi2per,halign='left')
+                                r'$\chi^2/dof$: %0.2f' % chi2per,
+                                color='red',
+                                halign='left')
     else:
-        chi2perpix = (resid**2).sum()/im1.size
+        if dof is None:
+            dof=im1.size
+        chi2per = (resid**2).sum()/dof
         lab = biggles.PlotLabel(0.1,0.1,
-                                r'noerr $\chi^2/N$: %0.2e' % chi2perpix,
+                                r'$\chi^2/npix$: %.3e' % chi2per,
                                 color='red',
                                 halign='left')
     residplt.add(lab)
