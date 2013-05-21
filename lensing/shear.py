@@ -153,6 +153,26 @@ class Shear:
         sout = Shear(e1=e1,e2=e2)
         return sout
 
+    def add_by_g(self, s):
+        if not isinstance(s,Shear):
+            raise ValueError("Only Shear objects can be added")
+
+        if s.e1 == 0 and s.e2 == 0:
+            return copy.deepcopy(self)
+
+        A = 1 + self.g1*s.g1 + self.g2*s.g2
+        B = self.g2*s.g1 - self.g1*s.g2
+        denom_inv = 1./(A**2 + B**2)
+
+        g1 = A*(self.g1 + s.g1) + B*(self.g2 + s.g2)
+        g2 = A*(self.g2 + s.g2) - B*(self.g1 + s.g1)
+
+        g1 *= denom_inv
+        g2 *= denom_inv
+
+        sout = Shear(g1=g1, g2=g2)
+        return sout
+
     def __sub__(self, s):
         return self.__add__(-s)
     def __repr__(self):
