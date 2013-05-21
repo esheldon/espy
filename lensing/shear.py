@@ -154,6 +154,9 @@ class Shear:
         return sout
 
     def add_by_g(self, s):
+        """
+        equivalent to the distortion based addition formula
+        """
         if not isinstance(s,Shear):
             raise ValueError("Only Shear objects can be added")
 
@@ -173,10 +176,92 @@ class Shear:
         sout = Shear(g1=g1, g2=g2)
         return sout
 
+    def add_complex(self, s):
+        gc = complex(self.g1, self.g2)
+        sc = complex(s.g1, s.g2)
+
+        newg = (gc + sc)/(1 + sc.conjugate()*gc)
+
+        return Shear(g1=newg.real, g2=newg.imag)
+
     def __sub__(self, s):
         return self.__add__(-s)
     def __repr__(self):
         return '(%.16g, %.16g)' % (self.e1,self.e2)
+
+
+class Shape:
+    """
+    A class for shapes and shears.  This differs from the old
+    Shear class in that it uses complex ellipticities which
+    simplifies things greatly
+
+    Need to make sure it reproduces exactly the old results
+
+    Examples
+    --------
+        s1 = Shape(g=complex(0.1, 0.2))
+        s1.set_e1e2(g=complex(0.1, 0.2))
+        
+        print s1.e
+        print s1.g
+
+        # This performs proper shear addition
+        s3 = s1 + s2
+        s4 = s1 - s2
+    """
+    def __init__(self, e=None, g=None):
+
+        if e is not None:
+            self.set_e(e)
+        elif g is not None:
+            self.set_g(g)
+        else:
+            raise ValueError("send e= or g=")
+
+    def set_e(self, e):
+        if not isinstance(e,complex):
+            raise ValueError("e must be complex")
+        self.e=e
+        self.g = e/(1+sqrt(1 - abs(e)**2))
+
+    def set_g(self, g):
+        if not isinstance(g,complex):
+            raise ValueError("g must be complex")
+        self.g=g
+        self.e = 2*g/(1+abs(g)**2)
+
+    def __add__(self, s):
+        """
+        Add a shear.  If this object is "shape", the convention is
+
+            newshape = shape + shear
+
+        I see in galsim CppShear.cpp that they have a += operator which
+        uses a different convention
+
+            shape += shear -> shear+shape
+        """
+        if not isinstance(s,Shape):
+            raise ValueError("Only Shape objects can be added")
+
+        if abs(s.g) == 0:
+            return copy.deepcopy(self)
+
+        newg = (self.g + s.g)/(1 + s.g.conjugate()*self.g)
+
+        return Shape(g=newg)
+
+    def __neg__(self):
+        s = Shape(g=-self.g)
+        return s
+
+    def __sub__(self, s):
+        return self.__add__(-s)
+
+    def __repr__(self):
+        return '%s' % self.g
+
 
 
 
