@@ -220,12 +220,29 @@ class Shape:
             raise ValueError("send e= or g=")
 
     def set_e(self, e):
+        """
+        Set e with internal consistency, updating g as well
+
+        parameters
+        ----------
+        e: complex
+            complex distortion
+        """
         if not isinstance(e,complex):
             raise ValueError("e must be complex")
         self.e=e
         self.g = e/(1+sqrt(1 - abs(e)**2))
 
     def set_g(self, g):
+        """
+        Set g with internal consistency, updating g as well
+
+        parameters
+        ----------
+        g: complex
+            complex ellipticity
+        """
+
         if not isinstance(g,complex):
             raise ValueError("g must be complex")
         self.g=g
