@@ -138,7 +138,7 @@ from fimage.convolved import NoisyConvolvedImage
 import gmix_image
 from gmix_image import print_pars, GMix, gmix2pars
 from gmix_image.gmix_mcmc import MixMC, MixMCStandAlone
-from gmix_image.priors import GPrior, CenPrior
+from gmix_image.priors import GPriorOld, CenPrior
 
 import images
 import esutil as eu
@@ -174,7 +174,7 @@ class BayesFitSim(shapesim.BaseSim):
                 print k,v
                 self[k] = v
 
-        self.gprior = GPrior(A=self.simc['A'],
+        self.gprior = GPriorOld(A=self.simc['A'],
                              B=self.simc['B'],
                              C=self.simc['C'],
                              D=self.simc['D'])

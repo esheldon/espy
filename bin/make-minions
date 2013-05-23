@@ -33,7 +33,7 @@ _template="""#!/bin/bash
 #PBS -V
 #PBS -A {account}
 
-if [[ "${{PBS_O_WORKDIR}}Y" != "Y" ]];
+if [[ "${{PBS_O_WORKDIR}}Y" != "Y" ]]; then
     echo changing to directory: $PBS_O_WORKDIR
     cd $PBS_O_WORKDIR
 fi

@@ -84,8 +84,10 @@ def main():
 
     
     command=['wget',
-             '-N',
-             '-r',
+             '--no-check-certificate',
+             '-nv', # not too verbose
+             '-N',  # timestamping
+             '-r',  # recursive
              '-l '+depth,
              '-nH',  # -nH prevents putting hostname directory here
              '--cut-dirs=%s' % cut_dirs,
