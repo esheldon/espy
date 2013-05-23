@@ -3,6 +3,7 @@ from math import sqrt, atan2, tanh, atanh
 import copy
 from . import util
 from .util import ShapeRangeError
+import numpy
 
 
 class Shear:
@@ -348,7 +349,7 @@ def test_average_shear(shapenoise=0.16, n=1000000):
     print 'sh1: %.5f +/- %.5f' % (sh1,sh1err)
     print 'sh2: %.5f +/- %.5f' % (sh2,sh2err)
 
-def get_ba_vals(g1, g2, h=1.e-6):
+def get_ba_vals(g1in, g2in, h=1.e-6):
     """
     Evaluate 
         PJ/P
@@ -372,6 +373,11 @@ def get_ba_vals(g1, g2, h=1.e-6):
     Derivatives are performed using finite differencing
     """
 
+    g1 = numpy.array(g1in, dtype='f8', ndmin=1, copy=False)
+    g2 = numpy.array(g2in, dtype='f8', ndmin=1, copy=False)
+
+    np=g1.size
+
     P = dgs_by_dgo_jacob(g1, g2, 0.0, 0.0)
 
     h2=1/(2*h)
@@ -392,12 +398,12 @@ def get_ba_vals(g1, g2, h=1.e-6):
     R22 = (Q2_1 - 2*P + Q2_2)*hsq
     R12 = (R11_1 - Q1_1 - Q2_1 + 2*P - Q1_2 - Q2_2 + R11_2)*hsq*0.5
 
-    Q = numpy.array([Q1, Q2], dtype='f8')
-    R = numpy.zeros( (2,2) )
-    R[0,0] = R11
-    R[0,1] = R12
-    R[1,0] = R12
-    R[1,1] = R22
+    Q = numpy.zeros( (np,2) )
+    R = numpy.zeros( (np,2,2) )
+    R[:,0,0] = R11
+    R[:,0,1] = R12
+    R[:,1,0] = R12
+    R[:,1,1] = R22
 
     return P, Q, R
 
