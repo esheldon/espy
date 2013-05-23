@@ -348,11 +348,64 @@ def test_average_shear(shapenoise=0.16, n=1000000):
     print 'sh1: %.5f +/- %.5f' % (sh1,sh1err)
     print 'sh2: %.5f +/- %.5f' % (sh2,sh2err)
 
+def get_ba_vals(g1, g2, h=1.e-6):
+    """
+    Evaluate 
+        PJ/P
+        Q/P
+        R/P
+    From Bernstein & Armstrong
+
+    We can evaluate only the values/P where P is the unlensed prior because we
+    will already have the prior in our MCMC chain
+
+    PJ is this prior times the jacobian at shear==0
+
+    Q is the gradient of P*J at shear==0
+
+        [ d(P*J)/dg1, d(P*J)/dg2]_{g=0}
+
+    R is grad of grad of P*J at shear==0
+        [ d(P*J)/dg1dg1  d(P*J)/dg1dg2 ]
+        [ d(P*J)/dg1dg2  d(P*J)/dg2dg2 ]_{g=0}
+
+    Derivatives are performed using finite differencing
+    """
+
+    P = dgs_by_dgo_jacob(g1, g2, 0.0, 0.0)
+
+    h2=1/(2*h)
+    hsq=1/h**2
+
+    Q1_1 = dgs_by_dgo_jacob(g1, g2, +h, 0.0)
+    Q1_2 = dgs_by_dgo_jacob(g1, g2, -h, 0.0)
+    Q1 = (Q1_1 - Q1_2)*h2
+
+    Q2_1 = dgs_by_dgo_jacob(g1, g2, 0.0, +h)
+    Q2_2 = dgs_by_dgo_jacob(g1, g2, 0.0, -h)
+    Q2 = (Q2_1 - Q2_2)*h2
+
+    R11_1 = dgs_by_dgo_jacob(g1, g2, +h, +h)
+    R11_2 = dgs_by_dgo_jacob(g1, g2, -h, -h)
+
+    R11 = (Q1_1 - 2*P + Q1_2)*hsq
+    R22 = (Q2_1 - 2*P + Q2_2)*hsq
+    R12 = (R11_1 - Q1_1 - Q2_1 + 2*P - Q1_2 - Q2_2 + R11_2)*hsq*0.5
+
+    Q = numpy.array([Q1, Q2], dtype='f8')
+    R = numpy.zeros( (2,2) )
+    R[0,0] = R11
+    R[0,1] = R12
+    R[1,0] = R12
+    R[1,1] = R22
+
+    return P, Q, R
+
 
 def dgs_by_dgo_jacob(g1, g2, s1, s2):
     """
     jacobian of the transformation
-        |dgs/dgo|_{-g}
+        |dgs/dgo|_{-shear}
 
     parameters
     ----------
@@ -387,10 +440,11 @@ def dgs_by_dgo_jacob(g1, g2, s1, s2):
 
     return g1s_by_g1o*g2s_by_g2o - g1s_by_g2o*g2s_by_g1o
 
+
 def dgs_by_dgo_jacob_full(g1, g2, s1, s2):
     """
     same as above but without simplification
-    |dgs/dgo|_{-g}
+    |dgs/dgo|_{-shear}
     """
 
     g1s_by_g1o = -((((g2 - s2)*(-(g2*s1) + g1*s2) + (g1 - s1)*(1 - g1*s1 - g2*s2))*(2*s2*(-(g2*s1) + g1*s2) - 2*s1*(1 - g1*s1 - g2*s2)))/((-(g2*s1) + g1*s2)**2 + (1 - g1*s1 - g2*s2)**2)**2) -  (1 - g1*s1 - (g1 - s1)*s1 - g2*s2 + (g2 - s2)*s2)/((-(g2*s1) + g1*s2)**2 + (1 - g1*s1 - g2*s2)**2)
