@@ -22,6 +22,72 @@ def gadd(g1, g2, s1, s2):
 
     return g1o,g2o
 
+def get_shear_pqr(P,Q,R):
+    """
+    Extract a shear estimate from the p,q,r values from
+    Bernstein & Armstrong
+
+    parameters
+    ----------
+    P: array[nobj]
+        Prior times jacobian
+    Q: array[nobj,2]
+        gradient of P with respect to shear
+    R: array[nobj,2,2]
+        gradient of gradient
+
+    output
+    ------
+    [g1,g2]: array
+
+    notes
+    -----
+    If done on a single object, the operations would look simpler
+
+    QQ = numpy.outer(Q,Q)
+    Cinv = QQ/P**2 - R/P
+    C = numpy.linalg.inv(Cinv)
+    g1g2 = numpy.dot(C,Q/P)
+
+    """
+    from numpy import zeros,where
+
+    w,=where(P > 0)
+
+    nuse = w.size
+
+    # outer product
+    QQ = numpy.zeros( (nuse,2,2))
+    Cinv_all = numpy.zeros( (nuse,2,2))
+
+    QQ[:,0,0] = Q[w,0]*Q[w,0]
+    QQ[:,0,1] = Q[w,0]*Q[w,1]
+    QQ[:,1,0] = Q[w,1]*Q[w,0]
+    QQ[:,1,1] = Q[w,1]*Q[w,1]
+
+    Pinv = 1/P[w]
+    P2inv = Pinv*Pinv
+
+    Cinv_all[:,0,0] = QQ[:,0,0]*P2inv - R[w,0,0]*Pinv
+    Cinv_all[:,0,1] = QQ[:,0,1]*P2inv - R[w,0,1]*Pinv
+    Cinv_all[:,1,0] = QQ[:,1,0]*P2inv - R[w,1,0]*Pinv
+    Cinv_all[:,1,1] = QQ[:,1,1]*P2inv - R[w,1,1]*Pinv
+
+    #Cinv_all = QQ/P**2 - R/P
+    Cinv_sum = Cinv_all.sum(axis=0)
+    C = numpy.linalg.inv(Cinv_sum)
+
+    QbyP = numpy.zeros( (nuse,2) )
+    QbyP[:,0] = Q[w,0]*Pinv
+    QbyP[:,1] = Q[w,1]*Pinv
+
+    Qsum = QbyP.sum(axis=0)
+
+    g1g2 = numpy.dot(C,Qsum)
+
+    return g1g2, C
+
+
 class Shear:
     """
     A class for shapes and shears
