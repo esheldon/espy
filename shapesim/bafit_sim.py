@@ -41,7 +41,7 @@ class BAFitSim(shapesim.BaseSim):
         tests. 
 
         """
-        super(BayesFitSim,self).__init__(run)
+        super(BAFitSim,self).__init__(run)
         if 'verbose' not in self:
             self['verbose'] = False
 
@@ -186,37 +186,43 @@ class BAFitSim(shapesim.BaseSim):
 
     def _copy_to_output(self, out, i, ci, res):
 
-            out['s2n_admom'][i] = ci['s2n_admom']
-            out['s2n_matched'][i] = ci['s2n_matched']
-            out['s2n_uw'][i] = ci['s2n_uw']
-            out['s2n_admom_psf'][i] = ci['s2n_admom_psf']
-            out['s2n_matched_psf'][i] = ci['s2n_matched_psf']
-            out['s2n_uw_psf'][i] = ci['s2n_uw_psf']
+        out['s2n_admom'][i] = ci['s2n_admom']
+        out['s2n_matched'][i] = ci['s2n_matched']
+        out['s2n_uw'][i] = ci['s2n_uw']
+        out['s2n_admom_psf'][i] = ci['s2n_admom_psf']
+        out['s2n_matched_psf'][i] = ci['s2n_matched_psf']
+        out['s2n_uw_psf'][i] = ci['s2n_uw_psf']
 
-            out['model'][i] = res['model']
-            out['pars'][i,:] = res['pars']
-            out['pcov'][i,:,:] = res['pcov']
+        out['model'][i] = res['model']
+        out['pars'][i,:] = res['pars']
+        out['pcov'][i,:,:] = res['pcov']
 
-            if 'gcov' in res:
-                out['g'][i,:] = res['g']
-                out['gsens'][i,:] = res['gsens']
-                out['gcov'][i,:,:] = res['gcov']
-            else:
-                out['e'][i,:] = res['e']
-                out['ecov'][i,:,:] = res['ecov']
-                out['emed'][i,:] = res['emed']
+        if 'gcov' in res:
+            out['g'][i,:] = res['g']
+            out['gsens'][i,:] = res['gsens']
+            out['gcov'][i,:,:] = res['gcov']
+        else:
+            out['e'][i,:] = res['e']
+            out['ecov'][i,:,:] = res['ecov']
+            out['emed'][i,:] = res['emed']
 
-            if 'Ts2n' in res:
-                for tn in ['Tmean','Terr','Ts2n']:
-                    out[tn][i] = res[tn]
+        if 'Ts2n' in res:
+            for tn in ['Tmean','Terr','Ts2n']:
+                out[tn][i] = res[tn]
 
-            out['s2n_meas_w'][i] = res['s2n_w']
-            out['loglike'][i] = res['loglike']
-            out['chi2per'][i] = res['chi2per']
-            out['dof'][i] = res['dof']
-            out['fit_prob'][i] = res['fit_prob']
-            if 'arate' in res:
-                out['arate'][i] = res['arate']
+        out['s2n_meas_w'][i] = res['s2n_w']
+        out['loglike'][i] = res['loglike']
+        out['chi2per'][i] = res['chi2per']
+        out['dof'][i] = res['dof']
+        out['fit_prob'][i] = res['fit_prob']
+        if 'arate' in res:
+            out['arate'][i] = res['arate']
+
+
+        if 'P' in res:
+            out['P'][i] = res['P']
+            out['Q'][i] = res['Q']
+            out['R'][i] = res['R']
 
 
     def _run_models(self, ci, fitmodels):

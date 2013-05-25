@@ -20,6 +20,7 @@ import admom
 import fitsio
 import time
 
+
 class ShapeSim(dict):
     """
     The config file defines the PSF model and size as well as the
@@ -36,9 +37,7 @@ class ShapeSim(dict):
         for k,v in keys.iteritems():
             self[k] = v
 
-        self.fs=None
-        if os.environ.get('SHAPESIM_FS')=='hdfs':
-            self.fs='hdfs'
+        self.fs=get_default_fs()
 
         self.cache_list={}
 
@@ -381,9 +380,7 @@ class BaseSim(dict):
 
         self.simc = read_config(self['sim'])
 
-        self.fs=None
-        if os.environ.get('SHAPESIM_FS')=='hdfs':
-            self.fs='hdfs'
+        self.fs=get_default_fs()
 
         self['verbose'] = self.get('verbose',False)
 
@@ -815,6 +812,13 @@ def read_config(run):
                          "itself: '%s' instead of '%s'" % (n,c[n],run))
     return c
 
+def get_default_fs():
+    if os.environ.get('SHAPESIM_FS')=='hdfs':
+        fs='hdfs'
+    else:
+        fs='nfs'
+    return fs
+
 def get_simdir(fs=None):
     if fs=='hdfs':
         dir=os.environ.get('LENSDIR_HDFS')
@@ -1030,8 +1034,11 @@ def make_averaged_outputs(run, docum=False,
                           skip1=[], 
                           skip2=[]):
     """
-    We write to both local and hdfs, for speed
+    if fs is hdfs, we write to both local and hdfs, for speed
     """
+
+    fs=get_default_fs()
+
     data=[]
     c=read_config(run)
     cs=read_config(c['sim'])
@@ -1039,7 +1046,7 @@ def make_averaged_outputs(run, docum=False,
 
     straight_avg=False
     bayes=False
-    if 'bayes' in run or 'mixmc' in run:
+    if 'bayes' in run or 'mixmc' in run or 'bafit' in run:
         wlog("doing bayes averaging")
         bayes=True
     elif 'deswl' in run:
@@ -1060,8 +1067,9 @@ def make_averaged_outputs(run, docum=False,
         for i2 in xrange(numi2):
             if i2 in skip2:
                 continue
-            edata = read_output(run, i1, i2, verbose=True, fs='hdfs')
+            edata = read_output(run, i1, i2, verbose=True, fs=fs)
             s2data.append(edata)
+
         if 'shearmag' in cs:
             s2data = average_randshear_outputs(s2data)
         else:
@@ -1069,14 +1077,16 @@ def make_averaged_outputs(run, docum=False,
         data.append(s2data)
 
     wlog("writing averaged outputs")
-    write_averaged_outputs(run, data, skip1=skip1)
-    write_averaged_outputs(run, data, skip1=skip1,fs='hdfs')
+    write_averaged_outputs(run, data, skip1=skip1, fs=fs)
+    if fs=='hdfs':
+        write_averaged_outputs(run, data, skip1=skip1,fs='nfs')
 
     if docum:
         cumdata = accumulate_outputs(data)
         wlog("writing acummulated averaged outputs")
-        write_averaged_outputs(run, cumdata, docum=docum, skip1=skip1)
-        write_averaged_outputs(run, cumdata, docum=docum, skip1=skip1,fs='hdfs')
+        write_averaged_outputs(run, cumdata, docum=docum, skip1=skip1,fs=fs)
+        if fs=='hdfs':
+            write_averaged_outputs(run, cumdata, docum=docum, skip1=skip1,fs='nfs')
     return data
 
 
@@ -1223,6 +1233,12 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                          ('g2err0sum2','f8'),
                          ('g1err0_mean','f8'), # this is the rms: sqrt(sum(sigma^2)/n)
                          ('g2err0_mean','f8')]
+
+        if 'Q' in data[0].dtype.names:
+            dt+=[('Qsum','f8',2),
+                 ('Cinv_sum','f8',(2,2)),
+                 ('bashear','f8',2),
+                 ('bashear_cov','f8',(2,2))]
     else:
         dt_extra = [('e1sum','f8'), # sums so we can do cumulative
                     ('e2sum','f8'),
@@ -1330,6 +1346,19 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                 d['g2err0sum2'][i] = edata['gcov0'][:,1,1].sum()
                 d['g1err0_mean'][i] = sqrt(d['g1err0sum2'][i]/num)
                 d['g2err0_mean'][i] = sqrt(d['g2err0sum2'][i]/num)
+
+
+
+            if 'Q' in data[0].dtype.names:
+                P = data['P']
+                Q = data['Q']
+                R = data['R']
+                g1g2, C, Qsum, Cinv_sum = \
+                        lensing.shear.get_shear_pqr_sums(P,Q,R,get_sums=True)
+                d['Qsum'][i] = Qsum
+                d['Cinv_sum'][i] = Cinv_sum
+                d['bashear'][i] = g1g2
+                d['bashear_cov'][i] = C
         else:
             if 'e1_meas' in edata:
                 e1 = edata['e1_meas']
@@ -1408,6 +1437,8 @@ def average_runs(runlist, new_run_name):
     in all indices of relevance
     """
 
+    fs=get_default_fs()
+
     if 'bayes' in runlist[0]:
         bayes=True
         sumlist=['g1sum',
@@ -1418,7 +1449,7 @@ def average_runs(runlist, new_run_name):
                  'g2err2invsum',
                  'nsum']
 
-        f=get_averaged_url(runlist[0], 0, fs='hdfs')
+        f=get_averaged_url(runlist[0], 0, fs=fs)
         t=eu.io.read(f)
         if 'g1err0sum2' in t.dtype.names:
             sumlist+=['g1err0sum2','g2err0sum2']
@@ -1445,7 +1476,7 @@ def average_runs(runlist, new_run_name):
     numi1 = cs0['nums2']
     for i1 in xrange(numi1):
         for irun,run in enumerate(runlist):
-            f=get_averaged_url(run, i1, fs='hdfs')
+            f=get_averaged_url(run, i1, fs=fs)
             wlog("Reading:",f)
             d=eu.io.read(f)
 
@@ -1482,12 +1513,13 @@ def average_runs(runlist, new_run_name):
             data['shear2err'] = 0.5*sqrt(1/data['e2err2invsum'])
 
 
-        for fs in [None,'hdfs']:
-            fout=get_averaged_url(new_run_name, i1, fs=fs)
+        fout=get_averaged_url(new_run_name, i1, fs=fs)
+        wlog("    writing:",fout)
+        eu.io.write(fout, data, clobber=True)
+        if fs=='hdfs':
+            fout=get_averaged_url(new_run_name, i1, fs='nfs')
             wlog("    writing:",fout)
             eu.io.write(fout, data, clobber=True)
-
-
 
 
 def average_randshear_outputs(data):
@@ -1588,6 +1620,7 @@ def plot_signal_vs_rad(im, cen):
     plt.show()
 
 def combine_trials(run, is2, ie):
+    fs=get_default_fs()
     c = read_config(run)
     cs = read_config(c['sim'])
 
@@ -1598,11 +1631,11 @@ def combine_trials(run, is2, ie):
         ntrial = cs['ntrial']
 
 
-    outfile=get_output_url(run, is2, ie, fs='hdfs')
+    outfile=get_output_url(run, is2, ie, fs=fs)
 
     datalist=[]
     for itrial in xrange(ntrial):
-        f=get_output_url(run, is2, ie, itrial=itrial, fs='hdfs')
+        f=get_output_url(run, is2, ie, itrial=itrial, fs=fs)
         print f
         t=eu.io.read(f)
         datalist.append(t)

@@ -13,6 +13,8 @@ def read_config(run):
     import yaml
 
     path=get_config_path(run)
+
+    print 'reading config:',path
     conf=yaml.load(open(path))
 
     if conf['run'] != run:
