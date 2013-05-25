@@ -35,13 +35,14 @@ em_tol: 1.0e-6  # (T-Told)/T
 # iterate until the auto-correlation length is satisfactory
 iter: true
 
-fitmodel: ['gexp','gdev']
+fitmodel: ['gexp']
 ngauss_psf: 2
 mca_a: 3.0
 
 verbose: false
 
 comments: |
+    Only fitting exp to exp for simplicity
     Using GMixEMBoot for psf fitting
     Drawing walkers from the gprior
     mca_a 3.0
