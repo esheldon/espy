@@ -1,12 +1,12 @@
-run: bafit-get10r01
+run: bafit-get10r02
 sim: sim-get10
 
 runtype: bys2n
 
-when_prior: "during"
+when_prior: "after"
 
 # need to set this for the trials to work.
-seed: 1069
+seed: 2681
 
 s2n_method: admom
 s2n_fac: 40
@@ -44,6 +44,7 @@ mca_a: 3.0
 verbose: false
 
 comments: |
+    prior after
     Only fitting exp to exp for simplicity
     Using GMixEMBoot for psf fitting
     Drawing walkers from the gprior

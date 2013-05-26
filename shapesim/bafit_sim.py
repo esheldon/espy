@@ -261,6 +261,7 @@ class BAFitSim(shapesim.BaseSim):
                                     psf_gmix, self.gprior, fitmodel,
                                     cen=ci['cen'],
                                     do_pqr=True,
+                                    when_prior=self['when_prior'],
                                     nwalkers=self['nwalkers'],
                                     nstep=self['nstep'], 
                                     burnin=self['burnin'],

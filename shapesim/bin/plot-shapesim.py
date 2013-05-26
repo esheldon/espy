@@ -23,7 +23,7 @@ parser.add_option('-y','--yrange',default='-0.05,0.05',
                   help='yrange, default %default')
 parser.add_option('--yrange2',default='-0.05,0.05',
                   help='yrange2, default %default')
-parser.add_option('-t','--type',default='diff',
+parser.add_option('-t','--type',default='frac',
                   help='yrange, default %default')
 
 parser.add_option('--title',default=None,
@@ -167,6 +167,7 @@ else:
         if options.type=='frac':
             p.plots_shear1_frac_vs_s2n(yrng=yrng, xrng=xrng, 
                                        title=options.title,
+                                       use_pqr=True,
                                        show=show)
         elif options.type=='Tfrac':
             p.plots_shear1_frac_vs_s2n(yrng=yrng, xrng=xrng, 
@@ -186,4 +187,5 @@ else:
             p.plots_shear_vs_s2n(yrng=yrng, xrng=xrng, type=options.type, 
                                  s2n_name=options.s2n_name,
                                  title=options.title,
+                                 use_pqr=True,
                                  show=show)

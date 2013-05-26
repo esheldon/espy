@@ -1267,6 +1267,7 @@ class SimPlotter(dict):
                            xrng=None,
                            yrng=None, 
                            title=None,
+                           use_pqr=False,
                            show=True):
         import biggles
         import pcolors
@@ -1305,6 +1306,9 @@ class SimPlotter(dict):
         if len(data) == 4:
             colors=['red','forestgreen','NavajoWhite3','blue']
             linetypes=['dotted','dashed','dotdashed','solid']
+        elif len(data)==1:
+            colors=['blue']
+            linetypes=['solid']
         else:
             colors=pcolors.rainbow(len(data), 'hex')
             linetypes=['solid']*len(data)
@@ -1331,6 +1335,9 @@ class SimPlotter(dict):
                 errtag2='osheardifferr'
                 lab1=r'$\gamma_+$'
                 lab2=r'$\gamma_\times$'
+            elif use_pqr:
+                lab1=r'$\gamma_1$'
+                lab2=r'$\gamma_2$'
             else:
                 tag1='shear1'
                 tag2='shear2'
@@ -1369,13 +1376,24 @@ class SimPlotter(dict):
                 if is_shearmag:
                     yvals1 = st[tag1]
                     yvals2 = st[tag2]
+                    g1err = st[errtag1]
+                    g2err = st[errtag2]
+                elif use_pqr:
+                    yvals1=st['bashear'][:,0]
+                    yvals2=st['bashear'][:,1]
+                    g1err=sqrt(st['bashear_cov'][:,0,0])
+                    g2err=sqrt(st['bashear_cov'][:,1,1])
                 else:
                     yvals1 = st[tag1] - shear_true.g1
                     yvals2 = st[tag2] - shear_true.g2
+                    g1err = st[errtag1]
+                    g2err = st[errtag2]
             elif type == 'val':
                 yvals1 = st[tag1]
                 yvals2 = st[tag2]
 
+                g1err = st[errtag1]
+                g2err = st[errtag2]
             else:
                 raise ValueError("bad plot type: '%s'" % type)
 
@@ -1398,8 +1416,6 @@ class SimPlotter(dict):
             arr[1,0].add(cr2,pr2)
             
             if True:
-                g1err = st[errtag1]
-                g2err = st[errtag2]
                 err1p = biggles.SymmetricErrorBarsY(s2n, yvals1, g1err,
                                                     color=colors[i])
                 err2p = biggles.SymmetricErrorBarsY(s2n, yvals2, g2err,
@@ -1510,6 +1526,7 @@ class SimPlotter(dict):
                                  title=None,
                                  show=True,
                                  Ts2n=False,
+                                 use_pqr=False,
                                  nokey=False):
         """
         special plotting just shear1 as a fraction of
@@ -1599,8 +1616,14 @@ class SimPlotter(dict):
 
             s2n = st[s2n_name]
 
-          
-            yvals1 = (st[tag1] - shear_true.g1)/shear_true.g1
+            if use_pqr:
+                g1 = st['bashear'][:,0]
+                g1err = sqrt(st['bashear_cov'][:,0,0])
+                yvals1 = (g1-shear_true.g1)/shear_true.g1
+                yerr1 = g1err/shear_true.g1
+            else:
+                yvals1 = (st[tag1] - shear_true.g1)/shear_true.g1
+                yerr1 = st[errtag1]/shear_true.g1
 
             label = r'%0.3f' % s2
 
@@ -1612,7 +1635,6 @@ class SimPlotter(dict):
 
             plt.add(cr1,pr1)
             
-            yerr1 = st[errtag1]/shear_true.g1
             err1p = biggles.SymmetricErrorBarsY(s2n, yvals1, yerr1, color=colors[i])
             plt.add(err1p)
 

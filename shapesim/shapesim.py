@@ -1350,15 +1350,16 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
 
 
             if 'Q' in data[0].dtype.names:
-                P = data['P']
-                Q = data['Q']
-                R = data['R']
+                P = edata['P']
+                Q = edata['Q']
+                R = edata['R']
                 g1g2, C, Qsum, Cinv_sum = \
-                        lensing.shear.get_shear_pqr_sums(P,Q,R,get_sums=True)
+                        lensing.shear.get_shear_pqr(P,Q,R,get_sums=True)
                 d['Qsum'][i] = Qsum
                 d['Cinv_sum'][i] = Cinv_sum
                 d['bashear'][i] = g1g2
                 d['bashear_cov'][i] = C
+                print 'bashear1: %.16g +/- %.16g' % (g1g2[0],sqrt(C[0,0]))
         else:
             if 'e1_meas' in edata:
                 e1 = edata['e1_meas']
