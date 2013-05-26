@@ -4,11 +4,12 @@ gmix-fit
         - saw wrongness in the miller stuff with prior after, think I need to
           divide by psum.  Re-running 02 02
 
-          looks better, remember to re-run this in full
+          looks better, re-running in full
 
         - seeing offset at high s/n, same as with other bayes method.
           I *think* it is convergence of the mcmc chain but not sure.
             - run with more walkers
+                - went up to 100, a little better but still 0.003
 
             - try to get initial fit from a GMixFitSimple, which should work
               better at high S/N?  In that case we would not draw from prior
