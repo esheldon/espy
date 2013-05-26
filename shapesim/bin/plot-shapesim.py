@@ -60,6 +60,9 @@ parser.add_option('--nokey',action="store_true",
 parser.add_option('--use-rb',action="store_true",
                   help=("show rb = sigmagal/sigmapsf instead of "
                         "sigmapsf^2/sigmagal^2"))
+parser.add_option('--use-pqr',action="store_true",
+                  help=("Use PQR formalism from BA13"))
+
 
 options,args = parser.parse_args(sys.argv[1:])
 
@@ -167,7 +170,7 @@ else:
         if options.type=='frac':
             p.plots_shear1_frac_vs_s2n(yrng=yrng, xrng=xrng, 
                                        title=options.title,
-                                       use_pqr=True,
+                                       use_pqr=options.use_pqr,
                                        show=show)
         elif options.type=='Tfrac':
             p.plots_shear1_frac_vs_s2n(yrng=yrng, xrng=xrng, 
@@ -187,5 +190,5 @@ else:
             p.plots_shear_vs_s2n(yrng=yrng, xrng=xrng, type=options.type, 
                                  s2n_name=options.s2n_name,
                                  title=options.title,
-                                 use_pqr=True,
+                                 use_pqr=options.use_pqr,
                                  show=show)

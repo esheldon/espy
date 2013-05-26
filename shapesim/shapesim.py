@@ -1227,6 +1227,10 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
         if 'Ts2n' not in data[0].dtype.names:
             dt+=[('Ts2n','f8')]
         dt += [('Ts2n_sum','f8')]
+        if 'Fs2n' not in data[0].dtype.names:
+            dt+=[('Fs2n','f8')]
+        dt += [('Fs2n_sum','f8')]
+
 
         if 'gcov0' in data[0].dtype.names:
             dt_extra += [('g1err0sum2','f8'),
@@ -1235,7 +1239,7 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                          ('g2err0_mean','f8')]
 
         if 'Q' in data[0].dtype.names:
-            dt+=[('Qsum','f8',2),
+            dt+=[('Q_sum','f8',2),
                  ('Cinv_sum','f8',(2,2)),
                  ('bashear','f8',2),
                  ('bashear_cov','f8',(2,2))]
@@ -1337,9 +1341,19 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                 if 'Ts2n' in edata.dtype.names:
                     Ts2n_vals=edata['Ts2n']
                 else:
+                    # ack this won't work for complex models!
                     Ts2n_vals=edata['pars'][:,4]/sqrt(edata['pcov'][:,4,4])
                 d['Ts2n_sum'][i] = Ts2n_vals.sum()
                 d['Ts2n'][i] = d['Ts2n_sum'][i]/num
+
+                if 'Fs2n' in edata.dtype.names:
+                    Fs2n_vals=edata['Fs2n']
+                else:
+                    # ack this won't work for complex models!
+                    Fs2n_vals=edata['pars'][:,5]/sqrt(edata['pcov'][:,5,5])
+                d['Fs2n_sum'][i] = Fs2n_vals.sum()
+                d['Fs2n'][i] = d['Fs2n_sum'][i]/num
+
 
             if 'gcov0' in data[0].dtype.names:
                 d['g1err0sum2'][i] = edata['gcov0'][:,0,0].sum()
@@ -1350,16 +1364,19 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
 
 
             if 'Q' in data[0].dtype.names:
+                # NOTE!  can't use errors because this is a ring
+                # test.  Using errors from above
                 P = edata['P']
                 Q = edata['Q']
                 R = edata['R']
-                g1g2, C, Qsum, Cinv_sum = \
+                g1g2, C, Q_sum, Cinv_sum = \
                         lensing.shear.get_shear_pqr(P,Q,R,get_sums=True)
-                d['Qsum'][i] = Qsum
+                d['Q_sum'][i] = Q_sum
                 d['Cinv_sum'][i] = Cinv_sum
                 d['bashear'][i] = g1g2
-                d['bashear_cov'][i] = C
-                print 'bashear1: %.16g +/- %.16g' % (g1g2[0],sqrt(C[0,0]))
+                d['bashear_cov'][i,0,0] = d['shear1err'][i]**2
+                d['bashear_cov'][i,1,1] = d['shear2err'][i]**2
+                print 'bashear1: %.16g +/- %.16g' % (g1g2[0],sqrt(d['bashear_cov'][i,0,0]))
         else:
             if 'e1_meas' in edata:
                 e1 = edata['e1_meas']

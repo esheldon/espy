@@ -1619,7 +1619,7 @@ class SimPlotter(dict):
             if use_pqr:
                 g1 = st['bashear'][:,0]
                 g1err = sqrt(st['bashear_cov'][:,0,0])
-                yvals1 = (g1-shear_true.g1)/shear_true.g1
+                yvals1 = g1/shear_true.g1-1
                 yerr1 = g1err/shear_true.g1
             else:
                 yvals1 = (st[tag1] - shear_true.g1)/shear_true.g1

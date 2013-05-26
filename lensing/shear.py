@@ -44,20 +44,20 @@ def get_shear_pqr_sums(P,Q,R):
     Pinv = 1/P[w]
     P2inv = Pinv*Pinv
 
+    #Cinv_all = QQ/P**2 - R/P
     Cinv_all[:,0,0] = QQ[:,0,0]*P2inv - R[w,0,0]*Pinv
     Cinv_all[:,0,1] = QQ[:,0,1]*P2inv - R[w,0,1]*Pinv
     Cinv_all[:,1,0] = QQ[:,1,0]*P2inv - R[w,1,0]*Pinv
     Cinv_all[:,1,1] = QQ[:,1,1]*P2inv - R[w,1,1]*Pinv
 
-    #Cinv_all = QQ/P**2 - R/P
     Cinv_sum = Cinv_all.sum(axis=0)
 
     QbyP = numpy.zeros( (nuse,2) )
     QbyP[:,0] = Q[w,0]*Pinv
     QbyP[:,1] = Q[w,1]*Pinv
-    Qsum = QbyP.sum(axis=0)
+    Q_sum = QbyP.sum(axis=0)
 
-    return Qsum, Cinv_sum
+    return Q_sum, Cinv_sum
 
 
 def get_shear_pqr(P,Q,R, get_sums=False):
@@ -89,13 +89,13 @@ def get_shear_pqr(P,Q,R, get_sums=False):
 
     """
 
-    Qsum, Cinv_sum = get_shear_pqr_sums(P,Q,R)
+    Q_sum, Cinv_sum = get_shear_pqr_sums(P,Q,R)
 
     C = numpy.linalg.inv(Cinv_sum)
-    g1g2 = numpy.dot(C,Qsum)
+    g1g2 = numpy.dot(C,Q_sum)
 
     if get_sums:
-        return g1g2, C, Qsum, Cinv_sum
+        return g1g2, C, Q_sum, Cinv_sum
     else:
         return g1g2, C
 
