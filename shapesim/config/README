@@ -23,6 +23,11 @@ gmix-fit
             sim-geg01
             bafit-get01r01
 
+            looks  bad for the old method.
+                - bafit-get01r02 with during to see if we get similar
+
+            was fitting 2 gauss, try fitting 1 gauss as well?
+
         - plot vs s/n of flux
 
     mixmc
