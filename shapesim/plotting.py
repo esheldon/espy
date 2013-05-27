@@ -1525,7 +1525,7 @@ class SimPlotter(dict):
                                  yrng=None, 
                                  title=None,
                                  show=True,
-                                 Ts2n=False,
+                                 s2n_name='s2n_admom',
                                  use_pqr=False,
                                  nokey=False):
         """
@@ -1600,12 +1600,14 @@ class SimPlotter(dict):
         plots1=[]
         allplots=[]
 
-        if Ts2n:
-            s2n_name='Ts2n'
+        if s2n_name=='Ts2n':
             xlabel = r'$(S/N)_{T}$'
+        elif s2n_name=='s2n_admom':
+            xlabel = r'$(S/N)_{AM}$'
+        elif s2n_name=='Fs2n':
+            xlabel = r'$(S/N)_{Flux}$'
         else:
-            s2n_name='s2n_admom'
-            xlabel = 'S/N'
+            xlabel = s2n_name
 
         # looping over s2
         for i,st in enumerate(reversed(data)):

@@ -33,7 +33,7 @@ parser.add_option('--maketitle',action="store_true",
 
 parser.add_option('--s2min',default=None,
                   help="min value in s2")
-parser.add_option('--s2n-name',default=None,
+parser.add_option('--s2n-name',default='s2n_admom',
                   help="field for s2n")
 
 parser.add_option('--etot',action='store_true',
@@ -171,11 +171,12 @@ else:
             p.plots_shear1_frac_vs_s2n(yrng=yrng, xrng=xrng, 
                                        title=options.title,
                                        use_pqr=options.use_pqr,
+                                       s2n_name=options.s2n_name,
                                        show=show)
         elif options.type=='Tfrac':
             p.plots_shear1_frac_vs_s2n(yrng=yrng, xrng=xrng, 
                                        title=options.title,
-                                       show=show, Ts2n=True, 
+                                       show=show, s2n_name='Ts2n',
                                        nokey=options.nokey)
         elif options.type=='efrac':
             p.plots_shear1_frac_vs_err(yrng=yrng, xrng=xrng, 

@@ -21,10 +21,12 @@ gmix-fit
 
         - doing single gauss psf
             sim-geg01
-            bafit-get01r01
+            bafit-geg01r01
 
-            looks  bad for the old method.
-                - bafit-get01r02 with during to see if we get similar
+        - bafit-geg01r02 with prior during to see if we get better results for
+          old miller method
+
+        - bafit-geg02r03 prior during and s2n_fac=160
 
             was fitting 2 gauss, try fitting 1 gauss as well?
 

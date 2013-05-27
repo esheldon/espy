@@ -209,6 +209,10 @@ class BAFitSim(shapesim.BaseSim):
         if 'Ts2n' in res:
             for tn in ['Tmean','Terr','Ts2n']:
                 out[tn][i] = res[tn]
+        if 'Fs2n' in res:
+            out['Fs2n'][i] = res['Fs2n']
+
+
 
         out['s2n_meas_w'][i] = res['s2n_w']
         out['loglike'][i] = res['loglike']
@@ -320,6 +324,7 @@ class BAFitSim(shapesim.BaseSim):
             ('Tmean','f8','f8'),
             ('Terr','f8','f8'),
             ('Ts2n','f8','f8'),
+            ('Fs2n','f8','f8'),
             ('s2n_meas_w','f8'),  # weighted s/n based on most likely point
             ('loglike','f8'),     # loglike of fit
             ('chi2per','f8'),     # chi^2/degree of freedom
