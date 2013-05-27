@@ -14,7 +14,16 @@ gmix-fit
             - try to get initial fit from a GMixFitSimple, which should work
               better at high S/N?  In that case we would not draw from prior
 
-            - plot vs s/n of flux
+            - could be psf fitting is not good enough.  Try single gauss?
+            or increase # of gauss?
+                - trying ngauss==3
+                - in a quick look at 019 it looks better!
+
+        - doing single gauss psf
+            sim-geg01
+            bafit-get01r01
+
+        - plot vs s/n of flux
 
     mixmc
         mixmc-get03r06

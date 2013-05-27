@@ -1,12 +1,12 @@
-run: bafit-get10r03
-sim: sim-get10
+run: bafit-geg01r01
+sim: sim-geg01
 
 runtype: bys2n
 
 when_prior: "after"
 
 # need to set this for the trials to work.
-seed: 8653
+seed: 298
 
 s2n_method: admom
 s2n_fac: 40
@@ -38,7 +38,8 @@ em_tol: 1.0e-6  # (T-Told)/T
 iter: true
 
 fitmodel: ['gexp']
-ngauss_psf: 3
+# try two even though we know it is only 1
+ngauss_psf: 2
 mca_a: 3.0
 
 verbose: false
