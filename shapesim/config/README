@@ -30,7 +30,8 @@ gmix-fit
 
             was fitting 2 gauss, try fitting 1 gauss as well?
 
-        - bafit-geg03r04 fitting 1 gauss, s2n_fac 160, min_gcount 400
+        - bafit-geg03r04 fitting 1 gauss, s2n_fac 160, min_gcount 400, prior during
+        - bafit-geg03r04 fitting 1 gauss, s2n_fac 160, min_gcount 400, prior after
 
         - plot vs s/n of flux
 
