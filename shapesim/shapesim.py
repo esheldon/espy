@@ -376,7 +376,7 @@ class BaseSim(dict):
         conf=read_config(run)
         for k,v in conf.iteritems():
             self[k] = v
-        numpy.random.seed(self['seed'])
+        #numpy.random.seed(self['seed'])
 
         self.simc = read_config(self['sim'])
 
@@ -464,7 +464,7 @@ class BaseSim(dict):
                                       itheta=itheta)
 
         if dolog:
-            wlog("ring theta: %s/%s" % (itheta+1,self.simc['nring']))
+            wlog("ring theta: %s/%s" % (itheta+1,self.simc['nsplit']))
             wlog('ellip:',ellip,'s2n:',s2n,
                  's2n_psf:',s2n_psf,'s2n_method:',s2n_method)
 
@@ -514,22 +514,22 @@ class BaseSim(dict):
         s2n = get_s2n(self, is2n)
         s2n_fac = self['s2n_fac']
 
-        nring = self.simc['nring']
+        nsplit = self.simc['nsplit']
         nrepeat = get_s2n_nrepeat(s2n, fac=s2n_fac)
 
-        ntot = nring*nrepeat
+        ntot = nsplit*nrepeat
         out = numpy.zeros(ntot, dtype=self.out_dtype())
 
         ii = 0
-        for i in xrange(nring):
+        for i in xrange(nsplit):
             itheta=i
 
             if self['verbose']:
                 stderr.write('-'*70)
                 stderr.write('\n')
             # we always write this
-            stderr.write("%d/%d %d%% done\n" % ((i+1),nring,
-                                                100.*(i+1)/float(nring)))
+            stderr.write("%d/%d %d%% done\n" % ((i+1),nsplit,
+                                                100.*(i+1)/float(nsplit)))
 
             dolog=False
             if i==0:
@@ -563,7 +563,7 @@ class BaseSim(dict):
         ci_nonoise = self.get_a_trial(self.shapesim, is2, ie, 
                                       itheta=itheta)
         if dolog:
-            wlog("ring theta: %s/%s" % (itheta+1,self.simc['nring']))
+            wlog("ring theta: %s/%s" % (itheta+1,self.simc['nsplit']))
             wlog('s2n:',s2n, 's2n_psf:',s2n_psf,'s2n_method:',s2n_method)
 
         out = numpy.zeros(nrepeat, dtype=self.out_dtype())
@@ -624,23 +624,23 @@ class BaseSim(dict):
 
         nrepeat = get_s2n_nrepeat(s2n, fac=s2n_fac)
 
-        nring = self.simc['nring']
-        ntot = nring*nrepeat
+        nsplit = self.simc['nsplit']
+        ntot = nsplit*nrepeat
         out = numpy.zeros(ntot, dtype=self.out_dtype())
 
         s2,ellip = get_s2_e(self.simc, is2, ie)
         wlog('ellip:',ellip)
 
         ii = 0
-        for i in xrange(nring):
+        for i in xrange(nsplit):
             itheta=i
 
             if self['verbose']:
                 stderr.write('-'*70)
                 stderr.write('\n')
 
-            stderr.write("%d/%d %d%% done\n" % ((i+1),nring,
-                                                100.*(i+1)/float(nring)))
+            stderr.write("%d/%d %d%% done\n" % ((i+1),nsplit,
+                                                100.*(i+1)/float(nsplit)))
             dolog=False
             if i==0:
                 dolog=True
@@ -771,17 +771,17 @@ def get_theta(conf, itheta=None):
             raise ValueError("itheta only makes sense for ring test "
                              "simulation types")
 
-        thetas = get_ring_thetas(conf['nring'])
+        thetas = get_ring_thetas(conf['nsplit'])
         theta = thetas[itheta]
     return theta
 
-def get_ring_thetas(nring):
-    nring=int(nring)
-    if (nring % 2) != 0:
-        raise ValueError("nring must be even")
+def get_ring_thetas(nsplit):
+    nsplit=int(nsplit)
+    if (nsplit % 2) != 0:
+        raise ValueError("nsplit must be even")
 
-    thetas = zeros(nring)
-    nhalf = nring/2
+    thetas = zeros(nsplit)
+    nhalf = nsplit/2
     thetas[0:nhalf] = linspace(0,90,nhalf)
     thetas[nhalf:] = thetas[0:nhalf] + 90
 
@@ -1637,14 +1637,14 @@ def plot_signal_vs_rad(im, cen):
 
     plt.show()
 
-def combine_trials(run, is2, ie):
+def combine_trials(run, is2, ie, allow_missing=True):
     fs=get_default_fs()
     c = read_config(run)
     cs = read_config(c['sim'])
 
     orient=cs.get('orient','rand')
     if orient == 'ring':
-        ntrial = cs['nring']
+        ntrial = cs['nsplit']
     else:
         ntrial = cs['ntrial']
 
@@ -1655,6 +1655,8 @@ def combine_trials(run, is2, ie):
     for itrial in xrange(ntrial):
         f=get_output_url(run, is2, ie, itrial=itrial, fs=fs)
         print f
+        if allow_missing and not os.path.exists(f):
+            continue
         t=eu.io.read(f)
         datalist.append(t)
 

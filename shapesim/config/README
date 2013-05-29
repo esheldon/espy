@@ -6,10 +6,14 @@ gmix-fit
 
           looks better, re-running in full
 
-        - seeing offset at high s/n, same as with other bayes method.
-          I *think* it is convergence of the mcmc chain but not sure.
+        - seeing offset ~0.003 at high s/n for exp and gauss, and different
+          psfs.  Don't see it for the miller method.  Might be convergence of
+          the mcmc chain but not sure.
+
+            - try smaller h
+
             - run with more walkers
-                - went up to 100, a little better but still 0.003
+                - went up to 100, still 0.003
 
             - try to get initial fit from a GMixFitSimple, which should work
               better at high S/N?  In that case we would not draw from prior
@@ -30,10 +34,60 @@ gmix-fit
 
             was fitting 2 gauss, try fitting 1 gauss as well?
 
-        - bafit-geg03r04 fitting 1 gauss, s2n_fac 160, min_gcount 400, prior during
-        - bafit-geg03r05 fitting 1 gauss, s2n_fac 160, min_gcount 400, prior after
+        - bafit-geg01r04 fitting 1 gauss, s2n_fac 160, min_gcount 400, prior during
+        - bafit-geg01r05 fitting 1 gauss, s2n_fac 160, min_gcount 400, prior after
 
-        - plot vs s/n of flux
+        - bafit-geg02r01 s2n_fac 160, min_gcount 400, prior after
+            - trying bigger psf.  Tried 1 gauss, doesn't look any better.
+            - modified in place to use 2 gauss, trying now.
+            about the same
+        
+        - try gg, if this has same bias it is somehow related to using an
+          exponential or the fitting technique
+
+            sim-gg13
+            bafit-gg13r01
+
+        - trying gmix-fit
+            gmix-fit-gg13r01
+            same error
+
+            trying with tighter tolerance, 1.0e-8
+            nope
+
+            trying with 2 gauss
+
+            trying lm2
+                different error....  running 019 with 8000 to see
+                nope, got 0.002 now.  try 1 gauss?
+
+            maybe it is still noise bias?
+
+                trying s/n=10,000
+
+                nope
+
+        - trying really big psf and object.  psf sigma 6 and s2=0.01
+            sim-gg14
+            gmix-fit-gg14r01
+
+            similar, |<dgamma/gamma>| ~ 0.002 (as opposed to 0.003)
+            so maybe it is partly not capturing the pixelization?  But
+            using two gaussians didn't seem to help much....
+
+        - could it be the weak shear approximation?
+            try lower shear?
+
+            same, 0.002-0.003
+
+        - trying more in ring and random
+            sim-gg15
+            gmix-fit-gg15r01
+
+            looks better, but first try in bafit didn't look any
+            different.  Trying to increase number
+
+        - could also finally fix ring stuff to just generate pairs
 
     mixmc
         mixmc-get03r06

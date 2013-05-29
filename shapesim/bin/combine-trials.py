@@ -12,6 +12,8 @@ from optparse import OptionParser
 
 parser=OptionParser(__doc__)
 
+parser.add_option('--allow-missing',action='store_true',
+                  help="allow missing splits")
 options,args = parser.parse_args(sys.argv[1:])
 
 
@@ -20,7 +22,8 @@ run=args[0]
 if len(args) == 3:
     i1 = int(args[1])
     i2 = int(args[2])
-    shapesim.shapesim.combine_trials(run, i1, i2)
+    shapesim.shapesim.combine_trials(run, i1, i2,
+                                     allow_missing=options.allow_missing)
 elif len(args) == 1:
     c = shapesim.read_config(run)
     cs = shapesim.read_config(c['sim'])
@@ -35,7 +38,8 @@ elif len(args) == 1:
 
     for i1 in xrange(n1):
         for i2 in xrange(n2):
-            shapesim.shapesim.combine_trials(run, i1, i2)
+            shapesim.shapesim.combine_trials(run, i1, i2,
+                                             allow_missing=options.allow_missing)
 
 else:
     if len(args) < 3:

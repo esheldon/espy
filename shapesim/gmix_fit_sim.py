@@ -40,7 +40,125 @@ try:
 except ImportError:
     wlog("could not import admom")
 
-class GMixFitSim(shapesim.BaseSim):
+from . import bafit_sim
+
+class GMixFitSim(bafit_sim.BAFitSim):
+    def __init__(self, run, extra=None):
+        super(GMixFitSim,self).__init__(run,extra=extra)
+
+    def _run_fitter(self, ci, fitmodel):
+        """
+        need to fix to allow no cen prior or row0,col0 not at 0
+        """
+        from gmix_image.gmix_fit import GMixFitMultiSimple
+
+        psf_gmix = self._do_fit_psf(ci)
+
+        ivar=1./ci['skysig']**2
+        imlist=[ci.image]
+        wtlist=[ci.image*0 + 1./ivar]
+        jacob={'row0':ci['cen'][0],'col0':ci['cen'][1],
+               'dudrow':1.0,'dudcol':0.0,
+               'dvdrow':0.0,'dvdcol':1.0}
+        jacoblist=[jacob]
+        psflist=[psf_gmix]
+
+        self.fitter=GMixFitMultiSimple(imlist,wtlist,jacoblist,psflist,fitmodel)
+
+    def _do_fit_psf(self, ci):
+        from gmix_image.gmix_em import GMixEMBoot
+        from gmix_image.gmix_fit import GMixFitPSFJacob
+
+        jacob={'row0':ci['cen'][0],'col0':ci['cen'][1],
+               'dudrow':1.0,'dudcol':0.0,
+               'dvdrow':0.0,'dvdcol':1.0}
+
+        psf_ivar=1./ci['skysig_psf']**2
+
+        psf_fitter=self.get('psf_fitter','em')
+        if psf_fitter=='em':
+            gmpsf=GMixEMBoot(ci.psf, self['ngauss_psf'], ci['cen_psf'],
+                             ivar=psf_ivar,
+                             maxiter=self['em_maxiter'],
+                             tol=self['em_tol'])
+        elif psf_fitter=='lm':
+            gmpsf=GMixFitPSFJacob(ci.psf, psf_ivar, jacob, self['ngauss_psf'],
+                                  lm_max_try=20)
+        else:
+            raise ValueError("bad psf fitter: '%s'" % psf_fitter)
+
+        res=gmpsf.get_result()
+        if res['flags'] != 0:
+            raise ValueError("can not proceed")
+
+        psf_gmix=gmpsf.get_gmix()
+        return psf_gmix
+
+    def out_dtype(self, npars):
+
+        dt=[('model','S20'),
+            ('s2n_admom','f8'),
+            ('s2n_matched','f8'),
+            ('s2n_uw','f8'),
+            ('s2n_admom_psf','f8'),
+            ('s2n_matched_psf','f8'),
+            ('s2n_uw_psf','f8'),
+            ('s2','f8'),
+            ('shear_true','f8',2),
+            ('gtrue','f8',2),
+            ('g','f8',2),
+            ('gsens','f8',2),
+            ('gcov','f8',(2,2)),
+            ('pars','f8',npars),
+            ('pcov','f8',(npars,npars)),
+            ('Tmean','f8','f8'),
+            ('Terr','f8','f8'),
+            ('Ts2n','f8','f8'),
+            ('Fs2n','f8','f8'),
+            ('s2n_meas_w','f8'),  # weighted s/n based on most likely point
+            ('loglike','f8'),     # loglike of fit
+            ('chi2per','f8'),     # chi^2/degree of freedom
+            ('dof','i4'),         # degrees of freedom
+            ('fit_prob','f8'),    # probability of the fit happening randomly
+           ]
+
+        return dt
+
+
+
+
+    def _copy_to_output(self, out, i, ci, res):
+
+        out['s2n_admom'][i] = ci['s2n_admom']
+        out['s2n_matched'][i] = ci['s2n_matched']
+        out['s2n_uw'][i] = ci['s2n_uw']
+        out['s2n_admom_psf'][i] = ci['s2n_admom_psf']
+        out['s2n_matched_psf'][i] = ci['s2n_matched_psf']
+        out['s2n_uw_psf'][i] = ci['s2n_uw_psf']
+
+        out['model'][i] = res['model']
+        out['pars'][i,:] = res['pars']
+        out['pcov'][i,:,:] = res['pcov']
+
+        out['g'][i,:] = res['g']
+        out['gcov'][i,:,:] = res['gcov']
+
+        if 'Ts2n' in res:
+            for tn in ['Tmean','Terr','Ts2n']:
+                out[tn][i] = res[tn]
+        if 'Fs2n' in res:
+            out['Fs2n'][i] = res['Fs2n']
+
+
+
+        out['s2n_meas_w'][i] = res['s2n_w']
+        out['loglike'][i] = res['loglike']
+        out['chi2per'][i] = res['chi2per']
+        out['dof'][i] = res['dof']
+        out['fit_prob'][i] = res['fit_prob']
+
+
+class GMixFitSimOld(shapesim.BaseSim):
     """
     We only override
 

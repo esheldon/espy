@@ -29,13 +29,13 @@ def get_shear_pqr_sums(P,Q,R):
     from numpy import zeros,where
 
     w,=where(P > 0)
+    #print 'P > 0:',w.size,P.size
 
-    nuse = w.size
+    QQ = zeros( (w.size,2,2), dtype=Q.dtype)
+    Cinv_all = zeros( (w.size,2,2), dtype=Q.dtype)
+    QbyP = zeros( (w.size,2), dtype=Q.dtype)
 
     # outer product
-    QQ = numpy.zeros( (nuse,2,2))
-    Cinv_all = numpy.zeros( (nuse,2,2))
-
     QQ[:,0,0] = Q[w,0]*Q[w,0]
     QQ[:,0,1] = Q[w,0]*Q[w,1]
     QQ[:,1,0] = Q[w,1]*Q[w,0]
@@ -52,7 +52,6 @@ def get_shear_pqr_sums(P,Q,R):
 
     Cinv_sum = Cinv_all.sum(axis=0)
 
-    QbyP = numpy.zeros( (nuse,2) )
     QbyP[:,0] = Q[w,0]*Pinv
     QbyP[:,1] = Q[w,1]*Pinv
     Q_sum = QbyP.sum(axis=0)
@@ -443,7 +442,28 @@ def test_average_shear(shapenoise=0.16, n=1000000):
     print 'sh1: %.5f +/- %.5f' % (sh1,sh1err)
     print 'sh2: %.5f +/- %.5f' % (sh2,sh2err)
 
+
 def dgs_by_dgo_jacob(g1, g2, s1, s2):
+    """
+    jacobian of the transformation
+        |dgs/dgo|_{-shear}
+
+    parameters
+    ----------
+    g1,g2: numbers or arrays
+        shape pars for "observed" image
+    s1,s2: numbers or arrays
+        shape pars for shear, applied negative
+    """
+
+    ssq = s1**2 + s2**2
+    num = (ssq - 1)**2
+    denom=(1 + 2*g1*s1 + 2*g2*s2 + g1**2*ssq + g2**2*ssq)**2
+
+    jacob = num/denom
+    return jacob
+
+def dgs_by_dgo_jacob_old(g1, g2, s1, s2):
     """
     jacobian of the transformation
         |dgs/dgo|_{-shear}
@@ -480,43 +500,6 @@ def dgs_by_dgo_jacob(g1, g2, s1, s2):
 
     return g1s_by_g1o*g2s_by_g2o - g1s_by_g2o*g2s_by_g1o
 
-def dgs_by_dgo_jacob_wrong(g1, g2, s1, s2):
-    """
-    jacobian of the transformation
-        |dgs/dgo|_{-shear}
-
-    parameters
-    ----------
-    g1,g2: numbers or arrays
-        shape pars for "observed" image
-    s1,s2: numbers or arrays
-        shape pars for shear, applied negative
-    """
-    # usable in both C and python
-    A = 1 - g1*s1 - g2*s2
-    B = - g2*s1 + g1*s2
-    C = 1./(B*B + A*A)
-    C2 = C*C
-
-    g2ms2 = g2-s2
-    g1ms1 = g1-s1
-
-    D = (g2ms2*B + g1ms1*A)
-    E = s1*g2ms2 + g1ms1*s2
-    F = g1ms1*s1 - g2ms2*s2
-    G = (2*s2*B - 2*s1*A)
-    H = -g1ms1*B + g2ms2*A
-    I = (-2*s1*B - 2*s2*A)
-
-    g1s_by_g1o =  -D*G*C2 -  ( A - F)*C
-
-    g1s_by_g2o =  -D*I*C2 -  ( B - E)*C
-
-    g2s_by_g1o =  -H*G*C2 -  (-B - E)*C
-
-    g2s_by_g2o =  -H*I*C2 -  ( A + F)*C
-
-    return g1s_by_g1o*g2s_by_g2o - g1s_by_g2o*g2s_by_g1o
 
 def dgs_by_dgo_jacob_num(g1, g2, s1, s2, h=1.0e-6):
     ng1_1_1,ng2_1_1 = gadd(g1+h, g2, s1, s2)

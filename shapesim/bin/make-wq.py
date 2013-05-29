@@ -76,7 +76,7 @@ def main():
         else:
             orient=cs.get('orient','rand')
             if orient == 'ring':
-                ntrial = cs['nring']
+                ntrial = cs['nsplit']
             else:
                 ntrial = cs['ntrial']
 

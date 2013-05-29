@@ -32,6 +32,12 @@ from sys import stderr
 
 LOWVAL=-9999.9e9
 
+class TryAgainError(Exception):
+    def __init__(self, message, Errors):
+
+        # Call the base class constructor with the parameters it needs
+        Exception.__init__(self, message)
+
 class BAFitSim(shapesim.BaseSim):
     def __init__(self, run, extra=None):
         """
@@ -61,25 +67,26 @@ class BAFitSim(shapesim.BaseSim):
 
         Run this many times to sample the prior distribution
         """
+        raise RuntimeError("only use the trial by s2n version")
 
         s2n = shapesim.get_s2n(self, is2n)
         s2n_fac = self['s2n_fac']
 
         nellip = self.get_nellip(is2n)
 
-        nring = self.simc['nring']
+        nsplit = self.simc['nsplit']
 
-        ntot = nring*nellip
+        ntot = nsplit*nellip*2
+
         out = zeros(ntot, dtype=self.out_dtype())
 
         ii = 0
-        for i in xrange(nring):
-            itheta=i
+        for isplit in xrange(nsplit):
 
             dolog=False
-            if i==0:
+            if isplit==0:
                 dolog=True
-            st = self.process_trial_by_s2n(is2, is2n, itheta, dolog=dolog)
+            st = self.process_trial_by_s2n(is2, is2n, isplit, dolog=dolog)
             out[ii:ii+nellip] = st
             ii += nellip
 
@@ -87,104 +94,142 @@ class BAFitSim(shapesim.BaseSim):
         return out
 
 
+    def process_trial_by_s2n(self, is2, is2n, isplit,
+                             dowrite=False, 
+                             dolog=False):
+        """
+        its not really isplit any more, its just a split count
+        """
+
+        nellip=self.get_nellip(is2n)
+        s2n_psf = self['s2n_psf']
+        s2n = shapesim.get_s2n(self, is2n)
+        s2n_method = self['s2n_method']
+        s2ncalc_fluxfrac =self['s2ncalc_fluxfrac']
+
+        #gvals = self.get_gvals(is2, is2n, nellip)
+        gvals = self.get_gvals(nellip)
+
+        npars=6
+
+        out = zeros(nellip*2, dtype=self.out_dtype(npars))
+
+        s2 = linspace(self.simc['mins2'],
+                      self.simc['maxs2'], 
+                      self.simc['nums2'])[is2]
+        out['s2'] = s2
+        self['s2']=s2
+
+        i=0
+        for ipair,g in enumerate(gvals):
+
+            ellip=lensing.util.g2e(g)
+
+            if ( (ipair+1) % 10) == 0 or ipair== 0:
+                stderr.write("  %s/%s pairs done\n" % ((ipair+1),nellip))
+
+            while True:
+                theta1 = random.random()*360.0
+                theta2 = theta1 + 90.0
+                ci_nonoise1 = self.shapesim.get_trial(s2, ellip, theta1)
+                ci_nonoise2 = self.shapesim.get_trial(s2, ellip, theta2)
+                ci1 = NoisyConvolvedImage(ci_nonoise1, s2n, s2n_psf,
+                                          s2n_method=s2n_method,
+                                          fluxfrac=s2ncalc_fluxfrac)
+                ci2 = NoisyConvolvedImage(ci_nonoise2, s2n, s2n_psf,
+                                          s2n_method=s2n_method,
+                                          fluxfrac=s2ncalc_fluxfrac)
+
+                # we always write this, although slower when not verbose
+                try:
+                    res1,res2=self._process_pair(ci1,ci2)
+                    break
+                except TryAgainError:
+                    pass
+
+            self._copy_to_output(out, i, ci1, res1)
+            i += 1
+            self._copy_to_output(out, i, ci2, res2)
+            i += 1
+
+
+
+        if dowrite:
+            shapesim.write_output(self['run'], is2, is2n, out, itrial=isplit,
+                         fs=self.fs)
+        return out
+
+    def _process_pair(self, ci1, ci2):
+        reslist=[]
+        for ci in [ci1,ci2]:
+            res=self._run_models(ci)
+            if res['flags'] != 0:
+                raise TryAgainError("failed")
+            reslist.append(res)
+        return reslist
+
+    def _run_models(self, ci):
+        # fit models, keep the one that most looks like random error
+        probrand=-9999.
+        fitmodels=self.get_fitmodels()
+        for fitmodel in fitmodels:
+            self._run_fitter(ci, fitmodel)
+            res0 = self.fitter.get_result()
+            if len(fitmodels) > 1:
+                print '  model:',fitmodel,'probrand:',res0['fit_prob']
+            if res0['fit_prob'] > probrand:
+                res=res0
+                probrand=res0['fit_prob']
+
+        if len(fitmodels) > 1:
+            print '    best model:',res['model']
+        return res
+
+    def _run_fitter(self, ci, fitmodel):
+        from gmix_image.gmix_em import GMixEMBoot
+
+        psf_ivar=1./ci['skysig_psf']**2
+        gmpsf=GMixEMBoot(ci.psf, self['ngauss_psf'], ci['cen_psf'],
+                         ivar=psf_ivar,
+                         maxiter=self['em_maxiter'],
+                         tol=self['em_tol'])
+
+        psf_gmix=gmpsf.get_gmix()
+
+        Tguess = ci['Ttrue']*(1. + 0.1*srandu())
+        ivar=1./ci['skysig']**2
+
+        cenprior=CenPrior(ci['cen'], [0.1]*2)
+
+        self.fitter=MixMCStandAlone(ci.image, ivar, 
+                                    psf_gmix, self.gprior, fitmodel,
+                                    cen=ci['cen'],
+                                    do_pqr=True,
+                                    when_prior=self['when_prior'],
+                                    nwalkers=self['nwalkers'],
+                                    nstep=self['nstep'], 
+                                    burnin=self['burnin'],
+                                    mca_a=self['mca_a'],
+                                    iter=self.get('iter',False),
+                                    draw_gprior=self['draw_gprior'])
+
     def get_fitmodels(self):
         fitmodels=self['fitmodel']
         if not isinstance(fitmodels,list):
             fitmodels=[fitmodels]
         return fitmodels
 
-    def process_trial_by_s2n(self, is2, is2n, itheta,
-                             dowrite=False, 
-                             dolog=False):
-        """
-        Process a singe element in the ring, with nellip
-        possible noise realizations
-        """
-
-        s2 = linspace(self.simc['mins2'],
-                      self.simc['maxs2'], 
-                      self.simc['nums2'])[is2]
-        s2n_psf = self['s2n_psf']
-        s2n = shapesim.get_s2n(self, is2n)
-        theta = shapesim.get_theta(self.simc, itheta=itheta)
-
-        s2n_fac = self['s2n_fac']
-        s2n_method = self['s2n_method']
-        s2ncalc_fluxfrac =self['s2ncalc_fluxfrac']
-
-        nellip=self.get_nellip(is2n)
-
-        # these are generated on the same series every itheta for a given run
-        # seed so that each itheta gets the same ellip values; otherwise no
-        # ring
-        gvals = self.get_gvals(is2, is2n, nellip)
-
-
-        fitmodels=self.get_fitmodels()
-        if fitmodels[0] not in ['gexp','gdev','gauss']:
-            ngauss=self['ngauss_obj']
-            npars=2*ngauss+4
-        else:
-            npars=6
-
-        out = zeros(nellip, dtype=self.out_dtype(npars))
-        out['s2'] = s2
-        self['s2']=s2
-
-        if dolog:
-            wlog('s2n:',s2n,'s2n_psf:',s2n_psf,'s2n_method:',s2n_method)
-
-
-        for i,g in enumerate(gvals):
-
-            ellip=lensing.util.g2e(g)
-
-            ci_nonoise = self.shapesim.get_trial(s2, ellip, theta)
-
-            retrim = self['retrim']
-            if retrim:
-                if 'retrim_fluxfrac' not in self:
-                    raise ValueError("you must set fluxfrac for a retrim")
-                retrim_fluxfrac=self['retrim_fluxfrac']
-                olddims=ci_nonoise.image.shape
-                ci_nonoise.trim(fluxfrac=retrim_fluxfrac)
-                if self['verbose']:
-                    wlog("re-trimming with fluxfrac: %.12g" % retrim_fluxfrac)
-                    wlog("old dims:",str(olddims),"new dims:",str(ci_nonoise.image.shape))
-
-            e1true=ci_nonoise['e1true']
-            e2true=ci_nonoise['e2true']
-            g1true,g2true=lensing.util.e1e2_to_g1g2(e1true,e2true)
-
-            out['gtrue'][i,0] = g1true
-            out['gtrue'][i,1] = g2true
-            out['shear_true'][i,0] = ci_nonoise['shear1']
-            out['shear_true'][i,1] = ci_nonoise['shear2']
-            
-            if self['verbose']:
-                stderr.write('-'*70 + '\n')
-
-            # we always write this, although slower when not verbose
-            if (nellip > 1) and (( (i+1) % 10) == 0 or i== 0):
-                stderr.write("  %s/%s ellip done\n" % ((i+1),nellip))
-
-            ci = NoisyConvolvedImage(ci_nonoise, s2n, s2n_psf,
-                                     s2n_method=s2n_method,
-                                     fluxfrac=s2ncalc_fluxfrac)
-            if self['verbose']:
-                wlog("s2n_admom:",ci['s2n_admom'],"s2n_uw:",ci['s2n_uw'],
-                     "s2n_matched:",ci['s2n_matched'])
-
-            res=self._run_models(ci, fitmodels)
-
-            self._copy_to_output(out, i, ci, res)
-
-        if dowrite:
-            shapesim.write_output(self['run'], is2, is2n, out, itrial=itheta,
-                         fs=self.fs)
-        return out
 
     def _copy_to_output(self, out, i, ci, res):
+
+        e1true=ci['e1true']
+        e2true=ci['e2true']
+        g1true,g2true=lensing.util.e1e2_to_g1g2(e1true,e2true)
+
+        out['gtrue'][i,0] = g1true
+        out['gtrue'][i,1] = g2true
+        out['shear_true'][i,0] = ci['shear1']
+        out['shear_true'][i,1] = ci['shear2']
 
         out['s2n_admom'][i] = ci['s2n_admom']
         out['s2n_matched'][i] = ci['s2n_matched']
@@ -229,51 +274,6 @@ class BAFitSim(shapesim.BaseSim):
             out['R'][i] = res['R']
 
 
-    def _run_models(self, ci, fitmodels):
-        # fit models, keep the one that most looks like random error
-        probrand=-9999.
-        for fitmodel in fitmodels:
-            self._run_fitter(ci, fitmodel)
-            res0 = self.fitter.get_result()
-            if len(fitmodels) > 1:
-                print '  model:',fitmodel,'probrand:',res0['fit_prob']
-            if res0['fit_prob'] > probrand:
-                res=res0
-                probrand=res0['fit_prob']
-
-        if len(fitmodels) > 1:
-            print '    best model:',res['model']
-        return res
-
-    def _run_fitter(self, ci, fitmodel):
-        from gmix_image.gmix_em import GMixEMBoot
-
-        psf_ivar=1./ci['skysig_psf']**2
-        gmpsf=GMixEMBoot(ci.psf, self['ngauss_psf'], ci['cen_psf'],
-                         ivar=psf_ivar,
-                         maxiter=self['em_maxiter'],
-                         tol=self['em_tol'])
-
-        psf_gmix=gmpsf.get_gmix()
-
-        Tguess = ci['Ttrue']*(1. + 0.1*srandu())
-        ivar=1./ci['skysig']**2
-
-        cenprior=CenPrior(ci['cen'], [0.1]*2)
-
-        self.fitter=MixMCStandAlone(ci.image, ivar, 
-                                    psf_gmix, self.gprior, fitmodel,
-                                    cen=ci['cen'],
-                                    do_pqr=True,
-                                    when_prior=self['when_prior'],
-                                    nwalkers=self['nwalkers'],
-                                    nstep=self['nstep'], 
-                                    burnin=self['burnin'],
-                                    mca_a=self['mca_a'],
-                                    iter=self.get('iter',False),
-                                    draw_gprior=self['draw_gprior'])
-
-
 
     def get_nellip(self, is2n):
         s2n = shapesim.get_s2n(self, is2n)
@@ -284,7 +284,14 @@ class BAFitSim(shapesim.BaseSim):
             nellip=self['min_gcount']
         return nellip
 
-    def get_gvals(self, is2, is2n, nellip):
+    def get_gvals(self, nellip):
+        numpy.random.seed(None)
+        gvals = self.gprior.sample1d(nellip)
+        return gvals
+
+
+
+    def get_gvals_old(self, is2, is2n, nellip):
         if self['seed'] == None:
             raise ValueError("can't use null seed for bayesfit")
 
