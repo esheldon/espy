@@ -1,0 +1,26 @@
+# high shear: 0.005
+name: sim-get11
+
+dotrim: false
+
+orient: ring
+
+psfmodel: gturb
+
+# this corresponds to 1.4 sigma in pixels
+Tpsf: 3.9
+psf_e1: 0.0
+psf_e2: 0.0
+
+objmodel: gexp
+
+shear: [0.005,0.00]
+
+mins2: 0.5
+maxs2: 2.0
+nums2: 4
+
+gprior_type: 'fits-vs-mag'
+
+comments: |
+    using for stacking
