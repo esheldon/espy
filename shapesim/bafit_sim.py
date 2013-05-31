@@ -33,7 +33,7 @@ from sys import stderr
 LOWVAL=-9999.9e9
 
 class TryAgainError(Exception):
-    def __init__(self, message, Errors):
+    def __init__(self, message):
 
         # Call the base class constructor with the parameters it needs
         Exception.__init__(self, message)
@@ -140,7 +140,6 @@ class BAFitSim(shapesim.BaseSim):
                                           s2n_method=s2n_method,
                                           fluxfrac=s2ncalc_fluxfrac)
 
-                # we always write this, although slower when not verbose
                 try:
                     res1,res2=self._process_pair(ci1,ci2)
                     break
@@ -170,16 +169,19 @@ class BAFitSim(shapesim.BaseSim):
 
     def _run_models(self, ci):
         # fit models, keep the one that most looks like random error
-        probrand=-9999.
+        probrand=-9999e9
         fitmodels=self.get_fitmodels()
         for fitmodel in fitmodels:
             self._run_fitter(ci, fitmodel)
             res0 = self.fitter.get_result()
+
+            fit_prob=res0.get('fit_prob',-9999)
             if len(fitmodels) > 1:
-                print '  model:',fitmodel,'probrand:',res0['fit_prob']
-            if res0['fit_prob'] > probrand:
+                print '  model:',fitmodel,'probrand:',fit_prob
+
+            if fit_prob > probrand:
                 res=res0
-                probrand=res0['fit_prob']
+                probrand=fit_prob
 
         if len(fitmodels) > 1:
             print '    best model:',res['model']

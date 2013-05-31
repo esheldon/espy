@@ -5,6 +5,12 @@ gmix-fit
         - seeing offset ~0.003 at high s/n. Turns out it is the 2nd order
           approximation!  Running gg15 with shear 0.01
 
+            sim-gg15
+            bafit-gg15r01,r02,r03 and combined
+
+        - also lm fitter
+            gmix-fit-gg15r01
+
             - interestingly, miller method does not suffer this (and neither
             does maximum likelihood...) 
 
@@ -52,27 +58,6 @@ gmix-fit
 
                 nope
 
-        - trying really big psf and object.  psf sigma 6 and s2=0.01
-            sim-gg14
-            gmix-fit-gg14r01
-
-            similar, |<dgamma/gamma>| ~ 0.002 (as opposed to 0.003)
-            so maybe it is partly not capturing the pixelization?  But
-            using two gaussians didn't seem to help much....
-
-        - could it be the weak shear approximation?
-            try lower shear?
-
-            same, 0.002-0.003
-
-        - trying more in ring and random
-            sim-gg15
-            gmix-fit-gg15r01
-
-            looks better, but first try in bafit didn't look any
-            different.  Trying to increase number
-
-        - could also finally fix ring stuff to just generate pairs
 
     mixmc
         mixmc-get03r06

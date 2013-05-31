@@ -129,6 +129,12 @@ class GMixFitSim(bafit_sim.BAFitSim):
 
     def _copy_to_output(self, out, i, ci, res):
 
+        g1true,g2true=lensing.util.e1e2_to_g1g2(e1true,e2true)
+        out['gtrue'][i,0] = g1true
+        out['gtrue'][i,1] = g2true
+        out['shear_true'][i,0] = ci['shear1']
+        out['shear_true'][i,1] = ci['shear2']
+
         out['s2n_admom'][i] = ci['s2n_admom']
         out['s2n_matched'][i] = ci['s2n_matched']
         out['s2n_uw'][i] = ci['s2n_uw']

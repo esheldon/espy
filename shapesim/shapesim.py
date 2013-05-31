@@ -1244,18 +1244,15 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                  ('bashear','f8',2),
                  ('bashear_cov','f8',(2,2))]
     else:
-        dt_extra = [('e1sum','f8'), # sums so we can do cumulative
-                    ('e2sum','f8'),
-                    ('e1err2invsum','f8'),
-                    ('e2err2invsum','f8'),
-                    ('esqsum','f8'),
+        dt_extra = [('g1sum','f8'), # sums so we can do cumulative
+                    ('g2sum','f8'),
+                    ('g1err2invsum','f8'),
+                    ('g2err2invsum','f8'),
                     ('nsum','i8'),
                     ('shear1','f8'),
                     ('shear1err','f8'),  # average in particular bin
                     ('shear2','f8'),
-                    ('shear2err','f8'),
-                    ('Rshear_true','f8'),
-                    ('Rshear','f8')]
+                    ('shear2err','f8')]
 
     dt += dt_extra
     name_extra = [dd[0] for dd in dt_extra]
@@ -1289,8 +1286,6 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
 
             # we use the scatter from true, becuase with ring tests
             # we don't have shape noise
-            #g1scatt = (g1-edata['gtrue'][:,0]).var()
-            #g2scatt = (g2-edata['gtrue'][:,1]).var()
 
             num = g1.size
             #g1err = sqrt(g1scatt/num)
@@ -1378,64 +1373,38 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                 d['bashear_cov'][i,1,1] = d['shear2err'][i]**2
                 print 'bashear1: %.16g +/- %.16g' % (g1g2[0],sqrt(d['bashear_cov'][i,0,0]))
         else:
-            if 'e1_meas' in edata:
-                e1 = edata['e1_meas']
-                e2 = edata['e2_meas']
-                # we use the scatter from true, becuase with ring tests
-                # we don't have shape noise
-                e1scatt = (e1-edata['e1true']).var()
-                e2scatt = (e2-edata['e2true']).var()
 
-                e1err = sqrt(e1scatt/num)
-                e2err = sqrt(e2scatt/num)
-                e1err2inv = num/e1scatt
-                e2err2inv = num/e2scatt
+            g1 = edata['g'][:,0]
+            g2 = edata['g'][:,1]
 
-                e1err2invsum=e1err2inv.sum()
-                e2err2invsum=e2err2inv.sum()
+            num=g1.size
 
-            else:
-                e1 = edata['e'][:,0]
-                e2 = edata['e'][:,1]
-                e1err2invsum = ( 1/edata['ecov'][:,0,0] ).sum()
-                e2err2invsum = ( 1/edata['ecov'][:,1,1] ).sum()
-                e1err = sqrt(1/e1err2invsum)
-                e2err = sqrt(1/e2err2invsum)
+            # use median because sometimes the error is very small (e.g. wrong)
+            med_invcov1 = numpy.median(1./edata['gcov'][:,0,0])
+            med_invcov2 = numpy.median(1./edata['gcov'][:,1,1])
+            g1err2invsum = num*med_invcov1
+            g2err2invsum = num*med_invcov2
 
-            esq = e1**2 + e2**2
+            #g1err2invsum = ( 1/(SN1**2 + edata['gcov'][:,0,0]) ).sum()
+            #g2err2invsum = ( 1/(SN1**2 + edata['gcov'][:,1,1]) ).sum()
+            g1err = sqrt(1/g1err2invsum)
+            g2err = sqrt(1/g2err2invsum)
 
-            num=e1.size
+            g1sum = g1.sum()
+            g2sum = g2.sum()
 
-            e1sum = e1.sum()
-            e2sum = e2.sum()
-            esqsum = esq.sum()
+            mg1 = g1sum/num
+            mg2 = g2sum/num
 
-
-            mesq = esqsum/num
-            me1 = e1sum/num
-            me2 = e2sum/num
-
-
-            R = 1-.5*mesq
-            g1 = 0.5*me1/R
-            g2 = 0.5*me2/R
-
-            g1err = 0.5*e1err/R
-            g2err = 0.5*e2err/R
-
-
-            d['Rshear'][i] = R
-            #d['Rshear_true'][i] = (1-0.5*edata['etrue']**2).mean()
-            d['shear1'][i] = g1
-            d['shear2'][i] = g2
+            d['shear1'][i] = mg1
+            d['shear2'][i] = mg2
             d['shear1err'][i] = g1err
             d['shear2err'][i] = g2err
 
-            d['e1sum'][i] = e1sum
-            d['e2sum'][i] = e2sum
-            d['e1err2invsum'][i] = e1err2invsum
-            d['e2err2invsum'][i] = e2err2invsum
-            d['esqsum'][i] = esqsum
+            d['g1sum'][i] = g1sum
+            d['g2sum'][i] = g2sum
+            d['g1err2invsum'][i] = g1err2invsum
+            d['g2err2invsum'][i] = g2err2invsum
             d['nsum'][i] = num
             print 'shear1: %.16g +/- %.16g' % (d['shear1'][i],d['shear1err'][i])
 
@@ -1478,11 +1447,10 @@ def average_runs(runlist, new_run_name):
             print 'doing Ts2n'
             sumlist +=['Ts2n_sum']
     else:
-        sumlist=['e1sum',
-                 'e2sum',
-                 'e1err2invsum',
-                 'e2err2invsum',
-                 'esqsum',
+        sumlist=['g1sum',
+                 'g2sum',
+                 'g1err2invsum',
+                 'g2err2invsum',
                  'nsum']
         bayes=False
 
@@ -1538,12 +1506,10 @@ def average_runs(runlist, new_run_name):
                     data['bashear_cov'][i,1,1] = data['shear2err'][i]**2
 
         else:
-            mesq = data['esqsum']/data['nsum']
-            data['Rshear'] = 1.-.5*mesq
-            data['shear1'] = .5*data['e1sum']/data['nsum']/data['Rshear']
-            data['shear2'] = .5*data['e2sum']/data['nsum']/data['Rshear']
-            data['shear1err'] = 0.5*sqrt(1/data['e1err2invsum'])
-            data['shear2err'] = 0.5*sqrt(1/data['e2err2invsum'])
+            data['shear1'] = data['g1sum']/data['nsum']
+            data['shear2'] = data['g2sum']/data['nsum']
+            data['shear1err'] = sqrt(1/data['g1err2invsum'])
+            data['shear2err'] = sqrt(1/data['g2err2invsum'])
 
 
         fout=get_averaged_url(new_run_name, i1, fs=fs)
