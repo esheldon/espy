@@ -1457,7 +1457,7 @@ def average_runs(runlist, new_run_name):
 
     fs=get_default_fs()
 
-    if 'bayes' in runlist[0]:
+    if 'bayes' in runlist[0] or 'bafit' in runlist[0]:
         bayes=True
         sumlist=['g1sum',
                  'g2sum',
@@ -1466,6 +1466,9 @@ def average_runs(runlist, new_run_name):
                  'g1err2invsum',
                  'g2err2invsum',
                  'nsum']
+
+        if 'bafit' in runlist[0]:
+            sumlist += ['Q_sum', 'Cinv_sum']
 
         f=get_averaged_url(runlist[0], 0, fs=fs)
         t=eu.io.read(f)
@@ -1521,6 +1524,18 @@ def average_runs(runlist, new_run_name):
 
             if 'Ts2n_sum' in t.dtype.names:
                 data['Ts2n'] = data['Ts2n_sum']/data['nsum']
+
+            if 'Q_sum' in sumlist:
+
+                for i in xrange(data.size):
+                    Q_sum = data['Q_sum'][i]
+                    Cinv_sum = data['Cinv_sum'][i]
+                    C = numpy.linalg.inv(Cinv_sum)
+                    g1g2 = numpy.dot(C,Q_sum)
+
+                    data['bashear'][i] = g1g2
+                    data['bashear_cov'][i,0,0] = data['shear1err'][i]**2
+                    data['bashear_cov'][i,1,1] = data['shear2err'][i]**2
 
         else:
             mesq = data['esqsum']/data['nsum']

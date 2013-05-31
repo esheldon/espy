@@ -1,27 +1,12 @@
 gmix-fit
 
     bafit
-        - saw wrongness in the miller stuff with prior after, think I need to
-          divide by psum.  Re-running 02 02
 
-          looks better, re-running in full
+        - seeing offset ~0.003 at high s/n. Turns out it is the 2nd order
+          approximation!  Running gg15 with shear 0.01
 
-        - seeing offset ~0.003 at high s/n for exp and gauss, and different
-          psfs.  Don't see it for the miller method.  Might be convergence of
-          the mcmc chain but not sure.
-
-            - try smaller h
-
-            - run with more walkers
-                - went up to 100, still 0.003
-
-            - try to get initial fit from a GMixFitSimple, which should work
-              better at high S/N?  In that case we would not draw from prior
-
-            - could be psf fitting is not good enough.  Try single gauss?
-            or increase # of gauss?
-                - trying ngauss==3
-                - in a quick look at 019 it looks better!
+            - interestingly, miller method does not suffer this (and neither
+            does maximum likelihood...) 
 
         - doing single gauss psf
             sim-geg01
