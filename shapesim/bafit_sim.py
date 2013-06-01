@@ -58,41 +58,6 @@ class BAFitSim(shapesim.BaseSim):
 
         self.gprior = GPriorBA(self.simc['gsigma'])
 
-    def process_trials_by_s2n(self, is2, is2n):
-        """
-        ring test
-
-        Generates a random total ellipticity from the 
-        assumed prior
-
-        Run this many times to sample the prior distribution
-        """
-        raise RuntimeError("only use the trial by s2n version")
-
-        s2n = shapesim.get_s2n(self, is2n)
-        s2n_fac = self['s2n_fac']
-
-        nellip = self.get_nellip(is2n)
-
-        nsplit = self.simc['nsplit']
-
-        ntot = nsplit*nellip*2
-
-        out = zeros(ntot, dtype=self.out_dtype())
-
-        ii = 0
-        for isplit in xrange(nsplit):
-
-            dolog=False
-            if isplit==0:
-                dolog=True
-            st = self.process_trial_by_s2n(is2, is2n, isplit, dolog=dolog)
-            out[ii:ii+nellip] = st
-            ii += nellip
-
-        shapesim.write_output(self['run'], is2, is2n, out, fs=self.fs)
-        return out
-
 
     def process_trial_by_s2n(self, is2, is2n, isplit,
                              dowrite=False, 
@@ -110,7 +75,12 @@ class BAFitSim(shapesim.BaseSim):
         #gvals = self.get_gvals(is2, is2n, nellip)
         gvals = self.get_gvals(nellip)
 
-        npars=6
+        fitmodels=self.get_fitmodels()
+        if 'coellip' in fitmodels[0]:
+            ngauss=self.get_coellip_ngauss(fitmodel)
+            npars=2*ngauss+4
+        else:
+            npars=6
 
         out = zeros(nellip*2, dtype=self.out_dtype(npars))
 
@@ -203,18 +173,41 @@ class BAFitSim(shapesim.BaseSim):
 
         cenprior=CenPrior(ci['cen'], [0.1]*2)
 
-        self.fitter=MixMCStandAlone(ci.image, ivar, 
-                                    psf_gmix, self.gprior, fitmodel,
-                                    cen=ci['cen'],
-                                    do_pqr=True,
-                                    when_prior=self['when_prior'],
-                                    nwalkers=self['nwalkers'],
-                                    nstep=self['nstep'], 
-                                    burnin=self['burnin'],
-                                    mca_a=self['mca_a'],
-                                    iter=self.get('iter',False),
-                                    draw_gprior=self['draw_gprior'])
+        if 'coellip' in fitmodel:
+            ngauss=self.get_coellip_ngauss(fitmodel)
+            self.fitter=MixMCCoellip(ci.image, ivar, 
+                                     psf_gmix, self.gprior, ngauss,
+                                     cen=ci['cen'],
+                                     do_pqr=True,
+                                     nwalkers=self['nwalkers'],
+                                     nstep=self['nstep'], 
+                                     burnin=self['burnin'],
+                                     mca_a=self['mca_a'],
+                                     iter=self.get('iter',False),
+                                     draw_gprior=self['draw_gprior'])
 
+        else:
+            self.fitter=MixMCStandAlone(ci.image, ivar, 
+                                        psf_gmix, self.gprior, fitmodel,
+                                        cen=ci['cen'],
+                                        do_pqr=True,
+                                        when_prior=self['when_prior'],
+                                        nwalkers=self['nwalkers'],
+                                        nstep=self['nstep'], 
+                                        burnin=self['burnin'],
+                                        mca_a=self['mca_a'],
+                                        iter=self.get('iter',False),
+                                        draw_gprior=self['draw_gprior'])
+
+    def get_coellip_ngauss(self, model):
+        if model=='ngauss1':
+            return 1
+        elif model=='ngauss2':
+            return 2
+        elif model=='ngauss3':
+            return 3
+        else:
+            raise ValueError("implement '%s'" % model)
     def get_fitmodels(self):
         fitmodels=self['fitmodel']
         if not isinstance(fitmodels,list):
@@ -257,9 +250,8 @@ class BAFitSim(shapesim.BaseSim):
             for tn in ['Tmean','Terr','Ts2n']:
                 out[tn][i] = res[tn]
         if 'Fs2n' in res:
-            out['Fs2n'][i] = res['Fs2n']
-
-
+            for tn in ['Flux','Ferr','Fs2n']:
+                out[tn][i] = res[tn]
 
         out['s2n_meas_w'][i] = res['s2n_w']
         out['loglike'][i] = res['loglike']
@@ -330,10 +322,12 @@ class BAFitSim(shapesim.BaseSim):
             ('gcov','f8',(2,2)),
             ('pars','f8',npars),
             ('pcov','f8',(npars,npars)),
-            ('Tmean','f8','f8'),
-            ('Terr','f8','f8'),
-            ('Ts2n','f8','f8'),
-            ('Fs2n','f8','f8'),
+            ('Tmean','f8'),
+            ('Terr','f8'),
+            ('Ts2n','f8'),
+            ('Flux','f8'),
+            ('Ferr','f8'),
+            ('Fs2n','f8'),
             ('s2n_meas_w','f8'),  # weighted s/n based on most likely point
             ('loglike','f8'),     # loglike of fit
             ('chi2per','f8'),     # chi^2/degree of freedom
