@@ -113,9 +113,10 @@ class ShapeSim(dict):
 
         ci_full = self.new_convolved_image(s2, ellip, theta)
         if self['dotrim']:
+            fluxfrac=self.get('fluxfrac',0.999937)
             if self['verbose']:
-                wlog("trimming")
-            ci = fimage.convolved.TrimmedConvolvedImage(ci_full)
+                wlog("trimming",fluxfrac)
+            ci = fimage.convolved.TrimmedConvolvedImage(ci_full,fluxfrac=fluxfrac)
         else:
             ci=ci_full
 

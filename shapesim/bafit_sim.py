@@ -59,36 +59,44 @@ class BAFitSim(shapesim.BaseSim):
         self.gprior = GPriorBA(self.simc['gsigma'])
 
 
-    def process_trial_by_s2n(self, is2, is2n, isplit,
-                             dowrite=False, 
-                             dolog=False):
-        """
-        its not really isplit any more, its just a split count
-        """
+    def _set_s2n_info(self, is2n):
+        self._s2n_psf = self['s2n_psf']
+        self._s2n = shapesim.get_s2n(self, is2n)
+        self._s2n_method = self['s2n_method']
+        self._s2ncalc_fluxfrac =self['s2ncalc_fluxfrac']
 
-        nellip=self.get_nellip(is2n)
-        s2n_psf = self['s2n_psf']
-        s2n = shapesim.get_s2n(self, is2n)
-        s2n_method = self['s2n_method']
-        s2ncalc_fluxfrac =self['s2ncalc_fluxfrac']
-
-        #gvals = self.get_gvals(is2, is2n, nellip)
-        gvals = self.get_gvals(nellip)
-
+    def _get_npars(self):
         fitmodels=self.get_fitmodels()
         if 'coellip' in fitmodels[0]:
             ngauss=self.get_coellip_ngauss(fitmodels[0])
             npars=2*ngauss+4
         else:
             npars=6
+        return npars
 
-        out = zeros(nellip*2, dtype=self.out_dtype(npars))
-
+    def _get_s2(self, is2):
         s2 = linspace(self.simc['mins2'],
                       self.simc['maxs2'], 
                       self.simc['nums2'])[is2]
-        out['s2'] = s2
-        self['s2']=s2
+        return s2
+
+    def process_trial_by_s2n(self, is2, is2n, isplit,
+                             dowrite=False, 
+                             dolog=False):
+
+        t0=time.time()
+
+        nellip=self.get_nellip(is2n)
+        s2=self._get_s2(is2)
+        self._set_s2n_info(is2n)
+
+        gvals = self.get_gvals(nellip)
+        npars=self._get_npars()
+
+        out = zeros(nellip*2, dtype=self.out_dtype(npars))
+
+        out['s2']  = s2
+        self['s2'] = s2
 
         i=0
         for ipair,g in enumerate(gvals):
@@ -101,14 +109,8 @@ class BAFitSim(shapesim.BaseSim):
             while True:
                 theta1 = random.random()*360.0
                 theta2 = theta1 + 90.0
-                ci_nonoise1 = self.shapesim.get_trial(s2, ellip, theta1)
-                ci_nonoise2 = self.shapesim.get_trial(s2, ellip, theta2)
-                ci1 = NoisyConvolvedImage(ci_nonoise1, s2n, s2n_psf,
-                                          s2n_method=s2n_method,
-                                          fluxfrac=s2ncalc_fluxfrac)
-                ci2 = NoisyConvolvedImage(ci_nonoise2, s2n, s2n_psf,
-                                          s2n_method=s2n_method,
-                                          fluxfrac=s2ncalc_fluxfrac)
+                ci1=self._get_one_trial(ellip, theta1)
+                ci2=self._get_one_trial(ellip, theta2)
 
                 try:
                     res1,res2=self._process_pair(ci1,ci2)
@@ -122,11 +124,33 @@ class BAFitSim(shapesim.BaseSim):
             i += 1
 
 
-
         if dowrite:
             shapesim.write_output(self['run'], is2, is2n, out, itrial=isplit,
                          fs=self.fs)
+        
+        tm=time.time()-t0
+        print 'total time:',tm
+        print 'time per ellip(pair):',tm/nellip
+
         return out
+
+    def _get_one_trial(self, ellip, theta):
+        ci_nonoise = self.shapesim.get_trial(self['s2'], ellip, theta)
+        if self['retrim']:
+            if 'retrim_fluxfrac' not in self:
+                raise ValueError("you must set fluxfrac for a retrim")
+            retrim_fluxfrac = self['retrim_fluxfrac']
+            if self['verbose']:
+                print >>stderr,"trimming:",retrim_fluxfrac,"before:",ci_nonoise.image.shape,
+            ci_nonoise= fimage.convolved.TrimmedConvolvedImage(ci_nonoise,
+                                                               fluxfrac=retrim_fluxfrac)
+            if self['verbose']:
+                print >>stderr,"after:",ci_nonoise.image.shape
+
+        ci = NoisyConvolvedImage(ci_nonoise, self._s2n, self._s2n_psf,
+                                 s2n_method=self._s2n_method,
+                                 fluxfrac=self._s2ncalc_fluxfrac)
+        return ci
 
     def _process_pair(self, ci1, ci2):
         reslist=[]
