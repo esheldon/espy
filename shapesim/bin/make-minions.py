@@ -84,11 +84,16 @@ def main():
 
     np=nodes*ppn
     # seconds per ellip ring pair. this is for exp...
-    seconds_per=3.0
 
     c = shapesim.read_config(run)
     cs = shapesim.read_config(c['sim'])
 
+    seconds_per=0.0
+    for model in c['fitmodel']:
+        if model=='gexp':
+            seconds_per += 3.0
+        else:
+            seconds_per += 3.2
     nsplit = cs['nsplit']
 
     pbsd = shapesim.get_pbs_dir(run)
