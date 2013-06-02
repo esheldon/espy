@@ -1,4 +1,5 @@
-run: bafit-geg01r01
+# doing full coellip fit
+run: bafit-geg01r03
 sim: sim-geg01
 
 runtype: bys2n
@@ -20,9 +21,12 @@ s2n_psf: 1.0e+8
 s2nvals: [15,20,25,30,40,50,60,70,80,90,100,120,140,160,180,200,250,300,350,400]
 
 # step and burnin are *per walker*
-nwalkers: 20
-nstep: 200 # steps per walker
-burnin: 400 # burnin per walker.
+# acor failes if nstep too small, need to figure this out
+
+# this might be only good if our guess is good!
+nwalkers: 200
+nstep: 100 # steps per walker
+burnin: 100 # burnin per walker.
 
 # draw the g1,g2 starting points from the gprior
 draw_gprior: true
@@ -34,11 +38,14 @@ em_tol: 1.0e-6  # (T-Told)/T
 # iterate until the auto-correlation length is satisfactory
 iter: true
 
+# don't put more than one here since they all have different number of pars
 fitmodel: ['coellip3']
+#fitmodel: ['coellip2']
 
 # try two even though we know it is only 1
 ngauss_psf: 1
-mca_a: 3.0
+#mca_a: 3.0
+mca_a: 2.0
 
 verbose: false
 
