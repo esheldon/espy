@@ -830,6 +830,18 @@ def get_run_dir(run, fs=None):
     dir=get_simdir(fs=fs)
     return path_join(dir,run)
 
+def get_pbs_dir(run):
+    dir=get_run_dir(run)
+    dir=path_join(dir, 'pbs')
+    return dir
+
+def get_minions_url(run):
+    d=get_pbs_dir(run)
+    return path_join(d,'%s-minions.pbs' % run)
+def get_commands_url(run):
+    d=get_pbs_dir(run)
+    return path_join(d,'%s-commands.txt' % run)
+
 
 def get_wq_dir(run, bytrial=False, combine=False):
     dir=get_run_dir(run)
