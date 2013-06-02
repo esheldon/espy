@@ -38,6 +38,16 @@ _cmd_template="""
 nsetup_ess && module unload espy && module load espy/work && module unload fimage && module load fimage/work && module unload gmix_image && module load gmix_image/work && python $ESPY_DIR/shapesim/bin/run-shapesim.py {run} {i1} {i2} {itrial}
 """.strip()
 
+def get_nellip(conf, is2n):
+    s2n = shapesim.get_s2n(conf, is2n)
+    s2n_fac = conf['s2n_fac']
+    nellip = shapesim.get_s2n_nrepeat(s2n, fac=s2n_fac)
+
+    if nellip < conf['min_gcount']:
+        nellip=conf['min_gcount']
+    return nellip
+
+
 def main():
     options,args = parser.parse_args(sys.argv[1:])
 
@@ -50,6 +60,8 @@ def main():
     ppn=int(options.ppn)
 
     np=nodes*ppn
+    # seconds per ellip ring pair. this is for exp...
+    seconds_per=3.0
 
     c = shapesim.read_config(run)
     cs = shapesim.read_config(c['sim'])
@@ -65,18 +77,22 @@ def main():
     else:
         rstr=run
 
-    job_name = (rstr.split('-'))[1:]
+    job_name = '-'.join( (rstr.split('-'))[1:] )
 
     n1 = cs['nums2']
     n2 = shapesim.get_nums2n(c)
 
-    pbsf=shapesim.get_minions_url(run)
-    cmdf=shapesim.get_commands_url(run)
 
-    print cmdf
-    with open(cmdf,'w') as fobj:
-        for i1 in xrange(n1):
+
+    for i1 in xrange(n1):
+        pbsf=shapesim.get_minions_url(run,i1)
+        cmdf=shapesim.get_commands_url(run,i1)
+
+        print cmdf
+        ntot=0
+        with open(cmdf,'w') as fobj:
             for i2 in xrange(n2):
+                nellip=get_nellip(c,i2)
 
                 for itrial in xrange(nsplit):
                     cmd=_cmd_template.format(run=run,
@@ -87,17 +103,24 @@ def main():
                     fobj.write(cmd)
                     fobj.write('\n')
 
-    print pbsf
-    with open(pbsf,'w') as fobj:
-        hours=24
-        cmd_bname=os.path.basename(cmdf)
-        pbslog=os.path.basename(pbsf)+'.pbslog'
-        pbs_text=_pbs_template.format(job_name=job_name,
-                                      pbslog=pbslog,
-                                      nodes=nodes,
-                                      ppn=ppn,
-                                      np=np,
-                                      hours=hours,
-                                      commands_file=cmd_bname)
-        fobj.write(pbs_text)
+                    ntot += nellip
+
+        time_seconds = ntot*seconds_per/np
+
+        print pbsf
+        hours_raw = time_seconds/3600.
+        hours = int(round(hours_raw)) + 1
+        print '    raw hours:',hours_raw,'hours used:',hours
+
+        with open(pbsf,'w') as fobj:
+            cmd_bname=os.path.basename(cmdf)
+            pbslog=os.path.basename(pbsf)+'.pbslog'
+            pbs_text=_pbs_template.format(job_name=job_name,
+                                          pbslog=pbslog,
+                                          nodes=nodes,
+                                          ppn=ppn,
+                                          np=np,
+                                          hours=hours,
+                                          commands_file=cmd_bname)
+            fobj.write(pbs_text)
 main()

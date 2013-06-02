@@ -835,12 +835,13 @@ def get_pbs_dir(run):
     dir=path_join(dir, 'pbs')
     return dir
 
-def get_minions_url(run):
+def get_minions_url(run, i1):
     d=get_pbs_dir(run)
-    return path_join(d,'%s-minions.pbs' % run)
-def get_commands_url(run):
+    return path_join(d,'%s-minions-%03d.pbs' % (run,i1))
+
+def get_commands_url(run,i1):
     d=get_pbs_dir(run)
-    return path_join(d,'%s-commands.txt' % run)
+    return path_join(d,'%s-commands-%03d.txt' % (run,i1))
 
 
 def get_wq_dir(run, bytrial=False, combine=False):
