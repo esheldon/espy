@@ -1,21 +1,28 @@
+# using BA13 gprior because it is twice differentiable
 name: sim-gdg01
 
-#
-# PSF parameters.
-#
+orient: ring
+nsplit: 300
 
-psfmodel: dgauss
-psf_sigma: 1.4
-psf_ellip: 0.0
+dotrim: false
 
-psf_sigrat: 2.3
-psf_cenrat: 0.09
+psfmodel: gauss
 
-#
-# Object model
-#
-objmodel: gauss
+# this corresponds to 1.4 sigma in pixels
+Tpsf: 3.9
+psf_e1: 0.0
+psf_e2: 0.0
+
+objmodel: gdev
+
+shear: [0.01,0.0]
+
+mins2: 0.5
+maxs2: 2.0
+nums2: 4
+
+# gprior parameters from BA
+gsigma: 0.3
 
 comments: |
-
-    gauss obj, dgauss psf, low res
+    BA13 stuff
