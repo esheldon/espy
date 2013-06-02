@@ -2,17 +2,21 @@ gmix-fit
 
     bafit
 
+        - tried coellip; quick look it is very good at high s/n but a check at
+          s/n 25 or so looked terrible (0.03 error)
+
         - seeing offset ~0.003 at high s/n. Turns out it is the 2nd order
           approximation!  Running gg15 with shear 0.01
 
             sim-gg15
             bafit-gg15r01,r02,r03 and combined
 
+            - interestingly, miller method does not suffer this,
+              nor does maximum likelihood...
+
         - also lm fitter
             gmix-fit-gg15r01
 
-            - interestingly, miller method does not suffer this (and neither
-            does maximum likelihood...) 
 
         - doing exp with single gauss psf
             sim-geg01
