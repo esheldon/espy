@@ -8,7 +8,6 @@ import sys
 import numpy
 from numpy import where
 import esutil as eu
-import biggles
 import pcolors
 import glob
 import converter
@@ -32,6 +31,7 @@ def get_struct():
     return numpy.zeros(1, dtype=dt)
 
 def make_pointings(simname, frac=0.01):
+    import biggles
 
     conf=files.read_config(simname)
 

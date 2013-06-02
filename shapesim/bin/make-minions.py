@@ -34,9 +34,32 @@ mpirun -np {np} minions < {commands_file}
 echo "done minions"
 """
 
+_script_template="""
+#!/bin/bash
+
+run=$1
+i1=$2
+i2=$3
+itrial=$4
+
+nsetup_ess
+
+module unload espy && module load espy/work
+module unload fimage && module load fimage/work
+module unload gmix_image && module load gmix_image/work
+
+python $ESPY_DIR/shapesim/bin/run-shapesim.py $run $i1 $i2 $itrial
+"""
+
+
+#_cmd_template="""
+#source ~/.bashrc && nsetup_ess && module unload espy && module load espy/work && module unload fimage && module load fimage/work && module unload gmix_image && module load gmix_image/work && python $ESPY_DIR/shapesim/bin/run-shapesim.py {run} {i1} {i2} {itrial} &> logs/{logfile}
+#""".strip()
+
 _cmd_template="""
-nsetup_ess && module unload espy && module load espy/work && module unload fimage && module load fimage/work && module unload gmix_image && module load gmix_image/work && python $ESPY_DIR/shapesim/bin/run-shapesim.py {run} {i1} {i2} {itrial}
+bash ./{script_file} {run} {i1} {i2} {itrial} &> logs/{logfile}
 """.strip()
+
 
 def get_nellip(conf, is2n):
     s2n = shapesim.get_s2n(conf, is2n)
@@ -69,8 +92,11 @@ def main():
     nsplit = cs['nsplit']
 
     pbsd = shapesim.get_pbs_dir(run)
+    logdir=os.path.join(pbsd,'logs')
     if not os.path.exists(pbsd):
         os.makedirs(pbsd)
+    if not os.path.exists(logdir):
+        os.makedirs(logdir)
 
     if run[0:8] == 'gmix-fit':
         rstr=run.replace('gmix-fit','gmix')
@@ -83,6 +109,13 @@ def main():
     n2 = shapesim.get_nums2n(c)
 
 
+    script_url=shapesim.get_minions_script_url(run)
+    script_base=os.path.basename(script_url)
+
+    print script_url
+    with open(script_url,'w') as fobj:
+        fobj.write(_script_template)
+    print
 
     for i1 in xrange(n1):
         pbsf=shapesim.get_minions_url(run,i1)
@@ -95,10 +128,15 @@ def main():
                 nellip=get_nellip(c,i2)
 
                 for itrial in xrange(nsplit):
-                    cmd=_cmd_template.format(run=run,
+                    outf=shapesim.get_output_url(run, i1, i2, itrial=itrial)
+                    outbname=os.path.basename(outf)
+                    logf=outbname.replace('.rec','.log')
+                    cmd=_cmd_template.format(script_file=script_base,
+                                             run=run,
                                              i1=i1,
                                              i2=i2,
-                                             itrial=itrial)
+                                             itrial=itrial,
+                                             logfile=logf)
 
                     fobj.write(cmd)
                     fobj.write('\n')

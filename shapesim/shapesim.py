@@ -840,6 +840,11 @@ def get_minions_url(run, i1):
     d=get_pbs_dir(run)
     return path_join(d,'%s-minions-%03d.pbs' % (run,i1))
 
+def get_minions_script_url(run):
+    d=get_pbs_dir(run)
+    return path_join(d,'%s-minions.sh' % run)
+
+
 def get_commands_url(run,i1):
     d=get_pbs_dir(run)
     return path_join(d,'%s-commands-%03d.txt' % (run,i1))
