@@ -13,8 +13,7 @@ parser=OptionParser(__doc__)
 parser.add_option('-p','--ppn',default=8, help='processors per node')
 
 
-_pbs_template="""
-#!/bin/bash -l
+_pbs_template="""#!/bin/bash -l
 #PBS -N {job_name}
 #PBS -j oe
 #PBS -l nodes={nodes}:ppn={ppn},walltime={hours}:00:00
@@ -44,9 +43,9 @@ itrial=$4
 
 nsetup_ess
 
-module unload espy && module load espy/work
+module unload espy && module load espy/work2
 module unload fimage && module load fimage/work
-module unload gmix_image && module load gmix_image/work
+module unload gmix_image && module load gmix_image/work2
 
 python $ESPY_DIR/shapesim/bin/run-shapesim.py $run $i1 $i2 $itrial
 """
