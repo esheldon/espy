@@ -1437,7 +1437,7 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
     return d
 
 
-def average_runs(runlist, new_run_name):
+def average_runs(runlist, new_run_name, skip1=[]):
     """
     The runs must already be averaged and have the same size
     in all indices of relevance
@@ -1483,6 +1483,9 @@ def average_runs(runlist, new_run_name):
 
     numi1 = cs0['nums2']
     for i1 in xrange(numi1):
+        if i1 in skip1:
+            continue
+
         for irun,run in enumerate(runlist):
             f=get_averaged_url(run, i1, fs=fs)
             wlog("Reading:",f)
