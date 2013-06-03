@@ -1,5 +1,5 @@
-run: bafit-geg01r04
-sim: sim-geg01
+run: bafit-gdg01r02
+sim: sim-gdg01
 
 runtype: bys2n
 
@@ -34,9 +34,10 @@ em_tol: 1.0e-6  # (T-Told)/T
 # iterate until the auto-correlation length is satisfactory
 iter: true
 
-fitmodel: ['gexp']
+fitmodel: ['gdev']
 # try two even though we know it is only 1
 ngauss_psf: 1
 mca_a: 3.0
 
 verbose: false
+

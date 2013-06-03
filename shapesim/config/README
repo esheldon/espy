@@ -2,6 +2,8 @@ gmix-fit
 
     bafit
 
+        - I worry the sampling is not good?
+
         - tried coellip; quick look it is very good at high s/n but a check at
           s/n 25 or so looked terrible (0.03 error)
 
@@ -30,6 +32,7 @@ gmix-fit
 
             was fitting 2 gauss, try fitting 1 gauss as well?
 
+        old
         - bafit-geg01r04 fitting 1 gauss, s2n_fac 160, min_gcount 400, prior during
         - bafit-geg01r05 fitting 1 gauss, s2n_fac 160, min_gcount 400, prior after
 
