@@ -92,7 +92,7 @@ def main():
         if model=='gexp':
             seconds_per += 3.0
         else:
-            seconds_per += 3.2
+            seconds_per += 3.4
     nsplit = cs['nsplit']
 
     pbsd = shapesim.get_pbs_dir(run)
