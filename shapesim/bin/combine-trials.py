@@ -16,7 +16,9 @@ parser.add_option('--allow-missing',action='store_true',
                   help="allow missing splits")
 options,args = parser.parse_args(sys.argv[1:])
 
-
+if len(args) < 1:
+    parser.print_help()
+    sys.exit(1)
 run=args[0]
 
 if len(args) == 3:

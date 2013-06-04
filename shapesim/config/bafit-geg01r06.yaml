@@ -1,19 +1,17 @@
+# during; mainly to test flux recovery
 run: bafit-geg01r06
 sim: sim-geg01
 
 runtype: bys2n
 
-when_prior: "after"
-
-# need to set this for the trials to work.
-seed: 8969
+when_prior: "during"
 
 s2n_method: admom
-s2n_fac: 160
+s2n_fac: 40
 
 # minimum number of random ellipticities to use.
 # need decent count to sample the prior surface
-min_gcount: 400
+min_gcount: 100
 
 retrim: false
 retrim_fluxfrac: null
@@ -38,18 +36,7 @@ em_tol: 1.0e-6  # (T-Told)/T
 iter: true
 
 fitmodel: ['gexp']
-# try two even though we know it is only 1
-ngauss_psf: 2
+ngauss_psf: 1
 mca_a: 3.0
 
 verbose: false
-
-comments: |
-    prior during
-    Only fitting exp to exp for simplicity
-    Using GMixEMBoot for psf fitting
-    Drawing walkers from the gprior
-    mca_a 3.0
-    "stand alone" version
-    2 gauss psf
-    20 walkers

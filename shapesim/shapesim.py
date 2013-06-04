@@ -1267,6 +1267,8 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
         if 'Fs2n' not in data[0].dtype.names:
             dt+=[('Fs2n','f8')]
         dt += [('Fs2n_sum','f8')]
+        if 'Flux' in data[0].dtype.names:
+            dt += [('Flux_sum','f8')]
 
 
         if 'gcov0' in data[0].dtype.names:
@@ -1386,14 +1388,17 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                 d['Fs2n_sum'][i] = Fs2n_vals.sum()
                 d['Fs2n'][i] = d['Fs2n_sum'][i]/num
 
+            if 'Flux' in edata.dtype.names:
+                Flux_sum=edata['Flux'].sum()
+                d['Flux_sum'][i] = Flux_sum
+                d['Flux'][i] = Flux_sum/num
+                d['Ferr'][i] = edata['Ferr'].mean()
 
             if 'gcov0' in data[0].dtype.names:
                 d['g1err0sum2'][i] = edata['gcov0'][:,0,0].sum()
                 d['g2err0sum2'][i] = edata['gcov0'][:,1,1].sum()
                 d['g1err0_mean'][i] = sqrt(d['g1err0sum2'][i]/num)
                 d['g2err0_mean'][i] = sqrt(d['g2err0sum2'][i]/num)
-
-
 
             if 'Q' in data[0].dtype.names:
                 # NOTE!  can't use errors because this is a ring
