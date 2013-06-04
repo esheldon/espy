@@ -17,7 +17,7 @@ from fimage.convolved import NoisyConvolvedImage
 
 import gmix_image
 from gmix_image import print_pars, GMix, gmix2pars
-from gmix_image.gmix_mcmc import MixMC, MixMCStandAlone, MixMCCoellip
+from gmix_image.gmix_mcmc import MixMC, MixMCStandAlone, MixMCCoellip, MixMCBDC
 from gmix_image.priors import GPriorBA, CenPrior
 
 import images
@@ -70,6 +70,8 @@ class BAFitSim(shapesim.BaseSim):
         if 'coellip' in fitmodels[0]:
             ngauss=self.get_coellip_ngauss(fitmodels[0])
             npars=2*ngauss+4
+        elif 'bdc' in fitmodels[0]:
+            npars=8
         else:
             npars=6
         return npars
@@ -103,7 +105,7 @@ class BAFitSim(shapesim.BaseSim):
 
             ellip=lensing.util.g2e(g)
 
-            if ( (ipair+1) % 10) == 0 or ipair== 0:
+            if self['verbose'] or ( ( (ipair+1) % 10) == 0 or ipair== 0):
                 stderr.write("  %s/%s pairs done\n" % ((ipair+1),nellip))
 
             while True:
@@ -124,13 +126,14 @@ class BAFitSim(shapesim.BaseSim):
             i += 1
 
 
-        if dowrite:
-            shapesim.write_output(self['run'], is2, is2n, out, itrial=isplit,
-                         fs=self.fs)
         
         tm=time.time()-t0
         print 'total time:',tm
         print 'time per ellip(pair):',tm/nellip
+
+        if dowrite:
+            shapesim.write_output(self['run'], is2, is2n, out, itrial=isplit,
+                         fs=self.fs)
 
         return out
 
@@ -209,6 +212,18 @@ class BAFitSim(shapesim.BaseSim):
                                      mca_a=self['mca_a'],
                                      iter=self.get('iter',False),
                                      draw_gprior=self['draw_gprior'])
+
+        elif 'bdc' in fitmodel:
+            self.fitter=MixMCBDC(ci.image, ivar, 
+                                 psf_gmix, self.gprior, 
+                                 cen=ci['cen'],
+                                 do_pqr=True,
+                                 nwalkers=self['nwalkers'],
+                                 nstep=self['nstep'], 
+                                 burnin=self['burnin'],
+                                 mca_a=self['mca_a'],
+                                 iter=self.get('iter',False),
+                                 draw_gprior=self['draw_gprior'])
 
         else:
             self.fitter=MixMCStandAlone(ci.image, ivar, 

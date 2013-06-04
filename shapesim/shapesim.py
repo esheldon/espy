@@ -205,7 +205,7 @@ class ShapeSim(dict):
         object models listed in the config.
         """
         # new thing using the gmix_image code for gaussian objects
-        if self['objmodel'] in ['gexp','gdev','gauss']:
+        if self['objmodel'] in ['gexp','gdev','gauss','gbdc']:
             return self.new_gmix_convolved_image(s2, obj_ellip, obj_theta)
 
         psfmodel = self['psfmodel']
@@ -286,15 +286,33 @@ class ShapeSim(dict):
         else:
             shape=shape0
 
-        objpars=[-9., -9., shape.e1, shape.e2, Tobj, 1.0]
-        if objmodel=='gexp':
-            obj_gmix=gmix_image.GMixExp(objpars)
-        elif objmodel=='gdev':
-            obj_gmix=gmix_image.GMixDev(objpars)
-        elif objmodel=='gauss':
-            obj_gmix=gmix_image.GMixCoellip(objpars)
+        if objmodel in ['gbdc','bdc']:
+            # we always set Texp to Tobj
+            frac_dev=self['frac_dev']
+            Tfrac_dev=self['Tfrac_dev']
+            
+            Flux_exp = (1.0-frac_dev)
+            Flux_dev = frac_dev
+
+            # need to adjust a bit to get Tobj
+            Tobj0 = (1-frac_dev)*(1-Tfrac_dev)*Tobj + frac_dev*Tfrac_dev*Tobj
+            fac = Tobj/Tobj0
+
+            T_exp = (1-Tfrac_dev)*Tobj*fac
+            T_dev = Tfrac_dev*Tobj*fac
+
+            objpars=[-9., -9., shape.e1, shape.e2, T_exp, T_dev, Flux_exp, Flux_dev]
+            obj_gmix=gmix_image.GMix(objpars,type='bdc')
         else:
-            raise ValueError("unsupported gmix object type: '%s'" % objmodel)
+            objpars=[-9., -9., shape.e1, shape.e2, Tobj, 1.0]
+            if objmodel=='gexp':
+                obj_gmix=gmix_image.GMixExp(objpars)
+            elif objmodel=='gdev':
+                obj_gmix=gmix_image.GMixDev(objpars)
+            elif objmodel=='gauss':
+                obj_gmix=gmix_image.GMixCoellip(objpars)
+            else:
+                raise ValueError("unsupported gmix object type: '%s'" % objmodel)
 
         ci=fimage.convolved.ConvolverGMix(obj_gmix, psf_gmix, **self)
 
