@@ -93,6 +93,10 @@ def main():
             seconds_per += 3.0
         else:
             seconds_per += 3.4
+
+    if c['when_prior']:
+        seconds_per *= 1.16
+
     nsplit = cs['nsplit']
 
     pbsd = shapesim.get_pbs_dir(run)

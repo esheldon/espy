@@ -2,6 +2,12 @@ gmix-fit
 
     bafit
 
+        - fitting bd to exp.  Works ok for flux it seems, need to 
+        do full run to check shear
+
+            - also it seems to have tau and acor problems pretty often at high
+              s/n
+
         - I worry the sampling is not good?
 
         - tried coellip; quick look it is very good at high s/n but a check at
