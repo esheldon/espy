@@ -17,7 +17,7 @@ from fimage.convolved import NoisyConvolvedImage
 
 import gmix_image
 from gmix_image import print_pars, GMix, gmix2pars
-from gmix_image.gmix_mcmc import MixMC, MixMCStandAlone
+from gmix_image.gmix_mcmc import MixMCOld, MixMCSimple
 from gmix_image.priors import GPriorOld, CenPrior
 
 import images
@@ -458,15 +458,16 @@ class BayesFitSim(shapesim.BaseSim):
 
         cenprior=CenPrior(ci['cen'], [0.1]*2)
 
-        self.fitter=MixMCStandAlone(ci.image, ivar, 
-                                    psf_gmix, self.gprior, fitmodel,
-                                    cen=ci['cen'],
-                                    nwalkers=self['nwalkers'],
-                                    nstep=self['nstep'], 
-                                    burnin=self['burnin'],
-                                    mca_a=self['mca_a'],
-                                    iter=self.get('iter',False),
-                                    draw_gprior=self['draw_gprior'])
+        raise RuntimeError("convert to use new mixmc")
+        self.fitter=MixMCSimple(ci.image, ivar, 
+                                psf_gmix, self.gprior, fitmodel,
+                                cen=ci['cen'],
+                                nwalkers=self['nwalkers'],
+                                nstep=self['nstep'], 
+                                burnin=self['burnin'],
+                                mca_a=self['mca_a'],
+                                iter=self.get('iter',False),
+                                draw_gprior=self['draw_gprior'])
 
     def _run_fitter_old(self, ci, fitmodel):
         """
@@ -528,7 +529,7 @@ class BayesFitSim(shapesim.BaseSim):
             else:
                 Tsend = T
 
-            self.fitter=MixMC(ci.image,
+            self.fitter=MixMCOld(ci.image,
                               1./ci['skysig']**2,
                               psf_gmix,
                               cenprior,

@@ -17,7 +17,7 @@ from fimage.convolved import NoisyConvolvedImage
 
 import gmix_image
 from gmix_image import print_pars, GMix, gmix2pars
-from gmix_image.gmix_mcmc import MixMC, MixMCStandAlone, MixMCCoellip, MixMCBDC
+from gmix_image.gmix_mcmc import MixMCSimple, MixMCCoellip, MixMCBDC
 from gmix_image.priors import GPriorBA, CenPrior
 
 import images
@@ -214,6 +214,7 @@ class BAFitSim(shapesim.BaseSim):
                                      draw_gprior=self['draw_gprior'])
 
         elif 'bdc' in fitmodel:
+            raise ValueError("fix bdc")
             self.fitter=MixMCBDC(ci.image, ivar, 
                                  psf_gmix, self.gprior, 
                                  cen=ci['cen'],
@@ -226,17 +227,22 @@ class BAFitSim(shapesim.BaseSim):
                                  draw_gprior=self['draw_gprior'])
 
         else:
-            self.fitter=MixMCStandAlone(ci.image, ivar, 
-                                        psf_gmix, self.gprior, fitmodel,
-                                        cen=ci['cen'],
-                                        do_pqr=True,
-                                        when_prior=self['when_prior'],
-                                        nwalkers=self['nwalkers'],
-                                        nstep=self['nstep'], 
-                                        burnin=self['burnin'],
-                                        mca_a=self['mca_a'],
-                                        iter=self.get('iter',False),
-                                        draw_gprior=self['draw_gprior'])
+            T_guess=ci['Ttrue']*(1.+0.1*srandu())
+            self.fitter=MixMCSimple(ci.image,
+                                    ivar, 
+                                    psf_gmix,
+                                    self.gprior,
+                                    T_guess,
+                                    ci['cen'],
+                                    fitmodel,
+                                    do_pqr=True,
+                                    when_prior=self['when_prior'],
+                                    nwalkers=self['nwalkers'],
+                                    nstep=self['nstep'], 
+                                    burnin=self['burnin'],
+                                    mca_a=self['mca_a'],
+                                    iter=self.get('iter',False),
+                                    draw_gprior=self['draw_gprior'])
 
     def get_coellip_ngauss(self, model):
         if model=='coellip1':

@@ -1262,13 +1262,14 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                     ('shear2','f8'),
                     ('shear2err','f8')]
         if 'Ts2n' not in data[0].dtype.names:
-            dt+=[('Ts2n','f8')]
-        dt += [('Ts2n_sum','f8')]
+            dt_extra+=[('Ts2n','f8')]
+        dt_extra += [('Ts2n_sum','f8')]
         if 'Fs2n' not in data[0].dtype.names:
-            dt+=[('Fs2n','f8')]
-        dt += [('Fs2n_sum','f8')]
+            dt_extra+=[('Fs2n','f8')]
+        dt_extra += [('Fs2n_sum','f8')]
         if 'Flux' in data[0].dtype.names:
-            dt += [('Flux_sum','f8')]
+            dt_extra += [('Flux_sum','f8'),
+                         ('Ferr2invsum','f8')]
 
 
         if 'gcov0' in data[0].dtype.names:
@@ -1278,7 +1279,7 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                          ('g2err0_mean','f8')]
 
         if 'Q' in data[0].dtype.names:
-            dt+=[('Q_sum','f8',2),
+            dt_extra+=[('Q_sum','f8',2),
                  ('Cinv_sum','f8',(2,2)),
                  ('bashear','f8',2),
                  ('bashear_cov','f8',(2,2))]
@@ -1295,6 +1296,9 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
 
     dt += dt_extra
     name_extra = [dd[0] for dd in dt_extra]
+
+    # other names not to avarage
+    name_extra += ['Ferr']
 
     d=zeros(len(data),dtype=dt)
     for i,edata in enumerate(data): # over different ellipticities
@@ -1392,7 +1396,8 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                 Flux_sum=edata['Flux'].sum()
                 d['Flux_sum'][i] = Flux_sum
                 d['Flux'][i] = Flux_sum/num
-                d['Ferr'][i] = edata['Ferr'].mean()
+                d['Ferr2invsum'][i] = (1./edata['Ferr']**2).sum()
+                d['Ferr'][i] = sqrt(1./d['Ferr2invsum'][i])
 
             if 'gcov0' in data[0].dtype.names:
                 d['g1err0sum2'][i] = edata['gcov0'][:,0,0].sum()
@@ -1488,6 +1493,9 @@ def average_runs(runlist, new_run_name, skip1=[]):
         if 'Ts2n_sum' in t.dtype.names:
             print 'doing Ts2n'
             sumlist +=['Ts2n_sum']
+
+        if 'Flux_sum' in t.dtype.names:
+            sumlist += ['Flux_sum','Ferr2invsum']
     else:
         sumlist=['g1sum',
                  'g2sum',
@@ -1538,6 +1546,10 @@ def average_runs(runlist, new_run_name, skip1=[]):
             if 'Ts2n_sum' in t.dtype.names:
                 data['Ts2n'] = data['Ts2n_sum']/data['nsum']
 
+            if 'Flux_sum' in sumlist:
+                data['Flux'] = data['Flux_sum']/data['nsum']
+                data['Ferr'] = sqrt(1./data['Ferr2invsum'])
+
             if 'Q_sum' in sumlist:
 
                 for i in xrange(data.size):
@@ -1549,6 +1561,7 @@ def average_runs(runlist, new_run_name, skip1=[]):
                     data['bashear'][i] = g1g2
                     data['bashear_cov'][i,0,0] = data['shear1err'][i]**2
                     data['bashear_cov'][i,1,1] = data['shear2err'][i]**2
+
 
         else:
             data['shear1'] = data['g1sum']/data['nsum']
