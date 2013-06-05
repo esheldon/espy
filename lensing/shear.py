@@ -5,6 +5,99 @@ from . import util
 from .util import ShapeRangeError
 import numpy
 
+def gadd(g1, g2, s1, s2):
+    """
+    addition formula for reduced shear
+    """
+
+    A = 1 + g1*s1 + g2*s2
+    B = g2*s1 - g1*s2
+    denom_inv = 1./(A**2 + B**2)
+
+    g1o = A*(g1 + s1) + B*(g2 + s2)
+    g2o = A*(g2 + s2) - B*(g1 + s1)
+
+    g1o *= denom_inv
+    g2o *= denom_inv
+
+    return g1o,g2o
+
+def get_shear_pqr_sums(P,Q,R):
+    """
+    Create the sums used to calculate shear from BA13 PQR
+    """
+    from numpy import zeros,where
+
+    w,=where(P > 0)
+    #print 'P > 0:',w.size,P.size
+
+    QQ = zeros( (w.size,2,2), dtype=Q.dtype)
+    Cinv_all = zeros( (w.size,2,2), dtype=Q.dtype)
+    QbyP = zeros( (w.size,2), dtype=Q.dtype)
+
+    # outer product
+    QQ[:,0,0] = Q[w,0]*Q[w,0]
+    QQ[:,0,1] = Q[w,0]*Q[w,1]
+    QQ[:,1,0] = Q[w,1]*Q[w,0]
+    QQ[:,1,1] = Q[w,1]*Q[w,1]
+
+    Pinv = 1/P[w]
+    P2inv = Pinv*Pinv
+
+    #Cinv_all = QQ/P**2 - R/P
+    Cinv_all[:,0,0] = QQ[:,0,0]*P2inv - R[w,0,0]*Pinv
+    Cinv_all[:,0,1] = QQ[:,0,1]*P2inv - R[w,0,1]*Pinv
+    Cinv_all[:,1,0] = QQ[:,1,0]*P2inv - R[w,1,0]*Pinv
+    Cinv_all[:,1,1] = QQ[:,1,1]*P2inv - R[w,1,1]*Pinv
+
+    Cinv_sum = Cinv_all.sum(axis=0)
+
+    QbyP[:,0] = Q[w,0]*Pinv
+    QbyP[:,1] = Q[w,1]*Pinv
+    Q_sum = QbyP.sum(axis=0)
+
+    return Q_sum, Cinv_sum
+
+
+def get_shear_pqr(P,Q,R, get_sums=False):
+    """
+    Extract a shear estimate from the p,q,r values from
+    Bernstein & Armstrong
+
+    parameters
+    ----------
+    P: array[nobj]
+        Prior times jacobian
+    Q: array[nobj,2]
+        gradient of P with respect to shear
+    R: array[nobj,2,2]
+        gradient of gradient
+
+    output
+    ------
+    [g1,g2]: array
+
+    notes
+    -----
+    If done on a single object, the operations would look simpler
+
+    QQ = numpy.outer(Q,Q)
+    Cinv = QQ/P**2 - R/P
+    C = numpy.linalg.inv(Cinv)
+    g1g2 = numpy.dot(C,Q/P)
+
+    """
+
+    Q_sum, Cinv_sum = get_shear_pqr_sums(P,Q,R)
+
+    C = numpy.linalg.inv(Cinv_sum)
+    g1g2 = numpy.dot(C,Q_sum)
+
+    if get_sums:
+        return g1g2, C, Q_sum, Cinv_sum
+    else:
+        return g1g2, C
+
 
 class Shear:
     """
@@ -153,7 +246,7 @@ class Shear:
         sout = Shear(e1=e1,e2=e2)
         return sout
 
-    def add_by_g(self, s):
+    def gadd(self, s):
         """
         equivalent to the distortion based addition formula
         """
@@ -348,64 +441,6 @@ def test_average_shear(shapenoise=0.16, n=1000000):
     print 'sh1: %.5f +/- %.5f' % (sh1,sh1err)
     print 'sh2: %.5f +/- %.5f' % (sh2,sh2err)
 
-def get_ba_vals(g1in, g2in, h=1.e-6):
-    """
-    Evaluate 
-        PJ/P
-        Q/P
-        R/P
-    From Bernstein & Armstrong
-
-    We can evaluate only the values/P where P is the unlensed prior because we
-    will already have the prior in our MCMC chain
-
-    PJ is this prior times the jacobian at shear==0
-
-    Q is the gradient of P*J at shear==0
-
-        [ d(P*J)/dg1, d(P*J)/dg2]_{g=0}
-
-    R is grad of grad of P*J at shear==0
-        [ d(P*J)/dg1dg1  d(P*J)/dg1dg2 ]
-        [ d(P*J)/dg1dg2  d(P*J)/dg2dg2 ]_{g=0}
-
-    Derivatives are performed using finite differencing
-    """
-
-    g1 = numpy.array(g1in, dtype='f8', ndmin=1, copy=False)
-    g2 = numpy.array(g2in, dtype='f8', ndmin=1, copy=False)
-
-    np=g1.size
-
-    P = dgs_by_dgo_jacob(g1, g2, 0.0, 0.0)
-
-    h2=1/(2*h)
-    hsq=1/h**2
-
-    Q1_1 = dgs_by_dgo_jacob(g1, g2, +h, 0.0)
-    Q1_2 = dgs_by_dgo_jacob(g1, g2, -h, 0.0)
-    Q1 = (Q1_1 - Q1_2)*h2
-
-    Q2_1 = dgs_by_dgo_jacob(g1, g2, 0.0, +h)
-    Q2_2 = dgs_by_dgo_jacob(g1, g2, 0.0, -h)
-    Q2 = (Q2_1 - Q2_2)*h2
-
-    R11_1 = dgs_by_dgo_jacob(g1, g2, +h, +h)
-    R11_2 = dgs_by_dgo_jacob(g1, g2, -h, -h)
-
-    R11 = (Q1_1 - 2*P + Q1_2)*hsq
-    R22 = (Q2_1 - 2*P + Q2_2)*hsq
-    R12 = (R11_1 - Q1_1 - Q2_1 + 2*P - Q1_2 - Q2_2 + R11_2)*hsq*0.5
-
-    Q = numpy.zeros( (np,2) )
-    R = numpy.zeros( (np,2,2) )
-    R[:,0,0] = R11
-    R[:,0,1] = R12
-    R[:,1,0] = R12
-    R[:,1,1] = R22
-
-    return P, Q, R
-
 
 def dgs_by_dgo_jacob(g1, g2, s1, s2):
     """
@@ -419,45 +454,85 @@ def dgs_by_dgo_jacob(g1, g2, s1, s2):
     s1,s2: numbers or arrays
         shape pars for shear, applied negative
     """
-    # usable in both C and python
-    A = 1 - g1*s1 - g2*s2
-    B = - g2*s1 + g1*s2
-    C = 1./(B*B + A*A)
-    C2 = C*C
 
-    g2ms2 = g2-s2
-    g1ms1 = g1-s1
+    ssq = s1**2 + s2**2
+    num = (ssq - 1)**2
+    denom=(1 + 2*g1*s1 + 2*g2*s2 + g1**2*ssq + g2**2*ssq)**2
 
-    D = (g2ms2*B + g1ms1*A)
-    E = s1*g2ms2 + g1ms1*s2
-    F = g1ms1*s1 - g2ms2*s2
-    G = (2*s2*B - 2*s1*A)
-    H = -g1ms1*B + g2ms2*A
-    I = (-2*s1*B - 2*s2*A)
+    jacob = num/denom
+    return jacob
 
-    g1s_by_g1o =  -D*G*C2 -  ( A - F)*C
+def dgs_by_dgo_jacob_old(g1, g2, s1, s2):
+    """
+    jacobian of the transformation
+        |dgs/dgo|_{-shear}
 
-    g1s_by_g2o =  -D*I*C2 -  ( B - E)*C
+    parameters
+    ----------
+    g1,g2: numbers or arrays
+        shape pars for "observed" image
+    s1,s2: numbers or arrays
+        shape pars for shear, applied negative
+    """
 
-    g2s_by_g1o =  -H*G*C2 -  (-B - E)*C
+    A = 1 + g1*s1 + g2*s2
+    B = g2*s1 - g1*s2
+    denom_inv = 1./(A**2 + B**2)
+    denom_inv2 = denom_inv**2
 
-    g2s_by_g2o =  -H*I*C2 -  ( A + F)*C
+    k1 = (-2*s2*B + 2*s1*A)*((g2 + s2)*B + (g1 + s1)*A)
+    k2 = 1 + g1*s1 + s1*(g1 + s1) + g2*s2 - s2*(g2 + s2)
+    g1s_by_g1o = -denom_inv2*k1 + denom_inv*k2
+
+    k1 = ((g2+s2)*B+(g1+s1)*A)*(2*s1*B + 2*s2*A)
+    k2 = B + (g1+s1)*s2 + s1*(g2+s2)
+    g1s_by_g2o = -denom_inv2*k1 + denom_inv*k2
+
+
+    k1 = (-2*s2*B + 2*s1*A)*(-(g1+s1)*B + (g2+s2)*A)
+    k2 = -B + (g1 + s1)*s2 + s1*(g2 + s2)
+    g2s_by_g1o = -denom_inv2*k1 + denom_inv*k2
+
+    k1 = (2*s1*B + 2*s2*A)*(-(g1+s1)*B + (g2+s2)*A)
+    k2 = A - s1*(g1+s1) + s2*(g2+s2)
+    g2s_by_g2o = -denom_inv2*k1 + denom_inv*k2
 
     return g1s_by_g1o*g2s_by_g2o - g1s_by_g2o*g2s_by_g1o
 
 
-def dgs_by_dgo_jacob_full(g1, g2, s1, s2):
-    """
-    same as above but without simplification
-    |dgs/dgo|_{-shear}
-    """
+def dgs_by_dgo_jacob_num(g1, g2, s1, s2, h=1.0e-6):
+    ng1_1_1,ng2_1_1 = gadd(g1+h, g2, s1, s2)
+    ng1_1_2,ng2_1_2 = gadd(g1-h, g2, s1, s2)
 
-    g1s_by_g1o = -((((g2 - s2)*(-(g2*s1) + g1*s2) + (g1 - s1)*(1 - g1*s1 - g2*s2))*(2*s2*(-(g2*s1) + g1*s2) - 2*s1*(1 - g1*s1 - g2*s2)))/((-(g2*s1) + g1*s2)**2 + (1 - g1*s1 - g2*s2)**2)**2) -  (1 - g1*s1 - (g1 - s1)*s1 - g2*s2 + (g2 - s2)*s2)/((-(g2*s1) + g1*s2)**2 + (1 - g1*s1 - g2*s2)**2)
+    g1s_by_g1o = (ng1_1_1-ng1_1_2)/(2*h)
+    g2s_by_g1o = (ng2_1_1-ng2_1_2)/(2*h)
 
-    g1s_by_g2o = -((((g2 - s2)*(-(g2*s1) + g1*s2) + (g1 - s1)*(1 - g1*s1 - g2*s2))*(-2*s1*(-(g2*s1) + g1*s2) - 2*s2*(1 - g1*s1 - g2*s2)))/((-(g2*s1) + g1*s2)**2 + (1 - g1*s1 - g2*s2)**2)**2) -  (-(g2*s1) - s1*(g2 - s2) + g1*s2 - (g1 - s1)*s2)/((-(g2*s1) + g1*s2)**2 + (1 - g1*s1 - g2*s2)**2)
+    ng1_2_1,ng2_2_1 = gadd(g1, g2+h, s1, s2)
+    ng1_2_2,ng2_2_2 = gadd(g1, g2-h, s1, s2)
 
-    g2s_by_g1o = -(((2*s2*(-(g2*s1) + g1*s2) - 2*s1*(1 - g1*s1 - g2*s2))*(-((g1 - s1)*(-(g2*s1) + g1*s2)) + (g2 - s2)*(1 - g1*s1 - g2*s2)))/((-(g2*s1) + g1*s2)**2 + (1 - g1*s1 - g2*s2)**2)**2) -  (g2*s1 - s1*(g2 - s2) - g1*s2 - (g1 - s1)*s2)/((-(g2*s1) + g1*s2)**2 + (1 - g1*s1 - g2*s2)**2)
-
-    g2s_by_g2o =  -(((-((g1 - s1)*(-(g2*s1) + g1*s2)) + (g2 - s2)*(1 - g1*s1 - g2*s2))*(-2*s1*(-(g2*s1) + g1*s2) - 2*s2*(1 - g1*s1 - g2*s2)))/((-(g2*s1) + g1*s2)**2 + (1 - g1*s1 - g2*s2)**2)**2) -  (1 - g1*s1 + (g1 - s1)*s1 - g2*s2 - (g2 - s2)*s2)/((-(g2*s1) + g1*s2)**2 + (1 - g1*s1 - g2*s2)**2)
+    g1s_by_g2o = (ng1_2_1-ng1_2_2)/(2*h)
+    g2s_by_g2o = (ng2_2_1-ng2_2_2)/(2*h)
 
     return g1s_by_g1o*g2s_by_g2o - g1s_by_g2o*g2s_by_g1o
+
+
+def _compare_num_s1(g1, g2, h=1.e-6):
+    """
+    Do a numerical version of dgs_by_dgo_jacob for comparison
+    at fixed g1,g2 and as a function of s1
+    """
+    import esutil as eu
+    s2=0.0
+    s1vals=numpy.linspace(-0.4,0.4,100)
+
+    dvals_an  = dgs_by_dgo_jacob(g1,g2,-s1vals,-s2)
+    dvals_num = dgs_by_dgo_jacob_num(g1, g2, -s1vals, -s2, h=h)
+
+    plt=eu.plotting.bscatter(s1vals, dvals_an, color='blue',
+                             xlabel='shear 1',
+                             ylabel='jacobian',
+                             title='g1: %.2g g2: %.2g' % (g1,g2),
+                             show=False)
+    eu.plotting.bscatter(s1vals, dvals_num, color='red', type='triangle', plt=plt)
+
+

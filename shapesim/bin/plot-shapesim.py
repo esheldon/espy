@@ -23,7 +23,7 @@ parser.add_option('-y','--yrange',default='-0.05,0.05',
                   help='yrange, default %default')
 parser.add_option('--yrange2',default='-0.05,0.05',
                   help='yrange2, default %default')
-parser.add_option('-t','--type',default='diff',
+parser.add_option('-t','--type',default='frac',
                   help='yrange, default %default')
 
 parser.add_option('--title',default=None,
@@ -33,7 +33,7 @@ parser.add_option('--maketitle',action="store_true",
 
 parser.add_option('--s2min',default=None,
                   help="min value in s2")
-parser.add_option('--s2n-name',default=None,
+parser.add_option('--s2n-name',default='s2n_admom',
                   help="field for s2n")
 
 parser.add_option('--etot',action='store_true',
@@ -60,6 +60,9 @@ parser.add_option('--nokey',action="store_true",
 parser.add_option('--use-rb',action="store_true",
                   help=("show rb = sigmagal/sigmapsf instead of "
                         "sigmapsf^2/sigmagal^2"))
+parser.add_option('--use-pqr',action="store_true",
+                  help=("Use PQR formalism from BA13"))
+
 
 options,args = parser.parse_args(sys.argv[1:])
 
@@ -167,11 +170,13 @@ else:
         if options.type=='frac':
             p.plots_shear1_frac_vs_s2n(yrng=yrng, xrng=xrng, 
                                        title=options.title,
+                                       use_pqr=options.use_pqr,
+                                       s2n_name=options.s2n_name,
                                        show=show)
         elif options.type=='Tfrac':
             p.plots_shear1_frac_vs_s2n(yrng=yrng, xrng=xrng, 
                                        title=options.title,
-                                       show=show, Ts2n=True, 
+                                       show=show, s2n_name='Ts2n',
                                        nokey=options.nokey)
         elif options.type=='efrac':
             p.plots_shear1_frac_vs_err(yrng=yrng, xrng=xrng, 
@@ -186,4 +191,5 @@ else:
             p.plots_shear_vs_s2n(yrng=yrng, xrng=xrng, type=options.type, 
                                  s2n_name=options.s2n_name,
                                  title=options.title,
+                                 use_pqr=options.use_pqr,
                                  show=show)

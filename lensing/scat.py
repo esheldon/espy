@@ -189,7 +189,7 @@ class DR8GMixCatalog(GenericSrcCatalog):
 
     def select(self):
         import gmix_sdss
-        selector=gmix_sdss.cuts.Selector(self.scols)
+        selector=gmix_sdss.cuts.Selector(self.scols,self['psf_model'])
         selector.do_select(pzrun=self['pzrun'],
                            s2n_min=self['s2n_range'][0],
                            s2n_max=self['s2n_range'][1],
@@ -200,6 +200,9 @@ class DR8GMixCatalog(GenericSrcCatalog):
 
     def open_all_columns(self):
         import gmix_sdss
+        conf=gmix_sdss.files.read_config(self['catalog'])
+        self['psf_model'] = conf['psf_model']
+
         self.scols = gmix_sdss.collate.open_columns(self['catalog'])
         print("  #rows:",self.scols['photoid'].size)
 

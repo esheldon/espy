@@ -33,6 +33,12 @@ def main():
         sim=shapesim.gmix_fit_sim.GMixFitSim(run)
     elif run[0:4] == 'gmix':
         sim=shapesim.gmix_em_sim.GMixEMSim(run)
+
+    elif 'bafit' in run:
+        sim=shapesim.bafit_sim.BAFitSim(run)
+        c = shapesim.read_config(run)
+        cs = shapesim.read_config(c['sim'])
+
     elif 'mixmc' in run or 'bayes' in run or 'mca' in run:
         sim=shapesim.bayesfit_sim.BayesFitSim(run)
         c = shapesim.read_config(run)

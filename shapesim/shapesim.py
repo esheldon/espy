@@ -20,6 +20,7 @@ import admom
 import fitsio
 import time
 
+
 class ShapeSim(dict):
     """
     The config file defines the PSF model and size as well as the
@@ -36,9 +37,7 @@ class ShapeSim(dict):
         for k,v in keys.iteritems():
             self[k] = v
 
-        self.fs=None
-        if os.environ.get('SHAPESIM_FS')=='hdfs':
-            self.fs='hdfs'
+        self.fs=get_default_fs()
 
         self.cache_list={}
 
@@ -114,9 +113,10 @@ class ShapeSim(dict):
 
         ci_full = self.new_convolved_image(s2, ellip, theta)
         if self['dotrim']:
+            fluxfrac=self.get('fluxfrac',0.999937)
             if self['verbose']:
-                wlog("trimming")
-            ci = fimage.convolved.TrimmedConvolvedImage(ci_full)
+                wlog("trimming",fluxfrac)
+            ci = fimage.convolved.TrimmedConvolvedImage(ci_full,fluxfrac=fluxfrac)
         else:
             ci=ci_full
 
@@ -205,7 +205,7 @@ class ShapeSim(dict):
         object models listed in the config.
         """
         # new thing using the gmix_image code for gaussian objects
-        if self['objmodel'] in ['gexp','gdev','gauss']:
+        if self['objmodel'] in ['gexp','gdev','gauss','gbdc']:
             return self.new_gmix_convolved_image(s2, obj_ellip, obj_theta)
 
         psfmodel = self['psfmodel']
@@ -286,15 +286,33 @@ class ShapeSim(dict):
         else:
             shape=shape0
 
-        objpars=[-9., -9., shape.e1, shape.e2, Tobj, 1.0]
-        if objmodel=='gexp':
-            obj_gmix=gmix_image.GMixExp(objpars)
-        elif objmodel=='gdev':
-            obj_gmix=gmix_image.GMixDev(objpars)
-        elif objmodel=='gauss':
-            obj_gmix=gmix_image.GMixCoellip(objpars)
+        if objmodel in ['gbdc','bdc']:
+            # we always set Texp to Tobj
+            frac_dev=self['frac_dev']
+            Tfrac_dev=self['Tfrac_dev']
+            
+            Flux_exp = (1.0-frac_dev)
+            Flux_dev = frac_dev
+
+            # need to adjust a bit to get Tobj
+            Tobj0 = (1-frac_dev)*(1-Tfrac_dev)*Tobj + frac_dev*Tfrac_dev*Tobj
+            fac = Tobj/Tobj0
+
+            T_exp = (1-Tfrac_dev)*Tobj*fac
+            T_dev = Tfrac_dev*Tobj*fac
+
+            objpars=[-9., -9., shape.e1, shape.e2, T_exp, T_dev, Flux_exp, Flux_dev]
+            obj_gmix=gmix_image.GMix(objpars,type='bdc')
         else:
-            raise ValueError("unsupported gmix object type: '%s'" % objmodel)
+            objpars=[-9., -9., shape.e1, shape.e2, Tobj, 1.0]
+            if objmodel=='gexp':
+                obj_gmix=gmix_image.GMixExp(objpars)
+            elif objmodel=='gdev':
+                obj_gmix=gmix_image.GMixDev(objpars)
+            elif objmodel=='gauss':
+                obj_gmix=gmix_image.GMixCoellip(objpars)
+            else:
+                raise ValueError("unsupported gmix object type: '%s'" % objmodel)
 
         ci=fimage.convolved.ConvolverGMix(obj_gmix, psf_gmix, **self)
 
@@ -377,13 +395,11 @@ class BaseSim(dict):
         conf=read_config(run)
         for k,v in conf.iteritems():
             self[k] = v
-        numpy.random.seed(self['seed'])
+        #numpy.random.seed(self['seed'])
 
         self.simc = read_config(self['sim'])
 
-        self.fs=None
-        if os.environ.get('SHAPESIM_FS')=='hdfs':
-            self.fs='hdfs'
+        self.fs=get_default_fs()
 
         self['verbose'] = self.get('verbose',False)
 
@@ -467,7 +483,7 @@ class BaseSim(dict):
                                       itheta=itheta)
 
         if dolog:
-            wlog("ring theta: %s/%s" % (itheta+1,self.simc['nring']))
+            wlog("ring theta: %s/%s" % (itheta+1,self.simc['nsplit']))
             wlog('ellip:',ellip,'s2n:',s2n,
                  's2n_psf:',s2n_psf,'s2n_method:',s2n_method)
 
@@ -517,22 +533,22 @@ class BaseSim(dict):
         s2n = get_s2n(self, is2n)
         s2n_fac = self['s2n_fac']
 
-        nring = self.simc['nring']
+        nsplit = self.simc['nsplit']
         nrepeat = get_s2n_nrepeat(s2n, fac=s2n_fac)
 
-        ntot = nring*nrepeat
+        ntot = nsplit*nrepeat
         out = numpy.zeros(ntot, dtype=self.out_dtype())
 
         ii = 0
-        for i in xrange(nring):
+        for i in xrange(nsplit):
             itheta=i
 
             if self['verbose']:
                 stderr.write('-'*70)
                 stderr.write('\n')
             # we always write this
-            stderr.write("%d/%d %d%% done\n" % ((i+1),nring,
-                                                100.*(i+1)/float(nring)))
+            stderr.write("%d/%d %d%% done\n" % ((i+1),nsplit,
+                                                100.*(i+1)/float(nsplit)))
 
             dolog=False
             if i==0:
@@ -566,7 +582,7 @@ class BaseSim(dict):
         ci_nonoise = self.get_a_trial(self.shapesim, is2, ie, 
                                       itheta=itheta)
         if dolog:
-            wlog("ring theta: %s/%s" % (itheta+1,self.simc['nring']))
+            wlog("ring theta: %s/%s" % (itheta+1,self.simc['nsplit']))
             wlog('s2n:',s2n, 's2n_psf:',s2n_psf,'s2n_method:',s2n_method)
 
         out = numpy.zeros(nrepeat, dtype=self.out_dtype())
@@ -627,23 +643,23 @@ class BaseSim(dict):
 
         nrepeat = get_s2n_nrepeat(s2n, fac=s2n_fac)
 
-        nring = self.simc['nring']
-        ntot = nring*nrepeat
+        nsplit = self.simc['nsplit']
+        ntot = nsplit*nrepeat
         out = numpy.zeros(ntot, dtype=self.out_dtype())
 
         s2,ellip = get_s2_e(self.simc, is2, ie)
         wlog('ellip:',ellip)
 
         ii = 0
-        for i in xrange(nring):
+        for i in xrange(nsplit):
             itheta=i
 
             if self['verbose']:
                 stderr.write('-'*70)
                 stderr.write('\n')
 
-            stderr.write("%d/%d %d%% done\n" % ((i+1),nring,
-                                                100.*(i+1)/float(nring)))
+            stderr.write("%d/%d %d%% done\n" % ((i+1),nsplit,
+                                                100.*(i+1)/float(nsplit)))
             dolog=False
             if i==0:
                 dolog=True
@@ -774,17 +790,17 @@ def get_theta(conf, itheta=None):
             raise ValueError("itheta only makes sense for ring test "
                              "simulation types")
 
-        thetas = get_ring_thetas(conf['nring'])
+        thetas = get_ring_thetas(conf['nsplit'])
         theta = thetas[itheta]
     return theta
 
-def get_ring_thetas(nring):
-    nring=int(nring)
-    if (nring % 2) != 0:
-        raise ValueError("nring must be even")
+def get_ring_thetas(nsplit):
+    nsplit=int(nsplit)
+    if (nsplit % 2) != 0:
+        raise ValueError("nsplit must be even")
 
-    thetas = zeros(nring)
-    nhalf = nring/2
+    thetas = zeros(nsplit)
+    nhalf = nsplit/2
     thetas[0:nhalf] = linspace(0,90,nhalf)
     thetas[nhalf:] = thetas[0:nhalf] + 90
 
@@ -815,6 +831,13 @@ def read_config(run):
                          "itself: '%s' instead of '%s'" % (n,c[n],run))
     return c
 
+def get_default_fs():
+    if os.environ.get('SHAPESIM_FS')=='hdfs':
+        fs='hdfs'
+    else:
+        fs='nfs'
+    return fs
+
 def get_simdir(fs=None):
     if fs=='hdfs':
         dir=os.environ.get('LENSDIR_HDFS')
@@ -825,6 +848,24 @@ def get_simdir(fs=None):
 def get_run_dir(run, fs=None):
     dir=get_simdir(fs=fs)
     return path_join(dir,run)
+
+def get_pbs_dir(run):
+    dir=get_run_dir(run)
+    dir=path_join(dir, 'pbs')
+    return dir
+
+def get_minions_url(run, i1):
+    d=get_pbs_dir(run)
+    return path_join(d,'%s-minions-%03d.pbs' % (run,i1))
+
+def get_minions_script_url(run):
+    d=get_pbs_dir(run)
+    return path_join(d,'%s-minions.sh' % run)
+
+
+def get_commands_url(run,i1):
+    d=get_pbs_dir(run)
+    return path_join(d,'%s-commands-%03d.txt' % (run,i1))
 
 
 def get_wq_dir(run, bytrial=False, combine=False):
@@ -1030,8 +1071,11 @@ def make_averaged_outputs(run, docum=False,
                           skip1=[], 
                           skip2=[]):
     """
-    We write to both local and hdfs, for speed
+    if fs is hdfs, we write to both local and hdfs, for speed
     """
+
+    fs=get_default_fs()
+
     data=[]
     c=read_config(run)
     cs=read_config(c['sim'])
@@ -1039,7 +1083,7 @@ def make_averaged_outputs(run, docum=False,
 
     straight_avg=False
     bayes=False
-    if 'bayes' in run or 'mixmc' in run:
+    if 'bayes' in run or 'mixmc' in run or 'bafit' in run:
         wlog("doing bayes averaging")
         bayes=True
     elif 'deswl' in run:
@@ -1060,8 +1104,9 @@ def make_averaged_outputs(run, docum=False,
         for i2 in xrange(numi2):
             if i2 in skip2:
                 continue
-            edata = read_output(run, i1, i2, verbose=True, fs='hdfs')
+            edata = read_output(run, i1, i2, verbose=True, fs=fs)
             s2data.append(edata)
+
         if 'shearmag' in cs:
             s2data = average_randshear_outputs(s2data)
         else:
@@ -1069,14 +1114,16 @@ def make_averaged_outputs(run, docum=False,
         data.append(s2data)
 
     wlog("writing averaged outputs")
-    write_averaged_outputs(run, data, skip1=skip1)
-    write_averaged_outputs(run, data, skip1=skip1,fs='hdfs')
+    write_averaged_outputs(run, data, skip1=skip1, fs=fs)
+    if fs=='hdfs':
+        write_averaged_outputs(run, data, skip1=skip1,fs='nfs')
 
     if docum:
         cumdata = accumulate_outputs(data)
         wlog("writing acummulated averaged outputs")
-        write_averaged_outputs(run, cumdata, docum=docum, skip1=skip1)
-        write_averaged_outputs(run, cumdata, docum=docum, skip1=skip1,fs='hdfs')
+        write_averaged_outputs(run, cumdata, docum=docum, skip1=skip1,fs=fs)
+        if fs=='hdfs':
+            write_averaged_outputs(run, cumdata, docum=docum, skip1=skip1,fs='nfs')
     return data
 
 
@@ -1215,30 +1262,43 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                     ('shear2','f8'),
                     ('shear2err','f8')]
         if 'Ts2n' not in data[0].dtype.names:
-            dt+=[('Ts2n','f8')]
-        dt += [('Ts2n_sum','f8')]
+            dt_extra+=[('Ts2n','f8')]
+        dt_extra += [('Ts2n_sum','f8')]
+        if 'Fs2n' not in data[0].dtype.names:
+            dt_extra+=[('Fs2n','f8')]
+        dt_extra += [('Fs2n_sum','f8')]
+        if 'Flux' in data[0].dtype.names:
+            dt_extra += [('Flux_sum','f8'),
+                         ('Ferr2invsum','f8')]
+
 
         if 'gcov0' in data[0].dtype.names:
             dt_extra += [('g1err0sum2','f8'),
                          ('g2err0sum2','f8'),
                          ('g1err0_mean','f8'), # this is the rms: sqrt(sum(sigma^2)/n)
                          ('g2err0_mean','f8')]
+
+        if 'Q' in data[0].dtype.names:
+            dt_extra+=[('Q_sum','f8',2),
+                 ('Cinv_sum','f8',(2,2)),
+                 ('bashear','f8',2),
+                 ('bashear_cov','f8',(2,2))]
     else:
-        dt_extra = [('e1sum','f8'), # sums so we can do cumulative
-                    ('e2sum','f8'),
-                    ('e1err2invsum','f8'),
-                    ('e2err2invsum','f8'),
-                    ('esqsum','f8'),
+        dt_extra = [('g1sum','f8'), # sums so we can do cumulative
+                    ('g2sum','f8'),
+                    ('g1err2invsum','f8'),
+                    ('g2err2invsum','f8'),
                     ('nsum','i8'),
                     ('shear1','f8'),
                     ('shear1err','f8'),  # average in particular bin
                     ('shear2','f8'),
-                    ('shear2err','f8'),
-                    ('Rshear_true','f8'),
-                    ('Rshear','f8')]
+                    ('shear2err','f8')]
 
     dt += dt_extra
     name_extra = [dd[0] for dd in dt_extra]
+
+    # other names not to avarage
+    name_extra += ['Ferr']
 
     d=zeros(len(data),dtype=dt)
     for i,edata in enumerate(data): # over different ellipticities
@@ -1269,8 +1329,6 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
 
             # we use the scatter from true, becuase with ring tests
             # we don't have shape noise
-            #g1scatt = (g1-edata['gtrue'][:,0]).var()
-            #g2scatt = (g2-edata['gtrue'][:,1]).var()
 
             num = g1.size
             #g1err = sqrt(g1scatt/num)
@@ -1321,74 +1379,79 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                 if 'Ts2n' in edata.dtype.names:
                     Ts2n_vals=edata['Ts2n']
                 else:
+                    # ack this won't work for complex models!
                     Ts2n_vals=edata['pars'][:,4]/sqrt(edata['pcov'][:,4,4])
                 d['Ts2n_sum'][i] = Ts2n_vals.sum()
                 d['Ts2n'][i] = d['Ts2n_sum'][i]/num
+
+                if 'Fs2n' in edata.dtype.names:
+                    Fs2n_vals=edata['Fs2n']
+                else:
+                    # ack this won't work for complex models!
+                    Fs2n_vals=edata['pars'][:,5]/sqrt(edata['pcov'][:,5,5])
+                d['Fs2n_sum'][i] = Fs2n_vals.sum()
+                d['Fs2n'][i] = d['Fs2n_sum'][i]/num
+
+            if 'Flux' in edata.dtype.names:
+                Flux_sum=edata['Flux'].sum()
+                d['Flux_sum'][i] = Flux_sum
+                d['Flux'][i] = Flux_sum/num
+                d['Ferr2invsum'][i] = (1./edata['Ferr']**2).sum()
+                d['Ferr'][i] = sqrt(1./d['Ferr2invsum'][i])
 
             if 'gcov0' in data[0].dtype.names:
                 d['g1err0sum2'][i] = edata['gcov0'][:,0,0].sum()
                 d['g2err0sum2'][i] = edata['gcov0'][:,1,1].sum()
                 d['g1err0_mean'][i] = sqrt(d['g1err0sum2'][i]/num)
                 d['g2err0_mean'][i] = sqrt(d['g2err0sum2'][i]/num)
+
+            if 'Q' in data[0].dtype.names:
+                # NOTE!  can't use errors because this is a ring
+                # test.  Using errors from above
+                P = edata['P']
+                Q = edata['Q']
+                R = edata['R']
+                g1g2, C, Q_sum, Cinv_sum = \
+                        lensing.shear.get_shear_pqr(P,Q,R,get_sums=True)
+                d['Q_sum'][i] = Q_sum
+                d['Cinv_sum'][i] = Cinv_sum
+                d['bashear'][i] = g1g2
+                d['bashear_cov'][i,0,0] = d['shear1err'][i]**2
+                d['bashear_cov'][i,1,1] = d['shear2err'][i]**2
+                print 'bashear1: %.16g +/- %.16g' % (g1g2[0],sqrt(d['bashear_cov'][i,0,0]))
         else:
-            if 'e1_meas' in edata:
-                e1 = edata['e1_meas']
-                e2 = edata['e2_meas']
-                # we use the scatter from true, becuase with ring tests
-                # we don't have shape noise
-                e1scatt = (e1-edata['e1true']).var()
-                e2scatt = (e2-edata['e2true']).var()
 
-                e1err = sqrt(e1scatt/num)
-                e2err = sqrt(e2scatt/num)
-                e1err2inv = num/e1scatt
-                e2err2inv = num/e2scatt
+            g1 = edata['g'][:,0]
+            g2 = edata['g'][:,1]
 
-                e1err2invsum=e1err2inv.sum()
-                e2err2invsum=e2err2inv.sum()
+            num=g1.size
 
-            else:
-                e1 = edata['e'][:,0]
-                e2 = edata['e'][:,1]
-                e1err2invsum = ( 1/edata['ecov'][:,0,0] ).sum()
-                e2err2invsum = ( 1/edata['ecov'][:,1,1] ).sum()
-                e1err = sqrt(1/e1err2invsum)
-                e2err = sqrt(1/e2err2invsum)
+            # use median because sometimes the error is very small (e.g. wrong)
+            med_invcov1 = numpy.median(1./edata['gcov'][:,0,0])
+            med_invcov2 = numpy.median(1./edata['gcov'][:,1,1])
+            g1err2invsum = num*med_invcov1
+            g2err2invsum = num*med_invcov2
 
-            esq = e1**2 + e2**2
+            #g1err2invsum = ( 1/(SN1**2 + edata['gcov'][:,0,0]) ).sum()
+            #g2err2invsum = ( 1/(SN1**2 + edata['gcov'][:,1,1]) ).sum()
+            g1err = sqrt(1/g1err2invsum)
+            g2err = sqrt(1/g2err2invsum)
 
-            num=e1.size
+            g1sum = g1.sum()
+            g2sum = g2.sum()
 
-            e1sum = e1.sum()
-            e2sum = e2.sum()
-            esqsum = esq.sum()
+            mg1 = g1sum/num
+            mg2 = g2sum/num
 
-
-            mesq = esqsum/num
-            me1 = e1sum/num
-            me2 = e2sum/num
-
-
-            R = 1-.5*mesq
-            g1 = 0.5*me1/R
-            g2 = 0.5*me2/R
-
-            g1err = 0.5*e1err/R
-            g2err = 0.5*e2err/R
-
-
-            d['Rshear'][i] = R
-            #d['Rshear_true'][i] = (1-0.5*edata['etrue']**2).mean()
-            d['shear1'][i] = g1
-            d['shear2'][i] = g2
+            d['shear1'][i] = mg1
+            d['shear2'][i] = mg2
             d['shear1err'][i] = g1err
             d['shear2err'][i] = g2err
 
-            d['e1sum'][i] = e1sum
-            d['e2sum'][i] = e2sum
-            d['e1err2invsum'][i] = e1err2invsum
-            d['e2err2invsum'][i] = e2err2invsum
-            d['esqsum'][i] = esqsum
+            d['g1sum'][i] = g1sum
+            d['g2sum'][i] = g2sum
+            d['g1err2invsum'][i] = g1err2invsum
+            d['g2err2invsum'][i] = g2err2invsum
             d['nsum'][i] = num
             print 'shear1: %.16g +/- %.16g' % (d['shear1'][i],d['shear1err'][i])
 
@@ -1402,13 +1465,15 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
     return d
 
 
-def average_runs(runlist, new_run_name):
+def average_runs(runlist, new_run_name, skip1=[]):
     """
     The runs must already be averaged and have the same size
     in all indices of relevance
     """
 
-    if 'bayes' in runlist[0]:
+    fs=get_default_fs()
+
+    if 'bayes' in runlist[0] or 'bafit' in runlist[0]:
         bayes=True
         sumlist=['g1sum',
                  'g2sum',
@@ -1418,19 +1483,24 @@ def average_runs(runlist, new_run_name):
                  'g2err2invsum',
                  'nsum']
 
-        f=get_averaged_url(runlist[0], 0, fs='hdfs')
+        if 'bafit' in runlist[0]:
+            sumlist += ['Q_sum', 'Cinv_sum']
+
+        f=get_averaged_url(runlist[0], 0, fs=fs)
         t=eu.io.read(f)
         if 'g1err0sum2' in t.dtype.names:
             sumlist+=['g1err0sum2','g2err0sum2']
         if 'Ts2n_sum' in t.dtype.names:
             print 'doing Ts2n'
             sumlist +=['Ts2n_sum']
+
+        if 'Flux_sum' in t.dtype.names:
+            sumlist += ['Flux_sum','Ferr2invsum']
     else:
-        sumlist=['e1sum',
-                 'e2sum',
-                 'e1err2invsum',
-                 'e2err2invsum',
-                 'esqsum',
+        sumlist=['g1sum',
+                 'g2sum',
+                 'g1err2invsum',
+                 'g2err2invsum',
                  'nsum']
         bayes=False
 
@@ -1444,8 +1514,11 @@ def average_runs(runlist, new_run_name):
 
     numi1 = cs0['nums2']
     for i1 in xrange(numi1):
+        if i1 in skip1:
+            continue
+
         for irun,run in enumerate(runlist):
-            f=get_averaged_url(run, i1, fs='hdfs')
+            f=get_averaged_url(run, i1, fs=fs)
             wlog("Reading:",f)
             d=eu.io.read(f)
 
@@ -1473,21 +1546,37 @@ def average_runs(runlist, new_run_name):
             if 'Ts2n_sum' in t.dtype.names:
                 data['Ts2n'] = data['Ts2n_sum']/data['nsum']
 
+            if 'Flux_sum' in sumlist:
+                data['Flux'] = data['Flux_sum']/data['nsum']
+                data['Ferr'] = sqrt(1./data['Ferr2invsum'])
+
+            if 'Q_sum' in sumlist:
+
+                for i in xrange(data.size):
+                    Q_sum = data['Q_sum'][i]
+                    Cinv_sum = data['Cinv_sum'][i]
+                    C = numpy.linalg.inv(Cinv_sum)
+                    g1g2 = numpy.dot(C,Q_sum)
+
+                    data['bashear'][i] = g1g2
+                    data['bashear_cov'][i,0,0] = data['shear1err'][i]**2
+                    data['bashear_cov'][i,1,1] = data['shear2err'][i]**2
+
+
         else:
-            mesq = data['esqsum']/data['nsum']
-            data['Rshear'] = 1.-.5*mesq
-            data['shear1'] = .5*data['e1sum']/data['nsum']/data['Rshear']
-            data['shear2'] = .5*data['e2sum']/data['nsum']/data['Rshear']
-            data['shear1err'] = 0.5*sqrt(1/data['e1err2invsum'])
-            data['shear2err'] = 0.5*sqrt(1/data['e2err2invsum'])
+            data['shear1'] = data['g1sum']/data['nsum']
+            data['shear2'] = data['g2sum']/data['nsum']
+            data['shear1err'] = sqrt(1/data['g1err2invsum'])
+            data['shear2err'] = sqrt(1/data['g2err2invsum'])
 
 
-        for fs in [None,'hdfs']:
-            fout=get_averaged_url(new_run_name, i1, fs=fs)
+        fout=get_averaged_url(new_run_name, i1, fs=fs)
+        wlog("    writing:",fout)
+        eu.io.write(fout, data, clobber=True)
+        if fs=='hdfs':
+            fout=get_averaged_url(new_run_name, i1, fs='nfs')
             wlog("    writing:",fout)
             eu.io.write(fout, data, clobber=True)
-
-
 
 
 def average_randshear_outputs(data):
@@ -1587,23 +1676,26 @@ def plot_signal_vs_rad(im, cen):
 
     plt.show()
 
-def combine_trials(run, is2, ie):
+def combine_trials(run, is2, ie, allow_missing=True):
+    fs=get_default_fs()
     c = read_config(run)
     cs = read_config(c['sim'])
 
     orient=cs.get('orient','rand')
     if orient == 'ring':
-        ntrial = cs['nring']
+        ntrial = cs['nsplit']
     else:
         ntrial = cs['ntrial']
 
 
-    outfile=get_output_url(run, is2, ie, fs='hdfs')
+    outfile=get_output_url(run, is2, ie, fs=fs)
 
     datalist=[]
     for itrial in xrange(ntrial):
-        f=get_output_url(run, is2, ie, itrial=itrial, fs='hdfs')
+        f=get_output_url(run, is2, ie, itrial=itrial, fs=fs)
         print f
+        if allow_missing and not os.path.exists(f):
+            continue
         t=eu.io.read(f)
         datalist.append(t)
 

@@ -1,0 +1,35 @@
+run: gmix-fit-gg13r01
+sim: sim-gg13
+
+runtype: bys2n
+
+generic_prior: true
+
+s2n_method: admom
+s2n_fac: 160
+
+# minimum number of random ellipticities to use.
+# need decent count to sample the prior surface
+min_gcount: 2000
+
+seed: 8515
+
+retrim: false
+retrim_fluxfrac: null
+s2ncalc_fluxfrac: null
+
+s2nvals: [15,20,25,30,40,50,60,70,80,90,100,120,140,160,180,200,250,300,350,10000]
+
+s2n_psf: 1.0e+8
+
+use_cache: false
+add_to_cache: false
+
+verbose: false
+
+fitmodel: ['coellip']
+psf_fitter: 'lm'
+ngauss_psf: 1
+
+em_maxiter: 5000
+em_tol: 1.0e-8  # (T-Told)/T
