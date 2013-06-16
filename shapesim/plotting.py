@@ -1562,7 +1562,9 @@ class SimPlotter(dict):
 
         data = self.read_data()
 
-        epsfile = shapesim.get_plot_file(self['run'],type+extra,yrng=yrng)
+        epsfile = shapesim.get_plot_file(self['run'],type+extra,
+                                         yrng=yrng,use_pqr=use_pqr,
+                                         s2n_name=s2n_name)
         wlog("will plot to:",epsfile)
 
         if len(data) == 4:
@@ -1672,8 +1674,8 @@ class SimPlotter(dict):
 
         plt.add(g1lab)
 
-        if not xrng:
-            xrng=[1., 120.]
+        if xrng is None:
+            xrng = [0.4*s2n.min(), 1.5*s2n.max()]
         expect1 = biggles.Curve(xrng, [0,0])
 
         plt.aspect_ratio=1
