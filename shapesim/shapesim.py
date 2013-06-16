@@ -26,16 +26,14 @@ class ShapeSim(dict):
     The config file defines the PSF model and size as well as the
     galaxy model but not it's size or ellipticity or noise
     properties.
-    
     """
     def __init__(self, simname, **keys):
         conf=read_config(simname)
-        for k,v in conf.iteritems():
-            self[k] = v
+        self.update(conf)
+        self.update(keys)
 
-        # over-ride things
-        for k,v in keys.iteritems():
-            self[k] = v
+        self._set_s2()
+        self._set_counts()
 
         self.fs=get_default_fs()
 
@@ -94,7 +92,7 @@ class ShapeSim(dict):
         return ci
 
 
-    def get_trial(self, s2, ellip, theta):
+    def get_trial(self, s2, ellip, theta, counts=1.0):
         """
         Genereate a realization of the input size ratio squared and total
         ellipticity.
@@ -111,7 +109,7 @@ class ShapeSim(dict):
         s2n_psf: S/N ratio for psf
         """
 
-        ci_full = self.new_convolved_image(s2, ellip, theta)
+        ci_full = self.new_convolved_image(s2, ellip, theta, counts=counts)
         if self['dotrim']:
             fluxfrac=self.get('fluxfrac',0.999937)
             if self['verbose']:
@@ -199,14 +197,15 @@ class ShapeSim(dict):
         if key == 'q':
             stop
 
-    def new_convolved_image(self, s2, obj_ellip, obj_theta):
+    def new_convolved_image(self, s2, obj_ellip, obj_theta, counts=1.0):
         """
         Generate a convolved image with the input parameters and the psf and
         object models listed in the config.
         """
         # new thing using the gmix_image code for gaussian objects
         if self['objmodel'] in ['gexp','gdev','gauss','gbd']:
-            return self.new_gmix_convolved_image(s2, obj_ellip, obj_theta)
+            return self.new_gmix_convolved_image(s2, obj_ellip, obj_theta, 
+                                                 counts=counts)
 
         psfmodel = self['psfmodel']
         objmodel = self['objmodel']
@@ -248,7 +247,7 @@ class ShapeSim(dict):
             ci['shear2']=0.
         return ci
 
-    def new_gmix_convolved_image(self, s2, obj_ellip, obj_theta):
+    def new_gmix_convolved_image(self, s2, obj_ellip, obj_theta, counts=1.0):
         """
         Generate a convolved image with the input parameters and the psf and
         object models listed in the config.
@@ -291,8 +290,8 @@ class ShapeSim(dict):
             frac_dev=self['frac_dev']
             Tfrac_dev=self['Tfrac_dev']
             
-            Flux_exp = (1.0-frac_dev)
-            Flux_dev = frac_dev
+            Flux_exp = counts*(1.0-frac_dev)
+            Flux_dev = counts*frac_dev
 
             # need to adjust a bit to get Tobj
             Tobj0 = (1-frac_dev)*(1-Tfrac_dev)*Tobj + frac_dev*Tfrac_dev*Tobj
@@ -304,7 +303,7 @@ class ShapeSim(dict):
             objpars=[-9., -9., shape.e1, shape.e2, T_exp, T_dev, Flux_exp, Flux_dev]
             obj_gmix=gmix_image.GMix(objpars,type='bd')
         else:
-            objpars=[-9., -9., shape.e1, shape.e2, Tobj, 1.0]
+            objpars=[-9., -9., shape.e1, shape.e2, Tobj, counts]
             if objmodel=='gexp':
                 obj_gmix=gmix_image.GMixExp(objpars)
             elif objmodel=='gdev':
@@ -390,12 +389,54 @@ class ShapeSim(dict):
 
         return psfpars, psf_sigma_tot
 
+    def _set_s2(self):
+        self._s2_dists=None
+        self._s2vals=None
+
+        if 'mins2' in self:
+            self._s2vals = linspace(self['mins2'],
+                                    self['maxs2'], 
+                                    self['nums2'])
+
+            s2_dist=self.get('s2_dist',None)
+            if s2_dist is not None:
+                s2_width=self['s2_width']
+                self._s2_dists=[]
+
+                for s2 in self._s2vals:
+                    dist=eu.random.get_dist(s2_dist,[s2,s2*s2_width])
+                    self._s2_dists.append(dist)
+
+    def _get_s2(self, is2):
+        if self._s2_dists is not None:
+            return self._s2_dists[is2].sample()
+        else:
+            return self._s2vals[is2]
+    
+    def _set_counts(self):
+        self._counts_mean=1.0
+        self._counts_dist=None
+
+        counts_dist=self.get('counts_dist',None)
+
+        if counts_dist is not None:
+            counts_width=self['counts_width']
+
+            dist=eu.random.get_dist(counts_dist,
+                                    [self._counts_mean, 
+                                    self._counts_mean*counts_width])
+
+    def _get_counts(self):
+        if self._counts_dist is not None:
+            return self._counts_dist.sample()
+        else:
+            return self._counts_mean
+    
 class BaseSim(dict):
     def __init__(self, run):
         conf=read_config(run)
         for k,v in conf.iteritems():
             self[k] = v
-        #numpy.random.seed(self['seed'])
 
         self.simc = read_config(self['sim'])
 

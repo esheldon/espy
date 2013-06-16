@@ -22,7 +22,7 @@ from gmix_image.priors import GPriorBA, CenPrior
 
 import images
 import esutil as eu
-from esutil.random import srandu
+from esutil.random import srandu, LogNormal, Normal
 from esutil.misc import wlog
 
 import math
@@ -39,7 +39,7 @@ class TryAgainError(Exception):
         Exception.__init__(self, message)
 
 class BAFitSim(shapesim.BaseSim):
-    def __init__(self, run, extra=None):
+    def __init__(self, run, **keys):
         """
         use config files 
 
@@ -47,14 +47,21 @@ class BAFitSim(shapesim.BaseSim):
         tests. 
 
         """
+
         super(BAFitSim,self).__init__(run)
+        self.update(keys)
+
+        cw=self.simc.get('cen_width',None)
+        if cw is not None:
+            cen_dist=self.simc['cen_dist']
+            if cen_dist.lower()=="normal":
+                center_dist=gmix_image.priors.CenPrior([0.0]*2,[cw]*2)
+            else:
+                raise ValueError("implement non-normal cen dist")
+            self.shapesim['center_dist']=center_dist
+
         if 'verbose' not in self:
             self['verbose'] = False
-
-        if extra:
-            for k,v in extra.iteritems():
-                print k,v
-                self[k] = v
 
         self.gprior = GPriorBA(self.simc['gsigma'])
 
@@ -76,11 +83,7 @@ class BAFitSim(shapesim.BaseSim):
             npars=6
         return npars
 
-    def _get_s2(self, is2):
-        s2 = linspace(self.simc['mins2'],
-                      self.simc['maxs2'], 
-                      self.simc['nums2'])[is2]
-        return s2
+   
 
     def process_trial_by_s2n(self, is2, is2n, isplit,
                              dowrite=False, 
@@ -89,7 +92,6 @@ class BAFitSim(shapesim.BaseSim):
         t0=time.time()
 
         nellip=self.get_nellip(is2n)
-        s2=self._get_s2(is2)
         self._set_s2n_info(is2n)
 
         gvals = self.get_gvals(nellip)
@@ -97,11 +99,12 @@ class BAFitSim(shapesim.BaseSim):
 
         out = zeros(nellip*2, dtype=self.out_dtype(npars))
 
-        out['s2']  = s2
-        self['s2'] = s2
 
         i=0
         for ipair,g in enumerate(gvals):
+
+            s2=self.shapesim._get_s2(is2)
+            counts=self.shapesim._get_counts()
 
             ellip=lensing.util.g2e(g)
 
@@ -111,8 +114,8 @@ class BAFitSim(shapesim.BaseSim):
             while True:
                 theta1 = random.random()*360.0
                 theta2 = theta1 + 90.0
-                ci1=self._get_one_trial(ellip, theta1)
-                ci2=self._get_one_trial(ellip, theta2)
+                ci1=self._get_one_trial(s2, counts, ellip, theta1)
+                ci2=self._get_one_trial(s2, counts, ellip, theta2)
 
                 try:
                     res1,res2=self._process_pair(ci1,ci2)
@@ -120,9 +123,9 @@ class BAFitSim(shapesim.BaseSim):
                 except TryAgainError:
                     pass
 
-            self._copy_to_output(out, i, ci1, res1)
+            self._copy_to_output(out, i, ci1, res1, s2)
             i += 1
-            self._copy_to_output(out, i, ci2, res2)
+            self._copy_to_output(out, i, ci2, res2, s2)
             i += 1
 
 
@@ -137,8 +140,10 @@ class BAFitSim(shapesim.BaseSim):
 
         return out
 
-    def _get_one_trial(self, ellip, theta):
-        ci_nonoise = self.shapesim.get_trial(self['s2'], ellip, theta)
+    def _get_one_trial(self, s2, counts, ellip, theta):
+
+        ci_nonoise = self.shapesim.get_trial(s2, ellip, theta, counts=counts)
+
         if self['retrim']:
             if 'retrim_fluxfrac' not in self:
                 raise ValueError("you must set fluxfrac for a retrim")
@@ -184,6 +189,46 @@ class BAFitSim(shapesim.BaseSim):
             print '    best model:',res['model']
         return res
 
+    def _get_cen_prior(self, ci):
+        cen_width = self.simc.get('cen_width',0.1)
+        cen_dist = self.simc['cen_dist']
+        if cen_dist.lower()=="normal":
+            cen_prior=CenPrior(ci['cen'], [cen_width]*2)
+        else:
+            raise ValueError("implement non-normal cen dist")
+        return cen_prior
+
+    def _get_counts_prior(self, ci):
+        counts_prior=None
+        counts_dist = self.simc.get('counts_dist',None)
+        if counts_dist is not None:
+            counts_width=self.simc['counts_width']
+
+            counts_mean=self.shapesim._counts_mean
+            counts_width = counts_mean*counts_width
+
+            counts_prior = eu.random.get_dist(counts_dist,
+                                              [counts_mean,
+                                              counts_width])
+        
+        return counts_prior
+
+    def _get_T_prior(self, ci):
+        T_prior=None
+
+        s2_dist = self.simc.get('s2_dist',None)
+        if s2_dist is not None:
+            s2_width=self.simc['s2_width']
+            T_mean = ci['Ttrue']
+            T_width = T_mean*s2_width
+
+            T_prior = eu.random.get_dist(s2_dist,
+                                         [T_mean,
+                                         T_width])
+ 
+        return T_prior
+
+
     def _run_fitter(self, ci, fitmodel):
         from gmix_image.gmix_em import GMixEMBoot
 
@@ -198,7 +243,9 @@ class BAFitSim(shapesim.BaseSim):
         Tguess = ci['Ttrue']*(1. + 0.1*srandu())
         ivar=1./ci['skysig']**2
 
-        cenprior=CenPrior(ci['cen'], [0.1]*2)
+        cen_prior=self._get_cen_prior(ci)
+        counts_prior=self._get_counts_prior(ci)
+        T_prior=self._get_T_prior(ci)
 
         if 'coellip' in fitmodel:
             ngauss=self.get_coellip_ngauss(fitmodel)
@@ -227,15 +274,23 @@ class BAFitSim(shapesim.BaseSim):
                                  draw_gprior=self['draw_gprior'])
 
         else:
-            T_guess=ci['Ttrue']*(1.+0.1*srandu())
+            T_guess=ci['Ttrue']*(1.+0.3*srandu())
+            counts_guess=ci['counts_true']*(1.0 + 0.3*srandu())
+            cen_guess=ci['cen']
             self.fitter=MixMCSimple(ci.image,
                                     ivar, 
                                     psf_gmix,
                                     self.gprior,
                                     T_guess,
-                                    ci['cen'],
+                                    counts_guess,
+                                    cen_guess,
                                     fitmodel,
                                     do_pqr=True,
+
+                                    Tprior=T_prior,
+                                    counts_prior=counts_prior,
+                                    cen_prior=cen_prior,
+
                                     when_prior=self['when_prior'],
                                     nwalkers=self['nwalkers'],
                                     nstep=self['nstep'], 
@@ -260,7 +315,9 @@ class BAFitSim(shapesim.BaseSim):
         return fitmodels
 
 
-    def _copy_to_output(self, out, i, ci, res):
+    def _copy_to_output(self, out, i, ci, res, s2):
+
+        out['s2'][i] = s2
 
         e1true=ci['e1true']
         e2true=ci['e2true']
@@ -294,8 +351,8 @@ class BAFitSim(shapesim.BaseSim):
         if 'Ts2n' in res:
             for tn in ['Tmean','Terr','Ts2n']:
                 out[tn][i] = res[tn]
-        if 'Fs2n' in res:
-            for tn in ['Flux','Ferr','Fs2n']:
+        for tn in ['flux','flux_err','flux_s2n']:
+            if tn in res:
                 out[tn][i] = res[tn]
 
         out['s2n_meas_w'][i] = res['s2n_w']
@@ -370,9 +427,9 @@ class BAFitSim(shapesim.BaseSim):
             ('Tmean','f8'),
             ('Terr','f8'),
             ('Ts2n','f8'),
-            ('Flux','f8'),
-            ('Ferr','f8'),
-            ('Fs2n','f8'),
+            ('flux','f8'),
+            ('flux_err','f8'),
+            ('flux_s2n','f8'),
             ('s2n_meas_w','f8'),  # weighted s/n based on most likely point
             ('loglike','f8'),     # loglike of fit
             ('chi2per','f8'),     # chi^2/degree of freedom
