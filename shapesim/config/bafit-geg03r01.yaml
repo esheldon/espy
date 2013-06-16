@@ -11,8 +11,7 @@ s2n_fac: 40
 
 # minimum number of random ellipticities to use.
 # need decent count to sample the prior surface
-#min_gcount: 100
-min_gcount: 20
+min_gcount: 100
 
 retrim: false
 retrim_fluxfrac: null
