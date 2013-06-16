@@ -17,7 +17,7 @@ from fimage.convolved import NoisyConvolvedImage
 
 import gmix_image
 from gmix_image import print_pars, GMix, gmix2pars
-from gmix_image.gmix_mcmc import MixMCSimple, MixMCCoellip, MixMCBDC
+from gmix_image.gmix_mcmc import MixMCSimple, MixMCCoellip, MixMCBD
 from gmix_image.priors import GPriorBA, CenPrior
 
 import images
@@ -70,7 +70,7 @@ class BAFitSim(shapesim.BaseSim):
         if 'coellip' in fitmodels[0]:
             ngauss=self.get_coellip_ngauss(fitmodels[0])
             npars=2*ngauss+4
-        elif 'bdc' in fitmodels[0]:
+        elif 'bd' in fitmodels[0]:
             npars=8
         else:
             npars=6
@@ -213,9 +213,9 @@ class BAFitSim(shapesim.BaseSim):
                                      iter=self.get('iter',False),
                                      draw_gprior=self['draw_gprior'])
 
-        elif 'bdc' in fitmodel:
-            raise ValueError("fix bdc")
-            self.fitter=MixMCBDC(ci.image, ivar, 
+        elif 'bd' in fitmodel:
+            raise ValueError("fix bd")
+            self.fitter=MixMCBD(ci.image, ivar, 
                                  psf_gmix, self.gprior, 
                                  cen=ci['cen'],
                                  do_pqr=True,

@@ -205,7 +205,7 @@ class ShapeSim(dict):
         object models listed in the config.
         """
         # new thing using the gmix_image code for gaussian objects
-        if self['objmodel'] in ['gexp','gdev','gauss','gbdc']:
+        if self['objmodel'] in ['gexp','gdev','gauss','gbd']:
             return self.new_gmix_convolved_image(s2, obj_ellip, obj_theta)
 
         psfmodel = self['psfmodel']
@@ -286,7 +286,7 @@ class ShapeSim(dict):
         else:
             shape=shape0
 
-        if objmodel in ['gbdc','bdc']:
+        if objmodel in ['gbd','bd']:
             # we always set Texp to Tobj
             frac_dev=self['frac_dev']
             Tfrac_dev=self['Tfrac_dev']
@@ -302,7 +302,7 @@ class ShapeSim(dict):
             T_dev = Tfrac_dev*Tobj*fac
 
             objpars=[-9., -9., shape.e1, shape.e2, T_exp, T_dev, Flux_exp, Flux_dev]
-            obj_gmix=gmix_image.GMix(objpars,type='bdc')
+            obj_gmix=gmix_image.GMix(objpars,type='bd')
         else:
             objpars=[-9., -9., shape.e1, shape.e2, Tobj, 1.0]
             if objmodel=='gexp':
@@ -911,7 +911,7 @@ def get_bias_file(run, type):
     return f
 
 
-def get_plot_file(run, type, s2min=None, yrng=None):
+def get_plot_file(run, type, s2n_name=None, s2min=None, yrng=None, use_pqr=False):
     d=get_plot_dir(run)
     f='%s' % run
 
@@ -920,7 +920,15 @@ def get_plot_file(run, type, s2min=None, yrng=None):
 
     if yrng is not None:
         f += '-yr%0.3f-%0.3f' % tuple(yrng)
-    f += '-%s.eps' % type
+    f += '-%s' % type
+
+    if use_pqr:
+        f += '-pqr'
+
+    if s2n_name is not None:
+        f += '-%s' % s2n_name
+
+    f += '.eps'
     f = path_join(d, f)
     return f
 

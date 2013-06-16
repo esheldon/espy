@@ -39,7 +39,7 @@ em_tol: 1.0e-6  # (T-Told)/T
 iter: true
 
 # coelliptical bulge+disk
-fitmodel: ['bdc']
+fitmodel: ['bd']
 # try two even though we know it is only 1
 ngauss_psf: 1
 mca_a: 2.0
