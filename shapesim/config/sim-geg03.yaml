@@ -10,7 +10,7 @@ dotrim: false
 psfmodel: gauss
 
 # 3.9 this corresponds to 1.4 sigma in pixels
-Tpsf: 16.0
+Tpsf: 3.9
 psf_e1: 0.0
 psf_e2: 0.0
 

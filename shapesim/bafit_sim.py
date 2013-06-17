@@ -297,6 +297,7 @@ class BAFitSim(shapesim.BaseSim):
                                     burnin=self['burnin'],
                                     mca_a=self['mca_a'],
                                     iter=self.get('iter',False),
+                                    make_plots=self.get('make_plots',False),
                                     draw_gprior=self['draw_gprior'])
 
     def get_coellip_ngauss(self, model):
