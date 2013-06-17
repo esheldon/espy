@@ -85,7 +85,7 @@ class BAFitSim(shapesim.BaseSim):
 
    
 
-    def process_trial_by_s2n(self, is2, is2n, isplit,
+    def process_trial_by_s2n(self, iT, is2n, isplit,
                              dowrite=False, 
                              dolog=False):
 
@@ -103,7 +103,7 @@ class BAFitSim(shapesim.BaseSim):
         i=0
         for ipair,g in enumerate(gvals):
 
-            s2=self.shapesim._get_s2(is2)
+            Tobj=self.shapesim._get_Tobj(iT)
             counts=self.shapesim._get_counts()
 
             ellip=lensing.util.g2e(g)
@@ -114,8 +114,8 @@ class BAFitSim(shapesim.BaseSim):
             while True:
                 theta1 = random.random()*360.0
                 theta2 = theta1 + 90.0
-                ci1=self._get_one_trial(s2, counts, ellip, theta1)
-                ci2=self._get_one_trial(s2, counts, ellip, theta2)
+                ci1=self._get_one_trial(Tobj, counts, ellip, theta1)
+                ci2=self._get_one_trial(Tobj, counts, ellip, theta2)
 
                 try:
                     res1,res2=self._process_pair(ci1,ci2)
@@ -123,9 +123,9 @@ class BAFitSim(shapesim.BaseSim):
                 except TryAgainError:
                     pass
 
-            self._copy_to_output(out, i, ci1, res1, s2)
+            self._copy_to_output(out, i, ci1, res1)
             i += 1
-            self._copy_to_output(out, i, ci2, res2, s2)
+            self._copy_to_output(out, i, ci2, res2)
             i += 1
 
 
@@ -135,14 +135,14 @@ class BAFitSim(shapesim.BaseSim):
         print 'time per ellip(pair):',tm/nellip
 
         if dowrite:
-            shapesim.write_output(self['run'], is2, is2n, out, itrial=isplit,
+            shapesim.write_output(self['run'], iT, is2n, out, itrial=isplit,
                          fs=self.fs)
 
         return out
 
-    def _get_one_trial(self, s2, counts, ellip, theta):
+    def _get_one_trial(self, Tobj, counts, ellip, theta):
 
-        ci_nonoise = self.shapesim.get_trial(s2, ellip, theta, counts=counts)
+        ci_nonoise = self.shapesim.get_trial(Tobj, ellip, theta, counts=counts)
 
         if self['retrim']:
             if 'retrim_fluxfrac' not in self:
@@ -202,10 +202,10 @@ class BAFitSim(shapesim.BaseSim):
         counts_prior=None
         counts_dist = self.simc.get('counts_dist',None)
         if counts_dist is not None:
-            counts_width=self.simc['counts_width']
+            counts_width_frac=self.simc['counts_width_frac']
 
             counts_mean=self.shapesim._counts_mean
-            counts_width = counts_mean*counts_width
+            counts_width = counts_mean*counts_width_frac
 
             counts_prior = eu.random.get_dist(counts_dist,
                                               [counts_mean,
@@ -216,15 +216,13 @@ class BAFitSim(shapesim.BaseSim):
     def _get_T_prior(self, ci):
         T_prior=None
 
-        s2_dist = self.simc.get('s2_dist',None)
-        if s2_dist is not None:
-            s2_width=self.simc['s2_width']
+        T_dist = self.simc.get('T_dist',None)
+        if T_dist is not None:
+            T_width_frac=self.simc['T_width_frac']
             T_mean = ci['Ttrue']
-            T_width = T_mean*s2_width
+            T_width = T_mean*T_width_frac
 
-            T_prior = eu.random.get_dist(s2_dist,
-                                         [T_mean,
-                                         T_width])
+            T_prior = eu.random.get_dist(T_dist, [T_mean, T_width])
  
         return T_prior
 
@@ -316,9 +314,10 @@ class BAFitSim(shapesim.BaseSim):
         return fitmodels
 
 
-    def _copy_to_output(self, out, i, ci, res, s2):
+    def _copy_to_output(self, out, i, ci, res):
 
-        out['s2'][i] = s2
+        out['s2'][i] = self.simc['Tpsf']/ci['Ttrue']
+        out['sratio'][i] = sqrt(1./out['s2'][i])
 
         e1true=ci['e1true']
         e2true=ci['e2true']
@@ -328,6 +327,8 @@ class BAFitSim(shapesim.BaseSim):
         out['gtrue'][i,1] = g2true
         out['shear_true'][i,0] = ci['shear1']
         out['shear_true'][i,1] = ci['shear2']
+
+        out['Ttrue'][i] = ci['Ttrue']
 
         out['s2n_admom'][i] = ci['s2n_admom']
         out['s2n_matched'][i] = ci['s2n_matched']
@@ -387,27 +388,6 @@ class BAFitSim(shapesim.BaseSim):
         return gvals
 
 
-
-    def get_gvals_old(self, is2, is2n, nellip):
-        if self['seed'] == None:
-            raise ValueError("can't use null seed for bayesfit")
-
-        seed=self['seed']
-        allseed= seed*10000 + is2n*100 + is2
-
-        print 'seed,is2n,is2,allseed:',seed,is2n,is2,allseed
-        # always use same seed for a given is2/is2n and config seed so we use
-        # the same g values at given theta in ring
-
-        numpy.random.seed(allseed)
-        gvals = self.gprior.sample1d(nellip)
-
-        # now random seed
-        numpy.random.seed(None)
-
-        return gvals
-
-
     def out_dtype(self, npars):
 
         dt=[('model','S20'),
@@ -417,9 +397,11 @@ class BAFitSim(shapesim.BaseSim):
             ('s2n_admom_psf','f8'),
             ('s2n_matched_psf','f8'),
             ('s2n_uw_psf','f8'),
+            ('sratio','f8'),
             ('s2','f8'),
             ('shear_true','f8',2),
             ('gtrue','f8',2),
+            ('Ttrue','f8'),
             ('g','f8',2),
             ('gsens','f8',2),
             ('gcov','f8',(2,2)),
