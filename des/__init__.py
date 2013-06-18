@@ -12,6 +12,7 @@ from . import compare_truth
 from . import compare_serun_merun
 
 from . import pretty
+from . import stellar_density
 
 try:
     from . import admom_des
