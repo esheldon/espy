@@ -1307,12 +1307,12 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
         if 'Ts2n' not in data[0].dtype.names:
             dt_extra+=[('Ts2n','f8')]
         dt_extra += [('Ts2n_sum','f8')]
-        if 'Fs2n' not in data[0].dtype.names:
-            dt_extra+=[('Fs2n','f8')]
-        dt_extra += [('Fs2n_sum','f8')]
-        if 'Flux' in data[0].dtype.names:
-            dt_extra += [('Flux_sum','f8'),
-                         ('Ferr2invsum','f8')]
+
+        dt_extra += [('flux_s2n_sum','f8')]
+
+        if 'flux' in data[0].dtype.names:
+            dt_extra += [('flux_sum','f8'),
+                         ('flux_err2invsum','f8')]
 
 
         if 'gcov0' in data[0].dtype.names:
@@ -1341,7 +1341,7 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
     name_extra = [dd[0] for dd in dt_extra]
 
     # other names not to avarage
-    name_extra += ['Ferr']
+    name_extra += ['flux_err']
 
     d=zeros(len(data),dtype=dt)
     for i,edata in enumerate(data): # over different ellipticities
@@ -1427,20 +1427,17 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
                 d['Ts2n_sum'][i] = Ts2n_vals.sum()
                 d['Ts2n'][i] = d['Ts2n_sum'][i]/num
 
-                if 'Fs2n' in edata.dtype.names:
-                    Fs2n_vals=edata['Fs2n']
-                else:
-                    # ack this won't work for complex models!
-                    Fs2n_vals=edata['pars'][:,5]/sqrt(edata['pcov'][:,5,5])
-                d['Fs2n_sum'][i] = Fs2n_vals.sum()
-                d['Fs2n'][i] = d['Fs2n_sum'][i]/num
+                if 'flux_s2n' in edata.dtype.names:
+                    flux_s2n_vals=edata['flux_s2n']
+                    d['flux_s2n_sum'][i] = flux_s2n_vals.sum()
+                    d['flux_s2n'][i] = d['flux_s2n_sum'][i]/num
 
-            if 'Flux' in edata.dtype.names:
-                Flux_sum=edata['Flux'].sum()
-                d['Flux_sum'][i] = Flux_sum
-                d['Flux'][i] = Flux_sum/num
-                d['Ferr2invsum'][i] = (1./edata['Ferr']**2).sum()
-                d['Ferr'][i] = sqrt(1./d['Ferr2invsum'][i])
+            if 'flux' in edata.dtype.names:
+                flux_sum=edata['flux'].sum()
+                d['flux_sum'][i] = flux_sum
+                d['flux'][i] = flux_sum/num
+                d['flux_err2invsum'][i] = (1./edata['flux_err']**2).sum()
+                d['flux_err'][i] = sqrt(1./d['flux_err2invsum'][i])
 
             if 'gcov0' in data[0].dtype.names:
                 d['g1err0sum2'][i] = edata['gcov0'][:,0,0].sum()
@@ -1537,8 +1534,8 @@ def average_runs(runlist, new_run_name, skip1=[]):
             print 'doing Ts2n'
             sumlist +=['Ts2n_sum']
 
-        if 'Flux_sum' in t.dtype.names:
-            sumlist += ['Flux_sum','Ferr2invsum']
+        if 'flux_sum' in t.dtype.names:
+            sumlist += ['flux_sum','flux_err2invsum','flux_s2n_sum']
     else:
         sumlist=['g1sum',
                  'g2sum',
@@ -1589,9 +1586,9 @@ def average_runs(runlist, new_run_name, skip1=[]):
             if 'Ts2n_sum' in t.dtype.names:
                 data['Ts2n'] = data['Ts2n_sum']/data['nsum']
 
-            if 'Flux_sum' in sumlist:
-                data['Flux'] = data['Flux_sum']/data['nsum']
-                data['Ferr'] = sqrt(1./data['Ferr2invsum'])
+            if 'flux_sum' in sumlist:
+                data['flux'] = data['flux_sum']/data['nsum']
+                data['flux_err'] = sqrt(1./data['flux_err2invsum'])
 
             if 'Q_sum' in sumlist:
 

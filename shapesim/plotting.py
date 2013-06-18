@@ -1606,7 +1606,7 @@ class SimPlotter(dict):
             xlabel = r'$(S/N)_{T}$'
         elif s2n_name=='s2n_admom':
             xlabel = r'$(S/N)_{AM}$'
-        elif s2n_name=='Fs2n':
+        elif s2n_name=='flux_s2n':
             xlabel = r'$(S/N)_{Flux}$'
         else:
             xlabel = s2n_name
