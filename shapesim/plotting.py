@@ -1562,7 +1562,9 @@ class SimPlotter(dict):
 
         data = self.read_data()
 
-        epsfile = shapesim.get_plot_file(self['run'],type+extra,yrng=yrng)
+        epsfile = shapesim.get_plot_file(self['run'],type+extra,
+                                         yrng=yrng,use_pqr=use_pqr,
+                                         s2n_name=s2n_name)
         wlog("will plot to:",epsfile)
 
         if len(data) == 4:
@@ -1609,13 +1611,11 @@ class SimPlotter(dict):
         else:
             xlabel = s2n_name
 
-        # looping over s2
+        # looping over sratio
         for i,st in enumerate(reversed(data)):
             #wlog("s2:",median(st['s2']),"s2_meas:",median(st['s2_meas']))
 
-            s2 = median(st['s2'])
-
-
+            sratio = sqrt(self.simc['Tobj'][i]/self.simc['Tpsf'])
             s2n = st[s2n_name]
 
             if use_pqr:
@@ -1627,7 +1627,7 @@ class SimPlotter(dict):
                 yvals1 = (st[tag1] - shear_true.g1)/shear_true.g1
                 yerr1 = st[errtag1]/shear_true.g1
 
-            label = r'%0.3f' % s2
+            label = r'%0.3f' % sratio
 
             pr1 = biggles.Points(s2n, yvals1, color=colors[i],
                                  size=2,
@@ -1649,7 +1649,7 @@ class SimPlotter(dict):
                                    fontsize=fsize)
             plt.add(key1)
 
-            klabtext=r'$\sigma^2_{psf}/\sigma^2_{gal}: $'
+            klabtext=r'$\sigma_{gal}/\sigma_{psf}: $'
             klab = biggles.PlotLabel(.62,.92,klabtext,
                                      fontsize=2.5,halign='right')
             plt.add(klab)
@@ -1672,8 +1672,8 @@ class SimPlotter(dict):
 
         plt.add(g1lab)
 
-        if not xrng:
-            xrng=[1., 120.]
+        if xrng is None:
+            xrng = [0.4*s2n.min(), 1.5*s2n.max()]
         expect1 = biggles.Curve(xrng, [0,0])
 
         plt.aspect_ratio=1

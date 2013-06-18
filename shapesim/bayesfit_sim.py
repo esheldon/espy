@@ -17,7 +17,7 @@ from fimage.convolved import NoisyConvolvedImage
 
 import gmix_image
 from gmix_image import print_pars, GMix, gmix2pars
-from gmix_image.gmix_mcmc import MixMCOld, MixMCSimple
+from gmix_image.gmix_mcmc import MixMCSimple
 from gmix_image.priors import GPriorOld, CenPrior
 
 import images

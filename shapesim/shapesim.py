@@ -13,6 +13,7 @@ from fimage import add_noise_admom, add_noise_dev, add_noise_uw
 from fimage.conversions import mom2sigma, cov2sigma, etheta2e1e2, ellip2mom
 from fimage.convolved import NoisyConvolvedImage
 import lensing
+from lensing import Shear
 
 import pprint
 
@@ -26,16 +27,14 @@ class ShapeSim(dict):
     The config file defines the PSF model and size as well as the
     galaxy model but not it's size or ellipticity or noise
     properties.
-    
     """
     def __init__(self, simname, **keys):
         conf=read_config(simname)
-        for k,v in conf.iteritems():
-            self[k] = v
+        self.update(conf)
+        self.update(keys)
 
-        # over-ride things
-        for k,v in keys.iteritems():
-            self[k] = v
+        self._set_Tobj()
+        self._set_counts()
 
         self.fs=get_default_fs()
 
@@ -58,7 +57,6 @@ class ShapeSim(dict):
         parameters
         ----------
         is2: integer
-            A number between 0 and self['nums2']-1
         ie: integer
             A number is a number between 0 and self['nume']-1
 
@@ -94,7 +92,7 @@ class ShapeSim(dict):
         return ci
 
 
-    def get_trial(self, s2, ellip, theta):
+    def get_trial(self, Tobj, ellip, theta, counts=1.0):
         """
         Genereate a realization of the input size ratio squared and total
         ellipticity.
@@ -105,13 +103,13 @@ class ShapeSim(dict):
 
         parameters
         ----------
-        s2: s2 value
+        Tobj: T value for object
         ellip: ellipticity value
         s2n: S/N ratio for object after convolution
         s2n_psf: S/N ratio for psf
         """
 
-        ci_full = self.new_convolved_image(s2, ellip, theta)
+        ci_full = self.new_convolved_image(Tobj, ellip, theta, counts=counts)
         if self['dotrim']:
             fluxfrac=self.get('fluxfrac',0.999937)
             if self['verbose']:
@@ -122,11 +120,11 @@ class ShapeSim(dict):
 
         return ci
 
-    def read_random_cache(self, is2, ie):
+    def read_random_cache(self, iT, ie):
         """
         Read data from a random cache file
         """
-        f=self.get_random_cache_file(is2,ie)
+        f=self.get_random_cache_file(iT,ie)
         if self['verbose']:
             wlog("\nreading from cache:",f)
 
@@ -135,11 +133,11 @@ class ShapeSim(dict):
             ci = fimage.convolved.ConvolvedImageFromFits(hdfs_file.localfile)
         return ci
 
-    def read_random_ring_cache(self, is2, ie):
+    def read_random_ring_cache(self, iT, ie):
         """
         Read data from a random cache file
         """
-        f=self.get_random_cache_file(is2,ie)
+        f=self.get_random_cache_file(iT,ie)
         if self['verbose']:
             wlog("\nreading from cache:",f)
 
@@ -153,11 +151,11 @@ class ShapeSim(dict):
 
 
 
-    def read_theta_cache(self, is2, ie, itheta):
+    def read_theta_cache(self, iT, ie, itheta):
         """
         Read data from a random cache file
         """
-        f=get_theta_cache_url(self['name'],is2,ie,itheta,fs=self.fs)
+        f=get_theta_cache_url(self['name'],iT,ie,itheta,fs=self.fs)
         if self['verbose']:
             wlog("\nreading from cache:",f)
 
@@ -167,14 +165,14 @@ class ShapeSim(dict):
         return ci
 
 
-    def get_random_cache_file(self, is2, ie):
+    def get_random_cache_file(self, iT, ie):
         """
         Get random file from cache, with replacement.
         """
-        key = '%s-%03i-%03i' % (self['name'],is2,ie)
+        key = '%s-%03i-%03i' % (self['name'],iT,ie)
         flist = self.cache_list.get(key,None)
 
-        pattern=get_cache_pattern(self['name'],is2,ie,fs=self.fs)
+        pattern=get_cache_pattern(self['name'],iT,ie,fs=self.fs)
 
         if flist is None:
             if self.fs == 'hdfs':
@@ -186,7 +184,7 @@ class ShapeSim(dict):
 
         if len(flist) < 100:
             raise ValueError("less than 100 files in cache for "
-                             "%s %s %s" % (self['name'],is2,ie))
+                             "%s %s %s" % (self['name'],iT,ie))
         i=eu.numpy_util.randind(len(flist),1)
         return flist[i]
 
@@ -199,14 +197,15 @@ class ShapeSim(dict):
         if key == 'q':
             stop
 
-    def new_convolved_image(self, s2, obj_ellip, obj_theta):
+    def new_convolved_image(self, Tobj, obj_ellip, obj_theta, counts=1.0):
         """
         Generate a convolved image with the input parameters and the psf and
         object models listed in the config.
         """
         # new thing using the gmix_image code for gaussian objects
-        if self['objmodel'] in ['gexp','gdev','gauss','gbdc']:
-            return self.new_gmix_convolved_image(s2, obj_ellip, obj_theta)
+        if self['objmodel'] in ['gexp','gdev','gauss','gbd']:
+            return self.new_gmix_convolved_image(Tobj, obj_ellip, obj_theta, 
+                                                 counts=counts)
 
         psfmodel = self['psfmodel']
         objmodel = self['objmodel']
@@ -219,7 +218,8 @@ class ShapeSim(dict):
         else:
             raise ValueError("unknown psf model: '%s'" % psfmodel)
 
-        sigma = psf_sigma_tot/sqrt(s2)
+        sigma = sqrt(Tobj)/2.
+
         if psfmodel == 'turb' and objmodel == 'dev':
             pass
             #sigma *= 1.75
@@ -248,7 +248,7 @@ class ShapeSim(dict):
             ci['shear2']=0.
         return ci
 
-    def new_gmix_convolved_image(self, s2, obj_ellip, obj_theta):
+    def new_gmix_convolved_image(self, Tobj, obj_ellip, obj_theta, counts=1.0):
         """
         Generate a convolved image with the input parameters and the psf and
         object models listed in the config.
@@ -257,14 +257,17 @@ class ShapeSim(dict):
         psfmodel = self['psfmodel']
         objmodel = self['objmodel']
             
-        e1psf = self['psf_e1']
-        e2psf = self['psf_e2']
+        g1psf = self['psf_g1']
+        g2psf = self['psf_g2']
+
+        shape_psf=Shear(g1=g1psf, g2=g2psf)
+
         if 'Tpsf' in self:
             Tpsf  = self['Tpsf']
         else:
             Tpsf  = 2*self['psf_sigma']**2
         if psfmodel in ['gauss','gturb']:
-            psfpars=[-9., -9., e1psf, e2psf, Tpsf, 1.0]
+            psfpars=[-9., -9., shape_psf.g1, shape_psf.g2, Tpsf, 1.0]
             if psfmodel=='gauss':
                 psf_gmix=gmix_image.GMixCoellip(psfpars)
             else:
@@ -272,12 +275,9 @@ class ShapeSim(dict):
         else:
             raise ValueError("unsupported gmix psf type: '%s'" % psfmodel)
 
-        Tobj = Tpsf/s2
-
-
         e1,e2 = etheta2e1e2(obj_ellip, obj_theta)
 
-        shape0 = lensing.Shear(e1=e1,e2=e2)
+        shape0 = Shear(e1=e1,e2=e2)
         shear=self.get_shear()
 
         if shear is not None:
@@ -286,25 +286,25 @@ class ShapeSim(dict):
         else:
             shape=shape0
 
-        if objmodel in ['gbdc','bdc']:
-            # we always set Texp to Tobj
+        if objmodel in ['gbd','bd']:
+            # we always set Texp to T
             frac_dev=self['frac_dev']
             Tfrac_dev=self['Tfrac_dev']
             
-            Flux_exp = (1.0-frac_dev)
-            Flux_dev = frac_dev
+            Flux_exp = counts*(1.0-frac_dev)
+            Flux_dev = counts*frac_dev
 
-            # need to adjust a bit to get Tobj
-            Tobj0 = (1-frac_dev)*(1-Tfrac_dev)*Tobj + frac_dev*Tfrac_dev*Tobj
-            fac = Tobj/Tobj0
+            # need to adjust a bit to get T
+            T0 = (1-frac_dev)*(1-Tfrac_dev)*Tobj + frac_dev*Tfrac_dev*Tobj
+            fac = Tobj/T0
 
             T_exp = (1-Tfrac_dev)*Tobj*fac
             T_dev = Tfrac_dev*Tobj*fac
 
-            objpars=[-9., -9., shape.e1, shape.e2, T_exp, T_dev, Flux_exp, Flux_dev]
-            obj_gmix=gmix_image.GMix(objpars,type='bdc')
+            objpars=[-9., -9., shape.g1, shape.g2, T_exp, T_dev, Flux_exp, Flux_dev]
+            obj_gmix=gmix_image.GMix(objpars,type='bd')
         else:
-            objpars=[-9., -9., shape.e1, shape.e2, Tobj, 1.0]
+            objpars=[-9., -9., shape.g1, shape.g2, Tobj, counts]
             if objmodel=='gexp':
                 obj_gmix=gmix_image.GMixExp(objpars)
             elif objmodel=='gdev':
@@ -335,13 +335,13 @@ class ShapeSim(dict):
             theta=numpy.random.random()*pi
             g1 = shearmag*cos(2*theta)
             g2 = shearmag*sin(2*theta)
-            shear=lensing.Shear(g1=g1,g2=g2)
+            shear=Shear(g1=g1,g2=g2)
         elif 'shear' in self:
             sh = self['shear']
             if len(sh) != 2:
                 raise ValueError("shear in config should have the "
                                  "form [g1,g2]")
-            shear=lensing.Shear(g1=sh[0],g2=sh[1])
+            shear=Shear(g1=sh[0],g2=sh[1])
         else:
             shear=None
         return shear
@@ -349,7 +349,7 @@ class ShapeSim(dict):
     def get_cov(self, sigma, e, theta, shear=None):
         if shear:
             e1,e2 = etheta2e1e2(e, theta)
-            shape=lensing.Shear(e1=e1,e2=e2)
+            shape=Shear(e1=e1,e2=e2)
             sheared_shape = shape + shear
             cov = ellip2mom(e1=sheared_shape.e1,
                             e2=sheared_shape.e2,
@@ -362,13 +362,11 @@ class ShapeSim(dict):
         """
         for gauss or double gauss psf
         """
-        e1 = self['psf_e1']
-        e2 = self['psf_e2']
+        g1 = self['psf_g1']
+        g2 = self['psf_g2']
+        shape_psf=Shear(g1=g1, g2=g2)
         psf_cov=fimage.ellip2mom(2*self['psf_sigma']**2,
-                                 e1=e1, e2=e2)
-        #wlog("psf_cov:",psf_cov)
-        #wlog("psf e1:",(psf_cov[2]-psf_cov[0])/(psf_cov[2]+psf_cov[0]))
-        #wlog("psf e2:",2*psf_cov[1]/(psf_cov[2]+psf_cov[0]))
+                                 e1=shape_psf.e1, e2=shape.e2)
         if self['psfmodel'] == 'dgauss':
             psf_cov1=psf_cov
             psf_cov2=psf_cov*self['psf_sigrat']**2
@@ -390,12 +388,50 @@ class ShapeSim(dict):
 
         return psfpars, psf_sigma_tot
 
+    def _set_Tobj(self):
+        self._T_dists=None
+        self._Tvals=numpy.array(self['Tobj'])
+
+        T_dist_type=self.get('T_dist',None)
+        if T_dist_type is not None:
+            self._T_dists=[]
+            T_width_frac = self['T_width_frac']
+
+            for T in self._Tvals:
+                T_w = T*T_width_frac
+                dist=eu.random.get_dist(T_dist_type,[T,T_w])
+                self._T_dists.append(dist)
+
+    def _get_Tobj(self, iT):
+        if self._T_dists is not None:
+            return self._T_dists[iT].sample()
+        else:
+            return self._Tvals[iT]
+    
+    def _set_counts(self):
+        self._counts_mean=1.0
+        self._counts_dist=None
+
+        counts_dist=self.get('counts_dist',None)
+
+        if counts_dist is not None:
+            counts_width_frac=self['counts_width_frac']
+
+            dist=eu.random.get_dist(counts_dist,
+                                    [self._counts_mean, 
+                                    self._counts_mean*counts_width_frac])
+
+    def _get_counts(self):
+        if self._counts_dist is not None:
+            return self._counts_dist.sample()
+        else:
+            return self._counts_mean
+    
 class BaseSim(dict):
     def __init__(self, run):
         conf=read_config(run)
         for k,v in conf.iteritems():
             self[k] = v
-        #numpy.random.seed(self['seed'])
 
         self.simc = read_config(self['sim'])
 
@@ -427,7 +463,7 @@ class BaseSim(dict):
         """
         raise RuntimeError("Override the .run() method")
 
-    def copy_output(self, s2, ellip, s2n, ci, res):
+    def copy_output(self, Tobj, ellip, s2n, ci, res):
         """
         Copy the result structure and convolved image
         to the array for output
@@ -445,28 +481,29 @@ class BaseSim(dict):
         raise RuntimeError("Override the .out_dtype() method")
 
 
-    def process_trials(self, is2, ie_or_is2n, itrial=None):
+    def process_trials(self, iT, ie_or_is2n, itrial=None):
         runtype=self['runtype']
         if runtype == 'byellip':
             if itrial is not None:
-                self.process_trial_by_e(is2, ie_or_is2n, itrial,
+                self.process_trial_by_e(iT, ie_or_is2n, itrial,
                                         dowrite=True, dolog=True)
             else:
-                self.process_trials_by_e(is2, ie_or_is2n)
+                self.process_trials_by_e(iT, ie_or_is2n)
         else:
             if itrial is not None:
-                self.process_trial_by_s2n(is2, ie_or_is2n, itrial,
+                self.process_trial_by_s2n(iT, ie_or_is2n, itrial,
                                           dowrite=True, dolog=True)
             else:
-                self.process_trials_by_s2n(is2, ie_or_is2n)
+                self.process_trials_by_s2n(iT, ie_or_is2n)
 
-    def process_trial_by_s2n(self, is2, is2n, itheta, 
+    def process_trial_by_s2n(self, iT, is2n, itheta, 
                              dowrite=False, 
                              dolog=False):
         """
         Process a singe element in the ring, with nrepeat
         possible noise realizations
         """
+        raise ValueError("fix this!")
         # fixed ie
         ie = self['ie']
         s2,ellip = get_s2_e(self.simc, is2, ie)
@@ -631,7 +668,6 @@ class BaseSim(dict):
         parameters
         ----------
         is2: integer
-            A number between 0 and self['nums2']-1
         ie: integer
             A number is a number between 0 and self['nume']-1
         """
@@ -733,13 +769,12 @@ def get_s2_e(conf, is2, ie):
 
     return s2, ellip
 
+def get_numT(conf):
+    return len(conf['Tobj'])
 def get_nums2n(conf):
-    if 's2nvals' in conf:
-        nums2n = len(conf['s2nvals'])
-    else:
-        nums2n = conf['nums2n']
+    return len(conf['s2nvals'])
 
-    return nums2n
+
 def get_s2n(conf, is2n):
     """
     Extract the s2n corresponding to index
@@ -911,7 +946,7 @@ def get_bias_file(run, type):
     return f
 
 
-def get_plot_file(run, type, s2min=None, yrng=None):
+def get_plot_file(run, type, s2n_name=None, s2min=None, yrng=None, use_pqr=False):
     d=get_plot_dir(run)
     f='%s' % run
 
@@ -920,7 +955,15 @@ def get_plot_file(run, type, s2min=None, yrng=None):
 
     if yrng is not None:
         f += '-yr%0.3f-%0.3f' % tuple(yrng)
-    f += '-%s.eps' % type
+    f += '-%s' % type
+
+    if use_pqr:
+        f += '-pqr'
+
+    if s2n_name is not None:
+        f += '-%s' % s2n_name
+
+    f += '.eps'
     f = path_join(d, f)
     return f
 
@@ -1045,7 +1088,7 @@ def write_averaged_outputs(run, data, docum=False, skip1=[], fs=None):
 
     c=read_config(run)
     cs=read_config(c['sim'])
-    numi1 = cs['nums2']
+    numi1 = get_numT(cs)
     idata=0
     for i1 in xrange(numi1):
         if i1 not in skip1:
@@ -1057,7 +1100,7 @@ def write_averaged_outputs(run, data, docum=False, skip1=[], fs=None):
 def read_averaged_outputs(run, docum=False, skip1=[], fs=None):
     c=read_config(run)
     cs=read_config(c['sim'])
-    numi1 = cs['nums2']
+    numi1 = get_numT(cs)
     data=[]
     for i1 in xrange(numi1):
         if i1 not in skip1:
@@ -1090,7 +1133,7 @@ def make_averaged_outputs(run, docum=False,
         straight_avg=True
         wlog("Doing straight average for deswl")
 
-    numi1 = cs['nums2']
+    numi1 = get_numT(cs)
     if runtype == 'byellip':
         numi2 = cs['nume']
     else:
@@ -1141,7 +1184,7 @@ def read_all_outputs(run,
     cs=read_config(c['sim'])
     runtype=c['runtype']
 
-    numi1 = cs['nums2']
+    numi1 = get_numT(cs)
     if runtype == 'byellip':
         numi2 = cs['nume']
     else:
@@ -1512,7 +1555,7 @@ def average_runs(runlist, new_run_name, skip1=[]):
     c=read_config(runlist[0])
     cs0=read_config(c['sim'])
 
-    numi1 = cs0['nums2']
+    numi1 = get_numT(cs0)
     for i1 in xrange(numi1):
         if i1 in skip1:
             continue

@@ -209,8 +209,7 @@ class Shear:
         self.g1,self.g2=g1,g2
 
     def __neg__(self):
-        s = Shear()
-        s.set_e1e2(-self.e1, -self.e2)
+        s = Shear(e1=-self.e1, e2=-self.e2)
         return s
 
     def __add__(self, s):

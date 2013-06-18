@@ -1,6 +1,6 @@
-# fitting bulge+disk to exp
-run: bafit-geg01r05
-sim: sim-geg01
+# gexp obj and gauss psf
+run: bafit-geg03r02
+sim: sim-geg03
 
 runtype: bys2n
 
@@ -11,7 +11,9 @@ s2n_fac: 160
 
 # minimum number of random ellipticities to use.
 # need decent count to sample the prior surface
-min_gcount: 100
+# note they come in pairs
+min_gcount: 400
+#min_gcount: 5
 
 retrim: false
 retrim_fluxfrac: null
@@ -21,11 +23,9 @@ s2n_psf: 1.0e+8
 s2nvals: [15,20,25,30,40,50,60,70,80,90,100,120,140,160,180,200,250,300,350,400]
 
 # step and burnin are *per walker*
-nwalkers: 80
-nstep: 50 # steps per walker
-burnin: 200 # burnin per walker.
-
-
+nwalkers: 20
+nstep: 200 # steps per walker
+burnin: 400 # burnin per walker.
 
 # draw the g1,g2 starting points from the gprior
 draw_gprior: true
@@ -37,10 +37,9 @@ em_tol: 1.0e-6  # (T-Told)/T
 # iterate until the auto-correlation length is satisfactory
 iter: true
 
-# coelliptical bulge+disk
-fitmodel: ['bd']
-# try two even though we know it is only 1
+fitmodel: ['gexp']
 ngauss_psf: 1
-mca_a: 2.0
+mca_a: 3.0
 
+make_plots: false
 verbose: true

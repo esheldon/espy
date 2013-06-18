@@ -1,0 +1,105 @@
+#!/usr/bin/env python
+"""
+    %prog [options] command_file
+
+Command are in the specified fil, one per line, and yaml wq config
+files are written out with the specified prefix and end {jobnum}.yaml
+
+The jobnum is padded according to the number of files
+"""
+
+import sys
+from sys import stderr
+import yaml
+import os
+from optparse import OptionParser
+
+import wq
+
+parser=OptionParser(__doc__)
+parser.add_option('-p','--prefix',default='job',help="prefix for file names and job names")
+parser.add_option('--from-cmd',action='store_true',
+                  help=("assume the cmd is a single path and use basename for "
+                        "wq names"))
+
+_template="""
+command: |
+    source ~/.bashrc
+    {commands}
+
+job_name: "{job_name}"
+"""
+class CmdConverter(object):
+    def __init__(self, cmd, job_name):
+        """
+        cmd must be all one line
+        """
+        self.cmd=cmd
+        self.job_name=job_name
+        self.wq_script=self._cmd2yaml()
+
+    def get_wq_script(self):
+        return self.wq_script
+    def _cmd2yaml(self):
+        return _template.format(commands=self.cmd,
+                                job_name=self.job_name)
+
+def get_fmt(ncmd):
+    if ncmd >= 1000000:
+        return '%07d'
+    elif ncmd >= 100000:
+        return '%06d'
+    elif ncmd >= 10000:
+        return '%05d'
+    elif ncmd >= 1000:
+        return '%04d'
+    elif ncmd >= 100:
+        return '%03d'
+    elif ncmd >= 10:
+        return '%02d'
+    else:
+        return '%d'
+
+def get_job_name(command, i, name_fmt, from_cmd=False):
+    if from_cmd:
+        bname=os.path.basename(command)
+        job_name=(bname.split('.'))
+        if len(job_name) > 1:
+            job_name=job_name[0:-1]
+        job_name='.'.join(job_name)
+    else:
+        job_name = name_fmt % i
+    return job_name
+
+def main():
+    options, args = parser.parse_args(sys.argv[1:])
+    prefix=options.prefix
+
+    if len(args)==0:
+        parser.print_help()
+        sys.exit(1)
+
+    command_file = args[0]
+    commands = open(command_file).readlines()
+
+    ncmd = len(commands)
+
+    fmt = get_fmt(ncmd)
+    name_fmt = prefix+'-'+fmt
+
+    for i,command in enumerate(commands):
+        command=command.strip()
+
+        job_name=get_job_name(command, i, name_fmt, from_cmd=options.from_cmd)
+        fname = job_name+'.yaml'
+
+        conv=CmdConverter(command,job_name)
+        text=conv.get_wq_script() 
+
+        print fname
+        with open(fname,'w') as fobj:
+            fobj.write(text)
+
+
+
+main()

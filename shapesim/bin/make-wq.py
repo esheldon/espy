@@ -97,7 +97,7 @@ def main():
     else:
         rstr=run
 
-    n1 = cs['nums2']
+    n1 = shapesim.get_numT(cs)
 
     runtype = c['runtype']
     if runtype == 'byellip':
