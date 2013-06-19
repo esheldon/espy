@@ -1653,6 +1653,14 @@ class SimPlotter(dict):
             klab = biggles.PlotLabel(.62,.92,klabtext,
                                      fontsize=2.5,halign='right')
             plt.add(klab)
+
+        if use_pqr:
+            pqr_lab = biggles.PlotLabel(0.1,0.1,'PQR',
+                                        fontsize=2.5,halign='left')
+            plt.add(pqr_lab)
+
+
+
         objmodel = self.simc['objmodel']
         psfmodel = self.simc['psfmodel']
 
