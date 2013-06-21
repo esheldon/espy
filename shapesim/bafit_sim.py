@@ -123,6 +123,8 @@ class BAFitSim(shapesim.BaseSim):
                 except TryAgainError:
                     pass
 
+            print 'res1:',res1['s2n_w']
+            print 'res2:',res2
             self._copy_to_output(out, i, ci1, res1)
             i += 1
             self._copy_to_output(out, i, ci2, res2)
@@ -272,31 +274,42 @@ class BAFitSim(shapesim.BaseSim):
                                  draw_gprior=self['draw_gprior'])
 
         else:
+            sampler_type=self.get('sampler','mcmc')
+
             T_guess=ci['Ttrue']*(1.+0.3*srandu())
             counts_guess=ci['counts_true']*(1.0 + 0.3*srandu())
             cen_guess=ci['cen']
-            self.fitter=MixMCSimple(ci.image,
-                                    ivar, 
-                                    psf_gmix,
-                                    self.gprior,
-                                    T_guess,
-                                    counts_guess,
-                                    cen_guess,
-                                    fitmodel,
-                                    do_pqr=True,
 
-                                    Tprior=T_prior,
-                                    counts_prior=counts_prior,
-                                    cen_prior=cen_prior,
+            keys={}
+            keys['do_pqr']=True
+            keys['T_prior']=T_prior
+            keys['counts_prior']=counts_prior
+            keys['cen_prior']=cen_prior
+            keys['make_plots']=self.get('make_plots',False)
 
-                                    when_prior=self['when_prior'],
-                                    nwalkers=self['nwalkers'],
-                                    nstep=self['nstep'], 
-                                    burnin=self['burnin'],
-                                    mca_a=self['mca_a'],
-                                    iter=self.get('iter',False),
-                                    make_plots=self.get('make_plots',False),
-                                    draw_gprior=self['draw_gprior'])
+
+            if sampler_type=='mcmc':
+                sample_class=MixMCSimple
+                keys['when_prior']=self['when_prior']
+                keys['nwalkers']=self['nwalkers']
+                keys['nstep']=self['nstep']
+                keys['burnin']=self['burnin']
+                keys['mca_a']=self['mca_a']
+                keys['iter']=self.get('iter',False),
+                keys['draw_gprior']=self['draw_gprior']
+            else:
+                sample_class=gmix_image.gmix_isamp.GMixIsampSimple
+                keys['nsample']=self['nsample']
+
+            self.fitter=sample_class(ci.image,
+                                     ivar, 
+                                     psf_gmix,
+                                     self.gprior,
+                                     T_guess,
+                                     counts_guess,
+                                     cen_guess,
+                                     fitmodel,
+                                     **keys)
 
     def get_coellip_ngauss(self, model):
         if model=='coellip1':
@@ -315,6 +328,10 @@ class BAFitSim(shapesim.BaseSim):
 
 
     def _copy_to_output(self, out, i, ci, res):
+
+        out['flags'][i] = res['flags']
+        if res['flags'] != 0:
+            return
 
         out['s2'][i] = self.simc['Tpsf']/ci['Ttrue']
         out['sratio'][i] = sqrt(1./out['s2'][i])
@@ -421,7 +438,8 @@ class BAFitSim(shapesim.BaseSim):
             ('arate','f8'),
             ('P','f8'),           # parameters from BA13
             ('Q','f8',2),
-            ('R','f8',(2,2))
+            ('R','f8',(2,2)),
+            ('flags','i4')
            ]
 
         return dt

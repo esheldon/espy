@@ -1,0 +1,38 @@
+# trying isampling
+# gexp obj and gauss psf
+run: bafit-geg03r08
+sim: sim-geg03
+
+runtype: bys2n
+
+sampler: "isample"
+
+s2n_method: admom
+s2n_fac: 160
+
+# minimum number of random ellipticities to use.
+# need decent count to sample the prior surface
+# note they come in pairs
+min_gcount: 400
+#min_gcount: 5
+
+retrim: false
+retrim_fluxfrac: null
+s2ncalc_fluxfrac: null
+
+s2n_psf: 1.0e+8
+s2nvals: [15,20,25,30,40,50,60,70,80,90,100,120,140,160,180,200,250,300,350,400]
+
+# step and burnin are *per walker*
+nsample: 500
+
+# for psf in EM
+em_maxiter: 5000
+em_tol: 1.0e-6  # (T-Told)/T
+
+fitmodel: ['gexp']
+ngauss_psf: 1
+mca_a: 3.0
+
+make_plots: true
+verbose: false
