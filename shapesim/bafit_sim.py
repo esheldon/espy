@@ -123,8 +123,6 @@ class BAFitSim(shapesim.BaseSim):
                 except TryAgainError:
                     pass
 
-            print 'res1:',res1['s2n_w']
-            print 'res2:',res2
             self._copy_to_output(out, i, ci1, res1)
             i += 1
             self._copy_to_output(out, i, ci2, res2)

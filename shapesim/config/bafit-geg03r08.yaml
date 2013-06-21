@@ -14,7 +14,7 @@ s2n_fac: 160
 # need decent count to sample the prior surface
 # note they come in pairs
 min_gcount: 400
-#min_gcount: 5
+#min_gcount: 100
 
 retrim: false
 retrim_fluxfrac: null
@@ -34,5 +34,5 @@ fitmodel: ['gexp']
 ngauss_psf: 1
 mca_a: 3.0
 
-make_plots: true
+make_plots: false
 verbose: false
