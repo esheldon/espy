@@ -132,7 +132,7 @@ class BAFitSim(shapesim.BaseSim):
         
         tm=time.time()-t0
         print 'total time:',tm
-        print 'time per ellip(pair):',tm/nellip
+        print 'time per:',0.5*tm/nellip
 
         if dowrite:
             shapesim.write_output(self['run'], iT, is2n, out, itrial=isplit,
@@ -392,7 +392,7 @@ class BAFitSim(shapesim.BaseSim):
             while nleft > 0:
                 g1rand_t = g1 + 0.01*srandu(nleft)
                 g2rand_t = g2 + 0.01*srandu(nleft)
-                g2tot=g1rand**2 + g2rand**2
+                g2tot=g1rand_t**2 + g2rand_t**2
 
                 w,=numpy.where(g2tot < 0.999)
                 if w.size > 0:
@@ -402,7 +402,7 @@ class BAFitSim(shapesim.BaseSim):
                     nleft -= w.size
             
             guess[:,2]=g1rand
-            guess[:,3]=g1rand
+            guess[:,3]=g2rand
         elif g_draw=="maxlike":
             raise ValueError("implement getting maxlike as guess")
 

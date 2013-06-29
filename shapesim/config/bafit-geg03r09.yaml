@@ -15,6 +15,7 @@ s2n_fac: 160
 min_gcount: 400
 #min_gcount: 10
 #min_gcount: 100
+#min_gcount: 40
 
 retrim: false
 retrim_fluxfrac: null
@@ -48,5 +49,5 @@ mca_a: 3.0
 do_pqr: true
 prob_type: "ba13"
 
-make_plots: true
+make_plots: false
 verbose: true
