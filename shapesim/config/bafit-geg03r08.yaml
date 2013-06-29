@@ -15,6 +15,7 @@ s2n_fac: 160
 # note they come in pairs
 min_gcount: 400
 #min_gcount: 100
+#min_gcount: 10
 
 retrim: false
 retrim_fluxfrac: null
@@ -32,7 +33,6 @@ em_tol: 1.0e-6  # (T-Told)/T
 
 fitmodel: ['gexp']
 ngauss_psf: 1
-mca_a: 3.0
 
 make_plots: false
-verbose: false
+verbose: true

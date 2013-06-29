@@ -63,7 +63,7 @@ class BAFitSim(shapesim.BaseSim):
         if 'verbose' not in self:
             self['verbose'] = False
 
-        self.gprior = GPriorBA(self.simc['gsigma'])
+        self.gprior = GPriorBA(self.simc['g_width'])
 
 
     def _set_s2n_info(self, is2n):
@@ -109,7 +109,7 @@ class BAFitSim(shapesim.BaseSim):
             ellip=lensing.util.g2e(g)
 
             if self['verbose'] or ( ( (ipair+1) % 10) == 0 or ipair== 0):
-                stderr.write("  %s/%s pairs done\n" % ((ipair+1),nellip))
+                stderr.write("  %s/%s pairs done g: %g\n" % ((ipair+1),nellip,g))
 
             while True:
                 theta1 = random.random()*360.0
@@ -278,16 +278,17 @@ class BAFitSim(shapesim.BaseSim):
             counts_guess=ci['counts_true']*(1.0 + 0.3*srandu())
             cen_guess=ci['cen']
 
-            keys={}
-            keys['do_pqr']=True
-            keys['T_prior']=T_prior
-            keys['counts_prior']=counts_prior
-            keys['cen_prior']=cen_prior
-            keys['make_plots']=self.get('make_plots',False)
 
 
             if sampler_type=='mcmc':
-                sample_class=MixMCSimple
+                keys={}
+                keys.update(self)
+                keys['do_pqr']=True
+                keys['make_plots']=self.get('make_plots',False)
+
+                keys['cen_prior']=cen_prior
+                keys['T_prior']=T_prior
+                keys['counts_prior']=counts_prior
                 keys['when_prior']=self['when_prior']
                 keys['nwalkers']=self['nwalkers']
                 keys['nstep']=self['nstep']
@@ -295,19 +296,171 @@ class BAFitSim(shapesim.BaseSim):
                 keys['mca_a']=self['mca_a']
                 keys['iter']=self.get('iter',False),
                 keys['draw_gprior']=self['draw_gprior']
-            else:
-                sample_class=gmix_image.gmix_isamp.GMixIsampSimple
-                keys['nsample']=self['nsample']
 
-            self.fitter=sample_class(ci.image,
-                                     ivar, 
-                                     psf_gmix,
-                                     self.gprior,
-                                     T_guess,
-                                     counts_guess,
-                                     cen_guess,
-                                     fitmodel,
-                                     **keys)
+                self.fitter=MixMCSimple(ci.image,
+                                        ivar, 
+                                        psf_gmix,
+                                        self.gprior,
+                                        T_guess,
+                                        counts_guess,
+                                        cen_guess,
+                                        fitmodel,
+                                        **keys)
+
+            elif sampler_type=='cmcmc':
+                config={}
+                config.update(self)
+
+                config['model'] = fitmodel
+
+                config['cen1_mean']=ci['cen'][0]
+                config['cen1_width']=self.simc['cen_width']
+
+                config['cen2_mean']=ci['cen'][1]
+                config['cen2_width']=self.simc['cen_width']
+
+                config['g_width']=self.simc['g_width']
+
+                config['T_mean']=T_prior.get_mean()
+                config['T_width']=T_prior.get_sigma()
+
+                config['counts_mean']=counts_prior.get_mean()
+                config['counts_width']=counts_prior.get_sigma()
+
+                guess=self._get_cmcmc_simple_guess(ci,config)
+
+                self.fitter=gmix_image.gmix_mcmc.MixMCC(ci.image,
+                                                        ivar,
+                                                        psf_gmix,
+                                                        guess,
+                                                        config,
+                                                        gprior=self.gprior)
+
+            elif sampler=='isample':
+                keys['nsample']=self['nsample']
+                g1_guess,g2_guess=self.gprior.sample2d(1)
+                guess=numpy.zeros(6)
+                guess[0:2] = cen_guess
+                guess[2] = g1_guess[0]
+                guess[3] = g2_guess[0]
+                guess[4] = T_guess
+                guess[5] = counts_guess
+
+                #prior_samples=self._presample_prior_simple(cen_prior,
+                #                                           self.gprior,
+                #                                           T_prior,
+                #                                           counts_prior)
+                prior_samples=self._presample_gprior()
+                self.fitter=gmix_image.gmix_isamp.GMixIsampSimple(ci.image,
+                                                                  ivar,
+                                                                  psf_gmix,
+
+                                                                  cen_prior,
+                                                                  self.gprior,
+                                                                  T_prior,
+                                                                  counts_prior,
+
+                                                                  prior_samples,
+
+                                                                  guess,
+                                                                  fitmodel,
+                                                                  **keys)
+
+    def _get_cmcmc_simple_guess(self, ci, config):
+        nwalkers=config['nwalkers']
+        guess=numpy.zeros( (nwalkers, 6) )
+
+        # cen uniform within 0.1 pixels of truth
+        guess[:,0] = ci['cen'][0] + 0.1*srandu(nwalkers)
+        guess[:,1] = ci['cen'][0] + 0.1*srandu(nwalkers)
+        
+        g_draw=config['g_draw']
+        if g_draw=="prior":
+            g1rand,g2rand=self.gprior.sample2d(nwalkers)
+            guess[:,2]=g1rand
+            guess[:,3]=g2rand
+        elif g_draw=="truth":
+            sh=lensing.Shear(e1=ci['e1true'],e2=ci['e2true'])
+            g1=sh.g1
+            g2=sh.g2
+
+            g1rand=numpy.zeros( nwalkers )
+            g2rand=numpy.zeros( nwalkers )
+
+            nleft=nwalkers
+            ngood=0
+            while nleft > 0:
+                g1rand_t = g1 + 0.01*srandu(nleft)
+                g2rand_t = g2 + 0.01*srandu(nleft)
+                g2tot=g1rand**2 + g2rand**2
+
+                w,=numpy.where(g2tot < 0.999)
+                if w.size > 0:
+                    g1rand[ngood:ngood+w.size] = g1rand_t[w]
+                    g2rand[ngood:ngood+w.size] = g2rand_t[w]
+                    ngood += w.size
+                    nleft -= w.size
+            
+            guess[:,2]=g1rand
+            guess[:,3]=g1rand
+        elif g_draw=="maxlike":
+            raise ValueError("implement getting maxlike as guess")
+
+        guess[:,4] = ci['Ttrue']*(1.+0.1*srandu(nwalkers))
+        guess[:,5] = ci['counts_true']*(1.0 + 0.1*srandu(nwalkers))
+        
+        return guess
+
+
+    def _presample_gprior(self):
+        if not hasattr(self,'_gprior_samples'):
+            npre=self.get('n_pre_sample',10000)
+            print >>stderr,'    pre-sampling gprior:',npre
+            g1,g2= self.gprior.sample2d(npre)
+            self._gprior_samples= {'g1':g1, 'g2':g2}
+
+        return self._gprior_samples
+
+    def _presample_prior_simple(self,cen_prior,g_prior,T_prior,counts_prior):
+        from gmix_image import priors
+        if not hasattr(self,'_prior_samples'):
+
+            npre=self.get('n_pre_sample',100000)
+            print >>stderr,'pre-sampling the prior',npre
+            npars=6
+            nwalkers=20
+            # per walker, 2000
+            burnin=100
+
+            start=numpy.zeros( (nwalkers,npars) )
+
+            start[:,0:2] = cen_prior.sample(nwalkers)
+
+            start[:,2] = 0.1*srandu(nwalkers)
+            start[:,3] = 0.1*srandu(nwalkers)
+
+            start[:,4] = T_prior.sample(nwalkers)
+            start[:,5] = counts_prior.sample(nwalkers)
+
+
+            comb=priors.CombinedPriorSimple(cen_prior,
+                                            g_prior,
+                                            T_prior,
+                                            counts_prior)
+            sampler = comb.sample(start,
+                                  npre,
+                                  burnin=burnin,
+                                  nwalkers=nwalkers,
+                                  get_sampler=True)
+            prand = sampler.flatchain
+            lnp = sampler.lnprobability
+            lnp = lnp.reshape(lnp.shape[0]*lnp.shape[1])
+            probs = numpy.exp(lnp)
+
+            self._prior_samples={'samples':prand,
+                                 'prob':probs}
+        
+        return self._prior_samples
 
     def get_coellip_ngauss(self, model):
         if model=='coellip1':
@@ -326,6 +479,7 @@ class BAFitSim(shapesim.BaseSim):
 
 
     def _copy_to_output(self, out, i, ci, res):
+        sampler_type=self.get('sampler','mcmc')
 
         out['flags'][i] = res['flags']
         if res['flags'] != 0:
@@ -386,6 +540,9 @@ class BAFitSim(shapesim.BaseSim):
             out['Q'][i] = res['Q']
             out['R'][i] = res['R']
 
+        if sampler_type=='isample':
+            out['lm_flux'][i] = res['lm_result']['pars'][5]
+            out['lm_flux_err'][i] = res['lm_result']['perr'][5]
 
 
     def get_nellip(self, is2n):
@@ -440,6 +597,10 @@ class BAFitSim(shapesim.BaseSim):
             ('flags','i4')
            ]
 
+        sampler_type=self.get('sampler','mcmc')
+        if sampler_type=='isample':
+            dt += [('lm_flux','f8'),
+                   ('lm_flux_err','f8')]
         return dt
 
 

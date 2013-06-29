@@ -420,6 +420,7 @@ class ShapeSim(dict):
             dist=eu.random.get_dist(counts_dist,
                                     [self._counts_mean, 
                                     self._counts_mean*counts_width_frac])
+            self._counts_dist=dist
 
     def _get_counts(self):
         if self._counts_dist is not None:

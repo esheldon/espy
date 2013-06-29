@@ -13,7 +13,7 @@ s2n_fac: 160
 # need decent count to sample the prior surface
 # note they come in pairs
 min_gcount: 400
-#min_gcount: 5
+#min_gcount: 10
 
 retrim: false
 retrim_fluxfrac: null

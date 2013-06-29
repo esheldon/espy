@@ -25,7 +25,7 @@ Tobj: [8.0, 6.0, 4.0, 2.0]
 
 # gprior parameters from BA
 gprior: "ba13"
-gsigma: 0.3
+g_width: 0.3
 
 # draw from distribution with this width as a fraction
 # of the mean
