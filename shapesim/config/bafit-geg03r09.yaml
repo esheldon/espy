@@ -50,4 +50,4 @@ do_pqr: true
 prob_type: "ba13"
 
 make_plots: false
-verbose: true
+verbose: false

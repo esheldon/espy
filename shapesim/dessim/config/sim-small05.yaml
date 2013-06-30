@@ -59,4 +59,4 @@ alt_cd: false
 seed: 3904
 
 comments: |
-    This one has shear and psf and noise and model types exp,dev
+    This one has shear and psf and model types exp,dev
