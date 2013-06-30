@@ -69,6 +69,31 @@ def get_nellip(conf, is2n):
         nellip=conf['min_gcount']
     return nellip
 
+def get_seconds_per(run, c):
+    """
+    Seconds per pair
+    """
+    seconds_per=0.0
+
+    s=c.get('sampler',None)
+    if s=='cmcmc':
+        for model in c['fitmodel']:
+            if model=='gexp':
+                seconds_per += 2.0
+            else:
+                raise ValueError("test speed of gdev for cmcmc")
+   
+    else:
+        for model in c['fitmodel']:
+            if model=='gexp':
+                seconds_per += 3.0
+            else:
+                seconds_per += 3.4
+
+        if c['when_prior']:
+            seconds_per *= 1.16
+
+    return seconds_per
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -87,15 +112,7 @@ def main():
     c = shapesim.read_config(run)
     cs = shapesim.read_config(c['sim'])
 
-    seconds_per=0.0
-    for model in c['fitmodel']:
-        if model=='gexp':
-            seconds_per += 3.0
-        else:
-            seconds_per += 3.4
-
-    if c['when_prior']:
-        seconds_per *= 1.16
+    seconds_per=get_seconds_per(run,c)
 
     nsplit = cs['nsplit']
 
@@ -113,9 +130,12 @@ def main():
 
     job_name = '-'.join( (rstr.split('-'))[1:] )
 
-    n1 = cs['nums2']
-    n2 = shapesim.get_nums2n(c)
+    if 'nums2' in cs:
+        n1 = cs['nums2']
+    else:
+        n1 = len(cs['Tobj'])
 
+    n2 = shapesim.get_nums2n(c)
 
     script_url=shapesim.get_minions_script_url(run)
     script_base=os.path.basename(script_url)
@@ -151,7 +171,7 @@ def main():
 
                     ntot += nellip
 
-        time_seconds = ntot*seconds_per/np
+        time_seconds = ntot*seconds_per/(np-1)
 
         print pbsf
         hours_raw = time_seconds/3600.
