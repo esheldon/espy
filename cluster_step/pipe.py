@@ -10,7 +10,7 @@ from . import prior
 
 import gmix_image
 from gmix_image.gmix import GMix, GMixCoellip
-from gmix_image.gmix_mcmc import MixMCStandAlone, MixMCPSF
+from gmix_image.gmix_mcmc import MixMCPSF
 from gmix_image.gmix_em import GMixEMPSF
 from gmix_image.gmix_fit import GMixFitSimple
 
@@ -528,7 +528,7 @@ class Pipe(dict):
             nwalkers=self['nwalkers']
             burnin=self['burnin']
             nstep=self['nstep']
-            fitter=MixMCStandAlone(im, self['ivar'],
+            fitter=gmix_image.gmix_mcmc.MixMCStandAlone(im, self['ivar'],
                                    gmix_psf, gprior, fitmodel,
                                    nwalkers=nwalkers,
                                    nstep=nstep,

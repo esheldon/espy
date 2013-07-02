@@ -1149,6 +1149,10 @@ def make_averaged_outputs(run, docum=False,
             if i2 in skip2:
                 continue
             edata = read_output(run, i1, i2, verbose=True, fs=fs)
+            edata['shear_true'][:,0] = cs['shear'][0]
+            edata['shear_true'][:,1] = cs['shear'][1]
+            edata['gtrue'][:,0] = cs['shear'][0]
+            edata['gtrue'][:,1] = cs['shear'][1]
             s2data.append(edata)
 
         if 'shearmag' in cs:

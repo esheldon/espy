@@ -1655,9 +1655,14 @@ class SimPlotter(dict):
             plt.add(klab)
 
         if use_pqr:
-            pqr_lab = biggles.PlotLabel(0.1,0.1,'PQR',
-                                        fontsize=2.5,halign='left')
-            plt.add(pqr_lab)
+            method_lab='PQR'
+        else:
+            method_lab='"lensfit"'
+
+
+        method_lab = biggles.PlotLabel(0.1,0.1,method_lab,
+                                       fontsize=2.5,halign='left')
+        plt.add(method_lab)
 
 
 

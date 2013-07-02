@@ -456,23 +456,27 @@ def fit_gprior_dev(xdata, ydata):
 
 
 
-def fit_gprior_exp_gmix(g1, g2):
+def fit_gprior_gmix(g1, g2, ngauss, n_iter=4000, min_covar=1.e-6, n_init=10):
     import esutil as eu
-    from scikits.learn import mixture
-    ngauss=5
-    gmm = mixture.GMM(n_states=ngauss)
+    #from scikits.learn import mixture
+    from sklearn import mixture
+    #gmm = mixture.GMM(n_states=ngauss)
+    gmm = mixture.gmm.GMMCenZero(n_components=ngauss,
+                                 n_iter=n_iter,
+                                 n_init=n_init,
+                                 min_covar=min_covar,
+                                 covariance_type='spherical')
 
-    vals = zeros(g1.size, 2)
+    #gmm.means_ = numpy.zeros( (ngauss,2) )
+    vals = zeros( (g1.size, 2) )
     vals[:,0] = g1
     vals[:,1] = g2
 
-    gmm.fit(vals, n_iter=400)#, min_covar=1.e-6)
+    gmm.fit(vals)
 
-    mg = MultiGauss(gmm)
-    print mg
-
-    return mg
-
+    if not gmm.converged_:
+        raise RuntimeError("not converged")
+    return gmm
 
 class TPrior(object):
     """
