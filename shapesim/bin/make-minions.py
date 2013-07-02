@@ -10,7 +10,7 @@ from shapesim import shapesim
 from optparse import OptionParser
 parser=OptionParser(__doc__)
 
-parser.add_option('-p','--ppn',default=8, help='processors per node')
+parser.add_option('-p','--ppn',default=8, help='processors per node, default %default')
 
 
 _pbs_template="""#!/bin/bash -l
@@ -79,10 +79,9 @@ def get_seconds_per(run, c):
     if s=='cmcmc':
         for model in c['fitmodel']:
             if model=='gexp':
-                seconds_per += 2.0
+                seconds_per += 1.7
             else:
-                raise ValueError("test speed of gdev for cmcmc")
-   
+                seconds_per += 2.4
     else:
         for model in c['fitmodel']:
             if model=='gexp':

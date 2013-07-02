@@ -1,0 +1,51 @@
+# gdev obj and gauss psf
+run: "bafit-gdg02r01"
+sim: "sim-gdg02"
+
+runtype: "bys2n"
+
+sampler: "cmcmc"
+
+s2n_method: "admom"
+s2n_fac: 320
+
+# minimum number of random ellipticities to use.
+# need decent count to sample the prior surface
+# note they come in pairs
+min_gcount: 400
+#min_gcount: 10
+
+retrim: false
+retrim_fluxfrac: null
+s2ncalc_fluxfrac: null
+
+s2n_psf: 1.0e+8
+s2nvals: [15,20,25,30,40,50,60,70,80,90,100,120,140,160,180,200,250,300,350,400]
+
+# step and burnin are *per walker*
+nwalkers: 20
+nstep: 200 # steps per walker
+burnin: 400 # burnin per walker.
+
+# options
+#   truth: draw small box around truth
+#   prior: draw from prior
+#   maxlike: take from maxlike fit
+g_draw: "truth"
+
+# for psf in EM
+em_maxiter: 5000
+em_tol: 1.0e-6  # (T-Told)/T
+
+# iterate until the auto-correlation length is satisfactory
+iter: true
+
+fitmodel: ['gdev']
+ngauss_psf: 1
+mca_a: 3.0
+
+do_pqr: true
+prob_type: "ba13"
+
+make_plots: false
+verbose: false

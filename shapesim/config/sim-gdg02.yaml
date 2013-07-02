@@ -1,0 +1,43 @@
+# gexp obj and gauss psf
+# using BA13 gprior because it is twice differentiable
+name: sim-gdg02
+
+orient: ring
+nsplit: 100
+
+dotrim: false
+
+psfmodel: gauss
+
+# 3.9 this corresponds to 1.4 sigma in pixels
+Tpsf: 4.0
+psf_g1: 0.0
+psf_g2: 0.0
+
+objmodel: gdev
+
+shear: [0.01,0.0]
+
+Tobj: [8.0, 6.0, 4.0, 2.0]
+
+# Instead of truly fixing the parameters, we will draw
+# from distributions
+
+# gprior parameters from BA
+gprior: "ba13"
+g_width: 0.3
+
+# draw from distribution with this width as a fraction
+# of the mean
+T_dist: "LogNormal"
+T_width_frac: 0.3
+
+counts_dist: "LogNormal"
+counts_width_frac: 0.3
+
+# in pixels
+cen_dist: "Normal"
+cen_width: 0.2
+
+comments: |
+    BA13 stuff
