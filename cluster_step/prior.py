@@ -454,14 +454,161 @@ def fit_gprior_dev(xdata, ydata):
             'pcov':pcov,
             'perr':perr}
 
+def fit_gprior_2gauss_cut(xdata, ydata, ivar):
+    """
+    This works much better than the lm fitter
+    Input is the histogram data.
+    """
+    import mcmc
+    import emcee
+
+    nwalkers=800
+    burnin=1000
+    nstep=100
+
+    A=ydata.sum()#*(xdata[1]-xdata[0])
+
+    A1 = 0.6*A
+    A2 = 0.4*A
+
+    sigma1 = 0.02
+    sigma2 = 0.3
+
+    pcen = numpy.array([A1,sigma1,A2,sigma2])
+
+    npars=pcen .size
+    guess=zeros( (nwalkers,npars) )
+    guess[:,0] = pcen[0]*(1.+0.2*srandu(nwalkers))
+    guess[:,1] = pcen[1]*(1.+0.2*srandu(nwalkers))
+    guess[:,2] = pcen[2]*(1.+0.2*srandu(nwalkers))
+    guess[:,3] = pcen[3]*(1.+0.2*srandu(nwalkers))
+
+    gfitter=GPrior2GaussCutFitter(xdata, ydata, ivar)
+
+    print 'pcen:',pcen
+
+    sampler = emcee.EnsembleSampler(nwalkers, 
+                                    npars,
+                                    gfitter.get_lnprob,
+                                    a=2)
+
+    pos, prob, state = sampler.run_mcmc(guess, burnin)
+    sampler.reset()
+    pos, prob, state = sampler.run_mcmc(pos, nstep)
+
+    arate = sampler.acceptance_fraction.mean()
+    print 'arate:',arate
+    trials  = sampler.flatchain
+    mcmc.plot_results(trials, ptypes=['log','linear','log','linear'])
+    
+
+    pars,pcov=mcmc.extract_stats(trials)
+
+    d=diag(pcov)
+    perr = sqrt(d)
+
+    gprior=GPrior2GaussCut(pars)
+
+    res={'A1':pars[0],
+         'A1_err':perr[0],
+         'sigma1':pars[1],
+         'sigma1_err':perr[1],
+         'A2':pars[2],
+         'A2_err':perr[2],
+         'sigma2':pars[3],
+         'sigma2_err':perr[3],
+
+         'pars':pars,
+         'pcov':pcov,
+         'perr':perr}
 
 
-def fit_gprior_gmix(g1, g2, ngauss, n_iter=4000, min_covar=1.e-6, n_init=10):
+    fmt="""
+A1:        %(A1).6g +/- %(A1_err).6g
+sigma1:    %(sigma1).6g +/- %(sigma1_err).6g
+A2:        %(A2).6g +/- %(A2_err).6g
+sigma2:    %(sigma2).6g +/- %(sigma2_err).6g
+    """.strip()
+
+    print fmt % res
+
+    return gprior,res
+
+
+class GPrior2GaussCutFitter(object):
+    def __init__(self, xvals, yvals, ivar):
+        """
+        Input is the histogram data in 1d
+        """
+        self.xvals=xvals
+        self.yvals=yvals
+        self.ivar=ivar
+
+    def get_lnprob(self, pars):
+        w,=where(pars < 0)
+        if w.size > 0:
+            return -9.999e20
+
+        model=gprior1d_2gauss_cut(pars, self.xvals)
+
+        lnprob = model
+        lnprob -= self.yvals
+        lnprob *= lnprob
+        lnprob *= self.ivar
+
+        lnprob = lnprob.sum()
+        lnprob *= (-0.5)
+
+        return lnprob
+
+class GPrior2GaussCut(GPrior):
+    def __init__(self, pars):
+        """
+        Input is the histogram data in 1d
+        """
+        self.pars=pars
+        self.gmax=1.0
+
+    def prior2d_gabs(self, g):
+        """
+        Get the 2d prior for the input |g| value(s)
+        """
+        return gprior2d_2gauss_cut(self.pars,g)
+
+    def prior2d_gabs_scalar(self, g):
+        """
+        Get the 2d prior for the input |g| value(s)
+
+        using same for now
+        """
+        return gprior2d_2gauss_cut(self.pars,g)
+
+def gprior2d_2gauss_cut(pars, g):
+    gsq = g**2
+
+    amp1=pars[0]
+    ivar1 = 1./pars[1]**2
+    amp2=pars[2]
+    ivar2 = 1./pars[3]**2
+
+    n1=ivar1/(2*pi)
+    n2=ivar2/(2*pi)
+    p = (amp1*n1*exp(-0.5*gsq*ivar1) + amp2*n2*exp(-0.5*gsq*ivar2))*(1-gsq)**2 
+    return p
+
+def gprior1d_2gauss_cut(pars, g):
+    return 2*pi*g*gprior2d_2gauss_cut(pars,g)
+
+
+
+
+def fit_gprior_gmix_em(g1, g2, ngauss, n_iter=4000, min_covar=1.e-6, n_init=10):
     import esutil as eu
     #from scikits.learn import mixture
     from sklearn import mixture
     #gmm = mixture.GMM(n_states=ngauss)
-    gmm = mixture.gmm.GMMCenZero(n_components=ngauss,
+    #gmm = mixture.gmm.GMMCenZero(n_components=ngauss,
+    gmm = mixture.gmm.GMM(n_components=ngauss,
                                  n_iter=n_iter,
                                  n_init=n_init,
                                  min_covar=min_covar,

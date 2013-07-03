@@ -9,6 +9,8 @@ import os
 import numpy
 from numpy import sqrt, linspace, zeros, where
 
+import lensing
+
 import cluster_step
 from cluster_step import files, stats, prior
 
@@ -16,6 +18,7 @@ import esutil as eu
 from esutil.numpy_util import aprint
 from esutil.stat import histogram
 
+import biggles
 from biggles import FramedPlot, FramedArray, Table, Points, PlotKey, \
         SymmetricErrorBarsX, SymmetricErrorBarsY, Histogram, Curve,\
         ErrorBarsX
@@ -26,13 +29,28 @@ parser=OptionParser(__doc__)
 parser.add_option('-s','--show',action='store_true',
                   help="show the plot on the screen")
 
-        
+parser.add_option('--do-eta',action='store_true',
+                  help="fit in eta space")
+
+       
 class FitRunner(object):
     def __init__(self):
         options,args = parser.parse_args(sys.argv[1:])
         self.show=options.show
         self.options=options
         self.otype = 'nosplit-gmix'
+
+        self.do_eta=options.do_eta
+        if self.do_eta:
+            self.ellip_name='eta'
+            self.mine_2d = None
+            self.maxe_2d = None
+            self.maxe=None
+        else:
+            self.ellip_name='g'
+            self.mine_2d = -1.0
+            self.maxe_2d = 1.0
+            self.maxe=1.0
 
         self.ngauss=3
 
@@ -51,7 +69,16 @@ class FitRunner(object):
         return st
 
     def get_data(self):
-        self.data=files.read_prior_original()
+        data0=files.read_prior_original()
+
+        
+        eta1,eta2 = lensing.util.g1g2_to_eta1eta2(data0['g'][:,0], data0['g'][:,1])
+
+        data=eu.numpy_util.add_fields(data0, [('eta','f8',2)])
+        data['eta'][:,0] = eta1
+        data['eta'][:,1] = eta2
+
+        self.data=data
 
     def go(self):
 
@@ -87,7 +114,7 @@ class FitRunner(object):
             st['perr'][i] = fitres['perr']
             st['pcov'][i] = fitres['pcov']
             """
-            if False and self.show:
+            if True and self.show:
                 key=raw_input('hit a key (q to quit): ')
                 if key=='q':
                     stop
@@ -158,21 +185,21 @@ class FitRunner(object):
         more=True
         data=self.data
 
-        g1=data['g'][w,0]
-        g2=data['g'][w,1]
+        g1=data[self.ellip_name][w,0]
+        g2=data[self.ellip_name][w,1]
 
         gtot = sqrt(g1**2 + g2**2)
 
         sigma=gtot.std()
-        binsize=0.2*sigma
+        binsize=0.1*sigma
         self.binsize=binsize
 
-        h1=histogram(g1, binsize=binsize, min=-1., max=1., more=more)
-        h2=histogram(g2, binsize=binsize, min=-1., max=1., more=more)
+        h1=histogram(g1, binsize=binsize, min=self.mine_2d, max=self.maxe_2d, more=more)
+        h2=histogram(g2, binsize=binsize, min=self.mine_2d, max=self.maxe_2d, more=more)
 
 
-        #h=histogram(gtot, binsize=binsize, min=0., max=1., more=more)
-        h=histogram(gtot, binsize=binsize, more=more)
+        h=histogram(gtot, binsize=binsize, min=0., max=self.maxe, more=more)
+        #h=histogram(gtot, binsize=binsize, more=more)
 
         if False:
             import biggles
@@ -183,7 +210,9 @@ class FitRunner(object):
         return h1, h2, h
 
     def do_fit(self, data):
-        res=prior.fit_gprior_gmix(data['g'][:,0], data['g'][:,1], self.ngauss)
+        res=prior.fit_gprior_gmix_em(data[self.ellip_name][:,0],
+                                     data[self.ellip_name][:,1],
+                                     self.ngauss)
         return res
 
 
@@ -203,8 +232,9 @@ class FitRunner(object):
         tab.title='%s %.2f %.2f ' % (self.otype, minmag, maxmag)
 
 
-        nrand=100000
+        nrand=1000000
         binsize=self.binsize
+        rbinsize=binsize*0.2
 
 
         gr = gprior.sample(nrand)
@@ -213,25 +243,24 @@ class FitRunner(object):
 
         grand = numpy.sqrt( g1rand**2 + g2rand**2 )
 
-        #hrand=histogram(grand, binsize=binsize, min=0., max=1., more=True)
-        hrand=histogram(grand, binsize=binsize, min=h['low'][0], max=h['high'][-1], more=True)
-        h1rand=histogram(g1rand, binsize=binsize, min=-1., max=1., more=True)
+        #hrand=histogram(grand, binsize=rbinsize, min=h['low'][0], max=h['high'][-1], more=True)
+        hrand=histogram(grand, binsize=rbinsize, min=0,max=self.maxe, more=True)
+        h1rand=histogram(g1rand, binsize=rbinsize, min=self.mine_2d, max=self.maxe_2d, more=True)
 
-        #fbinsize=xfit[1]-xfit[0]
-        #hrand['hist'] = hrand['hist']*float(yfit.sum())/hrand['hist'].sum()*fbinsize/binsize
-        hrand['hist'] = hrand['hist']*float(h['hist'].sum())/nrand
-        h1rand['hist'] = h1rand['hist']*float(h1['hist'].sum())/h1rand['hist'].sum()
+        bratio = self.binsize/rbinsize
+        hrand['hist'] = hrand['hist']*bratio*float(h['hist'].sum())/nrand
+        h1rand['hist'] = h1rand['hist']*bratio*float(h1['hist'].sum())/h1rand['hist'].sum()
 
 
         pltboth=FramedPlot()
-        pltboth.xlabel=r'$g$'
+        pltboth.xlabel=r'$%s$' % self.ellip_name
 
-        hplt1=Histogram(h1['hist'], x0=h1['low'][0], binsize=binsize,color='red')
+        hplt1=Histogram(h1['hist'], x0=h1['low'][0], binsize=binsize,color='darkgreen')
         hplt2=Histogram(h2['hist'], x0=h2['low'][0], binsize=binsize,color='blue')
-        hpltrand=Histogram(hrand['hist'], x0=hrand['low'][0], binsize=binsize,
-                           color='magenta')
-        hplt1rand=Histogram(h1rand['hist'], x0=h1rand['low'][0], binsize=binsize,
-                           color='magenta')
+        hpltrand=Histogram(hrand['hist'], x0=hrand['low'][0], binsize=rbinsize,
+                           color='red')
+        hplt1rand=Histogram(h1rand['hist'], x0=h1rand['low'][0], binsize=rbinsize,
+                           color='red')
 
         hplt1.label=r'$g_1$'
         hplt2.label=r'$g_2$'
@@ -240,14 +269,16 @@ class FitRunner(object):
         keyboth=PlotKey(0.9,0.9,[hplt1,hplt2,hplt1rand],halign='right')
 
         pltboth.add(hplt1, hplt2, hplt1rand, keyboth)
+
+
         tab[0,0]=pltboth
         
 
         plt=FramedPlot()
-        plt.xlabel=r'$|g|$'
+        plt.xlabel=r'$|%s|$' % self.ellip_name
 
         hplt=Histogram(h['hist'], x0=h['low'][0], binsize=binsize)
-        hplt.label='|g|'
+        hplt.label='|%s|' % self.ellip_name
 
         
         #line=Curve(xfit, yfit, color='blue')

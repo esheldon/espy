@@ -512,41 +512,54 @@ def plot_results(trials, **keys):
     import biggles
     import esutil
 
+    npars=trials.shape[1]
+
     fontsize_min=keys.get('fontsize_min',1)
     biggles.configure( 'default', 'fontsize_min', fontsize_min)
 
     binfac=keys.get('binfac',0.2)
     names=keys.get('names',None)
     show=keys.get('show',True)
+    ptypes=keys.get('ptypes',['linear']*npars)
 
     means,cov = extract_stats(trials)
     errs=sqrt(diag(cov)) 
 
-    npars=len(means)
+    plt=biggles.Table(npars,2)
 
-    nrow,ncol=get_grid(npars)
-    plt=biggles.Table(nrow,ncol)
-    plt.aspect_ratio=float(nrow)/ncol
+    ind = numpy.arange(trials.shape[0])
 
     for i in xrange(npars):
-        row=i/ncol
-        col=i % ncol
+        if names is not None:
+            name=names[i]
+        else:
+            name=r'$p_{%d}$' % i
 
-        bsize = binfac*errs[i]
+        burn_plot_i = esutil.plotting.bscatter(ind,trials[:,i],
+                                               type='solid',
+                                               xlabel='step',
+                                               ylabel=name,
+                                               show=False)
+        plt[i,0] = burn_plot_i
 
-        hdict = esutil.stat.histogram(trials[:, i], 
+        if ptypes[i] == 'linear':
+            vals=trials[:,i]
+            bsize = binfac*errs[i]
+            xlabel='name'
+        else:
+            vals=numpy.log10(trials[:,i])
+            bsize=0.2*vals.std()
+            xlabel=r'$log_{10}(%s)$' % name
+
+        hdict = esutil.stat.histogram(vals,
                                       binsize=bsize, 
                                       more=True)
         hplot = biggles.Histogram(hdict['hist'], 
                                   x0=hdict['low'][0], 
                                   binsize=bsize)
         plti=biggles.FramedPlot()
-        if names is not None:
-            name=names[i]
-        else:
-            name=r'$p_{%d}$' % i
 
-        plti.xlabel=name
+        plti.xlabel=xlabel
 
         hmax=hdict['hist'].max()
         plti.yrange=[-0.05*hmax, 1.2*hmax]
@@ -558,7 +571,7 @@ def plot_results(trials, **keys):
 
         plti.add(plab)
 
-        plt[row,col]=plti
+        plt[i,1]=plti
     
     if show:
         plt.show()
