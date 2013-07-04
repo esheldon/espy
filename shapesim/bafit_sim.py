@@ -58,7 +58,10 @@ class BAFitSim(shapesim.BaseSim):
                 center_dist=gmix_image.priors.CenPrior([0.0]*2,[cw]*2)
             else:
                 raise ValueError("implement non-normal cen dist")
-            self.shapesim['center_dist']=center_dist
+
+            self.center_dist=center_dist
+        else:
+            self.center_dist=None
 
         if 'verbose' not in self:
             self['verbose'] = False
@@ -111,11 +114,15 @@ class BAFitSim(shapesim.BaseSim):
             if self['verbose'] or ( ( (ipair+1) % 10) == 0 or ipair== 0):
                 stderr.write("  %s/%s pairs done g: %g\n" % ((ipair+1),nellip,g))
 
+            center_offset=None
             while True:
                 theta1 = random.random()*360.0
                 theta2 = theta1 + 90.0
-                ci1=self._get_one_trial(Tobj, counts, ellip, theta1)
-                ci2=self._get_one_trial(Tobj, counts, ellip, theta2)
+                if self.center_dist is not None:
+                    center_offset=self.center_dist.sample()
+
+                ci1=self._get_one_trial(Tobj, counts, ellip, theta1, center_offset=center_offset)
+                ci2=self._get_one_trial(Tobj, counts, ellip, theta2, center_offset=center_offset)
 
                 try:
                     res1,res2=self._process_pair(ci1,ci2)
@@ -140,9 +147,10 @@ class BAFitSim(shapesim.BaseSim):
 
         return out
 
-    def _get_one_trial(self, Tobj, counts, ellip, theta):
+    def _get_one_trial(self, Tobj, counts, ellip, theta, center_offset=None):
 
-        ci_nonoise = self.shapesim.get_trial(Tobj, ellip, theta, counts=counts)
+        ci_nonoise = self.shapesim.get_trial(Tobj, ellip, theta, counts=counts,
+                                             center_offset=center_offset)
 
         if self['retrim']:
             if 'retrim_fluxfrac' not in self:

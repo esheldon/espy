@@ -92,7 +92,7 @@ class ShapeSim(dict):
         return ci
 
 
-    def get_trial(self, Tobj, ellip, theta, counts=1.0):
+    def get_trial(self, Tobj, ellip, theta, counts=1.0, center_offset=None):
         """
         Genereate a realization of the input size ratio squared and total
         ellipticity.
@@ -109,7 +109,8 @@ class ShapeSim(dict):
         s2n_psf: S/N ratio for psf
         """
 
-        ci_full = self.new_convolved_image(Tobj, ellip, theta, counts=counts)
+        ci_full = self.new_convolved_image(Tobj, ellip, theta, counts=counts, 
+                                           center_offset=center_offset)
         if self['dotrim']:
             fluxfrac=self.get('fluxfrac',0.999937)
             if self['verbose']:
@@ -197,7 +198,8 @@ class ShapeSim(dict):
         if key == 'q':
             stop
 
-    def new_convolved_image(self, Tobj, obj_ellip, obj_theta, counts=1.0):
+    def new_convolved_image(self, Tobj, obj_ellip, obj_theta, counts=1.0,
+                            center_offset=None):
         """
         Generate a convolved image with the input parameters and the psf and
         object models listed in the config.
@@ -205,7 +207,8 @@ class ShapeSim(dict):
         # new thing using the gmix_image code for gaussian objects
         if self['objmodel'] in ['gexp','gdev','gauss','gbd']:
             return self.new_gmix_convolved_image(Tobj, obj_ellip, obj_theta, 
-                                                 counts=counts)
+                                                 counts=counts,
+                                                 center_offset=center_offset)
 
         psfmodel = self['psfmodel']
         objmodel = self['objmodel']
@@ -248,7 +251,8 @@ class ShapeSim(dict):
             ci['shear2']=0.
         return ci
 
-    def new_gmix_convolved_image(self, Tobj, obj_ellip, obj_theta, counts=1.0):
+    def new_gmix_convolved_image(self, Tobj, obj_ellip, obj_theta, counts=1.0,
+                                 center_offset=None):
         """
         Generate a convolved image with the input parameters and the psf and
         object models listed in the config.
@@ -314,7 +318,7 @@ class ShapeSim(dict):
             else:
                 raise ValueError("unsupported gmix object type: '%s'" % objmodel)
 
-        ci=fimage.convolved.ConvolverGMix(obj_gmix, psf_gmix, **self)
+        ci=fimage.convolved.ConvolverGMix(obj_gmix, psf_gmix, center_offset=center_offset, **self)
 
         ci['obj_theta'] = obj_theta
         if shear is not None:
