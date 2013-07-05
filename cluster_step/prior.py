@@ -604,11 +604,12 @@ def gprior1d_2gauss_cut(pars, g):
 
 def fit_gprior_gmix_em(g1, g2, ngauss, n_iter=4000, min_covar=1.e-6, n_init=10):
     import esutil as eu
+    import gaussmix
     #from scikits.learn import mixture
     from sklearn import mixture
     #gmm = mixture.GMM(n_states=ngauss)
     #gmm = mixture.gmm.GMMCenZero(n_components=ngauss,
-    gmm = mixture.gmm.GMM(n_components=ngauss,
+    gmm = gaussmix.GMMZeroCenter(n_components=ngauss,
                                  n_iter=n_iter,
                                  n_init=n_init,
                                  min_covar=min_covar,
