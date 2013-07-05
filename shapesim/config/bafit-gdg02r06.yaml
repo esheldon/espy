@@ -1,6 +1,6 @@
-# gexp obj and gauss psf
-run: "bafit-geg03r06"
-sim: "sim-geg03"
+# gdev obj and gauss psf
+run: "bafit-gdg02r06"
+sim: "sim-gdg02"
 
 runtype: "bys2n"
 
@@ -14,8 +14,6 @@ s2n_fac: 320
 # note they come in pairs
 min_gcount: 400
 #min_gcount: 10
-#min_gcount: 100
-#min_gcount: 40
 
 retrim: false
 retrim_fluxfrac: null
@@ -42,7 +40,7 @@ em_tol: 1.0e-6  # (T-Told)/T
 # iterate until the auto-correlation length is satisfactory
 iter: true
 
-fitmodel: ['gexp']
+fitmodel: ['gdev']
 ngauss_psf: 1
 mca_a: 3.0
 

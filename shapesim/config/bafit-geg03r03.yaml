@@ -1,19 +1,21 @@
 # gexp obj and gauss psf
-run: bafit-geg03r03
-sim: sim-geg03
+run: "bafit-geg03r03"
+sim: "sim-geg03"
 
-runtype: bys2n
+runtype: "bys2n"
 
-when_prior: "after"
+sampler: "cmcmc"
 
-s2n_method: admom
-s2n_fac: 160
+s2n_method: "admom"
+s2n_fac: 320
 
 # minimum number of random ellipticities to use.
 # need decent count to sample the prior surface
 # note they come in pairs
 min_gcount: 400
-#min_gcount: 5
+#min_gcount: 10
+#min_gcount: 100
+#min_gcount: 40
 
 retrim: false
 retrim_fluxfrac: null
@@ -27,8 +29,11 @@ nwalkers: 20
 nstep: 200 # steps per walker
 burnin: 400 # burnin per walker.
 
-# draw the g1,g2 starting points from the gprior
-draw_gprior: true
+# options
+#   truth: draw small box around truth
+#   prior: draw from prior
+#   maxlike: take from maxlike fit
+g_draw: "truth"
 
 # for psf in EM
 em_maxiter: 5000
@@ -41,5 +46,8 @@ fitmodel: ['gexp']
 ngauss_psf: 1
 mca_a: 3.0
 
+do_pqr: true
+prob_type: "ba13"
+
 make_plots: false
-verbose: true
+verbose: false
