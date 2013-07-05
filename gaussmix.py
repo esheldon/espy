@@ -4,6 +4,9 @@ import esutil
 from sklearn import mixture
 
 class GMMZeroCenter(mixture.GMM):
+    """
+    Force the center to be at the origin
+    """
     def __init__(self, **keys):
         super(GMMZeroCenter,self).__init__(**keys)
 
@@ -28,6 +31,7 @@ class GMMZeroCenter(mixture.GMM):
         return weights
 
 
+# not really  used any more
 class GaussMix(mixture.GMM):
     """
 

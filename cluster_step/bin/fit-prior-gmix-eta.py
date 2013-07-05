@@ -50,11 +50,11 @@ class FitRunner(object):
         self.ngauss=3
 
     def get_dtype(self, npars):
+        npars=self.ngauss
         dt=[('minmag', 'f8'),
             ('maxmag', 'f8'),
-            ('pars','f8',npars),
-            ('perr','f8',npars),
-            ('pcov','f8',(npars,npars))]
+            ('weight','f8',npars),
+            ('sigma2','f8',npars)]
         return dt
 
     def get_struct(self,nbin):
@@ -99,22 +99,22 @@ class FitRunner(object):
             print '\nstats:'
             print gprior.means_.shape
             print gprior.means_
+            print gprior.covars_.shape
             print gprior.covars_
+            print gprior.weights_.shape
+            print gprior.weights_
 
-            """
             st['minmag'][i] = minmag
             st['maxmag'][i] = maxmag
-            st['pars'][i] = fitres['pars']
-            st['perr'][i] = fitres['perr']
-            st['pcov'][i] = fitres['pcov']
-            """
+            st['weight'][i] = gprior.weights_
+            st['sigma2'][i] = gprior.covars_[:,0] # round
+
             if False and self.show:
                 key=raw_input('hit a key (q to quit): ')
                 if key=='q':
                     stop
 
-        stop
-        self.plot_fits(st)
+        #self.plot_fits(st)
         self.write_data(st)
 
     def plot_fits(self,st):

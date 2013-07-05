@@ -179,19 +179,6 @@ def eta1eta2_to_g1g2(eta1,eta2):
 
     return g1,g2
 
-
-def jacobian_etag(g1, g2):
-    """
-    the jacobian determinant
-
-    |deta1/dg1 deta1/dg2|
-    |deta2/dg1 deta2/dg2|
-
-    """
-
-    gsq = g1**2 + g2**2
-    #deta1_dg1 = (2 g2**2 tanh**(-1)(sqrt(g1**2+g2**2)))/(g1**2+g2**2)**(3/2)-(2 g1**2)/((g1**2+g2**2-1) (g1**2+g2**2))
-
 def shear_fracdiff(e, em, deriv=1.0):
     """
     e=etrue
