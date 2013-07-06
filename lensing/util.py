@@ -142,14 +142,42 @@ def g1g2_to_eta1eta2(g1,g2):
         if gtot == 0:
             eta1,eta2=0.0,0.0
         else:
-            cos2theta=g1/etot
-            sin2theta=g2/etot
+            cos2theta=g1/gtot
+            sin2theta=g2/gtot
 
             eta = 2*atanh(gtot)
             eta1=eta*cos2theta
             eta2=eta*sin2theta
 
     return eta1,eta2
+
+def eta1eta2_to_g1g2(eta1,eta2):
+    eta_tot=sqrt(eta1**2 + eta2**2)
+    if isinstance(eta_tot,numpy.ndarray):
+        g1=numpy.zeros(eta_tot.size)
+        g2=numpy.zeros(eta_tot.size)
+
+        w,=numpy.where(eta_tot != 0)
+        if w.size > 0:
+            cos2theta=eta1[w]/eta_tot[w]
+            sin2theta=eta2[w]/eta_tot[w]
+
+            g = numpy.tanh(0.5*eta_tot[w])
+            g1[w]=g*cos2theta
+            g2[w]=g*sin2theta
+    else:
+        from math import tanh        
+        if eta_tot == 0:
+            g1,g2=0.0,0.0
+        else:
+            cos2theta=eta1/eta_tot
+            sin2theta=eta2/eta_tot
+
+            g = tanh(0.5*eta_tot)
+            g1=g*cos2theta
+            g2=g*sin2theta
+
+    return g1,g2
 
 def shear_fracdiff(e, em, deriv=1.0):
     """
