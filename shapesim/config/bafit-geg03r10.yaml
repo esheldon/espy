@@ -7,15 +7,12 @@ runtype: "bys2n"
 sampler: "cmcmc"
 
 s2n_method: "admom"
-s2n_fac: 160
+s2n_fac: 320
 
 # minimum number of random ellipticities to use.
 # need decent count to sample the prior surface
 # note they come in pairs
 min_gcount: 400
-#min_gcount: 10
-#min_gcount: 100
-#min_gcount: 40
 
 retrim: false
 retrim_fluxfrac: null
