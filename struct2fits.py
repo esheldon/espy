@@ -2,9 +2,41 @@
 todo:
     how to get header file name?  Just give header and struct name
     and extract?
+
+    write auto-generated to files
 """
 
 class StructFits(object):
+    """
+
+    struct_def = '''
+        struct particle {
+            int x;
+            double y[4];
+            long z;
+            char sfield[35];
+            uint32_t uf;
+        };
+    '''
+
+    Note the struct definition does not have to be complete; only
+    read/write the elements you want
+
+    types can be standard C number types, those from <stdint.h>
+    or char[len].  But note size_t etc are not supported.  Strings
+    cannot be arrays.
+
+    sf = Structfits(struct_def, header_list)
+    sf.write_header_file(filename)
+    sf.write_c_file(filename)
+
+    Then use in C like this
+    struct_particle_create_table(fits, nrows, "extname", &status);
+    struct_particle_write_fits(fits, particles, nrows, &status);
+    particles=struct_particle_read_fits(fits, &nrows, &status);
+
+
+    """
     def __init__(self, struct_def, headers):
         self.struct_def = struct_def
 
@@ -79,31 +111,85 @@ class StructFits(object):
         proto = ';\n'.join(proto)
         return proto
 
+    def get_guard_name(self):
+        gname="_%s_INCLUDE_HEADER_GUARD" % self.get_name_norm().upper()
+        return gname
 
-    def get_header_text(self):
-        prototypes=self.get_prototypes()
+    def get_includes(self):
         headers = self.get_headers()
-
         headers = ['#include "%s"' % h for h in headers]
         headers = '\n'.join(headers)
 
-        gname="_%s_HEADER_GUARD" % self.get_name_norm().upper()
+        return headers
+
+    def write_header_file(self, filename):
+        """
+        Write the full header text
+        """
+        with open(filename,'w') as fobj:
+            text=self.get_header_text()
+            fobj.write(text)
+
+    def write_c_file(self, filename):
+        """
+        Write the full .c text
+        """
+        with open(filename,'w') as fobj:
+            text=self.get_c_text()
+            fobj.write(text)
+
+
+    def get_header_text(self):
+        """
+        The full text for the .h file
+        """
+        prototypes=self.get_prototypes()
+
+        includes = self.get_includes()
+
+        gname = self.get_guard_name()
+
         hdr="""#ifndef %(gname)s
 #define %(gname)s
 
 #include <fitsio.h>
 
-%(headers)s
+%(includes)s
 
 %(prototypes)s
 
 #endif\n"""
 
         hdr = hdr % {'gname':gname,
-                     'headers':headers,
+                     'includes':includes,
                      'prototypes':prototypes}
 
         return hdr
+
+    def get_c_text(self):
+        """
+        The full text for the .c file
+        """
+
+        includes = self.get_includes()
+        texts = self.get_function_texts()
+
+        hdr="""
+#include <stdlib.h>
+#include <stdio.h>
+#include <fitsio.h>
+
+%(includes)s
+
+%(texts)s
+\n"""
+
+        hdr = hdr % {'includes':includes,
+                     'texts':texts}
+
+        return hdr
+
+
 
 
     def get_create_table_signature(self):
@@ -163,6 +249,13 @@ int %(struct_name_norm)s_write_fits(fitsfile* fits, %(struct_name_raw)s *self, L
                'struct_name_norm':self.get_name_norm()}
         return s.strip()
 
+
+    def get_function_texts(self):
+        texts = [self.get_create_table_func(),
+                 self.get_write_table_func(),
+                 self.get_read_table_func()]
+        texts = '\n\n'.join(texts)
+        return texts
 
     def get_write_table_func(self):
         """
