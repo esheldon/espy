@@ -1,14 +1,60 @@
+"""
+todo:
+    how to get header file name?  Just give header and struct name
+    and extract?
+"""
+
 class StructFits(object):
-    def __init__(self, struct_def):
+    def __init__(self, struct_def, headers):
         self.struct_def = struct_def
-        self.process_struct_def()
+
+        if not isinstance(headers,(list,tuple)):
+            headers = [headers]
+
+        self.headers=headers
+        self._process_struct_def()
+
+    def get_headers(self):
+        """
+        List of headers to include
+        """
+        return self.headers
 
     def get_name_raw(self):
+        """
+        The raw name, e.g. 'struct mystruct'.  If a typedef was used,
+        the raw name equals the normalized name
+        """
         return self.struct_name_raw
+
     def get_name_norm(self):
+        """
+        The normalized name, e.g. 'struct_mystruct'.  If a typedef was used,
+        the raw name equals the normalized name
+        """
         return self.struct_name_norm
 
-    def process_struct_def(self):
+    def get_names_c(self):
+        """
+        Get names as a C string array value
+        """
+        names=['"'+f.get_name()+'"' for f in self.fields]
+        names = '{' + ','.join(names)+'}'
+        return names
+
+    def get_tforms_c(self):
+        """
+        Get tforms as a C string array value
+        """
+        tforms=['"'+f.get_tform()+'"' for f in self.fields]
+        tforms = '{' + ','.join(tforms)+'}'
+        return tforms
+
+
+    def _process_struct_def(self):
+        """
+        Get the struct name and field list
+        """
         struct_def=self.struct_def
         sbeg = struct_def.find('{')
         send = struct_def.find('}')
@@ -26,18 +72,45 @@ class StructFits(object):
 
         self.fields=fields
 
-    def get_names_c(self):
-        names=['"'+f.get_name()+'"' for f in self.fields]
-        names = '{' + ','.join(names)+'}'
-        return names
+    def get_prototypes(self):
+        proto = [self.get_create_table_signature(),
+                 self.get_write_table_signature(),
+                 self.get_read_table_signature()]
+        proto = ';\n'.join(proto)
+        return proto
 
-    def get_tforms_c(self):
-        tforms=['"'+f.get_tform()+'"' for f in self.fields]
-        tforms = '{' + ','.join(tforms)+'}'
-        return tforms
+
+    def get_header_text(self):
+        prototypes=self.get_prototypes()
+        headers = self.get_headers()
+
+        headers = ['#include "%s"' % h for h in headers]
+        headers = '\n'.join(headers)
+
+        gname="_%s_HEADER_GUARD" % self.get_name_norm().upper()
+        hdr="""#ifndef %(gname)s
+#define %(gname)s
+
+#include <fitsio.h>
+
+%(headers)s
+
+%(prototypes)s
+
+#endif\n"""
+
+        hdr = hdr % {'gname':gname,
+                     'headers':headers,
+                     'prototypes':prototypes}
+
+        return hdr
 
 
     def get_create_table_signature(self):
+        """
+        This is the function signature for the table creator
+        """
+
         s="""
 int %(struct_name_norm)s_create_table(fitsfile* fits, LONGLONG nrows, const char *extname, int *status)
         """ % {'struct_name_norm':self.get_name_norm()}
@@ -45,12 +118,16 @@ int %(struct_name_norm)s_create_table(fitsfile* fits, LONGLONG nrows, const char
 
 
     def get_create_table_func(self):
+        """
+        Get the full create table function as a string
+        """
         names=self.get_names_c()
         tforms=self.get_tforms_c()
         struct_name_norm=self.get_name_norm()
 
         sig=self.get_create_table_signature()
         func="""
+// This function was automatically generated
 %(sig)s
 {
     int nfields=%(nfields)d;
@@ -67,6 +144,9 @@ int %(struct_name_norm)s_create_table(fitsfile* fits, LONGLONG nrows, const char
         return func
 
     def get_col_write_statements(self):
+        """
+        Get all the column write statements for a given row
+        """
         s=[]
         for i,f in enumerate(self.fields):
             s.append(f.get_write_statement(i))
@@ -74,6 +154,9 @@ int %(struct_name_norm)s_create_table(fitsfile* fits, LONGLONG nrows, const char
         return '\n        '.join(s)
 
     def get_write_table_signature(self):
+        """
+        function signature for the table writer
+        """
         s="""
 int %(struct_name_norm)s_write_fits(fitsfile* fits, %(struct_name_raw)s *self, LONGLONG nrows, int *status)
         """ % {'struct_name_raw':self.get_name_raw(),
@@ -82,6 +165,9 @@ int %(struct_name_norm)s_write_fits(fitsfile* fits, %(struct_name_raw)s *self, L
 
 
     def get_write_table_func(self):
+        """
+        get the full write table function as a string
+        """
         struct_name_raw=self.get_name_raw()
         struct_name_norm=self.get_name_norm()
         col_writes = self.get_col_write_statements()
@@ -92,6 +178,7 @@ int %(struct_name_norm)s_write_fits(fitsfile* fits, %(struct_name_raw)s *self, L
 
         # doesn't work for arrays
         func="""
+// This function was automatically generated
 %(sig)s
 {
     LONGLONG row=0;
@@ -102,6 +189,7 @@ int %(struct_name_norm)s_write_fits(fitsfile* fits, %(struct_name_raw)s *self, L
         str = &self[row];
 
         %(col_writes)s
+
         if (*status) {
             goto %(goto_name)s;
         }
@@ -122,6 +210,9 @@ int %(struct_name_norm)s_write_fits(fitsfile* fits, %(struct_name_raw)s *self, L
 
 
     def get_col_read_statements(self):
+        """
+        Get all the read statements for a given row
+        """
         s=[]
         for i,f in enumerate(self.fields):
             s.append(f.get_read_statement(i))
@@ -129,13 +220,20 @@ int %(struct_name_norm)s_write_fits(fitsfile* fits, %(struct_name_raw)s *self, L
         return '\n        '.join(s)
 
     def get_read_table_signature(self):
+        """
+        The function signature for reading the table
+        """
+
         s="""
-%(struct_name_raw)s *%(struct_name_norm)s_read_fits(fitsfile* fits, int *status)
+%(struct_name_raw)s *%(struct_name_norm)s_read_fits(fitsfile* fits, long *nrows, int *status)
         """ % {'struct_name_raw':self.get_name_raw(),
                'struct_name_norm':self.get_name_norm()}
         return s.strip()
 
     def get_read_table_func(self):
+        """
+        get the full function for reading the table as a string
+        """
         struct_name_raw=self.get_name_raw()
         struct_name_norm=self.get_name_norm()
         col_reads = self.get_col_read_statements()
@@ -146,26 +244,28 @@ int %(struct_name_norm)s_write_fits(fitsfile* fits, %(struct_name_raw)s *self, L
 
         # doesn't work for arrays
         func="""
+// This function was automatically generated
 %(sig)s
 {
-    LONGLONG nrows=0, row=0;
+    LONGLONG row=0;
     LONGLONG firstelem=1;
     %(struct_name_raw)s *self=NULL, *str=NULL;
 
-    if (fits_get_num_rows(fits, &nrows, status)) {
+    if (fits_get_num_rows(fits, nrows, status)) {
         goto %(goto_name)s;
     }
 
-    self=calloc(nrows, sizeof(%(struct_name_raw)s));
+    self=calloc(*nrows, sizeof(%(struct_name_raw)s));
     if (!self) {
-        fprintf(stderr,"could not allocate %%ld %(struct_name_raw)s\\n",nrows);
+        fprintf(stderr,"could not allocate %%ld %(struct_name_raw)s\\n",*nrows);
         exit(1);
     }
 
-    for (row=0; row<nrows; row++) {
+    for (row=0; row<*nrows; row++) {
         str = &self[row];
 
         %(col_reads)s
+
         if (*status) {
             goto %(goto_name)s;
         }
@@ -176,6 +276,7 @@ int %(struct_name_norm)s_write_fits(fitsfile* fits, %(struct_name_raw)s *self, L
     if (*status) {
         fits_report_error(stderr,*status);
         free(self);
+        *nrows=-1;
         self=NULL;
     }
     return self;
@@ -198,20 +299,26 @@ class FieldBase(object):
         """
         Always true for now
         """
-        return True
+        return self.f_shape is None
 
     def get_name(self):
         return self.f_name
+
     def get_type(self):
         return self.f_type
+
     def get_shape(self):
         return self.f_shape
+
     def get_tform(self):
         return self.tform
+
     def get_fits_type(self):
         return self.fits_type
+
     def get_short_name(self):
         return self.short_name
+
     def get_tdim(self):
         return self.tdim
 
@@ -220,7 +327,7 @@ class StringField(FieldBase):
         super(StringField,self).__init__(field_def)
 
         if '][' in field_def:
-            raise ValueError("arrays not supported: '%s'" % field_def)
+            raise ValueError("string array columns not supported: '%s'" % field_def)
 
     def get_write_func(self):
         return 'fits_write_col_str'
@@ -232,7 +339,7 @@ class StringField(FieldBase):
 
         if self.is_scalar():
             s="""
-        (fits, %(colnum)s, row+1, firstelem, %(nelem)s, &str->%(colname)s, status);
+        %(write_func)s(fits, %(colnum)s, row+1, firstelem, %(nelem)s, &str->%(colname)s, status);
             """ % {'write_func':write_func,
                    'colnum':colnum,
                    'nelem':self.n_elem,
@@ -270,69 +377,68 @@ class StringField(FieldBase):
         if self.f_type != 'char':
             raise ValueError("expected char field, got '%s'" % self.field_def)
 
+        # for now no arrays
         self.f_name, self.f_slen = _extract_string_name_len(f_name)
 
-        # for now no arrays
-        self.f_shape = (self.f_slen,)
+        self.f_shape = None
         self.n_elem=1
 
         self.tform, self.fits_type, self.short_name, self.tdim = \
-                c_string2fits(self.f_shape)
+                c_string2fits(self.f_slen)
   
 class NumberField(FieldBase):
     def __init__(self, field_def):
         super(NumberField,self).__init__(field_def)
 
-        if '[' in field_def:
-            raise ValueError("arrays not supported: '%s'" % field_def)
-
     def get_write_func(self):
         write_func='fits_write_col_%s' % self.short_name
         return write_func
+
     def get_read_func(self):
         write_func='fits_read_col_%s' % self.short_name
         return write_func
 
+    def get_data_readwrite_name(self):
+        if self.is_scalar():
+            data_name = '&str->%s' % self.f_name
+        else:
+            # not no &, since this is an array
+            data_name = 'str->%s' % self.f_name
+        return data_name
 
     def get_write_statement(self, colnum):
         write_func=self.get_write_func()
+        data_name = self.get_data_readwrite_name()
 
-        if self.is_scalar():
-            s="""
-        %(write_func)s(fits, %(colnum)s, row+1, firstelem, %(nelem)s, &str->%(colname)s, status);
-            """ % {'write_func':write_func,
-                   'colnum':colnum,
-                   'nelem':self.n_elem,
-                   'colname':self.f_name}
-            s=s.strip()
-        else:
-            raise ValueError("implement non-scalar field")
+        s="""
+        %(write_func)s(fits, %(colnum)s, row+1, firstelem, %(nelem)s, %(data_name)s, status);
+        """ % {'write_func':write_func,
+               'colnum':colnum,
+               'nelem':self.n_elem,
+               'data_name':data_name}
+        s=s.strip()
 
         return s
 
     def get_read_statement(self, colnum):
         read_func=self.get_read_func()
+        data_name = self.get_data_readwrite_name()
 
-        if self.is_scalar():
-            s="""
-        %(read_func)s(fits, %(colnum)s, row+1, firstelem, %(nelem)s, 0, &str->%(colname)s, NULL, status);
+        s="""
+        %(read_func)s(fits, %(colnum)s, row+1, firstelem, %(nelem)s, 0, %(data_name)s, NULL, status);
             """ % {'read_func':read_func,
                    'colnum':colnum,
                    'nelem':self.n_elem,
-                   'colname':self.f_name}
-            s=s.strip()
-        else:
-            raise ValueError("implement non-scalar field")
-
+                   'data_name':data_name}
+        s=s.strip()
         return s
-
 
     def _set_field_info(self):
         field=self.field_def
 
         fs = field.split(' ')
         self.f_type = fs[0]
-        self.f_name = fs[1]
+        f_name = fs[1]
 
         if self.f_type == 'struct':
             raise ValueError("struct fields not supported")
@@ -340,12 +446,8 @@ class NumberField(FieldBase):
         if self.f_type[0:4] == 'char':
             raise ValueError("use a StringField for char types: '%s'" % self.field_def)
 
-        # for now scalar
-        self.f_shape = (1,)
-        self.n_elem = 1
-
-        self.tform, self.fits_type, self.short_name, self.tdim = \
-                c_num2fits(self.f_type, self.f_shape)
+        self.f_name, self.tform, self.fits_type, self.short_name, self.tdim, self.f_shape, self.n_elem = \
+                c_num2fits(self.f_type, f_name)
 
 
 def _extract_string_name_len(f_name):
@@ -358,15 +460,30 @@ def _extract_string_name_len(f_name):
 
  
 def _field_def_to_field(field_def):
-    print field_def
+    #print field_def
     fd=field_def.strip()
     if fd[0:4] == 'char':
         return StringField(fd)
     else:
         return NumberField(fd)
 
-def c_num2fits(f_type, shape):
-    tdim=None
+def extract_shape(name0):
+    import re
+    ii=name0.find('[')
+    if ii==-1:
+        return name0,None
+
+
+    name = name0[0:ii]
+    shape_str = name0[ii:]
+    dimstrs = re.findall('\[[0-9]+\]', shape_str)
+    dims = [int(d.replace('[','').replace(']','')) for d in dimstrs]
+
+    return name,dims
+
+
+def c_num2fits(f_type, name):
+    name,shape = extract_shape(name)
 
     if f_type not in _table_C2fits_tform:
         raise ValueError("unsupported type '%s'" % f_type)
@@ -375,35 +492,24 @@ def c_num2fits(f_type, shape):
     fits_type = _table_C2fits_tform[f_type]['tstr']
     short_name = _table_C2fits_tform[f_type]['short_name']
 
-    count=reduce(lambda x, y: x*y, shape)
+    tdim=None
+    if shape is None:
+        count=1
+    else:
+        count=reduce(lambda x, y: x*y, shape)
+
+        if len(shape) > 1:
+            tdim = list(reversed(shape))
+            tdim = [str(e) for e in tdim]
+            tdim = '(' + ','.join(tdim)+')'
+
     tform = '%d%s' % (count,tform)
+    return name, tform, fits_type, short_name, tdim, shape, count
 
-    if len(shape) > 1:
-        tdim = list(reversed(shape))
-        tdim = [str(e) for e in tdim]
-        tdim = '(' + ','.join(tdim)+')'
-    return tform, fits_type, short_name, tdim
-
-def c_string2fits(shape):
-
+def c_string2fits(string_size):
     tdim = None
 
-    # get the size of each string
-    string_size = shape[0]
-
-    # now the dimensions
-    if len(shape) == 1:
-        tform = '%dA' % string_size
-    else:
-        sdims = shape[1:]
-        count=reduce(lambda x, y: x*y, sdims)
-        count = string_size*count
-        tform = '%dA' % count
-
-        tdim = list(reversed(sdims))
-        tdim = [string_size_str] + [str(e) for e in tdim]
-        tdim = '(' + ','.join(tdim)+')'
-
+    tform = '%dA' % string_size
     return tform, 'TSTRING', 'str', tdim
 
 
