@@ -48,13 +48,14 @@ class FitRunner(object):
         self.max_g=1.0
 
         self.ngauss=3
+        #self.ngauss=4
 
     def get_dtype(self, npars):
         npars=self.ngauss
         dt=[('minmag', 'f8'),
             ('maxmag', 'f8'),
             ('weight','f8',npars),
-            ('sigma2','f8',npars)]
+            ('sigma','f8',npars)]
         return dt
 
     def get_struct(self,nbin):
@@ -107,7 +108,7 @@ class FitRunner(object):
             st['minmag'][i] = minmag
             st['maxmag'][i] = maxmag
             st['weight'][i] = gprior.weights_
-            st['sigma2'][i] = gprior.covars_[:,0] # round
+            st['sigma'][i] = sqrt( gprior.covars_[:,0] ) # round
 
             if False and self.show:
                 key=raw_input('hit a key (q to quit): ')

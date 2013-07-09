@@ -462,43 +462,6 @@ def dgs_by_dgo_jacob(g1, g2, s1, s2):
     jacob = num/denom
     return jacob
 
-def dgs_by_dgo_jacob_old(g1, g2, s1, s2):
-    """
-    jacobian of the transformation
-        |dgs/dgo|_{-shear}
-
-    parameters
-    ----------
-    g1,g2: numbers or arrays
-        shape pars for "observed" image
-    s1,s2: numbers or arrays
-        shape pars for shear, applied negative
-    """
-
-    A = 1 + g1*s1 + g2*s2
-    B = g2*s1 - g1*s2
-    denom_inv = 1./(A**2 + B**2)
-    denom_inv2 = denom_inv**2
-
-    k1 = (-2*s2*B + 2*s1*A)*((g2 + s2)*B + (g1 + s1)*A)
-    k2 = 1 + g1*s1 + s1*(g1 + s1) + g2*s2 - s2*(g2 + s2)
-    g1s_by_g1o = -denom_inv2*k1 + denom_inv*k2
-
-    k1 = ((g2+s2)*B+(g1+s1)*A)*(2*s1*B + 2*s2*A)
-    k2 = B + (g1+s1)*s2 + s1*(g2+s2)
-    g1s_by_g2o = -denom_inv2*k1 + denom_inv*k2
-
-
-    k1 = (-2*s2*B + 2*s1*A)*(-(g1+s1)*B + (g2+s2)*A)
-    k2 = -B + (g1 + s1)*s2 + s1*(g2 + s2)
-    g2s_by_g1o = -denom_inv2*k1 + denom_inv*k2
-
-    k1 = (2*s1*B + 2*s2*A)*(-(g1+s1)*B + (g2+s2)*A)
-    k2 = A - s1*(g1+s1) + s2*(g2+s2)
-    g2s_by_g2o = -denom_inv2*k1 + denom_inv*k2
-
-    return g1s_by_g1o*g2s_by_g2o - g1s_by_g2o*g2s_by_g1o
-
 
 def dgs_by_dgo_jacob_num(g1, g2, s1, s2, h=1.0e-6):
     ng1_1_1,ng2_1_1 = gadd(g1+h, g2, s1, s2)
