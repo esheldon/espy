@@ -1,6 +1,6 @@
-# gexp obj and gauss psf
-run: "bafit-geg03r13"
-sim: "sim-geg03"
+# gdev obj and gauss psf
+run: "bafit-gdg02r11"
+sim: "sim-gdg02"
 
 runtype: "bys2n"
 
@@ -13,6 +13,7 @@ s2n_fac: 320
 # need decent count to sample the prior surface
 # note they come in pairs
 min_gcount: 400
+#min_gcount: 10
 
 retrim: false
 retrim_fluxfrac: null
@@ -39,7 +40,7 @@ em_tol: 1.0e-6  # (T-Told)/T
 # iterate until the auto-correlation length is satisfactory
 iter: true
 
-fitmodel: ['gexp']
+fitmodel: ['gdev']
 ngauss_psf: 1
 mca_a: 3.0
 
