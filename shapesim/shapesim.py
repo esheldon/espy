@@ -1586,7 +1586,7 @@ def average_runs(runlist, new_run_name, skip1=[]):
             data['shear1err'] = sqrt(1/data['g1err2invsum'])/g1sens_mean
             data['shear2err'] = sqrt(1/data['g2err2invsum'])/g2sens_mean
             for d in data:
-                print '%.16g +/- %.16g' % (d['shear1'],d['shear1err'])
+                print 'shear1: %.16g +/- %.16g' % (d['shear1'],d['shear1err'])
 
             if 'g1err0sum2' in sumlist:
                 data['g1err0_mean'] = sqrt(data['g1err0sum2']/data['nsum'])
@@ -1610,6 +1610,7 @@ def average_runs(runlist, new_run_name, skip1=[]):
                     data['bashear'][i] = g1g2
                     data['bashear_cov'][i,0,0] = data['shear1err'][i]**2
                     data['bashear_cov'][i,1,1] = data['shear2err'][i]**2
+                    print 'bashear1: %.16g +/- %.16g' % (g1g2[0],sqrt(data['bashear_cov'][i,0,0]))
 
 
         else:
@@ -1742,6 +1743,28 @@ def combine_trials(run, is2, ie, allow_missing=True):
     datalist=[]
     for itrial in xrange(ntrial):
         f=get_output_url(run, is2, ie, itrial=itrial, fs=fs)
+        print f
+        if allow_missing and not os.path.exists(f):
+            continue
+        t=eu.io.read(f)
+        datalist.append(t)
+
+    data = eu.numpy_util.combine_arrlist(datalist)
+    print 'data.size:',data.size
+    print 'writing:',outfile
+    eu.io.write(outfile, data, clobber=True)
+
+def combine_ctrials(run, is2n, allow_missing=True):
+    fs=get_default_fs()
+    c = read_config(run)
+
+    ntrial = c['nsplit']
+
+    outfile=get_output_url(run, 0, is2n, fs=fs)
+
+    datalist=[]
+    for itrial in xrange(ntrial):
+        f=get_output_url(run, 0, is2n, itrial=itrial, fs=fs)
         print f
         if allow_missing and not os.path.exists(f):
             continue

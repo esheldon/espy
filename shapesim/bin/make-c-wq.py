@@ -21,7 +21,23 @@ _wqtemplate="""
 command: |
     source ~/.bashrc
     module unload gsim_ring && module load gsim_ring/work
-    gsim-ring-mcmc %(sim_config)s %(mcmc_config)s %(s2n)g %(npair)d
+    output=%(output)s
+
+    tmp_output=/tmp/gsim-ring-mcmc-$RANDOM-$RANDOM.rec
+    while [[ -e $tmp_output ]]; do
+        tmp_output=/tmp/gsim-ring-mcmc-$RANDOM-$RANDOM.rec
+    done
+
+    gsim-ring-mcmc %(sim_config)s %(mcmc_config)s %(s2n)g %(npair)d > ${tmp_output}
+
+    # try a couple of times
+    echo "copying to output: ${output}"
+    cp ${tmp_output} ${output}
+    if [[ $? != "0" ]]; then
+        echo "failed to copy, trying again in a few seconds...."
+        sleep 10
+        cp ${tmp_output} ${output}
+    fi
 
 %(groups)s
 job_name: %(job_name)s
@@ -45,12 +61,17 @@ def main():
     nsplit      = c['nsplit']
     s2n_vals    = c['s2n_vals']
     s2n_fac     = c['s2n_fac']
+    min_npair   = c['min_npair']
 
     ns2n = len(s2n_vals)
 
-    wqd = shapesim.get_wq_dir(run, bytrial=True)
-    if not os.path.exists(wqd):
-        os.makedirs(wqd)
+    d = shapesim.get_wq_dir(run, bytrial=True)
+    if not os.path.exists(d):
+        os.makedirs(d)
+    d = shapesim.get_output_dir(run, sub='bytrial')
+    if not os.path.exists(d):
+        os.makedirs(d)
+
 
     groups=''
     if options.groups is not None:
@@ -60,10 +81,15 @@ def main():
 
         s2n = s2n_vals[is2n]
         npair = shapesim.get_s2n_nrepeat(s2n, fac=s2n_fac)
+        if npair < min_npair:
+            npair = min_npair
 
         for isplit in xrange(nsplit):
-            job_name='%s-%02i-%03i' % (run,is2n,isplit)
+            job_name='%s-%03i-%03i' % (run,is2n,isplit)
             wqurl = shapesim.get_wq_url(run,0,is2n,itrial=isplit)
+
+            output = shapesim.get_output_url(run, 0, is2n, itrial=isplit)
+
             wlog("writing wq script:",wqurl)
             with open(wqurl,'w') as fobj:
                 d={'job_name':job_name,
@@ -72,7 +98,8 @@ def main():
                    'sim_config':sim_config,
                    'mcmc_config':mcmc_config,
                    's2n':s2n,
-                   'npair':npair}
+                   'npair':npair,
+                   'output':output}
                 wqscript=_wqtemplate % d
                 fobj.write(wqscript)
 
