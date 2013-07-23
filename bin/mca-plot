@@ -1,0 +1,40 @@
+#!/usr/bin/env python
+"""
+    %prog [options] fname
+"""
+
+import sys
+from optparse import OptionParser
+import mcmc
+
+parser=OptionParser(__doc__)
+parser.add_option("--png", default=None, 
+                  help=("write to the named png file. Dims from --dims"))
+parser.add_option("--dims", default='400,400', 
+                  help="dims for png write, default %default")
+parser.add_option("--eps", default=None, 
+                  help=("write to the named eps file"))
+
+def main():
+    options, args = parser.parse_args(sys.argv[1:])
+    if len(args) < 1:
+        parser.print_help()
+        sys.exit(1)
+
+    show=True
+    if options.png or options.eps:
+        show=False
+
+
+    fname=args[0]
+
+    data=mcmc.read_results(fname)
+    plt=mcmc.plot_results(data['pars'], show=show)
+
+    if options.png:
+        dims=[int(d) for d in options.dims.split(',')]
+        plt.write_img(dims[0],dims[1],options.png)
+    elif options.eps:
+        plt.write_eps(options.eps)
+
+main()

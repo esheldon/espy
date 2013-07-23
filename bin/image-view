@@ -29,7 +29,7 @@ if options.file is not None:
 dims=[int(d) for d in options.dims.split(',')]
 
 fname=args[0]
-im=images.image_read(fname)
+im=images.image_read_text(fname)
 if options.multiview:
     images.multiview(im)
 else:

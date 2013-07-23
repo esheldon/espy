@@ -506,7 +506,25 @@ class MCMCTester:
         return self.trials, self.like
 
 
+def read_results(filename):
+    import esutil as eu
+    with open(filename) as fobj:
+        l=fobj.readline()
+        ls=l.split()
+        nwalkers=int(ls[0])
+        steps_per=int(ls[1])
+        npars=int(ls[2])
 
+        nsteps=nwalkers*steps_per
+        dt=[('accept','i2'),
+            ('lnprob','f8'),
+            ('pars','f8',npars)]
+
+        robj = eu.recfile.Recfile(fobj,
+                                  delim=' ',
+                                  dtype=dt)
+        data=robj.read()
+    return data 
 
 def plot_results(trials, **keys):
     import biggles
