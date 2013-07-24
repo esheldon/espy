@@ -23,20 +23,30 @@ command: |
     module unload gsim_ring && module load gsim_ring/work
     output=%(output)s
 
+    rm -f ${output}
+
     tmp_output=/tmp/gsim-ring-mcmc-$RANDOM-$RANDOM.rec
     while [[ -e $tmp_output ]]; do
         tmp_output=/tmp/gsim-ring-mcmc-$RANDOM-$RANDOM.rec
     done
 
-    gsim-ring-mcmc %(sim_config)s %(mcmc_config)s %(s2n)g %(npair)d > ${tmp_output}
+    s2n=%(s2n)g
+    npair=%(npair)d
+    gsim-ring-mcmc %(sim_config)s %(mcmc_config)s ${s2n} ${npair}  > ${tmp_output}
 
-    # try a couple of times
-    echo "copying to output: ${output}"
-    cp ${tmp_output} ${output}
-    if [[ $? != "0" ]]; then
-        echo "failed to copy, trying again in a few seconds...."
-        sleep 10
+    err="$?"
+    if [[ $err != "0" ]]; then
+        echo "error running gsim-ring-mcmc.  code: $err"
+    else
+
+        # try a couple of times
+        echo "copying to output: ${output}"
         cp ${tmp_output} ${output}
+        if [[ $? != "0" ]]; then
+            echo "failed to copy, will try again in a few seconds...."
+            sleep 10
+            cp ${tmp_output} ${output}
+        fi
     fi
 
 %(groups)s
