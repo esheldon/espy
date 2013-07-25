@@ -36,6 +36,8 @@ echo "done minions"
 _script_template="""
 #!/bin/bash
 
+nsetup_ess
+
 module unload gsim_ring && module load gsim_ring/work 
 
 sim_config=%(sim_config)s
