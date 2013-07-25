@@ -125,6 +125,8 @@ def main():
 
             for isplit in xrange(nsplit):
                 output = shapesim.get_output_url(run, 0, is2n, itrial=isplit)
+                outbname=os.path.basename(output)
+
                 logf=outbname.replace('.rec','.log')
                 cmd=_cmd_template.format(script_file=script_base,
                                          s2n=s2n,
@@ -132,7 +134,6 @@ def main():
                                          output=output,
                                          logfile=logf)
                 fobj.write(cmd)
-
                 fobj.write('\n')
 
 
