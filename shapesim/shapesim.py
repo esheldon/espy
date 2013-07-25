@@ -1332,9 +1332,9 @@ def average_outputs(data, straight_avg=False, bayes=False, orient='ring'):
 
         if 'Q' in data[0].dtype.names:
             dt_extra+=[('Q_sum','f8',2),
-                 ('Cinv_sum','f8',(2,2)),
-                 ('bashear','f8',2),
-                 ('bashear_cov','f8',(2,2))]
+                       ('Cinv_sum','f8',(2,2)),
+                       ('bashear','f8',2),
+                       ('bashear_cov','f8',(2,2))]
     else:
         dt_extra = [('g1sum','f8'), # sums so we can do cumulative
                     ('g2sum','f8'),
