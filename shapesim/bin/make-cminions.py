@@ -55,6 +55,8 @@ status=$?
 if [[ $status != "0" ]]; then
     echo "error running gsim-ring-mcmc: $status"
 fi
+
+echo "time: $SECONDS"
 exit $status
 """
 
