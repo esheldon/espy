@@ -476,6 +476,12 @@ def dgs_by_dgo_jacob_num(g1, g2, s1, s2, h=1.0e-6):
     g1s_by_g2o = (ng1_2_1-ng1_2_2)/(2*h)
     g2s_by_g2o = (ng2_2_1-ng2_2_2)/(2*h)
 
+    print "g1s_by_g1o:", g1s_by_g1o
+    print "g2s_by_g2o:", g2s_by_g2o
+    print "g1s_by_g2o:", g1s_by_g2o
+    print "g2s_by_g1o:", g2s_by_g1o
+
+
     return g1s_by_g1o*g2s_by_g2o - g1s_by_g2o*g2s_by_g1o
 
 
