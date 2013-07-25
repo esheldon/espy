@@ -45,6 +45,8 @@ s2n=$1
 npair=$2
 output=$3
 
+rm -f ${output}
+
 gsim-ring-mcmc ${sim_config} ${mcmc_config} ${s2n} ${npair}  > ${output}
 status=$?
 
