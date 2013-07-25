@@ -90,10 +90,14 @@ def main():
 
     pbsd = shapesim.get_pbs_dir(run)
     logdir=os.path.join(pbsd,'logs')
+    outd = shapesim.get_output_dir(run, sub='bytrial')
+
     if not os.path.exists(pbsd):
         os.makedirs(pbsd)
     if not os.path.exists(logdir):
         os.makedirs(logdir)
+    if not os.path.exists(outd):
+        os.makedirs(outd)
 
     rstr=run
 
