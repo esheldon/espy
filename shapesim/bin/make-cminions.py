@@ -46,6 +46,12 @@ npair=$2
 output=$3
 
 gsim-ring-mcmc ${sim_config} ${mcmc_config} ${s2n} ${npair}  > ${output}
+status=$?
+
+if [[ $status != "0" ]]; then
+    echo "error running gsim-ring-mcmc: $status"
+fi
+exit $status
 """
 
 
