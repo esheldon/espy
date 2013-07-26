@@ -140,25 +140,17 @@ def get_averaged(data, s2n_matched):
            ('Cinv_sum','f8',(2,2)),
            ('shear','f8',2),
            ('shear_cov','f8',(2,2)),
+           ('shear_cov_inv_sum','f8',(2,2)),
     
     ]
 
-    """
-    print 'bootstrapping'
-    t0=time.time()
-    shear, C, Q_sum, Cinv_sum = \
-            lensing.shear.get_shear_pqr(data['P'],
-                                        data['Q'],
-                                        data['R'],get_sums=True)
-    shear_cov = pqr_bootstrap(data['P'],data['Q'],data['R'],shear,verbose=True)
-    print 'time:',time.time()-t0
-    print 'boot shear1: %.16g +/- %.16g' % (shear[0],numpy.sqrt(shear_cov[0,0]))
-    """
 
     print 'jackknifing'
     t0=time.time()
     shear, shear_cov, Q_sum, Cinv_sum = pqr_jackknife(data['P'],data['Q'],data['R'],
                                                       verbose=True)
+    shear_cov_inv = numpy.linalg.inv(shear_cov)
+
     print 'time:',time.time()-t0
     d=numpy.zeros(1, dtype=dt)
 
@@ -171,6 +163,7 @@ def get_averaged(data, s2n_matched):
     d['shear'][0] = shear
     #d['shear_cov'][0] = C
     d['shear_cov'][0] = shear_cov
+    d['shear_cov_inv_sum'][0] = shear_cov_inv
 
     print 'shear1: %.16g +/- %.16g' % (shear[0],numpy.sqrt(shear_cov[0,0]))
 
