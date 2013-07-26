@@ -7,9 +7,10 @@ Description
 """
 
 import sys
-import shapesim
+import numpy
 
 import esutil as eu
+import shapesim
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
@@ -59,6 +60,7 @@ def main():
     do_avg(data)
 
     fout=shapesim.get_averaged_url(new_run_name, 0)
+    eu.ostools.makedirs_fromfile(fout)
     print 'writing run average:',fout
     eu.io.write(fout, data, clobber=True)
 

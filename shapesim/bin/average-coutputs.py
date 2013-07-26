@@ -161,7 +161,6 @@ def get_averaged(data, s2n_matched):
     d['Cinv_sum'][0] = Cinv_sum
 
     d['shear'][0] = shear
-    #d['shear_cov'][0] = C
     d['shear_cov'][0] = shear_cov
     d['shear_cov_inv_sum'][0] = shear_cov_inv
 
@@ -189,9 +188,9 @@ def main():
     n_s2n = len(s2n_vals)
 
     dlist=[]
-    #for is2n in reversed(xrange(n_s2n)):
+    for is2n in reversed(xrange(n_s2n)):
 
-    for is2n in xrange(n_s2n):
+    #for is2n in xrange(n_s2n):
         s2n_matched = s2n_vals[is2n]
         fname=shapesim.get_output_url(run, 0, is2n)
         print fname
