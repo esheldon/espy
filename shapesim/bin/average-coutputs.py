@@ -17,6 +17,8 @@ parser=OptionParser(__doc__)
 
 parser.add_option('--skip',default=None,
                   help="is2n elements to skip")
+parser.add_option('--verbose',action='store_true',
+                  help="show progress")
 
 def pqr_jackknife(P, Q, R, verbose=False):
     """
@@ -130,7 +132,7 @@ def pqr_bootstrap(P, Q, R, shear, nsamples=100, verbose=False):
 
     return shear_cov
 
-def get_averaged(data, s2n_matched):
+def get_averaged(data, s2n_matched, verbose=False):
     dt =data.dtype.descr
     dt += [('s2n_matched','f8'),
 
@@ -148,7 +150,7 @@ def get_averaged(data, s2n_matched):
     print 'jackknifing'
     t0=time.time()
     shear, shear_cov, Q_sum, Cinv_sum = pqr_jackknife(data['P'],data['Q'],data['R'],
-                                                      verbose=True)
+                                                      verbose=verbose)
     shear_cov_inv = numpy.linalg.inv(shear_cov)
 
     print 'time:',time.time()-t0
@@ -196,7 +198,7 @@ def main():
         print fname
         data=eu.io.read(fname)
 
-        d = get_averaged(data, s2n_matched)
+        d = get_averaged(data, s2n_matched, verbose=options.verbose)
         dlist.append(d)
 
     output = eu.numpy_util.combine_arrlist(dlist)
