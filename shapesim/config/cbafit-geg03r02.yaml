@@ -1,0 +1,19 @@
+#
+# This one with high nsplit to test more quickly at high s/n
+#
+
+run: "cbafit-geg03r02"
+
+# geg indicates the object is a gaussian exponential,
+# and psf is a gaussian
+sim_config: "$GSIM_RING_DIR/share/sim-geg02.cfg"
+
+# geg indicates we fit a gaussian exp with single gassian psf
+mcmc_config: "$GSIM_RING_DIR/share/bafit-geg02.cfg"
+
+nsplit: 355
+
+s2n_vals: [40]
+
+s2n_fac: 320
+min_npair: 400

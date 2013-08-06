@@ -15,12 +15,14 @@ parser.add_option('-g','--groups',default=None,
                   help='groups for wq, csv. Default is unconstrained')
 parser.add_option('-p','--priority',default='med',
                   help='priority for queue')
+parser.add_option('-v','--version',default='work',
+                  help='priority for queue')
 
 
 _wqtemplate="""
 command: |
     source ~/.bashrc
-    module unload gsim_ring && module load gsim_ring/work
+    module unload gsim_ring && module load gsim_ring/%(version)s
     output=%(output)s
 
     rm -f ${output}
@@ -103,6 +105,7 @@ def main():
             wlog("writing wq script:",wqurl)
             with open(wqurl,'w') as fobj:
                 d={'job_name':job_name,
+                   'version':options.version,
                    'groups':groups,
                    'pri':options.priority,
                    'sim_config':sim_config,

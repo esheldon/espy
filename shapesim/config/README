@@ -1,5 +1,35 @@
 gmix-fit
 
+    cbafit
+        - often seeing big outliers, and seeing bias at low s/n
+            - outliers
+                - could be because of not burning in (see runs geg04*)
+                - could be some error in calculating PQR
+            - bias at low s/n, inconsistent with what we saw with the python+C
+              code
+            - why did the nersc run look so bad?
+
+
+        - geg01r*
+            - initial runs with eta.  show significant bias
+        - geg02r*
+            - initial runs with g.  show significant bias, even at high s/n
+            - the runs 06, 07, 08 (nersc) and 09 10 (bnl) use the newer code that
+              distributes the guess across the prior
+            r11
+                - using long double for some logl() calculations
+                - not cutting off prob low values so low
+                - nsplit 355, s2n_fac 100, min_npair 800
+
+        - geg03r*
+            - for quick tests
+            - r01 was using new code that distributes guess from priors
+
+        - geg04r*
+            - nsplit 356 or 355, s2n_fac 100
+            r01 -
+                - using bafit-geg03.cfg which has burnin=800
+                - no difference 
     bafit
 
         - fitting bd to exp.  Works ok for flux it seems, need to 

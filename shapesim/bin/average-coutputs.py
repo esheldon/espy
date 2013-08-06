@@ -67,14 +67,18 @@ def pqr_jackknife(P, Q, R, verbose=False):
 
         shears[i, :] = shear_tmp
 
+    shear_jack = numpy.zeros(2)
     shear_cov = numpy.zeros( (2,2) )
     fac = (npair-1)/float(npair)
+
+    shear_jack[0] = shears[:,0].mean()
+    shear_jack[1] = shears[:,1].mean()
 
     shear_cov[0,0] = fac*( ((shear[0]-shears[:,0])**2).sum() )
     shear_cov[0,1] = fac*( ((shear[0]-shears[:,0]) * (shear[1]-shears[:,1])).sum() )
     shear_cov[1,0] = shear_cov[0,1]
     shear_cov[1,1] = fac*( ((shear[1]-shears[:,1])**2).sum() )
-    return shear, shear_cov, Q_sum, Cinv_sum
+    return shear, shear_jack, shear_cov, Q_sum, Cinv_sum
 
 def pqr_bootstrap(P, Q, R, shear, nsamples=100, verbose=False):
     """
@@ -141,6 +145,7 @@ def get_averaged(data, s2n_matched, verbose=False):
            ('Q_sum','f8',2),
            ('Cinv_sum','f8',(2,2)),
            ('shear','f8',2),
+           ('shear_jack','f8',2),
            ('shear_cov','f8',(2,2)),
            ('shear_cov_inv_sum','f8',(2,2)),
     
@@ -149,8 +154,9 @@ def get_averaged(data, s2n_matched, verbose=False):
 
     print 'jackknifing'
     t0=time.time()
-    shear, shear_cov, Q_sum, Cinv_sum = pqr_jackknife(data['P'],data['Q'],data['R'],
-                                                      verbose=verbose)
+    shear, shear_jack, shear_cov, Q_sum, Cinv_sum = \
+            pqr_jackknife(data['P'],data['Q'],data['R'],
+                          verbose=verbose)
     shear_cov_inv = numpy.linalg.inv(shear_cov)
 
     print 'time:',time.time()-t0
@@ -163,10 +169,12 @@ def get_averaged(data, s2n_matched, verbose=False):
     d['Cinv_sum'][0] = Cinv_sum
 
     d['shear'][0] = shear
+    d['shear_jack'][0] = shear_jack
     d['shear_cov'][0] = shear_cov
     d['shear_cov_inv_sum'][0] = shear_cov_inv
 
-    print 'shear1: %.16g +/- %.16g' % (shear[0],numpy.sqrt(shear_cov[0,0]))
+    print 'shear1:      %.16g +/- %.16g' % (shear[0],numpy.sqrt(shear_cov[0,0]))
+    print 'shear_jack1: %.16g +/- %.16g' % (shear_jack[0],numpy.sqrt(shear_cov[0,0]))
 
     return d
 

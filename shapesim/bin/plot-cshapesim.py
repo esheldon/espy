@@ -11,6 +11,8 @@ from numpy import sqrt
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
+parser.add_option('-y','--yrange',default='-0.03,0.03',
+                  help='y range')
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -30,7 +32,8 @@ def main():
     s2n_vals    = c['s2n_vals']
 
     xrange=[0.5*s2n_vals[0], 1.5*s2n_vals[-1]]
-    yrange=[-0.03,0.03]
+    yrange=options.yrange.split(',')
+    yrange=[float(yr) for yr in yrange]
 
     err=sqrt(data['shear_cov'][:,0,0])
     eu.plotting.bscatter(data['s2n_matched'],
