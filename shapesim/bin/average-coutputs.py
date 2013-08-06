@@ -19,6 +19,8 @@ parser.add_option('--skip',default=None,
                   help="is2n elements to skip")
 parser.add_option('--verbose',action='store_true',
                   help="show progress")
+parser.add_option('--gerror',action='store_true',
+                  help="Use scatter in g to get errors")
 
 def pqr_jackknife(P, Q, R, verbose=False):
     """
@@ -136,7 +138,7 @@ def pqr_bootstrap(P, Q, R, shear, nsamples=100, verbose=False):
 
     return shear_cov
 
-def get_averaged(data, s2n_matched, verbose=False):
+def get_averaged_gerror(data, s2n_matched, verbose=False):
     dt =data.dtype.descr
     dt += [('s2n_matched','f8'),
 
@@ -145,12 +147,53 @@ def get_averaged(data, s2n_matched, verbose=False):
            ('Q_sum','f8',2),
            ('Cinv_sum','f8',(2,2)),
            ('shear','f8',2),
-           ('shear_jack','f8',2),
            ('shear_cov','f8',(2,2)),
            ('shear_cov_inv_sum','f8',(2,2)),
     
     ]
 
+    Q_sum, Cinv_sum = lensing.shear.get_shear_pqr_sums(data['P'],
+                                                       data['Q'],
+                                                       data['R'])
+    C = numpy.linalg.inv(Cinv_sum)
+    shear = numpy.dot(C,Q_sum)
+
+    g1err2invsum = (1./data['pcov'][:,2,2]).sum()
+    g2err2invsum = (1./data['pcov'][:,3,3]).sum()
+
+    d=numpy.zeros(1, dtype=dt)
+
+    d['s2n_matched'] = s2n_matched
+    d['nsum'] = data.size
+
+    d['Q_sum'][0] = Q_sum
+    d['Cinv_sum'][0] = Cinv_sum
+
+    d['shear'][0] = shear
+    d['shear_cov'][0,0,0] = 1.0/g1err2invsum
+    d['shear_cov'][0,1,1] = 1.0/g2err2invsum
+    d['shear_cov_inv_sum'][0,0,0] = g1err2invsum
+    d['shear_cov_inv_sum'][0,1,1] = g2err2invsum
+
+    sherr=numpy.sqrt(1.0/g1err2invsum)
+    print 'shear1:      %.16g +/- %.16g' % (shear[0],sherr)
+
+    return d
+
+
+def get_averaged_jackknife(data, s2n_matched, verbose=False):
+    dt =data.dtype.descr
+    dt += [('s2n_matched','f8'),
+
+           ('nsum','i8'),
+
+           ('Q_sum','f8',2),
+           ('Cinv_sum','f8',(2,2)),
+           ('shear','f8',2),
+           ('shear_cov','f8',(2,2)),
+           ('shear_cov_inv_sum','f8',(2,2)),
+    
+    ]
 
     print 'jackknifing'
     t0=time.time()
@@ -169,12 +212,10 @@ def get_averaged(data, s2n_matched, verbose=False):
     d['Cinv_sum'][0] = Cinv_sum
 
     d['shear'][0] = shear
-    d['shear_jack'][0] = shear_jack
     d['shear_cov'][0] = shear_cov
     d['shear_cov_inv_sum'][0] = shear_cov_inv
 
     print 'shear1:      %.16g +/- %.16g' % (shear[0],numpy.sqrt(shear_cov[0,0]))
-    print 'shear_jack1: %.16g +/- %.16g' % (shear_jack[0],numpy.sqrt(shear_cov[0,0]))
 
     return d
 
@@ -206,7 +247,10 @@ def main():
         print fname
         data=eu.io.read(fname)
 
-        d = get_averaged(data, s2n_matched, verbose=options.verbose)
+        if options.gerror:
+            d = get_averaged_gerror(data, s2n_matched, verbose=options.verbose)
+        else:
+            d = get_averaged_jackknife(data, s2n_matched, verbose=options.verbose)
         dlist.append(d)
 
     output = eu.numpy_util.combine_arrlist(dlist)
