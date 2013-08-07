@@ -142,6 +142,8 @@ from . import shear
 from .shear import Shear
 from .util import ShapeRangeError
 
+from . import pqr
+
 from . import rotation
 
 from . import sigmacrit

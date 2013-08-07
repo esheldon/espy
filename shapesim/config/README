@@ -12,6 +12,9 @@ gmix-fit
 
         - geg01r*
             - initial runs with eta.  show significant bias
+
+            - redoing r01 with fix from below cutting off low prob values
+
         - geg02r*
             - initial runs with g.  show significant bias, even at high s/n
             - the runs 06, 07, 08 (nersc) and 09 10 (bnl) use the newer code that
@@ -19,6 +22,8 @@ gmix-fit
             r11
                 - using long double for some logl() calculations
                 - not cutting off prob low values so low
+                    - that was the trick.  Now just checking that P > 0
+                        and 1/P finite.
                 - nsplit 355, s2n_fac 100, min_npair 800
 
         - geg03r*

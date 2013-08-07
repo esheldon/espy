@@ -36,13 +36,14 @@ def main():
     yrange=[float(yr) for yr in yrange]
 
     err=sqrt(data['shear_cov'][:,0,0])
-    eu.plotting.bscatter(data['s2n_matched'],
-                         data['shear'][:,0]/shear_true-1,
-                         yerr=err/shear_true,
-                         xlabel=r'$(S/N)_{matched}$',
-                         ylabel=r'$\Delta \gamma/\gamma$',
-                         xrange=xrange,
-                         yrange=yrange,
-                         xlog=True)
+    plt=eu.plotting.bscatter(data['s2n_matched'],
+                             data['shear'][:,0]/shear_true-1,
+                             yerr=err/shear_true,
+                             xlabel=r'$(S/N)_{matched}$',
+                             ylabel=r'$\Delta \gamma/\gamma$',
+                             xrange=xrange,
+                             yrange=yrange,
+                             xlog=True,
+                             show=False)
 
 main()

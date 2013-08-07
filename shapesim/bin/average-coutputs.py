@@ -21,66 +21,9 @@ parser.add_option('--verbose',action='store_true',
                   help="show progress")
 parser.add_option('--gerror',action='store_true',
                   help="Use scatter in g to get errors")
+parser.add_option('--show',action='store_true',
+                  help="plot histogram of jackknife shears")
 
-def pqr_jackknife(P, Q, R, verbose=False):
-    """
-    Get the shear covariance matrix using bootstrap resampling.
-    We use this for errors when doing ring tests
-
-    The trick is that this must be done in pairs
-
-    This is "unweighted", although there are built-in weights
-    """
-
-    if verbose:
-        import progressbar
-        pg=progressbar.ProgressBar(width=70)
-
-    ntot = P.size
-    if ( (ntot % 2) != 0 ):
-        raise  ValueError("expected factor of two, got %d" % ntot)
-
-    npair = ntot/2
-
-    Q_sum, Cinv_sum = lensing.shear.get_shear_pqr_sums(P,Q,R)
-    C = numpy.linalg.inv(Cinv_sum)
-    shear = numpy.dot(C,Q_sum)
-
-    shears = numpy.zeros( (npair, 2) )
-    for i in xrange(npair):
-
-        if verbose:
-            frac=float(i+1)/npair
-            pg.update(frac=frac)
-
-        ii = i*2
-
-        Ptmp = P[ii:ii+2]
-        Qtmp = Q[ii:ii+2,:]
-        Rtmp = R[ii:ii+2,:,:]
-
-        Q_sum_tmp, Cinv_sum_tmp = lensing.shear.get_shear_pqr_sums(Ptmp,Qtmp,Rtmp)
-        
-        Q_sum_tmp    = Q_sum - Q_sum_tmp
-        Cinv_sum_tmp = Cinv_sum - Cinv_sum_tmp
-
-        Ctmp = numpy.linalg.inv(Cinv_sum_tmp)
-        shear_tmp = numpy.dot(C,Q_sum_tmp)
-
-        shears[i, :] = shear_tmp
-
-    shear_jack = numpy.zeros(2)
-    shear_cov = numpy.zeros( (2,2) )
-    fac = (npair-1)/float(npair)
-
-    shear_jack[0] = shears[:,0].mean()
-    shear_jack[1] = shears[:,1].mean()
-
-    shear_cov[0,0] = fac*( ((shear[0]-shears[:,0])**2).sum() )
-    shear_cov[0,1] = fac*( ((shear[0]-shears[:,0]) * (shear[1]-shears[:,1])).sum() )
-    shear_cov[1,0] = shear_cov[0,1]
-    shear_cov[1,1] = fac*( ((shear[1]-shears[:,1])**2).sum() )
-    return shear, shear_jack, shear_cov, Q_sum, Cinv_sum
 
 def pqr_bootstrap(P, Q, R, shear, nsamples=100, verbose=False):
     """
@@ -181,7 +124,7 @@ def get_averaged_gerror(data, s2n_matched, verbose=False):
     return d
 
 
-def get_averaged_jackknife(data, s2n_matched, verbose=False):
+def get_averaged_jackknife(data, s2n_matched, verbose=False, show=False, fname=None):
     dt =data.dtype.descr
     dt += [('s2n_matched','f8'),
 
@@ -198,8 +141,10 @@ def get_averaged_jackknife(data, s2n_matched, verbose=False):
     print 'jackknifing'
     t0=time.time()
     shear, shear_jack, shear_cov, Q_sum, Cinv_sum = \
-            pqr_jackknife(data['P'],data['Q'],data['R'],
-                          verbose=verbose)
+            lensing.pqr.pqr_jackknife(data['P'],data['Q'],data['R'],
+                                      verbose=verbose,
+                                      show=show,
+                                      fname=fname)
     shear_cov_inv = numpy.linalg.inv(shear_cov)
 
     print 'time:',time.time()-t0
@@ -218,6 +163,12 @@ def get_averaged_jackknife(data, s2n_matched, verbose=False):
     print 'shear1:      %.16g +/- %.16g' % (shear[0],numpy.sqrt(shear_cov[0,0]))
 
     return d
+
+def get_image_file(plot_dir, fname):
+    bname=os.path.basename(fname)
+    bname=bname.replace('.rec','-jackknife.png')
+
+    return os.path.join(plot_dir, bname)
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -250,7 +201,12 @@ def main():
         if options.gerror:
             d = get_averaged_gerror(data, s2n_matched, verbose=options.verbose)
         else:
-            d = get_averaged_jackknife(data, s2n_matched, verbose=options.verbose)
+            plot_dir=shapesim.get_plot_dir(run)
+            plot_name=get_image_file(plot_dir, fname)
+            d = get_averaged_jackknife(data, s2n_matched,
+                                       verbose=options.verbose,
+                                       show=options.show,
+                                       fname=plot_name)
         dlist.append(d)
 
     output = eu.numpy_util.combine_arrlist(dlist)
