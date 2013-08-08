@@ -95,14 +95,29 @@ def get_averaged_gerror(data, s2n_matched, verbose=False):
     
     ]
 
-    Q_sum, Cinv_sum = lensing.shear.get_shear_pqr_sums(data['P'],
-                                                       data['Q'],
-                                                       data['R'])
+    Q_sum, Cinv_sum = lensing.pqr.get_shear_pqr_sums(data['P'],
+                                                     data['Q'],
+                                                     data['R'])
     C = numpy.linalg.inv(Cinv_sum)
     shear = numpy.dot(C,Q_sum)
 
-    g1err2invsum = (1./data['pcov'][:,2,2]).sum()
-    g2err2invsum = (1./data['pcov'][:,3,3]).sum()
+    cov = data['pcov'][:,2:2+2, 2:2+2]
+    cov_inv = cov.copy()
+
+    det = cov[:,0,0]*cov[:,1,1] - cov[:,0,1]*cov[:,1,0]
+    cov_inv[:,0,0] = cov[:,1,1]
+    cov_inv[:,1,1] = cov[:,0,0]
+    cov_inv[:,0,1] = - cov[:,0,1]
+    cov_inv[:,1,0] = - cov[:,1,0]
+
+    idet = 1.0/det
+    cov_inv[:,0,0] *= idet
+    cov_inv[:,0,1] *= idet
+    cov_inv[:,1,0] *= idet
+    cov_inv[:,1,1] *= idet
+
+    shear_cov_inv = cov_inv.sum(axis=0)
+    shear_cov = numpy.linalg.inv(shear_cov_inv)
 
     d=numpy.zeros(1, dtype=dt)
 
@@ -113,12 +128,11 @@ def get_averaged_gerror(data, s2n_matched, verbose=False):
     d['Cinv_sum'][0] = Cinv_sum
 
     d['shear'][0] = shear
-    d['shear_cov'][0,0,0] = 1.0/g1err2invsum
-    d['shear_cov'][0,1,1] = 1.0/g2err2invsum
-    d['shear_cov_inv_sum'][0,0,0] = g1err2invsum
-    d['shear_cov_inv_sum'][0,1,1] = g2err2invsum
 
-    sherr=numpy.sqrt(1.0/g1err2invsum)
+    d['shear_cov'][0,:,:] = shear_cov
+    d['shear_cov_inv_sum'][0,:,:] = shear_cov_inv
+
+    sherr=numpy.sqrt(shear_cov[0,0])
     print 'shear1:      %.16g +/- %.16g' % (shear[0],sherr)
 
     return d
@@ -190,9 +204,9 @@ def main():
     n_s2n = len(s2n_vals)
 
     dlist=[]
-    for is2n in reversed(xrange(n_s2n)):
+    #for is2n in reversed(xrange(n_s2n)):
 
-    #for is2n in xrange(n_s2n):
+    for is2n in xrange(n_s2n):
         s2n_matched = s2n_vals[is2n]
         fname=shapesim.get_output_url(run, 0, is2n)
         print fname

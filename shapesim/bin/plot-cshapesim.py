@@ -44,6 +44,6 @@ def main():
                              xrange=xrange,
                              yrange=yrange,
                              xlog=True,
-                             show=False)
+                             show=True)
 
 main()

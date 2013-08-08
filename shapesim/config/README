@@ -25,6 +25,7 @@ gmix-fit
                     - that was the trick.  Now just checking that P > 0
                         and 1/P finite.
                 - nsplit 355, s2n_fac 100, min_npair 800
+            r10 also using same code as r10.  Should redo r01-r09
 
         - geg03r*
             - for quick tests
