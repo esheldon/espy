@@ -29,6 +29,8 @@ gmix-fit
                 - nsplit 355, s2n_fac 100, min_npair 800
             r10 also using same code as r10. r01 r02 running at nersc
 
+            r03 has additional error checking
+
         - geg03r*
             - for quick tests
             - r01 is currently testing gmix3 with the added error checking
