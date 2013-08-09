@@ -14,6 +14,8 @@ gmix-fit
             - initial runs with eta.  show significant bias
 
             - redoing r01 with fix from below cutting off low prob values
+                - looks better but still shit
+            - trying r02 with more error checking
 
         - geg02r*
             - initial runs with g.  show significant bias, even at high s/n
@@ -25,11 +27,11 @@ gmix-fit
                     - that was the trick.  Now just checking that P > 0
                         and 1/P finite.
                 - nsplit 355, s2n_fac 100, min_npair 800
-            r10 also using same code as r10.  Should redo r01-r09
+            r10 also using same code as r10. r01 r02 running at nersc
 
         - geg03r*
             - for quick tests
-            - r01 was using new code that distributes guess from priors
+            - r01 is currently testing gmix3 with the added error checking
 
         - geg04r*
             - nsplit 356 or 355, s2n_fac 100

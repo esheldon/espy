@@ -3,6 +3,7 @@
 """
 
 import sys
+import biggles
 import esutil as eu
 import shapesim
 
@@ -13,6 +14,7 @@ from optparse import OptionParser
 parser=OptionParser(__doc__)
 parser.add_option('-y','--yrange',default='-0.03,0.03',
                   help='y range')
+
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -36,6 +38,14 @@ def main():
     yrange=[float(yr) for yr in yrange]
 
     err=sqrt(data['shear_cov'][:,0,0])
+
+    plt0=biggles.FramedPlot()
+    plt0.xlog=True
+    plt0.add( biggles.FillBetween([1.e-6,500], [0.004,0.004], 
+                                  [1.e-6,500], [-0.004,-0.004],
+                                  color='grey80') )
+    plt0.add( biggles.Curve([1.e-6,500],[0,0]) )
+
     plt=eu.plotting.bscatter(data['s2n_matched'],
                              data['shear'][:,0]/shear_true-1,
                              yerr=err/shear_true,
@@ -43,7 +53,7 @@ def main():
                              ylabel=r'$\Delta \gamma/\gamma$',
                              xrange=xrange,
                              yrange=yrange,
-                             xlog=True,
-                             show=True)
+                             plt=plt0)
+
 
 main()

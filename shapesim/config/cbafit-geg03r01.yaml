@@ -6,10 +6,10 @@ run: "cbafit-geg03r01"
 
 # geg indicates the object is a gaussian exponential,
 # and psf is a gaussian
-sim_config: "$GSIM_RING_DIR/share/sim-geg02.cfg"
+sim_config: "$GSIM_RING_DIR/share/sim-geg01.cfg"
 
 # geg indicates we fit a gaussian exp with single gassian psf
-mcmc_config: "$GSIM_RING_DIR/share/bafit-geg02.cfg"
+mcmc_config: "$GSIM_RING_DIR/share/bafit-geg01.cfg"
 
 nsplit: 356
 

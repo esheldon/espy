@@ -207,6 +207,9 @@ def main():
     #for is2n in reversed(xrange(n_s2n)):
 
     for is2n in xrange(n_s2n):
+        if is2n in skip:
+            continue
+
         s2n_matched = s2n_vals[is2n]
         fname=shapesim.get_output_url(run, 0, is2n)
         print fname
