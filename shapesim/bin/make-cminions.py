@@ -1,5 +1,5 @@
 """
-    %prog run nodes
+    %prog run nodes ppn
 """
 
 import sys
@@ -10,7 +10,9 @@ from shapesim import shapesim
 from optparse import OptionParser
 parser=OptionParser(__doc__)
 
-parser.add_option('-p','--ppn',default=8, help='processors per node, default %default')
+parser.add_option('-v','--version',default='work',
+                  help='priority for queue')
+
 
 
 _pbs_template="""#!/bin/bash -l
@@ -28,17 +30,16 @@ fi
 
 
 module load openmpi-gnu
-mpirun -np {np} minions < {commands_file}
+mpirun -np {np} {minions_cmd} < {commands_file}
 
 echo "done minions"
 """
 
-_script_template="""
-#!/bin/bash
+_script_template="""#!/bin/bash
 
 nsetup_ess
 
-module unload gsim_ring && module load gsim_ring/work 
+module unload gsim_ring && module load gsim_ring/%(version)s
 
 sim_config=%(sim_config)s
 mcmc_config=%(mcmc_config)s
@@ -76,13 +77,13 @@ def get_seconds_per_pair():
 def main():
     options,args = parser.parse_args(sys.argv[1:])
 
-    if len(args) < 2:
+    if len(args) < 3:
         parser.print_help()
         sys.exit(45)
 
     run=args[0]
     nodes=int(args[1])
-    ppn=int(options.ppn)
+    ppn=int(args[2])
 
     np=nodes*ppn
     # seconds per ellip ring pair. this is for exp...
@@ -120,6 +121,7 @@ def main():
 
     print script_url
     with open(script_url,'w') as fobj:
+        c['version'] = options.version
         fobj.write(_script_template % c)
     print
 
@@ -160,10 +162,16 @@ def main():
     hours = int(round(hours_raw)) + 1
     print '    raw hours:',hours_raw,'hours used:',hours
 
+    if options.version=='hopper':
+        minions_cmd='minions-hopper'
+    else:
+        minions_cmd='minions'
+
     with open(pbsf,'w') as fobj:
         cmd_bname=os.path.basename(cmdf)
         pbslog=os.path.basename(pbsf)+'.pbslog'
-        pbs_text=_pbs_template.format(job_name=job_name,
+        pbs_text=_pbs_template.format(minions_cmd=minions_cmd,
+                                      job_name=job_name,
                                       pbslog=pbslog,
                                       nodes=nodes,
                                       ppn=ppn,

@@ -881,10 +881,12 @@ def get_default_fs():
 def get_simdir(fs=None):
     if fs=='hdfs':
         dir=os.environ.get('LENSDIR_HDFS')
+        dir=path_join(dir, 'shapesim')
     else:
-        dir=os.environ.get('LENSDIR')
-    return path_join(dir, 'shapesim')
+        dir=os.environ.get('TMPDIR')
+        dir=path_join(dir, 'lensing','shapesim')
 
+    return dir
 def get_run_dir(run, fs=None):
     dir=get_simdir(fs=fs)
     return path_join(dir,run)
