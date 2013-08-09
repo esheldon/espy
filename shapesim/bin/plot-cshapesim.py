@@ -41,10 +41,10 @@ def main():
 
     plt0=biggles.FramedPlot()
     plt0.xlog=True
-    plt0.add( biggles.FillBetween([1.e-6,500], [0.004,0.004], 
-                                  [1.e-6,500], [-0.004,-0.004],
+    plt0.add( biggles.FillBetween([1.e-6,5000], [0.004,0.004], 
+                                  [1.e-6,5000], [-0.004,-0.004],
                                   color='grey80') )
-    plt0.add( biggles.Curve([1.e-6,500],[0,0]) )
+    plt0.add( biggles.Curve([1.e-6,5000],[0,0]) )
 
     plt=eu.plotting.bscatter(data['s2n_matched'],
                              data['shear'][:,0]/shear_true-1,
@@ -53,7 +53,17 @@ def main():
                              ylabel=r'$\Delta \gamma/\gamma$',
                              xrange=xrange,
                              yrange=yrange,
+                             color='darkblue',
+                             show=False,
+                             size=2,
                              plt=plt0)
 
+
+    plt=eu.plotting.bscatter(data['s2n_matched'],
+                             data['shear'][:,0]/shear_true-1,
+                             color='darkblue',
+                             type='solid',
+                             width=2,
+                             plt=plt)
 
 main()
