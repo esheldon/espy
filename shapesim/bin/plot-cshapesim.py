@@ -12,7 +12,7 @@ from numpy import sqrt
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
-parser.add_option('-y','--yrange',default='-0.03,0.03',
+parser.add_option('-y','--yrange',default='-0.05,0.05',
                   help='y range')
 
 
