@@ -883,8 +883,7 @@ def get_simdir(fs=None):
         dir=os.environ.get('LENSDIR_HDFS')
         dir=path_join(dir, 'shapesim')
     else:
-        dir=os.environ.get('TMPDIR')
-        dir=path_join(dir, 'lensing','shapesim')
+        dir=os.environ['SHAPESIM_DIR']
 
     return dir
 def get_run_dir(run, fs=None):
