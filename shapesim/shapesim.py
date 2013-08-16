@@ -895,6 +895,20 @@ def get_pbs_dir(run):
     dir=path_join(dir, 'pbs')
     return dir
 
+def get_condor_dir(run):
+    dir=get_run_dir(run)
+    dir=path_join(dir, 'condor')
+    return dir
+
+def get_condor_job_url(run):
+    d=get_condor_dir(run)
+    return path_join(d,'%s.job' % run)
+
+def get_condor_master_url(run):
+    d=get_condor_dir(run)
+    return path_join(d,'master.sh')
+
+
 def get_minions_url(run, i1):
     d=get_pbs_dir(run)
     return path_join(d,'%s-minions-%03d.pbs' % (run,i1))
