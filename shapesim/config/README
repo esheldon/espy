@@ -34,10 +34,11 @@ gmix-fit
             r04
             r05,r06,r07 r08,r09 condor
 
-            ***** r08 (and others) looks bizarre and seem to have
-            correlations!  Re-doing r08 with better random number generator
+            ***** r08 (and others) looks bizarre and seem to have bin-to-bin
+            correlations in errors!  Re-doing r08 with better random number
+            generator, also new one r12 on normal cluster, r13 on condor
 
-            going slow, doing new one, r12 on normal cluster
+                - r08 still has correlations in errors
 
         - geg03r*
             - for quick tests
