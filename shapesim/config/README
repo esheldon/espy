@@ -39,6 +39,9 @@ gmix-fit
             generator, also new one r12 on normal cluster, r13 on condor
 
                 - r08 still has correlations in errors
+                - r12
+                - r13 looks about same as r08
+                - r14 running
 
         - geg03r*
             - for quick tests

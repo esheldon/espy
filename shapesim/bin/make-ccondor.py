@@ -50,7 +50,7 @@ Log             = ./{overall_name}.$(cluster).log
 """
 
 _queue_template="""
-Arguments       = {s2n} {npair} {output} {logfile}
+Arguments       = {s2n} {npair} {seed} {output} {logfile}
 Queue
 """
 
@@ -64,7 +64,7 @@ function runsim {
     echo "host: $host"
     echo "writing to temp file: $tmpfile"
 
-    gsim-ring-mcmc ${sim_config} ${mcmc_config} ${s2n} ${npair} > ${tmpfile}
+    gsim-ring-mcmc ${sim_config} ${mcmc_config} ${s2n} ${npair} ${seed} > ${tmpfile}
     status=$?
 
     echo "time: $SECONDS"
@@ -88,8 +88,9 @@ module unload gsim_ring && module load gsim_ring/%(version)s
 
 s2n=$1
 npair=$2
-output=$3
-logfile=$4
+seed=$3
+output=$4
+logfile=$5
 
 sim_config=%(sim_config)s
 mcmc_config=%(mcmc_config)s
@@ -165,6 +166,8 @@ def write_condor_file(c, master_script, equal_time=False):
 
     print condor_job_url
     njobs=0
+
+    smax=numpy.iinfo('i8').max
     with open(condor_job_url,'w') as fobj:
 
         text = _condor_template_head.format(master_script=master_script,
@@ -191,9 +194,11 @@ def write_condor_file(c, master_script, equal_time=False):
                 logfile = output.replace('.rec','.log')
 
                 this_job_name='%s-%03d-%03d' % (job_name,is2n,isplit)
+                seed = numpy.random.randint(smax)
                 qdata=_queue_template.format(job_name=this_job_name,
                                              s2n=s2n,
                                              npair=npair,
+                                             seed=seed,
                                              output=output,
                                              logfile=logfile)
                 fobj.write(qdata)
