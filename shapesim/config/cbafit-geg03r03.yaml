@@ -1,8 +1,8 @@
 #
-# for generating simulation runs
+# This one with high nsplit to test more quickly at high s/n
 #
 
-run: "cbafit-geg02r05"
+run: "cbafit-geg03r03"
 
 # geg indicates the object is a gaussian exponential,
 # and psf is a gaussian
@@ -13,7 +13,7 @@ mcmc_config: "$GSIM_RING_DIR/share/bafit-geg02.cfg"
 
 nsplit: 1000
 
-s2n_vals: [15,20,25,30,40,50,60,70,80,90,100,120,140,160,180,200,250,300,350,400]
+s2n_vals: [400]
 
-s2n_fac: 30
+s2n_fac: 50
 min_npair: 200

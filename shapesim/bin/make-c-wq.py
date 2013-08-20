@@ -9,6 +9,8 @@ import os
 from esutil.misc import wlog
 from shapesim import shapesim
 
+from shapesim.shapesim import get_npair_nsplit
+
 from optparse import OptionParser
 parser=OptionParser(__doc__)
 parser.add_option('-g','--groups',default=None,
@@ -70,10 +72,7 @@ def main():
     run         = c['run']
     sim_config  = c['sim_config']
     mcmc_config = c['mcmc_config']
-    nsplit      = c['nsplit']
     s2n_vals    = c['s2n_vals']
-    s2n_fac     = c['s2n_fac']
-    min_npair   = c['min_npair']
 
     ns2n = len(s2n_vals)
 
@@ -92,9 +91,8 @@ def main():
     for is2n in xrange(ns2n):
 
         s2n = s2n_vals[is2n]
-        npair = shapesim.get_s2n_nrepeat(s2n, fac=s2n_fac)
-        if npair < min_npair:
-            npair = min_npair
+
+        npair, nsplit = get_npair_nsplit(c, is2n)
 
         for isplit in xrange(nsplit):
             job_name='%s-%03i-%03i' % (run,is2n,isplit)

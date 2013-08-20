@@ -21,6 +21,7 @@ gmix-fit
             - initial runs with g.  show significant bias, even at high s/n
             - the runs 06, 07, 08 (nersc) and 09 10 (bnl) use the newer code that
               distributes the guess across the prior
+
             r11
                 - using long double for some logl() calculations
                 - not cutting off prob low values so low
@@ -30,6 +31,13 @@ gmix-fit
             r10 also using same code as r11. r01 r02 running at nersc
 
             r03 has additional error checking
+            r04
+            r05,r06,r07 r08,r09 condor
+
+            ***** r08 (and others) looks bizarre and seem to have
+            correlations!  Re-doing r08 with better random number generator
+
+            going slow, doing new one, r12 on normal cluster
 
         - geg03r*
             - for quick tests

@@ -762,6 +762,86 @@ class BaseSim(dict):
         return ci1, ci2
 
 
+# from a BA13 prior run,
+# /astro/u/esheldon/lensing/shapesim/cbafit-geg02r07/outputs/cbafit-geg02r07-000-avg.rec
+s2n_ref=[15,  20,  25,  30,  40,  50,  60,  70,  80,  90,  100,  120,  140,  160,  180,  200,  250,  300,  350,  400]
+
+err_ref=[6.04966948076, 6.27720009086, 6.39230479966, 6.46027631805, 6.31490331065, 5.07534788684, 4.24058192767, 3.63903754734, 3.18832441297, 2.83577943389, 2.55346528496, 2.12927717929, 1.82605936882, 1.5983608504, 1.42135553436, 1.27964356694, 1.02561949518, 0.857061929443, 0.737296676262, 0.648170473541]
+npair_ref=[1333000,  750000,  480000,  333000,  200000,  200000,  200000,  200000,  200000,  200000,  200000,  200000,  200000,  200000,  200000,  200000,  200000,  200000,  200000,  200000]
+
+s2n_ref=numpy.array(s2n_ref,dtype='f8')
+err_ref=numpy.array(err_ref)*1.e-5
+npair_ref=numpy.array(npair_ref)
+
+def get_npair_by_noise(s2n, desired_err):
+    """
+    given the desired final error, determine the required number of pairs
+    """
+
+    
+    """
+    if s2n < s2n_ref[0]:
+        ii=0
+    elif s2n > s2n_ref[-1]:
+        ii=s2n_ref.size-1
+    else:
+        for i in xrange(1,s2n_ref.size):
+            if s2n >= s2n_ref[i-1] and s2n < s2n_ref[i]:
+                ii=i
+                break
+
+    npairii = npair_ref[ii]
+    errii = err_ref[ii]
+    """
+
+    npairii = numpy.interp([s2n], s2n_ref, npair_ref)
+    errii = numpy.interp([s2n], s2n_ref, err_ref)
+
+    # desired_err = errii*sqrt(npairii/npair)
+    # thus npair = npairii*(errii/desired_err)^2
+    npair = npairii*(errii/desired_err)**2
+
+    return npair[0]
+    
+
+def get_npair_nsplit_by_noise(c, is2n):
+    from math import ceil
+    s2n = c['s2n_vals'][is2n]
+    npair_tot = get_npair_by_noise(s2n, c['desired_err'])
+    #print 'desired_err:',c['desired_err']
+    #print 'npair_tot:',npair_tot
+
+    # to keep equal time, normalize to zeroth
+    nsplit0 = c['nsplit0']
+
+    if is2n==0:
+        nsplit=nsplit0
+    else:
+        npair_tot0 = get_npair_by_noise(c['s2n_vals'][0], c['desired_err'])
+        nsplit = int( ceil( nsplit0*float(npair_tot)/npair_tot0 ))
+    
+    npair_per = int(ceil(npair_tot/float(nsplit)))
+
+    return npair_per, nsplit
+
+def get_npair_nsplit(c, is2n):
+    """
+    Get number of pairs per split and number of splits
+
+    For equal_time, we take number per split from is2n==0
+    """
+    if 'desired_err' in c:
+        return get_npair_nsplit_by_noise(c, is2n)
+    else:
+        s2n = c['s2n_vals'][is2n]
+
+        npair = get_s2n_nrepeat(0, fac=c['s2n_fac'])
+        if npair < c['min_npair']:
+            npair = c['min_npair']
+        nsplit=c['nsplit']
+
+        return npair,nsplit
+
 
 
 def get_s2_e(conf, is2, ie):
@@ -902,11 +982,11 @@ def get_condor_dir(run):
 
 def get_condor_job_url(run):
     d=get_condor_dir(run)
-    return path_join(d,'%s.job' % run)
+    return path_join(d,'%s.condor' % run)
 
 def get_condor_master_url(run):
     d=get_condor_dir(run)
-    return path_join(d,'master.sh')
+    return path_join(d,'%s.sh' % run)
 
 
 def get_minions_url(run, i1):
@@ -1773,20 +1853,25 @@ def combine_ctrials(run, is2n, allow_missing=True):
     fs=get_default_fs()
     c = read_config(run)
 
-    ntrial = c['nsplit']
+    npair,nsplit = get_npair_nsplit(c, is2n)
+    ntot=npair*2
 
     outfile=get_output_url(run, 0, is2n, fs=fs)
+    print 'writing to:',outfile
 
-    datalist=[]
-    for itrial in xrange(ntrial):
-        f=get_output_url(run, 0, is2n, itrial=itrial, fs=fs)
-        print f
-        if allow_missing and not os.path.exists(f):
-            continue
-        t=eu.io.read(f)
-        datalist.append(t)
+    with eu.sfile.SFile(outfile,mode="w+") as output:
 
-    data = eu.numpy_util.combine_arrlist(datalist)
-    print 'data.size:',data.size
-    print 'writing:',outfile
-    eu.io.write(outfile, data, clobber=True)
+        for isplit in xrange(nsplit):
+            f=get_output_url(run, 0, is2n, itrial=isplit, fs=fs)
+            if allow_missing and not os.path.exists(f):
+                continue
+            print f
+            t=eu.io.read(f)
+
+            if t.size != ntot:
+                raise ValueError("expected %d, got %d" % (npair,t.size))
+
+            output.write(t)
+
+    
+    print 'wrote:',outfile
