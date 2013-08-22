@@ -18,6 +18,10 @@ parser.add_option('-y','--yrange',default='-0.05,0.05',
 parser.add_option('--s2n-field',default='s2n_matched',
                   help="field for s2n")
 
+parser.add_option('--eps',default=None,
+                  help="eps file to write")
+parser.add_option('--png',default=None,
+                  help="png file to write")
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -76,4 +80,10 @@ def main():
                              width=2,
                              plt=plt)
 
+    if options.png:
+        print options.png
+        plt.write_img(800,800,options.png)
+    if options.eps:
+        print options.eps
+        plt.write_eps(options.eps)
 main()
