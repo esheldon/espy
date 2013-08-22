@@ -5,6 +5,7 @@
 import sys
 import os
 import numpy
+from numpy import sqrt
 
 import esutil as eu
 from shapesim import shapesim
@@ -95,6 +96,16 @@ def get_averaged_gerror(data, s2n_matched, verbose=False):
     
     ]
 
+    do_flux=False
+    if data['pars'].shape[1] == 6:
+        do_flux=True
+        dt += [('flux_sum','f8'),
+               ('flux_err2invsum','f8'),
+               ('flux_s2n_sum','f8'),
+               ('flux','f8'),
+               ('flux_err','f8'),
+               ('flux_s2n','f8')]
+
     Q_sum, Cinv_sum = lensing.pqr.get_shear_pqr_sums(data['P'],
                                                      data['Q'],
                                                      data['R'])
@@ -119,7 +130,9 @@ def get_averaged_gerror(data, s2n_matched, verbose=False):
     shear_cov_inv = cov_inv.sum(axis=0)
     shear_cov = numpy.linalg.inv(shear_cov_inv)
 
+
     d=numpy.zeros(1, dtype=dt)
+
 
     d['s2n_matched'] = s2n_matched
     d['nsum'] = data.size
@@ -134,6 +147,22 @@ def get_averaged_gerror(data, s2n_matched, verbose=False):
 
     sherr=numpy.sqrt(shear_cov[0,0])
     print 'shear1:      %.16g +/- %.16g' % (shear[0],sherr)
+
+    if do_flux:
+        print 'doing flux'
+        flux=data['pars'][:,5]
+        flux_var=data['pcov'][:,5,5]
+        flux_err=sqrt(flux_var)
+
+        d['flux_sum'] = flux.sum()
+        d['flux_err2invsum'] = (1.0/flux_var).sum()
+
+        d['flux'] = d['flux_sum']/d['nsum']
+        d['flux_err'] = sqrt(1.0/d['flux_err2invsum'])
+
+        flux_s2n_vals = flux/flux_err
+        d['flux_s2n_sum'] = flux_s2n_vals.sum()
+        d['flux_s2n'] = d['flux_s2n_sum']/d['nsum']
 
     return d
 

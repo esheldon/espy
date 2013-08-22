@@ -835,7 +835,7 @@ def get_npair_nsplit(c, is2n):
     else:
         s2n = c['s2n_vals'][is2n]
 
-        npair = get_s2n_nrepeat(0, fac=c['s2n_fac'])
+        npair = get_s2n_nrepeat(s2n, fac=c['s2n_fac'])
         if npair < c['min_npair']:
             npair = c['min_npair']
         nsplit=c['nsplit']
@@ -962,10 +962,13 @@ def get_simdir(fs=None):
     if fs=='hdfs':
         dir=os.environ.get('LENSDIR_HDFS')
         dir=path_join(dir, 'shapesim')
+    elif fs=='local':
+        dir='/data/esheldon/lensing/shapesim'
     else:
         dir=os.environ['SHAPESIM_DIR']
 
     return dir
+
 def get_run_dir(run, fs=None):
     dir=get_simdir(fs=fs)
     return path_join(dir,run)
@@ -1003,8 +1006,8 @@ def get_commands_url(run,i1):
     return path_join(d,'%s-commands-%03d.txt' % (run,i1))
 
 
-def get_wq_dir(run, bytrial=False, combine=False):
-    dir=get_run_dir(run)
+def get_wq_dir(run, bytrial=False, combine=False, fs=None):
+    dir=get_run_dir(run, fs=fs)
     dir=path_join(dir, 'wq')
     if bytrial:
         dir = path_join(dir, 'bytrial')
@@ -1012,14 +1015,14 @@ def get_wq_dir(run, bytrial=False, combine=False):
         dir = path_join(dir, 'combine')
     return dir
 
-def get_wq_url(run, is2, ie, itrial=None, combine=False):
+def get_wq_url(run, is2, ie, itrial=None, combine=False, fs=None):
     """
 
     is2 and ie are the index in the list of s2 and ellip vals for a given run.
     They should be within [0,nums2) and [0,nume)
 
     """
-    dir=get_wq_dir(run, bytrial = (itrial is not None), combine=combine)
+    dir=get_wq_dir(run, bytrial = (itrial is not None), combine=combine, fs=fs)
     f='%s' % run
     if combine:
         f += '-combine'

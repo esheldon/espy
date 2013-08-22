@@ -41,7 +41,8 @@ gmix-fit
                 - r08 still has correlations in errors
                 - r12
                 - r13 looks about same as r08
-                - r14 running
+                - r14 running on condor
+                - r15 running on astro
 
         - geg03r*
             - for quick tests

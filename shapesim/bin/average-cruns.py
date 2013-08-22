@@ -8,6 +8,7 @@ Description
 
 import sys
 import numpy
+from numpy import sqrt
 
 import esutil as eu
 import shapesim
@@ -22,7 +23,17 @@ def do_sums(data, data0):
     data['Cinv_sum'] += data0['Cinv_sum']
     data['shear_cov_inv_sum'] += data0['shear_cov_inv_sum']
 
+    if 'flux_sum' in data.dtype.names:
+        data['flux_sum'] += data0['flux_sum']
+        data['flux_err2invsum'] += data0['flux_err2invsum']
+        data['flux_s2n_sum'] += data0['flux_s2n_sum']
+
+
 def do_avg(data):
+
+    if 'flux_sum' in data.dtype.names:
+        data['flux'] = data['flux_sum']/data['nsum']
+        data['flux_err'] = sqrt(1.0/data['flux_err2invsum'])
 
     for is2n in xrange(data.size):
         C = numpy.linalg.inv(data['Cinv_sum'][is2n])
@@ -32,6 +43,7 @@ def do_avg(data):
 
         data['shear'][is2n] = shear
         data['shear_cov'][is2n] = shear_cov
+
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
