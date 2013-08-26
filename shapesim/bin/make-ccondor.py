@@ -37,7 +37,7 @@ GetEnv = True
 
 # phenix jobs might be matching and will guesses this
 # might be a problem?
-Requirements = (CPU_Experiment != "phenix")
+#Requirements = (CPU_Experiment != "phenix")
 
 kill_sig        = SIGINT
 
@@ -45,7 +45,7 @@ kill_sig        = SIGINT
 
 Output          = ./{overall_name}.$(cluster).out
 Error           = ./{overall_name}.$(cluster).err
-Log             = ./{overall_name}.$(cluster).log
+Log             = /data/esheldon/tmp/{overall_name}.$(cluster).log
 
 """
 
@@ -150,6 +150,9 @@ def make_some_dirs(run):
     if not os.path.exists(outd):
         os.makedirs(outd)
 
+    tmpdir='/data/esheldon/tmp'
+    if not os.path.exists(tmpdir):
+        os.makedirs(tmpdir)
 
 def write_condor_file(c, master_script, equal_time=False):
     run=c['run']

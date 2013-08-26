@@ -54,6 +54,7 @@ def main():
     err=sqrt(data['shear_cov'][:,0,0])
 
     plt0=biggles.FramedPlot()
+    plt0.aspect_ratio=1
     plt0.xlog=True
     plt0.add( biggles.FillBetween([1.e-6,5000], [0.004,0.004], 
                                   [1.e-6,5000], [-0.004,-0.004],
