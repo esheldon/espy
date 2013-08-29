@@ -1,8 +1,3 @@
-#
-# the "desired_err" method doesn't work yet, since I haven't trained it, but
-# this will the the training set
-#
-
 run: "cbafit-deg01r02"
 
 # geg indicates the object is a gaussian exponential,

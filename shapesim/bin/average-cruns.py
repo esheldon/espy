@@ -28,12 +28,21 @@ def do_sums(data, data0):
         data['flux_err2invsum'] += data0['flux_err2invsum']
         data['flux_s2n_sum'] += data0['flux_s2n_sum']
 
+        data['T_sum'] += data0['T_sum']
+        data['T_err2invsum'] += data0['T_err2invsum']
+        data['T_s2n_sum'] += data0['T_s2n_sum']
+
+
+
 
 def do_avg(data):
 
     if 'flux_sum' in data.dtype.names:
         data['flux'] = data['flux_sum']/data['nsum']
         data['flux_err'] = sqrt(1.0/data['flux_err2invsum'])
+
+        data['T'] = data['T_sum']/data['nsum']
+        data['T_err'] = sqrt(1.0/data['T_err2invsum'])
 
     for is2n in xrange(data.size):
         C = numpy.linalg.inv(data['Cinv_sum'][is2n])

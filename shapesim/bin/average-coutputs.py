@@ -96,15 +96,23 @@ def get_averaged_gerror(data, s2n_matched, verbose=False):
     
     ]
 
-    do_flux=False
+    do_simple=False
     if data['pars'].shape[1] == 6:
-        do_flux=True
+        do_simple=True
         dt += [('flux_sum','f8'),
                ('flux_err2invsum','f8'),
                ('flux_s2n_sum','f8'),
                ('flux','f8'),
                ('flux_err','f8'),
-               ('flux_s2n','f8')]
+               ('flux_s2n','f8'),
+
+               ('T_sum','f8'),
+               ('T_err2invsum','f8'),
+               ('T_s2n_sum','f8'),
+               ('T','f8'),
+               ('T_err','f8'),
+               ('T_s2n','f8')]
+
 
     Q_sum, Cinv_sum = lensing.pqr.get_shear_pqr_sums(data['P'],
                                                      data['Q'],
@@ -148,8 +156,7 @@ def get_averaged_gerror(data, s2n_matched, verbose=False):
     sherr=numpy.sqrt(shear_cov[0,0])
     print 'shear1:      %.16g +/- %.16g' % (shear[0],sherr)
 
-    if do_flux:
-        print 'doing flux'
+    if do_simple:
         flux=data['pars'][:,5]
         flux_var=data['pcov'][:,5,5]
         flux_err=sqrt(flux_var)
@@ -163,6 +170,22 @@ def get_averaged_gerror(data, s2n_matched, verbose=False):
         flux_s2n_vals = flux/flux_err
         d['flux_s2n_sum'] = flux_s2n_vals.sum()
         d['flux_s2n'] = d['flux_s2n_sum']/d['nsum']
+
+
+        T=data['pars'][:,4]
+        T_var=data['pcov'][:,4,4]
+        T_err=sqrt(T_var)
+
+        d['T_sum'] = T.sum()
+        d['T_err2invsum'] = (1.0/T_var).sum()
+
+        d['T'] = d['T_sum']/d['nsum']
+        d['T_err'] = sqrt(1.0/d['T_err2invsum'])
+
+        T_s2n_vals = T/T_err
+        d['T_s2n_sum'] = T_s2n_vals.sum()
+        d['T_s2n'] = d['T_s2n_sum']/d['nsum']
+
 
     return d
 
