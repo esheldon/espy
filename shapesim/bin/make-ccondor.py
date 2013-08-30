@@ -49,12 +49,80 @@ Log             = /data/esheldon/tmp/{overall_name}.$(cluster).log
 
 """
 
-_queue_template="""
+_queue_template_old="""
 Arguments       = {s2n} {npair} {seed} {output} {logfile}
 Queue
 """
+_queue_template_old="""
+Arguments       = {s2n} {npair} {output} {logfile}
+Queue
+"""
+
 
 _master_template="""#!/bin/bash
+function runsim {
+    host=$(hostname)
+
+    rm -vf ${output}
+    rm -vf ${logfile}
+
+    echo "host: $host"
+    echo "writing to temp file: $tmpfile"
+
+    gsim-ring-mcmc ${sim_config} ${mcmc_config} ${s2n} ${npair} > ${tmpfile}
+    status=$?
+
+    echo "time: $SECONDS"
+
+    if [[ $status != "0" ]]; then
+        echo "error running gsim-ring-mcmc: $status"
+    else
+        cp -v "$tmpfile" "$output"
+        status=$?
+        if [[ $status != "0" ]]; then
+            echo "error copying to output: $output"
+        fi
+    fi
+
+    return $status
+}
+
+source ~/.bashrc
+module unload gsim_ring && module load gsim_ring/%(version)s
+
+
+s2n=$1
+npair=$2
+output=$3
+logfile=$4
+
+sim_config=%(sim_config)s
+mcmc_config=%(mcmc_config)s
+
+bname=$(basename $output)
+log_bname=$(basename $logfile)
+tmpfile="$_CONDOR_SCRATCH_DIR/$bname"
+tmplog="$_CONDOR_SCRATCH_DIR/$log_bname"
+
+runsim &> $tmplog
+status=$?
+
+echo "copying log file $tmplog -> $logfile" >> $tmplog
+
+# any errors will go to the jobs stderr
+cp "$tmplog" "$logfile" 1>&2
+status2=$?
+
+if [[ $status != "0" ]]; then
+    # this error message will go to main error file
+    echo "error copying to output: $output" 1>&2
+
+    status=$status2
+fi
+
+exit $status
+"""
+_master_template_old="""#!/bin/bash
 function runsim {
     host=$(hostname)
 
@@ -118,6 +186,7 @@ fi
 
 exit $status
 """
+
 
 
 def get_seconds_per_pair():
@@ -197,11 +266,11 @@ def write_condor_file(c, master_script, equal_time=False):
                 logfile = output.replace('.rec','.log')
 
                 this_job_name='%s-%03d-%03d' % (job_name,is2n,isplit)
-                seed = numpy.random.randint(smax)
+                #seed = numpy.random.randint(smax)
                 qdata=_queue_template.format(job_name=this_job_name,
                                              s2n=s2n,
                                              npair=npair,
-                                             seed=seed,
+                                             #seed=seed,
                                              output=output,
                                              logfile=logfile)
                 fobj.write(qdata)
