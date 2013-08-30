@@ -53,7 +53,7 @@ _queue_template_old="""
 Arguments       = {s2n} {npair} {seed} {output} {logfile}
 Queue
 """
-_queue_template_old="""
+_queue_template="""
 Arguments       = {s2n} {npair} {output} {logfile}
 Queue
 """
