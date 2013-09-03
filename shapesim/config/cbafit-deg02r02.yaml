@@ -1,4 +1,4 @@
-run: "cbafit-deg01r02"
+run: "cbafit-deg02r02"
 
 # geg indicates the object is a gaussian exponential,
 # and psf is a gaussian
@@ -8,7 +8,7 @@ sim_config: "$GSIM_RING_DIR/share/sim-deg02.cfg"
 mcmc_config: "$GSIM_RING_DIR/share/bafit-deg02.cfg"
 
 # we normalize splits by split for is2n==0
-desired_err: 3.6e-05
-nsplit0: 9000
+desired_err: 3.0e-05
+nsplit0: 13000
 
 s2n_vals: [15,20,25,30,40,50,60,70,80,90,100,120,140,160,180,200,250,300,350,400]

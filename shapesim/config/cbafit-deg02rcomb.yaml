@@ -1,4 +1,4 @@
-run: "cbafit-deg02r01"
+run: "cbafit-deg02rcomb"
 
 # geg indicates the object is a gaussian exponential,
 # and psf is a gaussian
