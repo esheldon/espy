@@ -1,5 +1,5 @@
 # vim: set filetype=python :
-default_version='3330'
+default_version='3350'
 
 
 # Note I had problems downloading from the ftp site, although it seemed sporadic
@@ -9,7 +9,16 @@ url="""
 source_type = 'tar'
 
 # this will use the install_dir as prefix in configure
-install_method = 'configure-make-install'
+install_command = """
+'./configure --prefix={prefix}
+&& make
+&& make install
+&& make fpack
+&& make funpack
+&& make install
+&& mkdir -vp {prefix}/bin
+&& cp -v fpack {prefix}/bin
+&& cp -v funpack {prefix}/bin'.format(prefix=self.install_dir)""".replace('\n',' ')
 
 # for the modules system
 create_module_file='''"""#%%Module
@@ -19,11 +28,12 @@ module-whatis	"cfitsio"
 
 conflict cfitsio
 
-set PRODUCT_DIR %s
-setenv CFITSIO_DIR $PRODUCT_DIR 
+set CFITSIO_DIR %s
+setenv CFITSIO_DIR $CFITSIO_DIR 
 
-prepend-path LD_LIBRARY_PATH $PRODUCT_DIR/lib
-prepend-path LIBRARY_PATH    $PRODUCT_DIR/lib
-prepend-path C_INCLUDE_PATH  $PRODUCT_DIR/include
-prepend-path CPATH           $PRODUCT_DIR/include
+prepend-path PATH $CFITSIO_DIR/bin
+prepend-path LD_LIBRARY_PATH $CFITSIO_DIR/lib
+prepend-path LIBRARY_PATH    $CFITSIO_DIR/lib
+prepend-path C_INCLUDE_PATH  $CFITSIO_DIR/include
+prepend-path CPATH           $CFITSIO_DIR/include
 """ % self.install_dir'''

@@ -28,7 +28,8 @@ parser.add_option('--png',default=None,
                   help="png file to write")
 
 
-def plot_run(plt, run, shear_true, color, options):
+def plot_run(plt, run, shear_true, symbol, color, linestyle, options,
+             with_points=True, with_curve=True):
     c = shapesim.read_config(run)
     url=shapesim.get_averaged_url(run, 0)
     data=eu.io.read(url)
@@ -45,7 +46,7 @@ def plot_run(plt, run, shear_true, color, options):
 
     pts = biggles.Points(s2n_vals, 
                          data['shear'][:,0]/shear_true-1,
-                         type='filled circle',
+                         type=symbol,
                          size=2,
                          color=color)
     ep = biggles.SymmetricErrorBarsY(s2n_vals,
@@ -55,12 +56,16 @@ def plot_run(plt, run, shear_true, color, options):
                                      color=color)
     crv = biggles.Curve(s2n_vals, 
                         data['shear'][:,0]/shear_true-1,
-                        type='solid',
+                        type=linestyle,
                         width=2,
                         color=color)
 
     crv.label=run
-    plt.add(pts, ep, crv)
+    pts.label=run
+    if with_points:
+        plt.add(pts,ep)
+    if with_curve:
+        plt.add(crv)
 
     """
     plt=eu.plotting.bscatter(s2n_vals,
@@ -83,7 +88,7 @@ def plot_run(plt, run, shear_true, color, options):
                              show=False)
     """
 
-    return xrng, crv
+    return xrng, crv, pts
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -96,6 +101,8 @@ def main():
     shear_true=float(args[1])
 
     colors=['darkblue','red','darkgreen','magenta']
+    linestyles=['solid','dotdashed','shortdashed','dotted']
+    symbols=['filled circle','filled triangle','filled square','filled diamond']
 
     ylabel=r'$\Delta \gamma/\gamma$'
     if options.s2n_field=='s2n_matched':
@@ -125,10 +132,19 @@ def main():
     
     plt.yrange=yrng
 
-    curves=[]
+    cobj=[]
     for irun,run in enumerate(runs):
-        xrng_run, crv_run = plot_run(plt, run, shear_true, colors[irun], options)
-        curves.append(crv_run)
+        with_curve=False
+        xrng_run, crv_run, pts_run = plot_run(plt, run, shear_true, 
+                                              symbols[irun],
+                                              colors[irun],
+                                              linestyles[irun],
+                                              options,
+                                              with_curve=with_curve)
+        if with_curve:
+            cobj.append(crv_run)
+        else:
+            cobj.append(pts_run)
 
         if irun==0:
             xrng=xrng_run
@@ -136,7 +152,7 @@ def main():
             xrng[0] = min(xrng[0],xrng_run[0])
             xrng[1] = max(xrng[1],xrng_run[1])
     
-    key=biggles.PlotKey(0.9,0.9,curves,halign='right')
+    key=biggles.PlotKey(0.9,0.9,cobj,halign='right')
     plt.add(key)
     plt.xrange=xrng
 

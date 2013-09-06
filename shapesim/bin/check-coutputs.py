@@ -36,10 +36,15 @@ def check_is2n(run, is2n, flist, full=False):
             continue
 
         if full:
-            t=eu.io.read(f)
+            t=None
+            try:
+                t=eu.io.read(f)
+            except:
+                print 'failed to read:',f
 
-            if t.size != ntot:
-                print "expected %d, got %d" % (npair,t.size)
+            if t is not None:
+                if t.size != ntot:
+                    print "expected %d, got %d" % (npair,t.size)
 
 def get_flist(run):
     import glob
