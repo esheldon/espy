@@ -27,9 +27,15 @@ parser.add_option('--eps',default=None,
 parser.add_option('--png',default=None,
                   help="png file to write")
 
+parser.add_option('--labels',default=None,
+                  help="labels for each run")
+
+
+parser.add_option('--panel',default=None,
+                  help="labels for the panel")
 
 def plot_run(plt, run, shear_true, symbol, color, linestyle, options,
-             with_points=True, with_curve=True):
+             label,with_points=True, with_curve=True):
     c = shapesim.read_config(run)
     url=shapesim.get_averaged_url(run, 0)
     data=eu.io.read(url)
@@ -60,35 +66,26 @@ def plot_run(plt, run, shear_true, symbol, color, linestyle, options,
                         width=2,
                         color=color)
 
-    crv.label=run
-    pts.label=run
+    crv.label=label
+    pts.label=label
     if with_points:
         plt.add(pts,ep)
     if with_curve:
         plt.add(crv)
 
-    """
-    plt=eu.plotting.bscatter(s2n_vals,
-                             data['shear'][:,0]/shear_true-1,
-                             yerr=err/shear_true,
-                             xlabel=xlabel,
-                             ylabel=r'$\Delta \gamma/\gamma$',
-                             color='darkblue',
-                             show=False,
-                             size=2,
-                             plt=plt0)
-
-
-    plt=eu.plotting.bscatter(s2n_vals,
-                             data['shear'][:,0]/shear_true-1,
-                             color='darkblue',
-                             type='solid',
-                             width=2,
-                             plt=plt,
-                             show=False)
-    """
 
     return xrng, crv, pts
+
+def get_labels(runs, options):
+    if options.labels is None:
+        labels=runs
+    else:
+        labels=options.labels.split(',')
+        labels=[r'$%s$' % l for l in labels]
+        if len(labels) != len(runs):
+            raise ValueError("Labels must have same length as runs")
+
+    return labels
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -100,9 +97,14 @@ def main():
     runs=args[0].split(',')
     shear_true=float(args[1])
 
+    biggles.configure('default','fontsize_min',3)
+    biggles.configure('_HalfAxis','ticks_size',2)
+    biggles.configure('_HalfAxis','subticks_size',1)
+
     colors=['darkblue','red','darkgreen','magenta']
     linestyles=['solid','dotdashed','shortdashed','dotted']
     symbols=['filled circle','filled triangle','filled square','filled diamond']
+    labels=get_labels(runs, options)
 
     ylabel=r'$\Delta \gamma/\gamma$'
     if options.s2n_field=='s2n_matched':
@@ -140,6 +142,7 @@ def main():
                                               colors[irun],
                                               linestyles[irun],
                                               options,
+                                              labels[irun],
                                               with_curve=with_curve)
         if with_curve:
             cobj.append(crv_run)
@@ -155,6 +158,15 @@ def main():
     key=biggles.PlotKey(0.9,0.9,cobj,halign='right')
     plt.add(key)
     plt.xrange=xrng
+
+    tl=biggles.PlotLabel(0.9,0.1,r'$\gamma_{true} = %.02f$' % shear_true,
+                         halign='right')
+    plt.add(tl)
+
+    if options.panel is not None:
+        l=biggles.PlotLabel(0.1,0.9,options.panel,
+                            halign='left')
+        plt.add(l)
 
     plt.show()
 

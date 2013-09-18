@@ -18,6 +18,8 @@ parser=OptionParser(__doc__)
 
 parser.add_option('-f','--full',action='store_true',
                   help="if true, check number of rows as well")
+parser.add_option('--is2n',default=None,
+                  help="only process these is2n.  Can be a csv")
 
 
 def check_is2n(run, is2n, flist, full=False):
@@ -71,7 +73,13 @@ def main():
 
     flist=get_flist(run)
 
-    for is2n,s2n in enumerate(c['s2n_vals']):
+    if options.is2n is None:
+        is2n_vals = c['s2n_vals']
+    else:
+        is2n_vals = options.is2n.split(',')
+        is2n_vals = [int(ii) for ii in is2n_vals]
+
+    for is2n in is2n_vals:
         check_is2n(run, is2n, flist, full=options.full)
 
 main()

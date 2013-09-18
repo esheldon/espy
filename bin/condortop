@@ -65,6 +65,7 @@ condor_q \\
     -format '%-d,' ProcId \\
     -format '%-s,' Owner \\
     -format '%-s,' 'formatTime(QDate,"%m/%d %H:%M:%S")' \\
+    -format '%-s,' 'RemoteWallClockTime' \\
     -format '%s,' ServerTime \\
     -format '%s' ShadowBday \\
     -format ',' Owner \\
@@ -72,6 +73,7 @@ condor_q \\
     -format '%-d,' JobPrio \\
     -format '%-.1f,' ImageSize/1024.0 \\
     -format '%s,' Cmd \\
+    -format '%s,' job_name \\
     -format '%s' RemoteHost \\
     -format '\\n' Owner"""
 
@@ -119,7 +121,7 @@ class CondorWatcher:
             out = self.get_condor_q_output()
             out = out.split('\n')
 
-            stats={'njobs':0,'E':0,'R':0,'I':0,'H':0,'C':0,'X':0}
+            stats={'njobs':0,'R':0,'r':0,'I':0,'H':0,'C':0,'X':0}
             #lengths={'id':9,'owner':12,'qdate':11,'runtime':12,
             #         'status':2,'pri':3,'size':7,'cmd':3,'host':4}
             lengths={'id':2,'owner':5,'qdate':9,'runtime':8,
@@ -211,10 +213,10 @@ class CondorWatcher:
 
         win.addstr('%s ' % stats['njobs'])
 
-        win.addstr('Executing: ', colors['E'])
-        win.addstr('%s ' % stats['E'])
-        win.addstr('Reserved: ', colors['R'])
+        win.addstr('Running: ', colors['R'])
         win.addstr('%s ' % stats['R'])
+        win.addstr('Reserved: ', colors['r'])
+        win.addstr('%s ' % stats['r'])
 
         win.addstr('Idle: ', colors['I'])
         win.addstr('%s ' % stats['I'])
@@ -240,16 +242,19 @@ class CondorWatcher:
         """
         ls = line.split(',')
 
-        if len(ls) == 10:
-            id,owner,qdate,servertime,shadowbday,status,pri,size,cmd,host = ls
+        if len(ls) == 11:
+            id,owner,qdate,remotewall,servertime,shadowbday,status,pri,size,cmd,host = ls
+        elif len(ls)==12:
+            # job_name was present
+            id,owner,qdate,remotewall,servertime,shadowbday,status,pri,size,cmd0,job_name,host = ls
+            cmd=job_name
         else:
-            raise ValueError("Expected 10 results from condor_q, got %d" % len(ls))
+            raise ValueError("Expected 10 or 11 results from condor_q, got %d" % len(ls))
 
         cmd = os.path.basename(cmd)
         host = host.split('.')[0]
 
-        total_wall_time = 0
-
+        total_wall_time = int(float(remotewall))
 
         if status == 'R' and shadowbday != "":
             total_wall_time += int(servertime)-int(shadowbday)
@@ -257,10 +262,10 @@ class CondorWatcher:
 
         if status == 'R':
             if '-' in runtime:
-                stats['R'] += 1
+                stats['r'] += 1
             else:
-                status='E'
-                stats['E'] += 1
+                status='R'
+                stats['R'] += 1
         else:
             if status in stats:
                 stats[status] += 1
@@ -288,16 +293,13 @@ class CondorWatcher:
                 'host':host}
 
     def format_time(self, tot_seconds):
+        import datetime
         if tot_seconds == 0:
             return '----------'
-        days = tot_seconds/self.DAY
-        tsec = tot_seconds % self.DAY
-        hours = tsec/self.HOUR
-        tsec = tsec % self.HOUR
-        min = tsec/self.MINUTE
-        secs = tsec % self.MINUTE
+        sec = datetime.timedelta(seconds=tot_seconds)
+        d = datetime.datetime(1,1,1) + sec
 
-        return '%d+%02d:%02d:%02d' % (days, hours, min, secs)
+        return "%d+%02d:%02d:%02d" % (d.day-1, d.hour, d.minute, d.second)
 
     def get_condor_q_output(self):
 
@@ -331,8 +333,8 @@ class CondorWatcher:
             self.colors['queue'] = curses.color_pair(blue)
             self.colors['user'] = curses.color_pair(blue)
 
-            self.colors['E'] = curses.color_pair(green)
-            self.colors['R'] = curses.color_pair(cyan)
+            self.colors['R'] = curses.color_pair(green)
+            self.colors['r'] = curses.color_pair(cyan)
 
             self.colors['I'] = curses.color_pair(magenta)
             self.colors['H'] = curses.color_pair(red)
@@ -343,8 +345,8 @@ class CondorWatcher:
             self.colors['queue'] = curses.color_pair(green)
             self.colors['user'] = curses.color_pair(green)
 
-            self.colors['E'] = curses.color_pair(magenta)
-            self.colors['R'] = curses.color_pair(green)
+            self.colors['R'] = curses.color_pair(magenta)
+            self.colors['r'] = curses.color_pair(green)
 
             self.colors['I'] = curses.color_pair(yellow)
             self.colors['H'] = curses.color_pair(red)
@@ -356,8 +358,8 @@ class CondorWatcher:
             self.colors['queue'] = curses.color_pair(green)
             self.colors['user'] = curses.color_pair(green)
 
-            self.colors['E'] = curses.color_pair(green)
-            self.colors['R'] = curses.color_pair(cyan)
+            self.colors['R'] = curses.color_pair(green)
+            self.colors['r'] = curses.color_pair(cyan)
 
             self.colors['I'] = curses.color_pair(red)
             self.colors['H'] = curses.color_pair(red)
@@ -370,6 +372,7 @@ class CondorWatcher:
 #
 
 def main():
+
     try:
         options, args = parser.parse_args(sys.argv[1:])
         if len(args) > 0:

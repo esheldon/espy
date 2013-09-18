@@ -28,13 +28,6 @@ from sys import stdout
 import subprocess
 from optparse import OptionParser
 
-import curses
-try:
-    # newer version 
-    import curses.wrapper.wrapper as curses_wrapper
-except:
-    import curses.wrapper as curses_wrapper
-
 parser=OptionParser(__doc__)
 parser.add_option("-n","--name",default=None,
     help="Name of queue (scheduler) to use, default is local queue")
@@ -50,6 +43,7 @@ condor_q \\
     -format '%-d,' ProcId \\
     -format '%-s,' Owner \\
     -format '%-s,' 'formatTime(QDate,"%m/%d %H:%M:%S")' \\
+    -format '%-s,' 'RemoteWallClockTime' \\
     -format '%s,' ServerTime \\
     -format '%s' ShadowBday \\
     -format ',' Owner \\
@@ -57,6 +51,7 @@ condor_q \\
     -format '%-d,' JobPrio \\
     -format '%-.1f,' ImageSize/1024.0 \\
     -format '%s,' Cmd \\
+    -format '%s,' job_name \\
     -format '%s' RemoteHost \\
     -format '\\n' Owner"""
 
@@ -171,15 +166,19 @@ class CondorPrinter:
         """
         ls = line.split(',')
 
-        if len(ls) == 10:
-            id,owner,qdate,servertime,shadowbday,status,pri,size,cmd,host = ls
+        if len(ls) == 11:
+            id,owner,qdate,remotewall,servertime,shadowbday,status,pri,size,cmd,host = ls
+        elif len(ls)==12:
+            # job_name was present
+            id,owner,qdate,remotewall,servertime,shadowbday,status,pri,size,cmd0,job_name,host = ls
+            cmd=job_name
         else:
-            raise ValueError("Expected 10 results from condor_q, got %d" % len(ls))
+            raise ValueError("Expected 10 or 11 results from condor_q, got %d" % len(ls))
 
         cmd = os.path.basename(cmd)
         host = host.split('.')[0]
 
-        total_wall_time = 0
+        total_wall_time = int(float(remotewall))
 
         if status in stats:
             stats[status] += 1
@@ -210,17 +209,16 @@ class CondorPrinter:
                 'cmd':cmd,
                 'host':host}
 
+
     def format_time(self, tot_seconds):
+        import datetime
         if tot_seconds == 0:
             return '----------'
-        days = tot_seconds/self.DAY
-        tsec = tot_seconds % self.DAY
-        hours = tsec/self.HOUR
-        tsec = tsec % self.HOUR
-        min = tsec/self.MINUTE
-        secs = tsec % self.MINUTE
+        sec = datetime.timedelta(seconds=tot_seconds)
+        d = datetime.datetime(1,1,1) + sec
 
-        return '%d+%02d:%02d:%02d' % (days, hours, min, secs)
+        return "%d+%02d:%02d:%02d" % (d.day-1, d.hour, d.minute, d.second)
+
 
     def get_condor_q_output(self):
 
