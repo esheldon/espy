@@ -15,7 +15,7 @@ Description
 
     Send the username to restrict the job listing to the specified user.
     
-    The job listing is refreshed regularly, by default every 30 seconds.   Hit
+    The job listing is refreshed regularly, by default every 120 seconds.   Hit
     any key to update immediately.  Hit 'q' or control-c to quit."""
 
 modification_history="""
@@ -35,7 +35,7 @@ except:
     import curses.wrapper as curses_wrapper
 
 parser=OptionParser(__doc__)
-parser.add_option("-r","--refresh",default=30, 
+parser.add_option("-r","--refresh",default=120, 
     help="refresh rate in seconds.  default is %default")
 parser.add_option("-d","--dark",action="store_true", 
     help="Use a color scheme appropriate for dark backgrounds")
