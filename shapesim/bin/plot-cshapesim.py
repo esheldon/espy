@@ -30,14 +30,17 @@ parser.add_option('--png',default=None,
 parser.add_option('--labels',default=None,
                   help="labels for each run")
 
+parser.add_option('--with-lensfit',action='store_true',
+                  help="overplot lensfit results")
 
 parser.add_option('--panel',default=None,
                   help="labels for the panel")
 
 def plot_run(plt, run, shear_true, symbol, color, linestyle, options,
-             label,with_points=True, with_curve=True):
+             label,with_points=True, with_curve=True, with_lensfit=False):
     c = shapesim.read_config(run)
     url=shapesim.get_averaged_url(run, 0)
+    print url
     data=eu.io.read(url)
 
     s2n_vals = data[options.s2n_field]
@@ -70,8 +73,17 @@ def plot_run(plt, run, shear_true, symbol, color, linestyle, options,
     pts.label=label
     if with_points:
         plt.add(pts,ep)
-    if with_curve:
+
+    if with_curve and not with_lensfit:
         plt.add(crv)
+
+    if with_lensfit:
+        crv_lensfit = biggles.Curve(s2n_vals, 
+                                    data['shear_lensfit'][:,0]/shear_true-1,
+                                    type=linestyle,
+                                    width=2,
+                                    color='red')
+        plt.add(crv_lensfit)
 
 
     return xrng, crv, pts
@@ -143,7 +155,8 @@ def main():
                                               linestyles[irun],
                                               options,
                                               labels[irun],
-                                              with_curve=with_curve)
+                                              with_curve=with_curve,
+                                              with_lensfit=options.with_lensfit)
         if with_curve:
             cobj.append(crv_run)
         else:

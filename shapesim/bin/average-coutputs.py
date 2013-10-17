@@ -96,6 +96,18 @@ def get_averaged_gerror(data, s2n_matched, verbose=False):
     
     ]
 
+    if 'g' in data.dtype.names:
+        do_lensfit=True
+        dt += [('g_sum','f8',2),
+               ('gsens_sum','f8',2),
+               ('shear_lensfit','f8',2),
+               ('shear_lensfit_cov','f8',(2,2)),
+               ('shear_lensfit_cov_inv_sum','f8',(2,2)),
+              ]
+
+    else:
+        do_lensfit=False
+
     do_simple=False
     if data['pars'].shape[1] == 6:
         do_simple=True
@@ -187,6 +199,27 @@ def get_averaged_gerror(data, s2n_matched, verbose=False):
         d['T_s2n'] = d['T_s2n_sum']/d['nsum']
 
 
+    if do_lensfit:
+        gmean = data['g'].mean(axis=0)
+        gsens = data['gsens'].mean(axis=0)
+        
+        shear_cov[0,0] /= (gsens[0]*gsens[0])
+        shear_cov[0,1] /= (gsens[0]*gsens[1])
+        shear_cov[1,0] /= (gsens[0]*gsens[1])
+        shear_cov[1,1] /= (gsens[1]*gsens[1])
+        shear_cov_inv = numpy.linalg.inv(shear_cov)
+
+        shear=gmean/gsens
+        sherr=numpy.sqrt(shear_cov[0,0])
+
+        d['g_sum'] = data['g'].sum(axis=0)
+        d['gsens_sum'] = data['gsens'].sum(axis=0)
+
+        d['shear_lensfit'] = shear
+        d['shear_lensfit_cov'][0,:,:] = shear_cov
+        d['shear_lensfit_cov_inv_sum'][0,:,:] = shear_cov_inv
+
+        print 'shear1 (lensfit): %.16g +/- %.16g' % (shear[0],sherr)
     return d
 
 

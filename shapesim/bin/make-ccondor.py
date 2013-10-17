@@ -16,7 +16,8 @@ parser=OptionParser(__doc__)
 
 parser.add_option('-v','--version',default='work',
                   help='priority for queue')
-
+parser.add_option('--wshear',action='store_true',
+                  help="use wshear version of code")
 
 MAXTIME_HOURS=1.5
 
@@ -69,7 +70,7 @@ function runsim {
     echo "host: $host"
     echo "writing to temp file: $tmpfile"
 
-    gsim-ring-mcmc ${sim_config} ${mcmc_config} ${s2n} ${npair} > ${tmpfile}
+    %(exec_name)s ${sim_config} ${mcmc_config} ${s2n} ${npair} > ${tmpfile}
     status=$?
 
     echo "time: $SECONDS"
@@ -290,6 +291,10 @@ def main():
 
     c = shapesim.read_config(run)
     c['version'] = options.version
+    if options.wshear:
+        c['exec_name'] = 'gsim-ring-mcmc-wshear'
+    else:
+        c['exec_name'] = 'gsim-ring-mcmc'
 
     ns2n = len(c['s2n_vals'])
 

@@ -32,6 +32,11 @@ def do_sums(data, data0):
         data['T_err2invsum'] += data0['T_err2invsum']
         data['T_s2n_sum'] += data0['T_s2n_sum']
 
+    if 'g_sum' in data.dtype.names:
+        data['g_sum'] += data0['g_sum']
+        data['gsens_sum'] += data0['gsens_sum']
+        data['shear_lensfit_cov_inv_sum'] += data0['shear_lensfit_cov_inv_sum']
+
 
 
 
@@ -52,6 +57,11 @@ def do_avg(data):
 
         data['shear'][is2n] = shear
         data['shear_cov'][is2n] = shear_cov
+
+        if 'g_sum' in data.dtype.names:
+            data['shear_lensfit'][is2n] = data['g_sum'][is2n]/data['gsens_sum'][is2n]
+            shear_cov = numpy.linalg.inv(data['shear_lensfit_cov_inv_sum'][is2n])
+            data['shear_lensfit_cov'][is2n] = shear_cov
 
 
 def main():
