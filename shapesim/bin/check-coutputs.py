@@ -74,7 +74,7 @@ def main():
     flist=get_flist(run)
 
     if options.is2n is None:
-        is2n_vals = c['s2n_vals']
+        is2n_vals = range(len(c['s2n_vals']))
     else:
         is2n_vals = options.is2n.split(',')
         is2n_vals = [int(ii) for ii in is2n_vals]

@@ -36,8 +36,7 @@ Image_Size      = 90000
 
 GetEnv = True
 
-# phenix jobs might be matching and will guesses this
-# might be a problem?
+# phenix is SL6
 #Requirements = (CPU_Experiment != "phenix")
 
 kill_sig        = SIGINT
