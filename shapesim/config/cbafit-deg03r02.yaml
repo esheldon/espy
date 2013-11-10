@@ -1,5 +1,5 @@
 # This one with fixed noise instead of fixed s/n
-# s/n corresponds to means
+# s/n corresponds to means.  Includes lensfit
 run: "cbafit-deg03r02"
 
 # geg indicates the object is a gaussian exponential,
