@@ -1,7 +1,10 @@
 # This one with fixed noise instead of fixed s/n
 # s/n corresponds to means.  Includes lensfit
 # same as deg03r01 but with sim-deg01
+# size ratio sqrt(2)
 run: "cbafit-deg05rcomb"
+
+label: "$dev \\sigma_g/\\sigma_{PSF}=1.4$"
 
 # geg indicates the object is a gaussian exponential,
 # and psf is a gaussian

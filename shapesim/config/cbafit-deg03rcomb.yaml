@@ -1,6 +1,9 @@
 # This one with fixed noise instead of fixed s/n
 # s/n corresponds to means
+# size ratio 2
 run: "cbafit-deg03rcomb"
+
+label: "$dev \\sigma_g/\\sigma_{PSF}=2.0$"
 
 # geg indicates the object is a gaussian exponential,
 # and psf is a gaussian

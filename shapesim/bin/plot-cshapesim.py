@@ -27,8 +27,8 @@ parser.add_option('--eps',default=None,
 parser.add_option('--png',default=None,
                   help="png file to write")
 
-parser.add_option('--labels',default=None,
-                  help="labels for each run")
+#parser.add_option('--labels',default=None,
+#                  help="labels for each run")
 
 parser.add_option('--with-lensfit',action='store_true',
                   help="overplot lensfit results")
@@ -37,8 +37,10 @@ parser.add_option('--panel',default=None,
                   help="labels for the panel")
 
 def plot_run(plt, run, shear_true, symbol, color, linestyle, options,
-             label,with_points=True, with_curve=True, with_lensfit=False):
+             with_points=True, with_curve=True, with_lensfit=False):
     c = shapesim.read_config(run)
+    label = c.get('label',c['run'])
+
     url=shapesim.get_averaged_url(run, 0)
     print url
     data=eu.io.read(url)
@@ -82,7 +84,7 @@ def plot_run(plt, run, shear_true, symbol, color, linestyle, options,
                                     data['shear_lensfit'][:,0]/shear_true-1,
                                     type=linestyle,
                                     width=2,
-                                    color='red')
+                                    color=color)
         plt.add(crv_lensfit)
 
 
@@ -116,7 +118,7 @@ def main():
     colors=['darkblue','red','darkgreen','magenta']
     linestyles=['solid','dotdashed','shortdashed','dotted']
     symbols=['filled circle','filled triangle','filled square','filled diamond']
-    labels=get_labels(runs, options)
+    #labels=get_labels(runs, options)
 
     ylabel=r'$\Delta \gamma/\gamma$'
     if options.s2n_field=='s2n_matched':
@@ -154,7 +156,7 @@ def main():
                                               colors[irun],
                                               linestyles[irun],
                                               options,
-                                              labels[irun],
+                                              #labels[irun],
                                               with_curve=with_curve,
                                               with_lensfit=options.with_lensfit)
         if with_curve:

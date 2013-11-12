@@ -10,11 +10,15 @@ gmix-fit
             - why did the nersc run look so bad?
 
         - deg03*
-            - g style, lensfit calculated, prior ba13, size ratio 4
-        - deg05*
             - g style, lensfit calculated, prior ba13, size ratio 2
+        - deg05*
+            - g style, lensfit calculated, prior ba13, size ratio sqrt(2)
+            6-10 didn't start due to star shutdown
         - geg07*
-            - g style, lensfit calculated, prior ba13, size ratio 4
+            - g style, lensfit calculated, prior ba13, size ratio 2
+        - geg08*
+            - g style, lensfit calculated, prior ba13, size ratio sqrt(2)
+            - note deg08r10 didn't finish due to star upgrade.
 
         - geg01r*
             - initial runs with eta.  show significant bias
