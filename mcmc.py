@@ -563,7 +563,7 @@ def plot_results(trials, **keys):
         if ptypes[i] == 'linear':
             vals=trials[:,i]
             bsize = binfac*errs[i]
-            xlabel='name'
+            xlabel=name
         else:
             vals=numpy.log10(trials[:,i])
             bsize=0.2*vals.std()
