@@ -1,15 +1,17 @@
 import os
-version='COSMOS_23.5_training_sample_sub'
+
+VERSION='23.5'
 def get_dir():
     d=os.environ['COSMOS_DIR']
-    return os.path.join(d, version)
+    vdir='COSMOS_%s_training_sample_sub' % VERSION
+    return os.path.join(d, vdir)
 
 def get_cat_path():
     """
     Get the path to the main catalog (not the one with fit parameters)
     """
     d=get_dir()
-    path=os.path.join(d, 'real_galaxy_catalog_23.5_sub.fits')
+    path=os.path.join(d, 'real_galaxy_catalog_%s_sub.fits' % VERSION)
     return path
 
 def get_fits_cat_path():
@@ -17,5 +19,17 @@ def get_fits_cat_path():
     Get the path to the fit parameters
     """
     d=get_dir()
-    path=os.path.join(d,'real_galaxy_catalog_23.5_sub_fits.fits')
+    path=os.path.join(d,'real_galaxy_catalog_%s_sub_fits.fits' % VERSION)
     return path
+
+def read_cat():
+    import fitsio
+    path=get_cat_path()
+    print 'reading:',path
+    return fitsio.read(path,lower=True)
+
+def read_fits_cat():
+    import fitsio
+    path=get_fits_cat_path()
+    print 'reading:',path
+    return fitsio.read(path,lower=True)
