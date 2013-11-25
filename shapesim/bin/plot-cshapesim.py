@@ -30,23 +30,42 @@ parser.add_option('--png',default=None,
 #parser.add_option('--labels',default=None,
 #                  help="labels for each run")
 
+parser.add_option('--method',default='ba13',
+                  help="method to plot ('lensfit,'ba13')")
+
 parser.add_option('--with-lensfit',action='store_true',
                   help="overplot lensfit results")
 
 parser.add_option('--panel',default=None,
                   help="labels for the panel")
 
+def get_names(method):
+    if method == 'BA13':
+        s_name='shear'
+        scov_name='shear_cov'
+    elif method=='LENSFIT':
+        s_name='shear_lensfit'
+        scov_name='shear_lensfit_cov'
+    else:
+        raise ValueError("bad method: '%s'" % method)
+
+    return s_name, scov_name
+
 def plot_run(plt, run, shear_true, symbol, color, linestyle, options,
-             with_points=True, with_curve=True, with_lensfit=False):
+             with_points=True, with_curve=True, method='BA13', with_lensfit=False):
+
     c = shapesim.read_config(run)
     label = c.get('label',c['run'])
+
 
     url=shapesim.get_averaged_url(run, 0)
     print url
     data=eu.io.read(url)
 
+    s_name,scov_name=get_names(method)
+    shear=data[s_name][:,0]
+    err=sqrt(data[scov_name][:,0,0])
     s2n_vals = data[options.s2n_field]
-    err=sqrt(data['shear_cov'][:,0,0])
 
     if options.xrange is None:
         xrng=[0.75*s2n_vals[0], 1.25*s2n_vals[-1]]
@@ -56,17 +75,17 @@ def plot_run(plt, run, shear_true, symbol, color, linestyle, options,
 
 
     pts = biggles.Points(s2n_vals, 
-                         data['shear'][:,0]/shear_true-1,
+                         shear/shear_true-1,
                          type=symbol,
                          size=2,
                          color=color)
     ep = biggles.SymmetricErrorBarsY(s2n_vals,
-                                     data['shear'][:,0]/shear_true-1,
+                                     shear/shear_true-1,
                                      err/shear_true,
                                      width=2,
                                      color=color)
     crv = biggles.Curve(s2n_vals, 
-                        data['shear'][:,0]/shear_true-1,
+                        shear/shear_true-1,
                         type=linestyle,
                         width=2,
                         color=color)
@@ -79,7 +98,7 @@ def plot_run(plt, run, shear_true, symbol, color, linestyle, options,
     if with_curve and not with_lensfit:
         plt.add(crv)
 
-    if with_lensfit:
+    if with_lensfit and method != 'lensfit':
         crv_lensfit = biggles.Curve(s2n_vals, 
                                     data['shear_lensfit'][:,0]/shear_true-1,
                                     type=linestyle,
@@ -110,6 +129,7 @@ def main():
 
     runs=args[0].split(',')
     shear_true=float(args[1])
+    method=options.method.upper()
 
     biggles.configure('default','fontsize_min',3)
     biggles.configure('_HalfAxis','ticks_size',2)
@@ -158,6 +178,7 @@ def main():
                                               options,
                                               #labels[irun],
                                               with_curve=with_curve,
+                                              method=method,
                                               with_lensfit=options.with_lensfit)
         if with_curve:
             cobj.append(crv_run)
@@ -177,6 +198,10 @@ def main():
     tl=biggles.PlotLabel(0.9,0.1,r'$\gamma_{true} = %.02f$' % shear_true,
                          halign='right')
     plt.add(tl)
+
+    ml=biggles.PlotLabel(0.9,0.17,method, halign='right')
+    plt.add(ml)
+
 
     if options.panel is not None:
         l=biggles.PlotLabel(0.1,0.9,options.panel,

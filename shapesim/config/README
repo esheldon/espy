@@ -11,14 +11,14 @@ gmix-fit
 
         - deg03*
             - g style, lensfit calculated, prior ba13, size ratio 2
+            running 06-10
         - deg05*
             - g style, lensfit calculated, prior ba13, size ratio sqrt(2)
-            6-10 didn't start due to star shutdown
         - geg07*
             - g style, lensfit calculated, prior ba13, size ratio 2
         - geg08*
             - g style, lensfit calculated, prior ba13, size ratio sqrt(2)
-            - note deg08r10 didn't finish due to star upgrade.
+            from r11 onward was demanding more precision
 
         - geg01r*
             - initial runs with eta.  show significant bias

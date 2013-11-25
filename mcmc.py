@@ -585,12 +585,16 @@ def plot_results(trials, **keys):
         plti.add(hplot)
             
         lab = r'$<%s> = %0.4g \pm %0.4g$' % (name,means[i],errs[i])
-        plab = biggles.PlotLabel(0.1,0.9,lab,halign='left')
+        plab = biggles.PlotLabel(0.1,0.8,lab,
+                                 halign='left',
+                                 color='blue')
 
         plti.add(plab)
 
         plt[i,1]=plti
     
+    plt.title=keys.get('title',None)
+
     if show:
         plt.show()
 
