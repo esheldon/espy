@@ -256,9 +256,9 @@ def multiview(image, **keys):
     tab[0,0] = imp
     tab[0,1] = crossplt
 
-    title=keys.get('title',None)
-    if title:
-        tab.title=title
+    #title=keys.get('title',None)
+    #if title:
+    #    tab.title=title
 
     show = keys.get('show', True)
     if show:
