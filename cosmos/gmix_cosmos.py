@@ -4,9 +4,33 @@ import galsim
 
 from . import files
 
-_guess_Tfac={'exp':2.0,
-             'dev':50.0} # can be larger for some galaxies!
+NO_ATTEMPT=2**30
+DEFVAL=-9999
+PDEFVAL=9999
+BIG_DEFVAL=-9.999e9
+BIG_PDEFVAL=9.999e9
+
+
+def fit_cosmos(models, output_file, obj_range=None):
+    """
+    Do some fits and write an output file.
+    """
+    import fitsio
+    fitter=CosmosFitter(models, obj_range=obj_range)
+    fitter.do_fits()
+
+    data=fitter.get_data()
+
+    print >>stderr,'writing:',output_file
+    with fitsio.FITS(output_file, 'rw', clobber=True) as fobj:
+        fobj.write(data, extension="model_fits")
+
 class CosmosFitter(object):
+    """
+    Fit models to the cosmos galaxies released as part of great3.
+    
+    Convolve with a gaussian PSF, and add a little noise.
+    """
     def __init__(self,
                  models,
                  obj_range=None,
@@ -20,6 +44,7 @@ class CosmosFitter(object):
         self._sky_sigma0  = float(sky_sigma0)
         self._rotate      = rotate
         self._pixel_scale = float(pixel_scale)
+        self._pixel_area  = self._pixel_scale**2
         self._make_plots  = make_plots
 
 
@@ -35,6 +60,14 @@ class CosmosFitter(object):
 
         self.make_pixel()
         self.make_psf()
+
+        self.make_struct()
+
+    def get_data(self):
+        """
+        Get the fit data
+        """
+        return self._data
 
     def set_index_list(self, obj_range):
         """
@@ -116,66 +149,131 @@ class CosmosFitter(object):
 
         self.set_priors()
         last=self._index_list[-1]
+        ndo=self._index_list.size
 
-        for index in self._index_list:
-            print >>stderr,'%s:%s' % (index, last)
-            gal_im_obj,wt = self.make_galaxy_image(index)
-            self.fit_galaxy_models(gal_im_obj,wt)
+        for dindex in xrange(ndo):
+            rindex=self._index_list[dindex]
+            print >>stderr,'%s:%s' % (rindex, last)
+            gal_im_obj,wt = self.make_galaxy_image(dindex)
+            self.fit_galaxy_models(gal_im_obj,wt,dindex)
 
 
-    def fit_galaxy_models(self, gal_im_obj, wt):
+    def fit_galaxy_models(self, gal_im_obj, wt, dindex):
         """
         Fit all the models
         """
-        import ngmix
-        from ngmix.fitting import print_pars
 
-        moms=gal_im_obj.FindAdaptiveMom()
+        im=gal_im_obj.array.astype('f8')
+        counts_guess,T_guess0,row,col=self.get_guesses(gal_im_obj,im,wt)
+        j=self.get_jacobian(row,col)
 
-        counts_guess = moms.moments_amp * self._pixel_scale**2
-        T_guess0    = 2*moms.moments_sigma**2 * self._pixel_scale**2
         print >>stderr,'  T_guess0:     ',T_guess0
         print >>stderr,'  counts_guess: ',counts_guess
 
-        j=ngmix.Jacobian(moms.moments_centroid.y-1.,
-                         moms.moments_centroid.x-1.,
+        for model in self._models:
+            print >>stderr,'    model:',model
+            res=self.fit_galaxy_model(im,wt,j,model,counts_guess,T_guess0)
+
+            self.copy_result(dindex, res)
+
+            self.print_some_stats(res)
+
+    def get_guesses(self, gal_im_obj, im, wt):
+        """
+        Try adaptive moments, otherwise fall back on simple
+        guesses
+        """
+        import ngmix
+        try:
+            moms=gal_im_obj.FindAdaptiveMom()
+            counts_guess = moms.moments_amp * self._pixel_area
+            # extra factor of 2 because this is the weight sigma
+            T_guess0     = 2 * 2*moms.moments_sigma**2 * self._pixel_area
+            row_guess    = moms.moments_centroid.y -1
+            col_guess    = moms.moments_centroid.x -1
+        except:
+            print >>stderr,'Warning: adaptive moments failed, trying EM'
+            counts_guess = im.sum() * self._pixel_area
+            try:
+
+                row_guess=0.5*im.shape[0] 
+                col_guess=0.5*im.shape[1] 
+                gm_guess=ngmix.gmix.GMixModel([row_guess,col_guess,0.0, 0.0, 8.0, 1.0],
+                                              'gauss')
+                imsky,sky=ngmix.em.prep_image(im)
+                fitter=ngmix.em.GMixEM(imsky)
+                fitter.go(gm_guess, sky, maxiter=1000, tol=1.e-3)
+
+                gm=fitter.get_gmix()
+                T_guess0 = gm.get_T() * self._pixel_area
+                row_guess,col_guess = gm.get_cen()
+            except:
+                # will use row_guess from above
+                print >>stderr,'Warning: EM also failed!'
+                T_guess0=0.25
+
+        return counts_guess, T_guess0, row_guess, col_guess
+
+    def fit_galaxy_model(self, im, wt, j, model, counts_guess, T_guess0):
+        """
+        fit a single model
+        """
+
+        import ngmix
+
+        T_guess=_guess_Tfac[model]*T_guess0
+        print >>stderr,'    T_guess:      ',T_guess
+
+        fitter=ngmix.fitting.MCMCSimple(im, wt, j, model,
+                                        psf=self._psf_gmix,
+                                        T_guess=T_guess,
+                                        counts_guess=counts_guess,
+                                        T_prior=self._T_prior,
+                                        cen_prior=self._cen_prior,
+                                        nwalkers=self._nwalkers,
+                                        burnin=self._burnin,
+                                        nstep=self._nstep)
+        fitter.go()
+
+        if self._make_plots:
+            fitter.make_plots(show=True, do_residual=True, title=model)
+
+        res=fitter.get_result()
+        return res
+
+    def get_jacobian(self, rowcen, colcen):
+        """
+        Get a jacobian for the input center
+        """
+        import ngmix
+        j=ngmix.Jacobian(rowcen,
+                         colcen,
                          self._pixel_scale,
                          0.,
                          0.,
                          self._pixel_scale)
+        return j
 
-        im=gal_im_obj.array.astype('f8')
-        for model in self._models:
-            print >>stderr,'    model:',model
-            T_guess=_guess_Tfac[model]*T_guess0
-            print >>stderr,'    T_guess:      ',T_guess
-            fitter=ngmix.fitting.MCMCSimple(im, wt, j, model,
-                                            psf=self._psf_gmix,
-                                            T_guess=T_guess,
-                                            counts_guess=counts_guess,
-                                            T_prior=self._T_prior,
-                                            cen_prior=self._cen_prior,
-                                            nwalkers=self._nwalkers,
-                                            burnin=self._burnin,
-                                            nstep=self._nstep)
-            fitter.go()
-            res=fitter.get_result()
-            print_pars(res['pars'],front='      pars: ')
-            print_pars(res['perr'],front='      perr: ')
-            flux_s2n=res['pars'][5]/res['perr'][5]
-            T_s2n=res['pars'][4]/res['perr'][4]
-            print >>stderr,'      T_s2n: %g flux_s2n: %g' % (T_s2n, flux_s2n)
-            print >>stderr,'      arate: %(arate)g chi2per: %(chi2per)g' % res
-
-            if self._make_plots:
-                fitter.make_plots(show=True, do_residual=True, title=model)
+    def print_some_stats(self, res):
+        """
+        Print some stats from the fitter result
+        """
+        from ngmix.fitting import print_pars
+        print_pars(res['pars'],front='      pars: ')
+        print_pars(res['perr'],front='      perr: ')
+        flux_s2n=res['pars'][5]/res['perr'][5]
+        T_s2n=res['pars'][4]/res['perr'][4]
+        print >>stderr,'      T_s2n: %g flux_s2n: %g' % (T_s2n, flux_s2n)
+        print >>stderr,'      arate: %(arate)g chi2per: %(chi2per)g' % res
 
 
-    def make_galaxy_image(self, index, show=False, get_obj=False):
+    def make_galaxy_image(self, dindex, show=False, get_obj=False):
         """
         Make the galaxy image object
         """
-        gal_obj=self.make_galaxy_obj(index)
+
+        rindex=self._index_list[dindex]
+        gal_obj=self.make_galaxy_obj(rindex)
 
         # apply center offset in pixel coords
         dx = self._randu() - 0.5
@@ -202,12 +300,12 @@ class CosmosFitter(object):
         else:
             return gal_im_obj, wt
 
-    def make_galaxy_obj(self, index):
+    def make_galaxy_obj(self, rindex):
         """
         Make the galaxy object
         """
 
-        gal_pre = galsim.RealGalaxy(self._real_cat, index = index)
+        gal_pre = galsim.RealGalaxy(self._real_cat, index=rindex)
 
         # Rotate by a random angle
         if self._rotate:
@@ -238,7 +336,6 @@ class CosmosFitter(object):
         self._T_prior=ngmix.priors.FlatPrior(0.0001, 10000.0)
         # width arcsec
         self._cen_prior=ngmix.priors.CenPrior(0.0, 0.0, 0.1, 0.1)
-        #self._cen_prior=ngmix.priors.CenPrior(0.0, 0.0, 1.0, 1.0)
 
     def setup_rand(self):
         """
@@ -248,6 +345,29 @@ class CosmosFitter(object):
         self._randu  = galsim.UniformDeviate()
         self._rand_gauss_obj = galsim.GaussianNoise(self._randu,
                                                     sigma=self._sky_sigma0)
+
+    def copy_result(self, dindex, res):
+        """
+        Copy a result dict from the fitter to the output
+        """
+        model=res['model']
+        n=get_model_names(model)
+
+        self._data[n['flags']][dindex] = res['flags']
+        if res['flags']==0:
+            pars=res['pars']
+            pars_cov=res['pars_cov']
+
+            self._data[n['pars']][dindex,:] = pars
+            self._data[n['pars_cov']][dindex,:,:] = pars_cov
+
+            for sn in _stat_names:
+                self._data[n[sn]][dindex] = res[sn]
+
+            self._data[n['arate']][dindex] = res['arate']
+            if res['tau'] is not None:
+                self._data[n['tau']][dindex] = res['tau']
+
 
     def make_struct(self):
         """
@@ -296,7 +416,8 @@ class CosmosFitter(object):
 
             data[n['tau']] = PDEFVAL
      
-        self.data=data
+        data['id'] = self._index_list
+        self._data=data
 
 def get_model_names(model):
     names=['rfc_flags',
@@ -327,5 +448,14 @@ def get_model_names(model):
         ndict[n] = '%s_%s' % (model,n)
 
     return ndict
+
+
+_guess_Tfac={'exp':1.0,
+             'dev':25.0} # can be larger for some galaxies!
+_stat_names=['s2n_w',
+             'chi2per',
+             'dof',
+             'aic',
+             'bic']
 
 
