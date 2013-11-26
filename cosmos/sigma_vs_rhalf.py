@@ -3,8 +3,6 @@ Fit distributions from the cosmos field
 """
 
 import numpy
-from . import files
-
 
 def many_sigma2rhalf(model, sigma_vals, nsig=5, smooth=0.001):
     rhalf_vals=numpy.zeros(sigma_vals.size)

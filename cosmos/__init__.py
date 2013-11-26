@@ -1,2 +1,4 @@
 from . import files
-from . import fitdist
+from . import fit_gprior
+from . import sigma_vs_rhalf
+from . import gmix_cosmos

@@ -33,3 +33,8 @@ def read_fits_cat():
     path=get_fits_cat_path()
     print 'reading:',path
     return fitsio.read(path,lower=True)
+
+def get_galsim_catalog():
+    import galsim
+    path=get_cat_path()
+    return galsim.RealGalaxyCatalog(path)
