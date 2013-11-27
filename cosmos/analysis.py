@@ -7,7 +7,7 @@ _good_ranges['exp'] = {'log10_flux':[-1.2, 1.4],
 _good_ranges['dev'] = {'log10_flux':[-1.2, 1.6],
                        's2n_rat':[0.1, 0.6]}
 
-def do_select_by_s2n_flux(data, model, good=True):
+def select_by_s2n_flux(data, model, good=True):
     """
     Select a "good" range.  This is somewhat arbitrary
     based on find_good_s2n
@@ -112,15 +112,4 @@ def find_good_s2n(version):
     exp_plt.show()
     dev_plt.show()
 
-def plot_T(version):
-    import esutil as eu
-    data=files.read_output(version)
 
-    wexp=select_by_s2n_flux(data, 'exp')
-    wdev=select_by_s2n_flux(data, 'dev')
-
-    exp_logT = numpy.log10( data['exp_pars'][wexp,4] )
-    dev_logT = numpy.log10( data['dev_pars'][wdev,4] )
-
-    eu.plotting.bhist(exp_logT, binsize=0.1,xlabel='T',title='exp')
-    eu.plotting.bhist(dev_logT, binsize=0.1,xlabel='T',title='dev')
