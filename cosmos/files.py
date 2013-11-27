@@ -73,6 +73,15 @@ def get_gmix_output_path(version, obj_range=None):
     path=os.path.join(d, fname)
     return path
 
+def read_output(version, obj_range=None):
+    """
+    Read output files
+    """
+    import fitsio
+    path=get_gmix_output_path(version, obj_range=obj_range)
+    print >>stderr,"reading:",path
+    return fitsio.read(path)
+
 def get_gmix_condor_path(version):
     """
     The condor submit file path

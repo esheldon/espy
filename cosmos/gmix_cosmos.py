@@ -49,7 +49,7 @@ class CosmosFitter(object):
 
 
         self._nwalkers=40
-        self._burnin=400
+        self._burnin=1000
         self._nstep=100
 
 
