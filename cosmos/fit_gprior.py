@@ -1,8 +1,43 @@
 import numpy
+from . import files
+from . import analysis
 
-def fit_gprior_exp_mcmc(a=0.25, g0=0.1, gmax=0.87, gmax_min=None, Awidth=1.0,
-                        binsize=0.02, doplot=False):
+def get_shapes(cat_type, version=None):
+    if cat_type=="galfit":
+        fits_cat=files.read_fits_cat()
+        # b/a
+        r = fits_cat['sersicfit'][:, 3]
+        g = (1-r)/(1+r)
+
+    elif cat_type in ["ngmix-exp","ngmix-dev"]:
+        data=files.read_output(version)
+
+        if cat_type=="ngmix-exp":
+            model="exp"
+        else:
+            model="dev"
+        w=analysis.select_by_s2n_flux(data, model)
+        pname="%s_pars" % model
+        g1 = data[pname][w,2]
+        g2 = data[pname][w,3]
+
+        g=numpy.sqrt(g1**2 + g2**2)
+
+    else:
+        raise ValueError("bad cat type: '%s'" % (cat_type))
+
+    return g
+                            
+def fit_gprior_m_style(cat_type, version=None,
+                       a=0.25, g0=0.1, gmax=0.87, gmax_min=None, Awidth=1.0,
+                       binsize=0.02, doplot=False):
     """
+    cat_type should be "galfit" or "ngmix-exp" "ngmix-dev"
+
+    If cat_type=="galfit" then fit to the shapes from the sersic fits.
+    
+    If cat=="ngmix-exp" use my fits, same for dev.  Must send version= as well
+
     This works much better than an lm fitter
 
     for all cosmos galaxies I get
@@ -13,12 +48,7 @@ def fit_gprior_exp_mcmc(a=0.25, g0=0.1, gmax=0.87, gmax_min=None, Awidth=1.0,
     import esutil as eu
     from esutil.random import srandu
 
-    fits_cat=files.read_fits_cat()
-
-    # b/a
-    r = fits_cat['sersicfit'][:, 3]
-    g = (1-r)/(1+r)
-
+    g=get_shapes(cat_type, version=version)
 
     bs=eu.stat.Binner(g)
     bs.dohist(binsize=binsize)
@@ -27,7 +57,7 @@ def fit_gprior_exp_mcmc(a=0.25, g0=0.1, gmax=0.87, gmax_min=None, Awidth=1.0,
     ydata=bs['hist']
 
     nwalkers=200
-    burnin=100
+    burnin=500
     nstep=100
 
     print 'fitting exp'
@@ -45,7 +75,7 @@ def fit_gprior_exp_mcmc(a=0.25, g0=0.1, gmax=0.87, gmax_min=None, Awidth=1.0,
     ivar = numpy.ones(xdata.size)
     w,=numpy.where(ydata > 0)
     ivar[w] = 1./ydata[w]
-    gfitter=GPriorExpFitter(xdata, ydata, ivar, Aprior=A, Awidth=Awidth, gmax_min=gmax_min)
+    gfitter=GPriorMFitter(xdata, ydata, ivar, Aprior=A, Awidth=Awidth, gmax_min=gmax_min)
 
     print 'pcen:',pcen
 
@@ -88,15 +118,22 @@ gmax: %(gmax).6g +/- %(gmax_err).6g
     print fmt % res
 
     if doplot:
+        import mcmc
         import ngmix
-        p=ngmix.priors.GPriorExp(pars)
+        mcmc.plot_results(trials,names=['A','a','g0','gmax'],
+                          title=cat_type)
+        p=ngmix.priors.GPriorM(pars)
         gsamp=p.sample1d(g.size)
         plt=eu.plotting.bhist(g, binsize=binsize, show=False)
-        eu.plotting.bhist(gsamp, binsize=binsize, plt=plt, color='blue')
+        eu.plotting.bhist(gsamp, binsize=binsize,
+                          plt=plt, color='blue',
+                          xlabel='|g|',
+                          xrange=[0.,1.],
+                          title=cat_type)
 
     return res
 
-class GPriorExpFitter:
+class GPriorMFitter:
     def __init__(self, xvals, yvals, ivar, Aprior=None, Awidth=None, gmax_min=None):
         """
         Fit with gmax free
