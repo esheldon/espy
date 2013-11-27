@@ -22,11 +22,11 @@ def fit_Tdist(version,show=True):
 
     print 'exp'
     print '    means:  ',exp_gmm.means_[:,0]
-    print '    covars: ',exp_gmm.covars_[:,0]
+    print '    sigmas: ',numpy.sqrt(exp_gmm.covars_[:,0])
     print '    weights:',exp_gmm.weights_
     print 'dev'
     print '    means:  ',dev_gmm.means_[:,0]
-    print '    covars: ',dev_gmm.covars_[:,0]
+    print '    sigmas: ',numpy.sqrt(dev_gmm.covars_[:,0])
     print '    weights:',dev_gmm.weights_
 
 def plot_fits_2gauss(logT, gmm, type):
