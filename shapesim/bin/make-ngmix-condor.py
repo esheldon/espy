@@ -54,13 +54,11 @@ _master_template="""#!/bin/bash
 function runsim {
     host=$(hostname)
 
-    rm -vf ${output}
-    rm -vf ${logfile}
 
     echo "host: $host"
     echo "writing to temp file: $tmpfile"
 
-    python $ESPY_DIR/shapesim/bin/run-ngmix-sim.py ${run} ${s2n} ${npair} > ${tmpfile}
+    python $ESPY_DIR/shapesim/bin/run-ngmix-sim.py ${run} ${s2n} ${npair} ${output}
     status=$?
 
     echo "time: $SECONDS"
@@ -80,6 +78,7 @@ function runsim {
 
 source ~/.bashrc
 module unload gsim_ring && module load gsim_ring/%(version)s
+module unload espy && module load espy/%(version)s
 
 
 s2n=$1
@@ -93,6 +92,9 @@ bname=$(basename $output)
 log_bname=$(basename $logfile)
 tmpfile="$_CONDOR_SCRATCH_DIR/$bname"
 tmplog="$_CONDOR_SCRATCH_DIR/$log_bname"
+
+rm -vf ${logfile}
+rm -vf ${output}
 
 runsim &> $tmplog
 status=$?
