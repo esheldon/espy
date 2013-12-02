@@ -68,6 +68,7 @@ class NGMixSim(dict):
 
         tm=time.time()-tm
         print >>stderr,'time per image:',tm/(2*npairs)
+
     def process_pair(self):
         """
         Create a simulated image pair and perform the fit
