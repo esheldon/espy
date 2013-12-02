@@ -935,10 +935,12 @@ def get_ring_thetas(nsplit):
 def get_config_dir():
     d=os.environ['ESPY_DIR']
     return path_join(d,'shapesim','config')
+
 def get_config_file(run):
     d=get_config_dir()
     name='%s.yaml' % run
     return path_join(d, name)
+
 def read_config(run):
     """
     run could be 'name' in sim
