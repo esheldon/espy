@@ -1082,7 +1082,7 @@ def get_output_dir(run, sub=None, fs=None):
         dir = path_join(dir, sub)
     return dir
 
-def get_output_url(run, is2, ie, itrial=None, fs=None):
+def get_output_url(run, is2, ie, itrial=None, fs=None, ext=None):
     """
 
     is2 and ie are the index in the list of s2 and ellip vals for a given run.
@@ -1091,6 +1091,11 @@ def get_output_url(run, is2, ie, itrial=None, fs=None):
     Note ie might actually be is2n
 
     """
+    if ext is None:
+        if 'ngmix' in run:
+            ext='fits'
+        else:
+            ext='rec'
     sub=None
     if itrial is not None:
         sub='bytrial'
@@ -1101,7 +1106,7 @@ def get_output_url(run, is2, ie, itrial=None, fs=None):
             f += '-*'
         else:
             f += '-%05i' % itrial
-    f += '.rec'
+    f += '.%s' % ext
     return path_join(dir, f)
 
 
@@ -1864,10 +1869,10 @@ def combine_ctrials(run, is2n, allow_missing=True):
     npair,nsplit = get_npair_nsplit(c, is2n)
     ntot=npair*2
 
-    outfile=get_output_url(run, 0, is2n, fs=fs)
+    outfile=get_output_url(run, 0, is2n, fs=fs, ext='fits')
     print 'writing to:',outfile
 
-    with eu.sfile.SFile(outfile,mode="w+") as output:
+    with fitsio.FITS(outfile,mode="rw",clobber=True) as output:
 
         for isplit in xrange(nsplit):
             f=get_output_url(run, 0, is2n, itrial=isplit, fs=fs)
@@ -1879,7 +1884,10 @@ def combine_ctrials(run, is2n, allow_missing=True):
             if t.size != ntot:
                 raise ValueError("expected %d, got %d" % (npair,t.size))
 
-            output.write(t)
+            if isplit == 0:
+                output.write(t)
+            else:
+                output[-1].append(t)
 
     
     print 'wrote:',outfile

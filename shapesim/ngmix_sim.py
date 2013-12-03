@@ -278,7 +278,7 @@ class NGMixSim(dict):
              'im2':{'gm_pre':gm2_pre,'gm':gm2,'image':im2,'jacobian':j}}
         return out
 
-    def get_pair_pars(self, random=False):
+    def get_pair_pars(self, random=True):
         """
         Get pair parameters
         """
@@ -290,10 +290,10 @@ class NGMixSim(dict):
             g=g[0]
             rangle1 = randu()*2*numpy.pi
             rangle2 = rangle1 + numpy.pi/2.0
-            g1_1 = g*numpy.cos(rangle1)
-            g2_1 = g*numpy.sin(rangle1)
-            g1_2 = g*numpy.cos(rangle2)
-            g2_2 = g*numpy.sin(rangle2)
+            g1_1 = g*numpy.cos(2*rangle1)
+            g2_1 = g*numpy.sin(2*rangle1)
+            g1_2 = g*numpy.cos(2*rangle2)
+            g2_2 = g*numpy.sin(2*rangle2)
 
             T=self.T_prior.sample()
             counts=self.counts_prior.sample()
