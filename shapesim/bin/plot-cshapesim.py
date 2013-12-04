@@ -67,7 +67,7 @@ def plot_run(plt, run, shear_true, symbol, color, linestyle, options,
 
     s_name,scov_name=get_names(method)
     if s_name=='g_sum':
-        shear=data['g_sum'][:,0]/data['nsum'][:,0]
+        shear=data['g_sum'][:,0]/data['nsum']
     else:
         shear=data[s_name][:,0]
 
