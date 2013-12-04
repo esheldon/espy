@@ -31,7 +31,7 @@ parser.add_option('--png',default=None,
 #                  help="labels for each run")
 
 parser.add_option('--method',default='ba13',
-                  help="method to plot ('lensfit,'ba13')")
+                  help="method to plot ('lensfit,'ba13','gmean')")
 
 parser.add_option('--with-lensfit',action='store_true',
                   help="overplot lensfit results")
@@ -46,6 +46,9 @@ def get_names(method):
     elif method=='LENSFIT':
         s_name='shear_lensfit'
         scov_name='shear_lensfit_cov'
+    elif method='GMEAN':
+        s_name='g_sum'
+        scov_name='shear_cov'
     else:
         raise ValueError("bad method: '%s'" % method)
 
@@ -63,7 +66,11 @@ def plot_run(plt, run, shear_true, symbol, color, linestyle, options,
     data=eu.io.read(url)
 
     s_name,scov_name=get_names(method)
-    shear=data[s_name][:,0]
+    if s_name=='g_sum':
+        shear=data['g_sum'][:,0]/data['nsum'][:,0]
+    else:
+        shear=data[s_name][:,0]
+
     err=sqrt(data[scov_name][:,0,0])
     s2n_vals = data[options.s2n_field]
 
