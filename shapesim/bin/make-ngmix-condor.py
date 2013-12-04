@@ -186,7 +186,7 @@ def write_condor_file(c, master_script, equal_time=False):
 
             for isplit in xrange(nsplit):
                 output = shapesim.get_output_url(run, 0, is2n, itrial=isplit)
-                logfile = output+'.log'
+                logfile = output.replace('.fits','.log')
 
                 this_job_name='%s-%03d-%03d' % (job_name,is2n,isplit)
                 qdata=_queue_template.format(job_name=this_job_name,
