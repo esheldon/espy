@@ -46,7 +46,7 @@ def get_names(method):
     elif method=='LENSFIT':
         s_name='shear_lensfit'
         scov_name='shear_lensfit_cov'
-    elif method='GMEAN':
+    elif method=='GMEAN':
         s_name='g_sum'
         scov_name='shear_cov'
     else:
