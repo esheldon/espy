@@ -38,8 +38,8 @@ parser.add_option('--with-lensfit',action='store_true',
 
 parser.add_option('--panel',default=None,
                   help="labels for the panel")
-parser.add_option('--show',action='store_true',
-                  help="show on the screen")
+parser.add_option('--noshow',action='store_true',
+                  help="don't show on the screen")
 
 def get_names(method):
     if method == 'BA13':
@@ -217,7 +217,7 @@ def main():
                             halign='left')
         plt.add(l)
 
-    if options.show:
+    if not options.noshow:
         plt.show()
 
     if options.png:
