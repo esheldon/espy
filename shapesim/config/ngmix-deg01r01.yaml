@@ -1,6 +1,8 @@
 run: "ngmix-deg01r01"
 sim: "nsim-deg01"
 
+fit_model: "dev"
+
 nwalkers: 20
 nstep:    200
 burnin:   400

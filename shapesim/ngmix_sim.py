@@ -98,7 +98,7 @@ class NGMixSim(dict):
         fitter=ngmix.fitting.MCMCSimple(imdict['image'],
                                         imdict['wt'],
                                         imdict['jacobian'],
-                                        self.obj_model,
+                                        self['fit_model'],
 
                                         cen_prior=self.cen_prior,
                                         g_prior=self.g_prior,

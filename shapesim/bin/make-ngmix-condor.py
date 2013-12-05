@@ -116,11 +116,14 @@ exit $status
 """
 
 
-def get_seconds_per_pair():
+def get_seconds_per_pair(c):
     """
     Boosting this for the slowest machines
     """
-    return 4.0
+    if c['fit_model']=='exp':
+        return 4.0
+    else:
+        return 6.0
 
 def write_master(c):
     master_url=shapesim.get_condor_master_url(c['run'])
@@ -154,7 +157,8 @@ def write_condor_file(c, master_script, equal_time=False):
 
     condor_job_url=shapesim.get_condor_job_url(run)
     ns2n=len(c['s2n_vals'])
-    seconds_per=get_seconds_per_pair()
+    seconds_per=get_seconds_per_pair(c)
+    print 'seconds per:',seconds_per
 
     if 'desired_err' in c:
         do_by_noise=True

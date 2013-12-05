@@ -54,7 +54,10 @@ def get_flist(run):
     f=get_output_url(run, 0, 0, itrial=0, fs=fs)
     d=os.path.dirname(f)
 
-    flist=glob.glob(d+'/*.rec')
+    if 'ngmix' in run:
+        flist=glob.glob(d+'/*.fits')
+    else:
+        flist=glob.glob(d+'/*.rec')
     return flist
 
 def main():
