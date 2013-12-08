@@ -91,10 +91,7 @@ class NGMixSim(dict):
         Fit the model to the galaxy
         """
 
-        gm=imdict['gm_pre']
-        T_guess      = gm.get_T()
-        counts_guess = gm.get_psum()
-
+        full_guess=self.get_guess(imdict)
         fitter=ngmix.fitting.MCMCSimple(imdict['image'],
                                         imdict['wt'],
                                         imdict['jacobian'],
@@ -105,8 +102,7 @@ class NGMixSim(dict):
                                         T_prior=self.T_prior,
                                         counts_prior=self.counts_prior,
 
-                                        T_guess=T_guess,
-                                        counts_guess=counts_guess,
+                                        full_guess=full_guess,
 
                                         psf=self.psf_gmix_fit,
                                         nwalkers=self['nwalkers'],
@@ -118,6 +114,64 @@ class NGMixSim(dict):
         fitter.go()
         #fitter.make_plots(show=True)
         return fitter.get_result()
+
+    def get_guess(self, imdict):
+        """
+        Get a guess centered on the truth
+        """
+        pars=imdict['pars']
+        nwalkers=self['nwalkers']
+        guess=numpy.zeros( (nwalkers, pars.size) )
+
+        guess[:,0] = 0.01*srandu(nwalkers)
+        guess[:,1] = 0.01*srandu(nwalkers)
+        guess_shape=self.get_shape_guess(pars[2],pars[3],nwalkers)
+        guess[:,2]=guess_shape[:,0]
+        guess[:,3]=guess_shape[:,1]
+        guess[:,4] = self.get_positive_guess(pars[4],nwalkers)
+        guess[:,5] = self.get_positive_guess(pars[5],nwalkers)
+
+        return guess
+
+    def get_shape_guess(self, g1, g2, n):
+        """
+        Get guess, making sure in range
+        """
+        guess=numpy.zeros( (n, 2) )
+        shape=ngmix.Shape(g1, g2)
+
+        for i in xrange(n):
+
+            while True:
+                try:
+                    g1_offset,g2_offset=0.01*srandu(2)
+                    shape_new=shape.copy()
+                    shape_new.shear(g1_offset, g2_offset)
+                    break
+                except GMixRangeError:
+                    pass
+
+            guess[i,0] = shape_new.g1
+            guess[i,1] = shape_new.g2
+
+        return guess
+
+    def get_positive_guess(self, val, n):
+        """
+        Get guess, making sure positive
+        """
+        if val <= 0.0:
+            raise GMixRangeError("val <= 0: %s" % val)
+
+        vals=numpy.zeros(n)-9999.0
+        while True:
+            w,=numpy.where(vals <= 0)
+            if w.size == 0:
+                break
+            else:
+                vals[w] = val*(1.0 + 0.01*srandu(w.size))
+
+        return vals
 
     def print_res(self,res):
         """
@@ -274,8 +328,15 @@ class NGMixSim(dict):
         im1=gm1.make_image(dims, nsub=nsub)
         im2=gm2.make_image(dims, nsub=nsub)
 
-        out={'im1':{'gm_pre':gm1_pre,'gm':gm1,'image':im1,'jacobian':j},
-             'im2':{'gm_pre':gm2_pre,'gm':gm2,'image':im2,'jacobian':j}}
+        pars_true1=numpy.array(pars1)
+        pars_true2=numpy.array(pars2)
+        pars_true1[0] += cen_offset[0]
+        pars_true1[1] += cen_offset[1]
+        pars_true2[0] += cen_offset[0]
+        pars_true2[1] += cen_offset[1]
+
+        out={'im1':{'pars':pars_true1,'gm_pre':gm1_pre,'gm':gm1,'image':im1,'jacobian':j},
+             'im2':{'pars':pars_true2,'gm_pre':gm2_pre,'gm':gm2,'image':im2,'jacobian':j}}
         return out
 
     def get_pair_pars(self, random=True):

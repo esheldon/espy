@@ -793,7 +793,7 @@ def get_npair_by_noise(s2n, desired_err, run):
     given the desired final error, determine the required number of pairs
     """
 
-    if 'geg' in run:
+    if 'geg' in run or '-eg' in run:
         npairii = numpy.interp([s2n], s2n_ref_geg, npair_ref_geg)
         errii = numpy.interp([s2n], s2n_ref_geg, err_ref_geg)
     elif 'deg' in run:
@@ -1186,11 +1186,16 @@ def get_averaged_url(run, is2, fs=None, docum=False):
     All the trials are averaged in a given s2 bin, and all
     ellip/s2n bins are in a single struct.
     """
+    if 'ngmix' in run:
+        ext='fits'
+    else:
+        ext='rec'
+
     dir=get_output_dir(run, fs=fs)
     f='%s-%03i-avg' % (run,is2)
     if docum:
         f += '-cum'
-    f += '.rec'
+    f = '%s.%s' % (f,ext)
     return path_join(dir, f)
 
 def write_averaged_outputs(run, data, docum=False, skip1=[], fs=None):

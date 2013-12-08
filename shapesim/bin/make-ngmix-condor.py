@@ -120,10 +120,15 @@ def get_seconds_per_pair(c):
     """
     Boosting this for the slowest machines
     """
+    nstep=c['nwalkers']*(c['nstep'] + c['burnin'])
+    nstep_cal=float(20*(200+400))
     if c['fit_model']=='exp':
-        return 4.0
+        secper=4.0
     else:
-        return 6.0
+        secper=6.0
+
+    secper *= nstep/nstep_cal
+    return secper
 
 def write_master(c):
     master_url=shapesim.get_condor_master_url(c['run'])

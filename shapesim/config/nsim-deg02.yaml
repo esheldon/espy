@@ -2,7 +2,7 @@
 #     gaussian psf
 #     exponential galaxy
 
-name: "nsim-deg01"
+name: "nsim-deg02"
 
 psf_model: "gauss"
 psf_T: 4.0

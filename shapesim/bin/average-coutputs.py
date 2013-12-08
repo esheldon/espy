@@ -265,7 +265,7 @@ def get_averaged_jackknife(data, s2n_matched, verbose=False, show=False, fname=N
 
 def get_image_file(plot_dir, fname):
     bname=os.path.basename(fname)
-    bname=bname.replace('.rec','-jackknife.png')
+    bname += '-jackknife.png'
 
     return os.path.join(plot_dir, bname)
 
