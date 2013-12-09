@@ -3,6 +3,7 @@
 """
 
 import sys
+from sys import stderr
 import os
 import numpy
 from numpy import sqrt
@@ -166,7 +167,7 @@ def get_averaged_gerror(data, s2n_matched, verbose=False):
     d['shear_cov_inv_sum'][0,:,:] = shear_cov_inv
 
     sherr=numpy.sqrt(shear_cov[0,0])
-    print 'shear1:      %.16g +/- %.16g' % (shear[0],sherr)
+    print >>stderr,'shear1:      %.16g +/- %.16g' % (shear[0],sherr)
 
     if do_simple:
         flux=data['pars'][:,5]
@@ -219,7 +220,7 @@ def get_averaged_gerror(data, s2n_matched, verbose=False):
         d['shear_lensfit_cov'][0,:,:] = shear_cov
         d['shear_lensfit_cov_inv_sum'][0,:,:] = shear_cov_inv
 
-        print 'shear1 (lensfit): %.16g +/- %.16g' % (shear[0],sherr)
+        print >>stderr,'shear1 (lensfit): %.16g +/- %.16g' % (shear[0],sherr)
     return d
 
 
@@ -237,7 +238,7 @@ def get_averaged_jackknife(data, s2n_matched, verbose=False, show=False, fname=N
     
     ]
 
-    print 'jackknifing'
+    print >>stderr,'jackknifing'
     t0=time.time()
     shear, shear_jack, shear_cov, Q_sum, Cinv_sum = \
             lensing.pqr.pqr_jackknife(data['P'],data['Q'],data['R'],
@@ -246,7 +247,7 @@ def get_averaged_jackknife(data, s2n_matched, verbose=False, show=False, fname=N
                                       fname=fname)
     shear_cov_inv = numpy.linalg.inv(shear_cov)
 
-    print 'time:',time.time()-t0
+    print >>stderr,'time:',time.time()-t0
     d=numpy.zeros(1, dtype=dt)
 
     d['s2n_matched'] = s2n_matched
@@ -259,7 +260,7 @@ def get_averaged_jackknife(data, s2n_matched, verbose=False, show=False, fname=N
     d['shear_cov'][0] = shear_cov
     d['shear_cov_inv_sum'][0] = shear_cov_inv
 
-    print 'shear1:      %.16g +/- %.16g' % (shear[0],numpy.sqrt(shear_cov[0,0]))
+    print >>stderr,'shear1:      %.16g +/- %.16g' % (shear[0],numpy.sqrt(shear_cov[0,0]))
 
     return d
 
@@ -297,7 +298,7 @@ def main():
 
         s2n_matched = s2n_vals[is2n]
         fname=shapesim.get_output_url(run, 0, is2n)
-        print fname
+        print >>stderr,fname
         data=eu.io.read(fname)
 
         if options.gerror:
@@ -313,7 +314,7 @@ def main():
 
     output = eu.numpy_util.combine_arrlist(dlist)
     out_fname=shapesim.get_averaged_url(run, 0)
-    print 'writing:',out_fname
+    print >>stderr,'writing:',out_fname
     eu.io.write(out_fname, output, clobber=True)
 
 main()
