@@ -1,0 +1,16 @@
+
+run: "ngmix-dg01r01"
+sim: "nsim-dg01"
+
+fit_model: "dev"
+
+nwalkers: 40
+burnin:   400
+nstep:    200
+mca_a:    3.0
+
+# we normalize splits by split for is2n==0
+desired_err: 1.0e-04
+nsplit0: 5000
+
+s2n_vals: [15,25,40,60,80,100,140,180,250,500,1000] 
