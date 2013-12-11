@@ -1,5 +1,18 @@
 gmix-fit
 
+    ngmix
+        - nsim-eg01
+            - exp, sigma ratio 2 (T ratio 4)
+            - ngmix-eg01r{01-12} nwalkers 40,burnin 400, nstep 200, 20 s2n bins
+            - ngmix-eg01r{17-32} nwalkers 40,burnin 400, nstep 200, 11 s2n bins
+                - not yet run
+        - nsim-dg01
+            - dev, sigma ratio 2 (T ratio 4)
+            - ngmix-dg01r{01-16} nwalkers 40,burnin 400, nstep 200, 11 s2n bins
+                fewer splits, so s/n in each is only ~1.0e-4
+            - ngmix-dg01r{17-32} more of the same
+                - running
+
     cbafit
         - often seeing big outliers, and seeing bias at low s/n
             - outliers

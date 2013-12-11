@@ -32,7 +32,6 @@ def check_is2n(run, is2n, flist, full=False):
     for isplit in xrange(nsplit):
         f=get_output_url(run, 0, is2n, itrial=isplit, fs=fs)
 
-        print >>stderr,'checking:',f
         if f not in flist:
             print 'missing:',f
             continue

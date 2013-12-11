@@ -16,6 +16,9 @@ parser=OptionParser(__doc__)
 
 parser.add_option('-v','--version',default='work',
                   help='priority for queue')
+parser.add_option('--missing',action='store_true',
+                  help='write a condor file for the missing files')
+
 
 MAXTIME_HOURS=1.5
 
@@ -45,6 +48,7 @@ Log             = /data/esheldon/tmp/{overall_name}.$(cluster).log
 """
 
 _queue_template="""
++job_name       = "{job_name}"
 Arguments       = {s2n} {npair} {output} {logfile}
 Queue
 """
@@ -156,11 +160,32 @@ def make_some_dirs(run):
     if not os.path.exists(tmpdir):
         os.makedirs(tmpdir)
 
-def write_condor_file(c, master_script, equal_time=False):
-    run=c['run']
-    job_name = '-'.join( (run.split('-'))[1:] )
+def get_flist(run):
+    import glob
+    fs=shapesim.get_default_fs()
+    f=shapesim.get_output_url(run, 0, 0, itrial=0, fs=fs)
+    d=os.path.dirname(f)
 
+    if 'ngmix' in run:
+        flist=glob.glob(d+'/*.fits')
+    else:
+        flist=glob.glob(d+'/*.rec')
+    return flist
+
+
+def write_condor_file(c, master_script, equal_time=False, missing=False):
+    run=c['run']
     condor_job_url=shapesim.get_condor_job_url(run)
+    overall_name = '-'.join( (run.split('-'))[1:] )
+
+    if missing:
+        flist=get_flist(run)
+        condor_job_url=condor_job_url.replace('.condor','-missing.condor')
+        overall_name += 'missing'
+    else:
+        flist=None
+
+
     ns2n=len(c['s2n_vals'])
     seconds_per=get_seconds_per_pair(c)
     print 'seconds per:',seconds_per
@@ -177,7 +202,7 @@ def write_condor_file(c, master_script, equal_time=False):
     with open(condor_job_url,'w') as fobj:
 
         text = _condor_template_head.format(master_script=master_script,
-                                            overall_name=job_name)
+                                            overall_name=overall_name)
         fobj.write(text)
 
         for is2n in xrange(ns2n):
@@ -191,19 +216,23 @@ def write_condor_file(c, master_script, equal_time=False):
                                  "hours: %d*%.2f/3600.0 = %s" % (MAXTIME_HOURS,npair,seconds_per,time_hours))
 
             print 'nsplit:',nsplit,'npair:',npair,'time (hours):',time_hours
-            njobs += nsplit
 
             for isplit in xrange(nsplit):
                 output = shapesim.get_output_url(run, 0, is2n, itrial=isplit)
                 logfile = output.replace('.fits','.log')
 
-                this_job_name='%s-%03d-%03d' % (job_name,is2n,isplit)
+                this_job_name='%s-%03d-%03d' % (overall_name,is2n,isplit)
                 qdata=_queue_template.format(job_name=this_job_name,
                                              s2n=s2n,
                                              npair=npair,
                                              output=output,
                                              logfile=logfile)
-                fobj.write(qdata)
+                do_write=True
+                if missing and output in flist:
+                    do_write=False
+                if do_write:
+                    njobs += 1
+                    fobj.write(qdata)
 
 
     print 'total jobs:',njobs
@@ -224,6 +253,6 @@ def main():
     make_some_dirs(run)
     master_script=write_master(c)
 
-    write_condor_file(c, master_script)
+    write_condor_file(c, master_script, missing=options.missing)
 
 main()
