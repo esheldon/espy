@@ -38,10 +38,18 @@ class NGMixSim(dict):
 
         self.obj_model=self.simc['obj_model']
 
-        self.make_struct()
+        #self.checkpoint=keys.get('checkpoint',5400)
+        self.checkpoint=keys.get('checkpoint',30)
+        self.checkpoint_file=keys.get('checkpoint_file',None)
+        self.set_checkpoint_data(**keys)
+
+        if self.data is None:
+            self.make_struct()
+
         self.set_priors()
         self.make_psf()
         self.set_noise()
+
 
     def run_sim(self):
         """
@@ -49,24 +57,32 @@ class NGMixSim(dict):
         """
         self.fit_psf()
 
-        tm=time.time()
+        tm0=time.time()
         i=0
         npairs=self.npairs
         for ipair in xrange(npairs):
             print >>stderr,'%s/%s' % (ipair+1,npairs)
-            while True:
-                try:
-                    reslist=self.process_pair()
-                    break
-                except TryAgainError as err:
-                    print >>stderr,str(err)
 
-            self.copy_to_output(reslist[0], i)
-            i += 1
-            self.copy_to_output(reslist[1], i)
-            i += 1
+            if self.data['processed'][i]:
+                i += 2 # skip the pair
+            else:
+                while True:
+                    try:
+                        reslist=self.process_pair()
+                        break
+                    except TryAgainError as err:
+                        print >>stderr,str(err)
 
-        tm=time.time()-tm
+                self.copy_to_output(reslist[0], i)
+                i += 1
+                self.copy_to_output(reslist[1], i)
+                i += 1
+
+            tm=time.time()-tm0
+            if self.should_checkpoint(tm):
+                self.write_checkpoint(tm)
+
+        tm=time.time()-tm0
         print >>stderr,'time per image:',tm/(2*npairs)
 
     def process_pair(self):
@@ -392,11 +408,46 @@ class NGMixSim(dict):
         """
         return self.data
 
+    def set_checkpoint_data(self, **keys):
+        """
+        Look for checkpoint data, file etc.
+        """
+        self.data=None
+        self.checkpointed=False
+
+        checkpoint_data=keys.get('checkpoint_data',None)
+        if checkpoint_data is not None:
+            self.data=checkpoint_data
+
+    def should_checkpoint(self, tm):
+        """
+        Should we write a checkpoint file?
+        """
+        if (tm > self.checkpoint
+                and self.checkpoint_file is not None
+                and not self.checkpointed):
+            return True
+        else:
+            return False
+
+    def write_checkpoint(self, tm):
+        """
+        Write the checkpoint file
+        """
+        import fitsio
+        print >>stderr,'checkpointing at',tm,'seconds'
+        print >>stderr,self.checkpoint_file
+        with fitsio.FITS(self.checkpoint_file,'rw',clobber=True) as fobj:
+            fobj.write(self.data)
+        self.checkpointed=True
+
+
     def copy_to_output(self, res, i):
         """
         Copy results into the output
         """
         d=self.data
+        d['processed'][i] = 1
         d['pars'][i,:] = res['pars']
         d['pcov'][i,:,:] = res['pars_cov']
         d['P'][i] = res['P']
@@ -409,7 +460,8 @@ class NGMixSim(dict):
         """
         Make the output array
         """
-        dt=[('pars','f8',6),
+        dt=[('processed','i2'),
+            ('pars','f8',6),
             ('pcov','f8',(6,6)),
             ('P','f8'),
             ('Q','f8',2),
