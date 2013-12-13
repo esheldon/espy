@@ -60,21 +60,15 @@ function runsim {
 
 
     echo "host: $host"
-    echo "writing to temp file: $tmpfile"
+    echo "will write to file: $output"
 
-    python $ESPY_DIR/shapesim/bin/run-ngmix-sim.py ${run} ${s2n} ${npair} ${tmpfile}
+    python $ESPY_DIR/shapesim/bin/run-ngmix-sim.py ${run} ${s2n} ${npair} ${output}
     status=$?
 
     echo "time: $SECONDS"
 
     if [[ $status != "0" ]]; then
         echo "error running sim: $status"
-    else
-        cp -v "$tmpfile" "$output"
-        status=$?
-        if [[ $status != "0" ]]; then
-            echo "error copying to output: $output"
-        fi
     fi
 
     return $status
@@ -94,24 +88,23 @@ run=%(run)s
 
 bname=$(basename $output)
 log_bname=$(basename $logfile)
-tmpfile="$_CONDOR_SCRATCH_DIR/$bname"
 tmplog="$_CONDOR_SCRATCH_DIR/$log_bname"
 
-rm -vf ${logfile}
-rm -vf ${output}
+rm -f ${logfile} &> /dev/null
+rm -f ${output}  &> /dev/null
 
-runsim &> $tmplog
+runsim &> ${tmplog}
 status=$?
 
-echo "copying log file $tmplog -> $logfile" >> $tmplog
+echo "copying log file ${tmplog} -> ${logfile}" >> ${tmplog}
 
 # any errors will go to the jobs stderr
-cp "$tmplog" "$logfile" 1>&2
+cp "${tmplog}" "${logfile}" 1>&2
 status2=$?
 
 if [[ $status != "0" ]]; then
     # this error message will go to main error file
-    echo "error copying to output: $output" 1>&2
+    echo "error copying to log: ${logfile}" 1>&2
 
     status=$status2
 fi
