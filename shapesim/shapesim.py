@@ -1886,8 +1886,13 @@ def combine_ctrials(run, is2n, allow_missing=True):
             print f
             t=eu.io.read(f)
 
+
             if t.size != ntot:
                 raise ValueError("expected %d, got %d" % (npair,t.size))
+
+            if 'processed' not in t.dtype.names:
+                t=eu.numpy_util.add_fields(t, [('processed','i2')])
+                t['processed']=1
 
             if isplit == 0:
                 output.write(t)
