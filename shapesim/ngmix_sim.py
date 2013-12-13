@@ -38,8 +38,9 @@ class NGMixSim(dict):
 
         self.obj_model=self.simc['obj_model']
 
-        #self.checkpoint=keys.get('checkpoint',5400)
-        self.checkpoint=keys.get('checkpoint',30)
+        # 1.5 hours
+        self.checkpoint=keys.get('checkpoint',5400)
+        #self.checkpoint=keys.get('checkpoint',30)
         self.checkpoint_file=keys.get('checkpoint_file',None)
         self.set_checkpoint_data(**keys)
 
