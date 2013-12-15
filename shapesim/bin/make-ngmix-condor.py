@@ -166,14 +166,13 @@ def get_flist(run):
     return flist
 
 
+
 def write_condor_file(c, master_script, equal_time=False, missing=False):
     run=c['run']
-    condor_job_url=shapesim.get_condor_job_url(run)
     overall_name = '-'.join( (run.split('-'))[1:] )
 
     if missing:
         flist=get_flist(run)
-        condor_job_url=condor_job_url.replace('.condor','-missing.condor')
         overall_name += 'missing'
     else:
         flist=None
@@ -188,47 +187,70 @@ def write_condor_file(c, master_script, equal_time=False, missing=False):
     else:
         do_by_noise=False
 
-    print condor_job_url
+    njobs_thisfile=0
     njobs=0
 
+    old_filenum=-1
+    filenum=0
+    max_jobs=10000
+
     smax=numpy.iinfo('i8').max
-    with open(condor_job_url,'w') as fobj:
 
-        text = _condor_template_head.format(master_script=master_script,
-                                            overall_name=overall_name)
-        fobj.write(text)
+    fobj=start_new_file(run, filenum, master_script, 
+                        overall_name, missing=missing)
+    for is2n in xrange(ns2n):
 
-        for is2n in xrange(ns2n):
-            s2n=c['s2n_vals'][is2n]
+        s2n=c['s2n_vals'][is2n]
 
-            npair, nsplit = get_npair_nsplit(c, is2n)
+        npair, nsplit = get_npair_nsplit(c, is2n)
 
-            time_hours = npair*seconds_per/3600.0
-            if time_hours > MAXTIME_HOURS:
-                raise ValueError("time is greater than %.2f "
-                                 "hours: %d*%.2f/3600.0 = %s" % (MAXTIME_HOURS,npair,seconds_per,time_hours))
+        time_hours = npair*seconds_per/3600.0
+        if time_hours > MAXTIME_HOURS:
+            raise ValueError("time is greater than %.2f "
+                             "hours: %d*%.2f/3600.0 = %s" % (MAXTIME_HOURS,npair,seconds_per,time_hours))
 
-            print 'nsplit:',nsplit,'npair:',npair,'time (hours):',time_hours
+        print '    nsplit:',nsplit,'npair:',npair,'time (hours):',time_hours
 
-            for isplit in xrange(nsplit):
-                output = shapesim.get_output_url(run, 0, is2n, itrial=isplit)
-                logfile = output.replace('.fits','.log')
+        for isplit in xrange(nsplit):
+            output = shapesim.get_output_url(run, 0, is2n, itrial=isplit)
+            logfile = output.replace('.fits','.log')
 
-                this_job_name='%s-%03d-%03d' % (overall_name,is2n,isplit)
-                qdata=_queue_template.format(job_name=this_job_name,
-                                             s2n=s2n,
-                                             npair=npair,
-                                             output=output,
-                                             logfile=logfile)
-                do_write=True
-                if missing and output in flist:
-                    do_write=False
-                if do_write:
-                    njobs += 1
-                    fobj.write(qdata)
+            this_job_name='%s-%03d-%03d' % (overall_name,is2n,isplit)
+            qdata=_queue_template.format(job_name=this_job_name,
+                                         s2n=s2n,
+                                         npair=npair,
+                                         output=output,
+                                         logfile=logfile)
+            do_write=True
+            if missing and output in flist:
+                do_write=False
+            if do_write:
+                njobs += 1
+                njobs_thisfile += 1
+                fobj.write(qdata)
+
+            if njobs_thisfile >= max_jobs:
+                filenum += 1
+                njobs_thisfile=0
+                fobj.close()
+                fobj=start_new_file(run, filenum, master_script, 
+                                    overall_name, missing=missing)
 
 
     print 'total jobs:',njobs
+
+def start_new_file(run, filenum, master_script, overall_name, missing=False):
+    condor_job_url=shapesim.get_condor_job_url(run,
+                                               filenum=filenum,
+                                               missing=missing)
+    print 'staring new job file:'
+    print condor_job_url
+    fobj=open(condor_job_url,'w')
+    text = _condor_template_head.format(master_script=master_script,
+                                        overall_name=overall_name)
+    fobj.write(text)
+
+    return fobj
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
