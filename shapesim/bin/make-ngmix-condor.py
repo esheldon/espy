@@ -56,10 +56,7 @@ Queue
 
 _master_template="""#!/bin/bash
 function runsim {
-    host=$(hostname)
-
-
-    echo "host: $host"
+    echo "host: $(hostname)"
     echo "will write to file: $output"
 
     python $ESPY_DIR/shapesim/bin/run-ngmix-sim.py ${run} ${s2n} ${npair} ${output}
@@ -68,7 +65,7 @@ function runsim {
     echo "time: $SECONDS"
 
     if [[ $status != "0" ]]; then
-        echo "error running sim: $status"
+        echo "error running sim: $status see log ${logfile}"
     fi
 
     return $status
@@ -86,25 +83,25 @@ logfile=$4
 
 run=%(run)s
 
-bname=$(basename $output)
+# start with a clean log file
+rm -f ${logfile}
+
+# temporary log file, to be transferred later
 log_bname=$(basename $logfile)
 tmplog="$_CONDOR_SCRATCH_DIR/$log_bname"
-
-rm -f ${logfile} &> /dev/null
-rm -f ${output}  &> /dev/null
 
 runsim &> ${tmplog}
 status=$?
 
 echo "copying log file ${tmplog} -> ${logfile}" >> ${tmplog}
 
-# any errors will go to the jobs stderr
+# errors go to the jobs stderr
 cp "${tmplog}" "${logfile}" 1>&2
 status2=$?
 
-if [[ $status != "0" ]]; then
+if [[ $status2 != "0" ]]; then
     # this error message will go to main error file
-    echo "error copying to log: ${logfile}" 1>&2
+    echo "error ${status2} copying to log: ${logfile}" 1>&2
 
     status=$status2
 fi
@@ -215,7 +212,7 @@ def write_condor_file(c, master_script, equal_time=False, missing=False):
             output = shapesim.get_output_url(run, 0, is2n, itrial=isplit)
             logfile = output.replace('.fits','.log')
 
-            this_job_name='%s-%03d-%03d' % (overall_name,is2n,isplit)
+            this_job_name='%s-%03d-%05d' % (overall_name,is2n,isplit)
             qdata=_queue_template.format(job_name=this_job_name,
                                          s2n=s2n,
                                          npair=npair,
@@ -243,11 +240,12 @@ def start_new_file(run, filenum, master_script, overall_name, missing=False):
     condor_job_url=shapesim.get_condor_job_url(run,
                                                filenum=filenum,
                                                missing=missing)
+    oname='%s-%02d' % (overall_name,filenum)
     print 'staring new job file:'
     print condor_job_url
     fobj=open(condor_job_url,'w')
     text = _condor_template_head.format(master_script=master_script,
-                                        overall_name=overall_name)
+                                        overall_name=oname)
     fobj.write(text)
 
     return fobj
