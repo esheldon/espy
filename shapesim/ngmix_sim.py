@@ -12,6 +12,9 @@ from .shapesim import read_config
 
 NSIGMA_RENDER=5.0
 
+# minutes
+DEFAULT_CHECKPOINTS=[5,30,60,100]
+
 class TryAgainError(Exception):
     def __init__(self, message):
 
@@ -38,11 +41,7 @@ class NGMixSim(dict):
 
         self.obj_model=self.simc['obj_model']
 
-        # 1.5 hours
-        self.checkpoint=keys.get('checkpoint',5400)
-        #self.checkpoint=keys.get('checkpoint',30)
-        self.checkpoint_file=keys.get('checkpoint_file',None)
-        self.set_checkpoint_data(**keys)
+        self.setup_checkpoints(**keys)
 
         if self.data is None:
             self.make_struct()
@@ -58,7 +57,8 @@ class NGMixSim(dict):
         """
         self.fit_psf()
 
-        tm0=time.time()
+        self.start_timer()
+
         i=0
         npairs=self.npairs
         for ipair in xrange(npairs):
@@ -79,12 +79,26 @@ class NGMixSim(dict):
                 self.copy_to_output(reslist[1], i)
                 i += 1
 
-            tm=time.time()-tm0
-            if self.should_checkpoint(tm):
-                self.write_checkpoint(tm)
+            self.set_elapsed_time()
+            self.try_checkpoint()
 
-        tm=time.time()-tm0
-        print >>stderr,'time per image:',tm/(2*npairs)
+        self.set_elapsed_time()
+        print >>stderr,'time minutes:',self.tm_minutes
+        print >>stderr,'time per image sec:',self.tm/(2*npairs)
+
+    def start_timer(self):
+        """
+        Set the elapsed time so far
+        """
+        self.tm0 = time.time()
+
+    def set_elapsed_time(self):
+        """
+        Set the elapsed time so far
+        """
+
+        self.tm = time.time()-self.tm0
+        self.tm_minutes = self.tm/60.0
 
     def process_pair(self):
         """
@@ -409,38 +423,79 @@ class NGMixSim(dict):
         """
         return self.data
 
+    def setup_checkpoints(self, **keys):
+        """
+        Set up checkpoint times, file, and sent data
+        """
+
+        self.checkpoints     = keys.get('checkpoints',DEFAULT_CHECKPOINTS)
+        self.n_checkpoint    = len(self.checkpoints)
+        self.checkpointed    = [False]*self.n_checkpoint
+
+        self.checkpoint_file=keys.get('checkpoint_file',None)
+        self.set_checkpoint_data(**keys)
+
+        if self.checkpoint_file is not None:
+            self.do_checkpoint=True
+        else:
+            self.do_checkpoint=False
+
+
     def set_checkpoint_data(self, **keys):
         """
         Look for checkpoint data, file etc.
         """
         self.data=None
-        self.checkpointed=False
 
         checkpoint_data=keys.get('checkpoint_data',None)
         if checkpoint_data is not None:
             self.data=checkpoint_data
 
-    def should_checkpoint(self, tm):
+
+    def try_checkpoint(self):
+        """
+        If we should make a checkpoint, do so
+        """
+
+        should_checkpoint, icheck = self.should_checkpoint()
+
+        if should_checkpoint:
+            self.write_checkpoint()
+            self.checkpointed[icheck]=True
+
+
+    def should_checkpoint(self):
         """
         Should we write a checkpoint file?
         """
-        if (tm > self.checkpoint
-                and self.checkpoint_file is not None
-                and not self.checkpointed):
-            return True
-        else:
-            return False
 
-    def write_checkpoint(self, tm):
+        should_checkpoint=False
+        icheck=-1
+
+        if self.do_checkpoint:
+            for i in xrange(self.n_checkpoint):
+
+                checkpoint=self.checkpoints[i]
+                checkpointed=self.checkpointed[i]
+
+                if self.tm_minutes > checkpoint and not checkpointed:
+                    should_checkpoint=True
+                    icheck=i
+
+        return should_checkpoint, icheck
+
+
+    def write_checkpoint(self):
         """
         Write the checkpoint file
         """
         import fitsio
-        print >>stderr,'checkpointing at',tm,'seconds'
+
+        print >>stderr,'checkpointing at',self.tm_minutes,'minutes'
         print >>stderr,self.checkpoint_file
+
         with fitsio.FITS(self.checkpoint_file,'rw',clobber=True) as fobj:
             fobj.write(self.data)
-        self.checkpointed=True
 
 
     def copy_to_output(self, res, i):
