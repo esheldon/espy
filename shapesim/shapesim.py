@@ -988,9 +988,17 @@ def get_condor_dir(run):
     dir=path_join(dir, 'condor')
     return dir
 
-def get_condor_job_url(run):
+def get_condor_job_url(run, filenum=None, missing=False):
     d=get_condor_dir(run)
-    return path_join(d,'%s.condor' % run)
+    if filenum is not None:
+        end = '-%02d' % filenum
+    else:
+        end=''
+    if missing:
+        end='%s-missing' % end
+
+    fname='{run}{end}.condor'.format(run=run,end=end)
+    return path_join(d,fname)
 
 def get_condor_master_url(run):
     d=get_condor_dir(run)
