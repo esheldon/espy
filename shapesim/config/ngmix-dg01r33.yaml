@@ -1,0 +1,18 @@
+# this one new style guess but nwalkers=20 to see if we do as well
+run: "ngmix-dg01r33"
+sim: "nsim-dg01"
+
+fit_model: "dev"
+
+nwalkers: 20
+burnin:   400
+nstep:    200
+mca_a:    3.0
+
+# we normalize splits by split for is2n==0
+desired_err: 2.0e-05
+nsplit0: 60000
+
+s2n_vals: [ 15, 21, 30, 42, 60, 86, 122, 174, 247, 352, 500] 
+
+label: '$dev \sigma_{gal}/\sigma_{PSF}=2$'
