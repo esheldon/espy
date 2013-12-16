@@ -18,6 +18,8 @@ parser.add_option('-v','--version',default='work',
                   help='priority for queue')
 parser.add_option('--missing',action='store_true',
                   help='write a condor file for the missing files')
+parser.add_option('--max-jobs',default=10000,
+                  help='max jobs per condor file, as split on run')
 
 
 MAXTIME_HOURS=1.5
@@ -164,7 +166,7 @@ def get_flist(run):
 
 
 
-def write_condor_file(c, master_script, equal_time=False, missing=False):
+def write_condor_file(c, master_script, equal_time=False, missing=False, max_jobs=10000):
     run=c['run']
     overall_name = '-'.join( (run.split('-'))[1:] )
 
@@ -189,7 +191,6 @@ def write_condor_file(c, master_script, equal_time=False, missing=False):
 
     old_filenum=-1
     filenum=0
-    max_jobs=10000
 
     smax=numpy.iinfo('i8').max
 
@@ -240,7 +241,7 @@ def start_new_file(run, filenum, master_script, overall_name, missing=False):
     condor_job_url=shapesim.get_condor_job_url(run,
                                                filenum=filenum,
                                                missing=missing)
-    oname='%s-%02d' % (overall_name,filenum)
+    oname='%s-%03d' % (overall_name,filenum)
     print 'staring new job file:'
     print condor_job_url
     fobj=open(condor_job_url,'w')
@@ -259,6 +260,8 @@ def main():
 
     run=args[0]
 
+    max_jobs=int(options.max_jobs)
+
 
     c = shapesim.read_config(run)
     c['version'] = options.version
@@ -266,6 +269,7 @@ def main():
     make_some_dirs(run)
     master_script=write_master(c)
 
-    write_condor_file(c, master_script, missing=options.missing)
+    write_condor_file(c, master_script, missing=options.missing,
+                      max_jobs=max_jobs)
 
 main()
