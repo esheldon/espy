@@ -991,7 +991,7 @@ def get_condor_dir(run):
 def get_condor_job_url(run, filenum=None, missing=False):
     d=get_condor_dir(run)
     if filenum is not None:
-        end = '-%02d' % filenum
+        end = '-%03d' % filenum
     else:
         end=''
     if missing:
