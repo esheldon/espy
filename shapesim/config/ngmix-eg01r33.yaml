@@ -14,3 +14,5 @@ desired_err: 2.0e-05
 nsplit0: 60000
 
 s2n_vals: [ 15, 21, 30, 42, 60, 86, 122, 174, 247, 352, 500] 
+
+label: '$exp \sigma_{gal}/\sigma_{PSF}=2$'
