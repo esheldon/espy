@@ -4,11 +4,16 @@ Bernstein & Armstrong using the ngmix code
 
 import os
 from sys import stderr
-import ngmix
-import numpy
-import time
 
-from .shapesim import read_config
+import ngmix
+from ngmix.gexceptions import GMixRangeError, GMixMaxIterEM
+
+import numpy
+from numpy.random import random as randu
+from numpy.random import randn
+
+import time
+import fitsio
 
 NSIGMA_RENDER=5.0
 
@@ -22,20 +27,21 @@ class TryAgainError(Exception):
         Exception.__init__(self, message)
 
 class NGMixSim(dict):
-    def __init__(self, run, s2n, npairs, **keys):
+    def __init__(self, conf, s2n, npairs, **keys):
         """
         Simulate and fit the requested number of pairs at
         the specified s/n
         """
 
-        self.run=run
+        self.conf=conf
+        self.simc=conf['simc']
+        self.run=conf['run']
         self.s2n=s2n
         self.npairs=npairs
 
-        self.update(keys)
-        self.conf = read_config(run)
         self.update(self.conf)
-        self.simc = read_config(self.conf['sim'])
+        self.update(keys)
+
         self.shear=self.simc['shear']
         self.nsub=self.simc['nsub']
 
@@ -216,7 +222,6 @@ class NGMixSim(dict):
         """
         Fit the pixelized psf to a model
         """
-        from ngmix.gexceptions import GMixRangeError, GMixMaxIterEM
 
         print >>stderr,'fitting psf'
         imsky,sky=ngmix.em.prep_image(self.psf_image)
@@ -283,7 +288,6 @@ class NGMixSim(dict):
           (S/N)^2
         """
         
-        from numpy.random import randn
 
         print >>stderr,"setting noise"
 
@@ -320,7 +324,6 @@ class NGMixSim(dict):
         Add gaussian random noise
         """
 
-        from numpy.random import randn
         im[:,:] += self.skysig*randn(im.size).reshape(im.shape)
 
     def get_image_pair(self, random=True):
@@ -374,7 +377,6 @@ class NGMixSim(dict):
         """
         Get pair parameters
         """
-        from numpy.random import random as randu
 
         if random:
             cen_offset=self.cen_prior.sample()
@@ -489,7 +491,6 @@ class NGMixSim(dict):
         """
         Write the checkpoint file
         """
-        import fitsio
 
         print >>stderr,'checkpointing at',self.tm_minutes,'minutes'
         print >>stderr,self.checkpoint_file
