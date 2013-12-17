@@ -5,7 +5,7 @@
 import sys
 import os
 from sys import stderr
-import shapesim.ngmix_sim
+import shapesim
 import fitsio
 
 from optparse import OptionParser
@@ -33,6 +33,26 @@ def cleanup_checkpoint(checkpoint_file):
         print >>stderr,'removing checkpoint file',checkpoint_file
         os.remove(checkpoint_file)
 
+def run_sim(sim_conf,run_conf,s2n,npairs,output_file):
+    """
+    Run the sim and deal with checkpointing
+    """
+    import ngmix
+
+    checkpoint_file, checkpoint_data=get_checkpoint_data(output_file)
+    sim=ngmix.sim.NGMixSim(sim_conf, run_conf, s2n, npairs,
+                           checkpoint_file=checkpoint_file,
+                           checkpoint_data=checkpoint_data)
+
+    sim.run_sim()
+
+    data=sim.get_data()
+
+    print >>stderr,'writing:',output_file
+    with fitsio.FITS(output_file,'rw',clobber=True) as fobj:
+        fobj.write(data)
+
+    cleanup_checkpoint(checkpoint_file)
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -46,19 +66,11 @@ def main():
     npairs=int(args[2])
     output_file=args[3]
 
-    checkpoint_file, checkpoint_data=get_checkpoint_data(output_file)
-    sim=shapesim.ngmix_sim.NGMixSim(run, s2n, npairs,
-                                    checkpoint_file=checkpoint_file,
-                                    checkpoint_data=checkpoint_data)
+    print 'reading config files'
+    run_conf = shapesim.read_config(run)
+    sim_conf = shapesim.read_config(run_conf['sim'])
 
-    sim.run_sim()
-
-    data=sim.get_data()
-
-    print >>stderr,'writing:',output_file
-    with fitsio.FITS(output_file,'rw',clobber=True) as fobj:
-        fobj.write(data)
-
-    cleanup_checkpoint(checkpoint_file)
+    print 'running sim'
+    run_sim(sim_conf,run_conf,s2n,npairs,output_file)
 
 main()
