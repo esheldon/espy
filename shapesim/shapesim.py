@@ -3,21 +3,25 @@ import os
 from os.path import join as path_join
 import esutil as eu
 from esutil.misc import wlog
-from esutil.stat import wmom
+
 import numpy
 from numpy import ogrid, array, sqrt, where, linspace, median, zeros, pi
 from numpy import sin, cos, arctan2
 from numpy.random import randn
-import fimage
-from fimage import add_noise_admom, add_noise_dev, add_noise_uw
-from fimage.conversions import mom2sigma, cov2sigma, etheta2e1e2, ellip2mom
-from fimage.convolved import NoisyConvolvedImage
+
+try:
+    import fimage
+    from fimage import add_noise_admom, add_noise_dev, add_noise_uw
+    from fimage.conversions import mom2sigma, cov2sigma, etheta2e1e2, ellip2mom
+    from fimage.convolved import NoisyConvolvedImage
+except:
+    pass
+
 import lensing
 from lensing import Shear
 
 import pprint
 
-import admom
 import fitsio
 import time
 

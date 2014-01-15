@@ -218,13 +218,14 @@ def make_condor_script(version):
     with open(path,'w') as fobj:
         fobj.write(text)
 
-def make_master(version):
+def make_master(version,models):
     """
     Make the master executable script
     """
     gmix_dir=get_gmix_dir(version)
     fname='master.sh'
     path=os.path.join(gmix_dir, fname)
+    modstr=' '.join(models)
 
     text="""#!/bin/bash
 source ~/.bashrc
@@ -233,9 +234,10 @@ beg=$1
 end=$2
 output_file=$3
 log_file=${output_file}.log
+models="%s"
 
-python ~/python/cosmos/bin/gmix-cosmos.py --obj-range $beg,$end $output_file &> $log_file
-    \n"""
+python ~/python/cosmos/bin/gmix-cosmos.py --obj-range $beg,$end $output_file $models &> $log_file
+    \n""" % modstr
 
     if not os.path.exists(gmix_dir):
         print >>stderr,'making dir:',gmix_dir

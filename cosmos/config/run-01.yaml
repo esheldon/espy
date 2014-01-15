@@ -1,0 +1,6 @@
+models: [exp, dev]
+
+nwalkers: 40
+burnin: 1000
+nstep: 100
+mca_a: 2.0

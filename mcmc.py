@@ -534,13 +534,14 @@ def plot_results(trials, **keys):
 
     fontsize_min=keys.get('fontsize_min',1)
     biggles.configure( 'default', 'fontsize_min', fontsize_min)
+    weights=keys.get('weights',None)
 
     binfac=keys.get('binfac',0.2)
     names=keys.get('names',None)
     show=keys.get('show',True)
     ptypes=keys.get('ptypes',['linear']*npars)
 
-    means,cov = extract_stats(trials)
+    means,cov = extract_stats(trials,weights=weights)
     errs=sqrt(diag(cov)) 
 
     plt=biggles.Table(npars,2)
@@ -571,15 +572,22 @@ def plot_results(trials, **keys):
 
         hdict = esutil.stat.histogram(vals,
                                       binsize=bsize, 
+                                      weights=weights,
                                       more=True)
-        hplot = biggles.Histogram(hdict['hist'], 
-                                  x0=hdict['low'][0], 
-                                  binsize=bsize)
+        if weights is not None:
+            hist=hdict['whist']
+            hplot = biggles.Curve(hdict['center'],
+                                  hdict['whist'])
+        else:
+            hist=hdict['hist']
+            hplot = biggles.Histogram(hdict['hist'], 
+                                      x0=hdict['low'][0], 
+                                      binsize=bsize)
         plti=biggles.FramedPlot()
 
         plti.xlabel=xlabel
 
-        hmax=hdict['hist'].max()
+        hmax=hist.max()
         plti.yrange=[-0.05*hmax, 1.2*hmax]
 
         plti.add(hplot)
