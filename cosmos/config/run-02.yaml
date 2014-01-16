@@ -3,8 +3,8 @@
 models: [bdc,dev,exp]
 
 nwalkers: 80
-#burnin: 2000
-burnin: 400
+burnin: 2000
+#burnin: 800
 nstep: 100
 #mca_a: 3.0
 mca_a: 2.0
