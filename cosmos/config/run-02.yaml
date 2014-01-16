@@ -1,14 +1,15 @@
 #models: [exp, dev, bdc]
 #models: [bdc]
-models: [bdc,dev,exp]
+version: "02"
+models: [bdf,dev]
 
 nwalkers: 80
-burnin: 2000
-#burnin: 800
+#burnin: 2000
+burnin: 400
 nstep: 100
-#mca_a: 3.0
-mca_a: 2.0
+mca_a: 3.0
+#mca_a: 2.0
 
-#min_arate: 0.25
-min_arate: 0.40
+min_arate: 0.25
+#min_arate: 0.40
 ntry: 5

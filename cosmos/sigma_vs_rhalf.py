@@ -146,9 +146,9 @@ def T_rat_from_fix_rhalf_rat(sigma_psf=1.414, rhalf_exp=4.0, show=False):
     import pprint
 
     flux=100.0
-    s2n=10000.0
+    s2n=1.0e6
 
-    shape=(32,32)
+    shape=(40,40)
     size=shape[0]*shape[1]
     pixel_scale=1.0
     j=ngmix.jacobian.UnitJacobian(0.5*shape[0], 0.5*shape[1])
@@ -193,7 +193,7 @@ def T_rat_from_fix_rhalf_rat(sigma_psf=1.414, rhalf_exp=4.0, show=False):
 
     psf_gmix = em.get_gmix()
 
-    nwalkers=200
+    nwalkers=1000
     guess=numpy.zeros( (nwalkers, 8) )
     guess[:,0] = 0.1*srandu(nwalkers)
     guess[:,1] = 0.1*srandu(nwalkers)
@@ -233,7 +233,8 @@ def T_rat_from_fix_rhalf_rat(sigma_psf=1.414, rhalf_exp=4.0, show=False):
     Td_err = perr[5]
 
     Trat = Tb/Td
-    Trat_err = Trat*( (Tb/Tb_err)**2 + (Td/Td_err)**2 )
+    Trat_err = Trat*numpy.sqrt( (Tb_err/Tb)**2 + (Td_err/Td)**2 )
+
     pprint.pprint(res)
     print
     print '%s +/- %s' % (Trat, Trat_err)

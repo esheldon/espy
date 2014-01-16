@@ -40,6 +40,7 @@ class CosmosFitter(object):
                  sky_sigma0=0.005, # before whitening, ~0.01 after
                  rotate=True,
                  make_plots=False,
+                 plot_base=None, # not yet used
                  nwalkers=80,
                  burnin=1000,
                  nstep=200,
@@ -53,6 +54,7 @@ class CosmosFitter(object):
         self._pixel_scale = float(pixel_scale)
         self._pixel_area  = self._pixel_scale**2
         self._make_plots  = make_plots
+        self._plot_dir    = plot_base
 
         self._nwalkers=nwalkers
         self._burnin=burnin
@@ -162,7 +164,10 @@ class CosmosFitter(object):
         ndo=self._index_list.size
 
         for dindex in xrange(ndo):
+
             rindex=self._index_list[dindex]
+            self.rindex=rindex
+
             print >>stderr,'%s:%s' % (rindex, last)
             gal_im_obj,wt = self.make_galaxy_image(dindex)
             self.fit_galaxy_models(gal_im_obj,wt,dindex)
@@ -176,6 +181,7 @@ class CosmosFitter(object):
         """
 
         im=gal_im_obj.array.astype('f8')
+        print >>stderr," ",im.shape
         counts_guess,T_guess0,row,col=self.get_guesses(gal_im_obj,im,wt)
         j=self.get_jacobian(row,col)
 
@@ -186,6 +192,8 @@ class CosmosFitter(object):
             print >>stderr,'    model:',model
             if model=='bdc':
                 res=self.fit_bdc(im,wt,j,model,counts_guess,T_guess0)
+            elif model=='bdf':
+                res=self.fit_bdf(im,wt,j,model,counts_guess,T_guess0)
             else:
                 res=self.fit_simple_model(im,wt,j,model,counts_guess,T_guess0)
 
@@ -255,12 +263,68 @@ class CosmosFitter(object):
         fitter.go()
 
         if self._make_plots:
-            fitter.make_plots(show=True, do_residual=True, title=model)
+            plt,plt_resid_list=fitter.make_plots(show=True,
+                                                 do_residual=True,
+                                                 title=model)
 
         res=fitter.get_result()
         res['T_guess0']=T_guess0
         res['T_guess']=T_guess
+        res['counts_guess']=counts_guess
         return res
+
+    def fit_bdf(self, im, wt, j, model, counts_guess, T_guess0):
+        """
+        fit bdc
+
+        We need to generate a full guess for each walker
+        """
+        import ngmix
+        npars=7
+
+        T_guess=_guess_Tfac[model]*T_guess0
+        print >>stderr,'    T_guess:      ',T_guess
+
+        full_guess=self.get_full_bdf_guess(T_guess,counts_guess)
+
+        nwalkers = self._nwalkers
+        for i in xrange(self._ntry):
+            fitter=ngmix.fitting.MCMCBDF(im, wt, j, model,
+                                         psf=self._psf_gmix,
+                                         full_guess=full_guess,
+                                         T_prior=self._T_prior, # flat
+                                         counts_prior=self._counts_prior,
+                                         bfrac_prior=self._bfrac_prior,
+                                         cen_prior=self._cen_prior,
+                                         nwalkers=nwalkers,
+                                         burnin=self._burnin,
+                                         nstep=self._nstep,
+                                         mca_a=self._mca_a,
+                                         #ntry=self._ntry,
+                                         min_arate=self._min_arate
+                                        )
+            fitter.go()
+
+            res=fitter.get_result()
+
+            if res['arate'] >= self._min_arate:
+                break
+            else:
+                #print >>stderr,"        arate",res['arate'],"<",self._min_arate
+                nwalkers = nwalkers*2
+                print >>stderr,'        trying nwalkers:',nwalkers
+                trials=fitter.trials
+                full_guess=numpy.zeros( (nwalkers,npars) )
+                full_guess[:,:] = trials[-nwalkers:, :]
+
+        if self._make_plots:
+            fitter.make_plots(show=True, do_residual=True, title=model)
+
+        res['T_guess0']=T_guess0
+        res['T_guess']=T_guess
+        res['counts_guess']=counts_guess
+        return res
+
 
     def fit_bdc(self, im, wt, j, model, counts_guess, T_guess0):
         """
@@ -269,6 +333,7 @@ class CosmosFitter(object):
         We need to generate a full guess for each walker
         """
         import ngmix
+        npars=8
 
         T_guess=_guess_Tfac[model]*T_guess0
         print >>stderr,'    T_guess:      ',T_guess
@@ -303,7 +368,7 @@ class CosmosFitter(object):
                 nwalkers = nwalkers*2
                 print >>stderr,'        trying nwalkers:',nwalkers
                 trials=fitter.trials
-                full_guess=numpy.zeros( (nwalkers,8) )
+                full_guess=numpy.zeros( (nwalkers,npars) )
                 full_guess[:,:] = trials[-nwalkers:, :]
 
         if self._make_plots:
@@ -311,15 +376,42 @@ class CosmosFitter(object):
 
         res['T_guess0']=T_guess0
         res['T_guess']=T_guess
+        res['counts_guess']=counts_guess
         return res
+
+    def get_full_bdf_guess(self, T_guess, counts_guess):
+        """
+        Get a full guess with an entry for each walker
+        """
+        n=self._nwalkers
+        npars=7
+
+        guess=numpy.zeros( (n, npars) )
+        cen1,cen2=self._cen_prior.sample(n)
+
+        guess[:,0]=cen1
+        guess[:,1]=cen2
+        guess[:,2]=0.1*srandu(n)
+        guess[:,3]=0.1*srandu(n)
+
+        # need to tune these guesses
+        guess[:,4] = 2*T_guess*(1.0 + 0.1*srandu(n))
+
+        # bulge flux
+        guess[:,5] = 2*counts_guess*(1.0 + 0.1*srandu(n))
+        # disk flux
+        guess[:,6] = 2*counts_guess*(1.0 + 0.1*srandu(n))
+
+        return guess
 
     def get_full_bdc_guess(self, T_guess, counts_guess):
         """
         Get a full guess with an entry for each walker
         """
+        npars=8
         n=self._nwalkers
 
-        guess=numpy.zeros( (n, 8) )
+        guess=numpy.zeros( (n, npars) )
         cen1,cen2=self._cen_prior.sample(n)
 
         guess[:,0]=cen1
@@ -364,7 +456,10 @@ class CosmosFitter(object):
             flux_s2n=res['pars'][5]/res['pars_err'][5]
             T_s2n=res['pars'][4]/res['pars_err'][4]
             print >>stderr,'      T_s2n: %g flux_s2n: %g' % (T_s2n, flux_s2n)
-        print >>stderr,'      arate: %(arate)g chi2per: %(chi2per)g' % res
+
+        mess='      arate: %(arate)g chi2per: %(chi2per)g aic: %(aic)g bic: %(bic)s'
+        mess = mess % res
+        print >>stderr,mess
 
 
     def make_galaxy_image(self, dindex, show=False, get_obj=False):
@@ -435,6 +530,8 @@ class CosmosFitter(object):
         # all pretty broad
         self._T_prior=ngmix.priors.FlatPrior(0.0001, 10000.0)
         self._counts_prior=ngmix.priors.FlatPrior(1.0e-6, 1.0e6)
+        self._bfrac_prior=ngmix.priors.TruncatedGaussian(0.0,0.1,0.0,1.0)
+
         # width arcsec
         self._cen_prior=ngmix.priors.CenPrior(0.0, 0.0, 0.1, 0.1)
 
@@ -458,6 +555,7 @@ class CosmosFitter(object):
 
         data['T_guess0'][dindex] = res['T_guess0']
         data['T_guess'][dindex] = res['T_guess']
+        data['counts_guess'][dindex] = res['counts_guess']
 
         data[n['flags']][dindex] = res['flags']
         if res['flags']==0:
@@ -483,7 +581,8 @@ class CosmosFitter(object):
 
         dt=[('id','i4'),
             ('T_guess0','f8'),
-            ('T_guess','f8')]
+            ('T_guess','f8'),
+            ('counts_guess','f8')]
 
         for model in self._models:
             n=get_model_names(model)
@@ -558,7 +657,8 @@ def get_model_names(model):
 
 _guess_Tfac={'exp':1.0,
              'dev':25.0, # can be larger for some galaxies!
-             'bdc':10.0} # need to calibrate this
+             'bdc':10.0,
+             'bdf':1.0} # need to calibrate this
 _stat_names=['s2n_w',
              'chi2per',
              'dof',

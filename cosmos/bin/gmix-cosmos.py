@@ -35,6 +35,9 @@ def main():
     conf['obj_range']=obj_range
     conf['make_plots']=options.make_plots
 
+    if options.make_plots:
+        conf['plot_base']=output_file.replace('.fits','')
+
     cosmos.gmix_cosmos.fit_cosmos(models,
                                   output_file,
                                   **conf)

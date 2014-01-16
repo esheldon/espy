@@ -177,11 +177,7 @@ kill_sig        = SIGINT
 
 +Experiment     = "astro"
 
-Output          = ./gmix-cosmos-{version}.$(cluster).out
-Error           = ./gmix-cosmos-{version}.$(cluster).err
-Log             = /data/esheldon/tmp/gmix-cosmos-{version}.$(cluster).log
-    """.format(gmix_dir=gmix_dir,
-               version=version)
+    """.format(gmix_dir=gmix_dir)
 
     beglist,endlist = get_splits()
     text_list=[head]
@@ -218,14 +214,20 @@ def make_condor_script(version):
     with open(path,'w') as fobj:
         fobj.write(text)
 
-def make_master(version,models):
+def make_master(config_file):
     """
     Make the master executable script
     """
-    gmix_dir=get_gmix_dir(version)
+    import yaml
+
+    config_file=os.path.expanduser(config_file)
+    config_file=os.path.expandvars(config_file)
+
+    conf=yaml.load(open(config_file))
+
+    gmix_dir=get_gmix_dir(conf['version'])
     fname='master.sh'
     path=os.path.join(gmix_dir, fname)
-    modstr=' '.join(models)
 
     text="""#!/bin/bash
 source ~/.bashrc
@@ -233,11 +235,14 @@ source ~/.bashrc
 beg=$1
 end=$2
 output_file=$3
+config_file=%(config_file)s
 log_file=${output_file}.log
-models="%s"
 
-python ~/python/cosmos/bin/gmix-cosmos.py --obj-range $beg,$end $output_file $models &> $log_file
-    \n""" % modstr
+python ~/python/cosmos/bin/gmix-cosmos.py \\
+        --obj-range $beg,$end             \\
+        $config_file                      \\
+        $output_file &> $log_file
+    \n""" % {'config_file':config_file}
 
     if not os.path.exists(gmix_dir):
         print >>stderr,'making dir:',gmix_dir

@@ -1,3 +1,5 @@
+version: "01"
+
 models: [exp, dev]
 
 nwalkers: 40
