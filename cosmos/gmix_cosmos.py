@@ -46,7 +46,8 @@ class CosmosFitter(object):
                  nstep=200,
                  mca_a=3.0,
                  min_arate=0.25,
-                 ntry=1):
+                 ntry=1,
+                 **keys):
         self._models      = models
         self._psf_fwhm    = float(psf_fwhm)    # arcsec
         self._sky_sigma0  = float(sky_sigma0)

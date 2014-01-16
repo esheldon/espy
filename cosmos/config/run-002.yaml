@@ -1,6 +1,6 @@
 #models: [exp, dev, bdc]
 #models: [bdc]
-version: "02"
+version: "002"
 models: [bdf,dev]
 
 nwalkers: 80

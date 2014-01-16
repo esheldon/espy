@@ -220,6 +220,7 @@ def make_master(config_file):
     """
     import yaml
 
+    config_file=os.path.abspath(config_file)
     config_file=os.path.expanduser(config_file)
     config_file=os.path.expandvars(config_file)
 
@@ -238,10 +239,21 @@ output_file=$3
 config_file=%(config_file)s
 log_file=${output_file}.log
 
+tmp_output_file=./$(basename $output_file)
+tmp_log_file=./$(basename $log_file)
+
+dname=$(dirname $output_file)
+mkdir -vp $dname > $tmp_log_file
+
 python ~/python/cosmos/bin/gmix-cosmos.py \\
         --obj-range $beg,$end             \\
         $config_file                      \\
-        $output_file &> $log_file
+        $tmp_output_file >> $tmp_log_file 2>&1
+
+mv -v $tmp_output_file $output_file >> $tmp_log_file
+
+mv $tmp_log_file $log_file
+
     \n""" % {'config_file':config_file}
 
     if not os.path.exists(gmix_dir):
