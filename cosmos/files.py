@@ -147,6 +147,7 @@ def combine_outputs(version):
     print >>stderr,'writing:',outfile
     with fitsio.FITS(outfile,'rw',clobber=True) as fobj:
         for i,path in enumerate(paths):
+            print path
             data=fitsio.read(path)
             if i==0:
                 fobj.write(data)
@@ -232,6 +233,7 @@ def make_master(config_file):
 
     text="""#!/bin/bash
 source ~/.bashrc
+module load galsim
 
 beg=$1
 end=$2
