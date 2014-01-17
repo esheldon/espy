@@ -1,9 +1,10 @@
 """
-    %prog version
+    %prog config_file
 """
 import sys, os
 from sys import stderr
 import cosmos
+import yaml
 
 from optparse import OptionParser
 parser=OptionParser(__doc__)
@@ -15,7 +16,9 @@ def main():
         parser.print_help()
         sys.exit(45)
 
-    version=args[0]
+    config_file=args[0]
+    conf=yaml.load(open(config_file))
+    version=conf['version']
 
     cosmos.files.combine_outputs(version)
 
