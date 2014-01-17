@@ -531,7 +531,7 @@ class CosmosFitter(object):
         # all pretty broad
         self._T_prior=ngmix.priors.FlatPrior(0.0001, 10000.0)
         self._counts_prior=ngmix.priors.FlatPrior(1.0e-6, 1.0e6)
-        self._bfrac_prior=ngmix.priors.TruncatedGaussian(0.0,0.1,0.0,1.0)
+        self._bfrac_prior=ngmix.priors.BFrac()
 
         # width arcsec
         self._cen_prior=ngmix.priors.CenPrior(0.0, 0.0, 0.1, 0.1)
