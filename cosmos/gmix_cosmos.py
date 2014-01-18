@@ -55,7 +55,7 @@ class CosmosFitter(object):
         self._pixel_scale = float(pixel_scale)
         self._pixel_area  = self._pixel_scale**2
         self._make_plots  = make_plots
-        self._plot_dir    = plot_base
+        self._plot_base   = plot_base
 
         self._nwalkers=nwalkers
         self._burnin=burnin
@@ -319,12 +319,24 @@ class CosmosFitter(object):
                 full_guess[:,:] = trials[-nwalkers:, :]
 
         if self._make_plots:
-            fitter.make_plots(show=True, do_residual=True, title=model)
+            self.do_make_plots(fitter,'bdf')
 
         res['T_guess0']=T_guess0
         res['T_guess']=T_guess
         res['counts_guess']=counts_guess
         return res
+
+    def do_make_plots(self, fitter, model):
+        trials_plot=self._plot_base+'-%s-%06d-trials.png' % (model,self.rindex)
+        diff_plot=self._plot_base+'-%s-%06d-diff.png' % (model,self.rindex)
+
+        tp,dplist=fitter.make_plots(show=False, do_residual=True, title=model)
+        dp=dplist[0]
+
+        print >>stderr,trials_plot
+        tp.write_img(1100,1100,trials_plot)
+        print >>stderr,diff_plot
+        dp.write_img(1100,1100,diff_plot)
 
 
     def fit_bdc(self, im, wt, j, model, counts_guess, T_guess0):
@@ -398,10 +410,17 @@ class CosmosFitter(object):
         # need to tune these guesses
         guess[:,4] = 2*T_guess*(1.0 + 0.1*srandu(n))
 
+        # sample from the bfrac distribution
+        bfracs = self._bfrac_prior.sample(n)
+        dfracs = 1.0-bfracs
+
         # bulge flux
-        guess[:,5] = 2*counts_guess*(1.0 + 0.1*srandu(n))
+        counts_b = bfracs*counts_guess
+        counts_d = dfracs*counts_guess
+
+        guess[:,5] = counts_b*(1.0 + 0.1*srandu(n))
         # disk flux
-        guess[:,6] = 2*counts_guess*(1.0 + 0.1*srandu(n))
+        guess[:,6] = counts_d*(1.0 + 0.1*srandu(n))
 
         return guess
 

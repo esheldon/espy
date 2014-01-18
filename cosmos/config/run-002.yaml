@@ -1,3 +1,6 @@
+# used single truncated gauss for bd frac prior
+# don't use!
+
 #models: [exp, dev, bdc]
 #models: [bdc]
 version: "002"
