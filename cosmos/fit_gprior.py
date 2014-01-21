@@ -9,14 +9,18 @@ def get_shapes(cat_type, version=None):
         r = fits_cat['sersicfit'][:, 3]
         g = (1-r)/(1+r)
 
-    elif cat_type in ["ngmix-exp","ngmix-dev"]:
+    elif cat_type in ["ngmix-exp","ngmix-dev","ngmix-bdf"]:
         data=files.read_output(version)
 
         if cat_type=="ngmix-exp":
             model="exp"
-        else:
+        elif cat_type=="ngmix-dev":
             model="dev"
+        elif cat_type=="ngmix-bdf":
+            model="bdf"
+
         w=analysis.select_by_s2n_flux(data, model)
+
         pname="%s_pars" % model
         g1 = data[pname][w,2]
         g2 = data[pname][w,3]
@@ -32,7 +36,7 @@ def fit_gprior_m_style(cat_type, version=None,
                        a=0.25, g0=0.1, gmax=0.87, gmax_min=None, Awidth=1.0,
                        binsize=0.02, doplot=False):
     """
-    cat_type should be "galfit" or "ngmix-exp" "ngmix-dev"
+    cat_type should be "galfit" or "ngmix-exp" "ngmix-dev" "ngmix-bdf"
 
     If cat_type=="galfit" then fit to the shapes from the sersic fits.
     

@@ -290,7 +290,7 @@ class CosmosFitter(object):
 
         nwalkers = self._nwalkers
         for i in xrange(self._ntry):
-            fitter=ngmix.fitting.MCMCBDF(im, wt, j, model,
+            fitter=ngmix.fitting.MCMCBDF(im, wt, j,
                                          psf=self._psf_gmix,
                                          full_guess=full_guess,
                                          T_prior=self._T_prior, # flat
@@ -355,7 +355,7 @@ class CosmosFitter(object):
 
         nwalkers = self._nwalkers
         for i in xrange(self._ntry):
-            fitter=ngmix.fitting.MCMCBDC(im, wt, j, model,
+            fitter=ngmix.fitting.MCMCBDC(im, wt, j,
                                          psf=self._psf_gmix,
                                          full_guess=full_guess,
                                          T_b_prior=self._T_prior, # flat
@@ -416,6 +416,7 @@ class CosmosFitter(object):
 
         # bulge flux
         counts_b = bfracs*counts_guess
+        # disk flux
         counts_d = dfracs*counts_guess
 
         guess[:,5] = counts_b*(1.0 + 0.1*srandu(n))
