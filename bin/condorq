@@ -253,6 +253,9 @@ def main():
 
     except KeyboardInterrupt:
         pass
+    except IOError as e:
+        # usually a broken pipe
+        pass
 
 
 main()
