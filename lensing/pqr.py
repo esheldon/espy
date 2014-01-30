@@ -160,7 +160,6 @@ def _plot_shears(shears, show=True, fname=None):
     tab[1,0] = plt2
 
     if fname is not None:
-        eu.ostools.makedirs_fromfile(fname)
         print fname
         tab.write_img(800,800,fname)
 
