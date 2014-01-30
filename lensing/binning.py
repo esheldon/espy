@@ -115,17 +115,16 @@ class BinnerBase(dict):
 
         zpts=biggles.Curve( [0.9*data['r'].min(), 1.1*data['r'].max()], [0,0])
 
-        plt=biggles.FramedArray(2,1)
-        plt.aspect_ratio=2
+        plt=biggles.FramedPlot()
+        plt.aspect_ratio=1
         plt.xlog=True
-        plt.uniform_limits=1
         if xrng is not None:
             plt.xrange=xrng
         if yrng is not None:
             plt.yrange=yrng
 
         plt.xlabel=r'$r [h^{-1} Mpc]$'
-        plt.ylabel=r'$\Delta\Sigma$'
+        plt.ylabel=r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
 
         pts=biggles.Points(data['r'][binnum], data['dsig'][binnum],
                            type='filled circle')
@@ -143,25 +142,7 @@ class BinnerBase(dict):
         key=biggles.PlotKey(0.9,0.9,[pts,rpts],halign='right')
         lab=biggles.PlotLabel(0.1,0.9,self.bin_label(binnum),halign='left')
 
-        plt[0,0].add(zpts,pts,epts,rpts,repts,key,lab)
-
-
-        opts=biggles.Points(data['r'][binnum], data['osig'][binnum],
-                            type='filled circle')
-        oepts=biggles.SymmetricErrorBarsY(data['r'][binnum], data['osig'][binnum], 
-                                          data['dsigerr'][binnum])
-
-        orpts=biggles.Points(rand['r'][binnum], rand['osig'][binnum],
-                             type='filled circle',color='red')
-        orepts=biggles.SymmetricErrorBarsY(rand['r'][binnum], rand['osig'][binnum], 
-                                           rand['dsigerr'][binnum],color='red')
-
-        opts.label=r'$\Delta\Sigma_\times$'
-        orpts.label=r'$\Delta\Sigma^{rand}_\times$'
-
-        okey=biggles.PlotKey(0.9,0.9,[opts,orpts],halign='right')
-
-        plt[1,0].add(zpts,opts,oepts,orpts,orepts,okey)
+        plt.add(zpts,pts,epts,rpts,repts,key,lab)
             
         epsfile=lensing.files.sample_file(type=type+'-plots',
                                           sample=lensrun,
