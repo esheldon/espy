@@ -253,7 +253,7 @@ def main():
 
     except KeyboardInterrupt:
         pass
-    except IOError as e:
+    except IOError:
         # usually a broken pipe
         pass
 
