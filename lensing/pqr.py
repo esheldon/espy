@@ -12,7 +12,8 @@ def get_shear_pqr_sums(P,Q,R):
     from numpy import zeros,where
 
     w,=where(P > 0)
-    #print 'P > 0:',w.size,P.size
+    if w.size != P.size:
+        print 'P > 0: %s/%s' (w.size,P.size)
 
     QQ = zeros( (w.size,2,2), dtype=Q.dtype)
     Cinv_all = zeros( (w.size,2,2), dtype=Q.dtype)
@@ -33,13 +34,15 @@ def get_shear_pqr_sums(P,Q,R):
     Cinv_all[:,1,0] = QQ[:,1,0]*P2inv - R[w,1,0]*Pinv
     Cinv_all[:,1,1] = QQ[:,1,1]*P2inv - R[w,1,1]*Pinv
 
+    P_sum = P[w].sum()
+
     Cinv_sum = Cinv_all.sum(axis=0)
 
     QbyP[:,0] = Q[w,0]*Pinv
     QbyP[:,1] = Q[w,1]*Pinv
     Q_sum = QbyP.sum(axis=0)
 
-    return Q_sum, Cinv_sum
+    return P_sum, Q_sum, Cinv_sum
 
 
 def get_shear_pqr(P,Q,R, get_sums=False):
@@ -71,7 +74,7 @@ def get_shear_pqr(P,Q,R, get_sums=False):
 
     """
 
-    Q_sum, Cinv_sum = get_shear_pqr_sums(P,Q,R)
+    P_sum, Q_sum, Cinv_sum = get_shear_pqr_sums(P,Q,R)
 
     C = numpy.linalg.inv(Cinv_sum)
     g1g2 = numpy.dot(C,Q_sum)
@@ -81,14 +84,16 @@ def get_shear_pqr(P,Q,R, get_sums=False):
     else:
         return g1g2, C
 
-def pqr_jackknife(P, Q, R, verbose=False, show=False, fname=None):
+def pqr_jackknife(P, Q, R,
+                  get_sums=False,
+                  verbose=False,
+                  show=False,
+                  eps=None,
+                  png=None):
     """
-    Get the shear covariance matrix using bootstrap resampling.
-    We use this for errors when doing ring tests
+    Get the shear covariance matrix using jackknife resampling.
 
     The trick is that this must be done in pairs
-
-    This is "unweighted", although there are built-in weights
     """
 
     if verbose:
@@ -101,7 +106,7 @@ def pqr_jackknife(P, Q, R, verbose=False, show=False, fname=None):
 
     npair = ntot/2
 
-    Q_sum, Cinv_sum = get_shear_pqr_sums(P,Q,R)
+    P_sum, Q_sum, Cinv_sum = get_shear_pqr_sums(P,Q,R)
     C = numpy.linalg.inv(Cinv_sum)
     shear = numpy.dot(C,Q_sum)
 
@@ -118,7 +123,7 @@ def pqr_jackknife(P, Q, R, verbose=False, show=False, fname=None):
         Qtmp = Q[ii:ii+2,:]
         Rtmp = R[ii:ii+2,:,:]
 
-        Q_sum_tmp, Cinv_sum_tmp = get_shear_pqr_sums(Ptmp,Qtmp,Rtmp)
+        P_sum, Q_sum_tmp, Cinv_sum_tmp = get_shear_pqr_sums(Ptmp,Qtmp,Rtmp)
         
         Q_sum_tmp    = Q_sum - Q_sum_tmp
         Cinv_sum_tmp = Cinv_sum - Cinv_sum_tmp
@@ -128,28 +133,93 @@ def pqr_jackknife(P, Q, R, verbose=False, show=False, fname=None):
 
         shears[i, :] = shear_tmp
 
-    shear_jack = numpy.zeros(2)
     shear_cov = numpy.zeros( (2,2) )
     fac = (npair-1)/float(npair)
 
-    shear_jack[0] = shears[:,0].mean()
-    shear_jack[1] = shears[:,1].mean()
+    shear = shears.mean(axis=0)
 
     shear_cov[0,0] = fac*( ((shear[0]-shears[:,0])**2).sum() )
     shear_cov[0,1] = fac*( ((shear[0]-shears[:,0]) * (shear[1]-shears[:,1])).sum() )
     shear_cov[1,0] = shear_cov[0,1]
     shear_cov[1,1] = fac*( ((shear[1]-shears[:,1])**2).sum() )
 
-    if show or fname:
-        _plot_shears(shears, show=show, fname=fname)
+    if show or eps or png:
+        _plot_shears(shears, show=show, eps=eps, png=png)
 
-    return shear, shear_jack, shear_cov, Q_sum, Cinv_sum
+    if get_sums:
+        return shear, shear_cov, Q_sum, Cinv_sum
+    else:
+        return shear, shear_cov
+
+def pqr_bootstrap(P, Q, R, nsamples, verbose=False, show=False, eps=None, png=None):
+    """
+    Get the shear covariance matrix using boot resampling.
+
+    The trick is that this must be done in pairs
+    """
+
+    if verbose:
+        import progressbar
+        pg=progressbar.ProgressBar(width=70)
+
+    ntot = P.size
+    if ( (ntot % 2) != 0 ):
+        raise  ValueError("expected factor of two, got %d" % ntot)
+
+    npair = ntot/2
+
+    Pboot = P.copy()
+    Qboot = Q.copy()
+    Rboot = R.copy()
+
+    rind1 = numpy.zeros(npair, dtype='i8')
+    rind2 = numpy.zeros(npair, dtype='i8')
+    rind = numpy.zeros(ntot, dtype='i8')
+
+    shears = numpy.zeros( (nsamples, 2) )
+
+    for i in xrange(nsamples):
+        if verbose:
+            frac=float(i+1)/nsamples
+            pg.update(frac=frac)
+
+        # first of the pair
+        rind1[:] = 2*numpy.random.randint(low=0,high=npair,size=npair)
+        # second of the pair
+        rind2[:] = rind1[:]+1
+
+        rind[0:npair] = rind1
+        rind[npair:]  = rind2
+
+        Pboot[:] = P[rind]
+        Qboot[:,:] = Q[rind,:]
+        Rboot[:,:,:] = R[rind,:,:]
+
+        sh, C_not_used =  get_shear_pqr(Pboot, Qboot, Rboot)
+
+        shears[i, :] = sh
+
+    shear = shears.mean(axis=0)
+
+    shear_cov = numpy.zeros( (2,2) )
+
+    shear_cov[0,0] = ( (shears[:,0]-shear[0])**2 ).sum()/(nsamples-1)
+    shear_cov[0,1] = ( (shears[:,0]-shear[0])*(shears[:,1]-shear[1]) ).sum()/(nsamples-1)
+    shear_cov[1,0] = shear_cov[0,1]
+    shear_cov[1,1] = ( (shears[:,1]-shear[1])**2 ).sum()/(nsamples-1)
+
+    if show or eps or png:
+        _plot_shears(shears, show=show, eps=eps, png=png)
+
+    return shear, shear_cov
 
 
-def _plot_shears(shears, show=True, fname=None):
+
+def _plot_shears(shears, show=True, eps=None, png=None):
     import biggles
     tab=biggles.Table(2,1)
     std=shears.std(axis=0)
+
     plt1=eu.plotting.bhist(shears[:,0], binsize=0.2*std[0],
                            color='blue',show=False,
                            xlabel=r'$\gamma_1$')
@@ -159,10 +229,15 @@ def _plot_shears(shears, show=True, fname=None):
     tab[0,0] = plt1
     tab[1,0] = plt2
 
-    if fname is not None:
-        print fname
-        tab.write_img(800,800,fname)
+    if png is not None:
+        print png
+        tab.write_img(800,800,png)
+    if eps is not None:
+        print eps
+        tab.write_eps(eps)
+
 
     if show:
         tab.show()
+
 
