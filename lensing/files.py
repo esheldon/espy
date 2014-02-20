@@ -356,7 +356,8 @@ def lcat_file(**keys):
     import lensing
     lcat_file(sample='rm03')
     """
-    keys['fs'] = 'hdfs'
+    if 'fs' not in keys:
+        keys['fs'] = 'hdfs'
     keys['ext'] = 'dat'
     keys['type'] = 'lcat'
     return sample_file(**keys)
@@ -517,7 +518,8 @@ def scat_file(**keys):
     """
     scat_file(sample=)
     """
-    keys['fs'] = 'hdfs'
+    if 'fs' not in keys:
+        keys['fs'] = 'hdfs'
     keys['type'] = 'scat'
     return sample_file(**keys)
 
@@ -526,22 +528,33 @@ def scat_write_ascii(**keys):
 
     sample=keys.get('sample',None)
     data=keys.get('data',None)
+    fs=keys.get('fs','nfs')
 
     if sample is None or data is None:
         raise ValueError("usage: scat_write_ascii(sample=, data= [, src_split=]")
 
-    file=scat_file(**keys)
+    fname=scat_file(**keys)
 
     conf = read_config('scat', sample)
 
-    print("Writing ascii source file:",file)
+    print("Writing ascii source file:",fname)
 
-    if eu.hdfs.exists(file):
-        eu.hdfs.rm(file)
-    with eu.hdfs.HDFSFile(file) as hdfs_file:
-        with recfile.Open(hdfs_file.localfile,'w',delim=' ') as robj:
+    if fs=='nfs':
+        if os.path.exists(fname):
+            os.remove(fname)
+        else:
+            d=os.path.dirname(fname)
+            if not os.path.exists(d):
+                os.makedirs(d)
+        with recfile.Open(fname,'w',delim=' ') as robj:
             robj.write(data)
-        hdfs_file.put()
+    else:
+        if eu.hdfs.exists(file):
+                eu.hdfs.rm(file)
+        with eu.hdfs.HDFSFile(file) as hdfs_file:
+            with recfile.Open(hdfs_file.localfile,'w',delim=' ') as robj:
+                robj.write(data)
+            hdfs_file.put()
 
 def scat_read_ascii(**keys):
 
@@ -615,6 +628,7 @@ def scat_read_binary(sample=None, file=None, lens_split=None):
     return data
 '''
 
+
 def scat_dtype(sigmacrit_style, nzl=None):
     dt=[('ra','f8'),
         ('dec','f8'),
@@ -637,6 +651,7 @@ def scat_dtype(sigmacrit_style, nzl=None):
 
     return dt
 
+
 def scat_gmix_dtype(sigmacrit_style, nzl=None):
     dt=[('ra','f8'),
         ('dec','f8'),
@@ -647,6 +662,25 @@ def scat_gmix_dtype(sigmacrit_style, nzl=None):
         ('gcov22','f8'),
         ('gsens1','f8'),
         ('gsens2','f8')]
+
+    if sigmacrit_style == 1:
+        dt += [('z','f8')]
+    elif sigmacrit_style == 2:
+        if nzl == None:
+            raise ValueError('you must send nzl for sigmacrit_style of 2')
+        dt += [('scinv','f8',nzl)]
+    else:
+        raise ValueError("sigmacrit_style should be in [1,2]")
+
+    return dt
+
+
+def scat_im3shape_dtype(sigmacrit_style, nzl=None):
+    dt=[('ra','f8'),
+        ('dec','f8'),
+        ('g1','f8'),
+        ('g2','f8'),
+        ('weight','f8')]
 
     if sigmacrit_style == 1:
         dt += [('z','f8')]

@@ -25,6 +25,8 @@ def instantiate_sample(sample):
     conf = lensing.files.read_config('scat', sample)
     if 'dr8regauss' in conf['catalog']:
         c = DR8RegaussCatalog(sample)
+    elif 'im3' in conf['catalog']:
+        c=IM3ShapePointz(sample)
     elif 'gmix' in conf['catalog']:
         c = DR8GMixCatalog(sample)
     elif 'desmocks' in conf['catalog']:
@@ -70,6 +72,12 @@ class GenericSrcCatalog(dict):
         if self['sigmacrit_style'] != 2:
             raise ValueError("Expected sigmacrit_style 2")
 
+        self.fs=fs
+
+    def dir_original(self):
+        catdir = lensing.files.catalog_dir()
+        d = path_join(catdir, self['catalog'])
+        return d
 
     def open_all_columns(self):
         raise RuntimeError("over-ride open_all_columns")
@@ -93,7 +101,6 @@ class GenericSrcCatalog(dict):
         if data is None:
             data = self.read()
 
-
         ntot = data.size
         nper = ntot/nsplit
         nleft = ntot % nsplit
@@ -107,7 +114,9 @@ class GenericSrcCatalog(dict):
             sdata = data[beg:end]
 
             lensing.files.scat_write_ascii(sample=self['sample'],
-                                           data=sdata, src_split=i)
+                                           data=sdata,
+                                           src_split=i,
+                                           fs=self.fs)
 
 
 class DR8GMixCatalog(GenericSrcCatalog):
@@ -487,6 +496,121 @@ class DESMockCatalog(dict):
         data = eu.io.read(infile, lower=True, verbose=True)
         return data
 
+class IM3ShapePointz(GenericSrcCatalog):
+    def __init__(self, sample, fs='nfs'):
+        conf = lensing.files.read_config('scat', sample)
+        for k in conf:
+            self[k] = conf[k]
+
+        if 'scinv_sample' in self:
+            self['scinv_config'] = \
+                    lensing.files.read_config('scinv', conf['scinv_sample'])
+
+        self.fs=fs
+
+    def fname_original(self):
+        d = self.dir_original()
+        f='011-im3shape-3_%s_photoz_gold_Feb12.fits' % self['band']
+        fname = path_join(d, f)
+        return fname
+
+    def read_original(self):
+        fname=self.fname_original()
+        print("reading:",fname)
+        return eu.io.read(fname, ext=1, lower=True)
+
+    def create_objshear_input(self):
+        """
+        - Trim to selected
+        - write to file or split files
+        """
+
+        output = self.create_output()
+
+        # the code requires no minus sign for matt's simulations, but
+        # does seem to require one for my shapes converted to equatorial
+        print("Adding minus sign to g1")
+        output['g1'] *= (-1)
+        
+        if self['nsplit'] > 0:
+            self.split(data=output)
+        else:
+            lensing.files.scat_write_ascii(sample=self['sample'],
+                                           data=output,
+                                           fs=self.fs)
+
+    def select(self, data):
+        from numpy import where, isnan
+
+        ntot=data.size
+
+        # remove size problems entirely from cat so we don't
+        # divide by zero
+        ws,=where( (data['psf_fwhm'] > 0) & (data['radius'] > 0))
+        print("sizes cut: %s/%s" % (ws.size,data.size))
+
+        data=data[ws]
+
+        snr_test = (data['snr'] > self['min_s2n'])
+        w,=where( snr_test )
+        print("s/n cut: %s/%s" % (w.size,ntot))
+
+        nan_test=(isnan(data['snr']) == False)
+        w,=where( nan_test )
+        print("nan cut: %s/%s" % (w.size,ntot))
+
+        flags=self.get_flags()
+        flag_test=( (data['flag'] & flags) == 0 )
+        w,=where( flag_test )
+        print("flag cut %s: %s/%s" % (flags,w.size,ntot))
+
+        srat = 2*data['radius']/data['psf_fwhm']
+        srat_test=(srat > self['min_srat'])
+        w,=where( srat_test )
+        print("srat cut %s: %s/%s" % (self['min_srat'],w.size,ntot))
+
+        sx_flags_test=(data['flags_r']==0) & (data['flags_i']==0)
+        w,=where( sx_flags_test )
+        print("sx flags cut: %s/%s" % (w.size,ntot))
+
+        tests = (snr_test & nan_test & flag_test & srat_test 
+                 & sx_flags_test)
+        w,=where(tests)
+
+        print("finally keeping %s/%s" % (w.size, ntot))
+        return w
+
+    def get_flags(self):
+        each_flag = [2**bit for bit in self['flags']]
+        flags=sum(each_flag)
+        return flags
+
+    def create_output(self):
+        data = self.read_original()
+        keep = self.select(data)
+
+        assert self['sigmacrit_style']==1
+        dt=files.scat_im3shape_dtype(self['sigmacrit_style'])
+        output = numpy.zeros(keep.size, dtype=dt)
+
+        weights = self.get_weights(data, keep)
+
+        output['ra']     = data['ra'][keep]
+        output['dec']    = data['dec'][keep]
+        output['g1']     = data['s1'][keep]
+        output['g2']     = data['s2'][keep]
+        output['weight'] = weights
+        output['z']      = data['zp_2'][keep]
+
+        return output
+
+    def get_weights(self, data, index):
+        snr = data['snr'][index]
+        eprox2 = (0.1/(snr/40.))**2
+        weight = 1.0/(0.2**2 + eprox2)
+
+        return weight
+
 class DESMockSrcCatalog(dict):
     """
     This reads the mock catalog and creates an input
@@ -505,7 +629,8 @@ class DESMockSrcCatalog(dict):
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
         if self['sample'] != sample:
-            raise ValueError("The config sample '%s' doesn't match input '%s'" % (self['sample'],sample))
+            raise ValueError("The config sample '%s' doesn't "
+                             "match input '%s'" % (self['sample'],sample))
 
         self['cosmo'] = lensing.files.read_config('cosmo',self['cosmo_sample'])
 
@@ -620,8 +745,6 @@ class DESMockSrcCatalog(dict):
 
         data = self.read()
 
-        fname=self.file()
-
         ntot = data.size
         nper = ntot/nsplit
         nleft = ntot % nsplit
@@ -634,7 +757,9 @@ class DESMockSrcCatalog(dict):
                 end += nleft
             sdata = data[beg:end]
 
-            lensing.files.scat_write_ascii(sample=self['sample'], data=sdata, src_split=i)
+            lensing.files.scat_write_ascii(sample=self['sample'],
+                                           data=sdata,
+                                           src_split=i)
 
 
     def original_file(self, scinv=False):

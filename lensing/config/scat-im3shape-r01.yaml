@@ -1,0 +1,23 @@
+sample:             "im3shape01"
+
+# collated with gold, NN photoz
+catalog:            "im3shape-v3-gold-nn"
+band:               "r"
+
+min_s2n: 10.0
+min_srat: 1.0
+
+flags: [0,2,3]
+
+# point estimators
+sigmacrit_style:    1
+
+# this is redundant with the cosmo_sample declaration in the run file
+# we have to demand consistency
+cosmo_sample:       "01"
+
+nsplit:             100
+
+comment: | 
+
+    First try with im3shape

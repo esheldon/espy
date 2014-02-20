@@ -11,35 +11,37 @@ def get_shear_pqr_sums(P,Q,R):
     """
     from numpy import zeros,where
 
-    w,=where(P > 0)
-    if w.size != P.size:
-        print 'P > 0: %s/%s' (w.size,P.size)
+    n=P.size
 
-    QQ = zeros( (w.size,2,2), dtype=Q.dtype)
-    Cinv_all = zeros( (w.size,2,2), dtype=Q.dtype)
-    QbyP = zeros( (w.size,2), dtype=Q.dtype)
+    wbad, = where(P <= 0)
+    if wbad.size != 0:
+        raise ValueError('Found P <= 0: %s/%s' (w.size,n) )
+
+    QQ       = zeros( (n,2,2), dtype=Q.dtype)
+    Cinv_all = zeros( (n,2,2), dtype=Q.dtype)
+    QbyP     = zeros( (n,2),   dtype=Q.dtype)
 
     # outer product
-    QQ[:,0,0] = Q[w,0]*Q[w,0]
-    QQ[:,0,1] = Q[w,0]*Q[w,1]
-    QQ[:,1,0] = Q[w,1]*Q[w,0]
-    QQ[:,1,1] = Q[w,1]*Q[w,1]
+    QQ[:,0,0] = Q[:,0]*Q[:,0]
+    QQ[:,0,1] = Q[:,0]*Q[:,1]
+    QQ[:,1,0] = Q[:,1]*Q[:,0]
+    QQ[:,1,1] = Q[:,1]*Q[:,1]
 
-    Pinv = 1/P[w]
+    Pinv = 1/P
     P2inv = Pinv*Pinv
 
-    #Cinv_all = QQ/P**2 - R/P
-    Cinv_all[:,0,0] = QQ[:,0,0]*P2inv - R[w,0,0]*Pinv
-    Cinv_all[:,0,1] = QQ[:,0,1]*P2inv - R[w,0,1]*Pinv
-    Cinv_all[:,1,0] = QQ[:,1,0]*P2inv - R[w,1,0]*Pinv
-    Cinv_all[:,1,1] = QQ[:,1,1]*P2inv - R[w,1,1]*Pinv
+    # QQ/P**2 - R/P
+    Cinv_all[:,0,0] = QQ[:,0,0]*P2inv - R[:,0,0]*Pinv
+    Cinv_all[:,0,1] = QQ[:,0,1]*P2inv - R[:,0,1]*Pinv
+    Cinv_all[:,1,0] = QQ[:,1,0]*P2inv - R[:,1,0]*Pinv
+    Cinv_all[:,1,1] = QQ[:,1,1]*P2inv - R[:,1,1]*Pinv
 
-    P_sum = P[w].sum()
+    P_sum = P.sum()
 
     Cinv_sum = Cinv_all.sum(axis=0)
 
-    QbyP[:,0] = Q[w,0]*Pinv
-    QbyP[:,1] = Q[w,1]*Pinv
+    QbyP[:,0] = Q[:,0]*Pinv
+    QbyP[:,1] = Q[:,1]*Pinv
     Q_sum = QbyP.sum(axis=0)
 
     return P_sum, Q_sum, Cinv_sum
@@ -76,7 +78,9 @@ def get_shear_pqr(P,Q,R, get_sums=False):
 
     P_sum, Q_sum, Cinv_sum = get_shear_pqr_sums(P,Q,R)
 
-    C = numpy.linalg.inv(Cinv_sum)
+    # linalg doesn't support f16 if that is the type of above
+    # arguments
+    C = numpy.linalg.inv(Cinv_sum.astype('f8')).astype(P.dtype)
     g1g2 = numpy.dot(C,Q_sum)
 
     if get_sums:
@@ -85,8 +89,10 @@ def get_shear_pqr(P,Q,R, get_sums=False):
         return g1g2, C
 
 def pqr_jackknife(P, Q, R,
+                  chunksize=1,
                   get_sums=False,
-                  verbose=False,
+                  get_shears=False,
+                  progress=False,
                   show=False,
                   eps=None,
                   png=None):
@@ -94,36 +100,42 @@ def pqr_jackknife(P, Q, R,
     Get the shear covariance matrix using jackknife resampling.
 
     The trick is that this must be done in pairs
+
+    chunksize is the number of *pairs* to remove for each chunk
     """
 
-    if verbose:
+    if progress:
         import progressbar
         pg=progressbar.ProgressBar(width=70)
 
     ntot = P.size
     if ( (ntot % 2) != 0 ):
         raise  ValueError("expected factor of two, got %d" % ntot)
-
     npair = ntot/2
+
+    # some may not get used
+    nchunks = npair/chunksize
 
     P_sum, Q_sum, Cinv_sum = get_shear_pqr_sums(P,Q,R)
     C = numpy.linalg.inv(Cinv_sum)
     shear = numpy.dot(C,Q_sum)
 
-    shears = numpy.zeros( (npair, 2) )
-    for i in xrange(npair):
+    shears = numpy.zeros( (nchunks, 2) )
+    for i in xrange(nchunks):
 
-        if verbose:
-            frac=float(i+1)/npair
+        beg = i*chunksize*2
+        end = (i+1)*chunksize*2
+        
+        if progress:
+            frac=float(i+1)/nchunks
             pg.update(frac=frac)
 
-        ii = i*2
+        Ptmp = P[beg:end]
+        Qtmp = Q[beg:end,:]
+        Rtmp = R[beg:end,:,:]
 
-        Ptmp = P[ii:ii+2]
-        Qtmp = Q[ii:ii+2,:]
-        Rtmp = R[ii:ii+2,:,:]
-
-        P_sum, Q_sum_tmp, Cinv_sum_tmp = get_shear_pqr_sums(Ptmp,Qtmp,Rtmp)
+        P_sum, Q_sum_tmp, Cinv_sum_tmp = \
+                get_shear_pqr_sums(Ptmp,Qtmp,Rtmp)
         
         Q_sum_tmp    = Q_sum - Q_sum_tmp
         Cinv_sum_tmp = Cinv_sum - Cinv_sum_tmp
@@ -134,7 +146,7 @@ def pqr_jackknife(P, Q, R,
         shears[i, :] = shear_tmp
 
     shear_cov = numpy.zeros( (2,2) )
-    fac = (npair-1)/float(npair)
+    fac = (nchunks-1)/float(nchunks)
 
     shear = shears.mean(axis=0)
 
@@ -148,8 +160,44 @@ def pqr_jackknife(P, Q, R,
 
     if get_sums:
         return shear, shear_cov, Q_sum, Cinv_sum
+    elif get_shears:
+        return shear, shear_cov, shears
     else:
         return shear, shear_cov
+
+def pqr_in_chunks(P, Q, R, chunksize):
+    """
+    Get the mean shear in chunks.  They will be in order
+    """
+
+
+    ntot = P.size
+    if ( (ntot % 2) != 0 ):
+        raise  ValueError("expected factor of two, got %d" % ntot)
+    npair = ntot/2
+
+    # some may not get used
+    nchunks = npair/chunksize
+
+    shears = numpy.zeros( (nchunks, 2) )
+    covs = numpy.zeros( (nchunks, 2, 2) )
+    for i in xrange(nchunks):
+        print '%d/%d' % (i+1, nchunks)
+
+        beg = i*chunksize*2
+        end = (i+1)*chunksize*2
+
+        Ptmp = P[beg:end]
+        Qtmp = Q[beg:end,:]
+        Rtmp = R[beg:end,:,:]
+
+        sh, C = get_shear_pqr(Ptmp, Qtmp, Rtmp)
+
+        shears[i, :] = sh
+        covs[i, :, :] = C
+
+    return shears, covs
+
 
 def pqr_bootstrap(P, Q, R, nsamples, verbose=False, show=False, eps=None, png=None):
     """
