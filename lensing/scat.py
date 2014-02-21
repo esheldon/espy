@@ -653,6 +653,35 @@ class IM3ShapePointz(GenericSrcCatalog):
 
         return weight
 
+    def plot_size_mag(self, data, nplot=100000,
+                      eps=None, png=None, show=False):
+        import biggles
+
+        wts=self.get_weights(data)
+        mag_range=[15,25]
+        rad_range=[0,6]
+
+        s=numpy.random.random(data.size)
+        ind=s[0:nplot]
+
+        pts=biggles.Points(data['mag_auto_i'][ind], data['radius'][ind],
+                           type='dot')
+
+        plt=biggles.FramedPlot()
+        plt.xtitle=r'mag_auto$_i$'
+        plt.ytitle=r'$r_{1/2}$'
+        plt.aspect_ratio=1
+
+        plt.add( pts )
+
+        if show:
+            plt.show()
+
+        if eps:
+            plt.write_eps(eps)
+        if png:
+            plt.write_img(800, 800, png)
+
 class DESMockSrcCatalog(dict):
     """
     This reads the mock catalog and creates an input
