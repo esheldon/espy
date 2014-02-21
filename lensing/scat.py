@@ -675,7 +675,7 @@ class IM3ShapePointz(GenericSrcCatalog):
 
         plt.add( pts )
 
-        write_plot(plt, convert=True, **keys)
+        write_plot(plt, **keys)
 
     def plot_sizes(self, data, binsize=0.01, **keys):
         import biggles
@@ -720,7 +720,7 @@ class IM3ShapePointz(GenericSrcCatalog):
         plt.xtitle=r'$r_{1/2}$'
         plt.aspect_ratio=1
 
-        write_plot(plt, convert=True, **keys)
+        write_plot(plt, **keys)
 
     def plot_ellip(self, data, binsize=0.005, **keys):
         import biggles
@@ -754,8 +754,7 @@ class IM3ShapePointz(GenericSrcCatalog):
         hplt.label='unweighted'
         whplt.label='weighted'
 
-        key=biggles.PlotKey(0.9, 0.9, [hplt,whplt],
-                            halign='right')
+        key=biggles.PlotKey(0.2, 0.1, [hplt,whplt])
 
 
         plt=biggles.FramedPlot()
@@ -764,30 +763,31 @@ class IM3ShapePointz(GenericSrcCatalog):
         plt.xtitle='|e|'
         plt.aspect_ratio=1
 
-        write_plot(plt, convert=True, **keys)
+        write_plot(plt, **keys)
 
 
 def write_plot(plt, show=False, eps=None,
                png=None, width=800, height=800,
                convert=False, dpi=90):
     """
-    If convert=True and both eps and png keywords are sent,
-    then the converter is used
+    If convert=True and eps keyword is sent,
+    then the converter is used.
+    
+    Otherwise send png
     """
     if show:
         plt.show()
 
-    if eps:
+    if eps is not None:
         print(eps)
         plt.write_eps(eps)
 
-    if png:
-        if eps and png and convert:
-            import converter
-            converter.convert(eps, dpi=dpi, verbose=True)
-        else:
-            print(png)
-            plt.write_img(width, height, png)
+    if eps is not None and convert:
+        import converter
+        converter.convert(eps, dpi=dpi, verbose=True)
+    elif png is not None:
+        print(png)
+        plt.write_img(width, height, png)
 
 class DESMockSrcCatalog(dict):
     """
