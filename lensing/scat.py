@@ -668,7 +668,7 @@ class IM3ShapePointz(GenericSrcCatalog):
 
         plt=biggles.FramedPlot()
         plt.xtitle=r'mag_auto$_i$'
-        plt.ytitle=r'$r_{1/2}$'
+        plt.ytitle=r'$r_{1/2} [arcsec]$'
         plt.aspect_ratio=1
         plt.xrange=mag_range
         plt.yrange=rad_range
@@ -721,7 +721,7 @@ class IM3ShapePointz(GenericSrcCatalog):
         plt.add( hplt, whplt, key )
 
 
-        plt.xtitle=r'$r_{1/2}$'
+        plt.xtitle=r'$r_{1/2} [arcsec]$'
         plt.aspect_ratio=1
 
         title=keys.get('title',None)
