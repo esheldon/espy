@@ -722,7 +722,7 @@ class IM3ShapePointz(GenericSrcCatalog):
 
         write_plot(plt, convert=True, **keys)
 
-    def plot_sizes(self, data, binsize=0.005, **keys):
+    def plot_ellip(self, data, binsize=0.005, **keys):
         import biggles
 
         e_range=[0,1]
