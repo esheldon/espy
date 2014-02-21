@@ -740,15 +740,15 @@ class IM3ShapePointz(GenericSrcCatalog):
 
         wbs=eu.stat.Binner(e, weights=wts)
         wbs.dohist(binsize=binsize,
-                   min=rad_range[0],
-                   max=rad_range[1])
+                   min=e_range[0],
+                   max=e_range[1])
         wbs.calc_stats()
 
         hplt=biggles.Histogram(bs['whist'], 
-                               x0=rad_range[0], binsize=binsize,
+                               x0=e_range[0], binsize=binsize,
                                color='red')
         whplt=biggles.Histogram(wbs['whist'], 
-                                x0=rad_range[0], binsize=binsize,
+                                x0=e_range[0], binsize=binsize,
                                 color='blue')
 
         hplt.label='unweighted'
