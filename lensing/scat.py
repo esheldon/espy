@@ -657,7 +657,6 @@ class IM3ShapePointz(GenericSrcCatalog):
                       eps=None, png=None, show=False):
         import biggles
 
-        wts=self.get_weights(data)
         mag_range=[15,25]
         rad_range=[0,6]
 
@@ -671,6 +670,8 @@ class IM3ShapePointz(GenericSrcCatalog):
         plt.xtitle=r'mag_auto$_i$'
         plt.ytitle=r'$r_{1/2}$'
         plt.aspect_ratio=1
+        plt.xrange=mag_range
+        plt.yrange=rad_range
 
         plt.add( pts )
 
