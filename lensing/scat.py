@@ -675,7 +675,7 @@ class IM3ShapePointz(GenericSrcCatalog):
 
         plt.add( pts )
 
-        write_plot(plt, **keys)
+        write_plot(plt, convert=True, **keys)
 
     def plot_sizes(self, data, binsize=0.01, **keys):
         import biggles
@@ -720,7 +720,7 @@ class IM3ShapePointz(GenericSrcCatalog):
         plt.xtitle=r'$r_{1/2}$'
         plt.aspect_ratio=1
 
-        write_plot(plt, **keys)
+        write_plot(plt, convert=True, **keys)
 
     def plot_sizes(self, data, binsize=0.005, **keys):
         import biggles
@@ -764,7 +764,7 @@ class IM3ShapePointz(GenericSrcCatalog):
         plt.xtitle='|e|'
         plt.aspect_ratio=1
 
-        write_plot(plt, **keys)
+        write_plot(plt, convert=True, **keys)
 
 
 def write_plot(plt, show=False, eps=None,
