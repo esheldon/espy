@@ -679,7 +679,7 @@ class IM3ShapePointz(GenericSrcCatalog):
         domake(plt, show=show, eps=eps, png=png)
 
     def plot_sizes(self, data,
-                   binsize=0.05,
+                   binsize=0.01,
                    eps=None, png=None, show=False):
         import biggles
 
