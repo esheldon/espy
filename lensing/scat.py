@@ -673,6 +673,10 @@ class IM3ShapePointz(GenericSrcCatalog):
         plt.xrange=mag_range
         plt.yrange=rad_range
 
+        title=keys.get('title',None)
+        if title:
+            plt.title=title
+
         plt.add( pts )
 
         write_plot(plt, **keys)
@@ -720,6 +724,10 @@ class IM3ShapePointz(GenericSrcCatalog):
         plt.xtitle=r'$r_{1/2}$'
         plt.aspect_ratio=1
 
+        title=keys.get('title',None)
+        if title:
+            plt.title=title
+
         write_plot(plt, **keys)
 
     def plot_ellip(self, data, binsize=0.005, **keys):
@@ -762,6 +770,10 @@ class IM3ShapePointz(GenericSrcCatalog):
 
         plt.xtitle='|e|'
         plt.aspect_ratio=1
+
+        title=keys.get('title',None)
+        if title:
+            plt.title=title
 
         write_plot(plt, **keys)
 
