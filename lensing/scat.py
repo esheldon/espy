@@ -653,8 +653,7 @@ class IM3ShapePointz(GenericSrcCatalog):
 
         return weight
 
-    def plot_size_mag(self, data, nplot=100000,
-                      eps=None, png=None, show=False):
+    def plot_size_mag(self, data, nplot=100000, **keys):
         import biggles
 
         mag_range=[15,25]
@@ -676,11 +675,9 @@ class IM3ShapePointz(GenericSrcCatalog):
 
         plt.add( pts )
 
-        domake(plt, show=show, eps=eps, png=png)
+        write_plot(plt, **keys)
 
-    def plot_sizes(self, data,
-                   binsize=0.01,
-                   eps=None, png=None, show=False):
+    def plot_sizes(self, data, binsize=0.01, **keys):
         import biggles
 
         rad_range=[0,5]
@@ -723,16 +720,74 @@ class IM3ShapePointz(GenericSrcCatalog):
         plt.xtitle=r'$r_{1/2}$'
         plt.aspect_ratio=1
 
-        domake(plt, show=show, eps=eps, png=png)
+        write_plot(plt, **keys)
 
-def domake(plt, show=False, eps=None,
-           png=None, width=800, height=800):
+    def plot_sizes(self, data, binsize=0.005, **keys):
+        import biggles
+
+        e_range=[0,1]
+
+        wts=self.get_weights(data)
+        wts *= (1./wts.max())
+        wts1=numpy.ones(data.size)
+
+        e=numpy.sqrt( data['s1']**2 + data['s2']**2)
+        bs=eu.stat.Binner(e, weights=wts1)
+        bs.dohist(binsize=binsize,
+                  min=e_range[0],
+                  max=e_range[1])
+        bs.calc_stats()
+
+        wbs=eu.stat.Binner(e, weights=wts)
+        wbs.dohist(binsize=binsize,
+                   min=rad_range[0],
+                   max=rad_range[1])
+        wbs.calc_stats()
+
+        hplt=biggles.Histogram(bs['whist'], 
+                               x0=rad_range[0], binsize=binsize,
+                               color='red')
+        whplt=biggles.Histogram(wbs['whist'], 
+                                x0=rad_range[0], binsize=binsize,
+                                color='blue')
+
+        hplt.label='unweighted'
+        whplt.label='weighted'
+
+        key=biggles.PlotKey(0.9, 0.9, [hplt,whplt],
+                            halign='right')
+
+
+        plt=biggles.FramedPlot()
+        plt.add( hplt, whplt, key )
+
+        plt.xtitle='|e|'
+        plt.aspect_ratio=1
+
+        write_plot(plt, **keys)
+
+
+def write_plot(plt, show=False, eps=None,
+               png=None, width=800, height=800,
+               convert=False, dpi=90):
+    """
+    If convert=True and both eps and png keywords are sent,
+    then the converter is used
+    """
     if show:
         plt.show()
+
     if eps:
+        print eps
         plt.write_eps(eps)
+
     if png:
-        plt.write_img(width, height, png)
+        if eps and png and convert:
+            import converter
+            converter.convert(eps, dpi=dpi, verbose=True)
+        else:
+            print png
+            plt.write_img(width, height, png)
 
 class DESMockSrcCatalog(dict):
     """
