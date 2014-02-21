@@ -778,7 +778,7 @@ def write_plot(plt, show=False, eps=None,
         plt.show()
 
     if eps:
-        print eps
+        print(eps)
         plt.write_eps(eps)
 
     if png:
@@ -786,7 +786,7 @@ def write_plot(plt, show=False, eps=None,
             import converter
             converter.convert(eps, dpi=dpi, verbose=True)
         else:
-            print png
+            print(png)
             plt.write_img(width, height, png)
 
 class DESMockSrcCatalog(dict):
