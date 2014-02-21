@@ -780,7 +780,7 @@ class IM3ShapePointz(GenericSrcCatalog):
 
 def write_plot(plt, show=False, eps=None,
                png=None, width=800, height=800,
-               convert=False, dpi=90):
+               convert=False, dpi=90, **keys):
     """
     If convert=True and eps keyword is sent,
     then the converter is used.
