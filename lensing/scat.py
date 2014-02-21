@@ -660,7 +660,8 @@ class IM3ShapePointz(GenericSrcCatalog):
         mag_range=[15,25]
         rad_range=[0,6]
 
-        s=numpy.random.random(data.size)
+        r=numpy.random.random(data.size)
+        s=r.argsort()
         ind=s[0:nplot]
 
         pts=biggles.Points(data['mag_auto_i'][ind], data['radius'][ind],
