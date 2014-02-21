@@ -679,11 +679,11 @@ class IM3ShapePointz(GenericSrcCatalog):
         domake(plt, show=show, eps=eps, png=png)
 
     def plot_sizes(self, data,
+                   binsize=0.05,
                    eps=None, png=None, show=False):
         import biggles
 
-        rad_range=[0,6]
-        binsize=0.1
+        rad_range=[0,5]
 
         wts=self.get_weights(data)
         wts *= (1./wts.max())
