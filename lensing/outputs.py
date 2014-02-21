@@ -31,7 +31,8 @@ def add_lensums(l1, l2):
     if 'totpairs' in l1.dtype.names:
         names.append('totpairs')
     for n in names:
-        l1[n] += l2[n]
+        if n in l1.dtype.names and n in l2.dtype.names:
+            l1[n] += l2[n]
 
 
 
@@ -64,10 +65,16 @@ def average_lensums(lout, weights=None):
     # weight is the weight for the lens.  Call this weightsum to
     # indicate a sum over multiple lenses
     comb['weightsum'][0] = lout['weight'].sum()
-    comb['sshsum'][0] = lout['sshsum'].sum()
+    if 'sshsum' in lout.dtype.names:
+        comb['sshsum'][0] = lout['sshsum'].sum()
+        comb['ssh'] = comb['sshsum']/comb['weightsum']
+    else:
+        # this makes ssh unity
+        comb['sshsum'][0] = comb['weightsum'][0]
+        comb['ssh'] = comb['sshsum']/comb['weightsum']
+
     comb['totpairs'][0] = lout['totpairs'].sum()
 
-    comb['ssh'] = comb['sshsum']/comb['weightsum']
 
     for i in xrange(nbin):
         npair = lout['npair'][:,i].sum()
@@ -133,13 +140,19 @@ def average_lensums_weighted(lout, weights):
     # indicate a sum over multiple lenses
 
     comb['weightsum'][0] = (lout['weight']*weights).sum()
-    comb['sshsum'][0] = (lout['sshsum']*weights).sum()
+
+    if 'sshsum' in lout.dtype.names:
+        comb['sshsum'][0] = (lout['sshsum']*weights).sum()
+        comb['ssh'] = comb['sshsum']/comb['weightsum']
+    else:
+        # this makes ssh unity
+        comb['sshsum'][0] = comb['weightsum'].sum()
+        comb['ssh'] = comb['sshsum']/comb['weightsum']
 
     # should not use this for anything since weights
     # make it non-integer
     comb['totpairs'][0] = lout['totpairs'].sum()
 
-    comb['ssh'] = comb['sshsum']/comb['weightsum']
 
     # these will get the extra weight
     # WE MUST MAKE A COPY!! ARRGGG THIS BIT ME!!!

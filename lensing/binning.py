@@ -59,8 +59,9 @@ def bin_lenses_byrun(run, type, nbin):
     b.bin_byrun(run)
 
 class BinnerBase(dict):
-    def __init__(self, nbin):
+    def __init__(self, nbin, fs='nfs'):
         self['nbin'] = nbin
+        self.fs=fs
         self.set_bin_ranges()
 
         self.dpi=150
@@ -74,7 +75,7 @@ class BinnerBase(dict):
         """
 
         name=self.name()
-        d = lensing.files.sample_read(type='collated',sample=run,fs='hdfs')
+        d = lensing.files.sample_read(type='collated',sample=run,fs=self.fs)
         res = self.bin(d)
 
         outdir = lensing.files.sample_dir(type='binned',sample=run,name=name)

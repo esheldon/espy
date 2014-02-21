@@ -4,9 +4,13 @@ from . import files
 
 class WQLens(dict):
     def __init__(self, run, version, 
-                 groups=None, priority="med", notgroups=None):
+                 groups=None,
+                 priority="med",
+                 notgroups=None,
+                 fs='nfs'):
 
         self['version'] = version
+        self.fs=fs
 
         conf = files.cascade_config(run)
         for key in conf:
@@ -54,22 +58,21 @@ class WQLens(dict):
         """
         Each of the scripts to run the lens and source splits
         """
-        fs='hdfs'
-        config_file=files.sample_file(type='config',sample=self['run'],fs=fs)
+        config_file=files.sample_file(type='config',sample=self['run'],fs=self.fs)
 
         scat=files.sample_file(type='scat',
                                sample=self['src_config']['sample'],
                                src_split=src_split,
-                               fs=fs)
+                               fs=self.fs)
         lcat=files.sample_file(type='lcat',
                                sample=self['lens_config']['sample'], 
                                lens_split=lens_split,
-                               fs=fs)
+                               fs=self.fs)
         out_file = files.sample_file(type='lensout',
                                      sample=self['run'], 
                                      src_split=src_split,
                                      lens_split=lens_split,
-                                     fs=fs)
+                                     fs=self.fs)
 
 
 
@@ -79,15 +82,19 @@ class WQLens(dict):
         if src_split is not None:
             job_name = '%s-%03i' % (job_name, src_split)
 
-        s=_shear_script % {'config_file':config_file,
-                           'scat':scat,
-                           'lcat':lcat,
-                           'out_file':out_file,
-                           'groups':self['groups'],
-                           'notgroups':self['notgroups'],
-                           'priority':self['priority'],
-                           'job_name':job_name,
-                           'version':self['version']}
+        if self.fs=='hdfs':
+            script=_shear_script_hdfs
+        else:
+            script=_shear_script_nfs
+        s=script % {'config_file':config_file,
+                    'scat':scat,
+                    'lcat':lcat,
+                    'out_file':out_file,
+                    'groups':self['groups'],
+                    'notgroups':self['notgroups'],
+                    'priority':self['priority'],
+                    'job_name':job_name,
+                    'version':self['version']}
         return s
 
 
@@ -154,26 +161,30 @@ class WQLens(dict):
         nfiles=src_nsplit*lens_nsplit
 
         pattern = files.sample_file(type='lensout', sample=self['run'], 
-                                    fs='hdfs')
+                                    fs=self.fs)
         pattern = pattern.replace('.dat','-*.dat')
         out_file = files.sample_file(type='reduced', sample=self['run'], 
-                                     fs='hdfs')
+                                     fs=self.fs)
         config_file=files.sample_file(type='config',sample=self['run'],
-                                      fs='hdfs')
+                                      fs=self.fs)
 
         job_name = 'reduce-%s' % self['run']
 
         extra='mode: bynode\nN: 1\nmin_mem: 25'
-        s=_reduce_script % {'pattern':pattern,
-                            'config_file':config_file,
-                            'out_file':out_file,
-                            'nfiles':nfiles,
-                            'groups':self['groups'],
-                            'notgroups':self['notgroups'],
-                            'priority':self['priority'],
-                            'job_name':job_name,
-                            'extra':'',
-                            'version':self['version']}
+        if self.fs=='hdfs':
+            script=_reduce_script_hdfs
+        else:
+            script=_reduce_script_nfs
+        s=script % {'pattern':pattern,
+                    'config_file':config_file,
+                    'out_file':out_file,
+                    'nfiles':nfiles,
+                    'groups':self['groups'],
+                    'notgroups':self['notgroups'],
+                    'priority':self['priority'],
+                    'job_name':job_name,
+                    'extra':'',
+                    'version':self['version']}
         return s
 
     def reduce_src_text(self, lens_split):
@@ -182,7 +193,8 @@ class WQLens(dict):
         """
         nfiles=self['src_config']['nsplit']
 
-        pattern = files.sample_file(type='lensout', sample=self['run'], fs='hdfs')
+        pattern = files.sample_file(type='lensout', sample=self['run'],
+                                    fs=self.fs)
         # just the 3 digits for all of the lens splits followed by the src
         # split
         pattern = pattern.replace('.dat','-%03i-[0-9][0-9][0-9].dat' % lens_split)
@@ -191,22 +203,27 @@ class WQLens(dict):
         out_file = files.sample_file(type='src-reduced-split', 
                                      sample=self['run'], 
                                      lens_split=lens_split, 
-                                     fs='hdfs')
-        config_file=files.sample_file(type='config',sample=self['run'],fs='hdfs')
+                                     fs=self.fs)
+        config_file=files.sample_file(type='config',sample=self['run'],fs=self.fs)
 
         job_name = 'srcred-%s-%03i' % (self['run'],lens_split)
 
         extra=''
-        s=_reduce_script % {'pattern':pattern,
-                            'config_file':config_file,
-                            'out_file':out_file,
-                            'nfiles':nfiles,
-                            'groups':self['groups'],
-                            'notgroups':self['notgroups'],
-                            'priority':self['priority'],
-                            'extra':extra,
-                            'job_name':job_name,
-                            'version':self['version']}
+        if self.fs=='hdfs':
+            script=_reduce_script_hdfs
+        else:
+            script=_reduce_script_nfs
+
+        s=script% {'pattern':pattern,
+                   'config_file':config_file,
+                   'out_file':out_file,
+                   'nfiles':nfiles,
+                   'groups':self['groups'],
+                   'notgroups':self['notgroups'],
+                   'priority':self['priority'],
+                   'extra':extra,
+                   'job_name':job_name,
+                   'version':self['version']}
         return s
 
 
@@ -223,14 +240,14 @@ class WQLens(dict):
         pattern = files.sample_file(type='src-reduced-split', 
                                     lens_split=0, 
                                     sample=self['run'], 
-                                    fs='hdfs')
+                                    fs=self.fs)
         # just the 3 digit ending rather than both we would have before lens
         # reduction
         pattern = pattern.replace('-000.dat','-[0-9][0-9][0-9].dat')
 
         # this part the same as all reduce above
-        out_file = files.sample_file(type='reduced', sample=self['run'], fs='hdfs')
-        config_file=files.sample_file(type='config',sample=self['run'],fs='hdfs')
+        out_file = files.sample_file(type='reduced', sample=self['run'], fs=self.fs)
+        config_file=files.sample_file(type='config',sample=self['run'],fs=self.fs)
 
         job_name = 'lens-concat-%s' % self['run']
 
@@ -257,7 +274,7 @@ class WQLens(dict):
                                   'priority':self['priority'],
                                   'extra':extra}
 
-_shear_script="""
+_shear_script_hdfs="""
 command: |
     source ~esheldon/.bashrc
 
@@ -283,7 +300,7 @@ command: |
     echo -e "staging config file to local disk:\\n  $config\\n  $tmp_config"
     hadoop fs -cat $config > $tmp_config
 
-    hadoop fs -cat $scat | sobjshear $tmp_config $tmp_lcat 1> $tmp_outf
+    hadoop fs -cat $scat | sobjshear-%(version)s $tmp_config $tmp_lcat 1> $tmp_outf
 
     err=$?
     if [[ $err != "0" ]]; then
@@ -304,7 +321,62 @@ priority: %(priority)s
 job_name: %(job_name)s
 """ 
 
-_reduce_script="""
+_shear_script_nfs="""
+command: |
+    source ~esheldon/.bashrc
+
+    module load sobjshear/%(version)s
+
+    config=%(config_file)s
+    scat=%(scat)s
+    lcat=%(lcat)s
+
+    outf=%(out_file)s
+
+    echo `hostname`
+
+    tmp_dir=/data/esheldon/sobjshear-$RANDOM-$RANDOM
+    mkdir -vp $tmp_dir
+
+    dname=$(dirname $outf)
+    mkdir -vp $dname
+
+    tmp_outf=$tmp_dir/$(basename $outf)
+    tmp_lcat=$tmp_dir/$(basename $lcat)
+    tmp_scat=$tmp_dir/$(basename $scat)
+    tmp_config=$tmp_dir/$(basename $config)
+
+    echo -e "staging lcat file to local disk:\\n  $lcat\\n  $tmp_lcat"
+    cp $lcat $tmp_lcat
+    echo -e "staging scat file to local disk:\\n  $scat\\n  $tmp_scat"
+    cp $scat $tmp_scat
+
+    echo -e "staging config file to local disk:\\n  $config\\n  $tmp_config"
+    cp $config $tmp_config
+
+    sobjshear-%(version)s $tmp_config $tmp_lcat < $tmp_scat 1> $tmp_outf
+
+    err=$?
+    if [[ $err != "0" ]]; then
+        echo "Error running sobjshear: $err"
+    fi
+    if [[ -e $tmp_outf ]]; then
+        echo -e "pushing temp file to\\n  $outf"
+        mv -fv $tmp_outf $outf
+    fi
+    rm -rvf $tmp_dir 2>&1
+
+    echo `date`
+
+%(groups)s
+%(notgroups)s
+priority: %(priority)s
+job_name: %(job_name)s
+""" 
+
+
+
+_reduce_script_hdfs="""
 command: |
     source ~esheldon/.bashrc
 
@@ -332,7 +404,7 @@ command: |
     hadoop fs -cat $config > $tmp_config
 
     echo "reducing files with pattern $pattern"
-    hadoop fs -cat "$pattern" | redshear $tmp_config 1> $tmp_outf
+    hadoop fs -cat "$pattern" | redshear-%(version)s $tmp_config 1> $tmp_outf
 
     err=$?
     if [[ $err != "0" ]]; then
@@ -353,6 +425,44 @@ priority: %(priority)s
 job_name: %(job_name)s
 %(extra)s
 """ 
+
+_reduce_script_nfs="""
+command: |
+    source ~esheldon/.bashrc
+
+    module load sobjshear/%(version)s
+
+    config="%(config_file)s"
+    outf="%(out_file)s"
+
+    nfiles=$(find %(pattern)s | wc -l)
+    flist=$(find %(pattern)s)
+    #nfiles=${#flist[@]} 
+
+    echo `hostname`
+
+    if [[ $nfiles != "%(nfiles)s" ]]; then
+        echo "Error: expected %(nfiles)s files but found $nfiles"
+        exit 1
+    fi
+
+    echo "reducing files"
+    cat $flist | redshear-%(version)s $config 1> $outf
+
+    err=$?
+    if [[ $err != "0" ]]; then
+        echo "Error running redshear: $err"
+    fi
+
+    echo `date`
+
+%(groups)s
+%(notgroups)s
+priority: %(priority)s
+job_name: %(job_name)s
+%(extra)s
+""" 
+
 
 _concat_script="""
 command: |

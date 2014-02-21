@@ -356,8 +356,6 @@ def lcat_file(**keys):
     import lensing
     lcat_file(sample='rm03')
     """
-    if 'fs' not in keys:
-        keys['fs'] = 'hdfs'
     keys['ext'] = 'dat'
     keys['type'] = 'lcat'
     return sample_file(**keys)
@@ -370,19 +368,31 @@ def lcat_write(**keys):
     if sample is None or data is None:
         raise ValueError("usage: lcat_write(sample=, data=)")
 
-    keys['fs'] = 'hdfs'
     keys['ext'] = 'dat'
     keys['type'] = 'lcat'
+    fs=keys.get('fs','nfs')
 
-    file = lcat_file(**keys)
+    fname = lcat_file(**keys)
 
-    stdout.write("Writing %d to %s: '%s'\n" % (data.size, 'lcat', file))
-    with eu.hdfs.HDFSFile(file,verbose=True) as fobj:
-        with recfile.Open(fobj.localfile,'w',delim=' ') as rec:
-            rec.fobj.write('%d\n' % data.size)
-            rec.write(data)
+    stdout.write("Writing %d to %s: '%s'\n" % (data.size, 'lcat', fname))
 
-        fobj.put(clobber=True)
+    if fs=='nfs':
+        if os.path.exists(fname):
+            os.remove(fname)
+        else:
+            d=os.path.dirname(fname)
+            if not os.path.exists(d):
+                os.makedirs(d)
+        with recfile.Open(fname,'w',delim=' ') as robj:
+            robj.fobj.write('%d\n' % data.size)
+            robj.write(data)
+    else:
+        with eu.hdfs.HDFSFile(fname,verbose=True) as fobj:
+            with recfile.Open(fobj.localfile,'w',delim=' ') as rec:
+                rec.fobj.write('%d\n' % data.size)
+                rec.write(data)
+
+            fobj.put(clobber=True)
 
 
 def lcat_read(**keys):
@@ -391,7 +401,6 @@ def lcat_read(**keys):
     d = lcat_read(sample='rm03')
 
     """
-    keys['fs'] = 'hdfs'
     file = lcat_file(**keys)
 
     stdout.write('Reading lens cat: %s\n' % file)
@@ -409,7 +418,6 @@ def lcat_read(**keys):
     return data
 
 def collated_file(**keys):
-    keys['fs'] = 'hdfs'
     keys['type'] = 'collated'
     return sample_file(**keys)
 
@@ -424,7 +432,6 @@ def lensout_file(**keys):
     import lensing
     lensout_file(sample='rm03')
     """
-    keys['fs'] = 'hdfs'
     keys['ext'] = 'dat'
     keys['type'] = 'lensout'
     return sample_file(**keys)
@@ -444,7 +451,6 @@ def lensout_read(**keys):
     return eu.io.read(fname, dtype=dtype, delim=' ', type='rec')
 
 def reduced_file(**keys):
-    keys['fs'] = 'hdfs'
     keys['ext'] = 'dat'
     keys['type'] = 'reduced'
     return sample_file(**keys)
@@ -469,6 +475,18 @@ def lensout_dtype(nbin):
            ('weight','f8'),
            ('totpairs','i8'),
            ('sshsum','f8'),
+           ('npair','i8',nbin),
+           ('rsum','f8',nbin),
+           ('wsum','f8',nbin),
+           ('dsum','f8',nbin),
+           ('osum','f8',nbin)]
+    return numpy.dtype(dtype)
+
+def lensout_im3shape_dtype(nbin):
+    dtype=[('index','i8'),
+           ('zindex','i8'),
+           ('weight','f8'),
+           ('totpairs','i8'),
            ('npair','i8',nbin),
            ('rsum','f8',nbin),
            ('wsum','f8',nbin),
@@ -518,8 +536,6 @@ def scat_file(**keys):
     """
     scat_file(sample=)
     """
-    if 'fs' not in keys:
-        keys['fs'] = 'hdfs'
     keys['type'] = 'scat'
     return sample_file(**keys)
 
@@ -564,27 +580,32 @@ def scat_read_ascii(**keys):
         raise ValueError("usage: data=scat_read_ascii(sample=, [, src_split=]")
 
     conf = read_config('scat', sample)
-    sconf = read_config('scinv', conf['scinv_sample'])
     style=conf['sigmacrit_style']
     if style not in [1,2]:
         raise ValueError("sigmacrit_style should be in [1,2]")
 
     if style == 2:
+        sconf = read_config('scinv', conf['scinv_sample'])
         zlvals=sigmacrit.make_zlvals(sconf['dzl'],sconf['zlmin'],sconf['zlmax'])
         nzl = zlvals.size
     else:
         nzl=None
     if 'gmix' in sample:
         dt = scat_gmix_dtype(style, nzl=nzl)
+    elif 'im3' in sample:
+        dt = scat_im3shape_dtype(style, nzl=nzl)
     else:
         dt = scat_dtype(style, nzl=nzl)
 
     file=scat_file(**keys)
     print("reading scat file:",file,file=stderr)
-    with eu.hdfs.HDFSFile(file) as hdfs_file:
-        hdfs_file.stage()
-        with recfile.Open(hdfs_file.localfile,'r',delim=' ',dtype=dt) as robj:
-            data = robj[:]
+
+    data = eu.io.read(file, delim=' ', dtype=dt, type='rec')
+
+    #with eu.hdfs.HDFSFile(file) as hdfs_file:
+    #    hdfs_file.stage()
+    #    with recfile.Open(hdfs_file.localfile,'r',delim=' ',dtype=dt) as robj:
+    #        data = robj[:]
 
     return data
 
@@ -709,13 +730,16 @@ def cascade_config(run):
     ss = conf['src_sample']
     conf['src_config'] = read_config('scat',ss)
 
-    
-    conf['scinv_config'] = read_config('scinv',
-                                       conf['src_config']['scinv_sample'])
+    if 'scinv_sample' in conf['src_config']: 
+        conf['scinv_config'] = read_config('scinv',
+                                           conf['src_config']['scinv_sample'])
 
-    scosmo = conf['scinv_config']['cosmo_sample']
+        scosmo = conf['scinv_config']['cosmo_sample']
+    else:
+        scosmo=None
+
     lcosmo = conf['lens_config']['cosmo_sample']
-    if scosmo != lcosmo:
+    if scosmo is not None and scosmo != lcosmo:
         mess="""
         mismatch between source scinv cosmo and lens cosmo
             scinv cosmo: %s
@@ -723,7 +747,7 @@ def cascade_config(run):
         """ % (scosmo, lcosmo)
         raise ValueError(mess)
 
-    conf['cosmo_config'] = read_config('cosmo', scosmo)
+    conf['cosmo_config'] = read_config('cosmo', lcosmo)
     return conf
 
 

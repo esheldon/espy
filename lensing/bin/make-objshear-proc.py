@@ -5,7 +5,7 @@ Description:
 
     Create config and shear/reduce wq scripts
 
-    version is the code version, e.g. gsens
+    version is the code version, e.g. gsens, im3
 
     types is by default 
         config,shear
@@ -47,6 +47,8 @@ parser.add_option("-n",dest="notgroups",default=None,
                   help="machine notgroups to use.  Default is %default")
 parser.add_option("-p",dest="priority",default=None,
                   help="priority use.  Default is %default")
+parser.add_option("--fs",default='nfs',
+                  help="which file system.  Default is '%default'")
 
 options,args = parser.parse_args(sys.argv[1:])
 
@@ -66,7 +68,8 @@ if 'config' in types:
 wql=lensing.wqsubmit.WQLens(run, version,
                             groups=options.groups,
                             notgroups=options.notgroups, 
-                            priority=options.priority)
+                            priority=options.priority,
+                            fs=options.fs)
 
 
 if 'shear'in types:

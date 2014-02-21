@@ -525,12 +525,15 @@ class IM3ShapePointz(GenericSrcCatalog):
         - write to file or split files
         """
 
-        output = self.create_output()
+        orig = self.read_original()
+        output = self.create_output(orig)
 
         # the code requires no minus sign for matt's simulations, but
         # does seem to require one for my shapes converted to equatorial
-        print("Adding minus sign to g1")
-        output['g1'] *= (-1)
+        #print("Adding minus sign to g1")
+        #output['g1'] *= (-1)
+        print("Adding minus sign to g2")
+        output['g2'] *= (-1)
         
         if self['nsplit'] > 0:
             self.split(data=output)
@@ -539,73 +542,112 @@ class IM3ShapePointz(GenericSrcCatalog):
                                            data=output,
                                            fs=self.fs)
 
-    def select(self, data):
+    def get_good(self, data, do_srat=True):
         from numpy import where, isnan
+
+        pixscale=0.265
 
         ntot=data.size
 
-        # remove size problems entirely from cat so we don't
-        # divide by zero
-        ws,=where( (data['psf_fwhm'] > 0) & (data['radius'] > 0))
+        # remove size and snr problems entirely from cat so we don't divide by
+        # zero
+
+        ws,=where(  (data['psf_fwhm']*pixscale > 0) & (data['radius'] > 0) )
         print("sizes cut: %s/%s" % (ws.size,data.size))
 
         data=data[ws]
 
-        snr_test = (data['snr'] > self['min_s2n'])
-        w,=where( snr_test )
-        print("s/n cut: %s/%s" % (w.size,ntot))
+        w,=where( data['snr'] > self['min_s2n'] )
+        print("s/n cut %s: %s/%s" % (self['min_s2n'],w.size,ntot))
+
+        data = data[w]
+
+        ntot=data.size
 
         nan_test=(isnan(data['snr']) == False)
         w,=where( nan_test )
         print("nan cut: %s/%s" % (w.size,ntot))
+
+
+        esq = data['s1']**2 + data['s2']**2
+        e_test = ( esq < ( self['max_ellip']**2) )
+        w,=where( e_test )
+        print("e cut %s: %s/%s" % (self['max_ellip'],w.size,ntot))
 
         flags=self.get_flags()
         flag_test=( (data['flag'] & flags) == 0 )
         w,=where( flag_test )
         print("flag cut %s: %s/%s" % (flags,w.size,ntot))
 
-        srat = 2*data['radius']/data['psf_fwhm']
-        srat_test=(srat > self['min_srat'])
-        w,=where( srat_test )
-        print("srat cut %s: %s/%s" % (self['min_srat'],w.size,ntot))
+        if do_srat: 
+            srat = 2*data['radius']/(data['psf_fwhm']*pixscale)
+            srat_test=(srat > self['min_srat'])
+            w,=where( srat_test )
+            print("srat cut %s: %s/%s" % (self['min_srat'],w.size,ntot))
 
         sx_flags_test=(data['flags_r']==0) & (data['flags_i']==0)
         w,=where( sx_flags_test )
         print("sx flags cut: %s/%s" % (w.size,ntot))
 
-        tests = (snr_test & nan_test & flag_test & srat_test 
-                 & sx_flags_test)
+        sg_test = self.get_sg_flags(data)
+        w,=where( sg_test )
+        print("sg cut: %s/%s" % (w.size,ntot))
+
+        tests = (nan_test & flag_test & sx_flags_test & e_test & sg_test )
+        if do_srat:
+            tests = tests & srat_test
         w,=where(tests)
 
+
         print("finally keeping %s/%s" % (w.size, ntot))
-        return w
+
+        data = data[w]
+        return data
 
     def get_flags(self):
         each_flag = [2**bit for bit in self['flags']]
         flags=sum(each_flag)
         return flags
 
-    def create_output(self):
-        data = self.read_original()
-        keep = self.select(data)
+    def get_sg_flags(self, data):
+        class_star_i = data['class_star_i']
+        spread_model_i = data['spread_model_i']
+        spreaderr_model_i = data['spreaderr_model_i']
+        mag_auto_i = data['mag_auto_i']
+        #mag_psf_i = data['mag_psf_i']
+
+        #sg_testp = (  ((class_star_i > 0.3) & (mag_auto_i < 18.0)) 
+        #            | ((spread_model_i + 3*spreaderr_model_i) < 0.003) |  ( (mag_psf_i > 30.0) & (mag_auto_i < 21.0) )   )
+
+        sg_testp = (  ((class_star_i > 0.3) & (mag_auto_i < 18.0)) 
+                    | ((spread_model_i + 3*spreaderr_model_i) < 0.003)  )
+
+        sg_test = (sg_testp == False) & (numpy.abs(spread_model_i) < 0.1)
+
+        return sg_test
+
+
+
+    def create_output(self, orig):
+        data = self.get_good(orig)
 
         assert self['sigmacrit_style']==1
         dt=files.scat_im3shape_dtype(self['sigmacrit_style'])
-        output = numpy.zeros(keep.size, dtype=dt)
+        output = numpy.zeros(data.size, dtype=dt)
 
-        weights = self.get_weights(data, keep)
+        weights = self.get_weights(data)
 
-        output['ra']     = data['ra'][keep]
-        output['dec']    = data['dec'][keep]
-        output['g1']     = data['s1'][keep]
-        output['g2']     = data['s2'][keep]
+        output['ra']     = data['ra']
+        output['dec']    = data['dec']
+        output['g1']     = data['s1']
+        output['g2']     = data['s2']
         output['weight'] = weights
-        output['z']      = data['zp_2'][keep]
+        output['z']      = data['zp_2']
 
         return output
 
-    def get_weights(self, data, index):
-        snr = data['snr'][index]
+    def get_weights(self, data):
+        snr = data['snr']
         eprox2 = (0.1/(snr/40.))**2
         weight = 1.0/(0.2**2 + eprox2)
 

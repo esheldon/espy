@@ -25,8 +25,9 @@ class ObjshearRunConfig(dict):
 
     """
 
-    def __init__(self, run):
+    def __init__(self, run, fs='nfs'):
 
+        self.fs=fs
         conf = lensing.files.cascade_config(run)
         for key in conf:
             self[key] = conf[key]
@@ -44,10 +45,9 @@ class ObjshearRunConfig(dict):
 
     # inputs to objshear
     def write_config(self):
-        fs='hdfs'
         config_file = lensing.files.sample_file(type='config',
                                                 sample=self['run'],
-                                                fs=fs)
+                                                fs=self.fs)
 
         print 'Writing config file:',config_file
         # should automate this type of thing; maybe an
@@ -57,40 +57,48 @@ class ObjshearRunConfig(dict):
         masktype=self['lens_config']['masktype']
         mask_style=MASK_STYLES[masktype]
 
-        with eu.hdfs.HDFSFile(config_file) as hdfs_file:
-            with open(hdfs_file.localfile,'w') as local_file:
+        if self.fs=='hdfs':
+            hdfs_file= eu.hdfs.HDFSFile(config_file)
+            local_fname=hdfs_file.localfile
+        else:
+            local_fname=config_file
+            eu.ostools.makedirs_fromfile(local_fname)
 
-                fmt='%-17s = %s\n'
+        with open(local_fname,'w') as local_file:
 
-                for key in ['H0','omega_m','npts']:
-                    local_file.write(fmt % (key, self['cosmo_config'][key]))
-                for key in ['nside']:
-                    local_file.write(fmt % (key, self[key]))
+            fmt='%-17s = %s\n'
 
-                local_file.write(fmt % ("mask_style",mask_style))
+            for key in ['H0','omega_m','npts']:
+                local_file.write(fmt % (key, self['cosmo_config'][key]))
+            for key in ['nside']:
+                local_file.write(fmt % (key, self[key]))
 
-                for key in ['sigmacrit_style']:
-                    local_file.write(fmt % (key,self['src_config'][key]))
-                for key in ['nbin','rmin','rmax']:
-                    local_file.write(fmt % (key,self['lens_config'][key]))
+            local_file.write(fmt % ("mask_style",mask_style))
 
-                if self['src_config']['sigmacrit_style'] == 2:
-                    zlvals=self.make_zlvals()
+            for key in ['sigmacrit_style']:
+                local_file.write(fmt % (key,self['src_config'][key]))
+            for key in ['nbin','rmin','rmax']:
+                local_file.write(fmt % (key,self['lens_config'][key]))
 
-                    local_file.write('zlvals = [')
-                    zlvals.tofile(local_file, sep=' ')
-                    local_file.write(']\n')
+            if self['src_config']['sigmacrit_style'] == 2:
+                zlvals=self.make_zlvals()
 
-                if 'zmin' in self['lens_config']:
-                    st=fmt % ('min_zlens_interp',self['lens_config']['zmin'])
-                    local_file.write(st)
+                local_file.write('zlvals = [')
+                zlvals.tofile(local_file, sep=' ')
+                local_file.write(']\n')
 
-                for key in ['mag_range','R_range']:
-                    if key in self:
-                        ls=['%s' % v for v in self[key]]
-                        vstr = '[' + ' '.join(ls) + ']'
-                        local_file.write(fmt % (key,vstr))
+            if 'zmin' in self['lens_config']:
+                st=fmt % ('min_zlens_interp',self['lens_config']['zmin'])
+                local_file.write(st)
 
+            for key in ['mag_range','R_range']:
+                if key in self:
+                    ls=['%s' % v for v in self[key]]
+                    vstr = '[' + ' '.join(ls) + ']'
+                    local_file.write(fmt % (key,vstr))
+
+        if self.fs=='hdfs':
             hdfs_file.put(clobber=True)
+            hdfs_file.cleanup()
 
       

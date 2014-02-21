@@ -40,7 +40,8 @@ def instantiate_sample(**keys):
 
     elif 'redmapper-dr8-rand' in conf['catalog']:
         return RedMapperRandom(sample, **keys)
-
+    elif 'redmapper-des' in conf['catalog']:
+        return RedMapperDES(sample, **keys)
     elif conf['catalog'][0:9] == 'redmapper':
         return RedMapper(sample, **keys)
 
@@ -632,6 +633,49 @@ class SDSSVoidsRandom(LcatBase):
 
         return numpy.array(maskflags, dtype='i8')
 
+
+class RedMapperDES(LcatBase):
+    def __init__(self, sample, **keys):
+        super(RedMapperDES,self).__init__(sample, **keys)
+
+        cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])
+        self.cosmo = cosmology.Cosmo(omega_m=cconf['omega_m'], H0=cconf['H0'])
+
+    def create_objshear_input(self, **keys):
+        from es_sdsspy.stomp_maps import get_quad_logic
+        
+        nsplit=self['nsplit']
+        if nsplit != 1:
+            raise ValueError("expected nsplit=1 for RedMapperDES")
+
+        z_field = self['z_field']
+        lambda_field = self['lambda_field']
+
+        data = self.read_original()
+
+        # keep index into original data
+        orig_size = data.size
+        zindex = numpy.arange(orig_size,dtype='i4')
+
+        # trim z for speed
+        z_logic = self.z_logic(data[z_field])
+
+        good=where1(z_logic)
+
+        # make sure in the tycho window and two adjacent quadrants
+        # not hitting edge (or no edge if strict=True)
+
+        print('creating output array')
+        output = make_output_array(good.size)
+
+        print('copying data')
+        output['zindex']    = zindex[good]
+        output['ra']        = data['ra'][good]
+        output['dec']       = data['dec'][good]
+        output['z']         = data[z_field][good]
+        output['maskflags'] = 0 # not currently used
+        lensing.files.lcat_write(sample=self['sample'], data=output,
+                                 lens_split=0)
 
 
 class RedMapper(LcatBase):

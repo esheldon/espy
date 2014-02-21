@@ -20,6 +20,8 @@ from numpy import where, zeros, ones
 from optparse import OptionParser
 
 parser=OptionParser(__doc__)
+parser.add_option('--fs',default='nfs',
+                  help="which file system")
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -30,25 +32,35 @@ def main():
 
     run=args[0]
 
-    outfile = lensing.files.collated_file(sample=run)
+    outfile = lensing.files.collated_file(sample=run,
+                                          fs=options.fs)
     c=lensing.files.cascade_config(run)
     nsplit=c['lens_config']['nsplit']
 
     print("processing",nsplit,"lens splits")
 
     print(outfile)
-    with eu.hdfs.HDFSFile(outfile,verbose=True) as hdfs_obj:
-        print("opening:",hdfs_obj.localfile)
-        with fitsio.FITS(hdfs_obj.localfile,'rw',clobber=True) as fobj:
 
-            for i in xrange(nsplit):
-                t=lensing.files.collated_read(sample=run,
-                                              lens_split=i,
-                                              verbose=False)
-                if i==0:
-                    fobj.write(t)
-                else:
-                    fobj[-1].append(t)
+    if options.fs=='hdfs':
+        hdfs_file=eu.hdfs.HDFSFile(outfile,verbose=True)
+        local_file=hdfs_file.localfile
+    else:
+        local_file=outfile
 
-        hdfs_obj.put(clobber=True)
+    print("opening:",local_file)
+    with fitsio.FITS(local_file,'rw',clobber=True) as fobj:
+
+        for i in xrange(nsplit):
+            t=lensing.files.collated_read(sample=run,
+                                          lens_split=i,
+                                          verbose=False,
+                                          fs=options.fs)
+            if i==0:
+                fobj.write(t)
+            else:
+                fobj[-1].append(t)
+
+    if options.fs=='hdfs':
+        hdfs_file.put(clobber=True)
+        hdfs_file.cleanup()
 main()

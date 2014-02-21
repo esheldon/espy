@@ -1,13 +1,17 @@
-sample:             "im3shape01"
+sample:             "im3shape-r01"
 
 # collated with gold, NN photoz
 catalog:            "im3shape-v3-gold-nn"
 band:               "r"
 
-min_s2n: 10.0
+# 20 is redundant with the flag cut
+min_s2n: 20.0
 min_srat: 1.0
 
-flags: [0,2,3]
+max_ellip: 0.95
+
+# this includes s/n 20 cut
+flags: [0,2,3,4,5]
 
 # point estimators
 sigmacrit_style:    1
@@ -19,5 +23,4 @@ cosmo_sample:       "01"
 nsplit:             100
 
 comment: | 
-
-    First try with im3shape
+    srat 1
