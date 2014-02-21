@@ -712,7 +712,8 @@ class IM3ShapePointz(GenericSrcCatalog):
         hplt.label='unweighted'
         whplt.label='weighted'
 
-        key=biggles.PlotKey(0.1, 0.1, [hplt,whplt])
+        key=biggles.PlotKey(0.9, 0.9, [hplt,whplt],
+                            halign='right')
 
 
         plt=biggles.FramedPlot()
