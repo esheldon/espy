@@ -676,13 +676,62 @@ class IM3ShapePointz(GenericSrcCatalog):
 
         plt.add( pts )
 
-        if show:
-            plt.show()
+        domake(plt, show=show, eps=eps, png=png)
 
-        if eps:
-            plt.write_eps(eps)
-        if png:
-            plt.write_img(800, 800, png)
+    def plot_sizes(self, data,
+                   eps=None, png=None, show=False):
+        import biggles
+
+        rad_range=[0,6]
+        binsize=0.1
+
+        wts=self.get_weights(data)
+        wts *= (1./wts.max())
+        wts1=numpy.ones(data.size)
+
+        bs=eu.stat.Binner(data['radius'],
+                          weights=wts1)
+        bs.dohist(binsize=binsize,
+                  min=rad_range[0],
+                  max=rad_range[1])
+        bs.calc_stats()
+
+        wbs=eu.stat.Binner(data['radius'], weights=wts)
+        wbs.dohist(binsize=binsize,
+                   min=rad_range[0],
+                   max=rad_range[1])
+        wbs.calc_stats()
+
+        hplt=biggles.Histogram(bs['whist'], 
+                               x0=rad_range[0], binsize=binsize,
+                               color='red')
+        whplt=biggles.Histogram(wbs['whist'], 
+                                x0=rad_range[0], binsize=binsize,
+                                color='blue')
+
+        hplt.label='unweighted'
+        whplt.label='weighted'
+
+        key=biggles.PlotKey(0.1, 0.1, [hplt,whplt])
+
+
+        plt=biggles.FramedPlot()
+        plt.add( hplt, whplt, key )
+
+
+        plt.xtitle=r'$r_{1/2}$'
+        plt.aspect_ratio=1
+
+        domake(plt, show=show, eps=eps, png=png)
+
+def domake(plt, show=False, eps=None,
+           png=None, width=800, height=800):
+    if show:
+        plt.show()
+    if eps:
+        plt.write_eps(eps)
+    if png:
+        plt.write_img(width, height, png)
 
 class DESMockSrcCatalog(dict):
     """
