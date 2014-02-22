@@ -313,10 +313,14 @@ class BinnerBase(dict):
             nrow=2
             ncol=3
             aspect_ratio=2./3.
-        elif self['nbin'] == 2:
+        elif self['nbin'] == 4:
             nrow = 2
-            ncol=1
-            aspect_ratio=1.5
+            ncol = 2
+            aspect_ratio=1.0
+        elif self['nbin'] == 2:
+            nrow = 1
+            ncol = 2
+            aspect_ratio=float(nrow)/ncol
         else:
             raise ValueError("Unsupported nbin: %s" % self['nbin'])
 
@@ -978,9 +982,9 @@ class ILumBinner(BinnerBase):
 
             print("l,h:",l,h)
             if h is not None:
-                print('%0.2f < ilum < %0.2f' % tuple(lamrange))
+                print('%0.2f < L/L_* < %0.2f' % tuple(lamrange))
             else:
-                print('ilum > %0.2f' % l)
+                print('L/L_*> %0.2f' % l)
 
             print("    reducing and jackknifing by lens")
             comb,w = reduce_from_ranges(data,
@@ -1037,17 +1041,37 @@ class ILumBinner(BinnerBase):
         if lrange[0] is None and lrange[1] is None:
             raise ValueError("expected at least one in range to be not None")
         elif lrange[1] == 1.e6:
-            return r'$ilum > %0.1f$' % lrange[0]
+            return r'$L/L_*> %0.1f$' % lrange[0]
         elif lrange[0] is None:
-            return r'$ilum < %0.1f$' % lrange[1]
+            return r'$L/L_* < %0.1f$' % lrange[1]
         else:
-            return r'$%0.1f < ilum < %0.1f$' % lrange
+            return r'$%0.1f < L/L_* < %0.1f$' % lrange
 
 
     def set_bin_ranges(self):
         if self['nbin'] == 2:
             lowlim = [0.1, 1.0]
             highlim = [1.0, 1.e6]
+        elif self['nbin']==4:
+            lowlim  = numpy.array([-0.92, -0.35, 0.00, 0.40])
+            highlim = numpy.array([-0.35,  0.00, 0.40, 1.70])
+            lowlim  = 10**lowlim
+            highlim = 10**highlim
+
+            highlim[-1] = 1.e6
+
+        elif self['nbin']==12:
+            # this doesn't really work for the gaussianish ilum distribution
+            lowlim=numpy.array([-0.92, -0.71880262, -0.51880262, -0.31880262, -0.11880262,
+                                0.08119738,  0.28119738,  0.48119738,  0.68119738,  0.88119738,
+                                1.08119738,  1.28119738])
+            highlim=numpy.array([-0.71880262, -0.51880262, -0.31880262, -0.11880262,  0.08119738,
+                                 0.28119738,  0.48119738,  0.68119738,  0.88119738,  1.08119738,
+                                 1.28119738,  1.7])
+            lowlim  = 10**lowlim
+            highlim = 10**highlim
+
+
         else:
             raise ValueError("Unsupported nbin: %d\n", self['nbin'])
 
