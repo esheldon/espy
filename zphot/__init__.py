@@ -7,6 +7,8 @@ import weighting
 import validation
 import rachel
 
+from . import skynet
+
 try:
     import cas
 except:

@@ -43,6 +43,8 @@ except:
 def instantiate_binner(type, nbin):
     if type == 'lambda':
         b = LambdaBinner(nbin)
+    elif type=='ilum':
+        b = ILumBinner(nbin)
     elif type == 'n200':
         b = N200Binner(nbin)
     elif type == 'mz':
@@ -263,7 +265,7 @@ class BinnerBase(dict):
             converter.convert(epsfile, dpi=self.dpi, verbose=True)
 
 
-    def plot_dsig_byrun_1var(self, run, type, show=False):
+    def plot_dsig_byrun_1var(self, run, type, yrnge=None, xrnge=None, show=False):
         """
 
         Make an array of plots with each plot a bin in one variable.  
@@ -324,8 +326,10 @@ class BinnerBase(dict):
         pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
         pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
 
-        xrnge = [0.01,60.0]
-        yrnge = [1.e-2,8000]
+        if xrnge is None:
+            xrnge = [0.01,60.0]
+        if yrnge is None:
+            yrnge = [1.e-2,8000]
         pa.xrange = xrnge
         pa.yrange = yrnge
         pa.xlog = True
@@ -943,6 +947,112 @@ class LambdaBinner(BinnerBase):
         self.highlim = highlim
 
 
+class ILumBinner(BinnerBase):
+    """
+    lrg des binner on lambda
+    """
+    range_type='()'
+
+    # in units of L* 
+    ilum_field = 'ilum'
+    z_field = 'zred2'
+    def name(self):
+        return 'ilum-%02d' % self['nbin']
+
+    def bin(self, data):
+        """
+        call also call base method bin_byrun
+        """
+        from math import ceil
+        ilum_field = self.ilum_field
+        z_field = self.z_field
+
+        low, high = self.bin_ranges()
+
+        nrbin = data['rsum'][0].size
+        bs = lensbin_struct(nrbin, bintags=['ilum','z'], n=self['nbin'])
+
+        i=0
+        for l,h in zip(low,high):
+            lamrange = [l,h]
+
+            print("l,h:",l,h)
+            if h is not None:
+                print('%0.2f < ilum < %0.2f' % tuple(lamrange))
+            else:
+                print('ilum > %0.2f' % l)
+
+            print("    reducing and jackknifing by lens")
+            comb,w = reduce_from_ranges(data,
+                                        ilum_field,
+                                        lamrange, 
+                                        range_type=self.range_type,
+                                        getind=True)
+        
+            print("    found",w.size,"in bin")
+            # first copy all common tags
+            for n in comb.dtype.names:
+                bs[n][i] = comb[n][0]
+
+            # now the things we are averaging by lens weight
+            mn,err,sdev = lens_wmom(data,z_field,ind=w, sdev=True)
+            bs['z_mean'][i] = mn
+            bs['z_err'][i] = err
+            bs['z_sdev'][i] = sdev
+            bs['z_range'][i] = data[z_field][w].min(), data[z_field][w].max()
+
+            mn,err,sdev = lens_wmom(data,ilum_field,ind=w, sdev=True)
+            bs['ilum_mean'][i] = mn
+            bs['ilum_err'][i] = err
+            bs['ilum_sdev'][i] = sdev
+            bs['ilum_range'][i] = lamrange
+            bs['ilum_minmax'][i] = \
+                data[ilum_field][w].min(), data[ilum_field][w].max()
+
+            # fix up last one
+            if i == (bs.size-1):
+                bs['ilum_range'][i,1] = ceil(bs['ilum_minmax'][i,1])
+
+            i+=1
+
+        return bs
+
+    def select_bin(self, data, binnum):
+        """
+
+        Although not used by bin(), this is useful for other programs such as
+        the random hist matching and correction code
+
+        """
+        if binnum > self['nbin']:
+            raise ValueError("bin number must be in [0,%d]" % (self['nbin']-1,))
+
+        low, high = self.bin_ranges()
+        logic = get_range_logic(data, self.ilum_field, [low[binnum], high[binnum]], self.range_type)
+        return where1(logic)
+
+
+    def bin_label(self, binnum):
+        lrange = self.bin_ranges(binnum)
+        if lrange[0] is None and lrange[1] is None:
+            raise ValueError("expected at least one in range to be not None")
+        elif lrange[1] == 1.e6:
+            return r'$ilum > %0.1f$' % lrange[0]
+        elif lrange[0] is None:
+            return r'$ilum < %0.1f$' % lrange[1]
+        else:
+            return r'$%0.1f < ilum < %0.1f$' % lrange
+
+
+    def set_bin_ranges(self):
+        if self['nbin'] == 2:
+            lowlim = [0.1, 1.0]
+            highlim = [1.0, 1.e6]
+        else:
+            raise ValueError("Unsupported nbin: %d\n", self['nbin'])
+
+        self.lowlim = lowlim
+        self.highlim = highlim
 
 
 class N200Binner(BinnerBase):

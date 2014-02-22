@@ -506,6 +506,7 @@ class IM3ShapePointz(GenericSrcCatalog):
             self['scinv_config'] = \
                     lensing.files.read_config('scinv', conf['scinv_sample'])
 
+        self.pixscale=0.263
         self.fs=fs
 
     def fname_original(self):
@@ -545,14 +546,12 @@ class IM3ShapePointz(GenericSrcCatalog):
     def get_good(self, data, do_srat=True):
         from numpy import where, isnan
 
-        pixscale=0.265
-
         ntot=data.size
 
         # remove size and snr problems entirely from cat so we don't divide by
         # zero
 
-        ws,=where(  (data['psf_fwhm']*pixscale > 0) & (data['radius'] > 0) )
+        ws,=where(  (data['psf_fwhm']*self.pixscale > 0) & (data['radius'] > 0) )
         print("sizes cut: %s/%s" % (ws.size,data.size))
 
         data=data[ws]
@@ -580,7 +579,7 @@ class IM3ShapePointz(GenericSrcCatalog):
         print("flag cut %s: %s/%s" % (flags,w.size,ntot))
 
         if do_srat: 
-            srat = 2*data['radius']/(data['psf_fwhm']*pixscale)
+            srat = 2*data['radius']/(data['psf_fwhm']*self.pixscale)
             srat_test=(srat > self['min_srat'])
             w,=where( srat_test )
             print("srat cut %s: %s/%s" % (self['min_srat'],w.size,ntot))
@@ -729,6 +728,60 @@ class IM3ShapePointz(GenericSrcCatalog):
             plt.title=title
 
         write_plot(plt, **keys)
+
+    def plot_srat(self, data, binsize=0.01, **keys):
+        import biggles
+
+        srat = 2*data['radius']/(data['psf_fwhm']*self.pixscale)
+
+        srat_range=[0,10]
+
+        wts=self.get_weights(data)
+        wts *= (1./wts.max())
+        wts1=numpy.ones(data.size)
+
+        bs=eu.stat.Binner(srat, 
+                          weights=wts1)
+        bs.dohist(binsize=binsize,
+                  min=srat_range[0],
+                  max=srat_range[1])
+        bs.calc_stats()
+
+        wbs=eu.stat.Binner(srat, weights=wts)
+        wbs.dohist(binsize=binsize,
+                   min=srat_range[0],
+                   max=srat_range[1])
+        wbs.calc_stats()
+
+        hplt=biggles.Histogram(bs['whist'], 
+                               x0=srat_range[0], binsize=binsize,
+                               color='red')
+        whplt=biggles.Histogram(wbs['whist'], 
+                                x0=srat_range[0], binsize=binsize,
+                                color='blue')
+
+        hplt.label='unweighted'
+        whplt.label='weighted'
+
+        key=biggles.PlotKey(0.9, 0.9, [hplt,whplt],
+                            halign='right')
+
+
+        plt=biggles.FramedPlot()
+        plt.add( hplt, whplt, key )
+
+
+        plt.xtitle=r'$FWHM_{gal}/FWHM_{PSF}$'
+        plt.aspect_ratio=1
+
+        title=keys.get('title',None)
+        if title:
+            plt.title=title
+
+        write_plot(plt, **keys)
+
+
+
 
     def plot_ellip(self, data, binsize=0.005, **keys):
         import biggles
