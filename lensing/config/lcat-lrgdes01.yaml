@@ -1,0 +1,24 @@
+sample: "lrgdes01"
+catalog: "lrg-des-sva1-gold-1.0"
+
+# this is redundant with the cosmo_sample declaration in the run file
+# we have to demand consistency
+cosmo_sample: "01"
+
+# these used to be in the run file. Moved here because we need to trim lenses
+# first
+nbin:          21
+rmin:          0.02
+rmax:          36.567
+
+# if true, use a strict edge cut
+strict_edgecut: false
+
+zmin:          0.0
+zmax:          10.0
+
+z_field: "zred2"
+
+masktype: null
+
+nsplit: 1
