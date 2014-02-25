@@ -73,6 +73,57 @@ def get_gmix_output_path(version, obj_range=None):
     path=os.path.join(d, fname)
     return path
 
+def get_dist_dir(version):
+    """
+    Fits to parameter distributions
+    """
+    d=get_gmix_dir(version)
+    d=os.path.join(d, 'dist')
+    return d
+
+
+def get_dist_path(version, model, dist_type, ext='fits'):
+    """
+    The fits to the joint distribution
+    """
+
+    d=get_dist_dir(version)
+    fname='gmix-cosmos-%s-%s-%s.%s' % (version, model, dist_type,ext)
+    path=os.path.join(d, fname)
+    return path
+
+def write_dist(version, model, dist_type, output, header=None):
+    """
+    Write to a dist fit file
+    """
+    import fitsio
+
+    fname=get_dist_path(version, model, dist_type)
+
+    d=get_dist_dir(version)
+    if not os.path.exists(d):
+        os.makedirs(d)
+
+    print 'writing:',fname
+    with fitsio.FITS(fname,'rw',clobber=True) as fobj:
+        fobj.write(output, header=header)
+
+
+def get_joint_T_flux_path(version, obj_range=None):
+    """
+    The output file from processing with gmix fits
+    """
+
+    d=get_gmix_output_dir(version)
+    fname='gmix-cosmos-%s' % version
+    if obj_range is not None:
+        fname = '%s-%05d-%05d' % (fname, obj_range[0], obj_range[1])
+
+    fname = '%s.fits' % fname
+    path=os.path.join(d, fname)
+    return path
+
+
 def read_output(version, obj_range=None):
     """
     Read output files
