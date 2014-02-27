@@ -82,23 +82,28 @@ def get_dist_dir(version):
     return d
 
 
-def get_dist_path(version, model, dist_type, ext='fits'):
+def get_dist_path(version, model, dist_type, ext='fits', extra=None):
     """
     The fits to the joint distribution
     """
 
     d=get_dist_dir(version)
-    fname='gmix-cosmos-%s-%s-%s.%s' % (version, model, dist_type,ext)
+    fname='gmix-cosmos-%s-%s-%s' % (version, model, dist_type)
+
+    if extra is not None:
+        fname = '%s-%s' % (fname, extra)
+
+    fname = '%s.%s' % (fname,ext)
     path=os.path.join(d, fname)
     return path
 
-def write_dist(version, model, dist_type, output, header=None):
+def write_dist(version, model, dist_type, output, extra=None, header=None):
     """
     Write to a dist fit file
     """
     import fitsio
 
-    fname=get_dist_path(version, model, dist_type)
+    fname=get_dist_path(version, model, dist_type, extra=extra)
 
     d=get_dist_dir(version)
     if not os.path.exists(d):

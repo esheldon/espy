@@ -496,6 +496,32 @@ class DESMockCatalog(dict):
         data = eu.io.read(infile, lower=True, verbose=True)
         return data
 
+def im3daniel_to_columns(version):
+    import columns
+    import fitsio
+
+    dir=os.path.join(files.catalog_dir(), version)
+    coldir='%s.cols' % dir
+
+    cols=columns.Columns(coldir)
+    if cols.dir_exists():
+        raise RuntimeError("remove existing directory:\n%s\n" % coldir)
+
+    cols.create()
+
+    # 0 to 252 no zero padding
+    fname_pattern='sva1_gold_desdmphotoz_im3shape_v3_ri_cat%d.fits.gz'
+    for i in xrange(253):
+        fname=fname_pattern % i
+        print(fname)
+
+        fname=os.path.join(dir, fname)
+
+        data=fitsio.read(fname, ext=1, lower=True)
+
+        cols.write_columns(data)
+
+
 class IM3ShapePointz(GenericSrcCatalog):
     def __init__(self, sample, fs='nfs'):
         conf = lensing.files.read_config('scat', sample)

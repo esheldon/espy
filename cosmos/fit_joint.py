@@ -8,8 +8,8 @@ import numpy
 from . import analysis
 from . import files
 
-NGAUSS=8
-N_ITER=1000
+NGAUSS_DEFAULT=8
+N_ITER_DEFAULT=1000
 MIN_COVAR=1.0e-6
 COVARIANCE_TYPE='full'
 
@@ -20,8 +20,9 @@ def make_joint_gmm(means, covars, weights):
     from sklearn.mixture import GMM
     # we will over-ride values, pars here shouldn't matter except
     # for consistency
-    gmm=GMM(n_components=NGAUSS,
-            n_iter=N_ITER,
+    ngauss=weights.size
+    gmm=GMM(n_components=ngauss,
+            n_iter=N_ITER_DEFAULT,
             min_covar=MIN_COVAR,
             covariance_type=COVARIANCE_TYPE)
     gmm.means_ = means.copy()
@@ -30,9 +31,8 @@ def make_joint_gmm(means, covars, weights):
 
     return gmm
 
-def fit_joint(version, model):
+def fit_joint(version, model, ngauss=NGAUSS_DEFAULT, n_iter=N_ITER_DEFAULT):
 
-    ngauss=8
     data=files.read_output(version)
 
     w=select_by_flux(data, model)
@@ -40,9 +40,9 @@ def fit_joint(version, model):
     pname = '%s_pars' % model
     log_T_flux = numpy.log10( data[pname][w, 4:4+2] )
 
-    gmm=fit_gmix2d(log_T_flux,ngauss)
+    gmm=fit_gmix2d(log_T_flux,ngauss,n_iter)
 
-    output=numpy.zeros(NGAUSS, dtype=[('means','f8',2),
+    output=numpy.zeros(ngauss, dtype=[('means','f8',2),
                                       ('covars','f8',(2,2)),
                                       ('weights','f8')])
     output['means']=gmm.means_
@@ -50,7 +50,9 @@ def fit_joint(version, model):
     output['weights']=gmm.weights_
 
 
-    eps=files.get_dist_path(version,model,'joint-dist',ext='eps')
+    extra='ngauss%d' % ngauss
+    eps=files.get_dist_path(version,model,'joint-dist',ext='eps',
+                            extra=extra)
     gmmtest=make_joint_gmm(output['means'], output['covars'], output['weights'])
 
     log_flux_mode, log_T_near=plot_fits(log_T_flux, gmmtest, model, eps=eps)
@@ -68,12 +70,13 @@ def fit_joint(version, model):
        'fmode':flux_mode,
        'logTnear':log_T_near,
        'Tnear':T_near}
-    files.write_dist(version, model, 'joint-dist', output,header=h)
+    files.write_dist(version, model, 'joint-dist', output,header=h,
+                     extra=extra)
 
     return output, h
 
 
-def fit_gmix2d(data, ngauss):
+def fit_gmix2d(data, ngauss, n_iter):
     """
     Send log10(T) and log10(flux).
     
@@ -84,8 +87,8 @@ def fit_gmix2d(data, ngauss):
     """
     from sklearn.mixture import GMM
 
-    gmm=GMM(n_components=NGAUSS,
-            n_iter=N_ITER,
+    gmm=GMM(n_components=ngauss,
+            n_iter=n_iter,
             min_covar=MIN_COVAR,
             covariance_type=COVARIANCE_TYPE)
 
