@@ -1,0 +1,70 @@
+#!/usr/bin/env python
+"""
+    %prog newfile file1 [file2 file3....]
+
+Concatenate the tables from the input fits files into one big new table
+in a new file.
+"""
+from __future__ import print_function
+
+import os
+import sys
+
+from optparse import OptionParser
+
+import fitsio
+
+parser=OptionParser(__doc__)
+parser.add_option("-e","--ext",default=1,
+                  help="zero-offset extension. Default %default")
+parser.add_option("--clobber",action='store_true',
+                  help="clobber existing file")
+
+
+def check(outf, options):
+    if not options.clobber and os.path.exists(outf):
+        mess="error: file exists: `%s' send --clobber to over-write"
+        mess=mess % outf
+
+        print(mess)
+        sys.exit(1)
+
+def cat_files(outf, flist, options):
+    ext=get_ext( options.ext )
+
+    print("    writing to:",outf)
+    with fitsio.FITS(outf, 'rw', clobber=options.clobber) as fobj:
+        for i,fname in enumerate(flist):
+            print("   ",fname)
+            tmp = fitsio.read(fname, ext=ext)
+
+            if i==0:
+                fobj.write(tmp)
+            else:
+                fobj[-1].append(tmp)
+
+def get_ext(ext_string):
+    try:
+        ext=int(ext_string)
+    except:
+        ext=ext_string
+
+    return ext
+
+def main():
+    options, args = parser.parse_args(sys.argv[1:])
+
+    if len(args) < 2:
+        parser.print_help()
+        sys.exit(45)
+
+
+    outf=args[0]
+
+    check(outf, options)
+
+
+    flist=args[1:]
+    cat_files(outf, flist, options)
+
+main()
