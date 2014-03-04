@@ -1,5 +1,5 @@
 sample: "rm05"
-catalog: "redmapper-dr8-5.20"
+catalog: "redmapper-dr8-5.2"
 
 # this is redundant with the cosmo_sample declaration in the run file
 # we have to demand consistency

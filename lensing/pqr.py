@@ -5,7 +5,45 @@ from . import util
 from .util import ShapeRangeError
 import numpy
 
-def get_shear_pqr_sums(P,Q,R):
+def get_pqr_shear(P,Q,R, get_sums=False):
+    """
+    Extract a shear estimate from the p,q,r values from
+    Bernstein & Armstrong
+
+    parameters
+    ----------
+    P: array[nobj]
+        Prior times jacobian
+    Q: array[nobj,2]
+        gradient of P with respect to shear
+    R: array[nobj,2,2]
+        gradient of gradient
+
+    output
+    ------
+    [g1,g2]: array
+
+    notes
+    -----
+    If done on a single object, the operations would look simpler
+
+    QQ = numpy.outer(Q,Q)
+    Cinv = QQ/P**2 - R/P
+    C = numpy.linalg.inv(Cinv)
+    g1g2 = numpy.dot(C,Q/P)
+
+    """
+
+    P_sum, Q_sum, Cinv_sum = get_pqr_sums(P,Q,R)
+
+    g1g2, C = combine_pqr_sums(P_sum, Q_sum, Cinv_sum)
+
+    if get_sums:
+        return g1g2, C, Q_sum, Cinv_sum
+    else:
+        return g1g2, C
+
+def get_pqr_sums(P,Q,R):
     """
     Create the sums used to calculate shear from BA13 PQR
     """
@@ -46,47 +84,19 @@ def get_shear_pqr_sums(P,Q,R):
 
     return P_sum, Q_sum, Cinv_sum
 
-
-def get_shear_pqr(P,Q,R, get_sums=False):
+def combine_pqr_sums(P_sum, Q_sum, Cinv_sum):
     """
-    Extract a shear estimate from the p,q,r values from
-    Bernstein & Armstrong
-
-    parameters
-    ----------
-    P: array[nobj]
-        Prior times jacobian
-    Q: array[nobj,2]
-        gradient of P with respect to shear
-    R: array[nobj,2,2]
-        gradient of gradient
-
-    output
-    ------
-    [g1,g2]: array
-
-    notes
-    -----
-    If done on a single object, the operations would look simpler
-
-    QQ = numpy.outer(Q,Q)
-    Cinv = QQ/P**2 - R/P
-    C = numpy.linalg.inv(Cinv)
-    g1g2 = numpy.dot(C,Q/P)
-
+    Combine the sums from get_pqr_sums to
+    get a shear and covariance matrix
     """
-
-    P_sum, Q_sum, Cinv_sum = get_shear_pqr_sums(P,Q,R)
 
     # linalg doesn't support f16 if that is the type of above
     # arguments
-    C = numpy.linalg.inv(Cinv_sum.astype('f8')).astype(P.dtype)
+    C = numpy.linalg.inv(Cinv_sum.astype('f8')).astype(P_sum.dtype)
     g1g2 = numpy.dot(C,Q_sum)
 
-    if get_sums:
-        return g1g2, C, Q_sum, Cinv_sum
-    else:
-        return g1g2, C
+    return g1g2, C
+
 
 def pqr_jackknife(P, Q, R,
                   chunksize=1,
@@ -99,7 +109,7 @@ def pqr_jackknife(P, Q, R,
     """
     Get the shear covariance matrix using jackknife resampling.
 
-    The trick is that this must be done in pairs
+    The trick is that this must be done in pairs for ring tests
 
     chunksize is the number of *pairs* to remove for each chunk
     """
@@ -116,7 +126,7 @@ def pqr_jackknife(P, Q, R,
     # some may not get used
     nchunks = npair/chunksize
 
-    P_sum, Q_sum, Cinv_sum = get_shear_pqr_sums(P,Q,R)
+    P_sum, Q_sum, Cinv_sum = get_pqr_sums(P,Q,R)
     C = numpy.linalg.inv(Cinv_sum)
     shear = numpy.dot(C,Q_sum)
 
@@ -135,7 +145,7 @@ def pqr_jackknife(P, Q, R,
         Rtmp = R[beg:end,:,:]
 
         P_sum, Q_sum_tmp, Cinv_sum_tmp = \
-                get_shear_pqr_sums(Ptmp,Qtmp,Rtmp)
+                get_pqr_sums(Ptmp,Qtmp,Rtmp)
         
         Q_sum_tmp    = Q_sum - Q_sum_tmp
         Cinv_sum_tmp = Cinv_sum - Cinv_sum_tmp
@@ -191,7 +201,7 @@ def pqr_in_chunks(P, Q, R, chunksize):
         Qtmp = Q[beg:end,:]
         Rtmp = R[beg:end,:,:]
 
-        sh, C = get_shear_pqr(Ptmp, Qtmp, Rtmp)
+        sh, C = get_pqr_shear(Ptmp, Qtmp, Rtmp)
 
         shears[i, :] = sh
         covs[i, :, :] = C
@@ -243,7 +253,7 @@ def pqr_bootstrap(P, Q, R, nsamples, verbose=False, show=False, eps=None, png=No
         Qboot[:,:] = Q[rind,:]
         Rboot[:,:,:] = R[rind,:,:]
 
-        sh, C_not_used =  get_shear_pqr(Pboot, Qboot, Rboot)
+        sh, C_not_used =  get_pqr_shear(Pboot, Qboot, Rboot)
 
         shears[i, :] = sh
 

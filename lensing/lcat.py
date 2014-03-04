@@ -734,7 +734,8 @@ class RedMapper(LcatBase):
                                    'redmapper-dr8-3.4-nord',
                                    'redmapper-dr8-3.14',
                                    'redmapper-dr8-3.14-cen2',
-                                   'redmapper-dr8-5.20']:
+                                   'redmapper-dr8-5.2',
+                                   'redmapper-dr8-5.10-lgt05']:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
         cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])
@@ -788,14 +789,29 @@ class RedMapper(LcatBase):
         print('creating output array')
         output = make_output_array(good.size)
 
-        print('copying data')
-        output['zindex']    = zindex[good]
-        output['ra']        = data['ra'][good]
-        output['dec']       = data['dec'][good]
-        output['z']         = data[z_field][good]
-        output['maskflags'] = maskflags[good]
+        self.copy_output(output, zindex, data, maskflags, good)
+
         lensing.files.lcat_write(sample=self['sample'], data=output,
                                  lens_split=0)
+
+    def copy_output(self, output, zindex, data, maskflags, good):
+        print('copying data')
+
+        output['zindex']    = zindex[good]
+        output['z']         = data[z_field][good]
+        output['maskflags'] = maskflags[good]
+
+        ra_field = self['ra_field']
+        dec_field = self['dec_field']
+        if 'cent' in ra_field:
+            # alternative centers
+            pos_index=self['psf_index']
+            output['ra']        = data[ra_field][good,pos_index]
+            output['dec']       = data[dec_field][good,pos_index]
+        else:
+            output['ra']        = data[ra_field][good]
+            output['dec']       = data[dec_field][good]
+
 
     def load_stomp_maps(self):
         if not hasattr(self, 'basic_map'):
@@ -1037,7 +1053,7 @@ class RedMapperRandom(LcatBase):
         # this copies each key to self[key]
         LcatBase.__init__(self, sample, **keys)
 
-        if self['catalog'] not in ['redmapper-dr8-rand-5.20']:
+        if self['catalog'] not in ['redmapper-dr8-rand-5.2']:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
         cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])
