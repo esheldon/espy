@@ -33,24 +33,6 @@ from esutil.ostools import path_join, expand_path
 
 import images
 
-try:
-
-    import sdsspy
-    from sdsspy.atlas.atlas import NoAtlasImageError
-    import es_sdsspy
-    import biggles
-
-    import fimage
-    from fimage.conversions import mom2fwhm
-
-    import admom
-    import zphot
-    import columns
-except:
-    print("could not import external modules")
-
-
-
 def open_columns(procrun, sweeptype):
     coll = Collator(procrun, sweeptype)
     return coll.open_columns()
@@ -66,6 +48,7 @@ def zphot_match(procrun, pzrun, sweeptype):
 
     The column name will be match_zphot{pzrun}
     '''
+    import zphot
 
     print("opening regauss columns for procrun:",procrun)
     rgcols = open_columns(procrun, sweeptype)
@@ -108,8 +91,313 @@ def zphot_match(procrun, pzrun, sweeptype):
     print("Creating index")
     rgcols[match_column].create_index()
 
+def make_scinv_chunk_scripts(procrun, scinv_sample, chunksize=1000000):
+    print("using chunksize:",chunksize)
+
+    outdir='~/lensing/proc/proc%s-add-scinv-%s' % (procrun,scinv_sample)
+    outdir=os.path.expanduser(outdir)
+
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
+    cols = open_columns(procrun, 'gal')
+
+    ntot = cols['run'].size
+    nchunk = ntot/chunksize
+    if (ntot % chunksize) > 0:
+        nchunk += 1
+
+    for chunk in xrange(nchunk):
+        fname='chunk%03d.py' % chunk
+        fname=os.path.join(outdir, fname)
+
+        print(fname)
+        with open(fname,'w') as fobj:
+            prog="""import lensing
+lensing.regauss.add_scinv_chunk('%s','%s',%s)\n"""
+            
+            prog=prog % (procrun, scinv_sample, chunk)
+
+            fobj.write(prog)
+
+def combine_scinv_chunks(procrun, scinv_sample, chunksize=1000000):
+    from . import files, scat, sigmacrit
+    import zphot
+
+    print("using chunksize:",chunksize)
+
+    scinv_conf = files.read_config('scinv', scinv_sample)
+    cosmo = files.read_config('cosmo',scinv_conf['cosmo_sample'])
+    pzrun=scinv_conf['pzrun']
+
+    cols = open_columns(procrun, 'gal')
+
+    ntot = cols['run'].size
+    nchunk = ntot/chunksize
+    if (ntot % chunksize) > 0:
+        nchunk += 1
+
+    corrfile=zphot.weighting.pofz_correction_file(pzrun)
+    corrstruct = eu.io.read(corrfile)
+    zs = (corrstruct['zmax']+corrstruct['zmin'])/2.
+    corr = corrstruct['corr']
+
+
+    scalc = sigmacrit.ScinvCalculator(zs,
+                                      scinv_conf['dzl'], 
+                                      scinv_conf['zlmin'],
+                                      scinv_conf['zlmax'],
+                                      H0=cosmo['H0'],
+                                      omega_m=cosmo['omega_m'])
+
+    zlvals = scalc.zlvals
+
+
+    meta={'scinv_sample':scinv_sample,
+          'zlmin':scinv_conf['zlmin'],
+          'zlmax':scinv_conf['zlmax'],
+          'dzl':scinv_conf['dzl'],
+          'zlvals':zlvals}
+
+
+    colname = scat.scinv_colname(scinv_sample)
+    print("Writing to column:\n",colname)
+    for chunk in xrange(nchunk):
+        chunkname='%s-%03d' % (colname,chunk)
+
+        print('  reading:',chunkname)
+        data=cols[chunkname][:]
+
+        print('  writing')
+        if chunk == 0:
+            cols.write_column(colname, data,meta=meta)
+        else:
+            cols.write_column(colname, data)
+
+
+
+def add_scinv_chunk(procrun, scinv_sample, chunk, chunksize=1000000):
+    """
+
+    scinv are created using the *corrected* p(z).
+
+    The dzl,zlmin,zlmax,zlvals will be in the meta data
+
+    Procedure
+    ---------
+    - get the correction factor N(z)/sumpofz(z)
+        calls zphot.weighting.pofz_correction(pzrun)
+
+    - for each p(z) multiply by that factor
+    - generate mean inverse critical density.
+
+
+    """
+    from . import files, scat, sigmacrit
+    import zphot
+
+    scinv_conf = files.read_config('scinv', scinv_sample)
+    cosmo = files.read_config('cosmo',scinv_conf['cosmo_sample'])
+    pzrun=scinv_conf['pzrun']
+
+
+    cols = open_columns(procrun, 'gal')
+
+    # the column which will hold the inverse critical density.
+    # depending on keywords, we might want to raise an error
+    colname = scat.scinv_colname(scinv_sample)
+    colname='%s-%03d' % (colname,chunk)
+
+    print("Writing to column:\n",colname)
+    if colname in cols:
+        if not clobber:
+            raise ValueError("Column already exists")
+        else:
+            print("  removing column")
+            cols[colname].delete()
+
+    # get the matches
+    zphot_matchname = scat.zphot_matchname(pzrun)
+
+    if zphot_matchname not in cols:
+        raise ValueError("zphot match column not "
+                         "found: '%s'" % zphot_matchname)
+
+    #
+    # correction factor to apply to all p(z)
+    #
+    print("getting p(z) correction function\n")
+    corrfile=zphot.weighting.pofz_correction_file(pzrun)
+    corrstruct = eu.io.read(corrfile)
+    zs = (corrstruct['zmax']+corrstruct['zmin'])/2.
+    corr = corrstruct['corr']
+
+
+    print("")
+    scalc = sigmacrit.ScinvCalculator(zs,
+                                      scinv_conf['dzl'], 
+                                      scinv_conf['zlmin'],
+                                      scinv_conf['zlmax'],
+                                      H0=cosmo['H0'],
+                                      omega_m=cosmo['omega_m'])
+
+    zlvals = scalc.zlvals
+
+    meta={'scinv_sample':scinv_sample,
+          'zlmin':scinv_conf['zlmin'],
+          'zlmax':scinv_conf['zlmax'],
+          'dzl':scinv_conf['dzl'],
+          'zlvals':zlvals}
+
+    print("opening corresponding p(z) columns: '%s'\n" % pzrun)
+    pzcols = zphot.weighting.open_pofz_columns(pzrun)
+
+    # work on chunks
+    print("using chunksize:",chunksize)
+    ntot = cols['run'].size
+    nchunk = ntot/chunksize
+    if (ntot % chunksize) > 0:
+        nchunk += 1
+
+    print("nchunk:",nchunk)
+    if chunk >= nchunk:
+        raise ValueError("chunk should be in [0,%d]" % (nchunk-1,) )
+
+    imin = chunk*chunksize
+    imax = (chunk+1)*chunksize
+    print("  %d %d (%d)" % (imin,imax,ntot))
+    match = cols[zphot_matchname][imin:imax]
+    
+    nrows = match.size
+    scinv = numpy.zeros((nrows, zlvals.size), dtype='f8') -9999.
+
+    w,=numpy.where(match >= 0)
+    print("    ",w.size,"with matches")
+    if w.size > 0:
+        # read the p(z) for the matches
+        pofz = pzcols['pofz'][match[w]]
+
+        pofz = pofz[:]*corr[:]
+
+        for j in xrange(w.size):
+            scinv[w[j], :] = scalc.calc_mean_scinv(pofz[j])
+    # metadata only gets written once
+    cols.write_column(colname, scinv, meta=meta)
+
+def add_scinv(procrun, scinv_sample, 
+              clobber=False,
+              chunksize=100000):
+    """
+
+    Use the chunked versioin instead
+
+    Add a column to the db that is the mean scinv as a function of lens
+    redshift.
+
+    scinv are created using the *corrected* p(z).
+
+    The dzl,zlmin,zlmax,zlvals will be in the meta data
+
+    Procedure
+    ---------
+    - get the correction factor N(z)/sumpofz(z)
+        calls zphot.weighting.pofz_correction(pzrun)
+
+    - for each p(z) multiply by that factor
+    - generate mean inverse critical density.
+
+
+    """
+    from . import files, scat, sigmacrit
+    import zphot
+
+    scinv_conf = files.read_config('scinv', scinv_sample)
+    cosmo = files.read_config('cosmo',scinv_conf['cosmo_sample'])
+    pzrun=scinv_conf['pzrun']
+
+
+    cols = open_columns(procrun, 'gal')
+
+    # the column which will hold the inverse critical density.
+    # depending on keywords, we might want to raise an error
+    colname = scat.scinv_colname(scinv_sample)
+    print("Writing to column:\n",colname)
+    if colname in cols:
+        if not clobber:
+            raise ValueError("Column already exists")
+        else:
+            print("  removing column")
+            cols[colname].delete()
+
+    # get the matches
+    zphot_matchname = scat.zphot_matchname(pzrun)
+
+    if zphot_matchname not in cols:
+        raise ValueError("zphot match column not "
+                         "found: '%s'" % zphot_matchname)
+
+    #
+    # correction factor to apply to all p(z)
+    #
+    print("getting p(z) correction function\n")
+    corrfile=zphot.weighting.pofz_correction_file(pzrun)
+    corrstruct = eu.io.read(corrfile)
+    zs = (corrstruct['zmax']+corrstruct['zmin'])/2.
+    corr = corrstruct['corr']
+
+
+    print("")
+    scalc = sigmacrit.ScinvCalculator(zs,
+                                      scinv_conf['dzl'], 
+                                      scinv_conf['zlmin'],
+                                      scinv_conf['zlmax'],
+                                      H0=cosmo['H0'],
+                                      omega_m=cosmo['omega_m'])
+
+    zlvals = scalc.zlvals
+
+    meta={'scinv_sample':scinv_sample,
+          'zlmin':scinv_conf['zlmin'],
+          'zlmax':scinv_conf['zlmax'],
+          'dzl':scinv_conf['dzl'],
+          'zlvals':zlvals}
+
+    print("opening corresponding p(z) columns: '%s'\n" % pzrun)
+    pzcols = zphot.weighting.open_pofz_columns(pzrun)
+
+    # work on chunks
+    print("using chunksize:",chunksize)
+    ntot = cols['run'].size
+    nchunk = ntot/chunksize
+    if (ntot % chunksize) > 0:
+        nchunk += 1
+
+    print("nchunk:",nchunk)
+    for i in xrange(nchunk):
+        imin = i*chunksize
+        imax = (i+1)*chunksize
+        print("  %d %d (%d)" % (imin,imax,ntot))
+        match = cols[zphot_matchname][imin:imax]
+        
+        nrows = match.size
+        scinv = numpy.zeros((nrows, zlvals.size), dtype='f8') -9999.
+
+        w,=numpy.where(match >= 0)
+        print("    ",w.size,"with matches")
+        if w.size > 0:
+            # read the p(z) for the matches
+            pofz = pzcols['pofz'][match[w]]
+
+            pofz = pofz[:]*corr[:]
+
+            for j in xrange(w.size):
+                scinv[w[j], :] = scalc.calc_mean_scinv(pofz[j])
+        # metadata only gets written once
+        cols.write_column(colname, scinv, meta=meta)
+
 def create_condor(type, procrun):
     import pbs
+    import sdsspy
     proctype='regauss'
     procshort='rg'
     minscore=0.1
@@ -179,6 +467,8 @@ p.process_runs(RegaussSweep, runs={run}, camcols={camcol})
 
 def create_pbs(type, procrun):
     import pbs
+    import sdsspy
+
     proctype='regauss'
     procshort='rg'
     minscore=0.1
@@ -252,6 +542,8 @@ class RegaussSweep:
     def select(self):
         """
         """
+        import es_sdsspy
+
         #raise RuntimeError("use mangle mask")
         print("Selecting objects")
         s = es_sdsspy.select.Selector(self.objs)
@@ -285,6 +577,7 @@ class RegaussSweep:
             self.objs = None
 
     def process(self):
+        import sdsspy
 
         self.select()
         if self.objs == None:
@@ -399,6 +692,8 @@ class RegaussSweep:
 
 
     def make_output(self):
+        import sdsspy
+
         print("creating output")
         dtype = self.output_dtype()
         self.output = numpy.zeros(self.objs.size, dtype=dtype)
@@ -518,6 +813,9 @@ class RegaussAtlas:
         return self.regauss_obj(obj, filter)
 
     def regauss_obj(self, obj, filter):
+        import admom
+        from sdsspy.atlas.atlas import NoAtlasImageError
+
         run = obj['run']
         camcol = obj['camcol']
         field = obj['field']
@@ -569,6 +867,8 @@ class RegaussAtlas:
         return rg
 
     def show(self, min=0, **keys):
+        import fimage
+        import biggles
         plt=images.view(self.im, show=False, min=min, **keys)
         s=self.rg['imstats']
 
@@ -595,6 +895,8 @@ class RegaussAtlas:
         return obj
 
     def has_atlas(self, run, camcol, field, id):
+        from sdsspy.atlas.atlas import NoAtlasImageError
+
         if run == 1462 and camcol == 3 and field == 209:
             # this atlas image is corrupt
             return False
@@ -611,6 +913,7 @@ class RegaussAtlas:
         This will cache reads so it can be used for multiple
         filter processings
         """
+        import sdsspy
         key = '%06i-%i-%04i-%05i' % (run,camcol,field,id)
         if self.atls_key != key:
             self.atls = sdsspy.read('fpAtlas',run,camcol,field,id, 
@@ -626,6 +929,8 @@ class RegaussAtlas:
         efficient.
 
         """
+        import sdsspy
+
         key = '%06i-%i-%04i' % (run,camcol,field)
         if self.field_key != key:
             self.psfield = sdsspy.read('psfield',run,camcol,field, 
@@ -662,6 +967,9 @@ def admom_atlas(type, run, camcol, field, id, filter,
     """
     Objs must be for this camcol!
     """
+    import admom
+    import sdsspy
+
     c = sdsspy.FILTERNUM[filter]
 
     if objs is None:
@@ -700,6 +1008,8 @@ def admom_atlas(type, run, camcol, field, id, filter,
                       Tguess=Tguess)
 
     if show:
+        import fimage
+        import biggles
         plt=images.view(im, min=showmin, show=False, **keys)
 
         if out['whyflag'] == 0:
@@ -763,6 +1073,8 @@ class SweepCache:
 
 
     def cache_column(self, type,run,camcol, **keys):
+        import sdsspy
+
         key = '%s-%06i-%d' % (type,run,camcol)
         if self.key != key:
             data = sdsspy.read('calibobj.%s' % type,
@@ -783,6 +1095,7 @@ class Collator:
     """
     
     def __init__(self, procrun, sweeptype, fs='nfs', coldir=None):
+        import es_sdsspy
 
         self.proctype='regauss'
         self.sweeptype=sweeptype
@@ -833,6 +1146,8 @@ class Collator:
 
 
     def create_output(self, st):
+        import sdsspy
+
         bands = ['u','g','r','i','z']
 
         out_dict = {}
@@ -1079,10 +1394,13 @@ class Collator:
 
 
     def open_columns(self):
+        import columns
         d = self.columns_dir()
         return columns.Columns(d)
 
     def columns_dir(self):
+        import es_sdsspy
+
         if self.coldir is None:
             p=es_sdsspy.sweeps.Proc(self.proctype,self.procrun,self.sweeptype) 
             d = p.columns_dir()
@@ -1091,6 +1409,8 @@ class Collator:
         return d
 
     def output_dir(self):
+        import es_sdsspy
+
         if self.fs == 'hdfs':
             d = 'hdfs:///user/esheldon/sweep-reduce/regauss/%s' % self.procrun
         else:
@@ -1119,6 +1439,8 @@ class Collator:
 
 
 def add_radec_to_columns(procrun):
+    import es_sdsspy
+
     gals = es_sdsspy.sweeps.open_columns('gal')
     c = open_columns(procrun)
 
@@ -1139,6 +1461,8 @@ def add_radec_to_columns(procrun):
     c.write_column('dec', dec)
 
 def match_yale(procrun):
+    import es_sdsspy
+
     dir = '~/lensing/yale'
     yfile=path_join(dir,'sdss_images1_iv.rec')
     outfile = path_join(dir, 'match-yale-%s.rec' % procrun)

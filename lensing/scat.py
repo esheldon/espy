@@ -58,7 +58,7 @@ def zphot_matchname(pzrun):
     return zphot_matchname 
 
 class GenericSrcCatalog(dict):
-    def __init__(self, sample, fs='hdfs'):
+    def __init__(self, sample, fs='nfs'):
         conf = lensing.files.read_config('scat', sample)
         for k in conf:
             self[k] = conf[k]
@@ -120,7 +120,7 @@ class GenericSrcCatalog(dict):
 
 
 class DR8GMixCatalog(GenericSrcCatalog):
-    def __init__(self, sample, fs='hdfs'):
+    def __init__(self, sample, fs='nfs'):
         super(DR8GMixCatalog,self).__init__(sample, fs=fs)
 
         if 'gmix' not in self['catalog']:
@@ -226,7 +226,7 @@ class DR8RegaussCatalog(GenericSrcCatalog):
     Before using, make sure you have matched the regauss cols with your chosen
     photoz sample using lensing.regauss.zphot_match()
     """
-    def __init__(self, sample, fs='hdfs'):
+    def __init__(self, sample, fs='nfs'):
         super(DR8RegaussCatalog,self).__init__(sample, fs=fs)
 
 
@@ -314,7 +314,9 @@ class DR8RegaussCatalog(GenericSrcCatalog):
 
         scinvcol = scinv_colname(self['scinv_sample'])
         if scinvcol not in self.scols:
-            raise ValueError("you need to run add-scinv for this sample")
+            raise ValueError("column '%s' not found: "
+                             "you need to run add-scinv "
+                             "for '%s'" % (scinvcol,self.scols.dir))
 
         # first make sure scinv column exists
 

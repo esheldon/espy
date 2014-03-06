@@ -1,9 +1,9 @@
 sample: "rm06"
 catalog: "redmapper-dr8-5.10-lgt05"
 
-# this is redundant with the cosmo_sample declaration in the run file
-# we have to demand consistency
-cosmo_sample: "01"
+# this is redundant with the cosmo_sample in the scinv_sample,
+# declared in the scat config
+cosmo_sample: "02"
 
 # these used to be in the run file. Moved here because we need to trim lenses
 # first
@@ -14,10 +14,9 @@ rmax:          36.567
 # if true, use a strict edge cut
 strict_edgecut: false
 
-# not much usefulness for lenses beyond z=0.4
 # the randoms eli gave me are cut at 0.1
 zmin:          0.08
-zmax:          0.4
+zmax:          0.31
 
 z_field: "z_lambda"
 ra_field: "ra_cent"

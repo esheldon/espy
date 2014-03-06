@@ -10,6 +10,7 @@ import numpy
 from  numpy import pi as PI
 import os,sys
 from sys import stdout
+import pprint
 
 import lensing
 
@@ -739,6 +740,8 @@ class RedMapper(LcatBase):
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
         cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])
+        print('cosmo config:')
+        pprint.pprint(cconf)
         self.cosmo = cosmology.Cosmo(omega_m=cconf['omega_m'], H0=cconf['H0'])
 
         self['mapname'] = 'boss'
@@ -797,6 +800,7 @@ class RedMapper(LcatBase):
     def copy_output(self, output, zindex, data, maskflags, good):
         print('copying data')
 
+        z_field = self['z_field']
         output['zindex']    = zindex[good]
         output['z']         = data[z_field][good]
         output['maskflags'] = maskflags[good]
@@ -805,7 +809,7 @@ class RedMapper(LcatBase):
         dec_field = self['dec_field']
         if 'cent' in ra_field:
             # alternative centers
-            pos_index=self['psf_index']
+            pos_index=self['pos_index']
             output['ra']        = data[ra_field][good,pos_index]
             output['dec']       = data[dec_field][good,pos_index]
         else:
@@ -971,6 +975,11 @@ class RedMapper(LcatBase):
 
 
         l = self.read()
+        w,=numpy.where( (l['ra'] >= 0.0) & (l['ra'] <= 360.0) )
+        if w.size != l.size:
+            print("threw out",l.size-w.size,"with bad ra")
+            l=l[w]
+
         llam,leta = eu.coords.eq2sdss(l['ra'],l['dec'])
         maskflags = l['maskflags']
 
@@ -1001,11 +1010,6 @@ class RedMapper(LcatBase):
         plt=FramedPlot()
         plt.xlabel=r'$\lambda$'
         plt.ylabel=r'$\eta$'
-        xrng = (lammin, lammax)
-        yrng = (emin, emax)
-        plt.xrange = xrng
-        plt.yrange = yrng
-
 
         print("adding all lenses")
 
@@ -1026,9 +1030,15 @@ class RedMapper(LcatBase):
         key=PlotKey(0.95,0.95,fakepoints,halign='right')
         plt.add(key)
 
-        plt.aspect_ratio = (yrng[1]-yrng[0])/float(xrng[1]-xrng[0])
 
         es_sdsspy.stomp_maps.plot_boss_geometry(color='blue',plt=plt,show=False)
+
+        xrng = (lammin, lammax)
+        yrng = (emin, emax)
+        plt.xrange = xrng
+        plt.yrange = yrng
+        plt.aspect_ratio = (yrng[1]-yrng[0])/float(xrng[1]-xrng[0])
+
 
         if show:
             plt.show()
@@ -1038,7 +1048,7 @@ class RedMapper(LcatBase):
             d = os.path.join(d,'plots')
             if not os.path.exists(d):
                 os.makedirs(d)
-            epsfile = os.path.join(d, 'lcat-%s-coverage.eps' % self['sample'])
+            epsfile = os.path.join(d, 'lcat-%s-%s-coverage.eps' % (self['sample'],region) )
             print("Writing to eps file:",epsfile)
             plt.write_eps(epsfile)
         return plt
@@ -1053,7 +1063,9 @@ class RedMapperRandom(LcatBase):
         # this copies each key to self[key]
         LcatBase.__init__(self, sample, **keys)
 
-        if self['catalog'] not in ['redmapper-dr8-rand-5.2']:
+        known_catalogs=['redmapper-dr8-rand-5.2',
+                        'redmapper-dr8-rand-5.10-lgt05']
+        if self['catalog'] not in known_catalogs:
             raise ValueError("Don't know about catalog: '%s'" % self['catalog'])
 
         cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])

@@ -357,7 +357,9 @@ def lcat_file(**keys):
     lcat_file(sample='rm03')
     """
     keys['ext'] = 'dat'
-    keys['type'] = 'lcat'
+    keys['type'] = 'lcat-split'
+    if 'lens_split' not in keys:
+        keys['lens_split']=0
     return sample_file(**keys)
 
 def lcat_write(**keys):
@@ -403,17 +405,16 @@ def lcat_read(**keys):
     """
     file = lcat_file(**keys)
 
-    stdout.write('Reading lens cat: %s\n' % file)
-    with eu.hdfs.HDFSFile(file,verbose=True) as hf:
-        hf.stage()
+    dt = lcat_dtype()
 
-        with open(hf.localfile) as fobj:
-            import recfile
-            nlens=int(fobj.readline())
-            print('Reading',nlens,'lenses',file=stderr)
-            dt = lcat_dtype()
-            with recfile.Open(fobj, mode='r', dtype=dt, delim=' ',nrows=nlens) as robj:
-                data = robj[:]
+    stdout.write('Reading lens cat: %s\n' % file)
+
+    with open(file) as fobj:
+        import recfile
+        nlens=int(fobj.readline())
+        print('Reading',nlens,'lenses',file=stderr)
+        with recfile.Open(fobj, mode='r', dtype=dt, delim=' ',nrows=nlens) as robj:
+            data = robj[:]
 
     return data
 
