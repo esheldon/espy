@@ -1,0 +1,29 @@
+sample: "rmrand02"
+
+# this means it is tuned to have a redshift range surrounding
+# the RedMapper ranges
+
+catalog: "redmapper-dr8-rand-5.10-lgt05"
+
+# this is redundant with the cosmo_sample declaration in the run file
+# we have to demand consistency
+cosmo_sample: "02"
+
+# these used to be in the run file. Moved here because we need to trim lenses
+# first. Make sure these match the lens sample you are correcting!
+nbin:          21
+rmin:          0.02
+rmax:          36.567
+
+# if true, use a strict edge cut
+strict_edgecut: false
+
+zmin:          0.08
+zmax:          0.31
+
+masktype: sdss
+
+nsplit: 100
+
+comment: |
+    Randoms that go with redmapper 5.10
