@@ -27,6 +27,15 @@ dec_field: "dec_cent"
 # for 0 this is the same as the ra,dec fields
 pos_index: 0
 
+# this is an sobjshear variable, not same as the mapname
+# below
 masktype: sdss
 
 nsplit: 1
+
+mapname: "boss"
+maptype: "basic"
+tycho_maptype: "tycho"
+maxres: 2048
+
+

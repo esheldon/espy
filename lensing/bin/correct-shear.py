@@ -33,15 +33,12 @@ parser.add_option("-t",dest="bintype",default=None,
 parser.add_option("-n",dest="nbin",default=None,
                   help="The number of bins, default %default")
 
-
 parser.add_option("-s",dest="subtract_rand",action='store_true',default=False,
                   help="Subtract the randoms.  default %default")
 parser.add_option("-r",dest="minrad",default=1.,
                   help="The minimum radius for the subtraction of random signal. "
                        "Set to a large number to turn off subtraction. Default %default Mpc")
 
-parser.add_option("--remove",action='store_true',default=False,
-                  help="Use results from hist_match_remove.  default %default")
 parser.add_option("-p",dest="prompt",action='store_true',default=False,
                   help="Prompt between each plot.  default %default")
 parser.add_option("--show",action='store_true',default=False,
@@ -134,7 +131,6 @@ def main():
     nbin=int(options.nbin)
     minrad=float(options.minrad)
     subtract_rand = bool(options.subtract_rand)
-    remove=options.remove
 
     if bintype is None or nbin is None:
         raise ValueError("currently demand some kind of binning")
@@ -145,14 +141,18 @@ def main():
     b = lensing.binning.instantiate_binner(bintype, nbin)
 
     binned_data = lensing.files.sample_read(type='binned', sample=lensrun, name=b.name())
-    if remove:
-        extra='randmatch-rm-%s' % randrun
-    else:
-        extra='randmatch-%s' % randrun
-    allrand = lensing.files.sample_read(type='binned', sample=lensrun, name=b.name(), extra=extra)
+
+    extra = 'randmatch-%s' % randrun
+
+
+    allrand = lensing.files.sample_read(type='binned',
+                                        sample=lensrun,
+                                        name=b.name(),
+                                        extra=extra)
 
     alldata = lensing.correct.correct(binned_data, allrand, 
-                                      subtract_rand=subtract_rand, minrad=minrad)
+                                      subtract_rand=subtract_rand,
+                                      minrad=minrad)
 
     lensing.files.sample_write(data=alldata,
                                type='corrected',

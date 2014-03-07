@@ -18,7 +18,7 @@ import sys
 import copy
 from sys import stdout
 import numpy
-from numpy import log10,sqrt,linspace,where
+from numpy import log10,sqrt,linspace,where, zeros
 import esutil as eu
 from esutil.ostools import path_join
 from esutil.stat import histogram
@@ -106,6 +106,16 @@ class BinnerBase(dict):
 
     def bin_label(self, binnum):
         raise RuntimeError("override this method")
+
+    def get_bin_erf_weights_1d(self, binnum, x, sigma):
+        """
+        For a 1-d binning and given sigma, get a 2-sided erf
+        weighting each point.  This is a probalistic way to 
+        assign objects to a bin range.
+        """
+        low, high = self.bin_ranges(binnum=binnum)
+        weights = two_sided_erf_weights(low, high, x, sigma)
+        return weights
 
     def compare_random(self, lensrun, type, binnum, randrun, **keys):
         xrng=keys.get('xrange',None)
@@ -950,6 +960,27 @@ class LambdaBinner(BinnerBase):
         self.lowlim = lowlim
         self.highlim = highlim
 
+def two_sided_erf_weights(low, high, x, sigma):
+    """
+    x and sigma should be arrays of the same length
+    """
+    from scipy.special import erf
+    weights = zeros( x.size )
+
+    mn=0.5*(low + high)
+
+    wlow,=where(x < mn)
+    whigh,=where(x >= mn)
+
+    if wlow.size > 0:
+        wts=0.5*( 1.0+erf((x[wlow]-low)/sigma[wlow]) )
+        weights[wlow] = wts
+
+    if whigh.size > 0:
+        wts=0.5*( 1.0+erf((high-x[whigh])/sigma[whigh]) )
+        weights[whigh] = wts
+
+    return weights
 
 class ILumBinner(BinnerBase):
     """

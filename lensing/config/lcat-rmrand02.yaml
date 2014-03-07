@@ -25,5 +25,10 @@ masktype: sdss
 
 nsplit: 100
 
+mapname: "boss"
+maptype: "basic"
+tycho_maptype: "tycho"
+maxres: 2048
+
 comment: |
     Randoms that go with redmapper 5.10

@@ -100,8 +100,7 @@ class LcatBase(dict):
             self[k] = keys[k]
 
         conf = lensing.files.read_config('lcat',sample)
-        for k in conf:
-            self[k] = conf[k]
+        self.update(conf)
 
         if self['sample'] != sample:
             raise ValueError("The config sample '%s' doesn't "
@@ -331,11 +330,6 @@ class SDSSRandom(LcatBase):
                                         xrange=[self['zmin'],self['zmax']], 
                                         nx=1000, 
                                         method='cut')
-        self['mapname'] = 'boss'
-        self['maptype'] = 'basic'
-        self['tycho_maptype'] = 'tycho'
-        # we might want to increase this!
-        self['maxres'] = 2048
 
     def read_original(self, **keys):
         """
@@ -530,11 +524,6 @@ class SDSSVoidsRandom(LcatBase):
                                         xrange=[self['zmin'],self['zmax']], 
                                         nx=1000, 
                                         method='cut')
-        self['mapname'] = 'boss'
-        self['maptype'] = 'basic'
-        self['tycho_maptype'] = 'tycho'
-        # we might want to increase this!
-        self['maxres'] = 2048
 
     def load_stomp_maps(self):
         if not hasattr(self, 'basic_map'):
@@ -744,11 +733,6 @@ class RedMapper(LcatBase):
         pprint.pprint(cconf)
         self.cosmo = cosmology.Cosmo(omega_m=cconf['omega_m'], H0=cconf['H0'])
 
-        self['mapname'] = 'boss'
-        self['maptype'] = 'basic'
-        self['tycho_maptype'] = 'tycho'
-        # we might want to increase this!
-        self['maxres'] = 2048
 
         self.basic_map = es_sdsspy.stomp_maps.load(self['mapname'],
                                                    self['maptype'], 
@@ -810,6 +794,7 @@ class RedMapper(LcatBase):
         if 'cent' in ra_field:
             # alternative centers
             pos_index=self['pos_index']
+            print('using center index:',pos_index)
             output['ra']        = data[ra_field][good,pos_index]
             output['dec']       = data[dec_field][good,pos_index]
         else:
@@ -1071,11 +1056,6 @@ class RedMapperRandom(LcatBase):
         cconf = lensing.files.read_config('cosmo',self['cosmo_sample'])
         self.cosmo = cosmology.Cosmo(omega_m=cconf['omega_m'], H0=cconf['H0'])
 
-        self['mapname'] = 'boss'
-        self['maptype'] = 'basic'
-        self['tycho_maptype'] = 'tycho'
-        # we might want to increase this!
-        self['maxres'] = 2048
 
         self.basic_map = es_sdsspy.stomp_maps.load(self['mapname'],
                                                    self['maptype'], 
