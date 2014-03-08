@@ -238,7 +238,7 @@ class DR8RegaussCatalog(GenericSrcCatalog):
 
     def get_colnames(self):
         if self['detrend']:
-            rmstr='%0.1f' % self['rmag_max']
+            rmstr='%0.1f' % self['rmag_max_detrend']
             rmstr = rmstr.replace('.','')
             e1name = 'e1_rg_dt'+rmstr+'_eq'
             e2name = 'e2_rg_dt'+rmstr+'_eq'
