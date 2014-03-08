@@ -1,0 +1,20 @@
+name: "sim-gg03"
+
+psf_model: "gauss"
+psf_T: 4.0
+psf_shape: [0.0, 0.0]
+
+obj_model: "gauss"
+
+cen_sigma: 0.1
+
+obj_T: 1.0
+obj_counts: 100.0
+
+fixed_pars: True
+
+shear: [0.08,0.0]
+
+nsub: 16
+
+label: '$gauss \sigma_{gal}/\sigma_{PSF}=??$'

@@ -4,15 +4,42 @@ from pprint import pprint
 import numpy
 
 import nsim
+from nsim.sim import TryAgainError
 import admom
 
 class RegaussNSim(nsim.sim.NGMixSim):
     """
     Use ngmix for the sim, regauss for fitting
     """
-    def fit_galaxy(self, imdict):
+
+    def process_pair(self):
+        """
+        Create a simulated image pair and perform the fit
+        """
+
+        imdicts = self.get_noisy_image_pair()
+        psf_image = imdicts['psf']['im']
+
+        reslist=[]
+        for key in ['im1','im2']:
+
+            imd = imdicts[key]
+
+            res=self.fit_galaxy(imd, psf_image)
+            if res['flags'] != 0:
+                raise TryAgainError("failed at %s" % key)
+
+            self.print_res(res)
+
+            reslist.append(res)
+
+        return reslist
+
+
+    def fit_galaxy(self, imdict, psf_image):
 
         image=imdict['image']
+
         cen_guess=image.shape[0]/2.0
 
         pars=imdict['pars']
@@ -21,7 +48,7 @@ class RegaussNSim(nsim.sim.NGMixSim):
         rg = admom.ReGauss(imdict['image'],
                            cen_guess,
                            cen_guess,
-                           self.psf_image,
+                           psf_image,
                            guess_psf=self.simc['psf_T']/2.,
                            guess=T_guess,
                            sigsky=self.skysig)
@@ -163,6 +190,7 @@ def get_shear(data, shape_noise=True):
     wsum=w.sum()
 
     ssh = data['wssh'].sum()/wsum
+    R = (data['R']*data['weight']).sum()/wsum
 
     sh1=0.5*e1mean/ssh
     sh2=0.5*e2mean/ssh
@@ -170,7 +198,7 @@ def get_shear(data, shape_noise=True):
     sh1err = 0.5*e1err/ssh
     sh2err = 0.5*e2err/ssh
 
-    return sh1, sh1err, sh2, sh2err
+    return sh1, sh1err, sh2, sh2err, R
 
 def get_config_dir():
     d=os.environ['ESPY_DIR']
