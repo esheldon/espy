@@ -1,0 +1,460 @@
+#!/usr/bin/env python
+"""
+    %prog [options] config_file meds_file truth_file psf_file out_file
+
+Process the input meds file.
+"""
+
+import os,sys
+from sys import stderr
+import shutil
+import numpy
+import yaml
+import fitsio
+import meds
+import pprint
+
+import esutil as eu
+
+from optparse import OptionParser
+parser = OptionParser(__doc__)
+
+parser.add_option("--obj-range",default=None,
+                  help=("Inclusive, zero-offset range of objects to "
+                        "process"))
+parser.add_option("--det-cat", default=None,
+                  help="detection cat for matched fluxes")
+
+parser.add_option("--work-dir", default=None,
+                  help=("copy files local for processing.  "
+                        "Also write to local files and copy out."
+                        "The local files are not removed."))
+
+parser.add_option("--profile-image", default=None,
+                  help=("Profile the code and create the specified "
+                        "image using pycallgraph"))
+def load_config(fname):
+    with open(fname) as fobj:
+        data=yaml.load(fobj)
+    return data
+
+def makedir_fromfile(fname):
+    dname=os.path.dirname(fname)
+    if not os.path.exists(dname):
+        try:
+            os.makedirs(dname)
+        except:
+            # probably a race condition
+            pass
+
+def make_ngmix_meta(conf, meds_meta, meds_file):
+
+    dt = meds_meta.dtype.descr
+
+    config_file=conf['config_file']
+
+    clen=len(config_file)
+    flen=len(meds_file)
+
+
+    dt += [('gmix_meds_config','S%d' % clen),
+           ('meds_file','S%d' % flen)]
+
+
+    meta=numpy.zeros(1, dtype=dt)
+
+    eu.numpy_util.copy_fields(meds_meta, meta)
+
+    meta['gmix_meds_config'] = config_file
+    meta['meds_file'] = meds_file
+
+    return meta
+
+
+def make_lm_meta(conf, meds_meta_list, meds_files):
+
+    dt = meds_meta_list[0].dtype.descr
+
+    config_file=conf['config_file']
+
+    clen=len(config_file)
+    flen=max( [len(mf) for mf in meds_files] )
+    mlen=len(conf['psf_model'])
+    rlen=len(conf['region'])
+
+    dt += [('gmix_meds_config','S%d' % clen),
+           ('meds_file','S%d' % flen),
+           ('psf_ntry','i2'),
+           ('obj_ntry','i2'),
+           ('psf_model','S%d' % mlen),
+           ('psf_offset_max','f8'),
+           ('region','S%d' % rlen)]
+
+    nband=len(meds_meta_list)
+
+    mlist=[]
+    for band in xrange(nband):
+
+        meta=numpy.zeros(1, dtype=dt)
+        meds_file=meds_files[band]
+        meds_meta=meds_meta_list[band]
+        mf=meds_files[band]
+
+        eu.numpy_util.copy_fields(meds_meta, meta)
+
+        meta['gmix_meds_config'] = config_file
+        meta['meds_file'] = meds_file
+        meta['psf_ntry'] = conf['psf_ntry']
+        meta['obj_ntry'] = conf['obj_ntry']
+        meta['psf_model'] = conf['psf_model']
+        meta['psf_offset_max'] = conf['psf_offset_max']
+        meta['region'] = conf['region']
+        mlist.append(meta)
+
+    meta=eu.numpy_util.combine_arrlist(mlist)
+    return meta
+
+def make_mcmc_meta(conf, meds_meta, meds_file):
+
+    raise ValueError("fix for multi-band")
+
+    dt = meds_meta.dtype.descr
+
+    config_file=conf['config_file']
+    clen=len(config_file)
+    flen=len(meds_file)
+    mlen=len(conf['psf_model'])
+    rlen=len(conf['region'])
+
+    gtlen = len(conf['gprior_type'])
+
+    dt += [('gmix_meds_config','S%d' % clen),
+           ('meds_file','S%d' % flen),
+           ('psf_ntry','i2'),
+
+           ('nwalkers','i2'),
+           ('burnin','i2'),
+           ('nstep','i2'),
+           ('mca_a','f8'),
+
+           ('do_pqr','i2'),
+
+           ('psf_model','S%d' % mlen),
+
+           ('gprior_type','S%d' % gtlen),
+
+           ('psf_offset_max','f8'),
+           ('region','S%d' % rlen)]
+
+    meta=numpy.zeros(1, dtype=dt)
+    for n in meds_meta.dtype.names:
+        meta[n] = meds_meta[n]
+
+    meta['gmix_meds_config'] = config_file
+    meta['meds_file'] = meds_file
+
+    meta['psf_ntry'] = conf['psf_ntry']
+
+    meta['nwalkers'] = conf['nwalkers']
+    meta['burnin'] = conf['burnin']
+    meta['nstep'] = conf['nstep']
+    meta['mca_a'] = conf['mca_a']
+
+    if conf['do_pqr']:
+        meta['do_pqr']=1
+    else:
+        meta['do_pqr']=0
+
+    meta['gprior_type'] = conf['gprior_type']
+
+    meta['psf_model'] = conf['psf_model']
+    meta['psf_offset_max'] = conf['psf_offset_max']
+    meta['region'] = conf['region']
+
+    return meta
+
+
+
+def run_ngmix(files, conf, checkpoint_data=None):
+    import great_des
+    import ngmix
+
+    
+    conf['g_priors']  = get_g_priors_ngmix(conf)
+    conf['cen_prior'] = get_cen_prior_ngmix(conf)
+    conf['T_priors']  = get_T_priors_ngmix(conf)
+    conf['counts_priors']  = get_counts_priors_ngmix(conf)
+
+    gm=great_des.nfit.MedsFit(files['meds'],
+                              files['truth'],
+                              files['psf'],
+                              checkpoint_data=checkpoint_data,
+                              **conf)
+    gm.do_fits()
+    data=gm.get_data()
+    epoch_data=gm.get_epoch_data()
+    meds_meta=gm.get_meds_meta()
+
+    meta=make_ngmix_meta(conf, meds_meta, files['meds_full'])
+
+    return data, epoch_data, meta
+
+def get_T_priors_ngmix(conf):
+    import ngmix
+
+    T_prior_types=conf['T_prior_types']
+
+    T_priors=[]
+    for i,typ in enumerate(T_prior_types):
+        if typ == 'flat':
+            pars=conf['T_prior_pars'][i]
+            T_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
+        elif typ =='lognormal':
+            pars=conf['T_prior_pars'][i]
+            T_prior=ngmix.priors.LogNormal(pars[0], pars[1])
+        elif typ=="cosmos_exp":
+            T_prior=ngmix.priors.TPriorCosmosExp()
+        elif typ=="cosmos_dev":
+            T_prior=ngmix.priors.TPriorCosmosDev()
+        else:
+            raise ValueError("bad T prior type: %s" % T_prior_type)
+
+        T_priors.append(T_prior)
+
+    return T_priors
+
+def get_counts_priors_ngmix(conf):
+    import ngmix
+
+    counts_prior_types=conf['counts_prior_types']
+
+    counts_priors=[]
+    for i,typ in enumerate(counts_prior_types):
+        if typ == 'flat':
+            pars=conf['counts_prior_pars'][i]
+            counts_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
+        else:
+            raise ValueError("bad counts prior type: %s" % counts_prior_type)
+
+        counts_priors.append(counts_prior)
+
+    return counts_priors
+
+
+
+def get_g_priors_ngmix(conf):
+    import ngmix
+    g_prior_types=conf['g_prior_types']
+
+    g_priors=[]
+    for i,typ in enumerate(g_prior_types):
+        if typ =='exp':
+            pars=conf['g_prior_pars'][i]
+            parr=numpy.array(pars,dtype='f8')
+            g_prior = ngmix.priors.GPriorM(parr)
+        elif typ=='cosmos-galfit':
+            g_prior = ngmix.priors.make_gprior_cosmos_galfit()
+        elif typ=='cosmos-exp':
+            g_prior = ngmix.priors.make_gprior_cosmos_exp()
+        elif typ=='cosmos-dev':
+            g_prior = ngmix.priors.make_gprior_cosmos_dev()
+        elif typ =='ba':
+            sigma=conf['g_prior_pars'][i]
+            g_prior = ngmix.priors.GPriorBA(sigma)
+        else:
+            raise ValueError("implement gprior '%s'")
+        g_priors.append(g_prior)
+
+    return g_priors
+
+def get_cen_prior_ngmix(conf):
+    import ngmix
+    use_cen_prior=conf.get('use_cen_prior',False)
+    if use_cen_prior:
+        width=conf.get('cen_width',1.0)
+        return ngmix.priors.CenPrior(0.0, 0.0, width,width)
+    else:
+        return None
+
+def get_g_prior(conf):
+    import gmix_image
+    if 'g_prior_type' in conf:
+        gprior_type=conf['g_prior_type']
+    elif 'gprior_type' in conf:
+        gprior_type=conf['gprior_type']
+    else:
+        gprior_type=None
+
+    if gprior_type is None or gprior_type=='None':
+        return None
+    elif gprior_type =='flat':
+        return gmix_image.priors.GPriorFlat()
+    elif gprior_type=='exp':
+        pars=conf['gprior_pars']
+        return gmix_image.priors.GPriorExp(pars)
+    else:
+        raise ValueError("implement gprior '%s'")
+
+
+def get_sub_fname(fname, rng, work_dir):
+    rng_string = '%s-%s' % (rng[0], rng[1])
+
+    bname = os.path.basename(fname)
+
+    bname = bname.replace('.fits.fz','').replace('.fits','')
+    bname = '%s-%s.fits' % (bname, rng_string)
+
+    newf = os.path.join(work_dir, bname)
+
+    return newf
+
+def get_sub(meds_file, rng, work_dir):
+    """
+    Local files will get cleaned up
+    """
+
+    print >>stderr,meds_file
+    newf = get_sub_fname(meds_file, rng, work_dir)
+    extracted=meds.MEDSExtractor(meds_file, rng[0], rng[1], newf,
+                                 cleanup=True)
+
+    return extracted
+
+def get_range(rng_string):
+    if rng_string is not None:
+        rng = rng_string.split(',')
+        rng = [int(i) for i in rng]
+    else:
+        rng=None
+
+    return rng
+
+
+def cleanup_checkpoint(checkpoint_file):
+    """
+    if we get this far, we have succeeded in writing the data. We can remove
+    the checkpoint file
+    """
+    if os.path.exists(checkpoint_file):
+        print >>stderr,'removing checkpoint file',checkpoint_file
+        os.remove(checkpoint_file)
+
+
+def get_checkpoint_data(out_file):
+    """
+    See if the code was checkpointed in a previous run
+    """
+    checkpoint_file=out_file.replace('.fits','-checkpoint.fits')
+    data=None
+
+    if os.path.exists(checkpoint_file):
+        data={}
+        print >>stderr,'reading checkpoint data:',checkpoint_file
+        with fitsio.FITS(checkpoint_file) as fobj:
+            data['data']=fobj['model_fits'][:]
+            if 'epoch_data'in fobj:
+                data['epoch_data']=fobj['epoch_data'][:]
+
+    return checkpoint_file, data
+
+def run_fitter(files, conf, checkpoint_data=None):
+    """
+    Run one of a few types of fitters.  Only ngmix is maintained currently
+    """
+    epoch_data=None
+    if conf['fitter'] == 'ngmix':
+        data, epoch_data, meta = run_ngmix(files,
+                                           conf,
+                                           checkpoint_data=checkpoint_data)
+    else:
+        raise  ValueError("bad fitter: '%s'" % conf['fitter'])
+
+    return data, epoch_data, meta
+
+def setup_work_files(options, meds_file):
+    """
+    Set up local, possibly sub-range meds files
+    """
+    meds_file_full=meds_file
+    extracted=None
+    rng=get_range( options.obj_range )
+    rng_send=None
+    if rng is not None:
+        if options.work_dir is not None:
+            # note variable extracted is cleaned up when MedsExtractors get
+            # garbage collected
+            extracted=get_sub(meds_file, rng, options.work_dir)
+            meds_file_full=meds_file
+            meds_file= extracted.sub_file
+            rng_send=None
+        else:
+            rng_send=rng
+    return rng_send, meds_file, meds_file_full, extracted
+
+ 
+def write_data(data, epoch_data, meta, out_file):
+    """
+    write the actual data.  clobber existing
+    """
+    makedir_fromfile(out_file)
+    print >>stderr,'writing:',out_file
+    with fitsio.FITS(out_file,'rw',clobber=True) as fobj:
+        fobj.write(data,extname="model_fits")
+        if epoch_data is not None:
+            fobj.write(epoch_data,extname="epoch_data")
+        fobj.write(meta,extname="meta_data")
+
+
+def go(files, options):
+
+    checkpoint_file, checkpoint_data=get_checkpoint_data(files['out'])
+
+    conf=load_config(files['config'])
+    pprint.pprint(conf,stream=stderr)
+
+    rng_send,meds_file,meds_file_full,extracted=\
+                        setup_work_files(options,files['meds'])
+
+    files['meds'] = meds_file
+    files['meds_full'] = meds_file_full
+
+    # if work_dir is sent, we do range by extracting it, see above, so
+    # rng_send would be None
+
+    conf['obj_range'] = rng_send
+    conf['config_file']=files['config']
+    conf['checkpoint_file']=checkpoint_file
+
+    data, epoch_data, meta=run_fitter(files, conf, 
+                                      checkpoint_data=checkpoint_data)
+
+    if options.work_dir is not None:
+        meta['meds_file'] = files['meds_file']
+
+    write_data(data, epoch_data, meta, files['out'])
+
+    cleanup_checkpoint(checkpoint_file)
+  
+    
+def main():
+    options, args = parser.parse_args(sys.argv[1:])
+    if len(args) < 5:
+        parser.print_help()
+        sys.exit(45)
+
+    config_file=args[0]
+    meds_file=args[1]
+    truth_file=args[2]
+    psf_file=args[3]
+    out_file=args[4]
+
+    files={'config':config_file,
+           'meds':meds_file,
+           'truth':truth_file,
+           'psf':psf_file,
+           'out':out_file}
+
+    go(files, options)
+
+if __name__=="__main__":
+    main()
