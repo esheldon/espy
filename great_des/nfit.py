@@ -382,8 +382,7 @@ class MedsFit(object):
                     gmix_list.append( gmix_psf )
                     keep_list.append(i)
                 else:
-                    print >>stderr,('large psf offset: %s '
-                                    'in %s' % (offset_arcsec,flist[i]))
+                    print >>stderr,'large psf offset: '
                     tflags |= PSF_LARGE_OFFSETS 
                     gmix_psf=None
 

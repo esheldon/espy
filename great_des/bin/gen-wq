@@ -19,15 +19,20 @@ template="""
 command: |
     source ~/.bashrc
     module unload espy && module load espy/work
+    work_dir="$TMPDIR-$RANDOM-$RANDOM"
+
+    mkdir -p $work_dir
 
     $ESPY_DIR/great_des/bin/fit-great-des \\
-        --work-dir=$TMPDIR \\
+        --work-dir=$work_dir \\
         --obj-range %(start)d,%(end)d \\
         $ESPY_DIR/great_des/config/%(run)s.yaml \\
         %(meds_file)s \\
         %(truth_file)s \\
         %(psf_file)s \\
         %(output_file)s
+
+    rm -r $work_dir
 
 job_name: "%(job_name)s"
 """

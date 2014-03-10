@@ -71,5 +71,5 @@ do_coadd: True
 
 checkpoints: [0,10,30,60,90]
 
-make_plots: True
+make_plots: False
 debug: 0

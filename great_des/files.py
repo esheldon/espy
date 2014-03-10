@@ -115,16 +115,22 @@ def get_wq_file(**keys):
 def get_output_file(**keys):
     d=get_output_dir(**keys)
 
-    start=keys['start']
-    end=keys['end']
-
-    fname='%(run)s-%(fnum)03i-g%(gnum)02i-%(start)05d-%(end)05d.fits'
+    if 'start' in keys:
+        fname='%(run)s-%(fnum)03i-g%(gnum)02i-%(start)05d-%(end)05d.fits'
+    else:
+        fname='%(run)s-%(fnum)03i-g%(gnum)02i.fits'
     fname=fname % keys
 
     fname=os.path.join(d, fname)
 
     return fname
 
+def read_output(**keys):
+    import fitsio
+    fname=get_output_file(**keys)
+    print 'reading:',fname
+    data = fitsio.read(fname)
+    return data
 
 
 def get_chunk_ranges(**keys):
@@ -139,7 +145,9 @@ def get_chunk_ranges(**keys):
     ntotal=m.size
 
     nchunks = ntotal/nper
-    if (nchunks % nper) != 0:
+    nleft = ntotal % nper
+
+    if nleft != 0:
         nchunks += 1
 
     low=[]
@@ -147,9 +155,15 @@ def get_chunk_ranges(**keys):
 
     for i in xrange(nchunks):
 
-        low.append( i*nper )
+        low_i = i*nper
 
         # minus one becuase it is inclusive
-        high.append( (i+1)*nper -1 )
+        if i == (nchunks-1) and nleft != 0:
+            high_i = low_i + nleft -1
+        else:
+            high_i = low_i + nper  - 1
+
+        low.append( low_i )
+        high.append( high_i )
 
     return low,high
