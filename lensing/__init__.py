@@ -162,6 +162,7 @@ try:
     from . import regauss
     from . import regauss_test
     from . import regauss_sim
+    from . import regauss_nsim
 except:
     pass
 

@@ -7,6 +7,10 @@ import nsim
 from nsim.sim import TryAgainError
 import admom
 
+MAX_ELLIP=4.0
+MAX_R = 1.0
+MIN_R = 0.01
+
 class RegaussNSim(nsim.sim.NGMixSim):
     """
     Use ngmix for the sim, regauss for fitting
@@ -43,14 +47,16 @@ class RegaussNSim(nsim.sim.NGMixSim):
         cen_guess=image.shape[0]/2.0
 
         pars=imdict['pars']
-        T_guess=pars[4]/2.
+        
+        T_guess_psf = self.simc['psf_T']
+        T_guess_obj = T_guess_psf + pars[4]
 
         rg = admom.ReGauss(imdict['image'],
                            cen_guess,
                            cen_guess,
                            psf_image,
-                           guess_psf=self.simc['psf_T']/2.,
-                           guess=T_guess,
+                           guess_psf=T_guess_psf/2.,
+                           guess=T_guess_obj/2.,
                            sigsky=self.skysig)
         rg.do_all()
         res=rg['rgcorrstats']
@@ -59,45 +65,48 @@ class RegaussNSim(nsim.sim.NGMixSim):
             #stop
             res={'flags':1}
         else:
-            # err is per component
-            res['err']=rg['rgstats']['uncer']
-            weight,wssh=self._get_weight_and_ssh(res['e1'],res['err'])
+            e1,e2,R=res['e1'],res['e2'],res['R']
+            if (abs(e1) > MAX_ELLIP
+                    or abs(e2) > MAX_ELLIP
+                    or R <= MIN_R
+                    or R >  MAX_R):
+                res['flags']=1
+            else:
+                # err is per component.  Boost by 1/R
+                res['err']=rg['rgstats']['uncer']/R
+                weight,ssh=self._get_weight_and_ssh(res['e1'],
+                                                    res['e2'],
+                                                    res['err'])
 
-            res['weight'] = weight
+                res['weight'] = weight
+                res['ssh'] = ssh
 
-            # ssh will be sum(wssh)/sum(weight)
-            res['wssh'] = wssh
         return res
 
-    def _get_weight_and_ssh(self, e1, err):
+    def _get_weight_and_ssh(self, e1, e2, err):
+        """
+        err is per component, as is the shape noise
+        """
+        esq = e1**2 + e2**2
         err2=err**2
 
         # for responsivity. 
         #   Shear = 0.5 * sum(w*e1)/sum(w)/R
         # where
-        #   R = sum(w*F)/sum(w)
+        #   ssh = sum(w*ssh)/sum(w)
         # this shape noise is per component
 
         sn2 = self.get_sn2() 
-        weight = 1.0/(sn2 + err2)
 
-
-        # coefficients (p 596 Bern02) 
-        # there is a k1*e^2/2 in Bern02 because
-        # its the total ellipticity he is using
-        # 
-        # factor of (1/2)^2 does not cancel here, 4 converts to shapenoise
+        # coefficients (eq 5-35 Bern02) 
 
         f = sn2/(sn2 + err2)
-        k0 = (1-f)*sn2
-        k1 = f**2
 
-        F = 1. - k0 - k1*e1**2
+        ssh = 1.0 - (1-f)*sn2 - 0.5*f**2 * esq
 
-        wssh = weight*F
-        return weight, wssh
+        weight = 1.0/(sn2 + err2)
 
-
+        return weight, ssh
 
 
     def get_sn2(self):
@@ -149,7 +158,7 @@ class RegaussNSim(nsim.sim.NGMixSim):
         d['R'][i] = res['R']
 
         d['weight'][i] = res['weight']
-        d['wssh'][i] = res['wssh']
+        d['ssh'][i] = res['ssh']
 
     def make_struct(self):
         """
@@ -161,36 +170,42 @@ class RegaussNSim(nsim.sim.NGMixSim):
             ('e2','f8'),
             ('err','f8'),
             ('R','f8'),
-            ('weight','f8'),
-            ('wssh','f8')]
+            ('ssh','f8'),
+            ('weight','f8')]
 
         self.data=numpy.zeros(self.npairs*2, dtype=dt)
 
-def get_shear(data, shape_noise=True):
+def get_shear(data, weighted=True, shape_noise=True):
     """
     If shape_noise==False then it is assumed there is
     no shape noise (e.g. a ring) so only the errors are used
     """
-    from esutil.stat import wmom
 
-    w=data['weight']
-    wssh = data['wssh']
+    if weighted:
+        return get_shear_weighted(data, shape_noise=shape_noise)
+    else:
+        return get_shear_unweighted(data, shape_noise=shape_noise)
 
-    e1=data['e1']
-    e2=data['e2']
+def get_shear_unweighted(data, shape_noise=True):
+    """
+    If shape_noise==False then it is assumed there is
+    no shape noise (e.g. a ring) so only the errors are used
+    """
 
-    e1mean,e1err = wmom(e1, w, calcerr=True)
-    e2mean,e2err = wmom(e2, w, calcerr=True)
+    e1mean = data['e1'].mean()
+    e2mean = data['e2'].mean()
 
     if not shape_noise:
-        e1ivar = ( 1.0/data['err']**2 ).sum()
+        err2=data['err']**2
+        e1ivar = ( 1.0/err2 ).sum()
         e1err = numpy.sqrt( 1.0/e1ivar )
         e2err = e1err
+    else:
+        e1err = data['e1'].std()/sqrt(data.size)
+        e2err = data['e2'].std()/sqrt(data.size)
 
-    wsum=w.sum()
-
-    ssh = data['wssh'].sum()/wsum
-    R = (data['R']*data['weight']).sum()/wsum
+    ssh = data['ssh'].mean()
+    R = data['R'].mean()
 
     sh1=0.5*e1mean/ssh
     sh2=0.5*e2mean/ssh
@@ -198,7 +213,36 @@ def get_shear(data, shape_noise=True):
     sh1err = 0.5*e1err/ssh
     sh2err = 0.5*e2err/ssh
 
-    return sh1, sh1err, sh2, sh2err, R
+    return sh1, sh1err, sh2, sh2err, ssh, R
+
+
+def get_shear_weighted(data, shape_noise=True):
+    """
+    If shape_noise==False then it is assumed there is
+    no shape noise (e.g. a ring) so only the errors are used
+    """
+    from esutil.stat import wmom
+
+    wt=data['weight']
+
+    e1mean,e1err = wmom(data['e1'], wt, calcerr=True)
+    e2mean,e2err = wmom(data['e2'], wt, calcerr=True)
+    R,Rerr = wmom(data['R'], wt, calcerr=True)
+    ssh,ssherr = wmom(data['ssh'], wt, calcerr=True)
+
+    if not shape_noise:
+        err2=data['err']**2
+        e1ivar = ( 1.0/err2 ).sum()
+        e1err = numpy.sqrt( 1.0/e1ivar )
+        e2err = e1err
+
+    sh1=0.5*e1mean/ssh
+    sh2=0.5*e2mean/ssh
+
+    sh1err = 0.5*e1err/ssh
+    sh2err = 0.5*e2err/ssh
+
+    return sh1, sh1err, sh2, sh2err, ssh, R
 
 def get_config_dir():
     d=os.environ['ESPY_DIR']
@@ -228,3 +272,44 @@ def read_config(run):
     return c
 
 
+def test_err(n=10000, skysig=0.1):
+    """
+    this shows that the uncer is per component
+    """
+    import ngmix
+    import admom
+    from numpy.random import randn
+
+    T=4.0
+    sigma=numpy.sqrt(T/2.)
+    dim = int( round(2.0*5.0*sigma) )
+    dims = [dim]*2
+
+    cen = [(dim-1.)/2.]*2
+
+    pars=[cen[0], cen[1], 0.0, 0.0, T, 100.0]
+
+    gm = ngmix.gmix.GMixModel(pars, 'gauss')
+
+    im0=gm.make_image(dims, nsub=16.0)
+
+    e1s=numpy.zeros(n)
+    e2s=numpy.zeros(n)
+    errs = numpy.zeros(n)
+    for i in xrange(n):
+        
+        if ( (i % 100) == 0):
+            print '%d/%d' % (i+1,n)
+
+        im = im0 + skysig*randn(im0.size).reshape(im0.shape)
+
+        res=admom.admom(im, cen[0], cen[1], guess=T/2.,
+                        sigsky=skysig)
+
+        e1s[i] = res['e1']
+        e2s[i] = res['e2']
+        errs[i] = res['uncer']
+
+    print 'mean err:    ',errs.mean()
+    print 'e1 shape std:',e1s.std()
+    print 'e2 shape std:',e2s.std()
