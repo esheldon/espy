@@ -53,7 +53,7 @@ def get_pqr_sums(P,Q,R):
 
     wbad, = where(P <= 0)
     if wbad.size != 0:
-        raise ValueError('Found P <= 0: %s/%s' (w.size,n) )
+        raise ValueError('Found P <= 0: %s/%s' % (wbad.size,n) )
 
     QQ       = zeros( (n,2,2), dtype=Q.dtype)
     Cinv_all = zeros( (n,2,2), dtype=Q.dtype)

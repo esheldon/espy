@@ -27,7 +27,7 @@ psf_tol: 5.0e-4
 # we won't fit other models if the s/n is too low
 # this might be tweaked depending on how many bands
 # and images you have in the stack.
-min_psf_s2n: 0.0
+min_psf_s2n: -9999.0
 
 # should work with these sims I think
 region: "seg_and_sky"

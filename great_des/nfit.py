@@ -232,6 +232,7 @@ class MedsFit(object):
         print >>stderr,'    fitting: psf models'
         keep_list,psf_gmix_list,flags=self._fit_psfs(dindex,jacob_list)
         if flags != 0:
+            print >>stderr,'not fitting object due to psf failure'
             self.data['flags'][dindex] = PSF_FIT_FAILURE 
             return
 
@@ -388,7 +389,7 @@ class MedsFit(object):
 
                 
             except GMixMaxIterEM:
-                print >>stderr,'psf fail',flist[i]
+                print >>stderr,'psf fail'
 
                 tflags = PSF_FIT_FAILURE
 

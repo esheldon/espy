@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-    %prog [options] run gnum fnum
+    %prog [options] run gnum
 
 combine outputs
 """
@@ -16,33 +16,36 @@ parser = OptionParser(__doc__)
 
 def main():
     options, args = parser.parse_args(sys.argv[1:])
-    if len(args) < 3:
+    if len(args) < 2:
         parser.print_help()
         sys.exit(45)
 
     run=args[0]
     gnum=int(args[1])
-    fnum=int(args[2])
 
     conf=files.read_config(run=run)
 
     conf['gnum'] = gnum
-    conf['fnum'] = fnum
 
-    low,high = files.get_chunk_ranges(**conf)
-    n=len(low)
+    for fnum in xrange(conf['nf']):
+        conf['fnum'] = fnum
 
-    dlist=[]
-    for i in xrange(n):
-        conf['start'] = low[i]
-        conf['end'] = high[i]
-        datai = files.read_output(**conf)
-        dlist.append(datai)
+        low,high = files.get_chunk_ranges(**conf)
+        n=len(low)
+
+        dlist=[]
+        for i in xrange(n):
+            conf['start'] = low[i]
+            conf['end'] = high[i]
+            datai = files.read_output(**conf)
+            dlist.append(datai)
 
     data=eu.numpy_util.combine_arrlist(dlist)
 
     del conf['start']
     del conf['end']
+    del conf['fnum']
+
     fname = files.get_output_file(**conf)
     print 'writing:',fname
     fitsio.write(fname, data, clobber=True)

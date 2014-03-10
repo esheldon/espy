@@ -118,7 +118,7 @@ def get_output_file(**keys):
     if 'start' in keys:
         fname='%(run)s-%(fnum)03i-g%(gnum)02i-%(start)05d-%(end)05d.fits'
     else:
-        fname='%(run)s-%(fnum)03i-g%(gnum)02i.fits'
+        fname='%(run)s-g%(gnum)02i.fits'
     fname=fname % keys
 
     fname=os.path.join(d, fname)
