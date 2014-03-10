@@ -33,6 +33,48 @@ parser.add_option("--work-dir", default=None,
 parser.add_option("--profile-image", default=None,
                   help=("Profile the code and create the specified "
                         "image using pycallgraph"))
+
+class RemoteFile(object):
+    def __init__(self, remote_file, local_dir='/tmp'):
+        self.local_dir=local_dir
+        self.remote_file=remote_file
+        self.local_file=self._generate_local_filename()
+
+        if self.local_file==self.remote_file:
+            raise ValueError("local file equals remote file: '%s'" % remote_file)
+
+        if not os.path.exists(self.local_dir):
+            os.makedirs(self.localdir)
+
+    def _generate_local_filename(self):
+        bname=os.path.basename(self.remote_file)
+        local_file=os.path.join(self.local_dir, bname)
+
+
+        return local_file
+
+    def stage(self):
+        import shutil
+
+        self.cleanup()
+        print >>stderr,'copying to local file:',self.remote_file, self.local_file
+        shutil.copy2(self.remote_file, self.local_file)
+
+    def cleanup(self):
+        if os.path.exists(self.local_file):
+            print >>stderr,'removing local file:',self.local_file
+            os.remove(self.local_file)
+
+    def __enter__(self):
+        self.stage()
+        return self
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.cleanup()
+    def __del__(self):
+        self.cleanup()
+
+
 def load_config(fname):
     with open(fname) as fobj:
         data=yaml.load(fobj)
@@ -371,14 +413,16 @@ def run_fitter(files, conf, checkpoint_data=None):
 
     return data, epoch_data, meta
 
-def setup_work_files(options, meds_file):
+def setup_work_files(options, meds_file, psf_file):
     """
     Set up local, possibly sub-range meds files
     """
+
     meds_file_full=meds_file
     extracted=None
     rng=get_range( options.obj_range )
     rng_send=None
+
     if rng is not None:
         if options.work_dir is not None:
             # note variable extracted is cleaned up when MedsExtractors get
@@ -389,7 +433,13 @@ def setup_work_files(options, meds_file):
             rng_send=None
         else:
             rng_send=rng
-    return rng_send, meds_file, meds_file_full, extracted
+
+    if options.work_dir is not None:
+        tmp_psf = RemoteFile(psf_file, local_dir=options.work_dir)
+        tmp_psf.stage()
+    else:
+        tmp_psf=None
+    return rng_send, meds_file, meds_file_full, extracted, tmp_psf
 
  
 def write_data(data, epoch_data, meta, out_file):
@@ -412,11 +462,14 @@ def go(files, options):
     conf=load_config(files['config'])
     pprint.pprint(conf,stream=stderr)
 
-    rng_send,meds_file,meds_file_full,extracted=\
-                        setup_work_files(options,files['meds'])
+    rng_send,meds_file,meds_file_full,extracted,tmp_psf=\
+                        setup_work_files(options,files['meds'],files['psf'])
 
     files['meds'] = meds_file
     files['meds_full'] = meds_file_full
+    files['tmp_psf'] = tmp_psf
+    if tmp_psf is not None:
+        files['psf'] = tmp_psf.local_file
 
     # if work_dir is sent, we do range by extracting it, see above, so
     # rng_send would be None
@@ -429,7 +482,7 @@ def go(files, options):
                                       checkpoint_data=checkpoint_data)
 
     if options.work_dir is not None:
-        meta['meds_file'] = files['meds_file']
+        meta['meds_file'] = files['meds_full']
 
     write_data(data, epoch_data, meta, files['out'])
 
