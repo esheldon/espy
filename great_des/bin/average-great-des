@@ -1,0 +1,70 @@
+#!/usr/bin/env python
+"""
+    %prog [options] run gnum
+
+average outputs
+"""
+
+import os,sys
+import numpy
+from numpy import diag, sqrt, where
+import fitsio
+import esutil as eu
+
+from great_des import files
+import lensing
+
+from optparse import OptionParser
+parser = OptionParser(__doc__)
+
+def get_dtype(conf):
+    dt=[]
+    for model in conf['simple_models']:
+        ndict = files.get_shear_name_dict(model=model)
+        dt += [(ndict['nuse'],'i8'),
+               (ndict['shear'],'f8',2),
+               (ndict['shear_err'],'f8',2),
+               (ndict['shear_cov'],'f8',(2,2))]
+    return dt
+
+def main():
+    options, args = parser.parse_args(sys.argv[1:])
+    if len(args) < 2:
+        parser.print_help()
+        sys.exit(45)
+
+    run=args[0]
+    gnum=int(args[1])
+
+    conf=files.read_config(run=run)
+
+    conf['gnum'] = gnum
+
+    data=files.read_output(**conf)
+
+    dt=get_dtype(conf)
+    output=numpy.zeros(1, dtype=dt)
+    for model in conf['simple_models']:
+
+        nd = files.get_shear_name_dict(model=model)
+
+        w,=where(data[nd['flags']]==0)
+        print 'using: %d/%d' % (w.size, data.size)
+        sh,cov=lensing.pqr.get_pqr_shear(data[nd['P']][w],
+                                         data[nd['Q']][w],
+                                         data[nd['R']][w])
+        err=sqrt(diag(cov))
+        output[nd['nuse']][0] = w.size
+        output[nd['shear']][0,:] = sh
+        output[nd['shear_err']][0,:] = err
+        output[nd['shear_cov']][0,:,:] = cov
+
+        mess='sh1: %.4g +/- %.4g  sh2: %.4g +/- %.4g'
+        mess=mess % (sh[0], err[0], sh[1], err[1])
+        print mess
+
+    fname = files.get_averaged_file(**conf)
+    print 'writing:',fname
+    fitsio.write(fname, data, clobber=True)
+
+main()
