@@ -1,3 +1,16 @@
+run: "nfit-01"
+
+gdtype: "nbc2"
+gdrun: "140307_first_test"
+
+# number per g number, index 0-1
+nf: 2
+# shear numbers 0-7
+ng: 8
+
+# size of processing chunks
+nper: 100
+
 fitter: "ngmix"
 
 nwalkers: 80
