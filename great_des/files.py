@@ -1,5 +1,20 @@
 import os
 
+def get_shear_name_dict(model=None):
+    # add as many as you need here
+    names=['nuse','shear','shear_cov','shear_err',
+           'P','Q','R','flags']
+
+    ndict={}
+    if model is not None:
+        for n in names:
+            name='%s_%s' % (model,n)
+            ndict[n] = name
+    else:
+        for n in names:
+            ndict[n] = n
+    return ndict
+
 def get_config_file(**keys):
     run=keys['run']
 
@@ -128,6 +143,27 @@ def get_output_file(**keys):
 def read_output(**keys):
     import fitsio
     fname=get_output_file(**keys)
+    print 'reading:',fname
+    data = fitsio.read(fname)
+    return data
+
+
+def get_averaged_file(**keys):
+    d=get_output_dir(**keys)
+    
+    if 'gnum' in keys:
+        fname='%(run)s-g%(gnum)02i-avg.fits'
+    else:
+        fname='%(run)s-avg.fits'
+    fname=fname % keys
+
+    fname=os.path.join(d, fname)
+
+    return fname
+
+def read_averaged(**keys):
+    import fitsio
+    fname=get_averaged_file(**keys)
     print 'reading:',fname
     data = fitsio.read(fname)
     return data
