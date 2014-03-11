@@ -65,6 +65,6 @@ def main():
 
     fname = files.get_averaged_file(**conf)
     print 'writing:',fname
-    fitsio.write(fname, data, clobber=True)
+    fitsio.write(fname, output, clobber=True)
 
 main()

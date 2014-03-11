@@ -126,10 +126,12 @@ def pqr_jackknife(P, Q, R,
     # some may not get used
     nchunks = npair/chunksize
 
+    print 'getting overall sums'
     P_sum, Q_sum, Cinv_sum = get_pqr_sums(P,Q,R)
     C = numpy.linalg.inv(Cinv_sum)
     shear = numpy.dot(C,Q_sum)
 
+    print 'doing jackknife'
     shears = numpy.zeros( (nchunks, 2) )
     for i in xrange(nchunks):
 
