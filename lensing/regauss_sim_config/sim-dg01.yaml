@@ -6,7 +6,7 @@ psf_shape: [0.0, 0.0]
 
 obj_model: "dev"
 
-obj_T: 48.0
+obj_T: 16.0
 obj_counts: 100.0
 
 fixed_pars: True

@@ -1,6 +1,149 @@
 import numpy
 import scipy.optimize
 
+class GaussFitter(object):
+    """
+    Fit a 1-d gaussian
+    """
+    def __init__(self, data, **keys):
+        """
+        The data are histogrammed and fit according to the keywords
+        """
+
+        self.data=data
+        self.conf=keys
+
+        self.use_error = keys.get('use_error',False)
+
+
+    def get_result(self):
+        return {'pars':self.pars,
+                'pcov':self.pcov,
+                'perr':self.perr}
+
+    def dofit(self, guess):
+        """
+        Run the lm fitter
+        """
+
+        self._make_hist()
+
+        print 'running leastsq'
+        res=scipy.optimize.leastsq(self._errfunc,
+                                   guess,
+                                   full_output=1)
+
+        self.pars, self.pcov0, self.infodict, self.errmsg, self.ier = res
+
+        if self.ier == 0:
+            # wrong args, this is a bug
+            raise ValueError(self.errmsg)
+
+        self.numiter = self.infodict['nfev']
+        self.pcov=None
+        self.perr=None
+
+        if self.pcov0 is not None:
+            self.pcov = self._scale_leastsq_cov(self.pars, self.pcov0)
+
+            d=numpy.diag(self.pcov)
+            w,=numpy.where(d < 0)
+
+            if w.size == 0:
+                # only do if non negative
+                self.perr = numpy.sqrt(d)
+
+    def eval_pars(self, pars):
+        """
+        [cen, sigma, amp]
+        """
+        from numpy import exp, sqrt, pi
+        mean=pars[0]
+        sigma=pars[1]
+        amp=pars[2]
+
+        norm = 1.0/sqrt(2*pi)/sigma
+
+        modvals = amp*norm*exp( -0.5*(self.x-mean)**2/sigma**2 )
+
+        return modvals
+
+    def _errfunc(self, pars):
+        model = self.eval_pars(pars)
+        if not self.use_error is None:
+            diff = model-self.y
+        else:
+            diff = (model-self.y)/self.yerr
+
+        return diff
+
+
+    def _scale_leastsq_cov(self, pars, pcov):
+        """
+        Scale the covariance matrix returned from leastsq; this will
+        recover the covariance of the parameters in the right units.
+        """
+        dof = (self.x.size-len(pars))
+        s_sq = (self._errfunc(pars)**2).sum()/dof
+        return pcov * s_sq 
+
+    def _make_hist(self):
+        import esutil as eu
+
+        if not hasattr(self, 'x'):
+            print 'histogramming'
+            self.conf['more']=True
+            h=eu.stat.histogram(self.data, **self.conf)
+
+            self.x=h['center']
+            self.y=h['hist']
+
+            if self.use_error:
+                self.yerr=numpy.sqrt(h['hist'])
+
+    def make_plot(self, show=False):
+        """
+        compare fit to data
+        """
+        import biggles
+
+        model=self.eval_pars(self.pars)
+
+        plt=biggles.FramedPlot()
+
+        x0=self.x[0]
+        binsize=self.x[1]-self.x[0]
+        h=biggles.Histogram(self.y, x0=x0, binsize=binsize, color='black')
+        h.label='data'
+
+        plt.add(h)
+        if self.use_error:
+            ep=biggles.SymmetricErrorBarsY(self.x, self.y, self.yerr)
+            plt.add(ep)
+
+        fh=biggles.Histogram(model, x0=x0, binsize=binsize, color='red')
+        fh.label='fit'
+
+        plt.add(fh)
+
+        key=biggles.PlotKey(0.1, 0.9, [h, fh], halign='left')
+        plt.add(key)
+
+        mnstr='mn: %g +/- %g' % (self.pars[0],self.perr[0])
+        sigstr=r'$\sigma: %g +/- %g$' % (self.pars[1],self.perr[1])
+        ampstr='amp: %g +/- %g' % (self.pars[2],self.perr[2])
+
+        mnlab = biggles.PlotLabel(0.9,0.3,mnstr, halign='right')
+        siglab = biggles.PlotLabel(0.9,0.2,sigstr, halign='right')
+        amplab = biggles.PlotLabel(0.9,0.1,ampstr, halign='right')
+
+        plt.add(mnlab, siglab, amplab)
+
+        if show:
+            plt.show()
+
+        return plt
+
 class LineFitter:
     def __init__(self, x, y, yerr=None):
         self.x=x
@@ -15,7 +158,7 @@ class LineFitter:
     def eval_pars(self, pars):
         return pars[0]*self.x + pars[1]
 
-    def errfunc(self, pars):
+    def _errfunc(self, pars):
         model = self.eval_pars(pars)
         if self.yerr is None:
             diff = model-self.y
@@ -25,8 +168,8 @@ class LineFitter:
         return diff
 
     def dofit(self):
-        res=scipy.optimize.leastsq(self.errfunc, self.guess,
-                                       full_output=1)
+        res=scipy.optimize.leastsq(self._errfunc, self.guess,
+                                   full_output=1)
         self.pars, self.pcov0, self.infodict, self.errmsg, self.ier = res
         if self.ier == 0:
             # wrong args, this is a bug
@@ -37,7 +180,7 @@ class LineFitter:
         self.perr=None
 
         if self.pcov0 is not None:
-            self.pcov = self.scale_leastsq_cov(self.pars, self.pcov0)
+            self.pcov = self._scale_leastsq_cov(self.pars, self.pcov0)
 
             d=numpy.diag(self.pcov)
             w,=numpy.where(d < 0)
@@ -50,13 +193,13 @@ class LineFitter:
         return {'pars':self.pars,
                 'pcov':self.pcov,
                 'perr':self.perr}
-    def scale_leastsq_cov(self, pars, pcov):
+    def _scale_leastsq_cov(self, pars, pcov):
         """
         Scale the covariance matrix returned from leastsq; this will
         recover the covariance of the parameters in the right units.
         """
         dof = (self.x.size-len(pars))
-        s_sq = (self.errfunc(pars)**2).sum()/dof
+        s_sq = (self._errfunc(pars)**2).sum()/dof
         return pcov * s_sq 
 
 

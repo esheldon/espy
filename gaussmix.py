@@ -3,35 +3,14 @@ import esutil
 #from scikits.learn import mixture
 from sklearn import mixture
 
-class GMMZeroCenter(mixture.GMM):
-    """
-    Force the center to be at the origin
-    """
-    def __init__(self, **keys):
-        super(GMMZeroCenter,self).__init__(**keys)
+def fit_gauss1d(data, **keys):
+    data_r=data.reshape(data.size, 1)
+    gm=GaussMix(**keys)
 
-    def _do_mstep(self, X, responsibilities, params, min_covar=0):
-        """ Perform the Mstep of the EM algorithm and return the class weihgts.
-        """
-        from sklearn.mixture.gmm import EPS, _covar_mstep_funcs
-        weights = responsibilities.sum(axis=0)
-        weighted_X_sum = numpy.dot(responsibilities.T, X)
-        inverse_weights = 1.0 / (weights[:, numpy.newaxis] + 10 * EPS)
+    gm.fit(data_r)
 
-        if 'w' in params:
-            self.weights_ = (weights / (weights.sum() + 10 * EPS) + EPS)
-        if 'm' in params:
-            self.means_ = weighted_X_sum * inverse_weights
-        if 'c' in params:
-            covar_mstep_func = _covar_mstep_funcs[self.covariance_type]
-            self.covars_ = covar_mstep_func(
-                self, X, responsibilities, weighted_X_sum, inverse_weights,
-                min_covar)
-        self.means_[:,:] = 0
-        return weights
+    return gm
 
-
-# not really  used any more
 class GaussMix(mixture.GMM):
     """
 
@@ -45,14 +24,6 @@ class GaussMix(mixture.GMM):
 
 
     """
-
-    #  no longer needed
-    #def fit1d(self, data1d, **keywords):
-    #    """
-    #    Important keyword is min_covar, size of smallest
-    #    possible gaussian
-    #    """
-    #    self.fit(data1d.reshape(data1d.size, 1), **keywords)
 
     def sample1d(self, n):
         samples=self.sample(n)

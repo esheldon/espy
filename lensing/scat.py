@@ -288,10 +288,14 @@ class DR8RegaussCatalog(GenericSrcCatalog):
         output['g1'][:] = -self.scols[e1name][keep]/2
         print(e2name)
         output['g2'][:] =  self.scols[e2name][keep]/2
-        output['err'][:] = self.scols[errname][keep]/2
 
+        print("correcting error for 1/R")
+        R = self.scols[Rname][keep]
+        err = self.scols[errname][keep]/R/2
+
+        output['err'][:] = err
         output['mag'][:] = self.scols[magname][keep]
-        output['R'][:] = self.scols[Rname][keep]
+        output['R'][:] = R
 
         scinvcol = scinv_colname(self['scinv_sample'])
         print("  reading",scinvcol)
