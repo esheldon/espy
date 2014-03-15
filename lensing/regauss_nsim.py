@@ -2,6 +2,7 @@ import os
 from sys import stderr
 from pprint import pprint
 import numpy
+from numpy import sqrt
 
 import nsim
 from nsim.sim import TryAgainError
@@ -181,6 +182,7 @@ AMOBJ_FAIL=2**1
 AMCOR_FAIL=2**2
 AMCOR_CUTS=2**3
 
+
 class AdmomNSim(RegaussNSim):
 
     def fit_galaxy(self, imdict, psf_image):
@@ -336,6 +338,172 @@ class AdmomNSim(RegaussNSim):
 
         self.data=numpy.zeros(self.npairs*2, dtype=dt)
 
+
+class AdmomSSim(object):
+    """
+    find the true shear by simulating the world and comparing to the biased
+    result
+    """
+    def __init__(self, sim_conf, run_conf, s2n, npairs,
+                 shear_meas, shear_meas_err):
+
+        self.sim_conf=sim_conf
+
+        self.run_conf=run_conf
+        self.s2n=s2n
+        self.npairs=npairs
+        self.shear_meas=shear_meas
+        self.shear_meas_err=shear_meas_err
+
+        #self.maxfev = 300
+        #self.ftol   = 1.0e-6
+        #self.xtol   = 1.0e-6
+        #self.epsfcn = 1.0e-6
+
+        self.lm_pars={'maxfev':20,
+                      'ftol':1.0e-3,
+                      'xtol':1.0e-3,
+                      'epsfcn':1.0e-6}
+
+
+    def go(self):
+        """
+        Run an LM fitter.  Starting guess is the measured shear
+        """
+
+        guess=self.shear_meas.copy()
+        dof = 1.0 # actually it is zero
+        lm_tup = run_leastsq(self.calc_fdiff, guess, dof, **self.lm_pars)
+
+    def calc_fdiff(self, shear):
+        """
+        Run the sim and get the shear
+        """
+
+
+        # this one will hold the shear we are simulating
+        sim_conf={}
+        sim_conf.update(self.sim_conf)
+        sim_conf['shear'] = shear
+
+        sim=AdmomNSim(sim_conf, self.run_conf, self.s2n, self.npairs)
+
+        sim.run_sim()
+        data=sim.get_data()
+
+        shnew,shnew_err,ssh,R=get_shear(data, shape_noise=False)
+
+        errtot = sqrt(self.shear_meas_err**2 + shnew_err**2)
+
+        fdiff = (shnew - self.shear_meas)/errtot
+
+        return fdiff
+
+def run_leastsq(func, guess, dof, **keys):
+    """
+    run leastsq from scipy.optimize.  Deal with certain
+    types of errors
+
+    TODO make this do all the checking and fill in cov etc.  return
+    a dict
+
+    parameters
+    ----------
+    func:
+        the function to minimize
+    guess:
+        guess at pars
+
+    some useful keywords
+    maxfev:
+        maximum number of function evaluations. e.g. 1000
+    epsfcn:
+        Step for jacobian estimation (derivatives). 1.0e-6
+    ftol:
+        Relative error desired in sum of squares, 1.0e06
+    xtol:
+        Relative error desired in solution. 1.0e-6
+    """
+    from scipy.optimize import leastsq
+    import pprint
+
+    npars=guess.size
+
+    res={}
+    try:
+        lm_tup = leastsq(func, guess, full_output=1, **keys)
+
+        pars, pcov0, infodict, errmsg, ier = lm_tup
+
+        if ier == 0:
+            # wrong args, this is a bug
+            raise ValueError(errmsg)
+
+        flags = 0
+        if ier > 4:
+            flags = 2**(ier-5)
+            pars,pcov,perr=_get_def_stuff(npars)
+            print >>stderr,'    ',errmsg
+
+        elif pcov0 is None:    
+            # why on earth is this not in the flags?
+            flags += LM_SINGULAR_MATRIX 
+            errmsg = "singular covariance"
+            print >>stderr,'    ',errmsg
+            print_pars(pars,front='    pars at singular:',stream=stderr)
+            junk,pcov,perr=_get_def_stuff(npars)
+        else:
+            # Scale the covariance matrix returned from leastsq; this will
+            # recover the covariance of the parameters in the right units.
+            fdiff=func(pars)
+
+            # npars: to remove priors
+            s_sq = (fdiff[npars:]**2).sum()/dof
+            pcov = pcov0 * s_sq 
+
+            cflags = _test_cov(pcov)
+            if cflags != 0:
+                flags += cflags
+                errmsg = "bad covariance matrix"
+                print >>stderr,'    ',errmsg
+                junk1,junk2,perr=_get_def_stuff(npars)
+            else:
+                # only if we reach here did everything go well
+                perr=numpy.sqrt( numpy.diag(pcov) )
+
+        res['flags']=flags
+        res['nfev'] = infodict['nfev']
+        res['ier'] = ier
+        res['errmsg'] = errmsg
+
+        res['pars'] = pars
+        res['pars_err']=perr
+        res['pars_cov0'] = pcov0
+        res['pars_cov']=pcov
+
+    except ValueError as e:
+        serr=str(e)
+        if 'NaNs' in serr or 'infs' in serr:
+            pars,pcov,perr=_get_def_stuff(npars)
+
+            res['pars']=pars
+            res['pars_cov0']=pcov
+            res['pars_cov']=pcov
+            res['nfev']=-1
+            res['flags']=LM_FUNC_NOTFINITE
+            res['errmsg']="not finite"
+            print >>stderr,'    not finite'
+        else:
+            raise e
+
+    return res
+
+
+
+
+
+
+
 def get_shear(data, weighted=True, shape_noise=True):
     """
     If shape_noise==False then it is assumed there is
@@ -374,7 +542,10 @@ def get_shear_unweighted(data, shape_noise=True):
     sh1err = 0.5*e1err/ssh
     sh2err = 0.5*e2err/ssh
 
-    return sh1, sh1err, sh2, sh2err, ssh, R
+    shear=numpy.array([sh1,sh2],dtype='f8')
+    shear_err=numpy.array([sh1err,sh2err],dtype='f8')
+
+    return shear,shear_err ssh, R
 
 
 def get_shear_weighted(data, shape_noise=True):
@@ -403,7 +574,10 @@ def get_shear_weighted(data, shape_noise=True):
     sh1err = 0.5*e1err/ssh
     sh2err = 0.5*e2err/ssh
 
-    return sh1, sh1err, sh2, sh2err, ssh, R
+    shear=numpy.array([sh1,sh2],dtype='f8')
+    shear_err=numpy.array([sh1err,sh2err],dtype='f8')
+
+    return shear,shear_err ssh, R
 
 def get_config_dir():
     d=os.environ['ESPY_DIR']
