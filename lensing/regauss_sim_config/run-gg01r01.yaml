@@ -2,6 +2,7 @@ run: "run-gg01r01"
 sim: "sim-gg01"
 
 fitter: 'regauss'
+fit_model: null
 
 # we normalize splits by split for is2n==0
 desired_err: 4.5e-05

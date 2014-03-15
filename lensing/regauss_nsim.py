@@ -11,6 +11,7 @@ MAX_ELLIP=4.0
 MAX_R = 1.0
 MIN_R = 0.01
 
+
 class RegaussNSim(nsim.sim.NGMixSim):
     """
     Use ngmix for the sim, regauss for fitting
@@ -172,6 +173,166 @@ class RegaussNSim(nsim.sim.NGMixSim):
             ('R','f8'),
             ('ssh','f8'),
             ('weight','f8')]
+
+        self.data=numpy.zeros(self.npairs*2, dtype=dt)
+
+AMPSF_FAIL=2**0
+AMOBJ_FAIL=2**1
+AMCOR_FAIL=2**2
+AMCOR_CUTS=2**3
+
+class AdmomNSim(RegaussNSim):
+
+    def fit_galaxy(self, imdict, psf_image):
+
+        image=imdict['image']
+
+        cen_guess=numpy.array(image.shape)/2.0
+
+        pars=imdict['pars']
+        
+        T_guess_psf = self.simc['psf_T']
+        T_guess_obj = T_guess_psf + pars[4]
+
+        ampsf = self.run_admom(psf_image, cen_guess, T_guess_psf)
+        am    = self.run_admom(imdict['image'], cen_guess, T_guess_obj)
+
+        res={'flags':0,
+             'gal':am,
+             'psf':ampsf}
+
+        if ampsf['whyflag'] != 0:
+            print >>stderr,"failed in admom psf"
+            res['flags'] = ampsf['whyflag']
+        elif am['whyflag'] != 0:
+            print >>stderr,"failed in admom object"
+            res['flags'] = am['whyflag']
+        else:
+            self.do_am_corr(res)
+            cres=res['corr']
+
+            if cres['flags'] != 0:
+                print >>stderr,"failed in corr"
+                res['flags'] = AMCOR_FAIL
+            else:
+                if not self.check_vals(cres):
+                    res['flags']=AMCOR_CUTS
+                else:
+                    weight,ssh=self._get_weight_and_ssh(cres['e1'],
+                                                        cres['e2'],
+                                                        cres['err'])
+                    cres['weight'] = weight
+                    cres['ssh'] = ssh
+
+        return res
+
+    def check_vals(self, res):
+        """
+        check bounds
+        """
+
+        e1,e2,R=res['e1'],res['e2'],res['R']
+        if (abs(e1) > MAX_ELLIP
+                or abs(e2) > MAX_ELLIP
+                or R <= MIN_R
+                or R >  MAX_R):
+            return False
+        else:
+            return True
+
+    def run_admom(self, image, cen_guess, T_guess):
+        """
+        Run adaptive moments on the image
+        """
+        from nsim.sim import srandu
+
+        ntry=self['ntry']
+        for i in xrange(ntry):
+            amres=admom.admom(image,
+                              cen_guess[0],
+                              cen_guess[1],
+                              guess=0.5*T_guess,
+                              sigsky=self.skysig)
+            if amres['whyflag'] == 0:
+                break
+            else:
+                T_guess = T_guess*(1.0 + 0.05*srandu() )
+                cen_guess = cen_guess + 0.1*srandu(2)
+
+        amres['ntry'] = i+1
+        return amres
+
+    def do_am_corr(self, res):
+        """
+        Do the compea4 style correction
+        """
+        from admom.compea4 import _compea41 as compea4
+
+        am=res['gal']
+        ampsf=res['psf']
+
+        To=am['Irr'] + am['Icc']
+        e1o,e2o,a4o=am['e1'],am['e2'],am['a4']
+
+        Tp=ampsf['Irr'] + ampsf['Icc']
+        e1p,e2p,a4p=ampsf['e1'],ampsf['e2'],ampsf['a4']
+
+        e1,e2,R,flags = compea4(To,e1o,e2o,a4o,
+                                Tp,e1p,e2p,a4p)
+
+        if flags != 0:
+            print >>stderr,"failed in corr"
+            corr_res = {'flags':flags}
+        else:
+            err=am['uncer']/R
+            corr_res={'flags':flags,
+                      'e1':e1,
+                      'e2':e2,
+                      'err':err,
+                      'R':R}
+
+        res['corr'] = corr_res
+
+    def print_res(self,res):
+        cres=res['corr']
+        tup=(cres['e1'],cres['e2'],cres['err'])
+        print >>stderr,'    e1: %.6g e2: %.6g err: %.6g' % tup
+
+    def copy_to_output(self, res, i):
+        """
+        Copy results into the output
+        """
+        d=self.data
+
+        cres=res['corr']
+
+        d['processed'][i] = 1
+        d['e1'][i] = cres['e1']
+        d['e2'][i] = cres['e2']
+        d['err'][i] = cres['err']
+        d['R'][i] = cres['R']
+
+        d['weight'][i] = cres['weight']
+        d['ssh'][i] = cres['ssh']
+
+        d['ntry_psf'][i] = res['psf']['ntry']
+        d['ntry'][i] = res['gal']['ntry']
+
+
+    def make_struct(self):
+        """
+        Make the output array
+        """
+
+        dt=[('processed','i2'),
+            ('e1','f8'),
+            ('e2','f8'),
+            ('err','f8'),
+            ('R','f8'),
+            ('ssh','f8'),
+            ('weight','f8'),
+            ('ntry_psf','i2'),
+            ('ntry','i2')]
 
         self.data=numpy.zeros(self.npairs*2, dtype=dt)
 

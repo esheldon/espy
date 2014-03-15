@@ -41,12 +41,21 @@ def run_sim(sim_conf,run_conf,s2n,npairs,output_file):
     """
 
     checkpoint_file, checkpoint_data=get_checkpoint_data(output_file)
-    sim=lensing.regauss_nsim.RegaussNSim(sim_conf,
-                                         run_conf,
-                                         s2n,
-                                         npairs,
-                                         checkpoint_file=checkpoint_file,
-                                         checkpoint_data=checkpoint_data)
+
+    fitter=run_conf['fitter']
+    if fitter=='regauss':
+        cls=lensing.regauss_nsim.RegaussNSim
+    elif fitter=='am':
+        cls=lensing.regauss_nsim.AdmomNSim
+    else:
+        raise ValueError("bad fitter: '%s'" % fitter)
+
+    sim=cls(sim_conf,
+            run_conf,
+            s2n,
+            npairs,
+            checkpoint_file=checkpoint_file,
+            checkpoint_data=checkpoint_data)
 
     sim.run_sim()
 
