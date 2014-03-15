@@ -1,0 +1,13 @@
+run: "run-gg01r02"
+sim: "sim-gg01"
+
+fitter: 'am'
+fit_model: null
+
+ntry: 10
+
+# we normalize splits by split for is2n==0
+desired_err: 4.5e-05
+nsplit0: 3000
+
+s2n_vals: [ 10, 15, 23, 35, 53, 81, 123, 187, 285, 433, 658, 1000 ]
