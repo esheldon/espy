@@ -383,7 +383,7 @@ def get_shear_unweighted(data, shape_noise=True):
     shear=numpy.array([sh1,sh2],dtype='f8')
     shear_err=numpy.array([sh1err,sh2err],dtype='f8')
 
-    return shear,shear_err ssh, R
+    return shear, shear_err, ssh, R
 
 
 def get_shear_weighted(data, shape_noise=True):
@@ -415,7 +415,7 @@ def get_shear_weighted(data, shape_noise=True):
     shear=numpy.array([sh1,sh2],dtype='f8')
     shear_err=numpy.array([sh1err,sh2err],dtype='f8')
 
-    return shear,shear_err ssh, R
+    return shear, shear_err, ssh, R
 
 def get_config_dir():
     d=os.environ['ESPY_DIR']
