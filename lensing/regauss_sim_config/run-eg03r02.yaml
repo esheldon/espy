@@ -4,6 +4,8 @@ sim: "sim-eg03"
 fitter: 'am'
 fit_model: null
 
+verbose: False
+
 ntry: 10
 
 # we normalize splits by split for is2n==0

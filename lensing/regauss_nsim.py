@@ -2,7 +2,7 @@ import os
 from sys import stderr
 from pprint import pprint
 import numpy
-from numpy import sqrt
+from numpy import sqrt, zeros
 
 import nsim
 from nsim.sim import TryAgainError
@@ -35,7 +35,8 @@ class RegaussNSim(nsim.sim.NGMixSim):
             if res['flags'] != 0:
                 raise TryAgainError("failed at %s" % key)
 
-            self.print_res(res)
+            if self.verbose:
+                self.print_res(res)
 
             reslist.append(res)
 
@@ -117,7 +118,8 @@ class RegaussNSim(nsim.sim.NGMixSim):
         """
         if not hasattr(self,'SN2'):
             import ngmix
-            n=10000
+            print >>stderr,'getting shape noise:',
+            n=1000000
             g1,g2 = self.g_prior.sample2d(n)
             e1=g1.copy()
             e2=g2.copy()
@@ -125,7 +127,7 @@ class RegaussNSim(nsim.sim.NGMixSim):
                 e1[i], e2[i] = ngmix.shape.g1g2_to_e1e2(g1[i],g2[i])
             self.SN2 = e1.var()
 
-            print >>stderr,'SN2:',self.SN2
+            print >>stderr,self.SN2
 
         return self.SN2
 
@@ -218,6 +220,7 @@ class AdmomNSim(RegaussNSim):
                 res['flags'] = AMCOR_FAIL
             else:
                 if not self.check_vals(cres):
+                    #print >>stderr,'failed AMCOR cuts'
                     res['flags']=AMCOR_CUTS
                 else:
                     weight,ssh=self._get_weight_and_ssh(cres['e1'],
@@ -486,3 +489,208 @@ def test_err(n=10000, skysig=0.1):
     print 'mean err:    ',errs.mean()
     print 'e1 shape std:',e1s.std()
     print 'e2 shape std:',e2s.std()
+
+
+def test_admom_err(run, s2n, npairs, ntrial):
+    """
+    don't use s2n > 100
+    """
+    import esutil as eu
+    run_conf = read_config(run)
+    sim_conf = read_config(run_conf['sim'])
+
+    shearvals=numpy.zeros(ntrial)
+    errvals=numpy.zeros(ntrial)
+    errvals_sn=numpy.zeros(ntrial)
+    for i in xrange(ntrial):
+        print 'trial: %s/%s' % (i+1,i)
+
+        sim=AdmomNSim(sim_conf, run_conf, s2n, npairs)
+        sim.run_sim()
+        data=sim.get_data()
+        shear0, shear0_err, ssh, R = get_shear(data,shape_noise=False)
+        shear0_sn, shear0_err_sn, ssh, R = get_shear(data,shape_noise=True)
+        print 'initial value:',shear0,shear0_err
+        frac_err     = shear0[0]/sim_conf['shear'][0]-1
+        frac_err_err = shear0_err[0]/sim_conf['shear'][0]
+        print 'frac err:      %g +/- %g' % (frac_err, frac_err_err)
+
+        shearvals[i] = shear0[0]
+        errvals[i] = shear0_err[0]
+        errvals_sn[i] = shear0_err_sn[0]
+
+    shear_std = shearvals.std()
+    print 'mean err:    ',errvals.mean()
+    print 'mean err SN: ',errvals_sn.mean()
+    print 'scatter:     ',shear_std
+
+    eu.plotting.bhist(shearvals, binsize=0.2*shear_std)
+
+
+def get_shear_in_chunks(data, nchunks):
+    n=data.size
+    chunksize=n/nchunks
+    nleft = n % nchunks
+
+    sh=numpy.zeros( (nchunks, 2) )
+    sh_err=numpy.zeros( (nchunks, 2) )
+    for i in xrange(nchunks):
+        beg=i*chunksize
+        if i==(nchunks-1):
+            end=n
+        else:
+            end=(i+1)*chunksize
+
+        tdata=data[beg:end]
+        tshear, tshear_err, ssh, R = get_shear(tdata,shape_noise=False)
+
+        sh[i,:] = tshear
+        sh_err[i,:] = tshear_err
+
+    return sh, sh_err
+
+def test_admom_ssim(run='run-eg01r02',
+                    s2n=100.,
+                    npairs_init=1000,
+                    npairs_sim=10000):
+    run_conf = read_config(run)
+    sim_conf = read_config(run_conf['sim'])
+
+    print 'running initial measurement'
+    sim=AdmomNSim(sim_conf, run_conf, s2n, npairs_init)
+    sim.run_sim()
+    data=sim.get_data()
+    shear0_all, shear0_err_all, ssh, R = get_shear(data,shape_noise=False)
+    shear0, shear0_err = get_shear_in_chunks(data, 8)
+
+    print 'initial value: %g +/- %g' % (shear0_all[0],shear0_err_all[0])
+    print '               %g +/- %g' % (shear0_all[1],shear0_err_all[1])
+    frac_err     = shear0_all[0]/sim_conf['shear'][0]-1
+    frac_err_err = shear0_err_all[0]/sim_conf['shear'][0]
+    print 'frac err:      %g +/- %g' % (frac_err, frac_err_err)
+
+    admom_ssim=AdmomSSim(sim_conf, run_conf, s2n, npairs_sim,
+                         shear0, shear0_err)
+    admom_ssim.go()
+
+    pprint(admom_ssim.res)
+
+    return admom_ssim.res
+
+class AdmomSSim(object):
+    """
+    find the true shear by simulating the world and comparing to the biased
+    result
+    """
+    def __init__(self, sim_conf, run_conf, s2n, npairs,
+                 shear_meas, shear_meas_err):
+
+        self.sim_conf=sim_conf
+
+        self.run_conf=run_conf
+        self.s2n=s2n
+        self.npairs=npairs
+        self.shear_meas=shear_meas
+        self.shear_meas_err=shear_meas_err
+
+        self.lm_pars={'maxfev':50,
+                      'ftol':1.0e-6,
+                      'xtol':1.0e-6,
+                      'epsfcn':1.0e-3}
+        #self.lm_pars={'maxfev':50,
+        #              'ftol':1.0e-6,
+        #              'xtol':1.0e-6,
+        #              'epsfcn':1.0e-2}
+
+        pprint(self.lm_pars)
+
+
+    def go(self):
+        """
+        Run an LM fitter.  Starting guess is the measured shear
+        """
+
+        self.feval=1
+
+        guess = self.shear_meas.mean(axis=0)
+
+        self.res = run_leastsq(self.calc_fdiff, guess, **self.lm_pars)
+
+    def calc_fdiff(self, shear):
+        """
+        Run the sim and get the shear
+        """
+
+        print >>stderr,'-'*70
+        print >>stderr,'feval:',self.feval
+        print >>stderr,'pars:',shear
+        #print >>stderr,'shmeas:',self.shear_meas
+
+        # this one will hold the shear we are simulating
+        sim_conf={}
+        sim_conf.update(self.sim_conf)
+        sim_conf['shear'] = shear
+
+        sim=AdmomNSim(sim_conf, self.run_conf, self.s2n, self.npairs)
+
+        sim.run_sim()
+        data=sim.get_data()
+
+        shnew,shnew_err,ssh,R=get_shear(data, shape_noise=False)
+
+
+        n=self.shear_meas.shape[0]
+        fdiff=zeros(2*n)
+        fdiff[0:n] = (shnew[0]-self.shear_meas[:,0])/self.shear_meas_err[:,0]
+        fdiff[n:] = (shnew[1]-self.shear_meas[:,1])/self.shear_meas_err[:,1]
+
+        
+        print >>stderr,'measures shear for pars:',shnew
+
+        self.feval += 1
+        return fdiff
+
+def run_leastsq(func, guess, **keys):
+    """
+    run leastsq from scipy.optimize.  Deal with certain
+    types of errors
+
+    TODO make this do all the checking and fill in cov etc.  return
+    a dict
+
+    parameters
+    ----------
+    func:
+        the function to minimize
+    guess:
+        guess at pars
+
+    some useful keywords
+    maxfev:
+        maximum number of function evaluations. e.g. 1000
+    epsfcn:
+        Step for jacobian estimation (derivatives). 1.0e-6
+    ftol:
+        Relative error desired in sum of squares, 1.0e06
+    xtol:
+        Relative error desired in solution. 1.0e-6
+    """
+    from scipy.optimize import leastsq
+    import pprint
+
+    npars=guess.size
+
+    res={}
+    lm_tup = leastsq(func, guess, full_output=1, **keys)
+
+    pars, pcov0, infodict, errmsg, ier = lm_tup
+
+    res['nfev'] = infodict['nfev']
+    res['ier'] = ier
+    res['errmsg'] = errmsg
+
+    res['pars'] = pars
+
+    return res
+
+
