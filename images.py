@@ -176,6 +176,9 @@ def view_mosaic(imlist, combine=False, **keys):
     return tab
 
 def get_grid(ntot):
+    """
+    get nrow,ncol
+    """
     from math import sqrt
     sq=int(sqrt(ntot))
     if ntot==sq*sq:

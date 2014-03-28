@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """
     %prog [options] script1 script2 script3 ...
+
+Incrementally submit jobs. By default, don't submit the script of script.wqlog
+exists, which is the wq log file.
 """
 
 import socket
@@ -18,12 +21,16 @@ import wq
 
 
 parser=OptionParser(__doc__)
-parser.add_option("-c","--chunksize",default=100)
+parser.add_option("-c","--chunksize",
+                  help="chunksize, default %default",
+                  default=100)
 
 parser.add_option("-p","--port", default=None, help="port for socket")
+
 parser.add_option("--poll", default=120,
-        help=("time between polls of wq status when we are at max allowed"
+        help=("time between polls of wq status when we are at max allowed "
               "jobs, default %default"))
+
 parser.add_option("-r","--req",default=None,help="over-ride requirements")
 parser.add_option("-n", "--njobs", default=50, 
                   help="max number of jobs, default %default")
