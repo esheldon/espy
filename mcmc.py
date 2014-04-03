@@ -190,6 +190,101 @@ def plot_results(trials, **keys):
 
     return plt
 
+def plot_results_separate(trials, **keys):
+    """
+    Plot the points and histograms of trials from an MCMC chain.
+    """
+    import biggles
+    import esutil
+    import images
+
+    npars=trials.shape[1]
+
+    fontsize_min=keys.get('fontsize_min',1)
+    biggles.configure( 'default', 'fontsize_min', fontsize_min)
+    weights=keys.get('weights',None)
+
+    binfac=keys.get('binfac',0.2)
+    names=keys.get('names',None)
+    show=keys.get('show',True)
+    ptypes=keys.get('ptypes',['linear']*npars)
+
+    means,cov = extract_stats(trials,weights=weights)
+    errs=sqrt(diag(cov)) 
+
+    nrows, ncols =images.get_grid(npars)
+    burn_plt=biggles.Table(nrows, ncols)
+    hist_plt=biggles.Table(nrows, ncols)
+
+    ind = numpy.arange(trials.shape[0])
+
+    prow=0
+    pcol=0
+    for i in xrange(npars):
+
+        prow=i/ncols
+        pcol=i % ncols
+
+        if names is not None:
+            name=names[i]
+        else:
+            name=r'$p_{%d}$' % i
+
+        lab = r'$<%s> = %0.4g \pm %0.4g$' % (name,means[i],errs[i])
+        plab = biggles.PlotLabel(0.1,0.8,lab,
+                                 halign='left',
+                                 color='blue')
+
+        # steps
+        burn_plot_i = esutil.plotting.bscatter(ind,trials[:,i],
+                                               type='solid',
+                                               xlabel='step',
+                                               ylabel=name,
+                                               show=False)
+
+        burn_plot_i.add(plab)
+        burn_plt[prow,pcol] = burn_plot_i
+
+        # hist
+        vals=trials[:,i]
+        bsize = binfac*errs[i]
+
+        hdict = esutil.stat.histogram(vals,
+                                      binsize=bsize, 
+                                      weights=weights,
+                                      more=True)
+        if weights is not None:
+            hist=hdict['whist']
+            hplot = biggles.Curve(hdict['center'],
+                                  hdict['whist'])
+        else:
+            hist=hdict['hist']
+            hplot = biggles.Histogram(hdict['hist'], 
+                                      x0=hdict['low'][0], 
+                                      binsize=bsize)
+        plti=biggles.FramedPlot()
+
+        plti.xlabel=name
+
+        hmax=hist.max()
+        plti.yrange=[-0.05*hmax, 1.2*hmax]
+
+        plti.add(hplot)
+        plti.add(plab)
+
+        hist_plt[prow,pcol]=plti
+   
+    burn_plt.title=keys.get('title',None)
+    hist_plt.title=keys.get('title',None)
+
+    if show:
+        burn_plt.show()
+        hist_plt.show()
+
+    return burn_plt, hist_plt
+
+
+
 class MCMC(object):
     """
     Run a Monte Carlo Markov Chain (MCMC).
