@@ -41,6 +41,9 @@ def fit_spline(data, nvals, type):
         start=4+ngauss
 
     nvals_interp=linspace(nvals[0], nvals[-1])
+
+    splines=[]
+
     for i in xrange(ngauss):
 
         color=colors[i]
@@ -53,6 +56,8 @@ def fit_spline(data, nvals, type):
         #crv=biggles.Curve(nvals, vals, type='solid',color=color)
         crv=biggles.Curve(nvals_interp, vals_interp, type='solid',color=color)
         plt.add( pts, crv )
+
+        splines.append(interpolator)
 
     plt.ylog=True
 
@@ -67,3 +72,4 @@ def fit_spline(data, nvals, type):
     print(eps)
     plt.write_eps(eps)
 
+    return splines

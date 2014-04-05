@@ -1,7 +1,10 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import sys
 import sersic_gmix
 import esutil as eu
+
+import pickle
 
 def main():
 
@@ -16,7 +19,16 @@ def main():
     data=renorm(data)
     nvals=numpy.array(nvals)
 
-    sersic_gmix.spline_fitting.fit_spline(data, nvals, 'T')
-    sersic_gmix.spline_fitting.fit_spline(data, nvals, 'flux')
+    T_splines=sersic_gmix.spline_fitting.fit_spline(data, nvals, 'T')
+    flux_splines=sersic_gmix.spline_fitting.fit_spline(data, nvals, 'flux')
+
+    splines={'T_splines':T_splines,
+             'flux_splines':flux_splines}
+
+    pfile='sersic-ngauss-%d-splines.pickle' % % ngauss
+
+    print(pfile)
+    with open(pfile,'w') as fobj:
+        pickle.dump(splines, fobj)
 
 main()
