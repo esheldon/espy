@@ -19,6 +19,37 @@ def fit_sersic(n, hlr, ngauss, **keys):
 
     return fitter
 
+def get_dir():
+    dir=os.environ['LENSDIR']
+    dir=os.path.join(dir,'sersic-gmix')
+    return dir
+
+def get_root(n, ngauss):
+    dir=get_dir()
+    root='sersic-%.2f-ngauss-%d' % (n, ngauss)
+    root=os.path.join(dir, root)
+    return root
+
+def get_fname(n, ngauss, type, ext='fits'):
+    root=get_root(n, ngauss)
+    fname='%s-%s.%s' % (root, type, ext)
+    return fname
+
+def get_spline_fname(ngauss):
+    d=get_dir()
+    pfile='sersic-ngauss-%d-splines.pickle' % ngauss
+    pfile=os.path.join(d, pfile)
+    return pfile
+
+def read_spline_data(ngauss):
+    import pickle
+    fname=get_spline_fname(ngauss)
+    print("reading:",fname)
+    with open(fname) as fobj:
+        spline_data=pickle.load(fobj)
+
+    return spline_data
+
 class SersicFitter(dict):
     def __init__(self, n, hlr, ngauss):
         """
@@ -225,13 +256,10 @@ class SersicFitter(dict):
         residp.write_img(1800,1000,self.resid_png)
 
     def _make_names(self):
-        root=self.get_root()
-
-        self.fits_name='%s-fit.fits' % root
-        self.burn_png='%s-steps.png' % root
-        self.hist_png='%s-hist.png' % root
-        self.resid_png='%s-resid.png' % root
-
+        self.fits_name=get_fname(self['n'],self['ngauss'],'fit',ext='fits')
+        self.burn_png=get_fname(self['n'],self['ngauss'],'steps',ext='png')
+        self.hist_png=get_fname(self['n'],self['ngauss'],'hist',ext='png')
+        self.resid_png=get_fname(self['n'],self['ngauss'],'resid',ext='png')
 
     def write_fit(self):
         import fitsio
@@ -260,7 +288,4 @@ class SersicFitter(dict):
         print(self.fits_name)
         fitsio.write(self.fits_name, output, clobber=True)
 
-    def get_root(self):
-        root='sersic-%.2f-ngauss-%d' % (self['n'], self['ngauss'])
-        return root
 

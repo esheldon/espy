@@ -1,7 +1,11 @@
 from __future__ import print_function
+
+import os
 import sys
 import numpy
 from numpy import linspace
+
+from . import fitting
 
 def renorm(data):
     n=data.size
@@ -68,7 +72,9 @@ def fit_spline(data, nvals, type):
     plt.yrange = [0.5*minval, 1.5*maxval]
     #plt.show()
 
-    eps='%s-vs-n.eps' % type
+    dir=fitting.get_dir()
+
+    eps=os.path.join(dir, '%s-vs-n.eps' % type)
     print(eps)
     plt.write_eps(eps)
 
