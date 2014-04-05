@@ -4,6 +4,7 @@ mixtures to them
 """
 from __future__ import print_function
 
+import os
 from numpy import zeros, sqrt, array
 from pprint import pprint
 
@@ -37,6 +38,8 @@ class SersicFitter(dict):
         self['psf_sigma']=1.414
 
         self['npars']=ngmix.gmix.get_coellip_npars(ngauss)
+
+        self._make_names()
 
         self._make_image()
         self._make_jacobian()
@@ -81,26 +84,31 @@ class SersicFitter(dict):
         ngauss=self['ngauss']
 
 
+        if os.path.exists(self.fits_name):
+            import fitsio
+            print("reading guess from:",self.fits_name)
+            data=fitsio.read(self.fits_name)
+            pars0 = data['pars'][0,4:]
+
+            T=1.0
+            F=1.0
+        else:
+            pars0=array([0.01183116, 0.06115546,  0.3829298 ,  2.89446939,
+                         0.19880675,  0.18535747, 0.31701891,  0.29881687])
+            # this is a terrible guess
+            T = 2*self['hlr']**2
+            F = self['flux']
+
         full_guess=zeros( (nwalkers, self['npars']) )
         full_guess[:,0] = 0.1*srandu(nwalkers)
         full_guess[:,1] = 0.1*srandu(nwalkers)
-        full_guess[:,2] = 0.1*srandu(nwalkers)
-        full_guess[:,3] = 0.1*srandu(nwalkers)
-
-        # this is a terrible guess
-        T = 2*self['hlr']**2
+        full_guess[:,2] = 0.01*srandu(nwalkers)
+        full_guess[:,3] = 0.01*srandu(nwalkers)
 
         if ngauss==4:
-            # implement this
-            # 0.710759     3.66662     22.9798     173.704
-            # 19.6636     18.3341     31.3521     29.5486
-            # nromalized
-            pars0=array([0.01183116, 0.06115546,  0.3829298 ,  2.89446939,
-                         0.19880675,  0.18535747, 0.31701891,  0.29881687])
-
             for i in xrange(ngauss):
                 full_guess[:,4+i] = T*pars0[i]*(1.0 + 0.01*srandu(nwalkers))
-                full_guess[:,4+ngauss+i] = self['flux']*pars0[ngauss+i]*(1.0 + 0.01*srandu(nwalkers))
+                full_guess[:,4+ngauss+i] = F*pars0[ngauss+i]*(1.0 + 0.01*srandu(nwalkers))
 
         else:
             raise ValueError("try other ngauss")
@@ -191,10 +199,8 @@ class SersicFitter(dict):
         import images
         images.multiview(self.psf_image,title='psf')
 
-    def make_plots(self, root=None):
+    def make_plots(self):
         import images
-        if root is None:
-            root=self.get_root()
 
         burnp, histp=self.fitter.make_plots(separate=True,show=False,
                                            fontsize_min=0.5)
@@ -209,28 +215,32 @@ class SersicFitter(dict):
                                        label2='model',
                                        show=False)
 
-        burn_png='%s-steps.png' % root
-        hist_png='%s-hist.png' % root
-        resid_png='%s-resid.png' % root
+        print(self.burn_png)
+        burnp.write_img(1800,1000,self.burn_png)
 
-        print(burn_png)
-        burnp.write_img(1800,1000,burn_png)
+        print(self.hist_png)
+        histp.write_img(1800,1000,self.hist_png)
 
-        print(hist_png)
-        histp.write_img(1800,1000,hist_png)
+        print(self.resid_png)
+        residp.write_img(1800,1000,self.resid_png)
 
-        print(resid_png)
-        residp.write_img(1800,1000,resid_png)
+    def _make_names(self):
+        root=self.get_root()
 
-    def write_fit(self, root=None):
+        self.fits_name='%s-fit.fits' % root
+        self.burn_png='%s-steps.png' % root
+        self.hist_png='%s-hist.png' % root
+        self.resid_png='%s-resid.png' % root
+
+
+    def write_fit(self):
         import fitsio
-        if root is None:
-            root=self.get_root()
 
-        fname='%s-fit.fits' % root
 
         npars=self['npars']
-        output=zeros(1, dtype=[('arate','f8'),
+        output=zeros(1, dtype=[('n','f8'),
+                               ('hlr','f8'),
+                               ('arate','f8'),
                                ('chi2per','f8'),
                                ('dof','f8'),
                                ('pars','f8',npars),
@@ -238,6 +248,8 @@ class SersicFitter(dict):
                                ('pars_cov','f8',(npars,npars))])
 
 
+        output['n'] = self['n']
+        output['hlr'] = self['hlr']
         output['arate'] = self.res['arate']
         output['chi2per'] = self.res['chi2per']
         output['dof'] = self.res['dof']
@@ -245,8 +257,8 @@ class SersicFitter(dict):
         output['pars_err'][0,:] = self.res['pars_err']
         output['pars_cov'][0,:,:] = self.res['pars_cov']
 
-        print(fname)
-        fitsio.write(fname, output, clobber=True)
+        print(self.fits_name)
+        fitsio.write(self.fits_name, output, clobber=True)
 
     def get_root(self):
         root='sersic-%.2f-ngauss-%d' % (self['n'], self['ngauss'])
