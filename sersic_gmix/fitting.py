@@ -50,6 +50,13 @@ def read_spline_data(ngauss):
 
     return spline_data
 
+def get_combined_fname(ngauss):
+    d=get_dir()
+    pfile='sersic-ngauss-%d-combined.fits' % ngauss
+    pfile=os.path.join(d, pfile)
+    return pfile
+
+
 class SersicFitter(dict):
     def __init__(self, n, hlr, ngauss):
         """
@@ -154,7 +161,7 @@ class SersicFitter(dict):
 
         fitter=ngmix.em.GMixEM(im_psf_sky)
 
-        cen=0.5*self.psf_image.shape[0]
+        cen=(self.psf_image.shape[0]-1)/2.0
 
         parguess=[1.0, cen, cen, self['psf_sigma']**2, 0.0, self['psf_sigma']**2]
         guess=ngmix.gmix.GMix(pars=parguess)
@@ -196,16 +203,16 @@ class SersicFitter(dict):
         print("image sum:",image.sum())
 
         # never use more than 200x200
-        if image.shape[0] > 200:
-            cen=int(0.5*image.shape[0])
-            xmin=cen-100
-            xmax=cen+100
-            if xmin < 0:
-                xmin=0
-            if xmax > image.shape[1]:
-                xmax=image.shape[1]
-
-            image=image[xmin:xmax, xmin:xmax]
+        #if image.shape[0] > 200:
+        #    cen=int(0.5*image.shape[0])
+        #    xmin=cen-100
+        #    xmax=cen+100
+        #    if xmin < 0:
+        #        xmin=0
+        #    if xmax > image.shape[1]:
+        #        xmax=image.shape[1]
+        #
+        #    image=image[xmin:xmax, xmin:xmax]
 
         psf_image = psf_obj.array.astype('f8')
 
@@ -219,7 +226,7 @@ class SersicFitter(dict):
 
     def _make_jacobian(self):
         import ngmix
-        cen0=0.5*self.image.shape[0]
+        cen0=(self.image.shape[0]-1)/2.
         self.jacobian=ngmix.jacobian.UnitJacobian(cen0, cen0)
 
     def show_image(self):
