@@ -4,7 +4,12 @@ import sersic_gmix
 
 
 n=float(sys.argv[1])
-hlr=20.0
-ngauss=4
+hlr=4.0
+ngauss=6
 
-sersic_gmix.fitting.fit_sersic(n, hlr, ngauss)
+sersic_gmix.fitting.fit_sersic(n=n,
+                               hlr=hlr,
+                               ngauss=ngauss,
+                               nwalkers=80,
+                               burnin=4000,
+                               nstep=800)

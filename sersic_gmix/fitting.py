@@ -8,11 +8,9 @@ import os
 from numpy import zeros, sqrt, array
 from pprint import pprint
 
-def fit_sersic(n, hlr, ngauss, **keys):
+def fit_sersic(n=1.0, hlr=4.0, ngauss=6, **keys):
     fitter=SersicFitter(n, hlr, ngauss)
     fitter.dofit(**keys)
-
-    make_plots=keys.get('make_plots',False)
 
     fitter.make_plots()
     fitter.write_fit()
@@ -58,7 +56,7 @@ def get_combined_fname(ngauss):
 
 
 class SersicFitter(dict):
-    def __init__(self, n, hlr, ngauss):
+    def __init__(self, n=1.0, hlr=4.0, ngauss=6):
         """
         hlr in pixels
         """
@@ -70,7 +68,7 @@ class SersicFitter(dict):
 
         self['pixel_scale']=1.0
         self['flux']=100.0
-        self['sky_noise']=1.0e-4
+        self['sky_noise']=1.0e-6
 
         # need some psf
         self['psf_sigma']=1.414
@@ -98,7 +96,13 @@ class SersicFitter(dict):
 
     def _fit_galaxy(self):
         import ngmix
-        guess=self._get_guess()
+
+        #first_T_mean=3.0e-6
+        #first_T_sigma=first_T_mean*0.01
+        #first_T_prior=ngmix.priors.LogNormal(first_T_mean, first_T_sigma)
+        first_T_prior=None
+
+        guess=self._get_guess(first_T_prior)
 
         fitter=ngmix.fitting.MCMCCoellip(self.image,
                                          self.wt,
@@ -107,13 +111,39 @@ class SersicFitter(dict):
                                          nwalkers=self['nwalkers'],
                                          burnin=self['burnin'],
                                          nstep=self['nstep'],
+                                         first_T_prior=first_T_prior,
                                          full_guess=guess)
         fitter.go()
 
         self.fitter=fitter
         self.res=fitter.get_result()
 
-    def _get_guess(self):
+        self._add_pars_norm()
+
+    def _add_pars_norm(self):
+        import ngmix
+
+        ngauss=self['ngauss']
+
+        pars_norm=self.res['pars'].copy()
+        Fvals=pars_norm[4+ngauss:].copy()
+        ftot=Fvals.sum()
+
+        Tvals=pars_norm[4:4+ngauss].copy()
+        Ttot=(Tvals*Fvals).sum()/ftot
+        Tnorm=Tvals/Ttot
+
+        Fnorm=Fvals/ftot
+
+        pars_norm[4+ngauss:] = Fnorm
+        pars_norm[4:4+ngauss] = Tnorm
+
+        self.res['pars_norm'] = pars_norm
+
+        ngmix.fitting.print_pars(pars_norm,front='pars norm: ')
+
+
+    def _get_guess(self, first_T_prior):
         import ngmix
         from ngmix.priors import srandu
 
@@ -131,8 +161,18 @@ class SersicFitter(dict):
             T=1.0
             F=1.0
         else:
-            pars0=array([0.01183116, 0.06115546,  0.3829298 ,  2.89446939,
-                         0.19880675,  0.18535747, 0.31701891,  0.29881687])
+            if ngauss==4:
+                pars0=array([0.01183116, 0.06115546,  0.3829298 ,  2.89446939,
+                             0.19880675,  0.18535747, 0.31701891,  0.29881687])
+            elif ngauss==5:
+                pars0=array([1.e-4,    0.01183116, 0.06115546,  0.3829298 ,  2.89446939,
+                             0.2,  0.2,        0.2,         0.2,         0.2])
+            elif ngauss==6:
+                #pars0=array([1.e-4,    0.01183116, 0.1,  0.3829298 ,  2.89446939,    8.0,
+                #             0.16,     0.16,       0.16,        0.16,         0.16,         0.16])
+                pars0=array([8.15266e-05, 0.00259716,  0.0595377,    0.45871,    1.0, 4.0, 
+                             3.85681e-05,  0.0167603,  0.0513565,   0.515547,    0.1, 0.3])
+
             # this is a terrible guess
             T = 2*self['hlr']**2
             F = self['flux']
@@ -143,13 +183,9 @@ class SersicFitter(dict):
         full_guess[:,2] = 0.01*srandu(nwalkers)
         full_guess[:,3] = 0.01*srandu(nwalkers)
 
-        if ngauss==4:
-            for i in xrange(ngauss):
-                full_guess[:,4+i] = T*pars0[i]*(1.0 + 0.01*srandu(nwalkers))
-                full_guess[:,4+ngauss+i] = F*pars0[ngauss+i]*(1.0 + 0.01*srandu(nwalkers))
-
-        else:
-            raise ValueError("try other ngauss")
+        for i in xrange(ngauss):
+            full_guess[:,4+i] = T*pars0[i]*(1.0 + 0.01*srandu(nwalkers))
+            full_guess[:,4+ngauss+i] = F*pars0[ngauss+i]*(1.0 + 0.01*srandu(nwalkers))
 
         return full_guess
 
@@ -240,8 +276,9 @@ class SersicFitter(dict):
     def make_plots(self):
         import images
 
-        burnp, histp=self.fitter.make_plots(separate=True,show=False,
-                                           fontsize_min=0.5)
+        burnp, histp=self.fitter.make_plots(separate=True,
+                                            show=False,
+                                            fontsize_min=0.2)
 
         gmix0=self.fitter.get_gmix()
         gmix=gmix0.convolve(self.psf_gmix)
@@ -279,6 +316,7 @@ class SersicFitter(dict):
                                ('chi2per','f8'),
                                ('dof','f8'),
                                ('pars','f8',npars),
+                               ('pars_norm','f8',npars),
                                ('pars_err','f8',npars),
                                ('pars_cov','f8',(npars,npars))])
 
@@ -289,6 +327,7 @@ class SersicFitter(dict):
         output['chi2per'] = self.res['chi2per']
         output['dof'] = self.res['dof']
         output['pars'][0,:] = self.res['pars']
+        output['pars_norm'][0,:] = self.res['pars_norm']
         output['pars_err'][0,:] = self.res['pars_err']
         output['pars_cov'][0,:,:] = self.res['pars_cov']
 
