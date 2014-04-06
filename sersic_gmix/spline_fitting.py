@@ -7,6 +7,27 @@ from numpy import linspace
 
 from . import fitting
 
+def sort_by_T(data):
+    ndata=data.size
+    ngauss=(data['pars'].shape[1]-4)/2
+
+    for name in ['pars','pars_norm']:
+        for i in xrange(ndata):
+            Tvals=data[name][i,4:4+ngauss].copy()
+            fvals=data[name][i,4+ngauss:].copy()
+
+            s=Tvals.argsort()
+
+            Tvals=Tvals[s]
+            fvals=fvals[s]
+
+            data[name][i,4:4+ngauss] = Tvals
+            data[name][i,4+ngauss:] = fvals
+
+    return data
+
+
+"""
 def renorm(data):
     n=data.size
 
@@ -26,13 +47,14 @@ def renorm(data):
         data['pars'][i,4+ngauss:] = fvals
 
     return data
+"""
 
-def fit_spline(data, nvals, type):
+def fit_spline(data, nvals, type, order=3, parname='pars_norm'):
     import biggles
     import pcolors
     from scipy.interpolate import InterpolatedUnivariateSpline
 
-    ngauss=(data['pars'].shape[1]-4)/2
+    ngauss=(data[parname].shape[1]-4)/2
     colors=pcolors.rainbow(ngauss)
 
     plt=biggles.FramedPlot()
@@ -52,10 +74,10 @@ def fit_spline(data, nvals, type):
 
         color=colors[i]
 
-        vals=data['pars'][:,start+i]
+        vals=data[parname][:,start+i]
         pts=biggles.Points(nvals, vals, type='filled circle',color=color)
 
-        interpolator=InterpolatedUnivariateSpline(nvals,vals,k=3)
+        interpolator=InterpolatedUnivariateSpline(nvals,vals,k=order)
         vals_interp=interpolator(nvals_interp)
         #crv=biggles.Curve(nvals, vals, type='solid',color=color)
         crv=biggles.Curve(nvals_interp, vals_interp, type='solid',color=color)
@@ -65,11 +87,12 @@ def fit_spline(data, nvals, type):
 
     plt.ylog=True
 
-    allvals = data['pars'][:,start:start+ngauss]
+    allvals = data[parname][:,start:start+ngauss]
     minval=allvals.min()
     maxval=allvals.max()
-    plt.xrange = [0.2,6.0]
+    plt.xrange = [0.2,8.0]
     plt.yrange = [0.5*minval, 1.5*maxval]
+    #plt.yrange = [0.001,1.5*maxval]
     #plt.show()
 
     dir=fitting.get_dir()

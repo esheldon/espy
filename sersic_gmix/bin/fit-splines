@@ -26,7 +26,10 @@ def main():
     fnames=[get_fname(n,ngauss,'fit',ext='fits') for n in nvals]
 
     data0=eu.io.read(fnames,combine=True)
-    data=sersic_gmix.spline_fitting.renorm(data0)
+
+    data=sersic_gmix.spline_fitting.sort_by_T(data0)
+    #data=sersic_gmix.spline_fitting.renorm(data)
+
     nvals=array(nvals)
 
     T_splines=sersic_gmix.spline_fitting.fit_spline(data, nvals, 'T')
