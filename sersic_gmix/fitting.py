@@ -22,21 +22,51 @@ def get_dir():
     dir=os.path.join(dir,'sersic-gmix')
     return dir
 
-def get_root(n, ngauss):
+def get_root_old(n, ngauss):
     dir=get_dir()
     root='sersic-%.2f-ngauss-%d' % (n, ngauss)
     root=os.path.join(dir, root)
     return root
 
-def get_fname(n, ngauss, type, ext='fits'):
+def get_root(n, ngauss):
+    dir=get_dir()
+    root='%s_K%02d_MR08' % (n,ngauss)
+    root=os.path.join(dir, root)
+    return root
+
+def get_fname_old(n, ngauss, type, ext='fits'):
     root=get_root(n, ngauss)
     fname='%s-%s.%s' % (root, type, ext)
     return fname
 
-def get_spline_fname(ngauss):
+def get_fname(n, ngauss, type, ext='fits'):
+    root=get_root(n, ngauss)
+
+    if type=='fit':
+        fname='%s.txt' % root
+    else:
+        fname='%s_%s.%s' % (root, type, ext)
+    return fname
+
+def read_fit(n, ngauss):
+    from .spline_fitting import convert_hogg
+    fname=get_fname(n, ngauss, 'fit')
+    print("reading:",fname)
+    with open(fname) as fobj:
+        pars_orig=eval(fobj.read())
+
+    pars = convert_hogg(pars_orig)
+    return pars
+
+
+def get_spline_fname(ngauss, order, type='splines', ext='pickle'):
     d=get_dir()
-    pfile='sersic-ngauss-%d-splines.pickle' % ngauss
+    pfile='sersic-ngauss-%02d-order-%d-%s.%s' % (ngauss,order,type,ext)
     pfile=os.path.join(d, pfile)
+    return pfile
+
+def get_plot_fname(ngauss, order, type):
+    pfile = get_spline_fname(ngauss, order, type=type, ext='eps')
     return pfile
 
 def read_spline_data(ngauss):
@@ -50,7 +80,7 @@ def read_spline_data(ngauss):
 
 def get_combined_fname(ngauss):
     d=get_dir()
-    pfile='sersic-ngauss-%d-combined.fits' % ngauss
+    pfile='sersic-ngauss-%02d-combined.fits' % ngauss
     pfile=os.path.join(d, pfile)
     return pfile
 
