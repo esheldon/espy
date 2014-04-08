@@ -22,21 +22,51 @@ def get_dir():
     dir=os.path.join(dir,'sersic-gmix')
     return dir
 
-def get_root(n, ngauss):
+def get_root_old(n, ngauss):
     dir=get_dir()
     root='sersic-%.2f-ngauss-%d' % (n, ngauss)
     root=os.path.join(dir, root)
     return root
 
-def get_fname(n, ngauss, type, ext='fits'):
+def get_root(n, ngauss):
+    dir=get_dir()
+    root='%s_K%02d_MR08' % (n,ngauss)
+    root=os.path.join(dir, root)
+    return root
+
+def get_fname_old(n, ngauss, type, ext='fits'):
     root=get_root(n, ngauss)
     fname='%s-%s.%s' % (root, type, ext)
     return fname
 
-def get_spline_fname(ngauss):
+def get_fname(n, ngauss, type, ext='fits'):
+    root=get_root(n, ngauss)
+
+    if type=='fit':
+        fname='%s.txt' % root
+    else:
+        fname='%s_%s.%s' % (root, type, ext)
+    return fname
+
+def read_fit(n, ngauss):
+    from .spline_fitting import convert_hogg
+    fname=get_fname(n, ngauss, 'fit')
+    print("reading:",fname)
+    with open(fname) as fobj:
+        pars_orig=eval(fobj.read())
+
+    pars = convert_hogg(pars_orig)
+    return pars
+
+
+def get_spline_fname(ngauss, order, type='splines', ext='pickle'):
     d=get_dir()
-    pfile='sersic-ngauss-%d-splines.pickle' % ngauss
+    pfile='sersic-ngauss-%02d-order-%d-%s.%s' % (ngauss,order,type,ext)
     pfile=os.path.join(d, pfile)
+    return pfile
+
+def get_plot_fname(ngauss, order, type):
+    pfile = get_spline_fname(ngauss, order, type=type, ext='eps')
     return pfile
 
 def read_spline_data(ngauss):
@@ -50,7 +80,7 @@ def read_spline_data(ngauss):
 
 def get_combined_fname(ngauss):
     d=get_dir()
-    pfile='sersic-ngauss-%d-combined.fits' % ngauss
+    pfile='sersic-ngauss-%02d-combined.fits' % ngauss
     pfile=os.path.join(d, pfile)
     return pfile
 
@@ -97,10 +127,9 @@ class SersicFitter(dict):
     def _fit_galaxy(self):
         import ngmix
 
-        #first_T_mean=3.0e-6
-        #first_T_sigma=first_T_mean*0.01
-        #first_T_prior=ngmix.priors.LogNormal(first_T_mean, first_T_sigma)
-        first_T_prior=None
+        first_T_mean=3.0e-3*(self['hlr']/4.0)
+        first_T_sigma=first_T_mean*1.0e-4
+        first_T_prior=ngmix.priors.LogNormal(first_T_mean, first_T_sigma)
 
         guess=self._get_guess(first_T_prior)
 
@@ -170,7 +199,7 @@ class SersicFitter(dict):
             elif ngauss==6:
                 #pars0=array([1.e-4,    0.01183116, 0.1,  0.3829298 ,  2.89446939,    8.0,
                 #             0.16,     0.16,       0.16,        0.16,         0.16,         0.16])
-                pars0=array([8.15266e-05, 0.00259716,  0.0595377,    0.45871,    1.0, 4.0, 
+                pars0=array([0,            0.00259716,  0.0595377,    0.45871,    1.0, 4.0, 
                              3.85681e-05,  0.0167603,  0.0513565,   0.515547,    0.1, 0.3])
 
             # this is a terrible guess
@@ -184,8 +213,13 @@ class SersicFitter(dict):
         full_guess[:,3] = 0.01*srandu(nwalkers)
 
         for i in xrange(ngauss):
-            full_guess[:,4+i] = T*pars0[i]*(1.0 + 0.01*srandu(nwalkers))
-            full_guess[:,4+ngauss+i] = F*pars0[ngauss+i]*(1.0 + 0.01*srandu(nwalkers))
+            if i==0 and first_T_prior is not None:
+                print("sampling first_T_prior")
+                full_guess[:,4+i] = first_T_prior.sample(nwalkers)
+                full_guess[:,4+ngauss+i] = F*pars0[ngauss+i]*(1.0 + 0.01*srandu(nwalkers))
+            else:
+                full_guess[:,4+i] = T*pars0[i]*(1.0 + 0.01*srandu(nwalkers))
+                full_guess[:,4+ngauss+i] = F*pars0[ngauss+i]*(1.0 + 0.01*srandu(nwalkers))
 
         return full_guess
 
