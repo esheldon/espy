@@ -1,20 +1,5 @@
 import os
 
-def get_shear_name_dict(model=None):
-    # add as many as you need here
-    names=['nuse','shear','shear_cov','shear_err',
-           'P','Q','R','flags']
-
-    ndict={}
-    if model is not None:
-        for n in names:
-            name='%s_%s' % (model,n)
-            ndict[n] = name
-    else:
-        for n in names:
-            ndict[n] = n
-    return ndict
-
 def get_config_file(**keys):
     run=keys['run']
 
@@ -38,33 +23,37 @@ def get_input_dir(**keys):
     """
     parameters
     ----------
-    gdtype: keyword
-        The type of run, e.g. nbc2
     gdrun: keyword
-        The great des run e.g. 140307_first_test
+        The great des run e.g. nbc-sva1-001
     """
     h=os.environ['HOME']
-    d=os.path.join(h, 'lensing','great-des',keys['gdtype'], keys['gdrun'])
+    d=os.path.join(h, 'lensing','great-des', keys['gdrun'], 'data')
     return d
 
 def get_input_file(**keys):
     """
     parameters
     ----------
-    gdtype: keyword
-        The type of gdrun, e.g. nbc2
     gdrun: keyword
-        The gdrun e.g. 140307_first_test
+        The gdrun e.g. nbc-sva1-001
     ftype: keyword
         The file type, e.g. 'meds' 'truth'
     fnum: keyword
         The file number within given g set
     gnum: keyword
         The g (shear) number set
+
+    noisefree: bool
+        If true, return path to noisefree data
     """
     d=get_input_dir(**keys)
 
-    fname='%(gdtype)s.%(ftype)s.%(fnum)03i.g%(gnum)02i.fits'
+    noisefree=keys.get("noisefree",False)
+    if noisefree:
+        fname='nbc2.%(ftype)s.%(fnum)03i.g%(gnum)02i.noisefree.fits'
+    else:
+        fname='nbc2.%(ftype)s.%(fnum)03i.g%(gnum)02i.fits'
+
     fname=fname % keys
 
     fname=os.path.join(d, fname)
@@ -74,10 +63,8 @@ def get_psf_file(**keys):
     """
     parameters
     ----------
-    gdtype: keyword
-        The type of gdrun, e.g. nbc2
     gdrun: keyword
-        The gdrun e.g. 140307_first_test
+        The gdrun e.g. nbc-sva1-001
     res: keyword
         The res, default 'lores'
     """
@@ -87,7 +74,7 @@ def get_psf_file(**keys):
     if 'res' not in keys:
         keys['res'] = 'lores'
 
-    fname='%(gdtype)s.psf.%(res)s.fits'
+    fname='nbc2.psf.%(res)s.fits'
     fname=fname % keys
 
     return os.path.join(d,fname)
@@ -203,3 +190,21 @@ def get_chunk_ranges(**keys):
         high.append( high_i )
 
     return low,high
+
+
+def get_shear_name_dict(model=None):
+    # add as many as you need here
+    names=['nuse','shear','shear_cov','shear_err',
+           'P','Q','R','flags']
+
+    ndict={}
+    if model is not None:
+        for n in names:
+            name='%s_%s' % (model,n)
+            ndict[n] = name
+    else:
+        for n in names:
+            ndict[n] = n
+    return ndict
+
+

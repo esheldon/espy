@@ -19,11 +19,13 @@ import esutil as eu
 from optparse import OptionParser
 parser = OptionParser(__doc__)
 
+
 parser.add_option("--obj-range",default=None,
                   help=("Inclusive, zero-offset range of objects to "
                         "process"))
-parser.add_option("--det-cat", default=None,
-                  help="detection cat for matched fluxes")
+
+parser.add_option("--make-plots",action="store_true",
+                  help="make some plots")
 
 parser.add_option("--work-dir", default=None,
                   help=("copy files local for processing.  "
@@ -220,12 +222,12 @@ def make_mcmc_meta(conf, meds_meta, meds_file):
 def run_ngmix(files, conf, checkpoint_data=None):
     import great_des
     import ngmix
-
     
-    conf['g_priors']  = get_g_priors_ngmix(conf)
+    conf['g_prior']  = get_g_prior_ngmix(conf)
     conf['cen_prior'] = get_cen_prior_ngmix(conf)
-    conf['T_priors']  = get_T_priors_ngmix(conf)
-    conf['counts_priors']  = get_counts_priors_ngmix(conf)
+    conf['T_prior']  = get_T_prior_ngmix(conf)
+    conf['counts_prior']  = get_counts_prior_ngmix(conf)
+    conf['n_prior'] = get_n_prior(conf)
 
     gm=great_des.nfit.MedsFit(files['meds'],
                               files['truth'],
@@ -234,80 +236,91 @@ def run_ngmix(files, conf, checkpoint_data=None):
                               **conf)
     gm.do_fits()
     data=gm.get_data()
-    epoch_data=gm.get_epoch_data()
     meds_meta=gm.get_meds_meta()
 
     meta=make_ngmix_meta(conf, meds_meta, files['meds_full'])
 
-    return data, epoch_data, meta
+    return data, meta
 
-def get_T_priors_ngmix(conf):
+def get_n_prior(conf):
+    import ngmix
+    n_prior_type=conf['n_prior_type']
+
+    if n_prior_type is None:
+        return None
+
+    if n_prior_type=='flat':
+        pars=conf['n_prior_pars']
+        n_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
+    else:
+        raise ValueError("bad n prior type: %s" % n_prior_type)
+
+    return n_prior
+
+def get_T_prior_ngmix(conf):
     import ngmix
 
-    T_prior_types=conf['T_prior_types']
+    T_prior_type=conf['T_prior_type']
 
-    T_priors=[]
-    for i,typ in enumerate(T_prior_types):
-        if typ == 'flat':
-            pars=conf['T_prior_pars'][i]
-            T_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
-        elif typ =='lognormal':
-            pars=conf['T_prior_pars'][i]
-            T_prior=ngmix.priors.LogNormal(pars[0], pars[1])
-        elif typ=="cosmos_exp":
-            T_prior=ngmix.priors.TPriorCosmosExp()
-        elif typ=="cosmos_dev":
-            T_prior=ngmix.priors.TPriorCosmosDev()
-        else:
-            raise ValueError("bad T prior type: %s" % T_prior_type)
+    if T_prior_type is None:
+        return None
 
-        T_priors.append(T_prior)
+    if T_prior_type == 'flat':
+        pars=conf['T_prior_pars']
+        T_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
+    elif T_prior_type =='lognormal':
+        pars=conf['T_prior_pars']
+        T_prior=ngmix.priors.LogNormal(pars[0], pars[1])
+    elif T_prior_type=="cosmos_exp":
+        T_prior=ngmix.priors.TPriorCosmosExp()
+    elif T_prior_type=="cosmos_dev":
+        T_prior=ngmix.priors.TPriorCosmosDev()
+    else:
+        raise ValueError("bad T prior type: %s" % T_prior_type)
 
-    return T_priors
 
-def get_counts_priors_ngmix(conf):
+    return T_prior
+
+def get_counts_prior_ngmix(conf):
     import ngmix
 
-    counts_prior_types=conf['counts_prior_types']
+    counts_prior_type=conf['counts_prior_type']
 
-    counts_priors=[]
-    for i,typ in enumerate(counts_prior_types):
-        if typ == 'flat':
-            pars=conf['counts_prior_pars'][i]
-            counts_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
-        else:
-            raise ValueError("bad counts prior type: %s" % counts_prior_type)
+    if counts_prior_type is None:
+        return None
 
-        counts_priors.append(counts_prior)
+    if counts_prior_type == 'flat':
+        pars=conf['counts_prior_pars']
+        counts_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
+    else:
+        raise ValueError("bad counts prior type: %s" % counts_prior_type)
 
-    return counts_priors
+    return counts_prior
 
-
-
-def get_g_priors_ngmix(conf):
+def get_g_prior_ngmix(conf):
     import ngmix
-    g_prior_types=conf['g_prior_types']
+    g_prior_type=conf['g_prior_type']
 
-    g_priors=[]
-    for i,typ in enumerate(g_prior_types):
-        if typ =='exp':
-            pars=conf['g_prior_pars'][i]
-            parr=numpy.array(pars,dtype='f8')
-            g_prior = ngmix.priors.GPriorM(parr)
-        elif typ=='cosmos-galfit':
-            g_prior = ngmix.priors.make_gprior_cosmos_galfit()
-        elif typ=='cosmos-exp':
-            g_prior = ngmix.priors.make_gprior_cosmos_exp()
-        elif typ=='cosmos-dev':
-            g_prior = ngmix.priors.make_gprior_cosmos_dev()
-        elif typ =='ba':
-            sigma=conf['g_prior_pars'][i]
-            g_prior = ngmix.priors.GPriorBA(sigma)
-        else:
-            raise ValueError("implement gprior '%s'")
-        g_priors.append(g_prior)
+    if g_prior_type is None:
+        return None
 
-    return g_priors
+    if g_prior_type =='exp':
+        pars=conf['g_prior_pars']
+        parr=numpy.array(pars,dtype='f8')
+        g_prior = ngmix.priors.GPriorM(parr)
+    elif g_prior_type=='cosmos-galfit':
+        g_prior = ngmix.priors.make_gprior_cosmos_galfit()
+    elif g_prior_type=='cosmos-exp':
+        g_prior = ngmix.priors.make_gprior_cosmos_exp()
+    elif g_prior_type=='cosmos-dev':
+        g_prior = ngmix.priors.make_gprior_cosmos_dev()
+    elif g_prior_type =='ba':
+        sigma=conf['g_prior_pars']
+        g_prior = ngmix.priors.GPriorBA(sigma)
+    else:
+        raise ValueError("implement gprior '%s'")
+
+    return g_prior
 
 def get_cen_prior_ngmix(conf):
     import ngmix
@@ -394,8 +407,6 @@ def get_checkpoint_data(out_file):
         print >>stderr,'reading checkpoint data:',checkpoint_file
         with fitsio.FITS(checkpoint_file) as fobj:
             data['data']=fobj['model_fits'][:]
-            if 'epoch_data'in fobj:
-                data['epoch_data']=fobj['epoch_data'][:]
 
     return checkpoint_file, data
 
@@ -403,15 +414,14 @@ def run_fitter(files, conf, checkpoint_data=None):
     """
     Run one of a few types of fitters.  Only ngmix is maintained currently
     """
-    epoch_data=None
     if conf['fitter'] == 'ngmix':
-        data, epoch_data, meta = run_ngmix(files,
+        data, meta = run_ngmix(files,
                                            conf,
                                            checkpoint_data=checkpoint_data)
     else:
         raise  ValueError("bad fitter: '%s'" % conf['fitter'])
 
-    return data, epoch_data, meta
+    return data, meta
 
 def setup_work_files(options, meds_file, psf_file):
     """
@@ -442,7 +452,7 @@ def setup_work_files(options, meds_file, psf_file):
     return rng_send, meds_file, meds_file_full, extracted, tmp_psf
 
  
-def write_data(data, epoch_data, meta, out_file):
+def write_data(data, meta, out_file):
     """
     write the actual data.  clobber existing
     """
@@ -450,8 +460,6 @@ def write_data(data, epoch_data, meta, out_file):
     print >>stderr,'writing:',out_file
     with fitsio.FITS(out_file,'rw',clobber=True) as fobj:
         fobj.write(data,extname="model_fits")
-        if epoch_data is not None:
-            fobj.write(epoch_data,extname="epoch_data")
         fobj.write(meta,extname="meta_data")
 
 
@@ -460,6 +468,8 @@ def go(files, options):
     checkpoint_file, checkpoint_data=get_checkpoint_data(files['out'])
 
     conf=load_config(files['config'])
+    conf['make_plots'] = options.make_plots
+
     pprint.pprint(conf,stream=stderr)
 
     rng_send,meds_file,meds_file_full,extracted,tmp_psf=\
@@ -478,13 +488,13 @@ def go(files, options):
     conf['config_file']=files['config']
     conf['checkpoint_file']=checkpoint_file
 
-    data, epoch_data, meta=run_fitter(files, conf, 
+    data, meta=run_fitter(files, conf, 
                                       checkpoint_data=checkpoint_data)
 
     if options.work_dir is not None:
         meta['meds_file'] = files['meds_full']
 
-    write_data(data, epoch_data, meta, files['out'])
+    write_data(data, meta, files['out'])
 
     cleanup_checkpoint(checkpoint_file)
   
