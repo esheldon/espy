@@ -219,29 +219,6 @@ def make_mcmc_meta(conf, meds_meta, meds_file):
 
 
 
-def run_ngmix(files, conf, checkpoint_data=None):
-    import great_des
-    import ngmix
-    
-    conf['g_prior']  = get_g_prior_ngmix(conf)
-    conf['cen_prior'] = get_cen_prior_ngmix(conf)
-    conf['T_prior']  = get_T_prior_ngmix(conf)
-    conf['counts_prior']  = get_counts_prior_ngmix(conf)
-    conf['n_prior'] = get_n_prior(conf)
-
-    gm=great_des.nfit.MedsFit(files['meds'],
-                              files['truth'],
-                              files['psf'],
-                              checkpoint_data=checkpoint_data,
-                              **conf)
-    gm.do_fits()
-    data=gm.get_data()
-    meds_meta=gm.get_meds_meta()
-
-    meta=make_ngmix_meta(conf, meds_meta, files['meds_full'])
-
-    return data, meta
-
 def get_n_prior(conf):
     import ngmix
     n_prior_type=conf['n_prior_type']
@@ -412,14 +389,31 @@ def get_checkpoint_data(out_file):
 
 def run_fitter(files, conf, checkpoint_data=None):
     """
-    Run one of a few types of fitters.  Only ngmix is maintained currently
+    Do the fit
     """
-    if conf['fitter'] == 'mcmc':
-        data, meta = run_ngmix(files,
-                               conf,
-                               checkpoint_data=checkpoint_data)
-    else:
-        raise  ValueError("bad fitter: '%s'" % conf['fitter'])
+    import great_des
+    import ngmix
+    
+    conf['g_prior']  = get_g_prior_ngmix(conf)
+    conf['cen_prior'] = get_cen_prior_ngmix(conf)
+    conf['T_prior']  = get_T_prior_ngmix(conf)
+    conf['counts_prior']  = get_counts_prior_ngmix(conf)
+    conf['n_prior'] = get_n_prior(conf)
+
+    gm=great_des.nfit.MedsFit(files['meds'],
+                              files['truth'],
+                              files['psf'],
+                              checkpoint_data=checkpoint_data,
+                              **conf)
+    gm.do_fits()
+    data=gm.get_data()
+    meds_meta=gm.get_meds_meta()
+
+    meta=make_ngmix_meta(conf, meds_meta, files['meds_full'])
+
+    return data, meta
+
+
 
     return data, meta
 

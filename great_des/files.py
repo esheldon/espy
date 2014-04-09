@@ -44,12 +44,14 @@ def get_input_file(**keys):
         The g (shear) number set
 
     noisefree: bool
-        If true, return path to noisefree data
+        If true, return path to noisefree data; meds only.
     """
     d=get_input_dir(**keys)
 
     noisefree=keys.get("noisefree",False)
-    if noisefree:
+    ftype=keys['ftype']
+
+    if noisefree and ftype=='meds':
         fname='nbc2.%(ftype)s.%(fnum)03i.g%(gnum)02i.noisefree.fits'
     else:
         fname='nbc2.%(ftype)s.%(fnum)03i.g%(gnum)02i.fits'
@@ -89,6 +91,56 @@ def get_output_dir(**keys):
     h=os.environ['HOME']
     d=os.path.join(h, 'lensing','great-des',keys['run'], 'output')
     return d
+
+def get_condor_dir(**keys):
+    """
+    parameters
+    ----------
+    run: keyword
+        The processing run
+    """
+    h=os.environ['HOME']
+    d=os.path.join(h, 'lensing','great-des',keys['run'],'condor')
+    return d
+
+def get_condor_master(**keys):
+    """
+    parameters
+    ----------
+    run
+    """
+    d=get_condor_dir(**keys)
+
+    fname='master.sh'
+    fname=os.path.join(d, fname)
+
+    return fname
+
+
+def get_condor_file(**keys):
+    """
+    parameters
+    ----------
+    run
+    fnum
+    gnum
+    start
+    end
+    """
+    d=get_condor_dir(**keys)
+
+    missing=keys.get('missing',False)
+    if missing:
+        fname='%(run)s-%(filenum)05d-missing.condor'
+    else:
+        fname='%(run)s-%(filenum)05d.condor'
+    fname=fname % keys
+
+    fname=os.path.join(d, fname)
+
+    return fname
+
+
 
 def get_wq_dir(**keys):
     """

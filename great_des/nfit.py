@@ -77,6 +77,7 @@ class MedsFit(object):
         self.conf={}
         self.conf.update(keys)
 
+        self.fitter = keys['fitter']
         self.fit_model = keys['fit_model']
 
         self.nwalkers=keys.get('nwalkers',80)
@@ -344,20 +345,29 @@ class MedsFit(object):
         """
 
         model=self.fit_model
-        print('    fitting',model)
+        fitter_type=self.fitter
+        print('    fitting',model,"using",fitter_type)
 
         if model=='sersic':
-            self._fit_sersic()
+            if fitter_type=='mcmc':
+                fitter=self._fit_sersic_mcmc()
+            elif fitter_type=='lm':
+                fitter=self._fit_sersic_lm()
+            else:
+                raise ValueError("bad fitter type: '%s'" % fitter_type)
         else:
             raise ValueError("bad model: '%s'" % model)
 
+        self.res['galaxy_fitter'] = fitter
+        self.res['galaxy_res'] = fitter.get_result()
+
         self._print_galaxy_res()
 
-        if self.make_plots:
+        if fitter_type=='mcmc' and self.make_plots:
             self._do_gal_plots(self.res['galaxy_fitter'])
 
 
-    def _fit_sersic(self):
+    def _fit_sersic_mcmc(self):
         """
         Fit a sersic model, taking guesses from our previous em fits
         """
@@ -391,10 +401,9 @@ class MedsFit(object):
                                         do_pqr=self.do_pqr)
         fitter.go()
 
-        res['galaxy_fitter'] = fitter
-        res['galaxy_res'] = fitter.get_result()
+        return fitter
 
-    def _fit_sersic_iter(self):
+    def _fit_sersic_mcmc_iter(self):
         """
         Fit a sersic model, taking guesses from our previous em fits
         """
@@ -436,9 +445,7 @@ class MedsFit(object):
                                             do_pqr=self.do_pqr)
             fitter.go()
 
-        res['galaxy_fitter'] = fitter
-        res['galaxy_res'] = fitter.get_result()
-
+        return fitter
 
 
     def _get_guess_sersic_maxlike(self):
@@ -448,93 +455,119 @@ class MedsFit(object):
         """
         from ngmix.fitting import print_pars
 
-        res=self.res
-
-        ntry=self.conf['ntry_lm']
-        for i in xrange(ntry):
-            self._fit_sersic_lm()
-            lmres=res['galaxy_res_lm']
-            if lmres['flags'] == 0:
-                break
-            else:
-                print("    fail lm:",lmres['flags'])
+        fitter=self._fit_sersic_lm()
+        lmres=fitter.get_result()
 
         if lmres['flags'] != 0:
-            print("    LM failed, using standard guess")
+            print("    LM failed, using standard guess instead")
             full_guess=self._get_guess_sersic(self.nwalkers)
         else:
             pars=lmres['pars']
-            print_pars(pars,front="    LM pars: ")
+            #print_pars(pars,front="    LM pars: ")
             full_guess=self._get_guess_sersic_frompars(pars)
 
         return full_guess
 
     def _fit_sersic_lm(self):
         """
-        Fit the simple model, taking guesses from our
-        previous em fits
+        Fit a sersic model, taking guesses from our previous em fits
         """
         import ngmix
         from ngmix.fitting import print_pars
 
         res=self.res
 
-        guess=self._get_guess_sersic(1)
-        guess=guess[0,:]
+        chi2per_min=1.e9
 
-        print_pars(guess,front="    LM start: ")
+        random_n=False
+        start_pars=None
+        ntry=self.conf['ntry_lm']
+        for i in xrange(ntry):
+
+            guess=self._get_guess_sersic(1, random_n=random_n, pars=start_pars)
+            guess=guess[0,:]
+
+            if i==0:
+                print_pars(guess,front="    LM start: ")
+
+            tfitter=ngmix.fitting.LMSersic(self.image,
+                                           self.wt,
+                                           res['jacobian'],
+                                           guess,
+
+                                           psf=res['psf_gmix'],
+
+                                           lm_pars=self.conf['lm_pars'],
+
+                                           cen_prior=self.cen_prior,
+                                           T_prior=self.T_prior,
+                                           counts_prior=self.counts_prior,
+                                           g_prior=self.g_prior,
+                                           n_prior=self.n_prior)
+            tfitter.go()
+
+            tres=tfitter.get_result()
+            if tres['flags']==0:
+                chi2per=tres['chi2per']
+                if chi2per < chi2per_min:
+                    print_pars(tres['pars'],front="    best LM pars %02s: " % (i+1))
+                    chi2per_min=chi2per
+                    fitter=tfitter
+
+                start_pars=tres['pars']
+            else:
+                start_pars=None
+                if i==0:
+                    fitter=tfitter
+
+            random_n=True
+
+        return fitter
 
 
-        fitter=ngmix.fitting.LMSersic(self.image,
-                                      self.wt,
-                                      res['jacobian'],
-                                      guess,
-
-                                      psf=res['psf_gmix'],
-
-                                      lm_pars=self.conf['lm_pars'],
-
-                                      cen_prior=self.cen_prior,
-                                      T_prior=self.T_prior,
-                                      counts_prior=self.counts_prior,
-                                      g_prior=self.g_prior,
-                                      n_prior=self.n_prior)
-        fitter.go()
-
-        res['galaxy_fitter_lm'] = fitter
-        res['galaxy_res_lm'] = fitter.get_result()
-
-
-    def _get_guess_sersic(self, num, widths=[0.1, 0.1, 0.03, 0.1]):
+    def _get_guess_sersic(self,
+                          num,
+                          pars=None,
+                          random_n=True,
+                          widths=[0.05, 0.05, 0.05, 0.05]):
         """
         Guess based on the em fit, with n drawn from prior
         """
 
         res=self.res
-        gmix = res['em_gmix']
-        g1,g2,T = gmix.get_g1g2T()
-        flux = res['em_gauss_flux']
 
-        #Tguess = T*4
-        Tguess = T
+        if pars is None:
+            gmix = res['em_gmix']
+            cen1,cen2=gmix.get_cen()
+            g1,g2,T = gmix.get_g1g2T()
+            flux = res['em_gauss_flux']
+        else:
+            cen1=pars[0]
+            cen2=pars[1]
+            g1=pars[2]
+            g2=pars[3]
+            T=pars[4]
+            flux=pars[5]
 
         shapes=get_shape_guess(g1, g2, num, width=widths[1])
 
         n_prior=self.n_prior
-        if num==1:
-            nvals = 0.5*(n_prior.minval+n_prior.maxval)
-        else:
+
+        if random_n:
             nvals = self.n_prior.sample(num)
+        else:
+            nvals=zeros(num)
+            nvals[:] = 0.5*(n_prior.minval+n_prior.maxval)
 
         guess=zeros( (num, 7) )
 
-        guess[:,0] = widths[0]*srandu(num)
-        guess[:,1] = widths[0]*srandu(num)
+        guess[:,0] = cen1 + widths[0]*srandu(num)
+        guess[:,1] = cen2 + widths[0]*srandu(num)
 
         guess[:,2]=shapes[:,0]
         guess[:,3]=shapes[:,1]
 
-        guess[:,4] = get_positive_guess(Tguess,num,width=widths[2])
+        guess[:,4] = get_positive_guess(T,num,width=widths[2])
         guess[:,5] = get_positive_guess(flux,num,width=widths[3])
 
         guess[:,6] = nvals
@@ -892,7 +925,9 @@ class MedsFit(object):
 
         if self.fit_model=='sersic':
             self._print_galaxy_n(res)
-        print('        arate:',res['arate'])
+        
+        if 'arate' in res:
+            print('        arate:',res['arate'])
 
     def _print_galaxy_n(self, res):
         """
@@ -987,6 +1022,27 @@ class MedsFit(object):
 
         data=self.data
 
+
+        # em fit to convolved galaxy
+        if 'em_gauss_flux' in allres:
+            data['em_gauss_flux'][dindex] = allres['em_gauss_flux']
+            data['em_gauss_flux_err'][dindex] = allres['em_gauss_flux_err']
+            data['em_gauss_cen'][dindex] = allres['em_gauss_cen']
+        else:
+            print("        em gauss not found, not copying pars")
+            return
+
+        if 'psf_flux' in allres:
+            data['psf_flux'][dindex] = allres['psf_flux']
+            data['psf_flux_err'][dindex] = allres['psf_flux_err']
+        else:
+            print("        em gauss not found, not copying pars")
+            return
+
+        if allres['flags'] != 0:
+            print("        Not copying pars due to failure")
+            return
+
         res=allres['galaxy_res']
 
         pars=res['pars']
@@ -994,14 +1050,6 @@ class MedsFit(object):
 
         flux=pars[5]
         flux_err=sqrt(pars_cov[5, 5])
-
-        # em fit to convolved galaxy
-        data['em_gauss_flux'][dindex] = allres['em_gauss_flux']
-        data['em_gauss_flux_err'][dindex] = allres['em_gauss_flux_err']
-        data['em_gauss_cen'][dindex] = allres['em_gauss_cen']
-
-        data['psf_flux'][dindex] = allres['psf_flux']
-        data['psf_flux_err'][dindex] = allres['psf_flux_err']
 
         data['pars'][dindex,:] = pars
         data['pars_cov'][dindex,:,:] = pars_cov
@@ -1012,8 +1060,9 @@ class MedsFit(object):
         data['g'][dindex,:] = res['g']
         data['g_cov'][dindex,:,:] = res['g_cov']
 
-        data['arate'][dindex] = res['arate']
-        data['tau'][dindex] = res['tau']
+        if 'arate' in res:
+            data['arate'][dindex] = res['arate']
+            data['tau'][dindex] = res['tau']
 
         for sn in _stat_names:
             if sn in res:
@@ -1182,9 +1231,10 @@ class MedsFit(object):
             ('s2n_w','f8'),
             ('chi2per','f8'),
             ('dof','f8'),
-            ('arate','f8'),
-            ('tau','f8'),
            ]
+
+        if self.fitter == 'mcmc':
+            dt += [('arate','f8'), ('tau','f8')]
 
         if self.do_pqr:
             dt += [('P', 'f8'),
@@ -1214,7 +1264,8 @@ class MedsFit(object):
         data['s2n_w'] = DEFVAL
         data['chi2per'] = PDEFVAL
 
-        data['tau'] = PDEFVAL
+        if self.fitter=='mcmc':
+            data['tau'] = PDEFVAL
 
         if self.do_pqr:
             data['P'] = DEFVAL
