@@ -359,8 +359,7 @@ class MedsFit(object):
 
     def _fit_sersic(self):
         """
-        Fit the simple model, taking guesses from our
-        previous em fits
+        Fit a sersic model, taking guesses from our previous em fits
         """
         import ngmix
         from ngmix.fitting import print_pars
@@ -368,11 +367,48 @@ class MedsFit(object):
         res=self.res
 
 
-        ntry=2
+        full_guess=self._get_guess_sersic_maxlike()
+
+        fitter=ngmix.fitting.MCMCSersic(self.image,
+                                        self.wt,
+                                        res['jacobian'],
+                                        psf=res['psf_gmix'],
+
+                                        nwalkers=self.nwalkers,
+                                        burnin=self.burnin,
+                                        nstep=self.nstep,
+                                        mca_a=self.mca_a,
+
+                                        full_guess=full_guess,
+
+                                        shear_expand=self.shear_expand,
+
+                                        cen_prior=self.cen_prior,
+                                        T_prior=self.T_prior,
+                                        counts_prior=self.counts_prior,
+                                        g_prior=self.g_prior,
+                                        n_prior=self.n_prior,
+                                        do_pqr=self.do_pqr)
+        fitter.go()
+
+        res['galaxy_fitter'] = fitter
+        res['galaxy_res'] = fitter.get_result()
+
+    def _fit_sersic_iter(self):
+        """
+        Fit a sersic model, taking guesses from our previous em fits
+        """
+        import ngmix
+        from ngmix.fitting import print_pars
+
+        res=self.res
+
+
+        ntry=self.conf['ntry']
         for i in xrange(ntry):
             print("    try: %s/%s" % (i+1,ntry))
             if i==0:
-                full_guess=self._get_guess_sersic()
+                full_guess=self._get_guess_sersic(self.nwalkers)
             else:
                 best_pars=fitter.best_pars
                 print_pars(best_pars,front="    best pars: ")
@@ -404,7 +440,72 @@ class MedsFit(object):
         res['galaxy_res'] = fitter.get_result()
 
 
-    def _get_guess_sersic(self, widths=[0.1, 0.1, 0.03, 0.1]):
+
+    def _get_guess_sersic_maxlike(self):
+        """
+        fit with lm and use as guess.  If it fails, fall back
+        to the guess based on em
+        """
+        from ngmix.fitting import print_pars
+
+        res=self.res
+
+        ntry=self.conf['ntry_lm']
+        for i in xrange(ntry):
+            self._fit_sersic_lm()
+            lmres=res['galaxy_res_lm']
+            if lmres['flags'] == 0:
+                break
+            else:
+                print("    fail lm:",lmres['flags'])
+
+        if lmres['flags'] != 0:
+            print("    LM failed, using standard guess")
+            full_guess=self._get_guess_sersic(self.nwalkers)
+        else:
+            pars=lmres['pars']
+            print_pars(pars,front="    LM pars: ")
+            full_guess=self._get_guess_sersic_frompars(pars)
+
+        return full_guess
+
+    def _fit_sersic_lm(self):
+        """
+        Fit the simple model, taking guesses from our
+        previous em fits
+        """
+        import ngmix
+        from ngmix.fitting import print_pars
+
+        res=self.res
+
+        guess=self._get_guess_sersic(1)
+        guess=guess[0,:]
+
+        print_pars(guess,front="    LM start: ")
+
+
+        fitter=ngmix.fitting.LMSersic(self.image,
+                                      self.wt,
+                                      res['jacobian'],
+                                      guess,
+
+                                      psf=res['psf_gmix'],
+
+                                      lm_pars=self.conf['lm_pars'],
+
+                                      cen_prior=self.cen_prior,
+                                      T_prior=self.T_prior,
+                                      counts_prior=self.counts_prior,
+                                      g_prior=self.g_prior,
+                                      n_prior=self.n_prior)
+        fitter.go()
+
+        res['galaxy_fitter_lm'] = fitter
+        res['galaxy_res_lm'] = fitter.get_result()
+
+
+    def _get_guess_sersic(self, num, widths=[0.1, 0.1, 0.03, 0.1]):
         """
         Guess based on the em fit, with n drawn from prior
         """
@@ -417,21 +518,24 @@ class MedsFit(object):
         #Tguess = T*4
         Tguess = T
 
-        nwalkers = self.nwalkers
+        shapes=get_shape_guess(g1, g2, num, width=widths[1])
 
-        shapes=get_shape_guess(g1, g2, nwalkers, width=widths[1])
-        nvals = self.n_prior.sample(nwalkers)
+        n_prior=self.n_prior
+        if num==1:
+            nvals = 0.5*(n_prior.minval+n_prior.maxval)
+        else:
+            nvals = self.n_prior.sample(num)
 
-        guess=zeros( (nwalkers, 7) )
+        guess=zeros( (num, 7) )
 
-        guess[:,0] = widths[0]*srandu(nwalkers)
-        guess[:,1] = widths[0]*srandu(nwalkers)
+        guess[:,0] = widths[0]*srandu(num)
+        guess[:,1] = widths[0]*srandu(num)
 
         guess[:,2]=shapes[:,0]
         guess[:,3]=shapes[:,1]
 
-        guess[:,4] = get_positive_guess(Tguess,nwalkers,width=widths[2])
-        guess[:,5] = get_positive_guess(flux,nwalkers,width=widths[3])
+        guess[:,4] = get_positive_guess(Tguess,num,width=widths[2])
+        guess[:,5] = get_positive_guess(flux,num,width=widths[3])
 
         guess[:,6] = nvals
 

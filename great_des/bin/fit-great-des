@@ -414,10 +414,10 @@ def run_fitter(files, conf, checkpoint_data=None):
     """
     Run one of a few types of fitters.  Only ngmix is maintained currently
     """
-    if conf['fitter'] == 'ngmix':
+    if conf['fitter'] == 'mcmc':
         data, meta = run_ngmix(files,
-                                           conf,
-                                           checkpoint_data=checkpoint_data)
+                               conf,
+                               checkpoint_data=checkpoint_data)
     else:
         raise  ValueError("bad fitter: '%s'" % conf['fitter'])
 
