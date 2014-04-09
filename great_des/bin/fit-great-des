@@ -4,9 +4,9 @@
 
 Process the input meds file.
 """
+from __future__ import print_function
 
 import os,sys
-from sys import stderr
 import shutil
 import numpy
 import yaml
@@ -59,12 +59,12 @@ class RemoteFile(object):
         import shutil
 
         self.cleanup()
-        print >>stderr,'copying to local file:',self.remote_file, self.local_file
+        print('copying to local file:',self.remote_file, self.local_file)
         shutil.copy2(self.remote_file, self.local_file)
 
     def cleanup(self):
         if os.path.exists(self.local_file):
-            print >>stderr,'removing local file:',self.local_file
+            print('removing local file:',self.local_file)
             os.remove(self.local_file)
 
     def __enter__(self):
@@ -368,7 +368,7 @@ def get_sub(meds_file, rng, work_dir):
     Local files will get cleaned up
     """
 
-    print >>stderr,meds_file
+    print(meds_file)
     newf = get_sub_fname(meds_file, rng, work_dir)
     extracted=meds.MEDSExtractor(meds_file, rng[0], rng[1], newf,
                                  cleanup=True)
@@ -391,7 +391,7 @@ def cleanup_checkpoint(checkpoint_file):
     the checkpoint file
     """
     if os.path.exists(checkpoint_file):
-        print >>stderr,'removing checkpoint file',checkpoint_file
+        print('removing checkpoint file',checkpoint_file)
         os.remove(checkpoint_file)
 
 
@@ -404,7 +404,7 @@ def get_checkpoint_data(out_file):
 
     if os.path.exists(checkpoint_file):
         data={}
-        print >>stderr,'reading checkpoint data:',checkpoint_file
+        print('reading checkpoint data:',checkpoint_file)
         with fitsio.FITS(checkpoint_file) as fobj:
             data['data']=fobj['model_fits'][:]
 
@@ -457,7 +457,7 @@ def write_data(data, meta, out_file):
     write the actual data.  clobber existing
     """
     makedir_fromfile(out_file)
-    print >>stderr,'writing:',out_file
+    print('writing:',out_file)
     with fitsio.FITS(out_file,'rw',clobber=True) as fobj:
         fobj.write(data,extname="model_fits")
         fobj.write(meta,extname="meta_data")
@@ -470,7 +470,7 @@ def go(files, options):
     conf=load_config(files['config'])
     conf['make_plots'] = options.make_plots
 
-    pprint.pprint(conf,stream=stderr)
+    pprint.pprint(conf)
 
     rng_send,meds_file,meds_file_full,extracted,tmp_psf=\
                         setup_work_files(options,files['meds'],files['psf'])

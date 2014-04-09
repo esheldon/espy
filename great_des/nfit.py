@@ -268,6 +268,7 @@ class MedsFit(object):
         jacobian = self._get_jacobian(self.gal_cen_guess)
 
         print('      sigma guess:',sigma_guess)
+        print('      cen guess:  ',self.gal_cen_guess)
         fitter=self._fit_em_1gauss(self.image,
                                    jacobian, 
                                    sigma_guess)
@@ -362,46 +363,59 @@ class MedsFit(object):
         previous em fits
         """
         import ngmix
+        from ngmix.fitting import print_pars
 
         res=self.res
 
-        full_guess=self._get_guess_sersic()
 
-        fitter=ngmix.fitting.MCMCSersic(self.image,
-                                        self.wt,
-                                        res['jacobian'],
-                                        psf=res['psf_gmix'],
+        ntry=2
+        for i in xrange(ntry):
+            print("    try: %s/%s" % (i+1,ntry))
+            if i==0:
+                full_guess=self._get_guess_sersic()
+            else:
+                best_pars=fitter.best_pars
+                print_pars(best_pars,front="    best pars: ")
+                full_guess=self._get_guess_sersic_frompars(best_pars)
 
-                                        nwalkers=self.nwalkers,
-                                        burnin=self.burnin,
-                                        nstep=self.nstep,
-                                        mca_a=self.mca_a,
+            fitter=ngmix.fitting.MCMCSersic(self.image,
+                                            self.wt,
+                                            res['jacobian'],
+                                            psf=res['psf_gmix'],
 
-                                        full_guess=full_guess,
+                                            nwalkers=self.nwalkers,
+                                            burnin=self.burnin,
+                                            nstep=self.nstep,
+                                            mca_a=self.mca_a,
 
-                                        shear_expand=self.shear_expand,
+                                            full_guess=full_guess,
 
-                                        cen_prior=self.cen_prior,
-                                        T_prior=self.T_prior,
-                                        counts_prior=self.counts_prior,
-                                        g_prior=self.g_prior,
-                                        n_prior=self.n_prior,
-                                        do_pqr=self.do_pqr)
-        fitter.go()
+                                            shear_expand=self.shear_expand,
+
+                                            cen_prior=self.cen_prior,
+                                            T_prior=self.T_prior,
+                                            counts_prior=self.counts_prior,
+                                            g_prior=self.g_prior,
+                                            n_prior=self.n_prior,
+                                            do_pqr=self.do_pqr)
+            fitter.go()
 
         res['galaxy_fitter'] = fitter
         res['galaxy_res'] = fitter.get_result()
 
 
-    def _get_guess_sersic(self, widths=[0.01, 0.01, 0.01, 0.01]):
+    def _get_guess_sersic(self, widths=[0.1, 0.1, 0.03, 0.1]):
         """
-        Guess with n drawn from prior
+        Guess based on the em fit, with n drawn from prior
         """
 
         res=self.res
         gmix = res['em_gmix']
         g1,g2,T = gmix.get_g1g2T()
         flux = res['em_gauss_flux']
+
+        #Tguess = T*4
+        Tguess = T
 
         nwalkers = self.nwalkers
 
@@ -416,10 +430,44 @@ class MedsFit(object):
         guess[:,2]=shapes[:,0]
         guess[:,3]=shapes[:,1]
 
-        guess[:,4] = get_positive_guess(T,nwalkers,width=widths[2])
+        guess[:,4] = get_positive_guess(Tguess,nwalkers,width=widths[2])
         guess[:,5] = get_positive_guess(flux,nwalkers,width=widths[3])
 
         guess[:,6] = nvals
+
+        return guess
+
+
+    def _get_guess_sersic_frompars(self, pars):
+        """
+        Guess centered on the input pars
+        """
+        nwalkers = self.nwalkers
+
+        nmin=self.n_prior.minval
+        nmax=self.n_prior.maxval
+
+        guess=zeros( (nwalkers, 7) )
+        guess[:,0] = pars[0] + 0.01*srandu(nwalkers)
+        guess[:,1] = pars[1] + 0.01*srandu(nwalkers)
+
+        shapes=get_shape_guess(pars[2],pars[3], nwalkers, width=0.01)
+        guess[:,2] = shapes[:,0]
+        guess[:,3] = shapes[:,1]
+
+        guess[:,4] = get_positive_guess(pars[4],nwalkers,width=0.01)
+        guess[:,5] = get_positive_guess(pars[5],nwalkers,width=0.01)
+
+        nleft=nwalkers
+        ngood=0
+        while nleft > 0:
+            vals = pars[6]*(1.0 + 0.01*srandu(nleft))
+            w,=numpy.where( (vals > nmin) & (vals < nmax) )
+            nkeep=w.size
+            if nkeep > 0:
+                guess[ngood:ngood+nkeep,6] = vals[w]
+                nleft -= w.size
+                ngood += w.size
 
         return guess
 
@@ -821,11 +869,7 @@ class MedsFit(object):
         # overall flags, model flags copied below
         data['flags'][dindex] = res['flags']
 
-        print("skipping copy")
-        return
-
         if 'psf_gmix' in res:
-
             self._copy_galaxy_pars()
 
     def _copy_galaxy_pars(self):
@@ -835,23 +879,25 @@ class MedsFit(object):
 
         dindex=self.dindex
         conf=self.conf
-        res = self.res
+        allres = self.res
+
         data=self.data
 
-        pars=res['pars']['galaxy_res']
+        res=allres['galaxy_res']
 
+        pars=res['pars']
         pars_cov=res['pars_cov']
 
         flux=pars[5]
         flux_err=sqrt(pars_cov[5, 5])
 
         # em fit to convolved galaxy
-        data['em_gauss_flux'][dindex] = res['em_gauss_flux']
-        data['em_gauss_flux_err'][dindex] = res['em_gauss_flux_err']
-        data['em_gauss_cen'][dindex] = res['em_gauss_cen']
+        data['em_gauss_flux'][dindex] = allres['em_gauss_flux']
+        data['em_gauss_flux_err'][dindex] = allres['em_gauss_flux_err']
+        data['em_gauss_cen'][dindex] = allres['em_gauss_cen']
 
-        data['psf_flux'][dindex] = res['psf_flux']
-        data['psf_flux_err'][dindex] = res['psf_flux_err']
+        data['psf_flux'][dindex] = allres['psf_flux']
+        data['psf_flux_err'][dindex] = allres['psf_flux_err']
 
         data['pars'][dindex,:] = pars
         data['pars_cov'][dindex,:,:] = pars_cov
@@ -1087,12 +1133,7 @@ _stat_names=['s2n_w',
 
 
 def get_model_names(model):
-    names=['rfc_flags',
-           'rfc_tries',
-           'rfc_iter',
-           'rfc_pars',
-           'rfc_pars_cov',
-           'flags',
+    names=['flags',
            'pars',
            'pars_cov',
            'flux',
