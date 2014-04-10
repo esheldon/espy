@@ -80,6 +80,7 @@ class MedsFit(object):
         self.fitter = keys['fitter']
         self.fit_model = keys['fit_model']
 
+        self.trim_image=keys.get('trim_image',False)
         self.nwalkers=keys.get('nwalkers',80)
         self.burnin=keys.get('burnin',400)
         self.nstep=keys.get('nstep',800)
@@ -252,6 +253,9 @@ class MedsFit(object):
 
         self._fit_galaxy_em()
         self._fit_galaxy_psf_flux()
+
+        if self.trim_image:
+            self._make_trimmed_image()
         self._fit_galaxy_model()
 
     def _fit_galaxy_em(self):
@@ -350,8 +354,12 @@ class MedsFit(object):
 
         if model=='sersic':
             if fitter_type=='mcmc':
-                fitter=self._fit_sersic_mcmc()
+                if self.conf['iter']:
+                    fitter=self._fit_sersic_mcmc_iter()
+                else:
+                    fitter=self._fit_sersic_mcmc()
             elif fitter_type=='lm':
+                raise RuntimeError("don't use lm, it is shit")
                 fitter=self._fit_sersic_lm()
             else:
                 raise ValueError("bad fitter type: '%s'" % fitter_type)
@@ -360,6 +368,7 @@ class MedsFit(object):
 
         self.res['galaxy_fitter'] = fitter
         self.res['galaxy_res'] = fitter.get_result()
+        self.res['flags'] |= self.res['galaxy_res']['flags']
 
         self._print_galaxy_res()
 
@@ -376,12 +385,13 @@ class MedsFit(object):
 
         res=self.res
 
+        image,wt,jacobian=self._get_image_data()
 
         full_guess=self._get_guess_sersic_maxlike()
 
-        fitter=ngmix.fitting.MCMCSersic(self.image,
-                                        self.wt,
-                                        res['jacobian'],
+        fitter=ngmix.fitting.MCMCSersic(image,
+                                        wt,
+                                        jacobian,
                                         psf=res['psf_gmix'],
 
                                         nwalkers=self.nwalkers,
@@ -412,6 +422,7 @@ class MedsFit(object):
 
         res=self.res
 
+        image,wt,jacobian=self._get_image_data()
 
         ntry=self.conf['ntry']
         for i in xrange(ntry):
@@ -423,9 +434,9 @@ class MedsFit(object):
                 print_pars(best_pars,front="    best pars: ")
                 full_guess=self._get_guess_sersic_frompars(best_pars)
 
-            fitter=ngmix.fitting.MCMCSersic(self.image,
-                                            self.wt,
-                                            res['jacobian'],
+            fitter=ngmix.fitting.MCMCSersic(image,
+                                            wt,
+                                            jacobian,
                                             psf=res['psf_gmix'],
 
                                             nwalkers=self.nwalkers,
@@ -475,6 +486,8 @@ class MedsFit(object):
         import ngmix
         from ngmix.fitting import print_pars
 
+        image,wt,jacobian=self._get_image_data()
+
         res=self.res
 
         chi2per_min=1.e9
@@ -490,9 +503,9 @@ class MedsFit(object):
             if i==0:
                 print_pars(guess,front="    LM start: ")
 
-            tfitter=ngmix.fitting.LMSersic(self.image,
-                                           self.wt,
-                                           res['jacobian'],
+            tfitter=ngmix.fitting.LMSersic(image,
+                                           wt,
+                                           jacobian,
                                            guess,
 
                                            psf=res['psf_gmix'],
@@ -516,6 +529,7 @@ class MedsFit(object):
 
                 start_pars=tres['pars']
             else:
+                print("    lm fail:",tres['flags'])
                 start_pars=None
                 if i==0:
                     fitter=tfitter
@@ -688,15 +702,15 @@ class MedsFit(object):
         ntry,maxiter,tol = self._get_em_pars()
         for i in xrange(ntry):
             guess = self._get_em_guess(sigma_guess, ngauss)
-            print("em guess:")
-            print(guess)
+            #print("em guess:")
+            #print(guess)
             try:
                 fitter=self._do_fit_em_with_full_guess(im_with_sky,
                                                        sky,
                                                        guess,
                                                        jacobian)
                 tres=fitter.get_result()
-                print("em numiter:",tres['numiter'])
+                #print("em numiter:",tres['numiter'])
                 break
             except GMixMaxIterEM:
                 fitter=None
@@ -835,6 +849,56 @@ class MedsFit(object):
         else:
             return conf['psf_em_ntry'], conf['psf_em_maxiter'], conf['psf_em_tol']
 
+    def _make_trimmed_image(self):
+        res=self.res
+
+        cen=res['jacobian'].get_cen()
+        T=res['em_gmix'].get_T()
+
+        sigma=sqrt(T/2.)/self.pixel_scale
+
+        radius = 5.0*sigma
+
+        minrow=cen[0]-radius
+        maxrow=cen[0]+radius
+        mincol=cen[1]-radius
+        maxcol=cen[1]+radius
+
+        sh=self.image.shape
+
+        if minrow < 0:
+            minrow=0
+        if maxrow >= sh[0]:
+            minrow=sh[0]-1
+
+        if mincol < 0:
+            mincol=0
+        if maxcol >= sh[1]:
+            mincol=sh[1]-1
+
+        self.trimmed_image = self.image[minrow:maxrow+1, mincol:maxcol+1]
+        self.trimmed_wt    = self.wt[minrow:maxrow+1, mincol:maxcol+1]
+        self.trimmed_cen   = array(cen)-array([minrow,mincol])
+        res['trimmed_jacobian'] = self._get_jacobian(self.trimmed_cen)
+
+        print("    trimmed image:",self.trimmed_image.shape,
+              "cen:  ",self.trimmed_cen)
+
+    def _get_image_data(self):
+        """
+        Get the appropriate image data for the current object.
+        """
+
+        if self.trim_image:
+            image=self.trimmed_image
+            wt=self.trimmed_wt
+            jacobian=self.res['trimmed_jacobian']
+        else:
+            image=self.image
+            wt=self.wt
+            jacobian=self.res['jacobian']
+        return image, wt, jacobian
+
     def _compare_psf(self, fitter):
         """
         compare psf image to best fit model
@@ -872,21 +936,23 @@ class MedsFit(object):
 
         gmix = fitter.get_gmix()
 
+        image, wt, jacobian=self._get_image_data()
+
         res=self.res
         psf_gmix = res['psf_gmix']
         gmix_conv = gmix.convolve(psf_gmix)
 
-        model_image = gmix_conv.make_image(self.image.shape,
-                                           jacobian=res['jacobian'])
+        model_image = gmix_conv.make_image(image.shape,
+                                           jacobian=jacobian)
 
-        plt=images.compare_images(self.image,
+        plt=images.compare_images(image,
                                   model_image,
                                   label1='galaxy',
                                   label2=model,
                                   show=False)
         pname='gal-resid-%06d-%s.png' % (self.mindex,model)
 
-        resid_std = (self.image-model_image).std()
+        resid_std = (image-model_image).std()
         print("    residual std:",resid_std)
         print("          ",pname)
         plt.write_img(1400,800,pname)
@@ -1022,7 +1088,6 @@ class MedsFit(object):
 
         data=self.data
 
-
         # em fit to convolved galaxy
         if 'em_gauss_flux' in allres:
             data['em_gauss_flux'][dindex] = allres['em_gauss_flux']
@@ -1039,6 +1104,7 @@ class MedsFit(object):
             print("        em gauss not found, not copying pars")
             return
 
+        # allres flags is or'ed with the galaxy fitting flags
         if allres['flags'] != 0:
             print("        Not copying pars due to failure")
             return
@@ -1082,6 +1148,12 @@ class MedsFit(object):
         self.meds = meds.MEDS(self.meds_file)
         self.meds_meta=self.meds.get_meta()
         self.nobj_tot = self.meds.size
+
+        self.mindex=0
+        jtmp=self._get_jacobian([0.0, 0.0])
+
+        self.pixel_scale = jtmp.get_scale()
+        print("pixel scale:",self.pixel_scale)
 
     def _load_truth(self):
         """
