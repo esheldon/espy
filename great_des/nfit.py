@@ -201,7 +201,7 @@ class MedsFit(object):
         self.fitting_galaxy=False
 
         # first 1 gaussian
-        jacobian=self._get_jacobian(self.psf_cen_guess)
+        jacobian=self._get_jacobian(self.psf_cen_guess_pix)
 
         fitter1=self._fit_em_1gauss(self.psf_image,
                                     jacobian,
@@ -216,10 +216,6 @@ class MedsFit(object):
         psf_gmix1=fitter1.get_gmix()
         self.psf_gmix1=psf_gmix1
         self.res['psf_gmix_em1']=psf_gmix1
-
-        # now a more complex model
-        cen_guess = self.psf_cen_guess + array(psf_gmix1.get_cen())
-        jacobian=self._get_jacobian(cen_guess)
 
         fitter=self._fit_em_ngauss(self.psf_image,
                                    jacobian,
@@ -240,7 +236,6 @@ class MedsFit(object):
 
             if self.make_plots:
                 self._compare_psf(fitter)
-
 
     def _fit_galaxy(self):
         """
@@ -270,22 +265,16 @@ class MedsFit(object):
         # first the structural fit
         sigma_guess = sqrt( self.res['psf_gmix'].get_T()/2.0 )
 
-        jacobian = self._get_jacobian(self.gal_cen_guess)
+        jacobian = self._get_jacobian(self.gal_cen_guess_pix)
 
         print('      sigma guess:',sigma_guess)
-        print('      cen guess:  ',self.gal_cen_guess)
+        print('      cen guess:  ',self.gal_cen_guess_pix)
         fitter=self._fit_em_1gauss(self.image,
                                    jacobian, 
                                    sigma_guess)
 
         em_gmix = fitter.get_gmix()
         print("      em gmix:",em_gmix)
-
-        row_rel, col_rel = em_gmix.get_cen()
-        em_cen = self.gal_cen_guess + array([row_rel,col_rel])
-        jacobian = self._get_jacobian(em_cen)
-
-        print("      em gauss cen:",em_cen)
 
         # now get a flux
         print('    fitting robust gauss flux')
@@ -296,7 +285,7 @@ class MedsFit(object):
 
         self.res['em_gauss_flux'] = flux
         self.res['em_gauss_flux_err'] = flux_err
-        self.res['em_gauss_cen'] = jacobian.get_cen()
+        self.res['em_gauss_cen'] = em_gmix.get_cen()
         self.res['em_gmix'] = em_gmix
         self.res['jacobian'] = jacobian
 
@@ -431,7 +420,7 @@ class MedsFit(object):
                 full_guess=self._get_guess_sersic(self.nwalkers)
             else:
                 best_pars=fitter.best_pars
-                print_pars(best_pars,front="    best pars: ")
+                print_pars(best_pars,front="    first pars: ")
                 full_guess=self._get_guess_sersic_frompars(best_pars)
 
             fitter=ngmix.fitting.MCMCSersic(image,
@@ -639,7 +628,7 @@ class MedsFit(object):
         else:
             self.wt = self.meds.get_cutout(mindex,0,type='weight')
 
-        self.gal_cen_guess=(array(self.image.shape)-1)/2.
+        self.gal_cen_guess_pix=(array(self.image.shape)-1)/2.
         self.data['nimage_tot'][dindex] = 1
 
     def _load_psf_image(self):
@@ -651,7 +640,7 @@ class MedsFit(object):
         psf_id = self.truth['id_psf'][self.mindex]
         self.psf_image = self.psf_fobj[psf_id].read().astype('f8')
         
-        self.psf_cen_guess=(array(self.psf_image.shape)-1)/2.
+        self.psf_cen_guess_pix=(array(self.psf_image.shape)-1)/2.
 
     def _get_jacobian(self, cen):
         import ngmix
@@ -852,32 +841,41 @@ class MedsFit(object):
     def _make_trimmed_image(self):
         res=self.res
 
-        cen=res['jacobian'].get_cen()
-        T=res['em_gmix'].get_T()
+        cen_jacob=array( res['jacobian'].get_cen() )
+
+        em_gmix=res['em_gmix']
+
+        T=em_gmix.get_T()
+        cen=array(em_gmix.get_cen())/self.pixel_scale
+
+        cen = cen + cen_jacob
 
         sigma=sqrt(T/2.)/self.pixel_scale
+        #print("cen:",cen)
+        #print("from gauss:",res['em_gmix'])
+        #print("got T:",T,"sigma (pixels):",sigma)
 
         radius = 5.0*sigma
 
-        minrow=cen[0]-radius
-        maxrow=cen[0]+radius
-        mincol=cen[1]-radius
-        maxcol=cen[1]+radius
+        minrow=int(cen[0]-radius)
+        maxrow=int(cen[0]+radius+1)
+        mincol=int(cen[1]-radius)
+        maxcol=int(cen[1]+radius+1)
 
         sh=self.image.shape
 
         if minrow < 0:
             minrow=0
-        if maxrow >= sh[0]:
-            minrow=sh[0]-1
+        if maxrow > sh[0]:
+            maxrow=sh[0]
 
         if mincol < 0:
             mincol=0
-        if maxcol >= sh[1]:
-            mincol=sh[1]-1
+        if maxcol > sh[1]:
+            maxcol=sh[1]
 
-        self.trimmed_image = self.image[minrow:maxrow+1, mincol:maxcol+1]
-        self.trimmed_wt    = self.wt[minrow:maxrow+1, mincol:maxcol+1]
+        self.trimmed_image = self.image[minrow:maxrow, mincol:maxcol]
+        self.trimmed_wt    = self.wt[minrow:maxrow, mincol:maxcol]
         self.trimmed_cen   = array(cen)-array([minrow,mincol])
         res['trimmed_jacobian'] = self._get_jacobian(self.trimmed_cen)
 
@@ -981,16 +979,19 @@ class MedsFit(object):
         p.write_img(width,height,trials_pname)
 
     def _print_galaxy_res(self):
-
+        from ngmix.fitting import print_pars
         res=self.res['galaxy_res']
 
-        self._print_galaxy_cen(res)
-        self._print_galaxy_shape(res)
-        self._print_galaxy_T(res)
-        self._print_galaxy_flux(res)
+        print_pars(res['pars'], front="    pars: ")
+        print_pars(res['pars_err'], front="    err:  ")
 
-        if self.fit_model=='sersic':
-            self._print_galaxy_n(res)
+        #self._print_galaxy_cen(res)
+        #self._print_galaxy_shape(res)
+        #self._print_galaxy_T(res)
+        #self._print_galaxy_flux(res)
+
+        #if self.fit_model=='sersic':
+        #    self._print_galaxy_n(res)
         
         if 'arate' in res:
             print('        arate:',res['arate'])

@@ -30,9 +30,9 @@ parser.add_option("--work-dir", default=None,
                         "Also write to local files and copy out."
                         "The local files are not removed."))
 
-parser.add_option("--profile-image", default=None,
-                  help=("Profile the code and create the specified "
-                        "image using pycallgraph"))
+parser.add_option("--profile", action='store_true',
+                  help=("Profile the code using cProfile"))
+
 
 class RemoteFile(object):
     def __init__(self, remote_file, local_dir='/tmp'):
@@ -380,6 +380,23 @@ def write_data(data, out_file):
     with fitsio.FITS(out_file,'rw',clobber=True) as fobj:
         fobj.write(data,extname="model_fits")
 
+def go_profile(files, options):
+    # don't want to see the JIT
+    import cProfile
+    import pstats
+    import ngmix
+
+    go(files, options)
+
+    # run twice to avoid jit stuff
+    print("--- profiling ---")
+    cProfile.runctx('go(files, options)',
+                    globals(),locals(),
+                    'profile_stats')
+    
+    p = pstats.Stats('profile_stats')
+    p.sort_stats('time').print_stats()
+
 
 def go(files, options):
 
@@ -431,7 +448,10 @@ def main():
            'psf':psf_file,
            'out':out_file}
 
-    go(files, options)
+    if options.profile:
+        go_profile(files, options)
+    else:
+        go(files, options)
 
 if __name__=="__main__":
     main()
