@@ -14,7 +14,6 @@ from great_des import files
 from optparse import OptionParser
 parser = OptionParser(__doc__)
 
-indir="/astro/u/esheldon/lensing/great-des/nbc2/140307_first_test"
 template="""
 command: |
     source ~/.bashrc

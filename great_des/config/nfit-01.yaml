@@ -1,3 +1,4 @@
+# uses old style names
 run: "nfit-01"
 
 gdtype: "nbc2"
