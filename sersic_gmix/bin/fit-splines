@@ -22,7 +22,6 @@ from optparse import OptionParser
 
 parser=OptionParser(__doc__)
 parser.add_option('--ngauss',default=None,help="number of gaussians, required")
-parser.add_option('--order',default=None,help="order of spline, required")
 
 def get_pars(nvals, ngauss):
     plist=[read_fit(n,ngauss) for n in nvals]
@@ -39,13 +38,11 @@ def get_pars(nvals, ngauss):
 def get_options(options):
     if options.ngauss is None:
         raise ValueError("send --ngauss")
-    if options.order is None:
-        raise ValueError("send --order")
 
-    order=int(options.order)
     ngauss=int(options.ngauss)
 
-    return ngauss, order
+    return ngauss
+
 def main():
 
     options, nvals = parser.parse_args(sys.argv[1:])
@@ -53,16 +50,14 @@ def main():
         parser.print_help()
         sys.exit(45)
 
-    ngauss, order = get_options(options)
+    ngauss = get_options(options)
 
     nvals=[float(n) for n in nvals]
     nvals=array(nvals)
 
     pars = get_pars(nvals, ngauss)
 
-
-    fit_spline(pars[:,0:ngauss], nvals, 'T', order=order)
-    fit_spline(pars[:,ngauss:],  nvals, 'flux', order=order)
+    fit_spline(nvals, pars)
 
     fitsname=sersic_gmix.fitting.get_combined_fname(ngauss)
     print(fitsname)

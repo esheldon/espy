@@ -3,11 +3,91 @@ from __future__ import print_function
 import os
 import sys
 import numpy
-from numpy import linspace
+from numpy import linspace, zeros
+
+from numba import autojit, jit, float64
 
 from . import fitting
 from .fitting import get_plot_fname
 
+#@jit(argtypes=[float64[:], float64])
+@autojit
+def binary_search(a, x):
+    """
+    Index of closest value from a smaller than x
+
+    however, defaults to edges when out of bounds
+    """
+
+    up=a.size
+    down=-1
+
+    if x < a[0]:
+        return 0
+    if x > a[up-1]:
+        return up-1
+
+    while up-down > 1:
+        mid = down + (up-down)//2
+        val=a[mid]
+
+        if x >= val:
+            down=mid
+        else:
+            up=mid
+        
+    return down
+
+#@autojit
+@jit(argtypes=[float64[:], float64[:,:], float64, float64[:]])
+def interp_multi_scalar(xref, yref, x, output):
+    """
+    parameters
+    ----------
+    xref: array
+        shape (n,)
+    yref: array
+        shape (n,ndim)
+    x: scalar
+        point at which to interpolate
+    output: array
+        shape (ndim,)
+    """
+
+    np=xref.size
+    ndim=output.size
+
+    ilo = binary_search(xref, x)
+    if (ilo >= (np-1)):
+        ilo = np-2
+    ihi = ilo + 1
+
+    for i in xrange(ndim):
+        output[i] = (x-xref[ilo])*(yref[ihi,i] - yref[ilo,i])/(xref[ihi]-xref[ilo]) + yref[ilo,i]
+
+
+
+def interp_multi_array(xref, yref, x):
+    """
+    parameters
+    ----------
+    xref: array
+        shape (n,)
+    yref: array
+        shape (n,ndim)
+    x: array
+        points at which to interpolate
+    """
+
+    ndim=yref.shape[1]
+    npoints=x.size
+    output=zeros( (npoints, ndim) )
+    res=zeros(ndim)
+    for i in xrange(npoints):
+        interp_multi_scalar(xref, yref, x[i], res)
+        output[i,:] = res
+
+    return output
 
 def convert_hogg(pars):
     """
@@ -34,7 +114,66 @@ def convert_hogg(pars):
 
     return newpars
 
-def fit_spline(pars, nvals, type, order=3):
+def fit_spline(nvals, pars):
+    import biggles
+    import pcolors
+
+    ngauss=pars.shape[1]/2
+    colors=pcolors.rainbow(ngauss)
+
+    ninterp=10000
+    nvals_interp=linspace(nvals[0]-0.001, nvals[-1]+0.001, ninterp)
+
+    #print(binary_search(nvals, nvals_interp[-2]))
+    #print(binary_search(nvals, nvals_interp[-1]))
+    #stop
+
+    vals_interp_all = interp_multi_array(nvals, pars, nvals_interp)
+
+    #w,=numpy.where(numpy.isfinite(vals_interp_all[:,4]) == False)
+    #print(w.size)
+    #print(nvals_interp[w])
+    #print(vals_interp_all[w,4])
+    #stop
+
+    for type in ['T','flux']:
+
+        if type=='T':
+            start=0
+        else:
+            start=ngauss
+
+        plt=biggles.FramedPlot()
+        plt.xlabel='Sersic n'
+        plt.ylabel=type
+
+        for i in xrange(ngauss):
+
+            color=colors[i]
+            vals=pars[:,start+i]
+            vals_interp=vals_interp_all[:,start+i]
+
+            pts=biggles.Points(nvals, vals,
+                               type='filled circle',color=color,size=1.0)
+            crv=biggles.Curve(nvals_interp, vals_interp, type='solid',color=color)
+
+            plt.add( pts, crv )
+
+        plt.ylog=True
+
+        minval=pars.min()
+        maxval=pars.max()
+        plt.xrange = [0.2,6.5]
+        plt.yrange = [0.5*minval, 1.5*maxval]
+
+        dir=fitting.get_dir()
+
+        eps=get_plot_fname(ngauss, type)
+        print(eps)
+        plt.write_eps(eps)
+
+
+def fit_spline_old(pars, nvals, type, order=3):
     import biggles
     import pcolors
 
@@ -59,14 +198,10 @@ def fit_spline(pars, nvals, type, order=3):
 
         vals=pars[:,i]
 
-        #interpolator=InterpolatedUnivariateSpline(nvals,vals,k=order)
-        #vals_interp=interpolator(nvals_interp)
         if order==3:
             interpolator=InterpolatedUnivariateSpline(nvals,vals,k=order)
             vals_interp=interpolator(nvals_interp)
         else:
-            #vals_interp=numpy.lib.function_base.compiled_interp(nvals_interp,
-            #                                                    nvals,
             #                                                    vals)
             interpolator=interp1d(nvals,vals)
             vals_interp=interpolator(nvals_interp)
