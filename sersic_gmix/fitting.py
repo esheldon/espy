@@ -59,14 +59,14 @@ def read_fit(n, ngauss):
     return pars
 
 
-def get_spline_fname(ngauss, order, type='splines', ext='pickle'):
+def get_spline_fname(ngauss, type='splines', ext='pickle'):
     d=get_dir()
-    pfile='sersic-ngauss-%02d-order-%d-%s.%s' % (ngauss,order,type,ext)
+    pfile='sersic-ngauss-%02d-%s.%s' % (ngauss,type,ext)
     pfile=os.path.join(d, pfile)
     return pfile
 
-def get_plot_fname(ngauss, order, type):
-    pfile = get_spline_fname(ngauss, order, type=type, ext='eps')
+def get_plot_fname(ngauss,  type):
+    pfile = get_spline_fname(ngauss, type=type, ext='eps')
     return pfile
 
 def read_spline_data(ngauss):
