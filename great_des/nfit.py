@@ -32,7 +32,7 @@ EM_MAX_ITER=100
 
 _CHECKPOINTS_DEFAULT_MINUTES=[10,30,60,90]
 
-class MedsFit(object):
+class MedsFit(dict):
     def __init__(self, meds_file, truth_file, psf_file, **keys):
         """
         This differs from nfit in gmix_meds in that there is no coadd
@@ -66,48 +66,26 @@ class MedsFit(object):
             psf fits
         """
 
-        self.meds_file=meds_file
-        self.truth_file=truth_file
-        self.psf_file=psf_file
+        self['meds_file']=meds_file
+        self['truth_file']=truth_file
+        self['psf_file']=psf_file
 
         self._load_meds()
         self._load_truth()
         self._load_psf_fobj()
 
-        self.conf={}
-        self.conf.update(keys)
+        self.update(keys)
 
-        self.fitter = keys['fitter']
-        self.fit_model = keys['fit_model']
+        self['psf_ngauss']=get_em_ngauss(self['psf_model'])
+        self['psf_sigma_guess']=self['psf_fwhm_guess']/2.3548200450309493
 
-        self.trim_image=keys.get('trim_image',False)
-        self.nwalkers=keys.get('nwalkers',80)
-        self.burnin=keys.get('burnin',400)
-        self.nstep=keys.get('nstep',800)
-        self.mca_a=keys.get('mca_a',2.0)
-
-        self.do_pqr=keys.get('do_pqr',True)
-
-        self.shear_expand=keys.get('shear_expand',None)
-
-        self._unpack_priors()
+        # make sure some optional ones are set
+        self['shear_expand']=self.get('shear_expand',None)
+        self['obj_range']=self.get('obj_range',None)
+        self['make_plots']=self.get('make_plots',False)
 
         self._setup_checkpoints()
-
-        self.obj_range=keys.get('obj_range',None)
         self._set_index_list()
-
-        self.psf_model=keys['psf_model']
-        self.psf_ngauss=get_em_ngauss(self.psf_model)
-
-        self.psf_fwhm_guess=keys.get('psf_fwhm_guess')
-        self.psf_sigma_guess=self.psf_fwhm_guess/2.3548200450309493
-
-        self.region=keys.get('region','seg_and_sky')
-        self.max_box_size=keys.get('max_box_size',2048)
-
-        self.make_plots=keys.get('make_plots',False)
-        self.prompt=keys.get('prompt',True)
 
         if self._checkpoint_data is None:
             self._make_struct()
@@ -205,7 +183,7 @@ class MedsFit(object):
 
         fitter1=self._fit_em_1gauss(self.psf_image,
                                     jacobian,
-                                    self.psf_sigma_guess)
+                                    self['psf_sigma_guess'])
 
         if fitter1 is None:
             self.res['flags'] = PSF_FIT_FAILURE
@@ -220,7 +198,7 @@ class MedsFit(object):
         fitter=self._fit_em_ngauss(self.psf_image,
                                    jacobian,
                                    psf_gmix1,
-                                   self.psf_ngauss)
+                                   self['psf_ngauss'])
 
         if fitter is None:
             self.res['flags'] = PSF_FIT_FAILURE
@@ -234,7 +212,7 @@ class MedsFit(object):
             self.psf_gmix=psf_gmix
             self.res['psf_gmix']=psf_gmix
 
-            if self.make_plots:
+            if self['make_plots']:
                 self._compare_psf(fitter)
 
     def _fit_galaxy(self):
@@ -249,7 +227,7 @@ class MedsFit(object):
         self._fit_galaxy_em()
         self._fit_galaxy_psf_flux()
 
-        if self.trim_image:
+        if self['trim_image']:
             self._make_trimmed_image()
         self._fit_galaxy_model()
 
@@ -261,9 +239,11 @@ class MedsFit(object):
 
         """
 
+        res=self.res
+
         print("    fitting galaxy with em")
         # first the structural fit
-        sigma_guess = sqrt( self.res['psf_gmix'].get_T()/2.0 )
+        sigma_guess = sqrt( res['psf_gmix'].get_T()/2.0 )
 
         jacobian = self._get_jacobian(self.gal_cen_guess_pix)
 
@@ -283,11 +263,11 @@ class MedsFit(object):
                                         jacobian,
                                         em_gmix)
 
-        self.res['em_gauss_flux'] = flux
-        self.res['em_gauss_flux_err'] = flux_err
-        self.res['em_gauss_cen'] = em_gmix.get_cen()
-        self.res['em_gmix'] = em_gmix
-        self.res['jacobian'] = jacobian
+        res['em_gauss_flux'] = flux
+        res['em_gauss_flux_err'] = flux_err
+        res['em_gauss_cen'] = em_gmix.get_cen()
+        res['em_gmix'] = em_gmix
+        res['jacobian'] = jacobian
 
 
     def _fit_galaxy_psf_flux(self):
@@ -337,13 +317,13 @@ class MedsFit(object):
         Run through and fit all the models
         """
 
-        model=self.fit_model
-        fitter_type=self.fitter
+        model=self['fit_model']
+        fitter_type=self['fitter']
         print('    fitting',model,"using",fitter_type)
 
         if model=='sersic':
             if fitter_type=='mcmc':
-                if self.conf['iter']:
+                if self['iter']:
                     fitter=self._fit_sersic_mcmc_iter()
                 else:
                     fitter=self._fit_sersic_mcmc()
@@ -355,14 +335,15 @@ class MedsFit(object):
         else:
             raise ValueError("bad model: '%s'" % model)
 
-        self.res['galaxy_fitter'] = fitter
-        self.res['galaxy_res'] = fitter.get_result()
-        self.res['flags'] |= self.res['galaxy_res']['flags']
+        res=self.res
+        res['galaxy_fitter'] = fitter
+        res['galaxy_res'] = fitter.get_result()
+        res['flags'] |= res['galaxy_res']['flags']
 
         self._print_galaxy_res()
 
-        if fitter_type=='mcmc' and self.make_plots:
-            self._do_gal_plots(self.res['galaxy_fitter'])
+        if fitter_type=='mcmc' and self['make_plots']:
+            self._do_gal_plots(res['galaxy_fitter'])
 
 
     def _fit_sersic_mcmc(self):
@@ -383,24 +364,25 @@ class MedsFit(object):
                                         jacobian,
                                         psf=res['psf_gmix'],
 
-                                        nwalkers=self.nwalkers,
-                                        burnin=self.burnin,
-                                        nstep=self.nstep,
-                                        mca_a=self.mca_a,
+                                        nwalkers=self['nwalkers'],
+                                        burnin=self['burnin'],
+                                        nstep=self['nstep'],
+                                        mca_a=self['mca_a'],
 
                                         full_guess=full_guess,
 
-                                        shear_expand=self.shear_expand,
+                                        shear_expand=self['shear_expand'],
 
-                                        cen_prior=self.cen_prior,
-                                        T_prior=self.T_prior,
-                                        counts_prior=self.counts_prior,
-                                        g_prior=self.g_prior,
-                                        n_prior=self.n_prior,
-                                        do_pqr=self.do_pqr)
+                                        cen_prior=self['cen_prior'],
+                                        T_prior=self['T_prior'],
+                                        counts_prior=self['counts_prior'],
+                                        g_prior=self['g_prior'],
+                                        n_prior=self['n_prior'],
+                                        do_pqr=self['do_pqr'])
         fitter.go()
 
         return fitter
+
 
     def _fit_sersic_mcmc_iter(self):
         """
@@ -413,11 +395,72 @@ class MedsFit(object):
 
         image,wt,jacobian=self._get_image_data()
 
-        ntry=self.conf['ntry']
+        full_guess=self._get_guess_sersic(self['nwalkers'])
+        fitter=ngmix.fitting.MCMCSersic(image,
+                                        wt,
+                                        jacobian,
+                                        psf=res['psf_gmix'],
+
+                                        nwalkers=self['nwalkers'],
+                                        burnin=self['burnin'],
+                                        nstep=self['nstep'],
+                                        mca_a=self['mca_a'],
+
+                                        full_guess=full_guess,
+
+                                        shear_expand=self['shear_expand'],
+
+                                        cen_prior=self['cen_prior'],
+                                        T_prior=self['T_prior'],
+                                        counts_prior=self['counts_prior'],
+                                        g_prior=self['g_prior'],
+                                        n_prior=self['n_prior'],
+                                        do_pqr=self['do_pqr'])
+
+
+        ntry=self['ntry']
+        for i in xrange(ntry):
+            print("    try: %s/%s" % (i+1,ntry))
+            if i == 0:
+                pos=fitter.run_mcmc(full_guess,self['burnin'])
+                pos=fitter.run_mcmc(pos,self['nstep'])
+            elif i==1:
+                best_pars=fitter.best_pars
+                print_pars(best_pars,front="    first pars: ")
+                full_guess=self._get_guess_sersic_frompars(best_pars)
+
+                pos=fitter.run_mcmc(full_guess,self['burnin'])
+                pos=fitter.run_mcmc(pos,self['nstep'])
+            else:
+                pos=fitter.run_mcmc(pos,self['nstep'])
+
+            if i > 0:
+                if fitter.arate > self['min_arate']:
+                    break
+                else:
+                    print("    arate",fitter.arate,"<",self['min_arate'])
+
+        fitter.calc_result()
+        return fitter
+
+
+
+    def _fit_sersic_mcmc_iter_old(self):
+        """
+        Fit a sersic model, taking guesses from our previous em fits
+        """
+        import ngmix
+        from ngmix.fitting import print_pars
+
+        res=self.res
+
+        image,wt,jacobian=self._get_image_data()
+
+        ntry=self['ntry']
         for i in xrange(ntry):
             print("    try: %s/%s" % (i+1,ntry))
             if i==0:
-                full_guess=self._get_guess_sersic(self.nwalkers)
+                full_guess=self._get_guess_sersic(self['nwalkers'])
             else:
                 best_pars=fitter.best_pars
                 print_pars(best_pars,front="    first pars: ")
@@ -428,21 +471,21 @@ class MedsFit(object):
                                             jacobian,
                                             psf=res['psf_gmix'],
 
-                                            nwalkers=self.nwalkers,
-                                            burnin=self.burnin,
-                                            nstep=self.nstep,
-                                            mca_a=self.mca_a,
+                                            nwalkers=self['nwalkers'],
+                                            burnin=self['burnin'],
+                                            nstep=self['nstep'],
+                                            mca_a=self['mca_a'],
 
                                             full_guess=full_guess,
 
-                                            shear_expand=self.shear_expand,
+                                            shear_expand=self['shear_expand'],
 
-                                            cen_prior=self.cen_prior,
-                                            T_prior=self.T_prior,
-                                            counts_prior=self.counts_prior,
-                                            g_prior=self.g_prior,
-                                            n_prior=self.n_prior,
-                                            do_pqr=self.do_pqr)
+                                            cen_prior=self['cen_prior'],
+                                            T_prior=self['T_prior'],
+                                            counts_prior=self['counts_prior'],
+                                            g_prior=self['g_prior'],
+                                            n_prior=self['n_prior'],
+                                            do_pqr=self['do_pqr'])
             fitter.go()
 
         return fitter
@@ -460,7 +503,7 @@ class MedsFit(object):
 
         if lmres['flags'] != 0:
             print("    LM failed, using standard guess instead")
-            full_guess=self._get_guess_sersic(self.nwalkers)
+            full_guess=self._get_guess_sersic(self['nwalkers'])
         else:
             pars=lmres['pars']
             #print_pars(pars,front="    LM pars: ")
@@ -483,7 +526,7 @@ class MedsFit(object):
 
         random_n=False
         start_pars=None
-        ntry=self.conf['ntry_lm']
+        ntry=self['ntry_lm']
         for i in xrange(ntry):
 
             guess=self._get_guess_sersic(1, random_n=random_n, pars=start_pars)
@@ -499,13 +542,13 @@ class MedsFit(object):
 
                                            psf=res['psf_gmix'],
 
-                                           lm_pars=self.conf['lm_pars'],
+                                           lm_pars=self['lm_pars'],
 
-                                           cen_prior=self.cen_prior,
-                                           T_prior=self.T_prior,
-                                           counts_prior=self.counts_prior,
-                                           g_prior=self.g_prior,
-                                           n_prior=self.n_prior)
+                                           cen_prior=self['cen_prior'],
+                                           T_prior=self['T_prior'],
+                                           counts_prior=self['counts_prior'],
+                                           g_prior=self['g_prior'],
+                                           n_prior=self['n_prior'])
             tfitter.go()
 
             tres=tfitter.get_result()
@@ -554,10 +597,10 @@ class MedsFit(object):
 
         shapes=get_shape_guess(g1, g2, num, width=widths[1])
 
-        n_prior=self.n_prior
+        n_prior=self['n_prior']
 
         if random_n:
-            nvals = self.n_prior.sample(num)
+            nvals = n_prior.sample(num)
         else:
             nvals=zeros(num)
             nvals[:] = 0.5*(n_prior.minval+n_prior.maxval)
@@ -582,10 +625,10 @@ class MedsFit(object):
         """
         Guess centered on the input pars
         """
-        nwalkers = self.nwalkers
+        nwalkers = self['nwalkers']
 
-        nmin=self.n_prior.minval
-        nmax=self.n_prior.maxval
+        nmin=self['n_prior'].minval
+        nmax=self['n_prior'].maxval
 
         guess=zeros( (nwalkers, 7) )
         guess[:,0] = pars[0] + 0.01*srandu(nwalkers)
@@ -623,8 +666,8 @@ class MedsFit(object):
         mindex=self.mindex
         
         self.image = self.meds.get_cutout(mindex,0).astype('f8')
-        if self.conf['noisefree']:
-            self.wt = 0*self.image + (1.0/self.conf['skynoise']**2)
+        if self['noisefree']:
+            self.wt = 0*self.image + (1.0/self['skynoise']**2)
         else:
             self.wt = self.meds.get_cutout(mindex,0,type='weight')
 
@@ -684,7 +727,6 @@ class MedsFit(object):
         """
         import ngmix
         from ngmix.gexceptions import GMixMaxIterEM, GMixRangeError
-        conf=self.conf
 
         im_with_sky, sky = ngmix.em.prep_image(im)
 
@@ -832,11 +874,10 @@ class MedsFit(object):
 
 
     def _get_em_pars(self):
-        conf=self.conf
         if self.fitting_galaxy:
-            return conf['gal_em_ntry'], conf['gal_em_maxiter'], conf['gal_em_tol']
+            return self['gal_em_ntry'], self['gal_em_maxiter'], self['gal_em_tol']
         else:
-            return conf['psf_em_ntry'], conf['psf_em_maxiter'], conf['psf_em_tol']
+            return self['psf_em_ntry'], self['psf_em_maxiter'], self['psf_em_tol']
 
     def _make_trimmed_image(self):
         res=self.res
@@ -846,16 +887,16 @@ class MedsFit(object):
         em_gmix=res['em_gmix']
 
         T=em_gmix.get_T()
-        cen=array(em_gmix.get_cen())/self.pixel_scale
+        cen=array(em_gmix.get_cen())/self['pixel_scale']
 
         cen = cen + cen_jacob
 
-        sigma=sqrt(T/2.)/self.pixel_scale
+        sigma=sqrt(T/2.)/self['pixel_scale']
         #print("cen:",cen)
         #print("from gauss:",res['em_gmix'])
         #print("got T:",T,"sigma (pixels):",sigma)
 
-        radius = 5.0*sigma
+        radius = sigma*self['trim_nsigma']
 
         minrow=int(cen[0]-radius)
         maxrow=int(cen[0]+radius+1)
@@ -887,7 +928,7 @@ class MedsFit(object):
         Get the appropriate image data for the current object.
         """
 
-        if self.trim_image:
+        if self['trim_image']:
             image=self.trimmed_image
             wt=self.trimmed_wt
             jacobian=self.res['trimmed_jacobian']
@@ -903,7 +944,7 @@ class MedsFit(object):
         """
         import images
 
-        model=self.conf['psf_model']
+        model=self['psf_model']
 
         model_image = fitter.make_image(counts=self.psf_image.sum())
 
@@ -930,7 +971,7 @@ class MedsFit(object):
         """
         import images
 
-        model=self.fit_model
+        model=self['fit_model']
 
         gmix = fitter.get_gmix()
 
@@ -961,7 +1002,7 @@ class MedsFit(object):
         Plot the trials
         """
 
-        model=self.fit_model
+        model=self['fit_model']
         width,height=800,800
 
         tup=fitter.make_plots(title=model)
@@ -984,82 +1025,9 @@ class MedsFit(object):
 
         print_pars(res['pars'], front="    pars: ")
         print_pars(res['pars_err'], front="    err:  ")
-
-        #self._print_galaxy_cen(res)
-        #self._print_galaxy_shape(res)
-        #self._print_galaxy_T(res)
-        #self._print_galaxy_flux(res)
-
-        #if self.fit_model=='sersic':
-        #    self._print_galaxy_n(res)
         
         if 'arate' in res:
             print('        arate:',res['arate'])
-
-    def _print_galaxy_n(self, res):
-        """
-        print the center
-        """
-        n=res['pars'][6]
-        n_err=res['pars_err'][6]
-        mess='        n: %.4g +/- %.4g'
-        mess = mess % (n, n_err)
-        print(mess)
-
-
-    def _print_galaxy_cen(self, res):
-        """
-        print the center
-        """
-        pars=res['pars']
-        perr=res['pars_err']
-        mess='        cen: %.4g +/- %.4g %.4g +/- %.4g'
-        mess = mess % (pars[0],perr[0],pars[1],perr[1])
-        print(mess)
-
-    def _print_galaxy_shape(self, res):
-        """
-        print shape info
-        """
-        g1=res['pars'][2]
-        g1err=sqrt(res['pars_cov'][2,2])
-        g2=res['pars'][3]
-        g2err=sqrt(res['pars_cov'][3,3])
-
-        mess='        g1: %.4g +/- %.4g g2: %.4g +/- %.4g'
-        mess = mess % (g1,g1err,g2,g2err)
-        print(mess)
-
-    def _print_galaxy_flux(self, res):
-        """
-        print in a nice format
-        """
-
-        flux = res['pars'][5:].sum()
-        flux_err = sqrt( res['pars_cov'][5:, 5:].sum() )
-        s2n=flux/flux_err
-
-        print('        flux: %s +/- %s Fs2n: %s' % (flux,flux_err,s2n))
-
-    def _print_galaxy_T(self, res):
-        """
-        print T, Terr, Ts2n and sigma
-        """
-
-        T = res['pars'][4]
-        Terr = sqrt( res['pars_cov'][4,4] )
-
-        if Terr > 0:
-            Ts2n=T/Terr
-        else:
-            Ts2n=-9999.0
-        if T > 0:
-            sigma=sqrt(T/2.)
-        else:
-            sigma=-9999.0
-
-        tup=(T,Terr,Ts2n,sigma)
-        print('        T: %s +/- %s Ts2n: %s sigma: %s' % tup)
 
 
     def _copy_to_output(self):
@@ -1070,7 +1038,6 @@ class MedsFit(object):
         dindex=self.dindex
         res=self.res
         data=self.data
-        conf=self.conf
 
         # overall flags, model flags copied below
         data['flags'][dindex] = res['flags']
@@ -1084,7 +1051,6 @@ class MedsFit(object):
         """
 
         dindex=self.dindex
-        conf=self.conf
         allres = self.res
 
         data=self.data
@@ -1129,13 +1095,12 @@ class MedsFit(object):
 
         if 'arate' in res:
             data['arate'][dindex] = res['arate']
-            data['tau'][dindex] = res['tau']
 
         for sn in _stat_names:
             if sn in res:
                 data[sn][dindex] = res[sn]
 
-        if conf['do_pqr']:
+        if self['do_pqr']:
             data['P'][dindex] = res['P']
             data['Q'][dindex,:] = res['Q']
             data['R'][dindex,:,:] = res['R']
@@ -1145,43 +1110,43 @@ class MedsFit(object):
         Load all listed meds files
         """
 
-        print(self.meds_file)
-        self.meds = meds.MEDS(self.meds_file)
+        print(self['meds_file'])
+        self.meds = meds.MEDS(self['meds_file'])
         self.meds_meta=self.meds.get_meta()
         self.nobj_tot = self.meds.size
 
         self.mindex=0
         jtmp=self._get_jacobian([0.0, 0.0])
 
-        self.pixel_scale = jtmp.get_scale()
-        print("pixel scale:",self.pixel_scale)
+        self['pixel_scale'] = jtmp.get_scale()
+        print("pixel scale:",self['pixel_scale'])
 
     def _load_truth(self):
         """
         load the truth file for getting the psf index
         """
         import fitsio
-        print(self.truth_file)
-        self.truth = fitsio.read(self.truth_file,lower=True)
+        print(self['truth_file'])
+        self.truth = fitsio.read(self['truth_file'],lower=True)
         
     def _load_psf_fobj(self):
         """
         Load the psf file as a FITS object
         """
         import fitsio
-        print(self.psf_file)
-        self.psf_fobj = fitsio.FITS(self.psf_file)
+        print(self['psf_file'])
+        self.psf_fobj = fitsio.FITS(self['psf_file'])
 
     def _set_index_list(self):
         """
         set the list of indices to be processed
         """
-        if self.obj_range is None:
+        if self['obj_range'] is None:
             start=0
             end=self.nobj_tot-1
         else:
-            start=self.obj_range[0]
-            end=self.obj_range[1]
+            start=self['obj_range'][0]
+            end=self['obj_range'][1]
 
         self.index_list = numpy.arange(start,end+1)
 
@@ -1190,37 +1155,37 @@ class MedsFit(object):
         """
         Set up the checkpoint times in minutes and data
         """
-        self.checkpoints = self.conf.get('checkpoints',_CHECKPOINTS_DEFAULT_MINUTES)
-        self.n_checkpoint    = len(self.checkpoints)
-        self.checkpointed    = [0]*self.n_checkpoint
-        self.checkpoint_file = self.conf.get('checkpoint_file',None)
+        self['checkpoints'] = self.get('checkpoints',_CHECKPOINTS_DEFAULT_MINUTES)
+        self['n_checkpoint']    = len(self['checkpoints'])
+        self['checkpointed']    = [0]*self['n_checkpoint']
+        self['checkpoint_file'] = self.get('checkpoint_file',None)
 
         self._set_checkpoint_data()
 
-        if self.checkpoint_file is not None:
-            self.do_checkpoint=True
+        if self['checkpoint_file'] is not None:
+            self['do_checkpoint']=True
         else:
-            self.do_checkpoint=False
+            self['do_checkpoint']=False
 
     def _set_checkpoint_data(self):
         """
         See if checkpoint data was sent
         """
-        self._checkpoint_data=self.conf.get('checkpoint_data',None)
+        self._checkpoint_data=self.get('checkpoint_data',None)
         if self._checkpoint_data is not None:
             self.data=self._checkpoint_data['data']
 
     def _try_checkpoint(self, tm):
         """
         Checkpoint at certain intervals.  
-        Potentially modified self.checkpointed
+        Potentially modified self['checkpointed']
         """
 
         should_checkpoint, icheck = self._should_checkpoint(tm)
 
         if should_checkpoint:
             self._write_checkpoint(tm)
-            self.checkpointed[icheck]=1
+            self['checkpointed'][icheck]=1
 
     def _should_checkpoint(self, tm):
         """
@@ -1230,13 +1195,13 @@ class MedsFit(object):
         should_checkpoint=False
         icheck=-1
 
-        if self.do_checkpoint:
+        if self['do_checkpoint']:
             tm_minutes=tm/60
 
-            for i in xrange(self.n_checkpoint):
+            for i in xrange(self['n_checkpoint']):
 
-                checkpoint=self.checkpoints[i]
-                checkpointed=self.checkpointed[i]
+                checkpoint=self['checkpoints'][i]
+                checkpointed=self['checkpointed'][i]
 
                 if tm_minutes > checkpoint and not checkpointed:
                     should_checkpoint=True
@@ -1252,23 +1217,10 @@ class MedsFit(object):
         import fitsio
 
         print('checkpointing at',tm/60,'minutes')
-        print(self.checkpoint_file)
+        print(self['checkpoint_file'])
 
-        with fitsio.FITS(self.checkpoint_file,'rw',clobber=True) as fobj:
+        with fitsio.FITS(self['checkpoint_file'],'rw',clobber=True) as fobj:
             fobj.write(self.data, extname="model_fits")
-
-    def _unpack_priors(self):
-        conf=self.conf
-
-        self.T_prior=conf['T_prior']
-        self.counts_prior=conf['counts_prior']
-        self.g_prior=conf['g_prior']
-
-        self.n_prior = conf.get('n_prior',None)
-
-        # in arcsec (or units of jacobian)
-        self.cen_prior=conf.get("cen_prior",None)
-
 
     def _make_struct(self):
         """
@@ -1276,7 +1228,7 @@ class MedsFit(object):
         """
         import ngmix
 
-        np=ngmix.gmix.get_model_npars(self.fit_model)
+        np=ngmix.gmix.get_model_npars(self['fit_model'])
 
         dt=[('number','i4'),
             ('processed','i1'),
@@ -1306,10 +1258,10 @@ class MedsFit(object):
             ('dof','f8'),
            ]
 
-        if self.fitter == 'mcmc':
-            dt += [('arate','f8'), ('tau','f8')]
+        if self['fitter'] == 'mcmc':
+            dt += [('arate','f8')]
 
-        if self.do_pqr:
+        if self['do_pqr']:
             dt += [('P', 'f8'),
                    ('Q', 'f8', 2),
                    ('R', 'f8', (2,2))]
@@ -1337,10 +1289,7 @@ class MedsFit(object):
         data['s2n_w'] = DEFVAL
         data['chi2per'] = PDEFVAL
 
-        if self.fitter=='mcmc':
-            data['tau'] = PDEFVAL
-
-        if self.do_pqr:
+        if self['do_pqr']:
             data['P'] = DEFVAL
             data['Q'] = DEFVAL
             data['R'] = DEFVAL

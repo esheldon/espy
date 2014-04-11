@@ -1,5 +1,5 @@
 # uses old style names
-run: "nfit-noisefree-01"
+run: "nfit-noisefree-02"
 noisefree: true
 # noise to assume for noise free images
 skynoise: 0.05
@@ -36,9 +36,13 @@ psf_fwhm_guess: 0.9
 
 fit_model: "sersic"
 trim_image: True
+trim_nsigma: 5
 
+# first iter is just burnin/step
+# second restarted at best position, burning/step
+# rest are just running nstep to get better arate
 iter: True
-ntry: 2
+ntry: 4
 
 mca_a: 2.0
 nwalkers: 80
@@ -46,6 +50,8 @@ nwalkers: 80
 #nstep: 800
 burnin: 400
 nstep: 200
+
+min_arate: 0.43
 
 ntry_lm: 5
 
