@@ -12,7 +12,7 @@ import fitsio
 import sersic_gmix
 
 from sersic_gmix.fitting import get_fname, read_fit
-from sersic_gmix.spline_fitting import fit_spline
+from sersic_gmix.spline_fitting import fit_spline, fit_spline_old
 
 import esutil as eu
 
@@ -22,8 +22,12 @@ from optparse import OptionParser
 
 parser=OptionParser(__doc__)
 parser.add_option('--ngauss',default=None,help="number of gaussians, required")
+parser.add_option('--old',action='store_true',help="use old spline fitting")
 
 def get_pars(nvals, ngauss):
+    """
+    Read the fit and run convert_hogg on the data so T comes first
+    """
     plist=[read_fit(n,ngauss) for n in nvals]
 
     ndata=len(plist)
@@ -57,7 +61,11 @@ def main():
 
     pars = get_pars(nvals, ngauss)
 
-    fit_spline(nvals, pars)
+    if options.old:
+        fit_spline_old(pars, nvals, 'T', order=3)
+        fit_spline_old(pars, nvals, 'flux', order=3)
+    else:
+        fit_spline(nvals, pars)
 
     fitsname=sersic_gmix.fitting.get_combined_fname(ngauss)
     print(fitsname)

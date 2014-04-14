@@ -1,4 +1,4 @@
-# uses old style names
+# This one was mcmc, but had problems with interpolation
 run: "nfit-noisefree-02"
 noisefree: true
 # noise to assume for noise free images

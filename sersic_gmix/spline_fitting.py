@@ -124,17 +124,7 @@ def fit_spline(nvals, pars):
     ninterp=10000
     nvals_interp=linspace(nvals[0]-0.001, nvals[-1]+0.001, ninterp)
 
-    #print(binary_search(nvals, nvals_interp[-2]))
-    #print(binary_search(nvals, nvals_interp[-1]))
-    #stop
-
     vals_interp_all = interp_multi_array(nvals, pars, nvals_interp)
-
-    #w,=numpy.where(numpy.isfinite(vals_interp_all[:,4]) == False)
-    #print(w.size)
-    #print(nvals_interp[w])
-    #print(vals_interp_all[w,4])
-    #stop
 
     for type in ['T','flux']:
 
@@ -182,8 +172,13 @@ def fit_spline_old(pars, nvals, type, order=3):
     if order != 3 and order != 1:
         raise ValueError("order 1 or 3")
 
-    ngauss=pars.shape[1]
+    ngauss=pars.shape[1]/2
     colors=pcolors.rainbow(ngauss)
+
+    if type=='T':
+        start=0
+    else:
+        start=ngauss
 
     plt=biggles.FramedPlot()
     plt.xlabel='Sersic n'
@@ -196,7 +191,7 @@ def fit_spline_old(pars, nvals, type, order=3):
 
         color=colors[i]
 
-        vals=pars[:,i]
+        vals=pars[:,start+i]
 
         if order==3:
             interpolator=InterpolatedUnivariateSpline(nvals,vals,k=order)
@@ -218,11 +213,12 @@ def fit_spline_old(pars, nvals, type, order=3):
     plt.xrange = [0.2,6.5]
     plt.yrange = [0.5*minval, 1.5*maxval]
 
-    dir=fitting.get_dir()
+    #dir=fitting.get_dir()
 
-    eps=get_plot_fname(ngauss, order, type)
-    print(eps)
-    plt.write_eps(eps)
+    #eps=get_plot_fname(ngauss, order, type)
+    #print(eps)
+    #plt.write_eps(eps)
+    plt.show()
 
 
 def sort_by_T(data):

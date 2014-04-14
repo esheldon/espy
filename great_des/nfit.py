@@ -357,7 +357,6 @@ class MedsFit(dict):
 
         image,wt,jacobian=self._get_image_data()
 
-        full_guess=self._get_guess_sersic_maxlike()
 
         fitter=ngmix.fitting.MCMCSersic(image,
                                         wt,
@@ -365,11 +364,7 @@ class MedsFit(dict):
                                         psf=res['psf_gmix'],
 
                                         nwalkers=self['nwalkers'],
-                                        burnin=self['burnin'],
-                                        nstep=self['nstep'],
                                         mca_a=self['mca_a'],
-
-                                        full_guess=full_guess,
 
                                         shear_expand=self['shear_expand'],
 
@@ -379,7 +374,11 @@ class MedsFit(dict):
                                         g_prior=self['g_prior'],
                                         n_prior=self['n_prior'],
                                         do_pqr=self['do_pqr'])
-        fitter.go()
+
+        full_guess=self._get_guess_sersic_maxlike()
+        pos=fitter.run_mcmc(full_guess,self['burnin'])
+        pos=fitter.run_mcmc(pos,self['nstep'])
+        fitter.calc_result()
 
         return fitter
 
@@ -1375,6 +1374,11 @@ def get_shape_guess(g1, g2, n, width=0.01):
     """
     import ngmix
     from ngmix.gexceptions import GMixRangeError
+
+    gtot = sqrt(g1**2 + g2**2)
+    if gtot > 0.98:
+        g1 = g1*0.9
+        g2 = g2*0.9
 
     guess=zeros( (n, 2) )
     shape=ngmix.Shape(g1, g2)

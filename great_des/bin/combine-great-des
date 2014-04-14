@@ -5,9 +5,10 @@
 combine outputs
 """
 
+from __future__ import print_function
+
 import os,sys
 import fitsio
-import esutil as eu
 
 from great_des import files
 
@@ -27,27 +28,36 @@ def main():
 
     conf['gnum'] = gnum
 
-    for fnum in xrange(conf['nf']):
-        conf['fnum'] = fnum
+    nper=conf['nper']
 
-        low,high = files.get_chunk_ranges(**conf)
-        n=len(low)
+    output_file = files.get_output_file(**conf)
+    print(output_file)
 
-        dlist=[]
-        for i in xrange(n):
-            conf['start'] = low[i]
-            conf['end'] = high[i]
-            datai = files.read_output(**conf)
-            dlist.append(datai)
+    first=True
+    with fitsio.FITS(output_file,'rw',clobber=True) as fobj:
+        for fnum in xrange(conf['nf']):
+            conf['fnum'] = fnum
 
-    data=eu.numpy_util.combine_arrlist(dlist)
+            low,high = files.get_chunk_ranges(**conf)
+            n=len(low)
 
-    del conf['start']
-    del conf['end']
-    del conf['fnum']
+            dlist=[]
+            for i in xrange(n):
+                conf['start'] = low[i]
+                conf['end'] = high[i]
+                data = files.read_output(**conf)
 
-    fname = files.get_output_file(**conf)
-    print 'writing:',fname
-    fitsio.write(fname, data, clobber=True)
+                if data.size != nper:
+                    err="data size mismatch: expected %d got %d"
+                    raise IOError(err % (nper,data.size))
+
+
+                if first:
+                    fobj.write(data)
+                    first=False
+                else:
+                    fobj[-1].append(data)
+
+    print(output_file)
 
 main()
