@@ -15,6 +15,125 @@ g_max=0.9
 
 MIN_COVAR=1.e-6
 
+class CosmosSersicN(object):
+    def __init__(self, n_gauss=10):
+        import ngmix
+        self.data=files.read_my_lackner_sersicn_fits(n_gauss)
+        self.n_gauss=n_gauss
+
+        self.gmnd=ngmix.gmix.GMixND(self.data['weights'],
+                                    self.data['means'],
+                                    self.data['covars'])
+
+        self._make_gmm()
+
+    def get_prob_scalar(self, n):
+        """
+        Additional checks on bounds over GMixND.  Scalar input.
+        """
+        from ngmix.priors import LOWVAL
+        if not self.check_bounds_scalar(n):
+            return LOWVAL
+        else:
+            return self.gmnd.get_prob_scalar(n)
+
+    def get_lnprob_scalar(self, n):
+        """
+        Additional checks on bounds over GMixND.  Scalar input.
+        """
+        from ngmix.priors import LOWVAL
+        if not self.check_bounds_scalar(n):
+            return LOWVAL
+        else:
+            return self.gmnd.get_lnprob_scalar(n)
+
+    def get_prob_array(self, n):
+        """
+        Additional checks on bounds over GMixND.  Array input.
+        """
+        from ngmix.priors import LOWVAL
+        p=numpy.zeros(n.size)
+        w=self.check_bounds_array(n)
+        if w.size > 0:
+            p[w]=self.gmnd.get_prob_array(n[w])
+        return p
+
+    def get_lnprob_array(self, n):
+        """
+        Additional checks on bounds over GMixND.  Array input.
+        """
+        from ngmix.priors import LOWVAL
+        lnp=numpy.zeros(n.size) + LOWVAL
+        w=self.check_bounds_array(n)
+        if w.size > 0:
+            lnp[w]=self.gmnd.get_lnprob_array(n[w])
+        return lnp
+
+    def check_bounds_scalar(self, n):
+        """
+        Check bounds on scalar input
+        """
+        from ngmix.gexceptions import GMixRangeError
+        if n < n_min or n > n_max:
+            raise GMixRangeError("n out of range")
+        return self.gmnd.get_prob_scalar(n)
+
+    def check_bounds_array(self, n):
+        """
+        Check bounds on scalar input
+        """
+        w,=numpy.where( (n > n_min) & (n < n_max) )
+        return w
+ 
+    def sample(self, n=None):
+        if n is None:
+            n=1
+            is_scalar=True
+        else:
+            is_scalar=False
+
+        samples=numpy.zeros(n)
+
+        nleft=n
+        ngood=0
+        while nleft > 0:
+
+            tsamples=self.gmm.sample(nleft).ravel()
+            w=self.check_bounds_array(tsamples)
+
+            if w.size > 0:
+                first=ngood
+                last=ngood+w.size
+
+                samples[first:last] = tsamples[w]
+
+                ngood += w.size
+                nleft -= w.size
+
+        if is_scalar:
+            samples=samples[0]
+
+        return samples
+
+
+    def _make_gmm(self):
+        """
+        Make a GMM object for sampling
+        """
+        from sklearn.mixture import GMM
+
+        # these numbers are not used because we set the means, etc by hand
+        gmm=GMM(n_components=self.n_gauss,
+                n_iter=10000,
+                min_covar=1.0e-6,
+                covariance_type='full')
+        gmm.means_ = self.gmnd.means.reshape( (self.n_gauss,1) )
+        gmm.covars_ = self.gmnd.covars.reshape( (self.n_gauss, 1, 1) )
+        gmm.weights_ = self.gmnd.weights
+
+        self.gmm=gmm 
+
+
 def fit_sersic(pars=None, show=False, eps=None, n_gauss=20, n_iter=5000, min_covar=MIN_COVAR):
     """
     Fit functions to sersic n and ellipticity
@@ -50,6 +169,7 @@ def write_sersicn_fit(n_gmm, n_gauss):
                                        ('covars','f8'),
                                        ('icovars','f8'),
                                        ('weights','f8')])
+
     output['means']=n_gmm.means_.ravel()
     output['covars']=n_gmm.covars_.ravel()
     output['weights']=n_gmm.weights_.ravel()
