@@ -33,6 +33,9 @@ def read_cat():
     return fitsio.read(path,lower=True)
 
 def read_fits_cat():
+    """
+    read the lackner fits
+    """
     import fitsio
     path=get_fits_cat_path()
     print 'reading:',path
@@ -50,6 +53,31 @@ def get_gmix_dir(version):
     d=os.environ['COSMOS_DIR']
     d=os.path.join(d,'gmix-fits', version)
     return d
+
+def get_my_lackner_fits_dir():
+    """
+    my fits to lackner distributions
+    """
+    d=os.environ['COSMOS_DIR']
+    d=os.path.join(d,'gmix-fits','lackner-fits')
+    return d
+
+def get_my_lackner_sersicn_fits(n_gauss):
+    """
+    file holding my gaussian fits to lackner sersicn distribution
+    """
+    d=get_my_lackner_fits_dir()
+    fname='lackner-sersicn-gmix-ngauss-%02d.fits' % n_gauss
+    path=os.path.join(d,fname)
+    return path
+
+def read_my_lackner_sersicn_fits(n_gauss):
+    """
+    read file holding my gaussian fits to lackner sersicn distribution
+    """
+    import fitsio
+    fname=get_my_lackner_sersicn_fits(n_gauss)
+    return fitsio.read(fname)
 
 def get_gmix_output_dir(version):
     """

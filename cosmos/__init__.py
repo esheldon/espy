@@ -6,3 +6,5 @@ from . import analysis
 from . import fit_gprior
 from . import fit_tprior
 from . import fit_joint
+
+from . import lackner_fits
