@@ -149,6 +149,22 @@ def make_mcmc_meta(conf, meds_meta, meds_file):
 
     return meta
 
+def get_joint_prior(conf):
+    import ngmix
+    from great3 import joint_prior
+
+    jptype = conf.get('joint_prior_type',None)
+    if jptype==None:
+        jp=None
+    elif 'bdf' in jptype:
+        jp=joint_prior.make_joint_prior_bdf(type=jptype)
+    elif 'sersic' in jptype:
+        jp = joint_prior.make_joint_prior_sersic(type=jptype)
+    else:
+        jp = joint_prior.make_joint_prior_simple(type=jptype)
+
+    return jp
+
 
 
 def get_n_prior(conf):
@@ -206,26 +222,15 @@ def get_counts_prior_ngmix(conf):
 
     return counts_prior
 
-def get_g_prior_ngmix(conf):
+def get_g_prior(conf):
     import ngmix
     g_prior_type=conf['g_prior_type']
 
     if g_prior_type is None:
         return None
 
-    if g_prior_type =='exp':
-        pars=conf['g_prior_pars']
-        parr=numpy.array(pars,dtype='f8')
-        g_prior = ngmix.priors.GPriorM(parr)
-    elif g_prior_type=='cosmos-galfit':
-        g_prior = ngmix.priors.make_gprior_cosmos_galfit()
-    elif g_prior_type=='cosmos-exp':
-        g_prior = ngmix.priors.make_gprior_cosmos_exp()
-    elif g_prior_type=='cosmos-dev':
-        g_prior = ngmix.priors.make_gprior_cosmos_dev()
-    elif g_prior_type =='ba':
-        sigma=conf['g_prior_pars']
-        g_prior = ngmix.priors.GPriorBA(sigma)
+    if g_prior_type=='cosmos-sersic':
+        g_prior=ngmix.priors.make_gprior_cosmos_sersic(type='erf')
     else:
         raise ValueError("implement gprior '%s'")
 
@@ -239,25 +244,6 @@ def get_cen_prior_ngmix(conf):
         return ngmix.priors.CenPrior(0.0, 0.0, width,width)
     else:
         return None
-
-def get_g_prior(conf):
-    import gmix_image
-    if 'g_prior_type' in conf:
-        gprior_type=conf['g_prior_type']
-    elif 'gprior_type' in conf:
-        gprior_type=conf['gprior_type']
-    else:
-        gprior_type=None
-
-    if gprior_type is None or gprior_type=='None':
-        return None
-    elif gprior_type =='flat':
-        return gmix_image.priors.GPriorFlat()
-    elif gprior_type=='exp':
-        pars=conf['gprior_pars']
-        return gmix_image.priors.GPriorExp(pars)
-    else:
-        raise ValueError("implement gprior '%s'")
 
 
 def get_sub_fname(fname, rng, work_dir):
@@ -326,11 +312,12 @@ def run_fitter(files, conf, checkpoint_data=None):
     import great_des
     import ngmix
     
-    conf['g_prior']  = get_g_prior_ngmix(conf)
+    conf['g_prior']  = get_g_prior(conf)
     conf['cen_prior'] = get_cen_prior_ngmix(conf)
     conf['T_prior']  = get_T_prior_ngmix(conf)
     conf['counts_prior']  = get_counts_prior_ngmix(conf)
     conf['n_prior'] = get_n_prior(conf)
+    conf['joint_prior'] = get_joint_prior(conf)
 
     gm=great_des.nfit.MedsFit(files['meds'],
                               files['truth'],

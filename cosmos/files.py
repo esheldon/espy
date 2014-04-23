@@ -254,7 +254,7 @@ Notification    = Never
 # Run this exe with these args
 Executable      = {gmix_dir}/master.sh
 
-Image_Size      = 700000
+Image_Size      = 1000000
 
 GetEnv = True
 
@@ -317,7 +317,6 @@ def make_master(config_file):
 
     text="""#!/bin/bash
 source ~/.bashrc
-module load galsim
 
 beg=$1
 end=$2

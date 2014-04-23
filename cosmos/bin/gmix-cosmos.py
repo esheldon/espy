@@ -29,8 +29,8 @@ def main():
     if obj_range is not None:
         obj_range=[int(x) for x in obj_range.split(',')]
 
-    models=conf['models']
-    del conf['models']
+    model=conf['model']
+    del conf['model']
 
     conf['obj_range']=obj_range
     conf['make_plots']=options.make_plots
@@ -38,7 +38,7 @@ def main():
     if options.make_plots:
         conf['plot_base']=output_file.replace('.fits','')
 
-    cosmos.gmix_cosmos.fit_cosmos(models,
+    cosmos.gmix_cosmos.fit_cosmos(model,
                                   output_file,
                                   **conf)
 

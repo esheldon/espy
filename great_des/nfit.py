@@ -192,6 +192,8 @@ class MedsFit(dict):
 
 
         psf_gmix1=fitter1.get_gmix()
+        print("psf fwhm1:",2.35*sqrt( psf_gmix1.get_T()/2. ))
+
         self.psf_gmix1=psf_gmix1
         self.res['psf_gmix_em1']=psf_gmix1
 
@@ -332,6 +334,8 @@ class MedsFit(dict):
                 fitter=self._fit_sersic_lm()
             else:
                 raise ValueError("bad fitter type: '%s'" % fitter_type)
+        elif model in ['exp','dev']:
+            fitter=self._fit_simple_mcmc()
         else:
             raise ValueError("bad model: '%s'" % model)
 
@@ -444,50 +448,6 @@ class MedsFit(dict):
 
 
 
-    def _fit_sersic_mcmc_iter_old(self):
-        """
-        Fit a sersic model, taking guesses from our previous em fits
-        """
-        import ngmix
-        from ngmix.fitting import print_pars
-
-        res=self.res
-
-        image,wt,jacobian=self._get_image_data()
-
-        ntry=self['ntry']
-        for i in xrange(ntry):
-            print("    try: %s/%s" % (i+1,ntry))
-            if i==0:
-                full_guess=self._get_guess_sersic(self['nwalkers'])
-            else:
-                best_pars=fitter.best_pars
-                print_pars(best_pars,front="    first pars: ")
-                full_guess=self._get_guess_sersic_frompars(best_pars)
-
-            fitter=ngmix.fitting.MCMCSersic(image,
-                                            wt,
-                                            jacobian,
-                                            psf=res['psf_gmix'],
-
-                                            nwalkers=self['nwalkers'],
-                                            burnin=self['burnin'],
-                                            nstep=self['nstep'],
-                                            mca_a=self['mca_a'],
-
-                                            full_guess=full_guess,
-
-                                            shear_expand=self['shear_expand'],
-
-                                            cen_prior=self['cen_prior'],
-                                            T_prior=self['T_prior'],
-                                            counts_prior=self['counts_prior'],
-                                            g_prior=self['g_prior'],
-                                            n_prior=self['n_prior'],
-                                            do_pqr=self['do_pqr'])
-            fitter.go()
-
-        return fitter
 
 
     def _get_guess_sersic_maxlike(self):
@@ -652,6 +612,173 @@ class MedsFit(dict):
                 ngood += w.size
 
         return guess
+
+
+    def _fit_simple_mcmc(self):
+        """
+        Fit the simple model, taking guesses from our
+        previous em fits
+        """
+        import ngmix
+
+        if self['joint_prior'] is not None:
+            return self._fit_simple_mcmc_joint(model)
+
+        res=self.res
+
+        image,wt,jacobian=self._get_image_data()
+
+        # possible value errors
+        nretry=10
+        for i in xrange(nretry):
+            try:
+
+                full_guess=self._get_guess_simple()
+
+                fitter=ngmix.fitting.MCMCSimple(image,
+                                                wt,
+                                                jacobian,
+                                                self['fit_model'],
+                                                psf=res['psf_gmix'],
+
+                                                nwalkers=self['nwalkers'],
+                                                burnin=self['burnin'],
+                                                nstep=self['nstep'],
+                                                mca_a=self['mca_a'],
+
+                                                full_guess=full_guess,
+
+                                                shear_expand=self['shear_expand'],
+
+                                                cen_prior=self['cen_prior'],
+                                                T_prior=self['T_prior'],
+                                                counts_prior=self['counts_prior'],
+                                                g_prior=self['g_prior'],
+
+                                                do_pqr=self['do_pqr'])
+                fitter.go()
+                break
+            except ValueError as err:
+                print("got value error: %s" % str(err))
+
+        return fitter
+
+
+    def _fit_simple_mcmc_joint(self):
+        """
+        Fit the simple model, taking guesses from our
+        previous em fits
+        """
+        import ngmix
+        from ngmix.fitting import MCMCSimpleJointHybrid
+
+        res=self.res
+        conf=self.conf
+
+        ntry=conf['mcmc_ntry']
+        for i in xrange(ntry):
+
+            full_guess=self._get_guess_simple_joint()
+
+            fitter=MCMCSimpleJointHybrid(self.gal_image,
+                                         self.weight_image,
+                                         res['jacob'],
+                                         self['fit_model'],
+                                         psf=res['psf_gmix'],
+
+                                         nwalkers=self['nwalkers'],
+                                         burnin=self['burnin'],
+                                         nstep=self['nstep'],
+                                         mca_a=self['mca_a'],
+
+                                         full_guess=full_guess,
+                                         shear_expand=self['shear_expand'],
+
+                                         cen_prior=self['cen_prior'],
+                                         joint_prior=self['joint_prior'],
+
+                                         do_pqr=self['do_pqr'])
+            fitter.go()
+
+            # guard against rare mcmc problems
+            tres=fitter.get_result()
+            if (tres['pars'] is not None
+                    and tres['flags'] == 0
+                    and abs(tres['pars'][2]) <1 ):
+                break
+            else:
+                print("          bad mcmc result:")
+                pprint(tres)
+                print("          trying again")
+
+        return fitter
+
+
+    def _get_guess_simple(self,
+                          widths=[0.01, 0.01, 0.01, 0.01, 0.01, 0.01]):
+        """
+        Get a guess centered on the truth
+
+        width is relative for T and counts
+        """
+
+
+        res=self.res
+        gmix = res['em_gmix']
+        g1,g2,T = gmix.get_g1g2T()
+        flux = res['em_gauss_flux']
+
+        nwalkers = self['nwalkers']
+        guess=numpy.zeros( (nwalkers, 6) )
+
+        # centers relative to jacobian center
+        guess[:,0] = widths[0]*srandu(nwalkers)
+        guess[:,1] = widths[1]*srandu(nwalkers)
+
+        guess_shape=get_shape_guess(g1, g2, nwalkers, width=widths[2])
+        guess[:,2]=guess_shape[:,0]
+        guess[:,3]=guess_shape[:,1]
+
+        guess[:,4] = get_positive_guess(T,nwalkers,width=widths[4])
+        guess[:,5] = get_positive_guess(flux,nwalkers,width=widths[5])
+
+        return guess
+
+    def _get_guess_simple_joint(self):
+        """
+        Get a guess centered on the truth
+
+        width is relative for T and counts
+        """
+
+        width = 0.01
+
+
+        res=self.res
+        gmix = res['em_gmix']
+        g1,g2,T = gmix.get_g1g2T()
+        F = res['em_gauss_flux']
+
+
+        nwalkers = self['nwalkers']
+        guess=numpy.zeros( (nwalkers, 6) )
+
+        guess[:,0] = width*srandu(nwalkers)
+        guess[:,1] = width*srandu(nwalkers)
+
+        guess_shape=get_shape_guess(g1,g2,nwalkers,width=width)
+        guess[:,2]=guess_shape[:,0]
+        guess[:,3]=guess_shape[:,1]
+
+        guess[:,4] = log10( get_positive_guess(T,nwalkers,width=width) )
+
+        # got anything better?
+        guess[:,5] = log10( get_positive_guess(F,nwalkers,width=width) )
+
+        return guess
+
+
+
 
 
 
