@@ -167,6 +167,20 @@ def get_wq_file(**keys):
     return fname
 
 def get_output_file(**keys):
+    """
+    parameters
+    ----------
+    run: string, keyword
+        String representing the run, e.g. nfit-noisefree-04
+    gnum: int, keyword
+        Integer representing the shear number.
+    fnum: int, optional keyword
+        File number for given gnum
+    start: int, optional keyword
+        Integer representing starting object number
+    end: int, optional keyword
+        Integer representing ending object number
+    """
     d=get_output_dir(**keys)
 
     if 'start' in keys:
@@ -180,6 +194,21 @@ def get_output_file(**keys):
     return fname
 
 def read_output(**keys):
+    """
+    parameters
+    ----------
+    run: string, keyword
+        String representing the run, e.g. nfit-noisefree-04
+    gnum: int, keyword
+        Integer representing the shear number.
+    fnum: int, keyword
+        File number for given gnum
+    start: int, optional keyword
+        Integer representing starting object number
+    end: int, optional keyword
+        Integer representing ending object number
+    """
+
     import fitsio
     fname=get_output_file(**keys)
     print 'reading:',fname
@@ -188,6 +217,15 @@ def read_output(**keys):
 
 
 def get_averaged_file(**keys):
+    """
+    parameters
+    ----------
+    run: string, keyword
+        String representing the run, e.g. nfit-noisefree-04
+    gnum: int, keyword
+        Integer representing the shear number.
+    """
+
     d=get_output_dir(**keys)
     
     if 'gnum' in keys:
@@ -201,6 +239,15 @@ def get_averaged_file(**keys):
     return fname
 
 def read_averaged(**keys):
+    """
+    parameters
+    ----------
+    run: string, keyword
+        String representing the run, e.g. nfit-noisefree-04
+    gnum: int, keyword
+        Integer representing the shear number.
+    """
+
     import fitsio
     fname=get_averaged_file(**keys)
     print 'reading:',fname
