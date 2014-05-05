@@ -6,11 +6,6 @@ import numpy
 from numpy import where
 from . import files
 
-class Namer(object):
-    def __init__(self, front):
-        self.front=front
-    def __call__(self, suffix):
-        return '%s_%s' % (self.front, suffix)
 
 def select_bad_center(data, model):
     """
@@ -27,9 +22,10 @@ def select_bad_center(data, model):
 
     return w
 
-def plot_bad_center(**keys):
+def plot_images(**keys):
     """
-    Plot a random subset of objects with bad centers.
+    Plot a random subset of objects, potentially with 
+    some selection
 
     parameters
     ----------
@@ -37,21 +33,31 @@ def plot_bad_center(**keys):
         The run identifier
     model: keyword, string
         Model name, e.g. 'exp'
-
+    imtype: keyword, string
+        'mosaic' or 'composite'
     num: keyword, int
         Number to make images for.  
+
+    type: keyword, string
+        'bad-center' or 'any'
     """
     import images
 
     model=keys['model']
     num=keys['num']
     seed=keys.get('seed',35)
+    keys['type']=keys.get('type','any')
+    keys['imtype']=keys.get('imtype','mosaic')
+
     numpy.random.seed(seed)
 
     data=files.read_output(**keys)
     m=files.open_meds()
 
-    w=select_bad_center(data, model)
+    if keys['type']=='bad-center':
+        w=select_bad_center(data, model)
+    else:
+        w=numpy.arange(data.size)
 
     r=numpy.random.random(w.size)
     s=r.argsort()
@@ -59,7 +65,7 @@ def plot_bad_center(**keys):
     wplot=w[s[0:num]]
 
     d=files.get_plot_dir(**keys)
-    pf=path.join(d,'mosaic-%(run)s-%(index)06d.png')
+    pf=path.join(d,'%(imtype)s-%(type)s-%(run)s-%(index)06d.png')
     if not os.path.exists(d):
         os.makedirs(d)
 
@@ -68,7 +74,15 @@ def plot_bad_center(**keys):
 
 
         im=m.get_mosaic(index)
-        im=im.transpose()
+
+        if keys['imtype']=='composite':
+            cw=m.get_cseg_mosaic(index)
+            im *= cw
+        elif keys['imtype'] == 'interp':
+            iseg=m.interpolate_coadd_seg_mosaic(index)
+            w=where( (iseg != (index+1)) & (iseg != 0) )
+            im[w] = 0.0
+
 
         plt=images.view(im, title='%s' % index,show=False)
 
@@ -77,7 +91,13 @@ def plot_bad_center(**keys):
 
         print(fname)
 
-        # view transposes image to match IDL
         xsize=1800
-        ysize=xsize*float(im.shape[0])/im.shape[1]
+        ysize=xsize*float(im.shape[1])/im.shape[0]
         plt.write_img(xsize,ysize,fname)
+
+class Namer(object):
+    def __init__(self, front):
+        self.front=front
+    def __call__(self, suffix):
+        return '%s_%s' % (self.front, suffix)
+
