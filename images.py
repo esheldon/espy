@@ -43,7 +43,7 @@ def view(image, **keys):
         color for contour, default 'white' unless type is dens-cont
         then grey.
     transpose: bool
-        Transpose the image.  Default True because of biggles' conventions.
+        Transpose the image.  Default False.
     file: string
         Write the image to the intput file name.  .png will be written
         as a png file, else an eps file.
@@ -53,7 +53,7 @@ def view(image, **keys):
     import biggles
 
     # we need to transpose for biggles to display properly
-    trans = keys.get('transpose',True)
+    trans = keys.get('transpose',False)
 
     im=scale_image(image, **keys)
 
