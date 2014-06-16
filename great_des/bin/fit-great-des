@@ -149,38 +149,6 @@ def make_mcmc_meta(conf, meds_meta, meds_file):
 
     return meta
 
-def get_joint_prior(conf):
-    import ngmix
-    from great3 import joint_prior
-
-    jptype = conf.get('joint_prior_type',None)
-    if jptype==None:
-        jp=None
-    elif 'bdf' in jptype:
-        jp=joint_prior.make_joint_prior_bdf(type=jptype)
-    elif 'sersic' in jptype:
-        jp = joint_prior.make_joint_prior_sersic(type=jptype)
-    else:
-        jp = joint_prior.make_joint_prior_simple(type=jptype)
-
-    return jp
-
-
-
-def get_n_prior(conf):
-    import ngmix
-    n_prior_type=conf['n_prior_type']
-
-    if n_prior_type is None:
-        return None
-
-    if n_prior_type=='flat':
-        pars=conf['n_prior_pars']
-        n_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
-    else:
-        raise ValueError("bad n prior type: %s" % n_prior_type)
-
-    return n_prior
 
 def get_T_prior_ngmix(conf):
     import ngmix
@@ -311,18 +279,33 @@ def run_fitter(files, conf, checkpoint_data=None):
     """
     import great_des
     import ngmix
+    from ngmix.joint_prior import PriorSimpleSep
+    from ngmix.priors import ZDisk2D
     
-    conf['g_prior']  = get_g_prior(conf)
-    conf['cen_prior'] = get_cen_prior_ngmix(conf)
-    conf['T_prior']  = get_T_prior_ngmix(conf)
-    conf['counts_prior']  = get_counts_prior_ngmix(conf)
-    conf['n_prior'] = get_n_prior(conf)
-    conf['joint_prior'] = get_joint_prior(conf)
+    g_prior_flat=ZDisk2D(1.0)
+    g_prior  = get_g_prior(conf)
+    cen_prior = get_cen_prior_ngmix(conf)
+    T_prior  = get_T_prior_ngmix(conf)
+    counts_prior  = get_counts_prior_ngmix(conf)
+
+    prior = PriorSimpleSep(cen_prior,
+                           g_prior,
+                           T_prior,
+                           counts_prior)
+
+    prior_gflat = PriorSimpleSep(cen_prior,
+                                 g_prior_flat,
+                                 T_prior,
+                                 counts_prior)
+
+
 
     gm=great_des.nfit.MedsFit(files['meds'],
                               files['truth'],
                               files['psf'],
                               checkpoint_data=checkpoint_data,
+                              prior=prior,
+                              prior_gflat=prior_gflat,
                               **conf)
     gm.do_fits()
     data=gm.get_data()
