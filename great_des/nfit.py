@@ -364,9 +364,9 @@ class MedsFit(dict):
         res['gauss_fitter'] = gauss_fitter
         res['galaxy_fitter'] = fitter
         res['galaxy_res'] = fitter.get_result()
-        res['flags'] |= res['galaxy_res']['flags']
+        res['flags'] = res['galaxy_res']['flags']
 
-        self._add_shear_info(res, fitter)
+        self._add_shear_info(res['galaxy_res'], fitter)
 
         self._print_galaxy_res(fitter)
 
@@ -847,12 +847,12 @@ class MedsFit(dict):
         #    print("        em gauss not found, not copying pars")
         #    return
 
-        if 'psf_flux' in allres:
-            data['psf_flux'][dindex] = allres['psf_flux']
-            data['psf_flux_err'][dindex] = allres['psf_flux_err']
-        else:
-            print("        psf flux not found, not copying pars")
-            return
+        #if 'psf_flux' in allres:
+        #    data['psf_flux'][dindex] = allres['psf_flux']
+        #    data['psf_flux_err'][dindex] = allres['psf_flux_err']
+        #else:
+        #    print("        psf flux not found, not copying pars")
+        #    return
 
         # allres flags is or'ed with the galaxy fitting flags
         if allres['flags'] != 0:
@@ -867,6 +867,7 @@ class MedsFit(dict):
         flux=pars[5]
         flux_err=sqrt(pars_cov[5, 5])
 
+        data['fit_flags'] = res['flags']
         data['pars'][dindex,:] = pars
         data['pars_cov'][dindex,:,:] = pars_cov
 
@@ -1045,8 +1046,8 @@ class MedsFit(dict):
             #('em_gauss_flux_err','f8'),
             #('em_gauss_cen','f8',2),
 
-            ('psf_flux',    'f8'),
-            ('psf_flux_err','f8'),
+            #('psf_flux',    'f8'),
+            #('psf_flux_err','f8'),
 
             ('fit_flags','i4'),
             ('pars','f8',np),
@@ -1075,8 +1076,8 @@ class MedsFit(dict):
         num=self.index_list.size
         data=zeros(num, dtype=dt)
 
-        data['psf_flux'] = DEFVAL
-        data['psf_flux_err'] = PDEFVAL
+        #data['psf_flux'] = DEFVAL
+        #data['psf_flux_err'] = PDEFVAL
 
         #data['em_gauss_flux'] = DEFVAL
         #data['em_gauss_flux_err'] = PDEFVAL

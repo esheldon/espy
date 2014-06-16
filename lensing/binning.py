@@ -447,7 +447,7 @@ class BinnerBase(dict):
         pa.aspect_ratio = aspect_ratio
 
         pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+        pa.ylabel = r'$\Delta\Sigma_{\times} [M_{sun} pc^{-2}]$'
 
         xrnge = [0.01,60.0]
         yrnge = [-20,20]
