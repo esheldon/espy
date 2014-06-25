@@ -3,15 +3,16 @@ Module:
     mcmc
 
 Classes:
-    MCMC: A class for running Monte Carlo Markov Chains.
-    MCMCTester: A class for testing the MCMC class.
+    MH: A class for running Monte Carlo Markov Chains using
+        metropolis hastings
+    MHTester: A class for testing the MH class.
 
 stats:
     extract_stats: extract mean and covariance
     plot_results: Plot points and histograms for MCMC trials.
 
 testing:
-    test: Run the MCMCTester
+    test: Run the MHTester
     testmany:  Run mutliple realizations of the tester and plot a histogram
         of all the means for all realizations.
 
@@ -284,14 +285,10 @@ def plot_results_separate(trials, **keys):
     return burn_plt, hist_plt
 
 
-
-class MCMC(object):
+class MH(object):
     """
-    Run a Monte Carlo Markov Chain (MCMC).
+    Run a Monte Carlo Markov Chain (MCMC) using metropolis hastings.
     
-    The user inputs an object that has the methods "step" and "get_loglike"
-    that can be used to generate the chain.
-
     parameters
     ----------
     lnprob_func: function or method
@@ -310,15 +307,18 @@ class MCMC(object):
     examples
     ---------
     m=mcmc.MCMC(lnprob_func, stepper, seed=34231)
-    m.run(nstep, par_guess)
+    m.run(pars_start, nstep)
     trials = m.get_trials()
     loglike = m.get_loglike()
     arate = m.get_acceptance_rate()
 
     """
-    def __init__(self, lnprob_func, stepper, seed=None):
+    def __init__(self, lnprob_func, stepper,
+                 seed=None, random_state=None):
         self._lnprob_func=lnprob_func
         self._stepper=stepper
+
+        self.set_random_state(seed=seed, state=random_state)
         self.reset(seed=seed)
 
     def reset(self, seed=None):
@@ -328,24 +328,45 @@ class MCMC(object):
         self._trials=None
         self._loglike=None
         self._accepted=None
-        numpy.random.seed(seed)
 
-    def run(self, nstep, pars_start):
+    def set_random_state(self, seed=None, state=None):
+        """
+        set the random state
+
+        parameters
+        ----------
+        seed: integer, optional
+            If state= is not set, the random state is set to
+            numpy.random.RandomState(seed=seed)
+        state: optional
+            A random number generator with method .uniform()
+        """
+        if state is not None:
+            self._random_state=state
+        else:
+            self._random_state=numpy.random.RandomState(seed=seed)
+
+    def run(self, pars_start, nstep):
         """
         Run the MCMC chain.  Append new steps if trials already
         exist in the chain.
 
         parameters
         ----------
-        nstep: Number of steps in the chain.
-        pars_start:  Starting point for the chain in the n-dimensional
-                parameters space.
+        pars_start: sequence
+            Starting point for the chain in the n-d parameter space.
+        nstep: integer
+            Number of steps in the chain.
         """
         
-        self._init_data(nstep, pars_start)
+        self._init_data(pars_start, nstep)
 
         for i in xrange(1,nstep):
             self._step()
+
+        self._arate=self._accepted.sum()/float(self._accepted.size)
+        return self._trials[-1,:]
+    run_mcmc=run
 
     def get_trials(self):
         """
@@ -363,7 +384,7 @@ class MCMC(object):
         """
         Get the acceptance rate
         """
-        return self._accepted.sum()/float(self._accepted.size)
+        return self._arate
 
     def get_accepted(self):
         """
@@ -375,11 +396,11 @@ class MCMC(object):
         """
         Take the next step in the MCMC chain.  
         
-        Calls the stepper lnprob_func methods sent during
-        construction.  If the new loglike is not greater than the previous, or
-        a uniformly generated random number is greater than the the ratio of
-        new to old likelihoods, the new step is not used, and the new
-        parameters are the same as the old.  Otherwise the new step is kept.
+        Calls the stepper lnprob_func methods sent during construction.  If the
+        new loglike is not greater than the previous, or a uniformly generated
+        random number is greater than the the ratio of new to old likelihoods,
+        the new step is not used, and the new parameters are the same as the
+        old.  Otherwise the new step is kept.
 
         This is an internal function that is called by the .run method.
         It is not intended for call by the user.
@@ -396,7 +417,7 @@ class MCMC(object):
 
         log_likeratio = newlike-oldlike
 
-        randnum = numpy.random.random()
+        randnum = self._random_state.uniform()
         log_randnum = numpy.log(randnum)
 
         # we allow use of -infinity as a sign we are out of bounds
@@ -417,12 +438,12 @@ class MCMC(object):
 
         self._current += 1
 
-    def _init_data(self, nstep, pars_start):
+    def _init_data(self, pars_start, nstep):
         """
         Set the trials and accept array.
         """
 
-        pars_start=array(pars_start,dtype='f8')
+        pars_start=array(pars_start,dtype='f8',copy=False)
         npars = pars_start.size
 
         self._trials   = numpy.zeros( (nstep, npars) )
@@ -437,6 +458,25 @@ class MCMC(object):
         self._loglike[0]  = self._oldlike
         self._accepted[0] = 1
 
+
+
+class GaussStepper(object):
+    """
+    A class to take gaussian steps.
+
+    gs=GausssianStepper(sigmas)
+    newpars = gs(oldpars)
+    """
+    def __init__(self, sigmas):
+        sigmas=numpy.asanyarray(sigmas, dtype='f8', copy=False)
+
+        self._sigmas=sigmas
+        self._ndim=sigmas.size
+
+    def __call__(self, pars):
+        sigmas=self._sigmas
+        return pars + sigmas*randn(sigmas.size)
+    
 def print_stats(means, cov, names=None):
     npar=len(means)
     for i in xrange(npar):
@@ -468,14 +508,14 @@ def extract_maxlike_stats(data, burnin):
 
 
 
-class MCMCTester:
+class MHTester:
     """
 
     A simple class for testing the MCMC code.  This is a good template for how
     to begin your own MCMC project.
 
         import mcmc
-        tc = mcmc.MCMCTester(type="constant")
+        tc = mcmc.MHTester(type="constant")
         tc.run_test()
 
     You can then use the plot_results method to see a histogram of the results.
@@ -509,15 +549,17 @@ class MCMCTester:
             self.yerr[:] = sigma
 
             self.ivar = 1.0/self.yerr**2
-            self.psigma = self.yerr[0]
+
+            # step sizes
+            self.step_sizes = sigma/sqrt(ny)
 
             #self.parguess=val + 3*sigma*randn()
             self.parguess=0.
 
             if verbose:
                 stdout.write('  type: "constant"\n')
-                stdout.write("  true_pars: %s\n  npars: %s\n  psigma: %s\n" %
-                             (self.true_pars,self.npars,self.psigma))
+                stdout.write("  true_pars: %s\n  npars: %s\n  step_sizes: %s\n" %
+                             (self.true_pars,self.npars,self.step_sizes))
 
 
     def get_truepars(self):
@@ -532,7 +574,7 @@ class MCMCTester:
 
     # pars must be an array
     def step(self,pars):
-        return pars + self.psigma*randn(self.npars)
+        return pars + self.step_sizes*randn(self.npars)
 
     def get_loglike(self,pars):
         if self.type == 'constant':
@@ -547,8 +589,8 @@ class MCMCTester:
         if self.verbose:
             stdout.write("  nstep: %s\n" % nstep)
 
-        m=MCMC(self.get_loglike, self.step)
-        m.run(nstep, self.parguess)
+        m=MH(self.get_loglike, self.step)
+        m.run(self.parguess, nstep)
         self.trials = m.get_trials()
         self.loglike = m.get_loglike()
         self.arate = m.get_acceptance_rate()
@@ -698,28 +740,31 @@ class MCMCTester:
 
 
 
-def test(burnin=100, nstep=10000, doplot=False, hardcopy=False):
+def test(burnin=1000, nstep=10000, doplot=False, hardcopy=False):
     """
     Name:
         test
     Purpose:
-        Run the MCMCTester.
+        Run the MHTester.
     """
-    tc = MCMCTester("constant")
+    tc = MHTester("constant")
     tc.run_test(nstep)
     print 'acceptance rate:',tc.arate
     tc.compare_results(doplot=doplot, hardcopy=hardcopy)
 
-def testmany(ntrial):
+def testmany(ntrial, **keys):
     """
     Just do a bunch of realizations and make sure we get the right mean
     """
 
-    tc = MCMCTester("constant")
-    tc.run_multiple(ntrial)
+    tc = MHTester("constant")
+    tc.run_multiple(ntrial, **keys)
     tc.plot_multiple()
 
-def test_line(nstep=10000, doplot=False):
+def test_line(burnin=1000, nstep=10000, doplot=False):
+    """
+    run all steps at once so we can plot burnin phase
+    """
     import esutil
     pars = [1.0,1.0]
     xmin = -1.0
@@ -730,10 +775,15 @@ def test_line(nstep=10000, doplot=False):
 
     LF = LinFitter(x, y, yerr)
 
-    chain = MCMC(LF)
+    fitter = MH(LF.get_loglike, LF.step)
 
-    parguess = [ pars[0] + 0.1, pars[1]-0.1 ]
-    data = chain.run(nstep, parguess)
+    # bad guess
+    parguess = [ pars[0] + 0.2, pars[1]-0.2 ]
+
+    ntot=nstep+burnin
+    pos = fitter.run(parguess, ntot)
+
+    data=fitter.get_trials()
 
     if doplot:
         import biggles
@@ -744,34 +794,39 @@ def test_line(nstep=10000, doplot=False):
         # plot the burnin
         tab = biggles.Table(2,1)
 
-        ntoplot = burnin*10
-        if ntoplot > data.size:
-            ntoplot = data.size
-        steps = numpy.arange(ntoplot, dtype='i4')
+        steps = numpy.arange(ntot, dtype='i4')
 
-        offset_burnin = biggles.FramedPlot()
-        offset_burnin.ylabel = 'offset'
-        offset_burnin.add( biggles.Curve(steps, data['pars'][0:ntoplot,0] ) )
+        offset_steps_plot = biggles.FramedPlot()
+        offset_steps_plot.ylabel = 'offset'
 
-        slope_burnin = biggles.FramedPlot()
-        slope_burnin.ylabel = 'slope'
-        slope_burnin.xlabel = 'step number'
-        slope_burnin.add( biggles.Curve(steps, data['pars'][0:ntoplot,1] ))
+        slope_steps_plot = biggles.FramedPlot()
+        slope_steps_plot.ylabel = 'slope'
+        slope_steps_plot.xlabel = 'step number'
 
-        tab[0,0] = offset_burnin
-        tab[1,0] = slope_burnin
+        offset_burnin_curve = biggles.Curve(steps[0:burnin], data[0:burnin,0], color='red')
+        slope_burnin_curve = biggles.Curve(steps[0:burnin], data[0:burnin,1], color='red')
+        offset_rest_curve = biggles.Curve(steps[burnin:], data[burnin:,0])
+        slope_rest_curve = biggles.Curve(steps[burnin:], data[burnin:,1])
+
+
+        offset_steps_plot.add( offset_burnin_curve, offset_rest_curve )
+        slope_steps_plot.add( slope_burnin_curve, slope_rest_curve )
+
+
+        tab[0,0] = offset_steps_plot
+        tab[1,0] = slope_steps_plot
 
         tab.show()
 
         # get status for chain
-        parfit, cov = extract_stats(data, burnin)
+        parfit, cov = extract_stats(data[burnin:, :])
         errfit = sqrt(diag(cov))
 
         # plot the histograms and comparison plot
 
         tab = biggles.Table(2,2)
-        offsets = data['pars'][burnin:,0]
-        slopes  = data['pars'][burnin:,1]
+        offsets = data[burnin:,0]
+        slopes  = data[burnin:,1]
 
         offset_binsize = offsets.std()*0.2
         slope_binsize = slopes.std()*0.2
