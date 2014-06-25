@@ -423,3 +423,59 @@ def _compare_num_s1(g1, g2, h=1.e-6):
     eu.plotting.bscatter(s1vals, dvals_num, color='red', type='triangle', plt=plt)
 
 
+
+def shear_jackknife(g1g2,
+                    chunksize=1,
+                    progress=False):
+    """
+    Get the shear covariance matrix using jackknife resampling.
+
+    The trick is that this must be done in pairs for ring tests
+
+    chunksize is the number of *pairs* to remove for each chunk
+    """
+
+    if progress:
+        import progressbar
+        pg=progressbar.ProgressBar(width=70)
+
+    ntot = g1g2.shape[0]
+    if ( (ntot % 2) != 0 ):
+        raise  ValueError("expected factor of two, got %d" % ntot)
+    npair = ntot/2
+
+    # some may not get used
+    nchunks = npair/chunksize
+
+    gsum=g1g2.sum(axis=0)
+    shear = g1g2.mean(axis=0)
+
+    print 'doing jackknife'
+    shears = numpy.zeros( (nchunks, 2) )
+    for i in xrange(nchunks):
+
+        beg = i*chunksize*2
+        end = (i+1)*chunksize*2
+        
+        if progress:
+            frac=float(i+1)/nchunks
+            pg.update(frac=frac)
+
+        gtmp = g1g2[beg:end, :]
+
+        gsum_tmp = gsum - gtmp.sum(axis=0)
+
+        shears[i, :] = gsum_tmp/(ntot - gtmp.shape[0])
+
+    shear_cov = numpy.zeros( (2,2) )
+    fac = (nchunks-1)/float(nchunks)
+
+    shear = shears.mean(axis=0)
+
+    shear_cov[0,0] = fac*( ((shear[0]-shears[:,0])**2).sum() )
+    shear_cov[0,1] = fac*( ((shear[0]-shears[:,0]) * (shear[1]-shears[:,1])).sum() )
+    shear_cov[1,0] = shear_cov[0,1]
+    shear_cov[1,1] = fac*( ((shear[1]-shears[:,1])**2).sum() )
+
+    return shear, shear_cov
+
