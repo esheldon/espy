@@ -5,6 +5,11 @@ import time
 import numpy
 from numpy import array, sqrt, zeros
 
+import ngmix
+from ngmix.fitting import print_pars
+from ngmix.gexceptions import GMixMaxIterEM, GMixRangeError
+from ngmix.observation import Observation
+
 import meds
 
 # starting new values for these
@@ -21,6 +26,7 @@ EXP_FIT_FAILURE=2**3
 DEV_FIT_FAILURE=2**4
 
 BOX_SIZE_TOO_BIG=2**5
+S2N_TOO_LOW=2**6
 
 NO_ATTEMPT=2**30
 
@@ -173,7 +179,6 @@ class MedsFit(dict):
         """
         Fit a psf to a single gauss and more complex model
         """
-        import ngmix
         from ngmix import GMixMaxIterEM
 
         self.fitting_galaxy=False
@@ -181,8 +186,10 @@ class MedsFit(dict):
         # first 1 gaussian
         jacobian=self._get_jacobian(self.psf_cen_guess_pix)
 
-        fitter1=self._fit_em_1gauss(self.psf_image,
-                                    jacobian,
+        psf_obs = Observation(self.psf_image,
+                              jacobian=jacobian)
+
+        fitter1=self._fit_em_1gauss(psf_obs,
                                     self['psf_sigma_guess'])
 
         if fitter1 is None:
@@ -197,9 +204,9 @@ class MedsFit(dict):
         self.psf_gmix1=psf_gmix1
         self.res['psf_gmix_em1']=psf_gmix1
 
-        fitter=self._fit_em_ngauss(self.psf_image,
-                                   jacobian,
-                                   psf_gmix1,
+        sigma_guess_new = sqrt( psf_gmix1.get_T()/2. )
+        fitter=self._fit_em_ngauss(psf_obs,
+                                   sigma_guess_new,
                                    self['psf_ngauss'])
 
         if fitter is None:
@@ -214,6 +221,9 @@ class MedsFit(dict):
             self.psf_gmix=psf_gmix
             self.res['psf_gmix']=psf_gmix
 
+            psf_obs.set_gmix(psf_gmix)
+            self.res['psf_obs'] = psf_obs
+
             if self['make_plots']:
                 self._compare_psf(fitter)
 
@@ -224,10 +234,11 @@ class MedsFit(dict):
 
         self.fitting_galaxy=True
 
-        print('    fitting gal em 1gauss')
+        self.res['jacobian'] = self._get_jacobian(self.gal_cen_guess_pix)
 
-        self._fit_galaxy_em()
-        self._fit_galaxy_psf_flux()
+        #print('    fitting gal em 1gauss')
+        #self._fit_galaxy_em()
+        #self._fit_galaxy_psf_flux()
 
         if self['trim_image']:
             self._make_trimmed_image()
@@ -298,7 +309,6 @@ class MedsFit(dict):
         Fit the flux from a fixed gmix model.  This is linear and always
         succeeds.
         """
-        import ngmix
 
         fitter=ngmix.fitting.PSFFluxFitter(image,
                                            weight_image,
@@ -318,436 +328,87 @@ class MedsFit(dict):
         """
         Run through and fit all the models
         """
-
-        model=self['fit_model']
-        fitter_type=self['fitter']
-        print('    fitting',model,"using",fitter_type)
-
-        if model=='sersic':
-            if fitter_type=='mcmc':
-                if self['iter']:
-                    fitter=self._fit_sersic_mcmc_iter()
-                else:
-                    fitter=self._fit_sersic_mcmc()
-            elif fitter_type=='lm':
-                raise RuntimeError("don't use lm, it is shit")
-                fitter=self._fit_sersic_lm()
-            else:
-                raise ValueError("bad fitter type: '%s'" % fitter_type)
-        elif model in ['exp','dev']:
-            fitter=self._fit_simple_mcmc()
-        else:
-            raise ValueError("bad model: '%s'" % model)
+        import gmix_meds.nfit
 
         res=self.res
+        model=self['fit_model']
+
+
+        obs = self._get_observation()
+        obs.set_psf( res['psf_obs'] )
+
+        print("    fitting gauss")
+        gauss_guesser=self['prior'].sample
+        gauss_fitter=self._fit_simple_mcmc(obs,
+                                           'gauss',
+                                           gauss_guesser)
+
+        gauss_res=gauss_fitter.get_result()
+
+        self._print_galaxy_res(gauss_fitter)
+
+        if gauss_res['s2n_w'] < self['min_gauss_s2n']:
+            print("    gauss s/n too low:",gauss_res['s2n_w'])
+            self.res['flags'] |= S2N_TOO_LOW
+            return
+
+        print('    fitting',model)
+        gauss_trials=gauss_fitter.get_trials()
+        model_guesser=gmix_meds.nfit.FromMCMCGuesser(gauss_trials,
+                                                     gauss_res['pars_err'])
+
+        fitter=self._fit_simple_mcmc(obs,
+                                     model,
+                                     model_guesser)
+
+        res['gauss_fitter'] = gauss_fitter
         res['galaxy_fitter'] = fitter
         res['galaxy_res'] = fitter.get_result()
-        res['flags'] |= res['galaxy_res']['flags']
+        res['flags'] = res['galaxy_res']['flags']
 
-        self._print_galaxy_res()
+        self._add_shear_info(res['galaxy_res'], fitter)
 
-        if fitter_type=='mcmc' and self['make_plots']:
+        self._print_galaxy_res(fitter)
+
+        if self['make_plots']:
             self._do_gal_plots(res['galaxy_fitter'])
 
 
-    def _fit_sersic_mcmc(self):
+    def _fit_simple_mcmc(self, obs, model, guesser):
         """
-        Fit a sersic model, taking guesses from our previous em fits
+        Fit the simple model
         """
-        import ngmix
-        from ngmix.fitting import print_pars
 
-        res=self.res
+        from ngmix.fitting import MCMCSimple
 
-        image,wt,jacobian=self._get_image_data()
+        # note flat on g!
+        prior=self['prior_gflat']
 
+        guess=guesser(n=self['nwalkers'])
 
-        fitter=ngmix.fitting.MCMCSersic(image,
-                                        wt,
-                                        jacobian,
-                                        psf=res['psf_gmix'],
+        fitter=MCMCSimple(obs,
+                          model,
+                          prior=prior,
+                          nwalkers=self['nwalkers'],
+                          mca_a=self['mca_a'])
 
-                                        nwalkers=self['nwalkers'],
-                                        mca_a=self['mca_a'],
-
-                                        shear_expand=self['shear_expand'],
-
-                                        cen_prior=self['cen_prior'],
-                                        T_prior=self['T_prior'],
-                                        counts_prior=self['counts_prior'],
-                                        g_prior=self['g_prior'],
-                                        n_prior=self['n_prior'],
-                                        do_pqr=self['do_pqr'])
-
-        full_guess=self._get_guess_sersic_maxlike()
-        pos=fitter.run_mcmc(full_guess,self['burnin'])
+        pos=fitter.run_mcmc(guess,self['burnin'])
         pos=fitter.run_mcmc(pos,self['nstep'])
-        fitter.calc_result()
+
+        g_prior = self['prior'].g_prior
+        log_trials = fitter.get_trials()
+        weights = g_prior.get_prob_array2d(log_trials[:,2], log_trials[:,3])
+
+        fitter.calc_result(weights=weights)
+        fitter.calc_lin_result(weights=weights)
+
+        self.weights=weights
 
         return fitter
 
 
-    def _fit_sersic_mcmc_iter(self):
+    def _get_guess_simple(self):
         """
-        Fit a sersic model, taking guesses from our previous em fits
-        """
-        import ngmix
-        from ngmix.fitting import print_pars
-
-        res=self.res
-
-        image,wt,jacobian=self._get_image_data()
-
-        full_guess=self._get_guess_sersic(self['nwalkers'])
-        fitter=ngmix.fitting.MCMCSersic(image,
-                                        wt,
-                                        jacobian,
-                                        psf=res['psf_gmix'],
-
-                                        nwalkers=self['nwalkers'],
-                                        burnin=self['burnin'],
-                                        nstep=self['nstep'],
-                                        mca_a=self['mca_a'],
-
-                                        full_guess=full_guess,
-
-                                        shear_expand=self['shear_expand'],
-
-                                        cen_prior=self['cen_prior'],
-                                        T_prior=self['T_prior'],
-                                        counts_prior=self['counts_prior'],
-                                        g_prior=self['g_prior'],
-                                        n_prior=self['n_prior'],
-                                        do_pqr=self['do_pqr'])
-
-
-        ntry=self['ntry']
-        for i in xrange(ntry):
-            print("    try: %s/%s" % (i+1,ntry))
-            if i == 0:
-                pos=fitter.run_mcmc(full_guess,self['burnin'])
-                pos=fitter.run_mcmc(pos,self['nstep'])
-            elif i==1:
-                best_pars=fitter.best_pars
-                print_pars(best_pars,front="    first pars: ")
-                full_guess=self._get_guess_sersic_frompars(best_pars)
-
-                pos=fitter.run_mcmc(full_guess,self['burnin'])
-                pos=fitter.run_mcmc(pos,self['nstep'])
-            else:
-                pos=fitter.run_mcmc(pos,self['nstep'])
-
-            if i > 0:
-                if fitter.arate > self['min_arate']:
-                    break
-                else:
-                    print("    arate",fitter.arate,"<",self['min_arate'])
-
-        fitter.calc_result()
-        return fitter
-
-
-
-
-
-    def _get_guess_sersic_maxlike(self):
-        """
-        fit with lm and use as guess.  If it fails, fall back
-        to the guess based on em
-        """
-        from ngmix.fitting import print_pars
-
-        fitter=self._fit_sersic_lm()
-        lmres=fitter.get_result()
-
-        if lmres['flags'] != 0:
-            print("    LM failed, using standard guess instead")
-            full_guess=self._get_guess_sersic(self['nwalkers'])
-        else:
-            pars=lmres['pars']
-            #print_pars(pars,front="    LM pars: ")
-            full_guess=self._get_guess_sersic_frompars(pars)
-
-        return full_guess
-
-    def _fit_sersic_lm(self):
-        """
-        Fit a sersic model, taking guesses from our previous em fits
-        """
-        import ngmix
-        from ngmix.fitting import print_pars
-
-        image,wt,jacobian=self._get_image_data()
-
-        res=self.res
-
-        chi2per_min=1.e9
-
-        random_n=False
-        start_pars=None
-        ntry=self['ntry_lm']
-        for i in xrange(ntry):
-
-            guess=self._get_guess_sersic(1, random_n=random_n, pars=start_pars)
-            guess=guess[0,:]
-
-            if i==0:
-                print_pars(guess,front="    LM start: ")
-
-            tfitter=ngmix.fitting.LMSersic(image,
-                                           wt,
-                                           jacobian,
-                                           guess,
-
-                                           psf=res['psf_gmix'],
-
-                                           lm_pars=self['lm_pars'],
-
-                                           cen_prior=self['cen_prior'],
-                                           T_prior=self['T_prior'],
-                                           counts_prior=self['counts_prior'],
-                                           g_prior=self['g_prior'],
-                                           n_prior=self['n_prior'])
-            tfitter.go()
-
-            tres=tfitter.get_result()
-            if tres['flags']==0:
-                chi2per=tres['chi2per']
-                if chi2per < chi2per_min:
-                    print_pars(tres['pars'],front="    best LM pars %02s: " % (i+1))
-                    chi2per_min=chi2per
-                    fitter=tfitter
-
-                start_pars=tres['pars']
-            else:
-                print("    lm fail:",tres['flags'])
-                start_pars=None
-                if i==0:
-                    fitter=tfitter
-
-            random_n=True
-
-        return fitter
-
-
-    def _get_guess_sersic(self,
-                          num,
-                          pars=None,
-                          random_n=True,
-                          widths=[0.05, 0.05, 0.05, 0.05]):
-        """
-        Guess based on the em fit, with n drawn from prior
-        """
-
-        res=self.res
-
-        if pars is None:
-            gmix = res['em_gmix']
-            cen1,cen2=gmix.get_cen()
-            g1,g2,T = gmix.get_g1g2T()
-            flux = res['em_gauss_flux']
-        else:
-            cen1=pars[0]
-            cen2=pars[1]
-            g1=pars[2]
-            g2=pars[3]
-            T=pars[4]
-            flux=pars[5]
-
-        shapes=get_shape_guess(g1, g2, num, width=widths[1])
-
-        n_prior=self['n_prior']
-
-        if random_n:
-            nvals = n_prior.sample(num)
-        else:
-            nvals=zeros(num)
-            nvals[:] = 0.5*(n_prior.minval+n_prior.maxval)
-
-        guess=zeros( (num, 7) )
-
-        guess[:,0] = cen1 + widths[0]*srandu(num)
-        guess[:,1] = cen2 + widths[0]*srandu(num)
-
-        guess[:,2]=shapes[:,0]
-        guess[:,3]=shapes[:,1]
-
-        guess[:,4] = get_positive_guess(T,num,width=widths[2])
-        guess[:,5] = get_positive_guess(flux,num,width=widths[3])
-
-        guess[:,6] = nvals
-
-        return guess
-
-
-    def _get_guess_sersic_frompars(self, pars):
-        """
-        Guess centered on the input pars
-        """
-        nwalkers = self['nwalkers']
-
-        nmin=self['n_prior'].minval
-        nmax=self['n_prior'].maxval
-
-        guess=zeros( (nwalkers, 7) )
-        guess[:,0] = pars[0] + 0.01*srandu(nwalkers)
-        guess[:,1] = pars[1] + 0.01*srandu(nwalkers)
-
-        shapes=get_shape_guess(pars[2],pars[3], nwalkers, width=0.01)
-        guess[:,2] = shapes[:,0]
-        guess[:,3] = shapes[:,1]
-
-        guess[:,4] = get_positive_guess(pars[4],nwalkers,width=0.01)
-        guess[:,5] = get_positive_guess(pars[5],nwalkers,width=0.01)
-
-        nleft=nwalkers
-        ngood=0
-        while nleft > 0:
-            vals = pars[6]*(1.0 + 0.01*srandu(nleft))
-            w,=numpy.where( (vals > nmin) & (vals < nmax) )
-            nkeep=w.size
-            if nkeep > 0:
-                guess[ngood:ngood+nkeep,6] = vals[w]
-                nleft -= w.size
-                ngood += w.size
-
-        return guess
-
-
-    def _fit_simple_mcmc(self):
-        """
-        Fit the simple model, taking guesses from our
-        previous em fits
-        """
-        import ngmix
-
-        if self['joint_prior'] is not None:
-            return self._fit_simple_mcmc_joint(model)
-
-        res=self.res
-
-        image,wt,jacobian=self._get_image_data()
-
-        # possible value errors
-        nretry=10
-        for i in xrange(nretry):
-            try:
-
-                full_guess=self._get_guess_simple()
-
-                fitter=ngmix.fitting.MCMCSimple(image,
-                                                wt,
-                                                jacobian,
-                                                self['fit_model'],
-                                                psf=res['psf_gmix'],
-
-                                                nwalkers=self['nwalkers'],
-                                                burnin=self['burnin'],
-                                                nstep=self['nstep'],
-                                                mca_a=self['mca_a'],
-
-                                                full_guess=full_guess,
-
-                                                shear_expand=self['shear_expand'],
-
-                                                cen_prior=self['cen_prior'],
-                                                T_prior=self['T_prior'],
-                                                counts_prior=self['counts_prior'],
-                                                g_prior=self['g_prior'],
-
-                                                do_pqr=self['do_pqr'])
-                fitter.go()
-                break
-            except ValueError as err:
-                print("got value error: %s" % str(err))
-
-        return fitter
-
-
-    def _fit_simple_mcmc_joint(self):
-        """
-        Fit the simple model, taking guesses from our
-        previous em fits
-        """
-        import ngmix
-        from ngmix.fitting import MCMCSimpleJointHybrid
-
-        res=self.res
-        conf=self.conf
-
-        ntry=conf['mcmc_ntry']
-        for i in xrange(ntry):
-
-            full_guess=self._get_guess_simple_joint()
-
-            fitter=MCMCSimpleJointHybrid(self.gal_image,
-                                         self.weight_image,
-                                         res['jacob'],
-                                         self['fit_model'],
-                                         psf=res['psf_gmix'],
-
-                                         nwalkers=self['nwalkers'],
-                                         burnin=self['burnin'],
-                                         nstep=self['nstep'],
-                                         mca_a=self['mca_a'],
-
-                                         full_guess=full_guess,
-                                         shear_expand=self['shear_expand'],
-
-                                         cen_prior=self['cen_prior'],
-                                         joint_prior=self['joint_prior'],
-
-                                         do_pqr=self['do_pqr'])
-            fitter.go()
-
-            # guard against rare mcmc problems
-            tres=fitter.get_result()
-            if (tres['pars'] is not None
-                    and tres['flags'] == 0
-                    and abs(tres['pars'][2]) <1 ):
-                break
-            else:
-                print("          bad mcmc result:")
-                pprint(tres)
-                print("          trying again")
-
-        return fitter
-
-
-    def _get_guess_simple(self,
-                          widths=[0.01, 0.01, 0.01, 0.01, 0.01, 0.01]):
-        """
-        Get a guess centered on the truth
-
-        width is relative for T and counts
-        """
-
-
-        res=self.res
-        gmix = res['em_gmix']
-        g1,g2,T = gmix.get_g1g2T()
-        flux = res['em_gauss_flux']
-
-        nwalkers = self['nwalkers']
-        guess=numpy.zeros( (nwalkers, 6) )
-
-        # centers relative to jacobian center
-        guess[:,0] = widths[0]*srandu(nwalkers)
-        guess[:,1] = widths[1]*srandu(nwalkers)
-
-        guess_shape=get_shape_guess(g1, g2, nwalkers, width=widths[2])
-        guess[:,2]=guess_shape[:,0]
-        guess[:,3]=guess_shape[:,1]
-
-        guess[:,4] = get_positive_guess(T,nwalkers,width=widths[4])
-        guess[:,5] = get_positive_guess(flux,nwalkers,width=widths[5])
-
-        return guess
-
-    def _get_guess_simple_joint(self):
-        """
-        Get a guess centered on the truth
-
         width is relative for T and counts
         """
 
@@ -812,7 +473,6 @@ class MedsFit(dict):
         self.psf_cen_guess_pix=(array(self.psf_image.shape)-1)/2.
 
     def _get_jacobian(self, cen):
-        import ngmix
         jdict = self.meds.get_jacobian(self.mindex,0)
 
         jacobian=ngmix.Jacobian(cen[0],
@@ -825,36 +485,35 @@ class MedsFit(dict):
         return jacobian
 
 
-    def _fit_em_1gauss(self, im, jacobian, sigma_guess):
+    def _fit_em_1gauss(self, obs, sigma_guess):
         """
         Just run the fitter
 
         cen is the global cen not within jacobian
         """
-        return self._fit_with_em(im, jacobian, sigma_guess, 1)
+        return self._fit_with_em(obs, sigma_guess, 1)
 
-    def _fit_em_ngauss(self, im, jacobian, gmix1, ngauss):
+    def _fit_em_ngauss(self, obs, sigma_guess, ngauss):
         """
         Start with fit from using 1 gauss, which must be entered
 
         cen is the global cen not within jacobian
         """
 
-        sigma_guess = sqrt( gmix1.get_T()/2. )
-        fitter=self._fit_with_em(im, jacobian, sigma_guess, ngauss)
+        fitter=self._fit_with_em(obs, sigma_guess, ngauss)
 
         return fitter
 
 
 
-    def _fit_with_em(self, im, jacobian, sigma_guess, ngauss):
+    def _fit_with_em(self, obs_in, sigma_guess, ngauss):
         """
         Fit the image using EM
         """
-        import ngmix
-        from ngmix.gexceptions import GMixMaxIterEM, GMixRangeError
 
-        im_with_sky, sky = ngmix.em.prep_image(im)
+        im_with_sky, sky = ngmix.em.prep_image(obs_in.image)
+
+        new_obs=Observation(im_with_sky, jacobian=obs_in.jacobian)
 
         ntry,maxiter,tol = self._get_em_pars()
         for i in xrange(ntry):
@@ -862,10 +521,9 @@ class MedsFit(dict):
             #print("em guess:")
             #print(guess)
             try:
-                fitter=self._do_fit_em_with_full_guess(im_with_sky,
+                fitter=self._do_fit_em_with_full_guess(new_obs,
                                                        sky,
-                                                       guess,
-                                                       jacobian)
+                                                       guess)
                 tres=fitter.get_result()
                 #print("em numiter:",tres['numiter'])
                 break
@@ -877,15 +535,13 @@ class MedsFit(dict):
         return fitter
 
     def _do_fit_em_with_full_guess(self,
-                                   image,
+                                   obs,
                                    sky,
-                                   guess,
-                                   jacobian):
-        import ngmix
+                                   guess):
 
         ntry,maxiter,tol = self._get_em_pars()
 
-        fitter=ngmix.em.GMixEM(image, jacobian=jacobian)
+        fitter=ngmix.em.GMixEM(obs)
         fitter.go(guess, sky, maxiter=maxiter, tol=tol)
 
         return fitter
@@ -906,7 +562,6 @@ class MedsFit(dict):
             return self._get_em_guess_ngauss(sigma,ngauss)
 
     def _get_em_guess_1gauss(self, sigma):
-        import ngmix
 
         sigma2 = sigma**2
         pars=array( [1.0 + 0.1*srandu(),
@@ -919,7 +574,6 @@ class MedsFit(dict):
         return ngmix.gmix.GMix(pars=pars)
 
     def _get_em_guess_2gauss(self, sigma):
-        import ngmix
 
         sigma2 = sigma**2
 
@@ -941,7 +595,6 @@ class MedsFit(dict):
         return ngmix.gmix.GMix(pars=pars)
 
     def _get_em_guess_3gauss(self, sigma):
-        import ngmix
 
         sigma2 = sigma**2
 
@@ -975,7 +628,6 @@ class MedsFit(dict):
 
 
     def _get_em_guess_ngauss(self, sigma, ngauss):
-        import ngmix
 
         sigma2 = sigma**2
 
@@ -1049,6 +701,13 @@ class MedsFit(dict):
         print("    trimmed image:",self.trimmed_image.shape,
               "cen:  ",self.trimmed_cen)
 
+    def _get_observation(self):
+        """
+        Get the appropriate observation
+        """
+        im, wt, jacob=self._get_image_data()
+        return Observation(im, weight=wt, jacobian=jacob)
+
     def _get_image_data(self):
         """
         Get the appropriate image data for the current object.
@@ -1101,14 +760,15 @@ class MedsFit(dict):
 
         gmix = fitter.get_gmix()
 
-        image, wt, jacobian=self._get_image_data()
+        obs = self._get_observation()
 
         res=self.res
         psf_gmix = res['psf_gmix']
         gmix_conv = gmix.convolve(psf_gmix)
 
+        image=obs.image
         model_image = gmix_conv.make_image(image.shape,
-                                           jacobian=jacobian)
+                                           jacobian=obs.jacobian)
 
         plt=images.compare_images(image,
                                   model_image,
@@ -1131,29 +791,26 @@ class MedsFit(dict):
         model=self['fit_model']
         width,height=800,800
 
-        tup=fitter.make_plots(title=model)
+        weights=self.weights
+        pdict=fitter.make_plots(title=model, weights=weights)
 
-        if isinstance(tup, tuple):
-            p,wp = tup
+        if 'wtrials' in pdict:
             wtrials_pname='wtrials-%06d-%s.png' % (self.mindex,model)
             print("          ",wtrials_pname)
-            wp.write_img(width,height,wtrials_pname)
-        else:
-            p = tup
+            pdict['wtrials'].write_img(width,height,wtrials_pname)
 
         trials_pname='trials-%06d-%s.png' % (self.mindex,model)
         print("          ",trials_pname)
-        p.write_img(width,height,trials_pname)
+        pdict['trials'].write_img(width,height,trials_pname)
 
-    def _print_galaxy_res(self):
-        from ngmix.fitting import print_pars
-        res=self.res['galaxy_res']
+    def _print_galaxy_res(self, fitter):
+        log_res=fitter.get_result()
+        lin_res=fitter.get_lin_result()
 
-        print_pars(res['pars'], front="    pars: ")
-        print_pars(res['pars_err'], front="    err:  ")
+        print_pars(lin_res['pars'], front="    pars: ")
+        print_pars(lin_res['pars_err'], front="    err:  ")
         
-        if 'arate' in res:
-            print('        arate:',res['arate'])
+        print('        arate:',log_res['arate'],"s/n:",log_res['s2n_w'])
 
 
     def _copy_to_output(self):
@@ -1182,20 +839,20 @@ class MedsFit(dict):
         data=self.data
 
         # em fit to convolved galaxy
-        if 'em_gauss_flux' in allres:
-            data['em_gauss_flux'][dindex] = allres['em_gauss_flux']
-            data['em_gauss_flux_err'][dindex] = allres['em_gauss_flux_err']
-            data['em_gauss_cen'][dindex] = allres['em_gauss_cen']
-        else:
-            print("        em gauss not found, not copying pars")
-            return
+        #if 'em_gauss_flux' in allres:
+        #    data['em_gauss_flux'][dindex] = allres['em_gauss_flux']
+        #    data['em_gauss_flux_err'][dindex] = allres['em_gauss_flux_err']
+        #    data['em_gauss_cen'][dindex] = allres['em_gauss_cen']
+        #else:
+        #    print("        em gauss not found, not copying pars")
+        #    return
 
-        if 'psf_flux' in allres:
-            data['psf_flux'][dindex] = allres['psf_flux']
-            data['psf_flux_err'][dindex] = allres['psf_flux_err']
-        else:
-            print("        em gauss not found, not copying pars")
-            return
+        #if 'psf_flux' in allres:
+        #    data['psf_flux'][dindex] = allres['psf_flux']
+        #    data['psf_flux_err'][dindex] = allres['psf_flux_err']
+        #else:
+        #    print("        psf flux not found, not copying pars")
+        #    return
 
         # allres flags is or'ed with the galaxy fitting flags
         if allres['flags'] != 0:
@@ -1210,6 +867,7 @@ class MedsFit(dict):
         flux=pars[5]
         flux_err=sqrt(pars_cov[5, 5])
 
+        data['fit_flags'] = res['flags']
         data['pars'][dindex,:] = pars
         data['pars_cov'][dindex,:,:] = pars_cov
 
@@ -1219,17 +877,17 @@ class MedsFit(dict):
         data['g'][dindex,:] = res['g']
         data['g_cov'][dindex,:,:] = res['g_cov']
 
-        if 'arate' in res:
-            data['arate'][dindex] = res['arate']
+        data['arate'][dindex] = res['arate']
 
         for sn in _stat_names:
             if sn in res:
                 data[sn][dindex] = res[sn]
 
-        if self['do_pqr']:
+        if self['do_shear']:
             data['P'][dindex] = res['P']
             data['Q'][dindex,:] = res['Q']
             data['R'][dindex,:,:] = res['R']
+            data['g_sens'][dindex,:] = res['g_sens']
 
     def _load_meds(self):
         """
@@ -1348,11 +1006,32 @@ class MedsFit(dict):
         with fitsio.FITS(self['checkpoint_file'],'rw',clobber=True) as fobj:
             fobj.write(self.data, extname="model_fits")
 
+    def _add_shear_info(self, res, fitter):
+        """
+        Add pqr or lensfit info
+        """
+
+        trials=fitter.get_trials()
+        g=trials[:,2:2+2]
+
+        g_prior=self['prior'].g_prior
+
+        ls=ngmix.lensfit.LensfitSensitivity(g, g_prior)
+        res['g_sens'] = ls.get_g_sens()
+        res['nuse'] = ls.get_nuse()
+
+        pqrobj=ngmix.pqr.PQR(g, g_prior)
+        P,Q,R = pqrobj.get_pqr()
+        res['P']=P
+        res['Q']=Q
+        res['R']=R
+
+
+
     def _make_struct(self):
         """
         make the output structure
         """
-        import ngmix
 
         np=ngmix.gmix.get_model_npars(self['fit_model'])
 
@@ -1363,12 +1042,12 @@ class MedsFit(dict):
             ('nimage_use','i4'),
             ('time','f8'),
 
-            ('em_gauss_flux','f8'),
-            ('em_gauss_flux_err','f8'),
-            ('em_gauss_cen','f8',2),
+            #('em_gauss_flux','f8'),
+            #('em_gauss_flux_err','f8'),
+            #('em_gauss_cen','f8',2),
 
-            ('psf_flux',    'f8'),
-            ('psf_flux_err','f8'),
+            #('psf_flux',    'f8'),
+            #('psf_flux_err','f8'),
 
             ('fit_flags','i4'),
             ('pars','f8',np),
@@ -1387,21 +1066,22 @@ class MedsFit(dict):
         if self['fitter'] == 'mcmc':
             dt += [('arate','f8')]
 
-        if self['do_pqr']:
+        if self['do_shear']:
             dt += [('P', 'f8'),
                    ('Q', 'f8', 2),
-                   ('R', 'f8', (2,2))]
+                   ('R', 'f8', (2,2)),
+                   ('g_sens','f8',2)]
 
 
         num=self.index_list.size
         data=zeros(num, dtype=dt)
 
-        data['psf_flux'] = DEFVAL
-        data['psf_flux_err'] = PDEFVAL
+        #data['psf_flux'] = DEFVAL
+        #data['psf_flux_err'] = PDEFVAL
 
-        data['em_gauss_flux'] = DEFVAL
-        data['em_gauss_flux_err'] = PDEFVAL
-        data['em_gauss_cen'] = DEFVAL
+        #data['em_gauss_flux'] = DEFVAL
+        #data['em_gauss_flux_err'] = PDEFVAL
+        #data['em_gauss_cen'] = DEFVAL
 
         data['fit_flags'] = NO_ATTEMPT
 
@@ -1415,10 +1095,11 @@ class MedsFit(dict):
         data['s2n_w'] = DEFVAL
         data['chi2per'] = PDEFVAL
 
-        if self['do_pqr']:
+        if self['do_shear']:
             data['P'] = DEFVAL
             data['Q'] = DEFVAL
             data['R'] = DEFVAL
+            data['g_sens'] = DEFVAL
 
      
         self.data=data
@@ -1477,7 +1158,6 @@ def get_positive_guess(val, n, width=0.01):
     """
     Get guess, making sure positive
     """
-    from ngmix.gexceptions import GMixRangeError
 
     if val <= 0.0:
         print("val <= 0: %s" % val)
@@ -1499,8 +1179,6 @@ def get_shape_guess(g1, g2, n, width=0.01):
     """
     Get guess, making sure in range
     """
-    import ngmix
-    from ngmix.gexceptions import GMixRangeError
 
     gtot = sqrt(g1**2 + g2**2)
     if gtot > 0.98:

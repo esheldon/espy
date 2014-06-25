@@ -30,11 +30,14 @@ def main():
 
     nper=conf['nper']
 
-    output_file = files.get_output_file(**conf)
-    print(output_file)
+    d = files.get_collated_dir(**conf)
+    if not os.path.exists(d):
+        os.makedirs(d)
+    collated_file = files.get_collated_file(**conf)
+    print(collated_file)
 
     first=True
-    with fitsio.FITS(output_file,'rw',clobber=True) as fobj:
+    with fitsio.FITS(collated_file,'rw',clobber=True) as fobj:
         for fnum in xrange(conf['nf']):
             conf['fnum'] = fnum
 
@@ -58,6 +61,6 @@ def main():
                 else:
                     fobj[-1].append(data)
 
-    print(output_file)
+    print(collated_file)
 
 main()

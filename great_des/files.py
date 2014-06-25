@@ -92,6 +92,18 @@ def get_output_dir(**keys):
     d=os.path.join(h, 'lensing','great-des',keys['run'], 'output')
     return d
 
+def get_collated_dir(**keys):
+    """
+    parameters
+    ----------
+    run: keyword
+        The processing run
+    """
+    h=os.environ['HOME']
+    d=os.path.join(h, 'lensing','great-des',keys['run'], 'collated')
+    return d
+
+
 def get_condor_dir(**keys):
     """
     parameters
@@ -174,24 +186,40 @@ def get_output_file(**keys):
         String representing the run, e.g. nfit-noisefree-04
     gnum: int, keyword
         Integer representing the shear number.
-    fnum: int, optional keyword
+    fnum: int
         File number for given gnum
-    start: int, optional keyword
+    start: int
         Integer representing starting object number
-    end: int, optional keyword
+    end: int
         Integer representing ending object number
     """
     d=get_output_dir(**keys)
 
-    if 'start' in keys:
-        fname='%(run)s-%(fnum)03i-g%(gnum)02i-%(start)05d-%(end)05d.fits'
-    else:
-        fname='%(run)s-g%(gnum)02i.fits'
+    fname='%(run)s-%(fnum)03i-g%(gnum)02i-%(start)05d-%(end)05d.fits'
     fname=fname % keys
 
     fname=os.path.join(d, fname)
 
     return fname
+
+def get_collated_file(**keys):
+    """
+    parameters
+    ----------
+    run: string, keyword
+        String representing the run, e.g. nfit-noisefree-04
+    gnum: int, keyword
+        Integer representing the shear number.
+    """
+    d=get_collated_dir(**keys)
+
+    fname='%(run)s-g%(gnum)02i.fits'
+    fname=fname % keys
+
+    fname=os.path.join(d, fname)
+
+    return fname
+
 
 def read_output(**keys):
     """

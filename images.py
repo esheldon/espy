@@ -20,7 +20,7 @@ def view(image, **keys):
         The image(s) as a 2-d array or 
     type: string
         Type of plot, 'dens', 'cont', 'dens-cont'.  (cont is short
-        for contour).  Default is 'dens'.
+        for contour, dens for density).  Default is 'dens'.
     nonlinear:
         Non-linear scale for an asinh scaling.  If not sent a linear scale is
         used. See the asinh_scale() function.  For asinh scaling you must scale
@@ -53,7 +53,7 @@ def view(image, **keys):
     import biggles
 
     # we need to transpose for biggles to display properly
-    trans = keys.get('transpose',False)
+    trans = keys.get('transpose',True)
 
     im=scale_image(image, **keys)
 
