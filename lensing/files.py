@@ -488,6 +488,11 @@ def lensout_im3shape_dtype(nbin):
            ('zindex','i8'),
            ('weight','f8'),
            ('totpairs','i8'),
+
+           ('x2sum','f8'),
+           ('y2sum','f8'),
+           ('xysum','f8'),
+
            ('npair','i8',nbin),
            ('rsum','f8',nbin),
            ('wsum','f8',nbin),
