@@ -1,0 +1,26 @@
+# rmax ~10
+sample: "rmdes02"
+catalog: "redmapper-des-5.9-lgt05"
+
+# this is redundant with the cosmo_sample declaration in the run file
+# we have to demand consistency
+cosmo_sample: "01"
+
+# these used to be in the run file. Moved here because we need to trim lenses
+# first
+nbin:          16
+rmin:          0.02
+rmax:          11.0
+
+# if true, use a strict edge cut
+strict_edgecut: false
+
+zmin:          0.0
+zmax:          10.0
+
+z_field: "z_lambda"
+lambda_field: "lambda_chisq"
+
+masktype: null
+
+nsplit: 1
