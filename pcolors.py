@@ -28,7 +28,7 @@ def rainbow(num, type='hex'):
         g *= 255
         b *= 255
         if type == 'rgb':
-            hex_colors.append(rgb)
+            hex_colors.append( (r,g,b) )
         elif type == 'hex':
             hex_colors.append( rgb_to_hex( (r,g,b) ) )
         else:
