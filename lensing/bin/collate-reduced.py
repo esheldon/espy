@@ -35,16 +35,21 @@ def add_ellip(data):
     data['pe']  =  9999.0
     data['pe1'] = -9999.0
     data['pe2'] = -9999.0
-    w,=numpy.where(data['totpairs'] > 10)
+    #w,=numpy.where(data['totpairs'] > 10)
+    #if w.size > 0:
+    #    ninv  = 1.0/(data['totpairs'][w]-1)
+    w,=numpy.where( (data['totpairs'] > 10) & (data['weight'] > 0.0) )
     if w.size > 0:
-        ninv  = 1.0/(data['totpairs'][w]-1)
+        print("kept:",w.size,"for ellip")
+        # weight is also wsum
+        winv  = 1.0/data['weight'][w]
         T     = data['x2sum'][w] + data['y2sum'][w]
         x2my2 = data['x2sum'][w] - data['y2sum'][w]
         xy    = data['xysum'][w]
 
-        T     *= ninv
-        x2my2 *= ninv
-        xy    *= ninv
+        T     *= winv
+        x2my2 *= winv
+        xy    *= winv
 
         data['pT'][w] = T
 

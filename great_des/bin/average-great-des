@@ -7,7 +7,7 @@ average outputs
 
 import os,sys
 import numpy
-from numpy import diag, sqrt, where
+from numpy import diag, sqrt, where, zeros
 import fitsio
 import esutil as eu
 
@@ -19,12 +19,14 @@ parser = OptionParser(__doc__)
 
 def get_dtype(conf):
     dt=[]
-    for model in conf['simple_models']:
-        ndict = files.get_shear_name_dict(model=model)
-        dt += [(ndict['nuse'],'i8'),
-               (ndict['shear'],'f8',2),
-               (ndict['shear_err'],'f8',2),
-               (ndict['shear_cov'],'f8',(2,2))]
+    dt += [('nuse','i8'),
+           ('shear','f8',2),
+           ('shear_err','f8',2),
+           ('shear_cov','f8',(2,2)),
+           ('g_sens','f8',2),
+           ('shear_lensfit','f8',2),
+           ('shear_err_lensfit','f8',2),
+           ('shear_true', 'f8', 2)]
     return dt
 
 def main():
@@ -37,31 +39,50 @@ def main():
     gnum=int(args[1])
 
     conf=files.read_config(run=run)
-
     conf['gnum'] = gnum
 
-    data=files.read_output(**conf)
+    data=files.read_collated(**conf)
 
     dt=get_dtype(conf)
-    output=numpy.zeros(1, dtype=dt)
-    for model in conf['simple_models']:
+    output=zeros(1, dtype=dt)
 
-        nd = files.get_shear_name_dict(model=model)
+    #w,=where(data['flags']==0)
+    w,=where( (data['flags']==0) & (data['arate'] < 0.6) & (data['arate'] > 0.4) )
 
-        w,=where(data[nd['flags']]==0)
-        print 'using: %d/%d' % (w.size, data.size)
-        sh,cov=lensing.pqr.get_pqr_shear(data[nd['P']][w],
-                                         data[nd['Q']][w],
-                                         data[nd['R']][w])
-        err=sqrt(diag(cov))
-        output[nd['nuse']][0] = w.size
-        output[nd['shear']][0,:] = sh
-        output[nd['shear_err']][0,:] = err
-        output[nd['shear_cov']][0,:,:] = cov
+    wts=zeros( (w.size, 2) )
+    wts[:,0] = 1.0/(0.32**2 + data['g_cov'][w,0,0] + data['g_cov'][w,1,1])
+    wts[:,1] = wts[:,0]
 
-        mess='sh1: %.4g +/- %.4g  sh2: %.4g +/- %.4g'
-        mess=mess % (sh[0], err[0], sh[1], err[1])
-        print mess
+    w_sum = wts.sum(axis=0)
+    g_sum = (data['g'][w,:]*wts).sum(axis=0)
+    g_sens_sum = (data['g_sens'][w,:]*wts).sum(axis=0)
+
+    g_mean = g_sum/w_sum
+    g_sens_mean = g_sens_sum/w_sum
+
+    shear_lensfit = g_mean/g_sens_mean
+
+    print 'using: %d/%d' % (w.size, data.size)
+    sh,cov=lensing.pqr.pqr_jackknife(data['P'][w],
+                                     data['Q'][w],
+                                     data['R'][w],
+                                     is_ring=False,
+                                     chunksize=100)
+    err=sqrt(diag(cov))
+    output['nuse'][0] = w.size
+    output['shear'][0,:] = sh
+    output['shear_err'][0,:] = err
+    output['shear_cov'][0,:,:] = cov
+
+    output['g_sens'][0,:] = g_sens_mean
+    output['shear_lensfit'][0,:] = shear_lensfit
+    output['shear_err_lensfit'][0,:] = err/g_sens_mean
+
+    output['shear_true'] = data['shear_true'].mean(axis=0)
+
+    mess='sh1: %.4g +/- %.4g  sh2: %.4g +/- %.4g'
+    mess=mess % (sh[0], err[0], sh[1], err[1])
+    print mess
 
     fname = files.get_averaged_file(**conf)
     print 'writing:',fname

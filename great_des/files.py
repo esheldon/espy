@@ -220,6 +220,20 @@ def get_collated_file(**keys):
 
     return fname
 
+def read_collated(**keys):
+    """
+    parameters
+    ----------
+    run: string, keyword
+        String representing the run, e.g. nfit-noisefree-04
+    gnum: int, keyword
+        Integer representing the shear number.
+    """
+    import fitsio
+
+    fname=get_collated_file(**keys)
+    print "reading:",fname
+    return fitsio.read(fname)
 
 def read_output(**keys):
     """
@@ -254,7 +268,7 @@ def get_averaged_file(**keys):
         Integer representing the shear number.
     """
 
-    d=get_output_dir(**keys)
+    d=get_collated_dir(**keys)
     
     if 'gnum' in keys:
         fname='%(run)s-g%(gnum)02i-avg.fits'

@@ -59,7 +59,7 @@ cen_width: 1.0
 g_prior_type: "cosmos-sersic"
 
 T_prior_type: "flat"
-T_prior_pars: [0.001, 50.0]
+#T_prior_pars: [0.001, 50.0]
 T_prior_pars: [-5.0, 3.5]
 
 # we cannot use cosmos because the fluxes were rescaled

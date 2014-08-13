@@ -364,6 +364,7 @@ class MedsFit(dict):
         res['gauss_fitter'] = gauss_fitter
         res['galaxy_fitter'] = fitter
         res['galaxy_res'] = fitter.get_result()
+        res['galaxy_lin_res'] = fitter.get_lin_result()
         res['flags'] = res['galaxy_res']['flags']
 
         self._add_shear_info(res['galaxy_res'], fitter)
@@ -860,19 +861,29 @@ class MedsFit(dict):
             return
 
         res=allres['galaxy_res']
+        lin_res=allres['galaxy_lin_res']
 
         pars=res['pars']
         pars_cov=res['pars_cov']
+        lin_pars=lin_res['pars']
+        lin_pars_cov=lin_res['pars_cov']
 
-        flux=pars[5]
-        flux_err=sqrt(pars_cov[5, 5])
+        T=lin_pars[4]
+        T_err=sqrt(lin_pars_cov[4, 4])
+
+        flux=lin_pars[5]
+        flux_err=sqrt(lin_pars_cov[5, 5])
 
         data['fit_flags'] = res['flags']
         data['pars'][dindex,:] = pars
         data['pars_cov'][dindex,:,:] = pars_cov
+        data['lin_pars'][dindex,:] = lin_pars
+        data['lin_pars_cov'][dindex,:,:] = lin_pars_cov
 
         data['flux'][dindex] = flux
         data['flux_err'][dindex] = flux_err
+        data['T'][dindex] = T
+        data['T_err'][dindex] = T_err
 
         data['g'][dindex,:] = res['g']
         data['g_cov'][dindex,:,:] = res['g_cov']
@@ -1052,9 +1063,13 @@ class MedsFit(dict):
             ('fit_flags','i4'),
             ('pars','f8',np),
             ('pars_cov','f8',(np,np)),
+            ('lin_pars','f8',np),
+            ('lin_pars_cov','f8',(np,np)),
 
             ('flux','f8'),
             ('flux_err','f8'),
+            ('T','f8'),
+            ('T_err','f8'),
             ('g','f8',2),
             ('g_cov','f8',(2,2)),
 

@@ -9,6 +9,7 @@ from __future__ import print_function
 
 import os,sys
 import fitsio
+import esutil as eu
 
 from great_des import files
 
@@ -34,12 +35,19 @@ def main():
     if not os.path.exists(d):
         os.makedirs(d)
     collated_file = files.get_collated_file(**conf)
+    collated_file=collated_file+'.test'
     print(collated_file)
+
+
 
     first=True
     with fitsio.FITS(collated_file,'rw',clobber=True) as fobj:
         for fnum in xrange(conf['nf']):
             conf['fnum'] = fnum
+
+            truth_file=files.get_input_file(ftype='truth', **conf)
+            print(truth_file)
+            truth_data=fitsio.read(truth_file)
 
             low,high = files.get_chunk_ranges(**conf)
             n=len(low)
@@ -48,7 +56,11 @@ def main():
             for i in xrange(n):
                 conf['start'] = low[i]
                 conf['end'] = high[i]
-                data = files.read_output(**conf)
+                data0 = files.read_output(**conf)
+
+                data=eu.numpy_util.add_fields(data0, [('shear_true','f8',2)])
+                data['shear_true'][:,0] = truth_data['g1_true'][low[i]:high[i]+1]
+                data['shear_true'][:,1] = truth_data['g2_true'][low[i]:high[i]+1]
 
                 if data.size != nper:
                     err="data size mismatch: expected %d got %d"
