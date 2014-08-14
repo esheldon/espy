@@ -69,7 +69,8 @@ def main():
         b.plot_osig_byrun_1var(run, options.type, show=options.show)
     else:
         if options.run2 is not None:
-            b.plot_dsig_2runs(run, options.run2, options.type, show=options.show)
+            b.plot_dsig_2runs(run, options.run2, options.type, show=options.show,
+                              linear=options.linear, yrange=yrng, xrange=xrng)
         else:
             b.plot_dsig_byrun_1var(run, options.type, show=options.show, yrnge=yrng)
 

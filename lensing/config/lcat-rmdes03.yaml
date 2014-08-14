@@ -15,8 +15,8 @@ rmax:          36.567
 # if true, use a strict edge cut
 strict_edgecut: false
 
-zmin:          0.0
-zmax:          10.0
+zmin:          0.1
+zmax:          0.9
 
 z_field: "z_lambda"
 lambda_field: "lambda_chisq"

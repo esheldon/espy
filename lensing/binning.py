@@ -144,7 +144,7 @@ class BinnerBase(dict):
             plt.yrange=yrng
 
         plt.xlabel=r'$r [h^{-1} Mpc]$'
-        plt.ylabel=r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+        plt.ylabel=r'$\Delta\Sigma ~ [M_{\odot} pc^{-2}]$'
 
         pts=biggles.Points(data['r'][binnum], data['dsig'][binnum],
                            type='filled circle')
@@ -353,7 +353,7 @@ class BinnerBase(dict):
         pa.aspect_ratio = aspect_ratio
 
         pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{\odot} pc^{-2}]$'
 
         if xrnge is None:
             xrnge = [0.01,60.0]
@@ -464,7 +464,7 @@ class BinnerBase(dict):
         pa.aspect_ratio = aspect_ratio
 
         pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-        pa.ylabel = r'$\Delta\Sigma_{\times} [M_{sun} pc^{-2}]$'
+        pa.ylabel = r'$\Delta\Sigma_{\times} [M_{\odot} pc^{-2}]$'
 
         xrnge = [0.01,60.0]
         yrnge = [-20,20]
@@ -513,7 +513,7 @@ class BinnerBase(dict):
         pa.write_eps(epsfile)
         converter.convert(epsfile, dpi=self.dpi, verbose=True)
 
-    def plot_dsig_2runs(self, run1, run2, type, show=False):
+    def plot_dsig_2runs(self, run1, run2, type,show=False, **kw):
         """
 
         Make an array of plots with each plot a bin in one variable.  
@@ -537,7 +537,7 @@ class BinnerBase(dict):
         color1='blue'
         color2='red'
         sym1='filled circle'
-        sym2='square'
+        sym2='filled diamond'
         width=4
         size1=2
         size2=3
@@ -550,6 +550,7 @@ class BinnerBase(dict):
         biggles.configure('_HalfAxis','subticks_size',1.5)
         biggles.configure('linewidth',0.6)
 
+        doarray=True
         if self['nbin'] == 12:
             nrow = 3
             ncol = 4
@@ -558,32 +559,62 @@ class BinnerBase(dict):
             nrow = 4
             ncol = 4
             aspect_ratio = 1.0
+        elif self['nbin']==1:
+            doarray=False
         else:
             raise ValueError("Unsupported nbin: %s" % self['nbin'])
 
-        pa = FramedArray(nrow, ncol)
-        pa.aspect_ratio = aspect_ratio
+        if doarray:
+            pa = FramedArray(nrow, ncol)
+            pa.aspect_ratio = aspect_ratio
+        else:
+            pa=FramedPlot()
+            pa.aspect_ratio=1
 
         pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{\odot} pc^{-2}]$'
 
-        xrnge = [0.01,60.0]
-        yrnge = [1.e-2,8000]
+        linear=kw.get('linear',False)
+        xrnge=kw.get('xrange',None)
+        yrnge=kw.get('yrange',None)
+
+        if xrnge is None:
+            xrnge = [0.01,60.0]
+        if not linear:
+            pa.ylog = True
+            if yrnge is None:
+                yrnge = [1.e-2,8000]
+        else:
+            if yrnge is None:
+                ymin=min(data1['dsig'].min(), data2['dsig'].min())
+                if ymin > 0:
+                    ymin=0.9*ymin
+                else:
+                    ymin=1.1*ymin
+                ymax=max(data1['dsig'].max(), data2['dsig'].max())
+                if ymax > 0:
+                    ymax=1.1*ymax
+                else:
+                    ymax=0.9*ymax
+
+
         pa.xrange = xrnge
         pa.yrange = yrnge
         pa.xlog = True
-        pa.ylog = True
+
 
 
         row = -1
 
-        low, high = self.bin_ranges()
-
         i = 0
         for i in xrange(self['nbin']):
-            col = i % ncol
-            if col == 0:
-                row += 1
+            if doarray:
+                col = i % ncol
+                if col == 0:
+                    row += 1
+                plt=pa[row,col]
+            else:
+                plt=pa
 
             pdict2=eu.plotting.bscatter(data2['r'][i],
                                         data2['dsig'][i],
@@ -592,7 +623,7 @@ class BinnerBase(dict):
                                         yrange=yrnge,
                                         xlog=True,ylog=True,
                                         show=False, 
-                                        plt=pa[row,col],
+                                        plt=plt,
                                         color=color2,
                                         label=run2,
                                         type=sym2,
@@ -606,7 +637,7 @@ class BinnerBase(dict):
                                         yrange=yrnge,
                                         xlog=True,ylog=True,
                                         show=False, 
-                                        plt=pa[row,col],
+                                        plt=plt,
                                         color=color1,
                                         type=sym1,
                                         label=run1,
@@ -614,19 +645,30 @@ class BinnerBase(dict):
                                         dict=True)
 
             if i == (self['nbin']-1):
-                key=PlotKey(0.9,0.2,[pdict1['p'],pdict2['p']],halign='right')
-                pa[row,col].add(key)
+                key=PlotKey(0.2,0.2,[pdict1['p'],pdict2['p']])
+                plt.add(key)
 
             label = self.bin_label(i)
             pl = PlotLabel(.85, .85, label, halign='right')
 
-            pa[row,col].add(pl)
+            plt.add(pl)
+
+            if linear:
+                plt.add(biggles.Curve([xrnge[0],xrnge[1]],[0.0,0.0]))
 
 
         if show:
             pa.show()
 
-        epsfile=lensing.files.sample_file(type=type+'-plots',sample=run1,name=name,extra='allplot-'+run2,ext='eps')
+        if linear:
+            extra='linear-allplot-'+run2
+        else:
+            extra='allplot-'+run2
+        epsfile=lensing.files.sample_file(type=type+'-plots',
+                                          sample=run1,
+                                          name=name,
+                                          extra=extra,
+                                          ext='eps')
         d = os.path.dirname(epsfile)
         if not os.path.exists(d):
             print("making dir:",d)
@@ -1346,7 +1388,7 @@ class N200Binner(BinnerBase):
         pa.aspect_ratio = 1.0/1.5
 
         pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{\odot} pc^{-2}]$'
 
         xrnge = [0.01,60.0]
         yrnge = [1.e-2,8000]
@@ -1506,7 +1548,7 @@ class MZBinner(dict):
         pa.aspect_ratio = 1.0/1.5
 
         pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{\odot} pc^{-2}]$'
         pa.xrange = [0.01,60.0]
         pa.yrange = [1.e-2,8000]
         pa.xlog = True
@@ -1630,16 +1672,16 @@ class MZBinner(dict):
         plt.xrange = [0.5*d['m200_mean'].min(), 1.5*d['m200_mean'].max()]
         if not residual:
             plt.yrange = [0.5*d[tag+'_fit'].min(), 1.5*d[tag+'_fit'].max()]
-            plt.ylabel = r'$M_{200}^{fit} [h^{-1} M_{sun}]$'
+            plt.ylabel = r'$M_{200}^{fit} [h^{-1} M_{\odot}]$'
             plt.add(Curve([0.1,1.e15],[0.1,1.e15]))
         else:
-            #plt.ylabel = r'$M_{true}-M_{fit} [h^{-1} M_{sun}]$'
+            #plt.ylabel = r'$M_{true}-M_{fit} [h^{-1} M_{\odot}]$'
             #plt.ylabel = r'$(M_{200}^{true}-M_{200}^{fit})/M_{200}^{true}$'
             if yrange is not None:
                 plt.yrange=yrange
             plt.ylabel = '(true-fit)/true'
             plt.add(Curve([0.1,1.e15],[0.0,0.0]))
-        plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{sun}]$'
+        plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{\odot}]$'
         plt.xlog = True
         if not residual:
             plt.ylog = True
@@ -1732,14 +1774,14 @@ class MZBinner(dict):
         plt.xrange = [0.5*d['m200_mean'].min(), 1.5*d['m200_mean'].max()]
         if not residual:
             plt.yrange = [0.5*d[tag].min(), 1.5*d[tag].max()]
-            plt.ylabel = r'$M_{200}^{inv} [h^{-1} M_{sun}]$'
+            plt.ylabel = r'$M_{200}^{inv} [h^{-1} M_{\dot}]$'
             plt.add(Curve([0.1,1.e15],[0.1,1.e15]))
         else:
             if yrange is not None:
                 plt.yrange=yrange
             plt.ylabel = '(true-inv)/true'
             plt.add(Curve([0.1,1.e15],[0.0,0.0]))
-        plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{sun}]$'
+        plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{\odot}]$'
         plt.xlog = True
         if not residual:
             plt.ylog = True
@@ -1949,7 +1991,7 @@ def plot_mzbin_byrun(run, nmass, nz, show=False):
     pa.aspect_ratio = 1.0/1.5
 
     pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-    pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+    pa.ylabel = r'$\Delta\Sigma ~ [M_{\odot} pc^{-2}]$'
     pa.xrange = [0.01,60.0]
     pa.yrange = [1.e-2,8000]
     pa.xlog = True
@@ -2056,14 +2098,14 @@ def plot_mzbin_invmass_byrun(run, nmass, nz, type='',
     plt.xrange = [0.5*d['m200_mean'].min(), 1.5*d['m200_mean'].max()]
     if not residual:
         plt.yrange = [0.5*d[tag].min(), 1.5*d[tag].max()]
-        plt.ylabel = r'$M_{200}^{inv} [h^{-1} M_{sun}]$'
+        plt.ylabel = r'$M_{200}^{inv} [h^{-1} M_{\odot}]$'
         plt.add(Curve([0.1,1.e15],[0.1,1.e15]))
     else:
         if yrange is not None:
             plt.yrange=yrange
         plt.ylabel = '(true-inv)/true'
         plt.add(Curve([0.1,1.e15],[0.0,0.0]))
-    plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{sun}]$'
+    plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{\odot}]$'
     plt.xlog = True
     if not residual:
         plt.ylog = True
@@ -2155,16 +2197,16 @@ def plot_mzbin_mass_byrun(run, nmass, nz,
     plt.xrange = [0.5*d['m200_mean'].min(), 1.5*d['m200_mean'].max()]
     if not residual:
         plt.yrange = [0.5*d[tag+'_fit'].min(), 1.5*d[tag+'_fit'].max()]
-        plt.ylabel = r'$M_{200}^{fit} [h^{-1} M_{sun}]$'
+        plt.ylabel = r'$M_{200}^{fit} [h^{-1} M_{\odot}]$'
         plt.add(Curve([0.1,1.e15],[0.1,1.e15]))
     else:
-        #plt.ylabel = r'$M_{true}-M_{fit} [h^{-1} M_{sun}]$'
+        #plt.ylabel = r'$M_{true}-M_{fit} [h^{-1} M_{\odot}]$'
         #plt.ylabel = r'$(M_{200}^{true}-M_{200}^{fit})/M_{200}^{true}$'
         if yrange is not None:
             plt.yrange=yrange
         plt.ylabel = '(true-fit)/true'
         plt.add(Curve([0.1,1.e15],[0.0,0.0]))
-    plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{sun}]$'
+    plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{\odot}]$'
     plt.xlog = True
     if not residual:
         plt.ylog = True
