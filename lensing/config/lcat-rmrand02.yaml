@@ -21,7 +21,7 @@ strict_edgecut: false
 zmin:          0.08
 zmax:          0.31
 
-masktype: sdss
+mask_type: sdss
 
 nsplit: 100
 

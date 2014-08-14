@@ -75,7 +75,7 @@ class BinnerBase(dict):
 
         self.dpi=150
 
-    def name(self):
+    def get_name(self):
         raise RuntimeError("override this method")
 
     def bin_byrun(self, run):
@@ -83,7 +83,7 @@ class BinnerBase(dict):
         Do the binning and write out a file
         """
 
-        name=self.name()
+        name=self.get_name()
         d = lensing.files.sample_read(type='collated',sample=run,fs=self.fs)
         res = self.bin(d)
 
@@ -129,8 +129,8 @@ class BinnerBase(dict):
         yrng=keys.get('yrange',None)
 
         extra='randmatch-%s' % randrun
-        data = lensing.files.sample_read(type=type, sample=lensrun, name=self.name())
-        rand = lensing.files.sample_read(type='binned', sample=lensrun, name=self.name(), 
+        data = lensing.files.sample_read(type=type, sample=lensrun, name=self.get_name())
+        rand = lensing.files.sample_read(type='binned', sample=lensrun, name=self.get_name(), 
                                          extra=extra)
 
         zpts=biggles.Curve( [0.9*data['r'].min(), 1.1*data['r'].max()], [0,0])
@@ -166,7 +166,7 @@ class BinnerBase(dict):
             
         epsfile=lensing.files.sample_file(type=type+'-plots',
                                           sample=lensrun,
-                                          name=self.name(),
+                                          name=self.get_name(),
                                           extra='%s-%02i' % (randrun,binnum),
                                           ext='eps')
         plt.write_eps(epsfile)
@@ -182,7 +182,7 @@ class BinnerBase(dict):
 
         linear=keys.get('linear',False)
 
-        name = self.name()
+        name = self.get_name()
         data=lensing.files.sample_read(type=type,sample=run,name=name)
 
         max_binnum = self['nbin']-1
@@ -273,7 +273,7 @@ class BinnerBase(dict):
             plt=self.plot_dsig_osig_byrun_bin(run, type, binnum, **keys)
             epsfile=lensing.files.sample_file(type=type+'-plots',
                                               sample=run,
-                                              name=self.name(),
+                                              name=self.get_name(),
                                               extra='osig-comp-%02i' % binnum,
                                               ext='eps')
             makedirs_fromfile(epsfile)
@@ -299,7 +299,7 @@ class BinnerBase(dict):
 
         """
 
-        name = self.name()
+        name = self.get_name()
         data=lensing.files.sample_read(type=type,sample=run,name=name)
 
         # this is for the screen: currently tuned for my big screen!
@@ -367,8 +367,6 @@ class BinnerBase(dict):
 
         row = -1
 
-        low, high = self.bin_ranges()
-
         i = 0
         for i in xrange(self['nbin']):
             col = i % ncol
@@ -428,7 +426,7 @@ class BinnerBase(dict):
 
         """
 
-        name = self.name()
+        name = self.get_name()
         data=lensing.files.sample_read(type=type,sample=run,name=name)
 
         # this is for the screen: currently tuned for my big screen!
@@ -533,7 +531,7 @@ class BinnerBase(dict):
 
         """
 
-        name = self.name()
+        name = self.get_name()
         data1=lensing.files.sample_read(type=type,sample=run1,name=name)
         data2=lensing.files.sample_read(type=type,sample=run2,name=name)
         color1='blue'
@@ -655,8 +653,10 @@ class AnyBinner(BinnerBase):
         self.fs=fs
         self.dpi=150
 
-    def name(self):
+    def get_name(self):
         return self['name']
+    def get_nbin(self):
+        return self['nbin']
 
     def bin(self, data):
         """
@@ -728,7 +728,7 @@ class AnyBinner(BinnerBase):
 class VoidZBinner(BinnerBase):
     range_type='()'
 
-    def name(self):
+    def get_name(self):
         return 'z-%02d' % self['nbin']
 
     def set_bin_ranges(self):
@@ -843,7 +843,7 @@ class LambdaBinner(BinnerBase):
     z_field = 'z_lambda'
     z_range_type='()'
 
-    def name(self):
+    def get_name(self):
         return 'lambda-%02d' % self['nbin']
 
     def bin(self, data):
@@ -1119,7 +1119,7 @@ class ILumBinner(BinnerBase):
     # in units of L* 
     ilum_field = 'ilum'
     z_field = 'zred2'
-    def name(self):
+    def get_name(self):
         return 'ilum-%02d' % self['nbin']
 
     def bin(self, data):
@@ -1246,7 +1246,7 @@ class N200Binner(BinnerBase):
     #    self['nbin'] = nbin
     #    self.set_bin_ranges()
     range_type='[]'
-    def name(self):
+    def get_name(self):
         return 'n200-%02d' % self['nbin']
 
 
@@ -1329,7 +1329,7 @@ class N200Binner(BinnerBase):
 
         """
 
-        name = self.name()
+        name = self.get_name()
         data=lensing.files.sample_read(type='binned',sample=run,name=name)
 
         biggles.configure('screen','width', 1140)
@@ -1409,7 +1409,7 @@ class MZBinner(dict):
     def __init__(self, nmass, nz):
         self['nmass'] = nmass
         self['nz']    = nz
-    def name(self):
+    def get_name(self):
         return 'm%02iz%01i' % (self['nmass'],self['nz'])
 
     def bin_byrun(self, run):
@@ -1417,7 +1417,7 @@ class MZBinner(dict):
         Do the binning and write out a file
         """
 
-        name=self.name()
+        name=self.get_name()
         d = lensing.files.sample_read(type='collated',sample=run)
         res = self.bin(d)
 
@@ -1488,7 +1488,7 @@ class MZBinner(dict):
 
         """
 
-        name = self.name()
+        name = self.get_name()
         data=lensing.files.lensbin_read(run,name)
 
         biggles.configure('screen','width', 1140)
@@ -1581,7 +1581,7 @@ class MZBinner(dict):
             nex=''
             ex=None
 
-        name=self.name()
+        name=self.get_name()
         d = lensing.files.sample_read(type='fit', sample=run, name=name, extra=ex)
 
         plt = FramedPlot()
@@ -1686,7 +1686,7 @@ class MZBinner(dict):
         residual: boolean, optional
             Plot the residual from true value.
         """
-        name=self.name()
+        name=self.get_name()
         d = lensing.files.sample_read(type='invert',sample=run,name=name)
 
         plt = FramedPlot()

@@ -96,8 +96,7 @@ def make_output_array(num):
 class LcatBase(dict):
     def __init__(self, sample, **keys):
 
-        for k in keys:
-            self[k] = keys[k]
+        self.update(keys)
 
         conf = lensing.files.read_config('lcat',sample)
         self.update(conf)
@@ -657,6 +656,10 @@ class RedMapperDES(LcatBase):
 
         good=where1(z_logic)
 
+        maskflags = self.get_maskflags(data['ra'][good],
+                                       data['dec'][good],
+                                       data[z_field][good])
+
         # make sure in the tycho window and two adjacent quadrants
         # not hitting edge (or no edge if strict=True)
 
@@ -671,6 +674,37 @@ class RedMapperDES(LcatBase):
         output['maskflags'] = 0 # not currently used
         lensing.files.lcat_write(sample=self['sample'], data=output,
                                  lens_split=0)
+    def get_maskflags(self, ra, dec, z):
+        mask_type=self.get('mask_type',None)
+        if mask_type is None:
+            maskflags = numpy.zeros(ra.size)
+        else:
+            import healpix_util as hu
+            if mask_type != 'healpix':
+                raise ValueError("only healpix supported for now")
+
+            # Da and rmax in Mpc
+            print("max radius for maskflags: %0.1f" % self['rmax'])
+
+            Da = self.cosmo.Da(0.0, z)
+
+            rmax = self['rmax']
+            radius_degrees = rmax/Da*180./PI
+
+            hmap=hu.readDensityMap(self['mask_file'])
+            
+            maskflags=numpy.zeros(ra.size, dtype='i8')
+            for i in xrange(ra.size):
+                if (i % 1000) == 0:
+                    print("%d/%d" % (i,ra.size))
+
+                maskflags[i] = hmap.check_quad(ra[i],
+                                               dec[i],
+                                               radius_degrees[i],
+                                               self['ellip_max'])
+        return maskflags
+
+
 
 class LRGDES(LcatBase):
     def __init__(self, sample, **keys):

@@ -25,7 +25,7 @@ lambda_min: 10.
 # hard edge cut, in Mpc/h
 rmax_hard: 1.0
 
-masktype: sdss
+mask_type: sdss
 
 comment: |
     

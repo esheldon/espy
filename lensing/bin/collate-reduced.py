@@ -40,7 +40,7 @@ def add_ellip(data):
     #    ninv  = 1.0/(data['totpairs'][w]-1)
     w,=numpy.where( (data['totpairs'] > 10) & (data['weight'] > 0.0) )
     if w.size > 0:
-        print("kept:",w.size,"for ellip")
+        print("%s/%s had enough for ellip calculation" % (w.size,data.size))
         # weight is also wsum
         winv  = 1.0/data['weight'][w]
         T     = data['x2sum'][w] + data['y2sum'][w]

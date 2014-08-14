@@ -1,5 +1,5 @@
 """
-    %prog [options] run bintype nbin
+    %prog [options] run bintype
 
 Description:
 
@@ -43,10 +43,6 @@ def main():
 
     run = args[0]
     bintype = args[1]
-    if len(args) > 2:
-        nbin = int(args[2])
-    else:
-        nbin=None
 
     yrng=options.yrange
     if yrng is not None:
@@ -56,7 +52,8 @@ def main():
         xrng=[float(x) for x in xrng.split(',')]
 
     if options.randrun is not None:
-        b = lensing.binning.instantiate_binner(bintype, nbin=nbin)
+        b = lensing.binning.instantiate_binner(bintype)
+        nbin=b.get_nbin()
         for i in xrange(nbin):
             b.compare_random(run, options.type, i, options.randrun, 
                              xrange=xrng, yrange=yrng)
@@ -64,7 +61,7 @@ def main():
         return
 
 
-    b = lensing.binning.instantiate_binner(bintype, nbin=nbin)
+    b = lensing.binning.instantiate_binner(bintype)
     if options.compare_osig:
         b.plot_dsig_osig_byrun(run, options.type, show=options.show, range4var=[0.5,100.0],
                                linear=options.linear, yrange=yrng, xrange=xrng)

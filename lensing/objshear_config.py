@@ -7,8 +7,7 @@ def write_configs(run):
     rc = ObjshearRunConfig(run)
     rc.write_config()
 
-
-MASK_STYLES = {None:1, 'sdss':2}
+MASK_STYLES = {None:1, 'sdss':2, 'healpix':3}
 
 class ObjshearRunConfig(dict):
     """
@@ -54,8 +53,8 @@ class ObjshearRunConfig(dict):
         # "auto" file class for hdfs that returns the open
         # file handle for the local file?
 
-        masktype=self['lens_config']['masktype']
-        mask_style=MASK_STYLES[masktype]
+        mask_type=self['lens_config']['mask_type']
+        mask_style=MASK_STYLES[mask_type]
 
         if self.fs=='hdfs':
             hdfs_file= eu.hdfs.HDFSFile(config_file)

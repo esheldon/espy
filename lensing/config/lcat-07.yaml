@@ -19,7 +19,7 @@ zmax:          0.4
 # Eli's recommendation
 lambda_min: 10.
 
-masktype: sdss
+mask_type: sdss
 
 comment: |
 

@@ -18,7 +18,7 @@ zmin:          0.05
 zmax:          0.3
 ngals_r200_min: 3
 
-masktype: sdss
+mask_type: sdss
 
 comment: |
 

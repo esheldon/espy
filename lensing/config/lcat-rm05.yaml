@@ -21,6 +21,6 @@ zmax:          0.4
 
 z_field: "z_lambda"
 
-masktype: sdss
+mask_type: sdss
 
 nsplit: 1

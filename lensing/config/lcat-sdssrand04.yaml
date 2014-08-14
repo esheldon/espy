@@ -27,7 +27,7 @@ nrand: 5000000
 
 # this is an sobjshear variable, not same as the mapname
 # below
-masktype: "sdss"
+mask_type: "sdss"
 
 
 mapname: "boss"

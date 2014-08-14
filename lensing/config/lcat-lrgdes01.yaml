@@ -19,6 +19,6 @@ zmax:          10.0
 
 z_field: "zred2"
 
-masktype: null
+mask_type: null
 
 nsplit: 1
