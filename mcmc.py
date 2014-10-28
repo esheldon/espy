@@ -1423,7 +1423,9 @@ class PolyFitter(object):
 
         return -0.5*chi2.sum()
 
-    def plot_trials(self):
+    def plot_trials(self, **kw):
+        plot_results(self.trials, **kw)
+        '''
         import biggles
         import esutil as eu
 
@@ -1440,7 +1442,7 @@ class PolyFitter(object):
 
             plti,hi=eu.plotting.bhist(trials[:,i], binsize=binsize, show=False,
                                       gethist=True)
-
+        '''
 
 
     def __repr__(self):
