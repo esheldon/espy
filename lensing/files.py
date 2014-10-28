@@ -33,6 +33,7 @@ import os
 from sys import stdout, stderr
 import lensing
 import numpy
+from numpy import linspace
 
 import esutil as eu
 from esutil.ostools import path_join, expand_path
@@ -592,7 +593,7 @@ def scat_read_ascii(**keys):
 
     if style == 2:
         sconf = read_config('scinv', conf['scinv_sample'])
-        zlvals=sigmacrit.make_zlvals(sconf['dzl'],sconf['zlmin'],sconf['zlmax'])
+        zlvals=linspace(sconf['zlmin'],sconf['zlmax'],sconf['nzl'])
         nzl = zlvals.size
     else:
         nzl=None

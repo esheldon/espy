@@ -142,13 +142,14 @@ def combine_scinv_chunks(procrun, scinv_sample, chunksize=1000000):
     zs = (corrstruct['zmax']+corrstruct['zmin'])/2.
     corr = corrstruct['corr']
 
-
-    scalc = sigmacrit.ScinvCalculator(zs,
-                                      scinv_conf['dzl'], 
-                                      scinv_conf['zlmin'],
+    scalc = sigmacrit.ScinvCalculator(scinv_conf['zlmin'],
                                       scinv_conf['zlmax'],
+                                      scinv_conf['nzl'], 
+                                      zs[0],
+                                      zs[-1],
                                       H0=cosmo['H0'],
                                       omega_m=cosmo['omega_m'])
+
 
     zlvals = scalc.zlvals
 
@@ -156,7 +157,7 @@ def combine_scinv_chunks(procrun, scinv_sample, chunksize=1000000):
     meta={'scinv_sample':scinv_sample,
           'zlmin':scinv_conf['zlmin'],
           'zlmax':scinv_conf['zlmax'],
-          'dzl':scinv_conf['dzl'],
+          'nzl':scinv_conf['nzl'],
           'zlvals':zlvals}
 
 
@@ -181,7 +182,7 @@ def add_scinv_chunk(procrun, scinv_sample, chunk, chunksize=1000000):
 
     scinv are created using the *corrected* p(z).
 
-    The dzl,zlmin,zlmax,zlvals will be in the meta data
+    The nzl,zlmin,zlmax,zlvals will be in the meta data
 
     Procedure
     ---------
@@ -234,10 +235,11 @@ def add_scinv_chunk(procrun, scinv_sample, chunk, chunksize=1000000):
 
 
     print("")
-    scalc = sigmacrit.ScinvCalculator(zs,
-                                      scinv_conf['dzl'], 
-                                      scinv_conf['zlmin'],
+    scalc = sigmacrit.ScinvCalculator(scinv_conf['zlmin'],
                                       scinv_conf['zlmax'],
+                                      scinv_conf['nzl'], 
+                                      zs[0],
+                                      zs[-1],
                                       H0=cosmo['H0'],
                                       omega_m=cosmo['omega_m'])
 
@@ -246,7 +248,7 @@ def add_scinv_chunk(procrun, scinv_sample, chunk, chunksize=1000000):
     meta={'scinv_sample':scinv_sample,
           'zlmin':scinv_conf['zlmin'],
           'zlmax':scinv_conf['zlmax'],
-          'dzl':scinv_conf['dzl'],
+          'nzl':scinv_conf['nzl'],
           'zlvals':zlvals}
 
     print("opening corresponding p(z) columns: '%s'\n" % pzrun)
@@ -296,7 +298,7 @@ def add_scinv(procrun, scinv_sample,
 
     scinv are created using the *corrected* p(z).
 
-    The dzl,zlmin,zlmax,zlvals will be in the meta data
+    The nzl,zlmin,zlmax,zlvals will be in the meta data
 
     Procedure
     ---------
@@ -347,19 +349,21 @@ def add_scinv(procrun, scinv_sample,
 
 
     print("")
-    scalc = sigmacrit.ScinvCalculator(zs,
-                                      scinv_conf['dzl'], 
-                                      scinv_conf['zlmin'],
+    scalc = sigmacrit.ScinvCalculator(scinv_conf['zlmin'],
                                       scinv_conf['zlmax'],
+                                      scinv_conf['nzl'], 
+                                      zs[0],
+                                      zs[-1],
                                       H0=cosmo['H0'],
                                       omega_m=cosmo['omega_m'])
+
 
     zlvals = scalc.zlvals
 
     meta={'scinv_sample':scinv_sample,
           'zlmin':scinv_conf['zlmin'],
           'zlmax':scinv_conf['zlmax'],
-          'dzl':scinv_conf['dzl'],
+          'nzl':scinv_conf['nzl'],
           'zlvals':zlvals}
 
     print("opening corresponding p(z) columns: '%s'\n" % pzrun)

@@ -45,14 +45,14 @@ def plot_lens_s2n(zl, zslow, zshigh, pzs, cumulative=True):
 
     biggles.configure('screen','width',1140)
     biggles.configure('screen','height',1140)
-    dz = zshigh[0]-zslow[0]
+    nzl=zshigh.size
     zlmin = 0.0
     zlmax = max([zl.max(), zshigh.max()])
 
     # first get the mean inverse critical density as a function
     # of lens redshift
     zsmid = (zshigh+zslow)/2.
-    sc = lensing.sigmacrit.ScinvCalculator(zsmid, dz, zlmin, zlmax)
+    sc = lensing.sigmacrit.ScinvCalculator(zlmin, zlmax, nzl, zsmid[0], zsmind[-1])
 
     mean_scinv = sc.calc_mean_scinv(pzs)
 

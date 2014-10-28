@@ -38,9 +38,7 @@ class ObjshearRunConfig(dict):
     def make_zlvals(self):
         import sigmacrit
         sconf = self['scinv_config']
-        return sigmacrit.make_zlvals(sconf['dzl'],
-                                     sconf['zlmin'],
-                                     sconf['zlmax'])
+        return linspace(sconf['zlmin'],sconf['zlmax'],sconf['nzl'])
 
     # inputs to objshear
     def write_config(self):

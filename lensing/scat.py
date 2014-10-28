@@ -1,5 +1,6 @@
 from __future__ import print_function
 import numpy
+from numpy import linspace
 import os,sys
 from sys import stdout
 
@@ -135,9 +136,7 @@ class DR8GMixCatalog(GenericSrcCatalog):
         keep = self.select()
 
         sconf=self['scinv_config']
-        zlvals=lensing.sigmacrit.make_zlvals(sconf['dzl'], 
-                                             sconf['zlmin'], 
-                                             sconf['zlmax'])
+        zlvals=linspace(sconf['zlmin'], sconf['zlmax'], sconf['nzl'])
         nzl = zlvals.size
 
         print("creating output struct")
@@ -261,9 +260,7 @@ class DR8RegaussCatalog(GenericSrcCatalog):
 
     def create_objshear_input(self):
         filter=self['filter']
-        zlvals=lensing.sigmacrit.make_zlvals(self['dzl'], 
-                                             self['zlmin'], 
-                                             self['zlmax'])
+        zlvals=linspace(self['zlmin'], self['zlmax'], self['nzl'])
         nzl = zlvals.size
 
         keep,zphot_matches = self.select()
@@ -404,9 +401,7 @@ class DR8RegaussCatalog(GenericSrcCatalog):
         For joseph clampett.  Note nfs
         """
         filter=self['filter']
-        zlvals=lensing.sigmacrit.make_zlvals(self['dzl'], 
-                                             self['zlmin'], 
-                                             self['zlmax'])
+        zlvals=linspace(self['zlmin'], self['zlmax'], self['nzl'])
         nzl = zlvals.size
 
         pzcols = self.pzcols
@@ -917,32 +912,14 @@ class DESMockSrcCatalog(dict):
                            "this.  see gmix_sdss/bin/add-scinv.py")
         from . import sigmacrit
         import zphot
-        if 'zlmin' not in self or 'zlmax' not in self or 'dzl' not in self:
-            raise ValueError("You must have zlmin,zlmax,dzl in config")
-
-
-        """
-        note we don't really need this because we have perfect zs, but this
-        is what you would do with a real sample
-
-        wo = zphot.WeightedOutputs()
-        z_file = wo.z_file(self['pzrun'], chunk=0)
-        zscols = zphot.weighting.read_z(z_file)
-        zsvals = (zscols['zmax']+zscols['zmin'])/2.0
-        
-        sc = sigmacrit.ScinvCalculator(zsvals, 
-                                       self['dzl'],
-                                       self['zlmin'],
-                                       self['zlmax'])
-        """
+        if 'zlmin' not in self or 'zlmax' not in self or 'nzl' not in self:
+            raise ValueError("You must have zlmin,zlmax,nzl in config")
 
         # ok, now read the original file and add to it
         # the man scinv as a function of zlens
         # for now just using exact z
 
-        zlvals = sigmacrit.make_zlvals(self['dzl'],
-                                       self['zlmin'],
-                                       self['zlmax'])
+        zlvals=linspace(self['zlmin'], self['zlmax'], self['nzl'])
         n_zlens=zlvals.size
         
         data = self.read_original()
