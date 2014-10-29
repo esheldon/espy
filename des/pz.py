@@ -1,3 +1,7 @@
+"""
+code for p(zs) and scinv(zl)
+"""
+
 from __future__ import print_function
 import os
 import numpy
@@ -290,6 +294,21 @@ def get_scinv_file(version, type, chunk=None):
     name='%s.fits' % name
     return os.path.join(dir, name)
 
+def read_scinv_file(version, type, chunk=None, get_zlvals=False):
+    import fitsio
+    fname=get_scinv_file(version, type, chunk=None)
+
+    with fitsio.FITS(fname) as fits:
+        scinv=fits['scinv'][:]
+
+        if get_zlvals:
+            zlvals=fits['zlvals'][:]
+            ret=scinv, zlvals
+        else:
+            ret=scinv
+
+    return ret
+
 def get_scinv_wq_dir(version, type):
     dir=os.environ['TMPDIR']
     dir=os.path.join(dir,'des-scinv',version,type)
@@ -300,5 +319,21 @@ def get_scinv_wq_file(version, type, chunk):
     name='DES_scinv_%s_%s_%06d.yaml' % (version, type, chunk)
     return os.path.join(dir, name)
 
+def get_match_dir(version, type, source_vers, tilename):
+    """
+    dir to hold matches between shear and p(z) files source vers could be
+    ngmix009
+    """
+    dir=get_scinv_dir(version,type)
+    subdir='match-%s' % source_vers
+    dir=os.path.join(dir, subdir)
+    return dir
 
+def get_match_file(version, type, source_vers, tilename):
+    """
+    match file between shear and p(z) files source vers could be ngmix009
+    """
+    dir=get_match_dir(version, type, source_vers)
+    name='%s_scinv_%s_%s_%06d_%s.yaml' % (tilename,version, type, chunk,source_vers)
 
+    return os.path.join(dir,name)

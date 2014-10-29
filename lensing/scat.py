@@ -221,7 +221,6 @@ class DR8GMixCatalog(GenericSrcCatalog):
 
 class DR8RegaussCatalog(GenericSrcCatalog):
     """
-
     Before using, make sure you have matched the regauss cols with your chosen
     photoz sample using lensing.regauss.zphot_match()
     """
@@ -497,7 +496,7 @@ class DESMockCatalog(dict):
         data = eu.io.read(infile, lower=True, verbose=True)
         return data
 
-def im3daniel_to_columns(version):
+def daniel_to_columns(shear_version):
     import columns
     import fitsio
 
