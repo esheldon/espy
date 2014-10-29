@@ -17,9 +17,9 @@ class DESPofz(object):
     print dz[35:40]
     """
 
-    def __init__(self, version, type, store='pytables'):
-        self.version=version
-        self.type=type
+    def __init__(self, pz_vers, pz_type, store='pytables'):
+        self.pz_vers=pz_vers
+        self.pz_type=pz_type
 
         if store=='pytables':
             self._load_pytables()
@@ -42,8 +42,8 @@ class DESPofz(object):
     def _load_h5py(self):
         import h5py
 
-        self.key, self.zvals = get_info(self.version, self.type)
-        self.fname=get_h5_file(self.version)
+        self.key, self.zvals = get_info(self.pz_vers, self.pz_type)
+        self.fname=get_h5_file(self.pz_vers)
 
         print("loading:",self.fname)
         self.h5=h5py.File(self.fname)
@@ -54,8 +54,8 @@ class DESPofz(object):
     def _load_pytables(self):
         import tables
 
-        self.key, self.zvals = get_info(self.version, self.type)
-        self.fname=get_h5_file(self.version)
+        self.key, self.zvals = get_info(self.pz_vers, self.pz_type)
+        self.fname=get_h5_file(self.pz_vers)
 
         print("loading:",self.fname)
         self.h5=tables.open_file(self.fname)
@@ -65,30 +65,30 @@ class DESPofz(object):
         self.size=self.table.shape[0]
 
 
-def make_scinv_wq(version, type, chunksize):
+def make_scinv_wq(pz_vers, pz_type, chunksize):
     """
     make the wq scripts
     """
     chunk=0
-    sc=SCinv(version, type, chunksize, chunk)
+    sc=SCinv(pz_vers, pz_type, chunksize, chunk)
     sc.write_wq()
 
-def combine_scinv(version, type, chunksize):
+def combine_scinv(pz_vers, pz_type, chunksize):
     """
     combine all the chunks into one big file
     """
     import fitsio
-    outfile=get_scinv_file(version, type)
+    outfile=get_scinv_file(pz_vers, pz_type)
     print("will write to:",outfile)
 
     chunk=0
-    sc=SCinv(version, type, chunksize, chunk)
+    sc=SCinv(pz_vers, pz_type, chunksize, chunk)
 
     nchunk=sc.nchunk
 
     with fitsio.FITS(outfile,'rw',clobber=True) as fits:
         for chunk in xrange(nchunk):
-            infile=get_scinv_file(version, type, chunk=chunk)
+            infile=get_scinv_file(pz_vers, pz_type, chunk=chunk)
             print(infile)
 
             with fitsio.FITS(infile) as fin:
@@ -105,10 +105,10 @@ class SCinv(object):
     """
     create scinv in chunks
     """
-    def __init__(self, version, type, chunksize, chunk,
+    def __init__(self, pz_vers, pz_type, chunksize, chunk,
                  zlmin=0.095, zlmax=0.95, nzl=57):
-        self.version=version
-        self.type=type
+        self.pz_vers=pz_vers
+        self.pz_type=pz_type
         self.zlmin=zlmin
         self.zlmax=zlmax
         self.nzl=nzl
@@ -119,7 +119,7 @@ class SCinv(object):
         self._load()
 
     def _load(self):
-        with DESPofz(self.version,self.type) as pofz:
+        with DESPofz(self.pz_vers,self.pz_type) as pofz:
             tsize=pofz.size
 
             nchunk = get_nchunk(self.chunksize, tsize)
@@ -142,7 +142,7 @@ class SCinv(object):
         make the chunk
         """
         from lensing.sigmacrit import ScinvCalculator
-        outfile=get_scinv_file(self.version, self.type, chunk=self.chunk)
+        outfile=get_scinv_file(self.pz_vers, self.pz_type, chunk=self.chunk)
         print("will write to:",outfile)
 
         data=self.data
@@ -184,7 +184,7 @@ class SCinv(object):
         write a wq script for each chunk
         """
 
-        dir=get_scinv_wq_dir(self.version, self.type)
+        dir=get_scinv_wq_dir(self.pz_vers, self.pz_type)
         if not os.path.exists(dir):
             print("making dir:",dir)
             os.makedirs(dir)
@@ -193,11 +193,11 @@ class SCinv(object):
         for chunk in xrange(len(beglist)):
             beg=beglist[chunk]
             end=endlist[chunk]
-            fname=get_scinv_wq_file(self.version,self.type,chunk)
+            fname=get_scinv_wq_file(self.pz_vers,self.pz_type,chunk)
 
-            job_name='scinv-%s-%06d' % (self.type, chunk)
-            text=_wq_scinv.format(version=self.version,
-                                  type=self.type,
+            job_name='scinv-%s-%06d' % (self.pz_type, chunk)
+            text=_wq_scinv.format(pz_vers=self.pz_vers,
+                                  pz_type=self.pz_type,
                                   chunksize=self.chunksize,
                                   chunk=chunk,
                                   job_name=job_name)
@@ -227,26 +227,26 @@ def get_chunks(chunksize, nchunk):
 
 _wq_scinv="""
 command: |
-    version={version}
-    type={type}
+    pz_vers={pz_vers}
+    pz_type={pz_type}
     chunk={chunk}
     chunksize={chunksize}
-    $ESPY_DIR/des/bin/make-scinv $version $type $chunksize $chunk
+    $ESPY_DIR/des/bin/make-scinv $pz_vers $pz_type $chunksize $chunk
 
 job_name: {job_name}
 """
 
-def get_info(version, type):
+def get_info(pz_vers, pz_type):
 
     allinfo=read_version_info()
-    if version not in allinfo:
-        raise KeyError("bad version: '%s'" % version)
+    if pz_vers not in allinfo:
+        raise KeyError("bad pz_vers: '%s'" % pz_vers)
 
-    vinfo = allinfo[version]
-    if type not in vinfo:
-        raise KeyError("bad type : '%s'" % type)
+    vinfo = allinfo[pz_vers]
+    if pz_type not in vinfo:
+        raise KeyError("bad pz_type : '%s'" % pz_type)
     
-    info = vinfo[type]
+    info = vinfo[pz_type]
 
     z_max = info['z_max']
     nbins = info['nbins']
@@ -259,9 +259,9 @@ def get_info(version, type):
 def get_base_dir():
     return '/astro/u/astrodat/data/DES/EXTRA/photoz/combined'
 
-def get_version_dir(version):
+def get_version_dir(pz_vers):
     d=get_base_dir()
-    return os.path.join(d, version)
+    return os.path.join(d, pz_vers)
 
 def get_version_info_file():
     dir=get_base_dir()
@@ -275,18 +275,18 @@ def read_version_info():
         data=yaml.load(fobj)
     return data
 
-def get_h5_file(version):
-    dir=get_version_dir(version)
-    name='DES_photoz_PDFS_%s.h5' % version
+def get_h5_file(pz_vers):
+    dir=get_version_dir(pz_vers)
+    name='DES_photoz_PDFS_%s.h5' % pz_vers
     return os.path.join(dir, name)
 
-def get_scinv_dir(version, type):
-    dir=get_version_dir(version)
-    return os.path.join(dir, '%s-scinv' % type)
+def get_scinv_dir(pz_vers, pz_type):
+    dir=get_version_dir(pz_vers)
+    return os.path.join(dir, '%s-scinv' % pz_type)
 
-def get_scinv_file(version, type, chunk=None):
-    dir=get_scinv_dir(version,type)
-    name='DES_scinv_%s_%s' % (version, type)
+def get_scinv_file(pz_vers, pz_type, chunk=None):
+    dir=get_scinv_dir(pz_vers,pz_type)
+    name='DES_scinv_%s_%s' % (pz_vers, pz_type)
 
     if chunk is not None:
         dir=os.path.join(dir,'chunks')
@@ -294,9 +294,9 @@ def get_scinv_file(version, type, chunk=None):
     name='%s.fits' % name
     return os.path.join(dir, name)
 
-def read_scinv_file(version, type, chunk=None, get_zlvals=False):
+def read_scinv_file(pz_vers, pz_type, chunk=None, get_zlvals=False):
     import fitsio
-    fname=get_scinv_file(version, type, chunk=None)
+    fname=get_scinv_file(pz_vers, pz_type, chunk=None)
 
     with fitsio.FITS(fname) as fits:
         scinv=fits['scinv'][:]
@@ -309,31 +309,14 @@ def read_scinv_file(version, type, chunk=None, get_zlvals=False):
 
     return ret
 
-def get_scinv_wq_dir(version, type):
+def get_scinv_wq_dir(pz_vers, pz_type):
     dir=os.environ['TMPDIR']
-    dir=os.path.join(dir,'des-scinv',version,type)
+    dir=os.path.join(dir,'des-scinv',pz_vers,pz_type)
     return dir
 
-def get_scinv_wq_file(version, type, chunk):
-    dir=get_scinv_wq_dir(version, type)
-    name='DES_scinv_%s_%s_%06d.yaml' % (version, type, chunk)
+def get_scinv_wq_file(pz_vers, pz_type, chunk):
+    dir=get_scinv_wq_dir(pz_vers, pz_type)
+    name='DES_scinv_%s_%s_%06d.yaml' % (pz_vers, pz_type, chunk)
     return os.path.join(dir, name)
 
-def get_match_dir(version, type, source_vers, tilename):
-    """
-    dir to hold matches between shear and p(z) files source vers could be
-    ngmix009
-    """
-    dir=get_scinv_dir(version,type)
-    subdir='match-%s' % source_vers
-    dir=os.path.join(dir, subdir)
-    return dir
 
-def get_match_file(version, type, source_vers, tilename):
-    """
-    match file between shear and p(z) files source vers could be ngmix009
-    """
-    dir=get_match_dir(version, type, source_vers)
-    name='%s_scinv_%s_%s_%06d_%s.yaml' % (tilename,version, type, chunk,source_vers)
-
-    return os.path.join(dir,name)

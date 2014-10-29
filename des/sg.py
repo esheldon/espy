@@ -57,7 +57,7 @@ def get_modest(mag_auto, mag_psf, class_star, spread_model, spread_model_err, fl
 
     if flags is not None:
         flags=array(flags, ndmin=1, copy=False)
-        sg_test = sg_test & (flags <= 3)
+        sg_test = sg_test & (flags == 0)
 
     return sg_test
 
