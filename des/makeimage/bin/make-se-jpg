@@ -45,5 +45,5 @@ for path in imlist:
 
     im=f[1][:,:]
 
-    imout = des.pretty.scale_se_image(im, exptime=exptime)
-    des.pretty.write_jpg(jpg_path, imout, quality=90)
+    imout = des.makeimage.pretty.scale_se_image(im, exptime=exptime)
+    des.makeimage.pretty.write_jpg(jpg_path, imout, quality=90)

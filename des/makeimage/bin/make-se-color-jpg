@@ -136,11 +136,11 @@ def main():
 
     print 'scaling'
     print '  ',(gh['FILTER'].split())[0], gh['exptime']
-    g *= (des.pretty.NOMINAL_EXPTIME/gh['exptime'])
+    g *= (des.makeimage.pretty.NOMINAL_EXPTIME/gh['exptime'])
     print '  ',(rh['FILTER'].split())[0], rh['exptime']
-    r *= (des.pretty.NOMINAL_EXPTIME/rh['exptime'])
+    r *= (des.makeimage.pretty.NOMINAL_EXPTIME/rh['exptime'])
     print '  ',(ih['FILTER'].split())[0], ih['exptime']
-    i *= (des.pretty.NOMINAL_EXPTIME/ih['exptime'])
+    i *= (des.makeimage.pretty.NOMINAL_EXPTIME/ih['exptime'])
 
     print 'shifting images'
     g,i=shift_images(gh,rh,ih,g,i)
@@ -158,8 +158,8 @@ def main():
     #scales= array([1.0, 1.1, 2.0])
     scales= array([1.0, 1.1, 2.0])
     #scales=array([1.,1.,1.])
-    scales= des.pretty.SCALE*scales
-    nonlinear=des.pretty.NONLINEAR
+    scales= des.makeimage.pretty.SCALE*scales
+    nonlinear=des.makeimage.pretty.NONLINEAR
 
     if rebin is not None:
         g=do_rebin(g, rebin)

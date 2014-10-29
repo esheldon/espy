@@ -98,8 +98,8 @@ class RGBMosaicMaker(object):
         image=zeros( (nrows, ncols, 3), dtype='f4' )
 
         scales= array([1.0, 1.1, 2.0])
-        scales = des.pretty.SCALE*scales
-        nonlinear=des.pretty.NONLINEAR
+        scales = des.makeimage.pretty.SCALE*scales
+        nonlinear=des.makeimage.pretty.NONLINEAR
         satval=100.0 # should play with this
 
         rowmin,rowmax,colmin,colmax=self.rowmin,self.rowmax,self.colmin,self.colmax
@@ -200,9 +200,9 @@ class RGBMosaicMaker(object):
         r -= rh['skybrite']
         i -= ih['skybrite']
 
-        g *= (des.pretty.NOMINAL_EXPTIME/gh['exptime'])
-        r *= (des.pretty.NOMINAL_EXPTIME/rh['exptime'])
-        i *= (des.pretty.NOMINAL_EXPTIME/ih['exptime'])
+        g *= (des.makeimage.pretty.NOMINAL_EXPTIME/gh['exptime'])
+        r *= (des.makeimage.pretty.NOMINAL_EXPTIME/rh['exptime'])
+        i *= (des.makeimage.pretty.NOMINAL_EXPTIME/ih['exptime'])
 
         g,i=shift_images(gh,rh,ih,g,i)
 

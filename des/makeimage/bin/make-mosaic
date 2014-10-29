@@ -70,7 +70,7 @@ class MosaicMaker(object):
             imrebin=self.do_rebin(rebin)
 
             print '  writing jpg:',jpg_file
-            jpg_shape=des.pretty.write_jpg(jpg_file, imrebin, quality=90)
+            jpg_shape=des.makeimage.pretty.write_jpg(jpg_file, imrebin, quality=90)
 
             self.make_html(rebin, jpg_shape)
 
@@ -98,10 +98,10 @@ class MosaicMaker(object):
             filt=(h['filter'].split())[0]
             ccd=h['ccdnum']
 
-            ims=des.pretty.scale_se_image(tim, exptime=exptime)
+            ims=des.makeimage.pretty.scale_se_image(tim, exptime=exptime)
             print '  ',jpg_file
             # this is not a bottle neck
-            des.pretty.write_jpg(jpg_file, ims, quality=90)
+            des.makeimage.pretty.write_jpg(jpg_file, ims, quality=90)
 
             # sometimes there is a slight mismatch in inferred size
             image[rowmin[i]:rowmax[i], colmin[i]:colmax[i]] = ims[:,:]
