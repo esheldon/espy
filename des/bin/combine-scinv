@@ -8,16 +8,18 @@ import des
 import argparse
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("version", help="version of P(z) h5 file")
-parser.add_argument("type", help="catalog type, e.g. skynet")
+parser.add_argument("cosmo_vers", help="version of cosmology")
+parser.add_argument("pz_vers", help="version of P(z) h5 file")
+parser.add_argument("pz_type", help="catalog type, e.g. skynet")
 parser.add_argument("chunksize", help="size of each chunk",type=int)
 
    
 def main():
     args = parser.parse_args()
 
-    des.pz.combine_scinv(args.version,
-                         args.type,
+    des.pz.combine_scinv(args.cosmo_vers,
+                         args.pz_vers,
+                         args.pz_type,
                          args.chunksize)
 
 main()
