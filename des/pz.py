@@ -69,6 +69,34 @@ def make_scinv_wq(version, type, chunksize):
     sc=SCinv(version, type, chunksize, chunk)
     sc.write_wq()
 
+def combine_scinv(version, type, chunksize):
+    """
+    combine all the chunks into one big file
+    """
+    import fitsio
+    outfile=get_scinv_file(version, type)
+    print("will write to:",outfile)
+
+    chunk=0
+    sc=SCinv(version, type, chunksize, chunk)
+
+    nchunk=sc.nchunk
+
+    with fitsio.FITS(outfile,'rw',clobber=True) as fits:
+        for chunk in xrange(nchunk):
+            infile=get_scinv_file(version, type, chunk=chunk)
+            print(infile)
+
+            with fitsio.FITS(infile) as fin:
+                data=fin['scinv'][:]
+                if chunk==0:
+                    zvals=fin['zlvals'][:]
+                    fits.write(zvals,extname='zlvals')
+                    fits.write(data,extname='scinv')
+                else:
+                    fits['scinv'].append(data)
+
+
 class SCinv(object):
     """
     create scinv in chunks
@@ -89,9 +117,8 @@ class SCinv(object):
     def _load(self):
         with DESPofz(self.version,self.type) as pofz:
             tsize=pofz.size
-            nchunk = tsize/self.chunksize
-            if (tsize % self.chunksize) != 0:
-                nchunk += 1
+
+            nchunk = get_nchunk(self.chunksize, tsize)
 
             if self.chunk > (nchunk-1):
                 raise RuntimeError("chunk %d out of bounds: "
@@ -155,9 +182,10 @@ class SCinv(object):
 
         dir=get_scinv_wq_dir(self.version, self.type)
         if not os.path.exists(dir):
+            print("making dir:",d)
             os.makedirs(dir)
 
-        beglist,endlist=self.get_chunks()
+        beglist,endlist=get_chunks(self.chunksize, self.nchunk)
         for chunk in xrange(len(beglist)):
             beg=beglist[chunk]
             end=endlist[chunk]
@@ -174,18 +202,24 @@ class SCinv(object):
             with open(fname,'w') as fobj:
                 fobj.write(text)
 
-    def get_chunks(self):
-        beglist=[]
-        endlist=[]
+def get_nchunk(chunksize, nobj):
+    nchunk = nobj/chunksize
+    if (nobj % chunksize) != 0:
+        nchunk += 1
+    return nchunk
 
-        for chunk in xrange(self.nchunk):
-            beg=chunk*self.chunksize
-            end=(chunk+1)*self.chunksize
+def get_chunks(chunksize, nchunk):
+    beglist=[]
+    endlist=[]
 
-            beglist.append(beg)
-            endlist.append(end)
+    for chunk in xrange(nchunk):
+        beg=chunk*chunksize
+        end=(chunk+1)*chunksize
 
-        return beglist, endlist
+        beglist.append(beg)
+        endlist.append(end)
+
+    return beglist, endlist
 
 _wq_scinv="""
 command: |
@@ -251,6 +285,7 @@ def get_scinv_file(version, type, chunk=None):
     name='DES_scinv_%s_%s' % (version, type)
 
     if chunk is not None:
+        dir=os.path.join(dir,'chunks')
         name='%s_%06d' % (name,chunk)
     name='%s.fits' % name
     return os.path.join(dir, name)
