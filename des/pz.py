@@ -182,7 +182,7 @@ class SCinv(object):
 
         dir=get_scinv_wq_dir(self.version, self.type)
         if not os.path.exists(dir):
-            print("making dir:",d)
+            print("making dir:",dir)
             os.makedirs(dir)
 
         beglist,endlist=get_chunks(self.chunksize, self.nchunk)
