@@ -33,6 +33,12 @@ def match_scat(scat_vers, tilenames=None):
             print("skipping missing file:",fname)
             continue
 
+        h=fitsio.read_header(fname,ext='scinv')
+        cvers=h['cosmo_vers'].strip()
+        if cvers != conf['cosmo_vers']:
+            raise RuntimeError("mismatch in cosmology: '%s' vs "
+                               "'%s'" % (cvers,conf['cosmo_vers']))
+
         nuse += 1
         matcher.match(tilename)
 
@@ -64,9 +70,7 @@ class Matcher(object):
         self.pz_vers=pz_vers
         self.pz_type=pz_type
 
-        self.data, self.zlvals = pz.read_scinv_file(self.pz_vers,
-                                                    self.pz_type,
-                                                    get_zlvals=True)
+        self.data, self.zlvals = pz.read_scinv_file(self.pz_vers, self.pz_type)
         self.nz=self.zlvals.size
 
         self.ids = self.data['index']

@@ -6,6 +6,8 @@ from __future__ import print_function
 import os
 import numpy
 
+from .files_common import *
+
 class DESPofz(object):
     """
     Wrapper for hdf5 file
@@ -65,15 +67,15 @@ class DESPofz(object):
         self.size=self.table.shape[0]
 
 
-def make_scinv_wq(pz_vers, pz_type, chunksize):
+def make_scinv_wq(cosmo_vers, pz_vers, pz_type, chunksize):
     """
     make the wq scripts
     """
     chunk=0
-    sc=SCinv(pz_vers, pz_type, chunksize, chunk)
+    sc=SCinv(cosmo_vers, pz_vers, pz_type, chunksize, chunk)
     sc.write_wq()
 
-def combine_scinv(pz_vers, pz_type, chunksize):
+def combine_scinv(cosmo_vers, pz_vers, pz_type, chunksize):
     """
     combine all the chunks into one big file
     """
@@ -82,7 +84,7 @@ def combine_scinv(pz_vers, pz_type, chunksize):
     print("will write to:",outfile)
 
     chunk=0
-    sc=SCinv(pz_vers, pz_type, chunksize, chunk)
+    sc=SCinv(cosmo_vers, pz_vers, pz_type, chunksize, chunk)
 
     nchunk=sc.nchunk
 
@@ -91,22 +93,28 @@ def combine_scinv(pz_vers, pz_type, chunksize):
             infile=get_scinv_file(pz_vers, pz_type, chunk=chunk)
             print(infile)
 
-            with fitsio.FITS(infile) as fin:
-                data=fin['scinv'][:]
+            with fitsio.FITS(infile) as fits_in:
+                data=fits_in['scinv'][:]
                 if chunk==0:
-                    zvals=fin['zlvals'][:]
-                    fits.write(zvals,extname='zlvals')
-                    fits.write(data,extname='scinv')
+                    h=fits_in['scinv'].read_header()
+                    h.delete('chunk')
+                    fits.write(data,extname='scinv',header=h)
                 else:
                     fits['scinv'].append(data)
 
+                if chunk==(nchunk-1):
+                    print("creating zlvals extension")
+                    zvals=fits_in['zlvals'][:]
+                    fits.write(zvals,extname='zlvals')
 
 class SCinv(object):
     """
     create scinv in chunks
     """
-    def __init__(self, pz_vers, pz_type, chunksize, chunk,
+    def __init__(self, cosmo_vers, pz_vers, pz_type, chunksize, chunk,
                  zlmin=0.0, zlmax=0.95, nzl=63):
+
+        self.cosmo_vers=cosmo_vers
         self.pz_vers=pz_vers
         self.pz_type=pz_type
         self.zlmin=zlmin
@@ -119,6 +127,8 @@ class SCinv(object):
         self._load()
 
     def _load(self):
+
+        self.cosmo_conf = read_config(self.cosmo_vers)
         with DESPofz(self.pz_vers,self.pz_type) as pofz:
             tsize=pofz.size
 
@@ -149,7 +159,12 @@ class SCinv(object):
         out=self._get_output()
 
         zs=self.zsvals
-        scalc=ScinvCalculator(self.zlmin, self.zlmax, self.nzl, zs[0], zs[-1])
+
+        conf=self.cosmo_conf
+        print("using H0:",conf['H0'],"omega_m:",conf['omega_m'])
+        scalc=ScinvCalculator(self.zlmin, self.zlmax, self.nzl, zs[0], zs[-1],
+                              H0=conf['H0'],
+                              omega_m=conf['omega_m'])
 
         nobj=data.size
         printstep=nobj//10
@@ -174,10 +189,17 @@ class SCinv(object):
             print("making dir:",d)
             os.makedirs(d)
 
+        header={'cosmo_vers':self.cosmo_vers,
+                'pz_vers':self.pz_vers,
+                'pz_type':self.pz_type,
+                'chunksize':self.chunksize,
+                'chunk':self.chunk}
+
+
         print("writing:",outfile)
         with fitsio.FITS(outfile,'rw',clobber=True) as fits:
+            fits.write(out, extname='scinv', header=header)
             fits.write(zlvals, extname='zlvals')
-            fits.write(out, extname='scinv')
 
     def write_wq(self):
         """
@@ -196,7 +218,8 @@ class SCinv(object):
             fname=get_scinv_wq_file(self.pz_vers,self.pz_type,chunk)
 
             job_name='scinv-%s-%06d' % (self.pz_type, chunk)
-            text=_wq_scinv.format(pz_vers=self.pz_vers,
+            text=_wq_scinv.format(cosmo_vers=self.cosmo_vers,
+                                  pz_vers=self.pz_vers,
                                   pz_type=self.pz_type,
                                   chunksize=self.chunksize,
                                   chunk=chunk,
@@ -227,11 +250,12 @@ def get_chunks(chunksize, nchunk):
 
 _wq_scinv="""
 command: |
+    cosmo_vers={cosmo_vers}
     pz_vers={pz_vers}
     pz_type={pz_type}
     chunk={chunk}
     chunksize={chunksize}
-    $ESPY_DIR/des/bin/make-scinv $pz_vers $pz_type $chunksize $chunk
+    $ESPY_DIR/des/bin/make-scinv $cosmo_vers $pz_vers $pz_type $chunksize $chunk
 
 job_name: {job_name}
 """
@@ -300,17 +324,15 @@ def read_scinv_file(pz_vers, pz_type, chunk=None, get_zlvals=False):
 
     print("reading:",fname)
     with fitsio.FITS(fname) as fits:
-        #beg=12000000
-        #end=beg+1000000
-        #data=fits['scinv'][beg:end]
         data=fits['scinv'][:]
+        zlvals=fits['zlvals'][:]
         print("    read:",data.size)
 
-        if get_zlvals:
-            zlvals=fits['zlvals'][:]
-            ret=data, zlvals
+        if get_header:
+            h=fits['scinv'].read_header()
+            ret=data, zlvals, h
         else:
-            ret=data
+            ret=data, zlvals
 
     return ret
 

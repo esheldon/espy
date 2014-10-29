@@ -1,6 +1,6 @@
-scat_vers: "001"
-
 scat_name: "ngmix009"
 
+cosmo_vers: "cosmo-01"
+
 pz_vers: "v0.1"
-pz_type: "skynet"
+pz_type: "skynet_mag_auto"
