@@ -137,9 +137,9 @@ class ScinvCalculator:
         """
         Set up the pre-computed grid of scinv(zl) over which we will interpolate
         """
-        print("Precomputing scinv on a grid of "
-              "zlmin: %g zlmax: %g nzl: %d "
-              "npts: %d" % (self.zlmin, self.zlmax, self.nzl, self.npts))
+        #print("Precomputing scinv on a grid of "
+        #      "zlmin: %g zlmax: %g nzl: %d "
+        #      "npts: %d" % (self.zlmin, self.zlmax, self.nzl, self.npts))
 
         self.scinv = numpy.zeros((self.nzl, self.npts),dtype='f8')
 
@@ -147,7 +147,6 @@ class ScinvCalculator:
         for i in range(self.nzl):
             zl = self.zlvals[i]
             self.scinv[i,:] = c.sigmacritinv(zl,self.zsvals_int)
-        print("done")
 
     def setup_zl(self, zlmin, zlmax, nzl):
         """
