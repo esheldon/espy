@@ -106,7 +106,7 @@ class SCinv(object):
     create scinv in chunks
     """
     def __init__(self, pz_vers, pz_type, chunksize, chunk,
-                 zlmin=0.095, zlmax=0.95, nzl=57):
+                 zlmin=0.0, zlmax=0.95, nzl=63):
         self.pz_vers=pz_vers
         self.pz_type=pz_type
         self.zlmin=zlmin
