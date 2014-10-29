@@ -89,7 +89,8 @@ class ScinvCalculator:
         """
 
         if pz.size != zs.size:
-            raise ValueError("pz and zs must be same size")
+            raise ValueError("pz(%d) and zs(%d) must be same "
+                             "size" % (pz.size, zs.size))
 
         mean_scinv = numpy.zeros(self.nzl, dtype='f8')
 
@@ -247,9 +248,21 @@ def load_test_data(pzrun):
 
 def test_with_pzrun(pzrun, beg, end):
     zs, data=load_test_data(pzrun)
-    tester=Tester(zs, data, label=pzrun)
 
+    tester=Tester(zs, data, label=pzrun)
     tester.test_scinv_dz(beg, end)
+
+def test_des(version, type, beg, end):
+    import des
+    dpofz=des.pz.DESPofz(version, type)
+
+    data=dpofz[beg:end]
+
+    label='%s-%s' % (version,type)
+
+    tester=Tester(dpofz.zvals, data, label=label)
+    tester.test_scinv_dz(beg, end, yrange=[0,3e-4])
+
 
 class Tester(object):
     def __init__(self, zs, data, label='test'):
@@ -257,18 +270,25 @@ class Tester(object):
         self.zs=zs
         self.label=label
 
-    def test_scinv_dz(self, beg, end, show=False, reload=False, type='png'):
+        d=self.plot_dir()
+        if not os.path.exists(d):
+            os.makedirs(d)
+
+    def test_scinv_dz(self, beg, end, yrange=[0,2.1e-4], show=False, reload=False, type='png'):
         """
 
         Test accuracy of interpolating scinv as a function of dzl, the
         lens redshift spacing.
 
         """
-
+        import biggles
         from biggles import Points,FramedPlot,PlotKey, Table,Histogram,Curve
         from time import time
         import lensing
         import pcolors
+
+        biggles.configure('default','fontface','HersheySans')
+        biggles.configure('default','fontsize_min',1.3)
 
         zsmin=self.zs[0]
         zsmax=self.zs[-1]
@@ -347,10 +367,9 @@ class Tester(object):
             scinv_key = PlotKey(0.95,0.9,scinv_plots,halign='right')
             plt_scinv.add(scinv_key)
 
-            plt_scinv.ylabel=r'$\langle \Sigma_{crit}^{-1}(z_{lens})\rangle$'
+            plt_scinv.ylabel=r'$\Sigma_{crit}^{-1}(z_{lens})$'
             plt_scinv.xlabel=r'$z_{lens}$'
-            plt_scinv.yrange = [0,2.1e-4]
-            #plt_scinv.yrange = [0,6e-4]
+            plt_scinv.yrange = yrange
 
             #plt_scinv.show()
             tab[1,0] = plt_scinv
@@ -387,7 +406,7 @@ class Tester(object):
             key = PlotKey(0.95,0.9,pdiff_plots,halign='right')
             plt_pdiff.add(key)
 
-            plt_pdiff.ylabel=r'$\langle \Sigma_{crit}^{-1} \rangle / \langle \Sigma_{crit}^{-1} \rangle_{best} - 1$'
+            plt_pdiff.ylabel=r'$\Sigma_{crit}^{-1} /  \Sigma_{crit}^{-1}_{best} - 1$'
             plt_pdiff.xlabel=r'$z_{lens}$'
 
             tab[2,0] = plt_pdiff
@@ -538,6 +557,7 @@ class Tester(object):
             if show:
                 tab.show()
 
+
             plotfile=self.npts_plot_file(i, type)
             print("writing to file:",plotfile)
             if type == 'png':
@@ -552,7 +572,7 @@ class Tester(object):
 
     def plot_dir(self):
         d=os.environ['LENSDIR']
-        d = path_join(d,'sigmacrit-tests')
+        d = path_join(d,'sigmacrit-tests',self.label)
         return d
 
     def npts_plot_file(self, index, type='png'):

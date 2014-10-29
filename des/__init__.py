@@ -14,6 +14,8 @@ from . import compare_serun_merun
 from . import pretty
 from . import stellar_density
 
+from . import pz
+
 try:
     from . import admom_des
 except:
