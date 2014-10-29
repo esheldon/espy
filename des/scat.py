@@ -1,21 +1,19 @@
 from .files_common import *
 from . import pz
 
-def match_scat(scat_vers):
+def match_scat(scat_vers, tilenames=None):
     import desdb
 
     conf=read_config(scat_vers)
-    print("getting tile list")
-    with desdb.Connection() as conn:
-        q="select distinct(tilename) from %(scat_name)s" % conf
-        res=conn.quick(q)
-        tiles=res['tilename']
         
+    if tilenames is None:
+        tilenames=get_tilenames(conf['scat_name'])
+
     matcher=Matcher(conf['scat_name'],
                     conf['pz_vers'],
                     conf['pz_type'])
 
-    for tile in tiles:
+    for tile in tilenames:
         # not all tiles are in Daniel's match file
         fname=get_dg_scat_file(conf['scat_name'], tilename)
         if not os.path.exists(fname):
@@ -23,8 +21,18 @@ def match_scat(scat_vers):
             continue
 
         matcher.match(tilename)
-        return
-    
+
+def get_tilenames(scat_name):
+    """
+    this assumes the scat_name corresponds to a database table
+    """
+    print("getting tile list")
+    with desdb.Connection() as conn:
+        q="select distinct(tilename) from %(scat_name)s" % scat_name
+        res=conn.quick(q)
+        tilenames=res['tilename']
+    return tilenames
+
 class Matcher(object):
     """
     match the scat to the sigma crit
@@ -45,6 +53,9 @@ class Matcher(object):
         self.ids = self.data['index']
 
     def match(self, tilename):
+        """
+        match and write the output file
+        """
         import fitsio
         from esutil import numpy_util as nu
         dg_data=read_dg_scat_file(self.scat_name, tilename)
