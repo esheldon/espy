@@ -298,14 +298,19 @@ def read_scinv_file(pz_vers, pz_type, chunk=None, get_zlvals=False):
     import fitsio
     fname=get_scinv_file(pz_vers, pz_type, chunk=None)
 
+    print("reading:",fname)
     with fitsio.FITS(fname) as fits:
-        scinv=fits['scinv'][:]
+        #beg=12000000
+        #end=beg+1000000
+        #data=fits['scinv'][beg:end]
+        data=fits['scinv'][:]
+        print("    read:",data.size)
 
         if get_zlvals:
             zlvals=fits['zlvals'][:]
-            ret=scinv, zlvals
+            ret=data, zlvals
         else:
-            ret=scinv
+            ret=data
 
     return ret
 

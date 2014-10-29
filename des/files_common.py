@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 
 def config_dir():
@@ -7,7 +8,7 @@ def config_dir():
 
 def config_file(name):
     d=config_dir()
-    name='%s.yaml'
+    name='%s.yaml' % name
 
     return os.path.join(d, name)
 
@@ -28,11 +29,11 @@ def get_lensdir():
     return os.environ['LENSDIR']
 
 def get_cat_basedir():
-    catdir = path_join(get_lensdir(), 'catalogs')
+    catdir = os.path.join(get_lensdir(), 'catalogs')
     return catdir
 
 
-def get_cat_dir(self, catname):
+def get_cat_dir(catname):
     d=get_cat_basedir()
     d=os.path.join(d, catname)
     return d

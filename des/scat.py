@@ -1,8 +1,17 @@
+from __future__ import print_function
 from .files_common import *
 from . import pz
 
 def match_scat(scat_vers, tilenames=None):
-    import desdb
+    """
+    match the dg scat to scinv using a Matcher
+
+    parameters
+    ----------
+    scat_vers: string
+        e.g. scat-001, implying a config/scat-001.yaml. This
+        holds the scat_name, pz_vers, pz_type etc.
+    """
 
     conf=read_config(scat_vers)
         
@@ -13,24 +22,34 @@ def match_scat(scat_vers, tilenames=None):
                     conf['pz_vers'],
                     conf['pz_type'])
 
-    for tile in tilenames:
+    ntile=len(tilenames)
+    nuse=0
+    for i,tilename in enumerate(tilenames):
+        print("-"*70)
+        print("processing tile %d/%d: %s" % (i+1,ntile,tilename))
         # not all tiles are in Daniel's match file
         fname=get_dg_scat_file(conf['scat_name'], tilename)
         if not os.path.exists(fname):
             print("skipping missing file:",fname)
             continue
 
+        nuse += 1
         matcher.match(tilename)
+
+    print("finally used: %d/%d" % (nuse, ntile))
 
 def get_tilenames(scat_name):
     """
     this assumes the scat_name corresponds to a database table
     """
+    import desdb
     print("getting tile list")
     with desdb.Connection() as conn:
-        q="select distinct(tilename) from %(scat_name)s" % scat_name
+        q="select distinct(tilename) from %s" % scat_name
         res=conn.quick(q)
-        tilenames=res['tilename']
+        tilenames=[r['tilename'] for r in res]
+
+    print("found",len(tilenames),"tiles")
     return tilenames
 
 class Matcher(object):
@@ -45,9 +64,9 @@ class Matcher(object):
         self.pz_vers=pz_vers
         self.pz_type=pz_type
 
-        self.zlvals, self.data = read_scinv_file(self.pz_vers,
-                                                 self.pz_type,
-                                                 get_zlvals=True)
+        self.data, self.zlvals = pz.read_scinv_file(self.pz_vers,
+                                                    self.pz_type,
+                                                    get_zlvals=True)
         self.nz=self.zlvals.size
 
         self.ids = self.data['index']
@@ -56,36 +75,55 @@ class Matcher(object):
         """
         match and write the output file
         """
-        import fitsio
         from esutil import numpy_util as nu
         dg_data=read_dg_scat_file(self.scat_name, tilename)
 
+        print("matching")
         mdg, msc = nu.match(dg_data['coadd_objects_id'], self.ids)
-        print("matched: %d/%d" % (mdg.size, dg_data.size))
+        print("    matched: %d/%d" % (mdg.size, dg_data.size))
 
+        if mdg.size == 0:
+            print("    skipping")
+            return
+
+        dg_data=dg_data[mdg]
         newdata=nu.add_fields(dg_data, [('scinv','f8',self.nz)])
-        newdata['scinv'][mdg,:] = self.data['scinv'][msc,:]
+        newdata['scinv'] = self.data['scinv'][msc,:]
+
+        self._write_data(newdata, tilename)
+
+    def _write_data(self, data, tilename):
+        """
+        write the data, making dir if necessary
+        """
+        import fitsio
+        d=get_scinv_matched_dir(self.scat_name,
+                                self.pz_vers,
+                                self.pz_type)
+        if not os.path.exists(d):
+            print("making dir:",d)
+            os.makedirs(d)
 
         outf=get_scinv_matched_file(self.scat_name,
                                     self.pz_vers,
                                     self.pz_type,
                                     tilename)
         print("writing to:",outf)
-        return
         with fitsio.FITS(outf,'rw',clobber=True) as fits:
-            fits.write(newdata, extname='model_fits')
+            fits.write(data, extname='model_fits')
             fits.write(self.zlvals, extname='zlvals')
 
 
 
-dg_name={'ngmix009':'{tilename}_{catname}m.fits.gz'}
+# e.g "ngmix009" for scat_name
+dg_name={'ngmix009':'{tilename}_{scat_name}m.fits.gz'}
 
 # daniel's files
 def get_dg_scat_file(scat_name, tilename):
     d=get_cat_dir(scat_name+'-dg')
     pattern=dg_name[scat_name]
 
-    fname=pattern.format(tilename=tilename)
+    fname=pattern.format(scat_name=scat_name, tilename=tilename)
     return os.path.join(d, fname)
 
 def read_dg_scat_file(scat_name, tilename):

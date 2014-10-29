@@ -8,12 +8,19 @@ import des
 import argparse
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("scat_vers", help="the scat version. corresponds to config/{version}.yaml.  E.g. scat-001")
-
+parser.add_argument("scat_vers", 
+                    help=("the scat version. corresponds to "
+                          "config/{version}.yaml.  E.g. scat-001"))
+parser.add_argument("-t", "--tilename",
+                    help="only match this tilename")
    
 def main():
     args = parser.parse_args()
 
-    des.scat.match_scat(args.scat_vers)
+    if args.tilename is not None:
+        tilenames=[args.tilename]
+    else:
+        tilenames=None
+    des.scat.match_scat(args.scat_vers,tilenames=tilenames)
 
 main()
