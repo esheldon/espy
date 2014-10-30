@@ -282,10 +282,16 @@ class Matcher(object):
 
 
 def get_scat_dir(scat_vers):
+    """
+    directory to hold source catalog files
+    """
     d=os.environ['LENSDIR']
     return os.path.join(d, 'scat', scat_vers)
 
 def get_scat_file(scat_vers, tilename):
+    """
+    source catalog ascii files 
+    """
     d=get_scat_dir(scat_vers)
     fname='{scat_vers}-{tilename}.dat'
     fname=fname.format(scat_vers=scat_vers,
@@ -293,6 +299,9 @@ def get_scat_file(scat_vers, tilename):
     return os.path.join(d,fname)
 
 def write_scat(fname, data):
+    """
+    Write a source ascii file
+    """
     from esutil.recfile import Recfile
     if os.path.exists(fname):
         os.remove(fname)
