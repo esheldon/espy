@@ -6,30 +6,120 @@ runs are a combination of source and lens sample with configuration details
 
 from __future__ import print_function
 from .files_common import *
+from .import scat
+from . import lcat
+from . import output
 
 class Run(dict):
     """
     for writing run configs and wq submit files
     """
     def __init__(self, run):
-        self.xshear_conf=XShearConfig(run)
+        conf=cascade_config(run)
+        self.update(conf)
+
 
     def write_all(self):
         """
         write config and yaml files
         """
-        self.xshear_conf.write()
+        self.write_config()
         self.write_wq()
+
+    def write_config(self):
+        """
+        write the xshear config
+        """
+        xshear_conf=XShearConfig(self['run'])
+        xshear_conf.write()
 
     def write_wq(self):
         """
         write the cfg file
         """
-        return
         self.write_chunk_wq()
+        return
         self.write_red_wq()
         self.write_collate_wq()
+    
+    def write_chunk_wq(self):
+        """
+        write all the chunks
+        """
+        lens_nchunk=self['lens_conf']['nchunk']
+        tilenames=scat.get_tilenames(self['source_conf']['scat_name'])
 
+        ntile=len(tilenames)
+        for lens_chunk in xrange(lens_nchunk):
+            for i,tilename in enumerate(tilenames):
+                print("    %d/%d: %s" % (i,ntile,tilename))
+                # first check if this source catalog exists
+                if self._scat_exists(tilename):
+                    job=XShearWQJob(self['run'],
+                                    lens_chunk,
+                                    tilename)
+                    job.write()
+                else:
+                    print("    skipping due to missing scat")
+
+    def _scat_exists(self, tilename):
+        """
+        check if the source catalog exists
+        """
+        fname=scat.get_scat_file(self['scat_vers'],
+                                 tilename)
+        return os.path.exists(fname)
+
+class XShearWQJob(dict):
+    """
+    For writing xshear wq files
+    """
+    def __init__(self, run, lens_chunk, source_tilename):
+        conf=cascade_config(run)
+        self.update(conf)
+
+        self['lens_chunk']=lens_chunk
+        self['source_tilename']=source_tilename
+    
+    def write(self):
+        """
+        write the wq file
+        """
+
+        d=get_run_dir(self['run'])
+        if not os.path.exists(d):
+            print("making dir:",d)
+            os.makedirs(d)
+
+        fname=get_xshear_wq_file(self['run'],
+                                 self['lens_chunk'],
+                                 self['source_tilename'])
+        text=self.get_text()
+        print("writing:",fname)
+        with open(fname,'w') as fobj:
+            fobj.write(text)
+
+    def get_text(self):
+        """
+        get the wq job text
+        """
+
+        c={}
+        c['config_file']=get_config_file(self['run'])
+
+        c['scat_file']=scat.get_scat_file(self['scat_vers'],
+                                          self['source_tilename'])
+        c['lcat_file']=lcat.get_lcat_file(self['lcat_vers'],
+                                          self['lens_chunk'])
+        c['output_file']=output.get_output_file(self['run'], self['lens_chunk'],
+                                                self['source_tilename'])
+        job_name='%(run)s-%(lens_chunk)06d-%(source_tilename)s'
+        c['job_name']=job_name % self
+
+        text=_xshear_wq_template % c
+
+        return text
+                                     
 class XShearConfig(dict):
     """
     For writing the xshear config file
@@ -144,6 +234,18 @@ def get_config_file(run):
     fname='%s.cfg' % run
     return os.path.join(d, fname)
 
+def get_xshear_wq_file(run, lens_chunk, source_tilename):
+    """
+    the yaml wq file for a source tilename and lens chunk
+    """
+    d=get_run_dir(run)
+    fname="%(run)s-lens-%(lens_chunk)06d-src-%(source_tilename)s.yaml"
+    fname=fname % {'run':run,
+                   'lens_chunk':lens_chunk,
+                   'source_tilename':source_tilename}
+
+    return os.path.join(d, fname)
+
 _config_top="""
 # cosmology parameters
 H0                = %(H0)g
@@ -196,3 +298,52 @@ sigmacrit_style   = "interp"
 zlvals = %(zlvals)s
 """
 
+
+_xshear_wq_template="""
+command: |
+    source ~esheldon/.bashrc
+
+    hostname
+    module load xshear/work
+
+    config=%(config_file)s
+    scat=%(scat_file)s
+    lcat=%(lcat_file)s
+
+    outf=%(output_file)s
+
+    tmp_dir=$TMPDIR/sobjshear-$RANDOM-$RANDOM
+    mkdir -vp $tmp_dir
+
+    dname=$(dirname $outf)
+    mkdir -vp $dname
+
+    tmp_outf=$tmp_dir/$(basename $outf)
+    tmp_lcat=$tmp_dir/$(basename $lcat)
+    tmp_scat=$tmp_dir/$(basename $scat)
+    tmp_config=$tmp_dir/$(basename $config)
+
+    echo -e "staging lcat file to local disk:\\n  $lcat\\n  $tmp_lcat"
+    cp $lcat $tmp_lcat
+    echo -e "staging scat file to local disk:\\n  $scat\\n  $tmp_scat"
+    cp $scat $tmp_scat
+
+    echo -e "staging config file to local disk:\\n  $config\\n  $tmp_config"
+    cp $config $tmp_config
+
+    xshear $tmp_config $tmp_lcat < $tmp_scat 1> $tmp_outf
+
+    err=$?
+    if [[ $err != "0" ]]; then
+        echo "Error running xshear: $err"
+    fi
+    if [[ -e $tmp_outf ]]; then
+        echo -e "pushing temp file to\\n  $outf"
+        mv -fv $tmp_outf $outf
+    fi
+    rm -rvf $tmp_dir 2>&1
+
+    date
+
+job_name: "%(job_name)s"
+"""
