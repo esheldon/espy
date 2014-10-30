@@ -9,19 +9,21 @@ from .files_common import *
 from . import pz
 from . import sg
 
-def make_xshear_input(scat_vers, tilenames=None):
+def make_xshear_input(scat_vers, tilename=None):
     """
     write xshear input files
 
     parameters
     ----------
-    tilenames: optional, list
-        Optional list of tilenames, default do all
+    tilename: optional
+        Optional tilename, default do all
     """
 
-    if tilenames is None:
+    if tilename is None:
         conf=read_config(scat_vers)
         tilenames=get_tilenames(conf['scat_name'])
+    else:
+        tilenames=[tilename]
 
     ntile=len(tilenames)
 
