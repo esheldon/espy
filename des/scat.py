@@ -287,7 +287,7 @@ def get_scat_dir(scat_vers):
     """
     directory to hold source catalog files
     """
-    d=os.environ['LENSDIR']
+    d=get_des_lensdir()
     return os.path.join(d, 'scat', scat_vers)
 
 def get_scat_file(scat_vers, tilename):

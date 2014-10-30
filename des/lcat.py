@@ -238,7 +238,7 @@ def get_lcat_dir(lcat_vers):
     """
     directory to hold lens catalog files
     """
-    d=os.environ['LENSDIR']
+    d=get_des_lensdir()
     return os.path.join(d, 'lcat', lcat_vers)
 
 def get_lcat_file(lcat_vers, chunk):

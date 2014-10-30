@@ -37,6 +37,13 @@ def get_lensdir():
         raise ValueError("LENSDIR is not set")
     return os.environ['LENSDIR']
 
+def get_des_lensdir():
+    """
+    root for des-specific lensing dir
+    """
+    d=get_lensdir()
+    return os.path.join(d, 'des-lensing')
+
 def get_cat_basedir():
     """
     base dir holding all catalog dirs

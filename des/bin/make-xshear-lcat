@@ -18,6 +18,6 @@ parser.add_argument("--chunk",
 def main():
     args = parser.parse_args()
 
-    des.lcat.make_xshear_input(args.lcat_vers,tilename=args.tilename)
+    des.lcat.make_xshear_input(args.lcat_vers,chunk=args.chunk)
 
 main()
