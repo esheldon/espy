@@ -210,15 +210,57 @@ def get_tilenames(scat_name):
     """
     this assumes the scat_name corresponds to a database table
     """
-    import desdb
-    print("getting tile list")
-    with desdb.Connection() as conn:
-        q="select distinct(tilename) from %s" % scat_name
-        res=conn.quick(q)
-        tilenames=[r['tilename'] for r in res]
+    print("getting tile list for:",scat_name)
 
+    tilenames=read_tilenames_cache(scat_name)
     print("found",len(tilenames),"tiles")
     return tilenames
+
+def read_tilenames_cache(scat_name):
+    """
+    write the tilenames to a file
+    """
+    import yaml
+    import desdb
+    fname=get_tilename_cache_file(scat_name)
+
+    if not os.path.exists(fname):
+        print("    caching from database")
+        dir=get_tilename_cache_dir()
+        if not os.path.exists(dir):
+            print("making dir:",dir)
+            os.makedirs(dir)
+
+        with desdb.Connection() as conn:
+            q="select distinct(tilename) from %s" % scat_name
+            res=conn.quick(q)
+            tilenames=[r['tilename'] for r in res]
+
+        
+        print("    writing to:",fname)
+        with open(fname,'w') as fobj:
+            yaml.dump(tilenames, fobj)
+    else:
+        print("    reading:",fname)
+        with open(fname) as fobj:
+            tilenames=yaml.load(fobj)
+
+    return tilenames
+
+def get_tilename_cache_dir():
+    """
+    directory to hold source catalog files
+    """
+    d=get_des_lensdir()
+    return os.path.join(d, 'tilename_cache')
+
+def get_tilename_cache_file(scat_name):
+    """
+    file to hold tilenames
+    """
+    dir=get_tilename_cache_dir()
+    fname='%s-tilenames.yaml' % scat_name
+    return os.path.join(dir, fname)
 
 class Matcher(object):
     """
