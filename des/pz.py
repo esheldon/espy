@@ -318,7 +318,7 @@ def get_scinv_file(pz_vers, pz_type, chunk=None):
     name='%s.fits' % name
     return os.path.join(dir, name)
 
-def read_scinv_file(pz_vers, pz_type, chunk=None, get_zlvals=False):
+def read_scinv_file(pz_vers, pz_type, chunk=None, get_header=False):
     import fitsio
     fname=get_scinv_file(pz_vers, pz_type, chunk=None)
 

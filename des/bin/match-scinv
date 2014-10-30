@@ -21,6 +21,6 @@ def main():
         tilenames=[args.tilename]
     else:
         tilenames=None
-    des.scat.match_scat(args.scat_vers,tilenames=tilenames)
+    des.scat.match_scinv(args.scat_vers,tilenames=tilenames)
 
 main()
