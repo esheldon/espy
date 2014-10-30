@@ -41,3 +41,32 @@ the source catalogs are broken up by tilename
 
 This is high memory, so I've been running it as a single job rather than
 splitting things up.
+
+Then make the source input for xshear.  This is pretty fast, no need currently
+to split it up
+
+    $ESPY_DIR/des/bin/make-xshear-scat $scat_vers
+    $ESPY_DIR/des/bin/make-xshear-scat scat-001
+    $ESPY_DIR/des/bin/make-xshear-scat -t DES0440-4623 scat-001
+
+lens catalogs
+---------------
+
+you need to define a lens sample, e.g.
+
+    $ESPY_DIR/des/config/lcat-001.yaml
+
+which will refer to an lcat_name that points under the catalogs directory.  It
+also refers to the cosmology.
+
+Create the lens xshear input file
+
+    $ESPY_DIR/des/bin/make-xshear-lcat $lcat_vers
+    $ESPY_DIR/des/bin/make-xshear-lcat lcat-001
+    $ESPY_DIR/des/bin/make-xshear-lcat --chunk 35 lcat-001
+
+For randoms and large catalogs you will want to process each chunk
+separately.  Make wq files to make the chunks.
+
+    $ESPY_DIR/des/bin/make-lcat-wq $lcat_vers
+
