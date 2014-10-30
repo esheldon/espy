@@ -24,7 +24,7 @@ def read_config(name):
     """
     import yaml
     fname=config_file(name)
-    print("reading:",fname)
+    #print("reading:",fname)
     with open(fname) as fobj:
         data=yaml.load(fobj)
     return data
@@ -35,6 +35,7 @@ def cascade_config(run):
     configs
     """
     conf=read_config(run)
+    conf['run']=run
 
     conf['lens_conf']=read_config(conf['lcat_vers'])
     conf['source_conf']=read_config(conf['scat_vers'])
