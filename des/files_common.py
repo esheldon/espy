@@ -29,6 +29,24 @@ def read_config(name):
         data=yaml.load(fobj)
     return data
 
+def cascade_config(run):
+    """
+    read the run config as well as the lens, source, and cosmo
+    configs
+    """
+    conf=read_config(run)
+
+    conf['lens_conf']=read_config(conf['lcat_vers'])
+    conf['source_conf']=read_config(conf['scat_vers'])
+    conf['cosmo_conf']=read_config(conf['lens_conf']['cosmo_vers'])
+
+    lc=conf['lens_conf']['cosmo_vers']
+    sc=conf['source_conf']['cosmo_vers']
+    if lc != sc:
+        raise ValueError("cosmo mismatch: '%s' '%s'" % (lc,sc))
+
+    return conf
+
 def get_lensdir():
     """
     This is the root dir under which all data are stored
