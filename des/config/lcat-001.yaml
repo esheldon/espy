@@ -12,7 +12,7 @@ zmin: 0.1
 zmax: 0.9
 
 # this is "eq" or "sdss"
-mask_coord: "eq"
+mask_style: "equatorial"
 mask_type: "healpix"
 mask_file: "/astro/u/esheldon/masks/des/neff/sva1_gold_1.0_nside4096-64_ring_i_neff.fits"
 mask_ellip_max: 0.05
