@@ -12,15 +12,11 @@ parser.add_argument("scat_vers",
                     help=("the scat version. corresponds to "
                           "config/{version}.yaml.  E.g. scat-001"))
 parser.add_argument("-t", "--tilename",
-                    help="only match this tilename")
+                    help="only processthis tilename")
    
 def main():
     args = parser.parse_args()
 
-    if args.tilename is not None:
-        tilenames=[args.tilename]
-    else:
-        tilenames=None
-    des.scat.make_xshear_input(args.scat_vers,tilenames=tilenames)
+    des.scat.make_xshear_input(args.scat_vers,tilename=args.tilename)
 
 main()
