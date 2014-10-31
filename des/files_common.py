@@ -330,7 +330,7 @@ def get_xshear_config_file(run):
     return os.path.join(d, fname)
 
 #
-# output files
+# xshear output files
 #
 
 def get_output_basedir():
@@ -359,6 +359,10 @@ def get_output_file(run, lens_chunk, source_tilename):
 
     return os.path.join(d, fname)
 
+#
+# xshear reduced files
+#
+
 def get_reduced_file(run, lens_chunk):
     """
     File reduced across sources
@@ -369,6 +373,11 @@ def get_reduced_file(run, lens_chunk):
                    'lens_chunk':lens_chunk}
 
     return os.path.join(d, fname)
+
+#
+# xshear combined files (combine all lens chunks)
+#
+
 
 def get_combined_file(run):
     """
