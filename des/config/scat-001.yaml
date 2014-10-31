@@ -9,7 +9,9 @@ shear_style: "lensfit"
 scinv_style: "interp"
 scinv_col: "scinv"
 
+# e1 only needed for old ngmix
 minus_e1: True
+minus_e2: False
 
 # support this as well in the future
 #scinv_style: 'point'

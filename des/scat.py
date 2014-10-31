@@ -69,6 +69,7 @@ class XShearInput(dict):
             print("%d/%d passed all cuts" % (w.size,data0.size))
             data=data0[w]
             output=self.extract_cols(data)
+            self.fix_data(output)
             self.write_data(output, tilename)
 
     def extract_cols(self, data):
@@ -104,11 +105,27 @@ class XShearInput(dict):
         weight=1.0/var
         newdata['weight'] = weight
 
+        return newdata
+
+    def fix_data(self, data):
+        """
+        fix conventions and ranges
+        """
         if self['minus_e1']:
             print("        multiplying e1 by -1")
             data[self['e1_col']] *= -1
 
-        return newdata
+        if self['minus_e2']:
+            print("        multiplying e2 by -1")
+            data[self['e2_col']] *= -1
+
+        if self['shear_style']=='lensfit':
+            print("        clipping sensitivities")
+            c1=self['e1sens_col']
+            c2=self['e2sens_col']
+            data[c1].clip(min=0.0,max=None,out=data[c1])
+            data[c2].clip(min=0.0,max=None,out=data[c2])
+            print("        min1:",data[c1].min(),"min2:",data[c2].min())
 
     def write_data(self, data, tilename):
         """
