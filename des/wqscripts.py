@@ -6,8 +6,41 @@ from __future__ import print_function
 from .files_common import *
 
 class MakeLcatWQJob(dict):
-    def __init__(self, lcat_vers):
-        pass
+    """
+    class to write wq scripts to make lcats
+    """
+    def __init__(self, lcat_vers, chunk):
+        self['lcat_vers']=lcat_vers
+        self['chunk']=chunk
+
+    def write(self):
+        """
+        write the wq script
+        """
+        fname=get_make_lcat_wq_file(self['lcat_vers'], self['chunk'])
+        d=get_make_lcat_wq_dir(self['lcat_vers'])
+
+        if not os.path.exists(d):
+            print("making dir:",d)
+            os.makedirs(d)
+
+        text=self.get_text()
+
+        print("writing:",fname)
+        with open(fname,'w') as fobj:
+            fobj.write(text)
+
+    def get_text(self):
+        """
+        text for the wq file
+        """
+        job_name="%s-%06d" % (self['lcat_vers'], self['chunk'])
+
+        text=_make_lcat_wq_template.format(lcat_vers=self['lcat_vers'],
+                                           chunk=self['chunk'],
+                                           job_name=job_name)
+
+        return text
 
 class XShearWQJob(dict):
     """
@@ -96,6 +129,26 @@ class RedshearWQJob(dict):
 
         text=_redshear_template % self
         return text
+
+def get_make_lcat_wq_dir(lcat_vers):
+    dir=os.environ['TMPDIR']
+    dir=os.path.join(dir,'des-lcat-make',lcat_vers)
+    return dir
+
+def get_make_lcat_wq_file(lcat_vers, chunk):
+    dir=get_make_lcat_wq_dir(lcat_vers)
+    name='%s-%06d.yaml' % (lcat_vers, chunk)
+    return os.path.join(dir, name)
+
+_make_lcat_wq_template="""
+command: |
+    lcat_vers={lcat_vers}
+    chunk={chunk}
+    $ESPY_DIR/des/bin/make-xshear-lcat --chunk $chunk $lcat_vers
+
+job_name: {job_name}
+"""
+
 
 def get_xshear_wq_dir(run):
     """

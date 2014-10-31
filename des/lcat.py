@@ -27,25 +27,12 @@ def make_wq(lcat_vers):
     """
     make the wq scripts
     """
+    from .wqscripts import MakeLcatWQJob
+
     conf=read_config(lcat_vers)
-    d=get_wq_dir(lcat_vers)
-
-    if not os.path.exists(d):
-        print("making dir:",d)
-        os.makedirs(d)
-
     for chunk in xrange(conf['nchunk']):
-
-        fname=get_wq_file(lcat_vers, chunk)
-        job_name="%s-%06d" % (lcat_vers, chunk)
-
-        text=_wq_template.format(lcat_vers=lcat_vers,
-                                 chunk=chunk,
-                                 job_name=job_name)
-
-        print("writing:",fname)
-        with open(fname,'w') as fobj:
-            fobj.write(text)
+        job=MakeLcatWQJob(lcat_vers, chunk) 
+        job.write()
 
 
 class XShearInput(dict):
@@ -216,24 +203,5 @@ class XShearInput(dict):
         return dt
 
 
-
-def get_wq_dir(lcat_vers):
-    dir=os.environ['TMPDIR']
-    dir=os.path.join(dir,'des-lcat-make',lcat_vers)
-    return dir
-
-def get_wq_file(lcat_vers, chunk):
-    dir=get_wq_dir(lcat_vers)
-    name='%s-%06d.yaml' % (lcat_vers, chunk)
-    return os.path.join(dir, name)
-
-_wq_template="""
-command: |
-    lcat_vers={lcat_vers}
-    chunk={chunk}
-    $ESPY_DIR/des/bin/make-xshear-lcat --chunk $chunk $lcat_vers
-
-job_name: {job_name}
-"""
 
 
