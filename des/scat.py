@@ -104,6 +104,10 @@ class XShearInput(dict):
         weight=1.0/var
         newdata['weight'] = weight
 
+        if self['minus_e1']:
+            print("        multiplying e1 by -1")
+            data[self['e1_col']] *= -1
+
         return newdata
 
     def write_data(self, data, tilename):

@@ -9,6 +9,8 @@ shear_style: "lensfit"
 scinv_style: "interp"
 scinv_col: "scinv"
 
+minus_e1: True
+
 # support this as well in the future
 #scinv_style: 'point'
 #z_col: 'zp'

@@ -270,7 +270,7 @@ nbin              = %(nbin)d
 
 # min and max radius in Mpc
 rmin              = %(rmin)g
-rmax              = %(rmin)g
+rmax              = %(rmax)g
 
 # sigma crit style
 #  "point": using source z as truth. Implies the last column in source cat is z
