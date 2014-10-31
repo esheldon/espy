@@ -10,6 +10,8 @@ from .import scat
 from . import lcat
 from . import output
 
+from .wqscripts import XShearWQJob, RedshearWQJob
+
 class Run(dict):
     """
     for writing run configs and wq submit files
@@ -17,7 +19,6 @@ class Run(dict):
     def __init__(self, run):
         conf=cascade_config(run)
         self.update(conf)
-
 
     def write_all(self):
         """
@@ -37,14 +38,14 @@ class Run(dict):
         """
         write the cfg file
         """
-        self.write_chunk_wq()
+        self.write_xshear_wq()
+        self.write_redshear_wq()
         return
-        self.write_red_wq()
         self.write_collate_wq()
     
-    def write_chunk_wq(self):
+    def write_xshear_wq(self):
         """
-        write all the chunks
+        write all the chunks and tiles
         """
         lens_nchunk=self['lens_conf']['nchunk']
         tilenames=scat.get_tilenames(self['source_conf']['scat_name'])
@@ -62,6 +63,16 @@ class Run(dict):
                 else:
                     print("    skipping due to missing scat")
 
+    def write_redshear_wq(self):
+        """
+        write all the chunks
+        """
+        lens_nchunk=self['lens_conf']['nchunk']
+
+        for lens_chunk in xrange(lens_nchunk):
+            job=RedShearWQJob(self['run'], lens_chunk)
+            job.write()
+
     def _scat_exists(self, tilename):
         """
         check if the source catalog exists
@@ -70,56 +81,7 @@ class Run(dict):
                                  tilename)
         return os.path.exists(fname)
 
-class XShearWQJob(dict):
-    """
-    For writing xshear wq files
-    """
-    def __init__(self, run, lens_chunk, source_tilename):
-        conf=cascade_config(run)
-        self.update(conf)
-
-        self['lens_chunk']=lens_chunk
-        self['source_tilename']=source_tilename
-    
-    def write(self):
-        """
-        write the wq file
-        """
-
-        d=get_run_dir(self['run'])
-        if not os.path.exists(d):
-            print("making dir:",d)
-            os.makedirs(d)
-
-        fname=get_xshear_wq_file(self['run'],
-                                 self['lens_chunk'],
-                                 self['source_tilename'])
-        text=self.get_text()
-        print("writing:",fname)
-        with open(fname,'w') as fobj:
-            fobj.write(text)
-
-    def get_text(self):
-        """
-        get the wq job text
-        """
-
-        c={}
-        c['config_file']=get_config_file(self['run'])
-
-        c['scat_file']=scat.get_scat_file(self['scat_vers'],
-                                          self['source_tilename'])
-        c['lcat_file']=lcat.get_lcat_file(self['lcat_vers'],
-                                          self['lens_chunk'])
-        c['output_file']=output.get_output_file(self['run'], self['lens_chunk'],
-                                                self['source_tilename'])
-        job_name='%(run)s-%(lens_chunk)06d-%(source_tilename)s'
-        c['job_name']=job_name % self
-
-        text=_xshear_wq_template % c
-
-        return text
-                                     
+                                    
 class XShearConfig(dict):
     """
     For writing the xshear config file
@@ -139,7 +101,7 @@ class XShearConfig(dict):
         """
         write the config
         """
-        fname=get_config_file(self['run'])
+        fname=get_xshear_config_file(self['run'])
 
         d=get_run_dir(self['run'])
         if not os.path.exists(d):
@@ -221,7 +183,7 @@ def get_run_dir(run):
     d=get_run_basedir()
     return os.path.join(d, run)
 
-def get_config_file(run):
+def get_xshear_config_file(run):
     """
     lensdir/run/{run_name}/{run_name}.cfg
 
@@ -232,18 +194,6 @@ def get_config_file(run):
     """
     d=get_run_dir(run)
     fname='%s.cfg' % run
-    return os.path.join(d, fname)
-
-def get_xshear_wq_file(run, lens_chunk, source_tilename):
-    """
-    the yaml wq file for a source tilename and lens chunk
-    """
-    d=get_run_dir(run)
-    fname="%(run)s-lens-%(lens_chunk)06d-src-%(source_tilename)s.yaml"
-    fname=fname % {'run':run,
-                   'lens_chunk':lens_chunk,
-                   'source_tilename':source_tilename}
-
     return os.path.join(d, fname)
 
 _config_top="""
@@ -344,6 +294,20 @@ command: |
     rm -rvf $tmp_dir 2>&1
 
     date
+
+job_name: "%(job_name)s"
+"""
+
+_redshear_template="""
+command: |
+    source ~/.bashrc
+    module load xshear/work
+
+    dir=%(output_dir)s
+    conf=%(config_file)s
+    outf=%(reduced_file)s
+
+    cat $dir/%(pattern)s | redshear $conf > $outf
 
 job_name: "%(job_name)s"
 """

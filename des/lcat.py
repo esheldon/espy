@@ -216,57 +216,6 @@ class XShearInput(dict):
         return dt
 
 
-def get_lcat_original_file(lcat_name):
-    """
-    get the original input file
-
-    We always use a symlink to enforce uniform names
-    """
-    dir=get_cat_dir(lcat_name)
-    return os.path.join(dir, '%s.fits' % lcat_name)
-
-def read_lcat_original_file(lcat_name):
-    """
-    read the original input file
-    """
-    import fitsio
-    fname=get_lcat_original_file(lcat_name)
-    print("reading:",fname)
-    return fitsio.read(fname, lower=True)
-
-def get_lcat_dir(lcat_vers):
-    """
-    directory to hold lens catalog files
-    """
-    d=get_des_lensdir()
-    return os.path.join(d, 'lcat', lcat_vers)
-
-def get_lcat_file(lcat_vers, chunk):
-    """
-    lens catalog ascii files 
-    """
-    d=get_lcat_dir(lcat_vers)
-    fname='%(lcat_vers)s-%(chunk)06d.dat'
-    fname=fname % {'lcat_vers':lcat_vers, 'chunk':chunk}
-    return os.path.join(d,fname)
-
-def write_lcat(fname, data):
-    """
-    Write a source ascii file
-    """
-    from esutil.recfile import Recfile
-
-    d=os.path.dirname(fname)
-    if not os.path.exists(d):
-        print("making dir:",d)
-        os.makedirs(d)
-
-    if os.path.exists(fname):
-        os.remove(fname)
-
-    print("writing:",fname)
-    with Recfile(fname,'w',delim=' ') as robj:
-        robj.write(data)
 
 def get_wq_dir(lcat_vers):
     dir=os.environ['TMPDIR']

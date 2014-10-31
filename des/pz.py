@@ -45,7 +45,7 @@ class DESPofz(object):
         import h5py
 
         self.key, self.zvals = get_info(self.pz_vers, self.pz_type)
-        self.fname=get_h5_file(self.pz_vers)
+        self.fname=get_pz_h5_file(self.pz_vers)
 
         print("loading:",self.fname)
         self.h5=h5py.File(self.fname)
@@ -57,7 +57,7 @@ class DESPofz(object):
         import tables
 
         self.key, self.zvals = get_info(self.pz_vers, self.pz_type)
-        self.fname=get_h5_file(self.pz_vers)
+        self.fname=get_pz_h5_file(self.pz_vers)
 
         print("loading:",self.fname)
         self.h5=tables.open_file(self.fname)
@@ -262,7 +262,7 @@ job_name: {job_name}
 
 def get_info(pz_vers, pz_type):
 
-    allinfo=read_version_info()
+    allinfo=read_pz_vers_info()
     if pz_vers not in allinfo:
         raise KeyError("bad pz_vers: '%s'" % pz_vers)
 
@@ -280,61 +280,7 @@ def get_info(pz_vers, pz_type):
     z_values = (z_values[1:] + z_values[:-1]) / 2.0
     return key, z_values
 
-def get_base_dir():
-    return '/astro/u/astrodat/data/DES/EXTRA/photoz/combined'
 
-def get_version_dir(pz_vers):
-    d=get_base_dir()
-    return os.path.join(d, pz_vers)
-
-def get_version_info_file():
-    dir=get_base_dir()
-    name='version-info.yaml'
-    return os.path.join(dir, name)
-
-def read_version_info():
-    import yaml
-    fname=get_version_info_file()
-    with open(fname) as fobj:
-        data=yaml.load(fobj)
-    return data
-
-def get_h5_file(pz_vers):
-    dir=get_version_dir(pz_vers)
-    name='DES_photoz_PDFS_%s.h5' % pz_vers
-    return os.path.join(dir, name)
-
-def get_scinv_dir(pz_vers, pz_type):
-    dir=get_version_dir(pz_vers)
-    return os.path.join(dir, '%s-scinv' % pz_type)
-
-def get_scinv_file(pz_vers, pz_type, chunk=None):
-    dir=get_scinv_dir(pz_vers,pz_type)
-    name='DES_scinv_%s_%s' % (pz_vers, pz_type)
-
-    if chunk is not None:
-        dir=os.path.join(dir,'chunks')
-        name='%s_%06d' % (name,chunk)
-    name='%s.fits' % name
-    return os.path.join(dir, name)
-
-def read_scinv_file(pz_vers, pz_type, chunk=None, get_header=False):
-    import fitsio
-    fname=get_scinv_file(pz_vers, pz_type, chunk=None)
-
-    print("reading:",fname)
-    with fitsio.FITS(fname) as fits:
-        data=fits['scinv'][:]
-        zlvals=fits['zlvals'][:]
-        print("    read:",data.size)
-
-        if get_header:
-            h=fits['scinv'].read_header()
-            ret=data, zlvals, h
-        else:
-            ret=data, zlvals
-
-    return ret
 
 def get_scinv_wq_dir(pz_vers, pz_type):
     dir=os.environ['TMPDIR']

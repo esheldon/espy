@@ -1,7 +1,7 @@
 """
 tools to match the scinv catalogs to shape catalogs
 
-tools to select and write the xshear input
+tools to select and write the xshear input (these we call scat)
 """
 from __future__ import print_function
 import numpy
@@ -227,62 +227,6 @@ def match_scinv(scat_vers, tilenames=None):
 
     print("finally used: %d/%d" % (nuse, ntile))
 
-def get_tilenames(scat_name):
-    """
-    this assumes the scat_name corresponds to a database table
-    """
-    print("getting tile list for:",scat_name)
-
-    tilenames=read_tilenames_cache(scat_name)
-    print("found",len(tilenames),"tiles")
-    return tilenames
-
-def read_tilenames_cache(scat_name):
-    """
-    write the tilenames to a file
-    """
-    import yaml
-    import desdb
-    fname=get_tilename_cache_file(scat_name)
-
-    if not os.path.exists(fname):
-        print("    caching from database")
-        dir=get_tilename_cache_dir()
-        if not os.path.exists(dir):
-            print("making dir:",dir)
-            os.makedirs(dir)
-
-        with desdb.Connection() as conn:
-            q="select distinct(tilename) from %s" % scat_name
-            res=conn.quick(q)
-            tilenames=[r['tilename'] for r in res]
-
-        
-        print("    writing to:",fname)
-        with open(fname,'w') as fobj:
-            yaml.dump(tilenames, fobj)
-    else:
-        print("    reading:",fname)
-        with open(fname) as fobj:
-            tilenames=yaml.load(fobj)
-
-    return tilenames
-
-def get_tilename_cache_dir():
-    """
-    directory to hold source catalog files
-    """
-    d=get_des_lensdir()
-    return os.path.join(d, 'tilename_cache')
-
-def get_tilename_cache_file(scat_name):
-    """
-    file to hold tilenames
-    """
-    dir=get_tilename_cache_dir()
-    fname='%s-tilenames.yaml' % scat_name
-    return os.path.join(dir, fname)
-
 class Matcher(object):
     """
     match the scat to the sigma crit
@@ -346,72 +290,60 @@ class Matcher(object):
             fits.write(self.zlvals, extname='zlvals')
 
 
-def get_scat_dir(scat_vers):
+def get_tilenames(scat_name):
+    """
+    this assumes the scat_name corresponds to a database table
+    """
+    print("getting tile list for:",scat_name)
+
+    tilenames=read_tilenames_cache(scat_name)
+    print("found",len(tilenames),"tiles")
+    return tilenames
+
+def read_tilenames_cache(scat_name):
+    """
+    write the tilenames to a file
+    """
+    import yaml
+    import desdb
+    fname=get_tilename_cache_file(scat_name)
+
+    if not os.path.exists(fname):
+        print("    caching from database")
+        dir=get_tilename_cache_dir()
+        if not os.path.exists(dir):
+            print("making dir:",dir)
+            os.makedirs(dir)
+
+        with desdb.Connection() as conn:
+            q="select distinct(tilename) from %s" % scat_name
+            res=conn.quick(q)
+            tilenames=[r['tilename'] for r in res]
+
+        
+        print("    writing to:",fname)
+        with open(fname,'w') as fobj:
+            yaml.dump(tilenames, fobj)
+    else:
+        print("    reading:",fname)
+        with open(fname) as fobj:
+            tilenames=yaml.load(fobj)
+
+    return tilenames
+
+def get_tilename_cache_dir():
     """
     directory to hold source catalog files
     """
     d=get_des_lensdir()
-    return os.path.join(d, 'scat', scat_vers)
+    return os.path.join(d, 'tilename_cache')
 
-def get_scat_file(scat_vers, tilename):
+def get_tilename_cache_file(scat_name):
     """
-    source catalog ascii files 
+    file to hold tilenames
     """
-    d=get_scat_dir(scat_vers)
-    fname='{scat_vers}-{tilename}.dat'
-    fname=fname.format(scat_vers=scat_vers,
-                       tilename=tilename)
-    return os.path.join(d,fname)
+    dir=get_tilename_cache_dir()
+    fname='%s-tilenames.yaml' % scat_name
+    return os.path.join(dir, fname)
 
-def write_scat(fname, data):
-    """
-    Write a source ascii file
-    """
-    from esutil.recfile import Recfile
-    if os.path.exists(fname):
-        os.remove(fname)
-    with Recfile(fname,'w',delim=' ') as robj:
-        robj.write(data)
-
-# daniel's files
-
-# e.g "ngmix009" for scat_name
-dg_name={'ngmix009':'{tilename}_{scat_name}m.fits.gz'}
-
-def get_dg_scat_file(scat_name, tilename):
-    d=get_cat_dir(scat_name+'-dg')
-    pattern=dg_name[scat_name]
-
-    fname=pattern.format(scat_name=scat_name, tilename=tilename)
-    return os.path.join(d, fname)
-
-def read_dg_scat_file(scat_name, tilename):
-    import fitsio
-    fname=get_dg_scat_file(scat_name, tilename)
-    print("reading:",fname)
-    return fitsio.read(fname, lower=True)
-
-
-def get_scinv_matched_dir(scat_name, pz_vers, pz_type):
-    d=get_cat_basedir()
-    pattern='{scat_name}-{pz_vers}-{pz_type}-match'
-    sub_dir=pattern.format(scat_name=scat_name,
-                           pz_vers=pz_vers,
-                           pz_type=pz_type)
-    return os.path.join(d, sub_dir)
-
-def get_scinv_matched_file(scat_name, pz_vers, pz_type, tilename):
-    d=get_scinv_matched_dir(scat_name, pz_vers, pz_type)
-
-    pattern='{tilename}-{scat_name}-{pz_vers}-{pz_type}-match.fits'
-    fname=pattern.format(tilename=tilename,
-                         scat_name=scat_name,
-                         pz_vers=pz_vers,
-                         pz_type=pz_type)
-
-    return os.path.join(d, fname)
-
-def read_scinv_matched_file(scat_name, pz_vers, pz_type, tilename):
-    import fitsio
-    pass
 
