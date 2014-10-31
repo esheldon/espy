@@ -140,15 +140,6 @@ def get_make_lcat_wq_file(lcat_vers, chunk):
     name='%s-%06d.yaml' % (lcat_vers, chunk)
     return os.path.join(dir, name)
 
-_make_lcat_wq_template="""
-command: |
-    lcat_vers={lcat_vers}
-    chunk={chunk}
-    $ESPY_DIR/des/bin/make-xshear-lcat --chunk $chunk $lcat_vers
-
-job_name: {job_name}
-"""
-
 
 def get_xshear_wq_dir(run):
     """
@@ -187,5 +178,75 @@ def get_redshear_wq_file(run, lens_chunk):
 
     return os.path.join(d, fname)
 
+_make_lcat_wq_template="""
+command: |
+    lcat_vers={lcat_vers}
+    chunk={chunk}
+    $ESPY_DIR/des/bin/make-xshear-lcat --chunk $chunk $lcat_vers
+
+job_name: {job_name}
+"""
 
 
+_xshear_wq_template="""
+command: |
+    source ~esheldon/.bashrc
+
+    hostname
+    module load xshear/work
+
+    config=%(config_file)s
+    scat=%(scat_file)s
+    lcat=%(lcat_file)s
+
+    outf=%(output_file)s
+
+    tmp_dir=$TMPDIR/sobjshear-$RANDOM-$RANDOM
+    mkdir -vp $tmp_dir
+
+    dname=$(dirname $outf)
+    mkdir -vp $dname
+
+    tmp_outf=$tmp_dir/$(basename $outf)
+    tmp_lcat=$tmp_dir/$(basename $lcat)
+    tmp_scat=$tmp_dir/$(basename $scat)
+    tmp_config=$tmp_dir/$(basename $config)
+
+    echo -e "staging lcat file to local disk:\\n  $lcat\\n  $tmp_lcat"
+    cp $lcat $tmp_lcat
+    echo -e "staging scat file to local disk:\\n  $scat\\n  $tmp_scat"
+    cp $scat $tmp_scat
+
+    echo -e "staging config file to local disk:\\n  $config\\n  $tmp_config"
+    cp $config $tmp_config
+
+    xshear $tmp_config $tmp_lcat < $tmp_scat 1> $tmp_outf
+
+    err=$?
+    if [[ $err != "0" ]]; then
+        echo "Error running xshear: $err"
+    fi
+    if [[ -e $tmp_outf ]]; then
+        echo -e "pushing temp file to\\n  $outf"
+        mv -fv $tmp_outf $outf
+    fi
+    rm -rvf $tmp_dir 2>&1
+
+    date
+
+job_name: "%(job_name)s"
+"""
+
+_redshear_template="""
+command: |
+    source ~/.bashrc
+    module load xshear/work
+
+    dir=%(output_dir)s
+    conf=%(config_file)s
+    outf=%(reduced_file)s
+
+    cat $dir/%(pattern)s | redshear $conf > $outf
+
+job_name: "%(job_name)s"
+"""

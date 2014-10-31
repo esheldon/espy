@@ -7,4 +7,7 @@ from . import run
 from . import output
 from . import files_common
 from . import wqscripts
+from . import xshear_config
+
+
 #from . import util
