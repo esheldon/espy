@@ -1,3 +1,10 @@
+"""
+getting file paths and some reading/writing
+
+We need to put these all in one place to avoid import
+confusion
+"""
+
 from __future__ import print_function
 import os
 
