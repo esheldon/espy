@@ -366,6 +366,27 @@ def get_output_file(run, lens_chunk, source_tilename):
 
     return os.path.join(d, fname)
 
+def read_lensum(filname, nbin, shear_style):
+    """
+    read a generic lensum file. Used by the other readers
+
+    parameters
+    ----------
+    filneame:
+        location of file
+    nbin: int
+        number of radial bins
+    shear_style: string
+        Determine the columns that must be read
+    """
+    pass
+
+def read_output(run, lens_chunk, source_tilename):
+    """
+    read the single output files
+    """
+    pass
+
 #
 # xshear reduced files
 #
@@ -381,10 +402,16 @@ def get_reduced_file(run, lens_chunk):
 
     return os.path.join(d, fname)
 
+def read_reduced_file(run, lens_chunk):
+    """
+    read a file for outputs reduced over sources
+    """
+    pass
+
+
 #
 # xshear combined files (combine all lens chunks)
 #
-
 
 def get_combined_file(run):
     """
@@ -393,4 +420,12 @@ def get_combined_file(run):
     d=get_output_dir(run)
     fname="%s-combined.dat" % run
     return os.path.join(d, fname)
+
+def read_combined_file(run, lens_chunk):
+    """
+    read a file for all lens chunks combined
+    """
+    pass
+
+
 
