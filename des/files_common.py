@@ -546,4 +546,5 @@ def read_collated(run):
     import fitsio
 
     fname=get_collated_file(run)
+    print("reading:",fname)
     return fitsio.read(fname)

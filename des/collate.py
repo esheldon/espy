@@ -40,6 +40,15 @@ class Collator(dict):
         orig=read_lcat_original(self['lens_conf']['lcat_name'])
         comb=read_combined(self['run'])
 
+        print("matching")
+        index_col=self['lens_conf']['index_col']
+        mo,mc=eu.numpy_util.match(orig[index_col], comb['index'])
+
+        print("    matched %d/%d" % (mo.size, orig.size))
+
+        orig=orig[mo]
+        comb=comb[mc]
+
         print("collating")
         newdata=eu.numpy_util.add_fields(orig, comb.dtype.descr)
         eu.numpy_util.copy_fields(comb, newdata)
