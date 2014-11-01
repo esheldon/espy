@@ -10,7 +10,7 @@ from .import scat
 from . import lcat
 from . import output
 
-from .wqscripts import XShearWQJob, RedshearWQJob
+from .wqscripts import XShearWQJob, RedshearWQJob, CombineWQJob
 from .xshear_config import XShearConfig
 
 class Run(dict):
@@ -41,6 +41,7 @@ class Run(dict):
         """
         self.write_xshear_wq()
         self.write_redshear_wq()
+        self.write_combine_wq()
         return
         self.write_collate_wq()
     
@@ -71,8 +72,16 @@ class Run(dict):
         lens_nchunk=self['lens_conf']['nchunk']
 
         for lens_chunk in xrange(lens_nchunk):
-            job=RedShearWQJob(self['run'], lens_chunk)
+            job=RedshearWQJob(self['run'], lens_chunk)
             job.write()
+
+    def write_combine_wq(self):
+        """
+        write all the chunks
+        """
+        job=CombineWQJob(self['run'])
+        job.write()
+
 
     def _scat_exists(self, tilename):
         """

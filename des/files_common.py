@@ -323,6 +323,13 @@ def get_run_dir(run):
     d=get_run_basedir()
     return os.path.join(d, run)
 
+def get_xshear_config_dir(run):
+    """
+    directory holding the config file
+    """
+    d=get_run_dir(run)
+    return os.path.join(d, 'config')
+
 def get_xshear_config_file(run):
     """
     lensdir/run/{run_name}/{run_name}.cfg
@@ -332,7 +339,7 @@ def get_xshear_config_file(run):
     run:
         e.g. run-001
     """
-    d=get_run_dir(run)
+    d=get_xshear_config_dir(run)
     fname='%s.cfg' % run
     return os.path.join(d, fname)
 
@@ -340,19 +347,12 @@ def get_xshear_config_file(run):
 # xshear output files
 #
 
-def get_output_basedir():
-    """
-    lensdir/output
-    """
-    d=get_des_lensdir()
-    return os.path.join(d, 'output')
-
 def get_output_dir(run):
     """
     lensdir/run/run_name
     """
-    d=get_output_basedir()
-    return os.path.join(d, run)
+    d=get_run_dir(run)
+    return os.path.join(d, 'output')
 
 def get_output_file(run, lens_chunk, source_tilename):
     """
@@ -391,12 +391,24 @@ def read_output(run, lens_chunk, source_tilename):
 # xshear reduced files
 #
 
+def get_reduced_dir(run):
+    """
+    lensdir/run/run_name
+    """
+    d=get_run_dir(run)
+    return os.path.join(d, 'reduced')
+
+
 def get_reduced_file(run, lens_chunk):
     """
     File reduced across sources
     """
-    d=get_output_dir(run)
-    fname="%(run)s-lens-%(lens_chunk)06d-reduced.dat"
+    d=get_reduced_dir(run)
+    if lens_chunk=='*':
+        fname="%(run)s-lens-*-reduced.dat"
+    else:
+        fname="%(run)s-lens-%(lens_chunk)06d-reduced.dat"
+
     fname=fname % {'run':run,
                    'lens_chunk':lens_chunk}
 
@@ -413,11 +425,18 @@ def read_reduced_file(run, lens_chunk):
 # xshear combined files (combine all lens chunks)
 #
 
+def get_combined_dir(run):
+    """
+    lensdir/run/run_name
+    """
+    d=get_run_dir(run)
+    return os.path.join(d, 'combined')
+
 def get_combined_file(run):
     """
     File combined for all lenses
     """
-    d=get_output_dir(run)
+    d=get_combined_dir(run)
     fname="%s-combined.dat" % run
     return os.path.join(d, fname)
 

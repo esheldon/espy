@@ -22,7 +22,7 @@ class XShearConfig(dict):
         """
         fname=get_xshear_config_file(self['run'])
 
-        d=get_run_dir(self['run'])
+        d=get_xshear_config_dir(self['run'])
         if not os.path.exists(d):
             print("making dir:",d)
             os.makedirs(d)

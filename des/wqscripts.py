@@ -99,7 +99,7 @@ class RedshearWQJob(dict):
     def __init__(self, run, lens_chunk):
         conf=cascade_config(run)
         self.update(conf)
-        self['len_chunk']=lens_chunk
+        self['lens_chunk']=lens_chunk
 
     def write(self):
         """
@@ -121,14 +121,52 @@ class RedshearWQJob(dict):
 
     def get_text(self):
 
-        self['output_dir']=get_output_dir(self['run'])
         self['config_file']=get_xshear_config_file(self['run'])
         self['pattern']=get_output_file(self['run'],self['lens_chunk'],'*')
+        self['reduced_dir']=get_reduced_dir(self['run'])
         self['reduced_file']=get_reduced_file(self['run'],self['lens_chunk'])
         self['job_name']='redshear-%s-%06d' % (self['run'],self['lens_chunk'])
 
         text=_redshear_template % self
         return text
+
+class CombineWQJob(dict):
+    """
+    make wq for reduced files
+    """
+    def __init__(self, run):
+        conf=cascade_config(run)
+        self.update(conf)
+
+    def write(self):
+        """
+        make the wq file to reduce across sources
+        """
+
+        wqfile=get_combine_wq_file(self['run'])
+        d=get_combine_wq_dir(self['run'])
+
+        if not os.path.exists(d):
+            print("making dir:",d)
+            os.makedirs(d)
+
+        text=self.get_text()
+
+        print("writing:",wqfile)
+        with open(wqfile,'w') as fobj:
+            fobj.write(text)
+
+    def get_text(self):
+
+        self['pattern']=get_reduced_file(self['run'],'*')
+        self['combined_dir']=get_combined_dir(self['run'])
+        self['combined_file']=get_combined_file(self['run'])
+        self['job_name']='combine-%s' % self['run']
+
+        text=_combine_template % self
+        return text
+
+
 
 def get_make_lcat_wq_dir(lcat_vers):
     dir=os.environ['TMPDIR']
@@ -146,7 +184,7 @@ def get_xshear_wq_dir(run):
     dir holding xshear wq files
     """
     d=get_run_dir(run)
-    return os.path.join(d, 'xshear-wq')
+    return os.path.join(d, 'wq-xshear')
 
 def get_xshear_wq_file(run, lens_chunk, source_tilename):
     """
@@ -160,12 +198,12 @@ def get_xshear_wq_file(run, lens_chunk, source_tilename):
 
     return os.path.join(d, fname)
 
-def get_resdshear_wq_dir(run):
+def get_redshear_wq_dir(run):
     """
     dir holding reduce wq scripts
     """
     d=get_run_dir(run)
-    return os.path.join(d, 'redshear-wq')
+    return os.path.join(d, 'wq-redshear')
 
 def get_redshear_wq_file(run, lens_chunk):
     """
@@ -177,6 +215,24 @@ def get_redshear_wq_file(run, lens_chunk):
                    'lens_chunk':lens_chunk}
 
     return os.path.join(d, fname)
+
+def get_combine_wq_dir(run):
+    """
+    dir holding reduce wq scripts
+    """
+    d=get_run_dir(run)
+    return os.path.join(d, 'wq-combine')
+
+def get_combine_wq_file(run):
+    """
+    the yaml wq to combine all lens chunks
+    """
+    d=get_combine_wq_dir(run)
+    fname="%(run)s-combine.yaml"
+    fname=fname % {'run':run}
+
+    return os.path.join(d, fname)
+
 
 _make_lcat_wq_template="""
 command: |
@@ -242,11 +298,27 @@ command: |
     source ~/.bashrc
     module load xshear/work
 
-    dir=%(output_dir)s
+    dir=%(reduced_dir)s
     conf=%(config_file)s
     outf=%(reduced_file)s
 
-    cat $dir/%(pattern)s | redshear $conf > $outf
+    mkdir -p $dir
+    cat %(pattern)s | redshear $conf > $outf
+
+job_name: "%(job_name)s"
+"""
+
+_combine_template="""
+command: |
+    dir=%(combined_dir)s
+    outf=%(combined_file)s
+    mkdir -p $dir
+
+    echo "concatenating to $outf"
+    cat %(pattern)s > $outf
+    echo
+    echo done
+    echo
 
 job_name: "%(job_name)s"
 """
