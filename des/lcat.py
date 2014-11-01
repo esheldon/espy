@@ -173,7 +173,7 @@ class XShearInput(dict):
         """
         read the original catalog
         """
-        return read_lcat_original_file(self['lcat_name'])
+        return read_lcat_original(self['lcat_name'])
     
     def read(self, chunk=0):
         """

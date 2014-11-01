@@ -239,9 +239,9 @@ class Matcher(object):
         self.pz_vers=pz_vers
         self.pz_type=pz_type
 
-        res = pz.read_scinv_file(self.pz_vers,
-                                 self.pz_type,
-                                 get_header=True)
+        res = pz.read_scinv(self.pz_vers,
+                            self.pz_type,
+                            get_header=True)
         self.data, self.zlvals, self.header=res
         self.nz=self.zlvals.size
 
@@ -252,7 +252,7 @@ class Matcher(object):
         match and write the output file
         """
         from esutil import numpy_util as nu
-        dg_data=read_dg_scat_file(self.scat_name, tilename)
+        dg_data=read_dg_scat(self.scat_name, tilename)
 
         print("matching")
         mdg, msc = nu.match(dg_data['coadd_objects_id'], self.ids)

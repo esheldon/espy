@@ -106,7 +106,7 @@ def get_lcat_original_file(lcat_name):
     dir=get_cat_dir(lcat_name)
     return os.path.join(dir, '%s.fits' % lcat_name)
 
-def read_lcat_original_file(lcat_name):
+def read_lcat_original(lcat_name):
     """
     read the original input file
     """
@@ -161,7 +161,7 @@ def get_scinv_file(pz_vers, pz_type, chunk=None):
     name='%s.fits' % name
     return os.path.join(dir, name)
 
-def read_scinv_file(pz_vers, pz_type, chunk=None, get_header=False):
+def read_scinv(pz_vers, pz_type, chunk=None, get_header=False):
     import fitsio
     fname=get_scinv_file(pz_vers, pz_type, chunk=None)
 
@@ -192,7 +192,7 @@ def get_dg_scat_file(scat_name, tilename):
     fname=pattern.format(scat_name=scat_name, tilename=tilename)
     return os.path.join(d, fname)
 
-def read_dg_scat_file(scat_name, tilename):
+def read_dg_scat(scat_name, tilename):
     import fitsio
     fname=get_dg_scat_file(scat_name, tilename)
     print("reading:",fname)
@@ -228,7 +228,7 @@ def get_scinv_matched_file(scat_name, pz_vers, pz_type, tilename):
 
     return os.path.join(d, fname)
 
-def read_scinv_matched_file(scat_name, pz_vers, pz_type, tilename):
+def read_scinv_matched(scat_name, pz_vers, pz_type, tilename):
     """
     read the matched file
     """
@@ -366,7 +366,28 @@ def get_output_file(run, lens_chunk, source_tilename):
 
     return os.path.join(d, fname)
 
-def read_lensum(filname, nbin, shear_style):
+def get_lensum_dtype(nbin, shear_style):
+    """
+    get the dtype for the number of bins and shear type
+    """
+    dt=[('index','i8'),
+        ('weight','f8'),
+        ('totpairs','i8'),
+
+        ('npair','i8',nbin),
+
+        ('rsum','f8',nbin),
+        ('wsum','f8',nbin),
+        ('dsum','f8',nbin),
+        ('osum','f8',nbin)]
+
+    if shear_style=='lensfit':
+        dt+=[('dsensum','f8',nbin),
+             ('osensum','f8',nbin)]
+
+    return dt
+
+def read_lensum(fname, nbin, shear_style):
     """
     read a generic lensum file. Used by the other readers
 
@@ -379,13 +400,46 @@ def read_lensum(filname, nbin, shear_style):
     shear_style: string
         Determine the columns that must be read
     """
-    pass
+    from esutil.recfile import Recfile
+
+    dt=get_lensum_dtype(nbin, shear_style)
+
+    print("reading:",fname)
+    with Recfile(fname, 'r', dtype=dt, delim=' ') as robj:
+        data=robj.read()
+
+    return data
+
+def _read_run_lensum(fname, run):
+    """
+    inernal routine to read a lensum, determining the nbin
+    and shear_style from the run
+    """
+    conf=cascade_config(run)
+
+    nbin=conf['lens_conf']['nbin']
+    shear_style=conf['source_conf']['shear_style']
+
+    return read_lensum(fname, nbin, shear_style)
+
 
 def read_output(run, lens_chunk, source_tilename):
     """
     read the single output files
+
+    parameters
+    ----------
+    run: string
+        the run identifier, e.g. run-001
+    lens_chunk: int
+        lens chunk number
+    source_tilename:
+        the source tilename
     """
-    pass
+
+    fname=get_output_file(run, lens_chunk, source_tilename)
+    return _read_run_lensum(fname, run)
+
 
 #
 # xshear reduced files
@@ -414,12 +468,20 @@ def get_reduced_file(run, lens_chunk):
 
     return os.path.join(d, fname)
 
-def read_reduced_file(run, lens_chunk):
+def read_reduced(run, lens_chunk):
     """
     read a file for outputs reduced over sources
-    """
-    pass
 
+    parameters
+    ----------
+    run: string
+        the run identifier, e.g. run-001
+    lens_chunk: int
+        lens chunk number
+    """
+
+    fname=get_reduced_file(run, lens_chunk)
+    return _read_run_lensum(fname, run)
 
 #
 # xshear combined files (combine all lens chunks)
@@ -440,11 +502,48 @@ def get_combined_file(run):
     fname="%s-combined.dat" % run
     return os.path.join(d, fname)
 
-def read_combined_file(run, lens_chunk):
+def read_combined(run):
     """
     read a file for all lens chunks combined
+
+    parameters
+    ----------
+    run: string
+        the run identifier, e.g. run-001
     """
-    pass
 
+    fname=get_combined_file(run)
+    return _read_run_lensum(fname, run)
 
+#
+# the collated file
+#
 
+def get_collated_dir(run):
+    """
+    lensdir/run/run_name
+    """
+    d=get_run_dir(run)
+    return os.path.join(d, 'collated')
+
+def get_collated_file(run):
+    """
+    File collated for all lenses
+    """
+    d=get_collated_dir(run)
+    fname="%s-collated.fits" % run
+    return os.path.join(d, fname)
+
+def read_collated(run):
+    """
+    read a file for all lens chunks collated
+
+    parameters
+    ----------
+    run: string
+        the run identifier, e.g. run-001
+    """
+    import fitsio
+
+    fname=get_collated_file(run)
+    return fitsio.read(fname)

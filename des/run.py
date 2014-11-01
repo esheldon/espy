@@ -10,7 +10,7 @@ from .import scat
 from . import lcat
 from . import output
 
-from .wqscripts import XShearWQJob, RedshearWQJob, CombineWQJob
+from .wqscripts import XShearWQJob, RedshearWQJob, CombineWQJob, CollateWQJob
 from .xshear_config import XShearConfig
 
 class Run(dict):
@@ -42,7 +42,6 @@ class Run(dict):
         self.write_xshear_wq()
         self.write_redshear_wq()
         self.write_combine_wq()
-        return
         self.write_collate_wq()
     
     def write_xshear_wq(self):
@@ -80,6 +79,13 @@ class Run(dict):
         write all the chunks
         """
         job=CombineWQJob(self['run'])
+        job.write()
+
+    def write_collate_wq(self):
+        """
+        write all the chunks
+        """
+        job=CollateWQJob(self['run'])
         job.write()
 
 

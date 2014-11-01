@@ -166,6 +166,37 @@ class CombineWQJob(dict):
         text=_combine_template % self
         return text
 
+class CollateWQJob(dict):
+    """
+    make wq for collating
+    """
+    def __init__(self, run):
+        conf=cascade_config(run)
+        self.update(conf)
+
+    def write(self):
+        """
+        make the wq file to reduce across sources
+        """
+
+        wqfile=get_collate_wq_file(self['run'])
+        d=get_collate_wq_dir(self['run'])
+
+        if not os.path.exists(d):
+            print("making dir:",d)
+            os.makedirs(d)
+
+        text=self.get_text()
+
+        print("writing:",wqfile)
+        with open(wqfile,'w') as fobj:
+            fobj.write(text)
+
+    def get_text(self):
+        self['job_name']='collate-%s' % self['run']
+        text=_collate_template % self
+        return text
+
 
 
 def get_make_lcat_wq_dir(lcat_vers):
@@ -233,6 +264,22 @@ def get_combine_wq_file(run):
 
     return os.path.join(d, fname)
 
+def get_collate_wq_dir(run):
+    """
+    dir holding reduce wq scripts
+    """
+    d=get_run_dir(run)
+    return os.path.join(d, 'wq-collate')
+
+def get_collate_wq_file(run):
+    """
+    the yaml wq to collate all lens chunks
+    """
+    d=get_collate_wq_dir(run)
+    fname="%(run)s-collate.yaml"
+    fname=fname % {'run':run}
+
+    return os.path.join(d, fname)
 
 _make_lcat_wq_template="""
 command: |
@@ -322,3 +369,13 @@ command: |
 
 job_name: "%(job_name)s"
 """
+
+_collate_template="""
+command: |
+    source ~/.bashrc
+    $ESPY_DIR/des/bin/collate %(run)s
+
+job_name: "%(job_name)s"
+"""
+
+
