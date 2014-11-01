@@ -375,6 +375,10 @@ command: |
     source ~/.bashrc
     $ESPY_DIR/des/bin/collate %(run)s
 
+    echo
+    echo done
+    echo
+
 job_name: "%(job_name)s"
 """
 
