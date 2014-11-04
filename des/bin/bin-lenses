@@ -1,0 +1,19 @@
+#!/usr/bin/env python
+"""
+bin lenses by the specified scheme
+"""
+from __future__ import print_function
+import os,sys
+import des
+import argparse
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("run", help="run identifier")
+parser.add_argument("bin_scheme", help="bin scheme, e.g. bin-lambda01-z01")
+   
+def main():
+    args = parser.parse_args()
+
+    des.binning.bin_lenses(args.run, args.bin_scheme)
+
+main()
