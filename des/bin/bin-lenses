@@ -14,6 +14,6 @@ parser.add_argument("bin_scheme", help="bin scheme, e.g. bin-lambda01-z01")
 def main():
     args = parser.parse_args()
 
-    des.binning.bin_lenses(args.run, args.bin_scheme)
+    des.binning.bin_run(args.run, args.bin_scheme)
 
 main()
