@@ -447,7 +447,7 @@ def read_output(run, lens_chunk, source_tilename):
 
 def get_reduced_dir(run):
     """
-    lensdir/run/run_name
+    lensdir/run/run_name/rediced
     """
     d=get_run_dir(run)
     return os.path.join(d, 'reduced')
@@ -489,7 +489,7 @@ def read_reduced(run, lens_chunk):
 
 def get_combined_dir(run):
     """
-    lensdir/run/run_name
+    lensdir/run/run_name/combined
     """
     d=get_run_dir(run)
     return os.path.join(d, 'combined')
@@ -521,7 +521,7 @@ def read_combined(run):
 
 def get_collated_dir(run):
     """
-    lensdir/run/run_name
+    lensdir/run/run_name/collated
     """
     d=get_run_dir(run)
     return os.path.join(d, 'collated')
@@ -548,3 +548,32 @@ def read_collated(run):
     fname=get_collated_file(run)
     print("reading:",fname)
     return fitsio.read(fname)
+
+#
+# binned files
+#
+
+def get_binned_dir(run, name):
+    """
+    lensdir/run/run_name/bin_name
+    """
+    d=get_run_dir(run)
+    return os.path.join(d, 'binned/%s' % name)
+
+
+def get_binned_file(run, name):
+    """
+    get the file holding binned data
+
+    parameters
+    ----------
+    run: string
+        the run identifier
+    name: string
+        name for the binning scheme, e.g. bin-lambda08-z01
+    """
+
+    d=get_binned_dir(run, name)
+
+    fname="%s-%s.fits" % (run, name)
+    return os.path.join(d, fname)
