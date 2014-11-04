@@ -10,5 +10,8 @@ from . import files_common
 from . import wqscripts
 from . import xshear_config
 
+from . import averaging
+from . import binning
+
 
 #from . import util

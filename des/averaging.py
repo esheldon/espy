@@ -1,5 +1,11 @@
+"""
+code to average lens outputs and certain tags
+"""
 from __future__ import print_function
+import numpy
 from numpy import sqrt, diag, where
+
+_DEFAULT_SHEAR_STYLE='reduced'
 
 def lens_wmom(data, tag, ind=None, sdev=False):
     """
@@ -31,6 +37,7 @@ def average_lensums(lout, weights=None):
     This is used by the binner routines
 
     """
+    import jackknife
 
     if weights is not None:
         return average_lensums_weighted(lout,weights)
@@ -73,8 +80,8 @@ def average_lensums(lout, weights=None):
         if shear_style=='lensfit':
             comb['dsensum'][0,i] = lout['dsensum'][:,i].sum()
             comb['osensum'][0,i] = lout['osensum'][:,i].sum()
-            comb['dsig'][0,i] = dsum/lout['dsensum']
-            comb['osig'][0,i] = osum/lout['osensum']
+            comb['dsig'][0,i] = dsum/comb['dsensum'][0,i]
+            comb['osig'][0,i] = osum/comb['osensum'][0,i]
         else:
 
             comb['dsig'][0,i] = dsum/wsum
@@ -93,7 +100,7 @@ def average_lensums(lout, weights=None):
     comb['dsigerr'][0,:] = sqrt(diag(cov))
 
     # turns out this agrees with the above one
-    w=ones(lout['wsum'].shape)
+    w=numpy.ones(lout['wsum'].shape)
     m,cov = jackknife.wjackknife(vsum=lout['wsum'], wsum=w)
     comb['wsum_mean_err'][0,:] = sqrt(diag(cov))
 
@@ -161,8 +168,9 @@ def average_lensums_weighted(lout, weights):
         if shear_style=='lensfit':
             comb['dsensum'][0,i] = lout['dsensum'][:,i].sum()
             comb['osensum'][0,i] = lout['osensum'][:,i].sum()
-            comb['dsig'][0,i] = dsum/lout['dsensum']
-            comb['osig'][0,i] = osum/lout['osensum']
+            print(comb['dsensum'][0,i])
+            comb['dsig'][0,i] = dsum/comb['dsensum'][0,i]
+            comb['osig'][0,i] = osum/comb['osensum'][0,i]
         else:
 
             comb['dsig'][0,i] = dsum/wsum
@@ -224,14 +232,14 @@ def add_lensums(l1, l2):
         if n in l1.dtype.names and n in l2.dtype.names:
             l1[n] += l2[n]
 
-def averaged_struct(nbin, n=1, shear_style='reduced'):
+def averaged_struct(nbin, n=1, shear_style=_DEFAULT_SHEAR_STYLE):
     """
     struct to hold the lens averages
     """
     dt = averaged_dtype(nbin, shear_style=shear_style)
     return numpy.zeros(n, dtype=dt)
 
-def averaged_dtype(nbin, shear_style='reduced'):
+def averaged_dtype(nbin, shear_style=_DEFAULT_SHEAR_STYLE):
     dt=[('weightsum','f8'),       # this is total of weight for each lens
         ('totpairs','i8'),
         ('r','f8',nbin),
@@ -255,14 +263,14 @@ def averaged_dtype(nbin, shear_style='reduced'):
     return dt
 
 
-def lensbin_struct(nrbin, bintags=None, n=1):
+def lensbin_struct(nrbin, shear_style=_DEFAULT_SHEAR_STYLE, bintags=None, n=1):
     """
     a combo of averaged_dtype with extra tags for averaged bin tags
     """
-    dt = lensbin_dtype(nrbin, bintags=bintags)
+    dt = lensbin_dtype(nrbin, shear_style=shear_style, bintags=bintags)
     return numpy.zeros(n, dtype=dt)
 
-def lensbin_dtype(nrbin, bintags=None):
+def lensbin_dtype(nrbin, shear_style=_DEFAULT_SHEAR_STYLE, bintags=None):
     """
     This is the same as averaged_dtype but with the averages added
     """
@@ -287,7 +295,7 @@ def lensbin_dtype(nrbin, bintags=None):
             tn = bt+'_sdev'
             dt.append( (tn,'f8') )
 
-    dt += averaged_dtype(nrbin)
+    dt += averaged_dtype(nrbin, shear_style=shear_style)
 
     return numpy.dtype(dt)
 

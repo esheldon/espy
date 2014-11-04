@@ -1,3 +1,8 @@
+"""
+code do bin lens outputs
+"""
+from __future__ import print_function
+import numpy
 from .files_common import *
 from . import averaging
 
@@ -9,7 +14,7 @@ def bin_run(run, bin_conf_name):
 
     data = read_collated(run)
 
-    binner=binner(bin_conf_name)
+    binner=Binner(bin_conf_name)
     res = binner.bin(data)
 
     fname=get_binned_file(run, bin_conf_name)
@@ -54,13 +59,18 @@ class Binner(dict):
         bin the data and return the result
         """
         nrbin = data['rsum'][0].size
+        if 'dsensum' in data.dtype.names:
+            shear_style='lensfit'
+        else:
+            shear_style='reduced'
 
         bin_info=self['bin_info']
-
+        
         bi0 = bin_info[0]['bins']
         bintags = [ri[0] for ri in bi0]
         print("bintags:",bintags)
         bs = averaging.lensbin_struct(nrbin,
+                                      shear_style=shear_style,
                                       bintags=bintags,
                                       n=self['nbin'])
 
@@ -143,7 +153,7 @@ def reduce_from_ranges_many(data, tags_and_ranges, getind=False):
         tag, range, range_type = tag_range
         logic = logic & get_range_logic(data, tag, range, range_type)
 
-    w=where1(logic)
+    w,=numpy.where(logic)
 
     comb = averaging.average_lensums(data[w])
 
