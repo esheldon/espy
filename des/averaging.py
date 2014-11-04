@@ -168,7 +168,6 @@ def average_lensums_weighted(lout, weights):
         if shear_style=='lensfit':
             comb['dsensum'][0,i] = lout['dsensum'][:,i].sum()
             comb['osensum'][0,i] = lout['osensum'][:,i].sum()
-            print(comb['dsensum'][0,i])
             comb['dsig'][0,i] = dsum/comb['dsensum'][0,i]
             comb['osig'][0,i] = osum/comb['osensum'][0,i]
         else:

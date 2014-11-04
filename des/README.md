@@ -30,17 +30,26 @@ you need to define a source sample, e.g.
 
     $ESPY_DIR/des/config/scat-001.yaml
 
-which will refer to an scat_name that points under the catalogs directory.  It
-also refers to the pz_vers and pz_type and cosmology.
+which will refer to an scat_name that points under the catalogs directory.  
 
-match the source catalog in *tiles* not the chunks above.  This is assuming
-the source catalogs are broken up by tilename
+### when using full p(z)
+
+In this case, the config will also refer to the pz_vers and pz_type and
+cosmology.
+
+match the source catalog to the scinv in *tiles* not the chunks above.  This is
+assuming the source catalogs are broken up by tilename
 
     $ESPY_DIR/des/bin/match-scinv $scat_vers
     $ESPY_DIR/des/bin/match-scinv scat-001
 
 This is high memory, so I've been running it as a single job rather than
 splitting things up.
+
+### when using point z
+
+In this case we just read the scat directly and write it, so skip to the
+next step
 
 Then make the source input for xshear.  This is pretty fast, no need currently
 to split it up
@@ -70,3 +79,42 @@ separately.  Make wq files to make the chunks.
 
     $ESPY_DIR/des/bin/make-lcat-wq $lcat_vers
 
+
+xshear runs
+-----------
+
+define a run, e.g.
+
+    $ESPY_DIR/des/config/run-001.yaml
+
+then write the xshear config and all wq files
+
+    $ESPY_DIR/des/config/make-run-wq
+
+then submit the xshear wq scripts
+
+    $LENSDIR/des-lensing/run/{run-name}/wq-xshear/*.yaml 
+
+the reduction script
+
+    $LENSDIR/des-lensing/run/{run-name}/wq-redshear/*.yaml 
+
+the combination of all lense splits
+
+    $LENSDIR/des-lensing/run/{run-name}/wq-combine/*.yaml 
+
+and finally collation
+
+    $LENSDIR/des-lensing/run/{run-name}/wq-collat/*.yaml 
+
+binning
+-------
+
+Define a bin scheme, e.g. 
+
+    $ESPY_DIR/des/config/bin-lambda01-z01.yaml
+
+Then perform the binning
+
+
+    $ESPY_DIR/des/bin/bin-lenses

@@ -13,6 +13,13 @@ from . import output
 from .wqscripts import XShearWQJob, RedshearWQJob, CombineWQJob, CollateWQJob
 from .xshear_config import XShearConfig
 
+def write_run(run):
+    """
+    write the xshear config, and wq submit scripts for xshear, redshear,
+    combination, and collation
+    """
+    r=Run(run)
+    r.write_all()
 class Run(dict):
     """
     for writing run configs and wq submit files

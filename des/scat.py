@@ -48,19 +48,10 @@ class XShearInput(dict):
         """
         select objects and write the ascii inputs
         """
-        import fitsio
 
-        inf=get_scinv_matched_file(self['scat_name'],
-                                   self['pz_vers'],
-                                   self['pz_type'],
-                                   tilename)
-        
-        if not os.path.exists(inf):
-            print("skipping missing file:",inf)
+        data0=self.read_input_data(tilename)
+        if data0 is None:
             return
-
-        print("reading:",inf)
-        data0=fitsio.read(inf,ext='model_fits')
 
         w=self.select(data0)
         if w.size == 0:
@@ -71,6 +62,32 @@ class XShearInput(dict):
             output=self.extract_cols(data)
             self.fix_data(output)
             self.write_data(output, tilename)
+
+    def read_input_data(self, tilename):
+        """
+        read the input catalog
+        """
+        import fitsio
+
+        if self['scinv_style']=='interp':
+            ext='model_fits'
+            inf=get_scinv_matched_file(self['scat_name'],
+                                       self['pz_vers'],
+                                       self['pz_type'],
+                                       tilename)
+        else:
+            ext=1
+            inf=get_dg_scat_file(self['scat_name'],
+                                 tilename)
+            
+        if not os.path.exists(inf):
+            print("skipping missing file:",inf)
+            return None
+
+        print("reading:",inf)
+        data=fitsio.read(inf,ext=ext,lower=True)
+
+        return data
 
     def extract_cols(self, data):
         """
