@@ -13,5 +13,7 @@ from . import xshear_config
 from . import averaging
 from . import binning
 
+from . import plotting
+
 
 #from . import util
