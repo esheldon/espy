@@ -4,8 +4,11 @@ cosmo_vers: "cosmo-01"
 
 nchunk: 1
 
-nbin: 21
-rmin: 0.02
+#nbin: 21
+#rmin: 0.02
+#rmax: 35.15
+nbin: 17
+rmin: 0.055
 rmax: 35.15
 
 zmin: 0.1
