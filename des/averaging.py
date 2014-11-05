@@ -209,7 +209,7 @@ def average_lensums_weighted(lout, weights):
 
 def average_ratio(l1, l2):
     """
-    jackknife the ratio of dsig
+    jackknife the ratio of dsig1/dsig2
     """
     import jackknife
 
@@ -235,7 +235,7 @@ def average_ratio(l1, l2):
         wsum_tot2=comb2['wsum']
 
     r      = comb1['r'][0,:]
-    ratio  = comb2['dsig'][0,:]/comb1['dsig'][0,:]
+    ratio  = comb1['dsig'][0,:]/comb2['dsig'][0,:]
     jmean1 = zeros(nbin)
     jmean2 = zeros(nbin)
     jratio = zeros(nbin)
@@ -247,7 +247,7 @@ def average_ratio(l1, l2):
         jmean1[:] = (dsum_tot1[:]-dsum1[i,:])/(wsum_tot1[:]-wsum1[i,:])
         jmean2[:] = (dsum_tot2[:]-dsum2[i,:])/(wsum_tot2[:]-wsum2[i,:])
 
-        jratio[:] = jmean2/jmean1
+        jratio[:] = jmean1/jmean2
 
         jdiff[:] = jratio[:] - ratio[:]
 

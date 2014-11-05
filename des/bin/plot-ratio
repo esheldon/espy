@@ -1,20 +1,29 @@
 #!/usr/bin/env python
 """
-plot ratio of dsig for two different runs
+plot ratio of dsig1/dsig2 for two different runs
 
 jackknife (singly) the errors so shape noise is not in the errors
 """
 from __future__ import print_function
 import os,sys
 import argparse
+import numpy
+from numpy import sqrt, diag
 import des
 import esutil as eu
+import biggles
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("run1", help="run identifier")
 parser.add_argument("run2", help="run identifier")
 parser.add_argument("bin_scheme", help="bin scheme, e.g. bin-lgt05-zwide")
-   
+parser.add_argument("-v","--visible",action='store_true',
+                    help="show plot on screen")
+
+parser.add_argument("--run-labels",
+                    default=None,
+                    help="alternate labels for each run")
+
 def main():
     args = parser.parse_args()
 
@@ -22,18 +31,73 @@ def main():
     data2=des.files_common.read_collated(args.run2)
 
     binner=des.binning.Binner(args.bin_scheme)
+    comb1=binner.bin(data1)
+
+    # to get right shape
+    r=comb1['r'].copy()
+    ratio=comb1['r']*0
+    ratio_err=comb1['r']*0
+
     nbin=binner.get_nbin()
+
+    grid, arr = des.plotting.get_framed_array(nbin)
+
+    ratmean=numpy.zeros(nbin)
+    ratmean_err=numpy.zeros(nbin)
 
     for binnum in xrange(nbin):
         w1=binner.select_bin(data1, binnum)
         w2=binner.select_bin(data2, binnum)
         print(w1.size, w2.size)
 
-        #data1=data1[w1]
-        #data2=data1[w2]
-
+        t1=data1[w1]
+        t2=data2[w2]
         
         print("getting ratio, resampled errors")
-        radius, ratio, cov = des.averaging.average_ratio(data1[w1],data2[w2])
+        tr, tratio, tcov = des.averaging.average_ratio(t1, t2)
 
+        terr=sqrt(diag(tcov))
+
+        ratio[binnum,:] = tratio
+        ratio_err[binnum,:] = terr
+
+        wt=1.0/terr**2
+        wm,we=eu.stat.wmom(tratio, wt)
+
+        ratmean[binnum]=wm
+        ratmean_err[binnum]=we
+
+    binspec=des.files_common.read_config(args.bin_scheme)
+    labels=[bi['label'] for bi in binspec['bin_info']]
+
+    if args.run_labels is None:
+        run_labels=args.run1,args.run2
+    else:
+        run_labels=tuple(args.run_labels.split(','))
+        print("run labels:",run_labels)
+    ylabel='%s/%s' % run_labels
+
+    arr=des.plotting.plot_dsig(r,
+                               ratio,
+                               ratio_err,
+                               ylog=False,
+                               ylabel=ylabel,
+                               lineval=1.0,
+                               visible=False,
+                               labels=labels)
+
+    # add labels for mean ratio
+    for binnum in xrange(nbin):
+        row,col=grid.get_rowcol(binnum)
+        plt=arr[row,col]
+
+        ls='<ratio> = %.3f +/- %.3f' % (ratmean[binnum],ratmean_err[binnum])
+        lab=biggles.PlotLabel(0.1,0.1, ls,halign='left')
+        plt.add(lab)
+
+    if args.visible:
+        arr.show()
+
+
+        
 main()

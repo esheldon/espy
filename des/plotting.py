@@ -8,63 +8,19 @@ LABELS['osig'] = r'$\Delta\Sigma_\times ~ [M_{sun} pc^{-2}]$'
 
 DEFAULT_MINVAL=1.0e-3
 
-def plot_dsig(data, **kw):
+
+def plot_dsig(r, dsig, dsigerr, **kw):
     """
-    plot delta sigma
+    plot delta sigma, potentially on a grid if more than one bin
 
     parameters
     ----------
-    data: lensum struct
-        lensum struct for single bin
-    """
-
-    from biggles import FramedPlot
-
-    nolabel=kw.get('nolabel',False)
-    visible=kw.get('visible',True)
-    xlog=kw.get('xlog',True)
-    ylog=kw.get('ylog',True)
-    aspect_ratio=kw.get('aspect_ratio',1)
-
-    is_ortho=kw.get('is_ortho',False)
-
-    plt=kw.get('plt',None)
-
-    r=data['r'].ravel()
-    dsig=data['dsig'].ravel()
-    dsigerr=data['dsigerr'].ravel()
-
-    if plt is None:
-        plt=FramedPlot()
-        plt.aspect_ratio=aspect_ratio
-        plt.xlog=xlog
-        plt.ylog=ylog
-
-        if not nolabel:
-            plt.xlabel = LABELS['rproj']
-            if is_ortho:
-                plt.ylabel = LABELS['osig']
-            else:
-                plt.ylabel = LABELS['dsig']
-
-    xrng, yrng = _add_dsig_to_plot(plt, r, dsig, dsigerr, **kw)
-    plt.xrange=xrng
-    plt.yrange=yrng
-
-    if visible:
-        plt.show()
-
-    return plt
-
-
-def plot_dsig_grid(data, **kw):
-    """
-    plot multiple bins on a grid
-
-    parameters
-    ----------
-    data: lensum struct array
-        lensum struct, potentially for multiple bin
+    r: array
+        array with shape [nbin,nrad], e.g from a bin struct
+    dsig: array
+        array with shape [nbin,nrad], e.g from a bin struct
+    dsigerr: array
+        array with shape [nbin,nrad], e.g from a bin struct
 
     kw: keywords
         extra keywords
@@ -72,7 +28,8 @@ def plot_dsig_grid(data, **kw):
     import biggles
 
 
-    nbin = data.size
+    nbin = r.shape[0]
+
     grid, arr = get_framed_array(nbin)
 
     visible=kw.get('visible',True)
@@ -83,30 +40,37 @@ def plot_dsig_grid(data, **kw):
     ylog=kw.get('ylog',True)
     labels=kw.get('labels',None)
 
+    ylabel=kw.get('ylabel',None)
+
     aspect_ratio=kw.get('aspect_ratio',None)
     if aspect_ratio is None:
         aspect_ratio=float(grid.nrow)/grid.ncol
     arr.aspect_ratio = aspect_ratio 
 
     arr.uniform_limits=True
-    arr.xlog, arr.ylog=xlog, ylog
+    arr.xlog, arr.ylog = xlog, ylog
 
     arr.xlabel = LABELS['rproj']
-    if is_ortho:
-        arr.ylabel = LABELS['osig']
-    else:
-        arr.ylabel = LABELS['dsig']
-
+    if ylabel is None:
+        if is_ortho:
+            ylabel = LABELS['osig']
+        else:
+            ylabel = LABELS['dsig']
+    arr.ylabel=ylabel
 
     for i in xrange(nbin):
         row, col = grid.get_rowcol(i)
 
-        r=data['r'][i,:]
-        dsig=data['dsig'][i,:]
-        dsigerr=data['dsigerr'][i,:]
+        ri=r[i,:]
+        dsigi=dsig[i,:]
+        dsigerri=dsigerr[i,:]
 
         plt=arr[row, col]
-        xrng, yrng = _add_dsig_to_plot(plt, r, dsig, dsigerr, **kw)
+        xrng, yrng = _add_dsig_to_plot(plt,
+                                       ri,
+                                       dsigi,
+                                       dsigerri,
+                                       **kw)
         plt.xrange=xrng
         plt.yrange=yrng
 
@@ -119,8 +83,58 @@ def plot_dsig_grid(data, **kw):
 
     return arr
 
+def plot_dsig_one(r, dsig, dsigerr, **kw):
+    """
+    plot delta sigma
+
+    useful if adding to an existing plot
+
+    parameters
+    ----------
+    r: array
+        radius
+    dsig: array
+        delta sigma
+    dsigerr: array
+        error on delta sigma
+    """
+
+    from biggles import FramedPlot
+
+    visible=kw.get('visible',True)
+    xlog=kw.get('xlog',True)
+    ylog=kw.get('ylog',True)
+    aspect_ratio=kw.get('aspect_ratio',1)
+
+    is_ortho=kw.get('is_ortho',False)
+
+    plt=kw.get('plt',None)
+
+    if plt is None:
+        plt=FramedPlot()
+        plt.aspect_ratio=aspect_ratio
+        plt.xlog=xlog
+        plt.ylog=ylog
+
+        plt.xlabel = LABELS['rproj']
+        if is_ortho:
+            plt.ylabel = LABELS['osig']
+        else:
+            plt.ylabel = LABELS['dsig']
+
+    xrng, yrng = _add_dsig_to_plot(plt, r, dsig, dsigerr, **kw)
+    plt.xrange=xrng
+    plt.yrange=yrng
+
+    if visible:
+        plt.show()
+
+    return plt
+
+
 def _add_dsig_to_plot(plt, r, dsig, dsigerr, **kw):
     from biggles import Points, Curve, SymmetricErrorBarsY
+    import esutil as eu
 
     xlog=kw.get('xlog',True)
     ylog=kw.get('ylog',True)
@@ -128,14 +142,16 @@ def _add_dsig_to_plot(plt, r, dsig, dsigerr, **kw):
     color=kw.get('color','black')
     type=kw.get('type','filled circle')
 
+    lineval=kw.get('lineval',0.0)
+
     if ylog:
         xrng,yrng=add_to_log_plot(plt, r, dsig, dsigerr, 
                                   color=color, 
                                   type=type,
                                   minval=minval)
     else:
-        zpts=Curve(r, dsig*0)
-        plt.add(zpts)
+        opts=Curve(r, dsig*0 + lineval)
+        plt.add(opts)
 
         pts=Points(r, dsig, type=type, color=color)
 
@@ -149,6 +165,30 @@ def _add_dsig_to_plot(plt, r, dsig, dsigerr, **kw):
         if xrng is None:
             if xlog:
                 xrng=eu.plotting.get_log_plot_range(r)
+
+        if yrng is None:
+            nrad=dsig.ravel().size
+            ytot=numpy.zeros(2*nrad)
+            ytot[0:nrad] = dsig-dsigerr
+            ytot[nrad:]  = dsig+dsigerr
+
+            wt=1.0/dsigerr**2
+            wm,we,wstd=eu.stat.wmom(dsig, wt, sdev=True)
+
+            std=ytot.std()
+            yrng=[wm-3.0*std, wm+3.0*std]
+            '''
+
+            if yrng[0] < 0:
+                yrng[0] *= 1.1
+            else:
+                yrng[0] *= 0.9
+
+            if yrng[1] < 0:
+                yrng[1] *= 0.9
+            else:
+                yrng[1] *= 1.1
+            '''
 
     return xrng, yrng
 

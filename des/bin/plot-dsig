@@ -29,8 +29,10 @@ def main():
     binspec=des.files_common.read_config(args.bin_scheme)
     labels=[bi['label'] for bi in binspec['bin_info']]
 
-    plt=des.plotting.plot_dsig_grid(data,
-                                    labels=labels,
-                                    visible=args.visible)
+    plt=des.plotting.plot_dsig(data['r'],
+                               data['dsig'],
+                               data['dsigerr'],
+                               labels=labels,
+                               visible=args.visible)
 
 main()
