@@ -1,0 +1,39 @@
+#!/usr/bin/env python
+"""
+plot ratio of dsig for two different runs
+
+jackknife (singly) the errors so shape noise is not in the errors
+"""
+from __future__ import print_function
+import os,sys
+import argparse
+import des
+import esutil as eu
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("run1", help="run identifier")
+parser.add_argument("run2", help="run identifier")
+parser.add_argument("bin_scheme", help="bin scheme, e.g. bin-lgt05-zwide")
+   
+def main():
+    args = parser.parse_args()
+
+    data1=des.files_common.read_collated(args.run1)
+    data2=des.files_common.read_collated(args.run2)
+
+    binner=des.binning.Binner(args.bin_scheme)
+    nbin=binner.get_nbin()
+
+    for binnum in xrange(nbin):
+        w1=binner.select_bin(data1, binnum)
+        w2=binner.select_bin(data2, binnum)
+        print(w1.size, w2.size)
+
+        #data1=data1[w1]
+        #data2=data1[w2]
+
+        
+        print("getting ratio, resampled errors")
+        radius, ratio, cov = des.averaging.average_ratio(data1[w1],data2[w2])
+
+main()
