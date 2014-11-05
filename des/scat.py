@@ -9,6 +9,10 @@ from .files_common import *
 from . import pz
 from . import sg
 
+SHAPENOISE=0.16
+SHAPENOISE2=SHAPENOISE**2
+
+
 def make_xshear_input(scat_vers, tilename=None):
     """
     write xshear input files
@@ -116,7 +120,8 @@ class XShearInput(dict):
 
         copy_fields(data, newdata)
 
-        var=(      data[self['e_cov_11_col']]
+        var=(2*SHAPENOISE2
+             +     data[self['e_cov_11_col']]
              + 2.0*data[self['e_cov_12_col']]
              +     data[self['e_cov_22_col']])
         weight=1.0/var
