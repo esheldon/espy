@@ -3,7 +3,7 @@ code to average lens outputs and certain tags
 """
 from __future__ import print_function
 import numpy
-from numpy import sqrt, diag, where
+from numpy import sqrt, diag, where, zeros
 
 _DEFAULT_SHEAR_STYLE='reduced'
 
@@ -206,6 +206,69 @@ def average_lensums_weighted(lout, weights):
 
 
     return comb
+
+def average_ratio(l1, l2):
+    """
+    jackknife the ratio of dsig
+    """
+    import jackknife
+
+    comb1=average_lensums(l1)
+    comb2=average_lensums(l2)
+
+    nlens, nbin = l1['wsum'].shape
+
+    dsum1=l1['dsum']
+    dsum_tot1=comb1['dsum']
+    dsum2=l2['dsum']
+    dsum_tot2=comb2['dsum']
+
+    if 'dsensum' in l1.dtype.names:
+        wsum1=l1['dsensum']
+        wsum_tot1=comb1['dsensum']
+        wsum2=l2['dsensum']
+        wsum_tot2=comb2['dsensum']
+    else:
+        wsum1=l1['wsum']
+        wsum_tot1=comb1['wsum']
+        wsum2=l2['wsum']
+        wsum_tot2=comb2['wsum']
+
+    r      = comb1['r'][0,:]
+    ratio  = comb2['dsig'][0,:]/comb1['dsig'][0,:]
+    jmean1 = zeros(nbin)
+    jmean2 = zeros(nbin)
+    jratio = zeros(nbin)
+    jdiff  = zeros(nbin)
+    jsum   = zeros((nbin, nbin))
+
+    for i in xrange(nlens):
+
+        jmean1[:] = (dsum_tot1[:]-dsum1[i,:])/(wsum_tot1[:]-wsum1[i,:])
+        jmean2[:] = (dsum_tot2[:]-dsum2[i,:])/(wsum_tot2[:]-wsum2[i,:])
+
+        jratio[:] = jmean2/jmean1
+
+        jdiff[:] = jratio[:] - ratio[:]
+
+        # now grab all the cross terms and add to the sum for
+        # the covariance matrix
+        for ix in xrange(nbin):
+            for iy in xrange(ix,nbin):
+                val = jdiff[ix]*jdiff[iy]
+
+                jsum[ix,iy] += val
+                if ix != iy:
+                    jsum[iy,ix] += val
+
+    covar = float(nlens-1)/nlens*jsum
+
+    return r, ratio, covar
+
+
+
+
+
 
 def add_lensums(l1, l2):
     """

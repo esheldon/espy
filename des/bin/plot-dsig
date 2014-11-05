@@ -16,6 +16,8 @@ parser.add_argument("-t","--type",
                     help="type to plot",
                     choices=['bin', 'corr', 'jack'],
                     default='bin')
+parser.add_argument("-v","--visible",action='store_true',
+                    help="show plot on screen")
    
 def main():
     args = parser.parse_args()
@@ -23,6 +25,12 @@ def main():
     if args.type=='bin':
         data=des.files_common.read_binned(args.run,
                                           args.bin_scheme)
-    des.plotting.plot_dsig(data)
+
+    binspec=des.files_common.read_config(args.bin_scheme)
+    labels=[bi['label'] for bi in binspec['bin_info']]
+
+    plt=des.plotting.plot_dsig_grid(data,
+                                    labels=labels,
+                                    visible=args.visible)
 
 main()

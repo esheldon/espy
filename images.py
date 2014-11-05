@@ -175,18 +175,46 @@ def view_mosaic(imlist, combine=False, **keys):
     
     return tab
 
-def get_grid(ntot):
+def get_grid(nplot):
     """
-    get nrow,ncol
+    get nrow,ncol given the number of plots
+
+    parameters
+    ----------
+    nplot: int
+        Number of plots in the grid
     """
     from math import sqrt
-    sq=int(sqrt(ntot))
-    if ntot==sq*sq:
+    sq=int(sqrt(nplot))
+    if nplot==sq*sq:
         return (sq,sq)
-    elif ntot <= sq*(sq+1):
+    elif nplot <= sq*(sq+1):
         return (sq,sq+1)
     else:
         return (sq+1,sq+1)
+
+def get_grid_rowcol(nplot, index):
+    """
+    get the grid position given the number of plots
+
+    move along columns first
+
+    example
+    -------
+    nplot=7
+    nrow, ncol = get_grid(nplot)
+    arr=biggles.FramedArray(nrow, ncol)
+
+    for i in xrange(nplot):
+        row,col=get_grid_rowcol(nplot, i)
+        arr[row,col].add( ... )
+    """
+
+    nrow, ncol = get_grid(nplot)
+    row = index/ncol
+    col = index % ncol
+
+    return row,col
 
 
 def bytescale(im):

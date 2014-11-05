@@ -31,8 +31,7 @@ class Binner(dict):
     bin any
     """
 
-    def __init__(self, bin_conf_name, **keys):
-        self.update(keys)
+    def __init__(self, bin_conf_name):
         self['name']=bin_conf_name
 
         conf=read_config(bin_conf_name)
@@ -110,7 +109,7 @@ class Binner(dict):
 
         return bs
 
-    def select_bin(self, data, binnum):
+    def bin_one(self, data, binnum):
         """
 
         Although not used by bin(), this is useful for other programs such as
@@ -126,6 +125,22 @@ class Binner(dict):
                                        getind=True)
  
         return comb
+
+    def select_bin(self, data, binnum):
+        """
+        Although not used by bin(), this is useful for other programs
+
+        """
+
+        if binnum > self['nbin']:
+            raise ValueError("bin number must be in [0,%d]" % (self['nbin']-1,))
+
+        range_info = self['bin_info'][binnum]['bins']
+
+        logic = get_range_logic_many(data, range_info)
+
+        w,=numpy.where(logic)
+        return w
 
 
 
@@ -147,12 +162,7 @@ def reduce_from_ranges_many(data, tags_and_ranges, getind=False):
         If True, get the indices from data that are in range
     """
 
-    logic = numpy.ones(data.size, dtype='bool')
-    for tag_range in tags_and_ranges:
-        print("    ",tag_range)
-        tag, range, range_type = tag_range
-        logic = logic & get_range_logic(data, tag, range, range_type)
-
+    logic = get_range_logic_many(data, tags_and_ranges)
     w,=numpy.where(logic)
 
     comb = averaging.average_lensums(data[w])
@@ -162,7 +172,22 @@ def reduce_from_ranges_many(data, tags_and_ranges, getind=False):
     else:
         return comb
  
+def get_range_logic_many(data, tags_and_ranges):
+    """
+    logic for multiple range sets
+    """
+    logic = numpy.ones(data.size, dtype='bool')
+    for tag_range in tags_and_ranges:
+        print("    ",tag_range)
+        tag, range, range_type = tag_range
+        logic = logic & get_range_logic(data, tag, range, range_type)
+
+    return logic
+
 def get_range_logic(data, tag, brange, type):
+    """
+    logic for single range set
+    """
     minval,maxval = brange
     if minval is None:
         minval = data[tag].min()

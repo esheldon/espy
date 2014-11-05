@@ -577,3 +577,19 @@ def get_binned_file(run, name):
 
     fname="%s-%s.fits" % (run, name)
     return os.path.join(d, fname)
+
+def read_binned(run, name):
+    """
+    read the file holding binned data
+
+    parameters
+    ----------
+    run: string
+        the run identifier
+    name: string
+        name for the binning scheme, e.g. bin-lambda08-z01
+    """
+    import fitsio
+
+    fname=get_binned_file(run,name)
+    return fitsio.read(fname)
