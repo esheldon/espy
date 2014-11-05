@@ -1,0 +1,8 @@
+bin_info:
+    - label: '$\lambda \in [5,20] z \in  [0.1,0.9]'
+      bins: [ ["lambda_chisq", [5.0, 20.0], "()"],
+              ["z_lambda", [0.1, 0.9], "()"] ]
+
+    - label: '$\lambda  > 20 z \in  [0.1,0.9]'
+      bins: [ ["lambda_chisq", [20.0, 1.0e6], "()"],
+              ["z_lambda", [0.1, 0.9], "()"] ]
