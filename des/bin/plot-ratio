@@ -17,12 +17,26 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("run1", help="run identifier")
 parser.add_argument("run2", help="run identifier")
 parser.add_argument("bin_scheme", help="bin scheme, e.g. bin-lgt05-zwide")
+
+
+parser.add_argument("--eps",default=None,
+                    help="write to the specified eps file")
+
 parser.add_argument("-v","--visible",action='store_true',
                     help="show plot on screen")
-
 parser.add_argument("--run-labels",
                     default=None,
                     help="alternate labels for each run")
+
+parser.add_argument("-y","--yrange",
+                    default=None,
+                    help="force y range")
+
+parser.add_argument("-c","--color",
+                    default='black',
+                    help="color for points")
+
+
 
 def main():
     args = parser.parse_args()
@@ -84,6 +98,7 @@ def main():
                                ylabel=ylabel,
                                lineval=1.0,
                                visible=False,
+                               color=args.color,
                                labels=labels)
 
     # add labels for mean ratio
@@ -95,9 +110,14 @@ def main():
         lab=biggles.PlotLabel(0.1,0.1, ls,halign='left')
         plt.add(lab)
 
+    if args.yrange is not None:
+        yrange=[float(v) for v in args.yrange.split(',')]
+        arr.yrange=yrange
+
+    if args.eps is not None:
+        print("writing:",args.eps)
+        arr.write_eps(args.eps)
+        
     if args.visible:
         arr.show()
-
-
-        
 main()
