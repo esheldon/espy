@@ -33,6 +33,15 @@ def main():
                                data['dsig'],
                                data['dsigerr'],
                                labels=labels,
-                               visible=args.visible)
+                               visible=False)
+
+    epsfile=des.files_common.get_binned_file(args.run,
+                                             args.bin_scheme,
+                                             ext='eps')
+    print("writing:",epsfile)
+    plt.write_eps(epsfile)
+
+    if args.visible:
+        plt.show()
 
 main()
