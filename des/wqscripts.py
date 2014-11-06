@@ -200,9 +200,11 @@ class CollateWQJob(dict):
 
 
 def get_make_lcat_wq_dir(lcat_vers):
-    dir=os.environ['TMPDIR']
-    dir=os.path.join(dir,'des-lcat-make',lcat_vers)
-    return dir
+    """
+    dir holding wq files to make lens catalog
+    """
+    dir=get_lcat_dir(lcat_vers)
+    return os.path.join(dir, 'wq')
 
 def get_make_lcat_wq_file(lcat_vers, chunk):
     dir=get_make_lcat_wq_dir(lcat_vers)
