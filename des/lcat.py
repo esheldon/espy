@@ -62,6 +62,7 @@ class XShearInput(dict):
         """
         data=self.read_original()
         beg,end=self.get_chunk_range(data.size, chunk)
+        print("    working on chunk: %d:%d" % (beg,end))
         data=data[beg:end]
 
         w=self.select(data)
