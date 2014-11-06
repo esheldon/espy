@@ -272,16 +272,23 @@ def write_scat(fname, data):
 
 def get_lcat_dir(lcat_vers):
     """
-    directory to hold lens catalog files
+    directory for a lens catalog
     """
     d=get_des_lensdir()
     return os.path.join(d, 'lcat', lcat_vers)
+
+def get_lcat_file_dir(lcat_vers):
+    """
+    directory holding the data
+    """
+    d=get_lcat_dir(lcat_vers)
+    return os.path.join(d, 'data')
 
 def get_lcat_file(lcat_vers, chunk):
     """
     lens catalog ascii files 
     """
-    d=get_lcat_dir(lcat_vers)
+    d=get_lcat_file_dir(lcat_vers)
     fname='%(lcat_vers)s-%(chunk)06d.dat'
     fname=fname % {'lcat_vers':lcat_vers, 'chunk':chunk}
     return os.path.join(d,fname)
@@ -561,9 +568,9 @@ def get_binned_dir(run, name):
     return os.path.join(d, 'binned/%s' % name)
 
 
-def get_binned_file(run, name):
+def get_binned_file(run, name, ext='fits'):
     """
-    get the file holding binned data
+    get the file holding binned data, or the basic plot file
 
     parameters
     ----------
@@ -575,7 +582,7 @@ def get_binned_file(run, name):
 
     d=get_binned_dir(run, name)
 
-    fname="%s-%s.fits" % (run, name)
+    fname="%s-%s.%s" % (run, name, ext)
     return os.path.join(d, fname)
 
 def read_binned(run, name):
@@ -593,3 +600,11 @@ def read_binned(run, name):
 
     fname=get_binned_file(run,name)
     return fitsio.read(fname)
+
+#
+# corrected here
+#
+
+#
+# jackknifed here
+#
