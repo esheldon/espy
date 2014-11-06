@@ -3,6 +3,7 @@ code do bin lens outputs
 """
 from __future__ import print_function
 import numpy
+from numpy import where, log10
 from .files_common import *
 from . import averaging
 
@@ -139,7 +140,7 @@ class Binner(dict):
 
         logic = get_range_logic_many(data, range_info)
 
-        w,=numpy.where(logic)
+        w,=where(logic)
         return w
 
 
@@ -163,7 +164,7 @@ def reduce_from_ranges_many(data, tags_and_ranges, getind=False):
     """
 
     logic = get_range_logic_many(data, tags_and_ranges)
-    w,=numpy.where(logic)
+    w,=where(logic)
 
     comb = averaging.average_lensums(data[w])
 
@@ -207,5 +208,128 @@ def get_range_logic(data, tag, brange, type):
         raise ValueError("Bad range type: '%s'" % type)
 
     return logic
+
+def define_bins(var_input, lastmin, alpha=0.6666, visible=False, prompt=False):
+    """
+
+    define bins assuming the data look similar to a schechter function.  The
+    trick is dealing with the exponential cutoff: pick a "lastmin" such that
+    defines the lower edge of the last bin.  For lower values we assume a power
+    law, working downward keeping N*var^alpha = constant
+
+    parameters
+    ----------
+    var: array
+        sample data with wich to define bins
+    lastmin: float
+        lower edge of last bin
+    alpha: float, optional
+        Assumed power law at the lower end of distribution. Default 0.6666
+    visible: bool, optional
+        make a plot if True
+    prompt: bool, optional
+        prompt the user if set True
+    """
+    
+    from biggles import FramedPlot, Curve, Point, PlotLabel
+    var = var_input.copy()
+    var.sort()
+
+    # reverse sort, biggest to smallest
+    var = numpy.fromiter(reversed(var), dtype='f8')
+
+    ind = numpy.arange(var.size,dtype='i8')
+
+    w_last, = where(var > lastmin)
+    mvar_last = var[w_last].sum()/w_last.size
+
+    print("wlast.size:",w_last.size,"mvar_last:",mvar_last)
+
+    cref = 0.5*log10(w_last.size) + alpha*log10(mvar_last)
+
+    # now look at mean var*N for rest by using cumulative
+    # sums
+
+
+    var = var[w_last[-1]:]
+    var_last = lastmin
+    binnum=0
+
+    minbin=[]
+    maxbin=[]
+    while 1:
+        nd = 1+numpy.arange(var.size)
+
+        mvar = var.cumsum()/nd
+        cval = 0.5*log10(nd) + alpha*log10(mvar)
+
+        wthis, = where(cval < cref)
+
+        var_min = var[wthis[-1]]
+        var_max = var_last
+
+        minbin.append(var_min)
+        maxbin.append(var_max)
+        if visible:
+            print("numleft:",var.size,"wthis.size",wthis.size)
+
+            plt=FramedPlot()
+            curve = Curve(var, cval)
+            plt.add(curve)
+
+            oc = Curve([var.min(), var.max()],[cref,cref],color='blue')
+            plt.add(oc)
+
+            p = Point(var[wthis[-1]], cval[wthis[-1]], color='orange', type='filled circle')
+            plt.add(p)
+
+            binnum -= 1
+            blab=PlotLabel(0.9,0.9,'bin %d' % binnum, halign='right')
+
+            rlab=PlotLabel(0.9,0.85,r'%0.2f $ < var < $ %0.2f' % (var_min,var_max), halign='right')
+            nlab=PlotLabel(0.9,0.80,'N: %d' % wthis.size, halign='right')
+
+            plt.add(blab)
+            plt.add(rlab)
+            plt.add(nlab)
+            plt.show()
+
+            if prompt:
+                key=raw_input('hit a key: ')
+                if key == 'q':
+                    return
+        var_last = var_min
+        var=var[wthis[-1]+1:]
+
+
+        if len(var) == 0:
+            break
+    
+    minbin = list(reversed(minbin))
+    maxbin = list(reversed(maxbin))
+    minbin.append(maxbin[-1])
+    maxbin.append(None)
+    
+    minstr=[]
+    maxstr=[]
+    for i in xrange(len(minbin)):
+        if minbin[i] is not None:
+            minstr.append('%0.1f' % minbin[i])
+        else:
+            minstr.append('None')
+        if maxbin[i] is not None:
+            maxstr.append('%0.1f' % maxbin[i])
+        else:
+            maxstr.append('None')
+
+    minstr = '[' + ', '.join(minstr) +']'
+    maxstr = '[' + ', '.join(maxstr) +']'
+
+    #for i in xrange(len(minbin)):
+    #    print('%i %0.1f %0.1f' % (i+1,minbin[i],maxbin[i]))
+
+    print("nbin:",len(minbin))
+    print(minstr)
+    print(maxstr)
 
 
