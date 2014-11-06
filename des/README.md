@@ -117,4 +117,15 @@ Define a bin scheme, e.g.
 Then perform the binning
 
 
-    $ESPY_DIR/des/bin/bin-lenses
+    $ESPY_DIR/des/bin/bin-lenses run bin_scheme
+
+plots
+-----
+
+Plot a binned set of lenses
+
+    $ESPY_DIR/des/bin/plot-dsig run bin_scheme
+
+Plot ratio between two runs
+
+    $ESPY_DIR/des/bin/plot-ratio run1 run2 bin_scheme
