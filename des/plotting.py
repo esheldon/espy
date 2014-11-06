@@ -3,8 +3,8 @@ import numpy
 
 LABELS={}
 LABELS['rproj'] = r'$R$ [$h^{-1}$ Mpc]'
-LABELS['dsig'] = r'$\Delta\Sigma ~[M_{sun} pc^{-2}]$'
-LABELS['osig'] = r'$\Delta\Sigma_\times ~ [M_{sun} pc^{-2}]$'
+LABELS['dsig'] = r'$\Delta\Sigma ~[M_{\odot} pc^{-2}]$'
+LABELS['osig'] = r'$\Delta\Sigma_\times ~ [M_{\odot} pc^{-2}]$'
 
 DEFAULT_MINVAL=1.0e-3
 
@@ -27,14 +27,13 @@ def plot_dsig(r, dsig, dsigerr, **kw):
     """
     import biggles
 
+    biggles.configure('default','fontsize_min',0.9)
 
     nbin = r.shape[0]
 
     grid, arr = get_framed_array(nbin)
 
     visible=kw.get('visible',True)
-    color=kw.get('color','black')
-    type=kw.get('type','filled circle')
     is_ortho=kw.get('is_ortho',False)
     xlog=kw.get('xlog',True)
     ylog=kw.get('ylog',True)
@@ -75,7 +74,7 @@ def plot_dsig(r, dsig, dsigerr, **kw):
         plt.yrange=yrng
 
         if labels is not None:
-            lab=biggles.PlotLabel(0.9, 0.9, labels[i], halign='right')
+            lab=biggles.PlotLabel(0.1, 0.1, labels[i], halign='left')
             plt.add(lab)
 
     if visible:
@@ -178,7 +177,6 @@ def _add_dsig_to_plot(plt, r, dsig, dsigerr, **kw):
             std=ytot.std()
             yrng=[wm-3.0*std, wm+3.0*std]
             '''
-
             if yrng[0] < 0:
                 yrng[0] *= 1.1
             else:
