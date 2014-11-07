@@ -354,18 +354,18 @@ def get_xshear_config_file(run):
 # xshear output files
 #
 
-def get_output_dir(run):
+def get_output_dir(run, lens_chunk):
     """
     lensdir/run/run_name
     """
     d=get_run_dir(run)
-    return os.path.join(d, 'output')
+    return os.path.join(d, 'output', 'lens-%06d' % lens_chunk)
 
 def get_output_file(run, lens_chunk, source_tilename):
     """
     the xshear output file for a lens chunk and source tilename
     """
-    d=get_output_dir(run)
+    d=get_output_dir(run, lens_chunk)
     fname="%(run)s-lens-%(lens_chunk)06d-src-%(source_tilename)s.dat"
     fname=fname % {'run':run,
                    'lens_chunk':lens_chunk,
@@ -560,15 +560,14 @@ def read_collated(run):
 # binned files
 #
 
-def get_binned_dir(run, name):
+def get_binned_dir(run, bin_scheme):
     """
-    lensdir/run/run_name/bin_name
+    lensdir/run/run_name/binned/bin_name
     """
     d=get_run_dir(run)
-    return os.path.join(d, 'binned/%s' % name)
+    return os.path.join(d, 'binned/%s' % bin_scheme)
 
-
-def get_binned_file(run, name, ext='fits'):
+def get_binned_file(run, bin_scheme, ext='fits'):
     """
     get the file holding binned data, or the basic plot file
 
@@ -576,16 +575,18 @@ def get_binned_file(run, name, ext='fits'):
     ----------
     run: string
         the run identifier
-    name: string
+    bin_scheme: string
         name for the binning scheme, e.g. bin-lambda08-z01
+    ext: string
+        default fits, could be eps etc.
     """
 
-    d=get_binned_dir(run, name)
+    d=get_binned_dir(run, bin_scheme)
 
-    fname="%s-%s.%s" % (run, name, ext)
+    fname="%s-%s.%s" % (run, bin_scheme, ext)
     return os.path.join(d, fname)
 
-def read_binned(run, name):
+def read_binned(run, bin_scheme):
     """
     read the file holding binned data
 
@@ -593,13 +594,78 @@ def read_binned(run, name):
     ----------
     run: string
         the run identifier
-    name: string
+    bin_scheme: string
         name for the binning scheme, e.g. bin-lambda08-z01
     """
     import fitsio
 
-    fname=get_binned_file(run,name)
+    fname=get_binned_file(run,bin_scheme)
     return fitsio.read(fname)
+
+#
+# weights for randoms
+#
+
+def get_match_dir(lens_run, rand_run, bin_scheme):
+    """
+    lensdir/run/lrun_name-rrunname
+    """
+    totrun='%s-%s' % (lens_run, rand_run)
+    d=get_run_dir(totrun)
+
+def get_match_binned_dir(lens_run, rand_run, bin_scheme):
+    """
+    lensdir/run/lrun_name-rrunname/binned
+    """
+
+    totrun='%s-%s' % (lens_run, rand_run)
+    return get_binned_dir(totrun, bin_scheme)
+
+def get_match_binned_file(lens_run, rand_run, bin_scheme, ext='fits'):
+    """
+    get the file holding binned data, or the basic plot file
+
+    parameters
+    ----------
+    run: string
+        the run identifier
+    bin_scheme: string
+        name for the binning scheme, e.g. bin-lambda08-z01
+    ext: string
+        default fits, could be eps etc.
+    """
+
+    totrun='%s-%s' % (lens_run, rand_run)
+    return get_binned_file(totrun, bin_scheme, ext=ext)
+
+def get_match_weights_dir(lens_run, rand_run, bin_scheme):
+    """
+    lensdir/run/lrun_name-rrunname/weights
+    """
+
+    d=get_match_binned_dir(lens_run, rand_run, bin_scheme)
+    return os.path.join(d, 'weights')
+
+def get_match_weights_file(lens_run, rand_run, bin_scheme, binnum, ext='fits'):
+    """
+    get the file holding weights for the random-matched data
+
+    parameters
+    ----------
+    run: string
+        the run identifier
+    bin_scheme: string
+        name for the binning scheme, e.g. bin-lambda08-z01
+    ext: string
+        default fits, could be eps etc.
+    """
+
+    d=get_match_weights_dir(lens_run, rand_run, bin_scheme)
+
+    totrun='%s-%s' % (lens_run, rand_run)
+    fname="%s-%s-%02d-weights.%s" % (totrun, bin_scheme, binnum, ext)
+    return os.path.join(d, fname)
+
 
 #
 # corrected here
