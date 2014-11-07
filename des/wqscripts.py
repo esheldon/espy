@@ -58,7 +58,7 @@ class XShearWQJob(dict):
         write the wq file
         """
 
-        d=get_xshear_wq_dir(self['run'])
+        d=get_xshear_wq_dir(self['run'],self['lens_chunk'])
         if not os.path.exists(d):
             print("making dir:",d)
             os.makedirs(d)
@@ -212,18 +212,18 @@ def get_make_lcat_wq_file(lcat_vers, chunk):
     return os.path.join(dir, name)
 
 
-def get_xshear_wq_dir(run):
+def get_xshear_wq_dir(run, lens_chunk):
     """
     dir holding xshear wq files
     """
     d=get_run_dir(run)
-    return os.path.join(d, 'wq-xshear')
+    return os.path.join(d, 'wq-xshear', 'lens-%06d' % lens_chunk)
 
 def get_xshear_wq_file(run, lens_chunk, source_tilename):
     """
     the yaml wq file for a source tilename and lens chunk
     """
-    d=get_xshear_wq_dir(run)
+    d=get_xshear_wq_dir(run, lens_chunk)
     fname="%(run)s-lens-%(lens_chunk)06d-src-%(source_tilename)s.yaml"
     fname=fname % {'run':run,
                    'lens_chunk':lens_chunk,
@@ -382,6 +382,7 @@ command: |
     echo
 
 job_name: "%(job_name)s"
+mode: bynode
 """
 
 
