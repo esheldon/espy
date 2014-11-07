@@ -40,7 +40,7 @@ def average_lensums(lout, weights=None):
     import jackknife
 
     if weights is not None:
-        return average_lensums_weighted(lout,weights)
+        return average_lensums_weighted_fast(lout,weights)
 
     nlens = lout.size
     nbin = lout['rsum'][0].size
@@ -113,6 +113,7 @@ def average_lensums_weighted(lout, weights):
     all the individual sums and producing averages
 
     """
+    import jackknife
 
     nlens = lout.size
     nbin = lout['rsum'][0].size
@@ -149,7 +150,7 @@ def average_lensums_weighted(lout, weights):
 
         npair = lout['npair'][:,i].sum()
 
-        rsum  = lout['rsum'][:,i].sum()
+        w_rsum = (lout['rsum'][:,i]*weights).sum()
 
         w_wsum = (lout['wsum'][:,i]*weights).sum()
         w_dsum = (lout['dsum'][:,i]*weights).sum()
@@ -157,23 +158,23 @@ def average_lensums_weighted(lout, weights):
 
 
         comb['npair'][0,i] = npair
-        comb['rsum'][0,i]  = rsum
+        comb['rsum'][0,i]  = w_rsum
         comb['wsum'][0,i]  = w_wsum
         comb['dsum'][0,i]  = w_dsum
         comb['osum'][0,i]  = w_osum
 
         # averages
-        comb['r'][0,i] = rsum/w_wsum
+        comb['r'][0,i] = w_rsum/w_wsum
 
         if shear_style=='lensfit':
             comb['dsensum'][0,i] = lout['dsensum'][:,i].sum()
             comb['osensum'][0,i] = lout['osensum'][:,i].sum()
-            comb['dsig'][0,i] = dsum/comb['dsensum'][0,i]
-            comb['osig'][0,i] = osum/comb['osensum'][0,i]
+            comb['dsig'][0,i] = w_dsum/comb['dsensum'][0,i]
+            comb['osig'][0,i] = w_osum/comb['osensum'][0,i]
         else:
 
-            comb['dsig'][0,i] = dsum/wsum
-            comb['osig'][0,i] = osum/wsum
+            comb['dsig'][0,i] = w_dsum/w_wsum
+            comb['osig'][0,i] = w_osum/w_wsum
 
         # this is average wsum over lenses
         # we calculate clustering correction from this, wsum_mean/wsum_mean_random
@@ -206,6 +207,103 @@ def average_lensums_weighted(lout, weights):
 
 
     return comb
+
+def average_lensums_weighted_fast(lout, weights):
+    """
+
+    Reduce the lens-by-lens lensums by summing over
+    all the individual sums and producing averages
+
+    """
+    import jackknife
+
+    nlens = lout.size
+    nbin = lout['rsum'][0].size
+
+    if weights.size != nlens:
+        raise ValueError("weights not same size as lensout, "
+                         "%d instead of %d" % (weights.size,nlens))
+
+    totweights = weights.sum()
+
+    if 'dsensum' in lout.dtype.names:
+        shear_style='lensfit'
+    else:
+        shear_style='reduced'
+
+    comb = averaged_struct(nbin, shear_style=shear_style)
+
+    # weight is the weight for the lens.  Call this weightsum to
+    # indicate a sum over multiple lenses
+
+    comb['weightsum'][0] = (lout['weight']*weights).sum()
+
+
+    # should not use this for anything since weights
+    # make it non-integer
+    comb['totpairs'][0] = lout['totpairs'].sum()
+
+    wa=weights[:,numpy.newaxis]
+
+    npair = lout['npair'].sum(axis=0)
+
+    w_rsum = (lout['rsum']*wa).sum(axis=0)
+
+    w_wsum = (lout['wsum']*wa).sum(axis=0)
+    w_dsum = (lout['dsum']*wa).sum(axis=0)
+    w_osum = (lout['osum']*wa).sum(axis=0)
+
+    comb['npair'] = npair
+    comb['rsum']  = w_rsum
+    comb['wsum']  = w_wsum
+    comb['dsum']  = w_dsum
+    comb['osum']  = w_osum
+
+    # averages
+    comb['r'] = w_rsum/w_wsum
+
+    if shear_style=='lensfit':
+        comb['dsensum'] = (lout['dsensum']*wa).sum(axis=0)
+        comb['osensum'] = (lout['osensum']*wa).sum(axis=0)
+        comb['dsig'] = w_dsum/comb['dsensum']
+        comb['osig'] = w_osum/comb['osensum']
+    else:
+        comb['dsig'] = w_dsum/w_wsum
+        comb['osig'] = w_osum/w_wsum
+
+    # this is average wsum over lenses
+    # we calculate clustering correction from this, wsum_mean/wsum_mean_random
+    comb['wsum_mean'] = w_wsum/totweights
+
+
+    # jackknifing for errors
+    jwsum = lout['wsum']*wa
+    jdsum = lout['dsum']*wa
+    m,cov=jackknife.wjackknife(vsum=jdsum, wsum=jwsum)
+
+    if shear_style=='lensfit':
+        dsensum=comb['dsensum']
+        for i in xrange(nbin):
+            for j in xrange(nbin):
+                cov[i,j] *= 1.0/(dsensum[0,i]*dsensum[0,j])
+
+    comb['dsigcov'][0,:,:] = cov
+    comb['dsigcor'][0,:,:] = jackknife.covar2corr(cov)
+    comb['dsigerr'][0,:] = sqrt(diag(cov))
+
+ 
+    # make weights in shape of wsum
+    #w      = zeros(lout['wsum'].shape)
+    #w_wsum = zeros(lout['wsum'].shape)
+    #for i in xrange(lout.size):
+    #    w_wsum[i,:] = lout['wsum'][i,:]*weights[i]
+    #    w[i,:] = weights[i]
+    #m,cov = jackknife.wjackknife(vsum=w_wsum, wsum=w)
+    #comb['wsum_mean_err'][0,:] = sqrt(diag(cov))
+
+    return comb
+
+
 
 def average_ratio(l1, l2):
     """

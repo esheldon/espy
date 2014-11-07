@@ -18,13 +18,25 @@ parser.add_argument("-t","--type",
                     default='bin')
 parser.add_argument("-v","--visible",action='store_true',
                     help="show plot on screen")
-   
+
+parser.add_argument("--linear",action='store_true',
+                    help="use linear y axis")
+
+parser.add_argument("-y","--yrange",
+                    default=None,
+                    help="force y range")
+
+  
 def main():
     args = parser.parse_args()
 
     if args.type=='bin':
         data=des.files_common.read_binned(args.run,
                                           args.bin_scheme)
+
+    yrange=args.yrange
+    if yrange is not None:
+        yrange=[float(v) for v in args.yrange.split(',')]
 
     binspec=des.files_common.read_config(args.bin_scheme)
     labels=[bi['label'] for bi in binspec['bin_info']]
@@ -33,6 +45,8 @@ def main():
                                data['dsig'],
                                data['dsigerr'],
                                labels=labels,
+                               ylog=(args.linear==False),
+                               yrange=yrange,
                                visible=False)
 
     epsfile=des.files_common.get_binned_file(args.run,

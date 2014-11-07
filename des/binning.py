@@ -59,6 +59,17 @@ class Binner(dict):
         """
         return self['bin_info'][binnum]['label']
 
+    def get_bintags(self):
+        """
+        get the tags to average in each bin
+        """
+        bin_info=self['bin_info']
+        
+        bi0 = bin_info[0]['bins']
+        bintags = [ri[0] for ri in bi0]
+
+        return bintags
+
     def bin(self, data):
         """
         bin the data and return the result
@@ -70,10 +81,10 @@ class Binner(dict):
             shear_style='reduced'
 
         bin_info=self['bin_info']
-        
-        bi0 = bin_info[0]['bins']
-        bintags = [ri[0] for ri in bi0]
+        bintags=self.get_bintags()
+
         print("bintags:",bintags)
+
         bs = averaging.lensbin_struct(nrbin,
                                       shear_style=shear_style,
                                       bintags=bintags,

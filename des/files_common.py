@@ -646,7 +646,7 @@ def get_match_weights_dir(lens_run, rand_run, bin_scheme):
     d=get_match_binned_dir(lens_run, rand_run, bin_scheme)
     return os.path.join(d, 'weights')
 
-def get_match_weights_file(lens_run, rand_run, bin_scheme, binnum, ext='fits'):
+def get_match_weights_file(lens_run, rand_run, bin_scheme, binnum=None, ext='fits'):
     """
     get the file holding weights for the random-matched data
 
@@ -663,7 +663,10 @@ def get_match_weights_file(lens_run, rand_run, bin_scheme, binnum, ext='fits'):
     d=get_match_weights_dir(lens_run, rand_run, bin_scheme)
 
     totrun='%s-%s' % (lens_run, rand_run)
-    fname="%s-%s-%02d-weights.%s" % (totrun, bin_scheme, binnum, ext)
+    if binnum is not None:
+        fname="%s-%s-%02d-weights.%s" % (totrun, bin_scheme, binnum, ext)
+    else:
+        fname="%s-%s-weights.%s" % (totrun, bin_scheme, ext)
     return os.path.join(d, fname)
 
 

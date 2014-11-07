@@ -2,7 +2,7 @@ from __future__ import print_function
 import numpy
 
 LABELS={}
-LABELS['rproj'] = r'$R$ [$h^{-1}$ Mpc]'
+LABELS['rproj'] = r'R [Mpc]'
 LABELS['dsig'] = r'$\Delta\Sigma ~[M_{\odot} pc^{-2}]$'
 LABELS['osig'] = r'$\Delta\Sigma_\times ~ [M_{\odot} pc^{-2}]$'
 

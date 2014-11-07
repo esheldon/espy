@@ -73,7 +73,7 @@ def plot_results1d(data1, data2, weights1, binsize,
     effperc = effnum/data1.size*100
     plabtext='effnum: %d/%d = %0.1f%%' % (effnum,data1.size,effperc)
 
-    print("plotting hist match results")
+    print("    plotting hist match results")
     print("    histogramming data set 1")
     h1dict = eu.stat.histogram(data1, binsize=binsize, more=True, 
                                min=xmin, max=xmax)
@@ -137,16 +137,15 @@ def plot_results1d(data1, data2, weights1, binsize,
     pltdiff.xlabel = xlabel
     pltdiff.ylabel = '%s-%s weighted' % (label2, label1)
 
+    pltdiff.title=title
     tab[1,0] = pltdiff
 
     #arr.xlabel=xlabel
     #arr.title=title
 
     if epsfile is not None:
-        print("writing eps file:",epsfile)
         tab.write_eps(epsfile)
     if pngfile is not None:
-        print("writing png file:",pngfile)
         tab.write_img(800,800,pngfile)
 
     if show:

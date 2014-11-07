@@ -29,5 +29,5 @@ lambda_col: "lambda_chisq"
 extra_weight_col: "rand_weight"
 
 # for matching to lens catalogs.  Can be "z" or "select"
-match_type: "selection"
+match_type: "selection-and-z"
 #match_type: "z"
