@@ -5,7 +5,7 @@ tools to select and write the xshear input (these we call scat)
 """
 from __future__ import print_function
 import numpy
-from .files_common import *
+from .files import *
 from . import pz
 from . import sg
 

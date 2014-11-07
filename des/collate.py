@@ -5,7 +5,7 @@ collate outputs
 """
 
 from __future__ import print_function
-from .files_common import *
+from .files import *
 
 class Collator(dict):
     def __init__(self, run):

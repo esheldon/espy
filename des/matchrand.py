@@ -3,7 +3,7 @@ code to match the redshift distributions of randoms to data
 """
 from __future__ import print_function
 import numpy
-from .files_common import *
+from .files import *
 from . import binning
 from . import averaging
 

@@ -5,7 +5,7 @@ from __future__ import print_function
 import numpy
 import cosmology
 
-from .files_common import *
+from .files import *
 
 def make_xshear_input(lcat_vers, chunk=None):
     """

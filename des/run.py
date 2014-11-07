@@ -5,7 +5,7 @@ runs are a combination of source and lens sample with configuration details
 """
 
 from __future__ import print_function
-from .files_common import *
+from .files import *
 from .import scat
 from . import lcat
 from . import output

@@ -4,7 +4,7 @@ code do bin lens outputs
 from __future__ import print_function
 import numpy
 from numpy import where, log10
-from .files_common import *
+from .files import *
 from . import averaging
 
 def bin_run(run, bin_conf_name):

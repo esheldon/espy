@@ -6,7 +6,7 @@ from . import lcat
 from . import run
 from . import collate
 from . import output
-from . import files_common
+from . import files
 from . import wqscripts
 from . import xshear_config
 
