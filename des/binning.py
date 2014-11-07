@@ -53,6 +53,11 @@ class Binner(dict):
         """
         return self['nbin']
 
+    def get_label(self, binnum):
+        """
+        get the label for the bin
+        """
+        return self['bin_info'][binnum]['label']
 
     def bin(self, data):
         """
