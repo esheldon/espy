@@ -93,7 +93,9 @@ then write the xshear config and all wq files
 
 then submit the xshear wq scripts
 
-    $LENSDIR/des-lensing/run/{run-name}/wq-xshear/*.yaml 
+    $LENSDIR/des-lensing/run/{run-name}/wq-xshear/lens-{chunk}/*.yaml 
+    e.g.
+    incsub -n 200 $(find . -name "*.yaml")
 
 the reduction script
 
