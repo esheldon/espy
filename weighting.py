@@ -3,7 +3,7 @@
 Multiple methods
 ----------------
 hist_match: 
-    simply derive weights so that the boxcar histograms are proportionalkk
+    simply derive weights so that the boxcar histograms are proportional
 
 hist_match_remove:
     remove objects until the boxcar histograms match.
@@ -46,7 +46,9 @@ def plothist_weights(weights):
 
 def plot_results1d(data1, data2, weights1, binsize, 
                    xmin=None, xmax=None, xlabel=None, title=None,
-                   epsfile=None, pngfile=None, show=True):
+                   epsfile=None, pngfile=None, show=True,
+                   label1='dataset 1',
+                   label2='dataset 2'):
     """
     compare the histograms at the input binsize
 
@@ -94,19 +96,22 @@ def plot_results1d(data1, data2, weights1, binsize,
     hdifferr = h2err
 
 
-    arr=biggles.FramedArray(2,1)
+    #arr=biggles.FramedArray(2,1)
+    tab=biggles.Table(2,1)
 
 
     ph1 = biggles.Histogram(h1, binsize=binsize, x0=h1dict['low'][0],color='blue')
-    ph1.label = 'dataset 1'
+    ph1.label = label1
 
     ph1w = biggles.Histogram(h1w, binsize=binsize, x0=h1dict['low'][0], color='red', type='longdashed', width=2)
-    ph1w.label = 'weighted 1'
+    ph1w.label = label1+' weighted'
 
     ph2 = biggles.Histogram(h2, binsize=binsize, x0=h2dict['low'][0], width=2)
-    ph2.label = 'dataset 2'
+    ph2.label = label2
 
-    plt=arr[0,0]
+    #plt=arr[0,0]
+    plt=biggles.FramedPlot()
+    plt.title=title
 
     plt.add(ph1)
     plt.add(ph2)
@@ -116,8 +121,10 @@ def plot_results1d(data1, data2, weights1, binsize,
     key=biggles.PlotKey(0.1,0.90,[ph1,ph2,ph1w],halign='left')
     plt.add(key)
 
+    tab[0,0]=plt
 
-    pltdiff=arr[1,0]
+    #pltdiff=arr[1,0]
+    pltdiff=biggles.FramedPlot()
 
     phdiff = biggles.Points(h1dict['center'], hdiff)
     phdifferr = biggles.SymmetricErrorBarsY(h1dict['center'], hdiff, hdifferr)
@@ -128,20 +135,22 @@ def plot_results1d(data1, data2, weights1, binsize,
     
     pltdiff.add(phdiff, phdifferr, zero, plab)
     pltdiff.xlabel = xlabel
-    pltdiff.ylabel = 'hist2-weight hist1'
+    pltdiff.ylabel = '%s-%s weighted' % (label2, label1)
 
-    arr.xlabel=xlabel
-    arr.title=title
+    tab[1,0] = pltdiff
+
+    #arr.xlabel=xlabel
+    #arr.title=title
 
     if epsfile is not None:
         print("writing eps file:",epsfile)
-        arr.write_eps(epsfile)
+        tab.write_eps(epsfile)
     if pngfile is not None:
         print("writing png file:",pngfile)
-        arr.write_img(800,800,pngfile)
+        tab.write_img(800,800,pngfile)
 
     if show:
-        arr.show()
+        tab.show()
 
 def hist_match(data1, data2, binsize, extra_weights1=None):
     """

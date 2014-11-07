@@ -1,49 +1,49 @@
 bin_info:
     - label: '$\lambda  \in [5.0,5.6]$'
       bins: [ ["lambda_chisq", [5.0, 5.6], "()"],
-              ["z_lambda", [0.1, 0.9], "()"] ]
+              ["z_lambda", [0.2, 0.8], "()"] ]
 
     - label: '$\lambda  \in [5.6,6.5]$'
       bins: [ ["lambda_chisq", [5.6, 6.5], "()"],
-              ["z_lambda", [0.1, 0.9], "()"] ]
+              ["z_lambda", [0.2, 0.8], "()"] ]
 
     - label: '$\lambda  \in [6.5,7.6]$'
       bins: [ ["lambda_chisq", [6.5, 7.6], "()"],
-              ["z_lambda", [0.1, 0.9], "()"] ]
+              ["z_lambda", [0.2, 0.8], "()"] ]
 
     - label: '$\lambda  \in [7.6,9.0]$'
       bins: [ ["lambda_chisq", [7.6, 9.0], "()"],
-              ["z_lambda", [0.1, 0.9], "()"] ]
+              ["z_lambda", [0.2, 0.8], "()"] ]
 
     - label: '$\lambda  \in [9.0,10.6]$'
       bins: [ ["lambda_chisq", [9.0, 10.6], "()"],
-              ["z_lambda", [0.1, 0.9], "()"] ]
+              ["z_lambda", [0.2, 0.8], "()"] ]
 
     - label: '$\lambda  \in [10.6,12.7]$'
       bins: [ ["lambda_chisq", [10.6, 12.7], "()"],
-              ["z_lambda", [0.1, 0.9], "()"] ]
+              ["z_lambda", [0.2, 0.8], "()"] ]
 
     - label: '$\lambda  \in [12.7,15.3]$'
       bins: [ ["lambda_chisq", [12.7, 15.3], "()"],
-              ["z_lambda", [0.1, 0.9], "()"] ]
+              ["z_lambda", [0.2, 0.8], "()"] ]
 
     - label: '$\lambda  \in [15.3,18.8]$'
       bins: [ ["lambda_chisq", [15.3, 18.8], "()"],
-              ["z_lambda", [0.1, 0.9], "()"] ]
+              ["z_lambda", [0.2, 0.8], "()"] ]
 
     - label: '$\lambda  \in [18.8,23.2]$'
       bins: [ ["lambda_chisq", [18.8, 23.2], "()"],
-              ["z_lambda", [0.1, 0.9], "()"] ]
+              ["z_lambda", [0.2, 0.8], "()"] ]
 
     - label: '$\lambda  \in [23.2,30.8]$'
       bins: [ ["lambda_chisq", [23.2, 30.8], "()"],
-              ["z_lambda", [0.1, 0.9], "()"] ]
+              ["z_lambda", [0.2, 0.8], "()"] ]
 
     - label: '$\lambda  \in [30.8,45.0]$'
       bins: [ ["lambda_chisq", [30.8, 45.0], "()"],
-              ["z_lambda", [0.1, 0.9], "()"] ]
+              ["z_lambda", [0.2, 0.8], "()"] ]
 
     - label: '$\lambda  > 45$'
       bins: [ ["lambda_chisq", [45.0, 1.0e06], "()"],
-              ["z_lambda", [0.1, 0.9], "()"] ]
+              ["z_lambda", [0.2, 0.8], "()"] ]
 
