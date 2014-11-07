@@ -4,6 +4,7 @@ code to create xshear input files
 from __future__ import print_function
 import numpy
 import cosmology
+from esutil.numpy_util import between
 
 from .files import *
 
@@ -94,9 +95,42 @@ class XShearInput(dict):
         apply any cuts
         """
         z_logic=self.get_z_logic(data[self['z_col']])
-        
-        w,=numpy.where(z_logic)
+        range_logic = self.get_radec_range_logic(data[self['ra_col']],
+                                                 data[self['dec_col']])
+
+        logic = z_logic & range_logic
+
+        w,=numpy.where(logic)
+        print("    final remaining %d/%d" % (w.size,data.size))
+        if w.size == 0:
+            raise ValueError("No objects passed cuts")
+       
         return w
+
+    def get_radec_range_logic(self, ra, dec):
+        """
+        apply cuts on ra,dec range if set
+        """
+
+        ra_range=self.get('ra_range',None)
+        dec_range=self.get('dec_range',None)
+        if ra_range is not None:
+            print("    Cutting ra to [%g, %g]" % tuple(ra_range))
+            print("    Cutting dec to [%g, %g]" % tuple(dec_range))
+
+            logic = (  between(ra, ra_range[0], ra_range[1])
+                     & between(dec, dec_range[0], dec_range[1])  )
+
+            w,=numpy.where(logic)
+            print("        remaining %d/%d" % (w.size,ra.size))
+            if w.size == 0:
+                raise ValueError("No objects passed ra,dec range cut")
+
+        else:
+            logic = numpy.ones(ra.size, dtype='bool')
+
+
+        return logic
 
     def get_z_logic(self, z):
         """
@@ -106,7 +140,7 @@ class XShearInput(dict):
         logic = (z > self['zmin']) & (z < self['zmax']) 
 
         w,=numpy.where(logic)
-        print("    Keeping %d/%d" % (w.size,z.size))
+        print("        remaining %d/%d" % (w.size,z.size))
         if w.size == 0:
             raise ValueError("No objects passed z cut")
 
