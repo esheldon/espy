@@ -28,10 +28,10 @@ def main():
     args = parser.parse_args()
 
     if args.type=='bin':
-        data=des.files_common.read_binned(args.run,
+        data=des.files.read_binned(args.run,
                                           args.bin_scheme)
 
-    binspec=des.files_common.read_config(args.bin_scheme)
+    binspec=des.files.read_config(args.bin_scheme)
     labels=[bi['label'] for bi in binspec['bin_info']]
 
     yrng=args.yrange
@@ -63,7 +63,7 @@ def main():
 
         arr[row,col].add(pts, err)
 
-    epsfile=des.files_common.get_binned_file(args.run,
+    epsfile=des.files.get_binned_file(args.run,
                                              args.bin_scheme,
                                              ext='eps')
     epsfile=epsfile.replace('.eps','-bmode.eps')

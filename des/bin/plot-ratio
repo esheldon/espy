@@ -41,8 +41,8 @@ parser.add_argument("-c","--color",
 def main():
     args = parser.parse_args()
 
-    data1=des.files_common.read_collated(args.run1)
-    data2=des.files_common.read_collated(args.run2)
+    data1=des.files.read_collated(args.run1)
+    data2=des.files.read_collated(args.run2)
 
     binner=des.binning.Binner(args.bin_scheme)
     comb1=binner.bin(data1)
@@ -81,7 +81,7 @@ def main():
         ratmean[binnum]=wm
         ratmean_err[binnum]=we
 
-    binspec=des.files_common.read_config(args.bin_scheme)
+    binspec=des.files.read_config(args.bin_scheme)
     labels=[bi['label'] for bi in binspec['bin_info']]
 
     if args.run_labels is None:

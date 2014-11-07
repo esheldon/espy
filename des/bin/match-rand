@@ -23,7 +23,7 @@ parser.add_argument("--show",
 def main():
     args = parser.parse_args()
 
-    rconf=des.files_common.cascade_config(args.rand_run)
+    rconf=des.files.cascade_config(args.rand_run)
     matcher=des.matchrand.RandomMatcher(args.lens_run,
                                         args.rand_run,
                                         args.bin_scheme,
