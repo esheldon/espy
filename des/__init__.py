@@ -15,5 +15,7 @@ from . import binning
 
 from . import plotting
 
+from . import matchrand
+
 
 #from . import util
