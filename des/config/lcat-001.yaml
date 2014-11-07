@@ -12,8 +12,8 @@ nbin: 17
 rmin: 0.055
 rmax: 35.15
 
-zmin: 0.1
-zmax: 0.9
+zmin: 0.2
+zmax: 0.8
 
 # this is "eq" or "sdss"
 mask_style: "equatorial"
