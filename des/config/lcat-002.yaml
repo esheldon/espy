@@ -17,11 +17,6 @@ rmax: 35.15
 zmin: 0.2
 zmax: 0.8
 
-
-# spt-e region
-ra_range: [40.0, 95.0]
-dec_range: [-62.0, -42.0]
-
 # this is "eq" or "sdss"
 mask_style: "equatorial"
 mask_type: "healpix"
