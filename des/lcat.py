@@ -95,20 +95,23 @@ class XShearInput(dict):
         apply any cuts
         """
         z_logic=self.get_z_logic(data[self['z_col']])
-        range_logic = self.get_radec_range_logic(data[self['ra_col']],
-                                                 data[self['dec_col']])
+        #range_logic = self.get_radec_range_logic(data[self['ra_col']],
+        #                                         data[self['dec_col']])
+        #logic = z_logic & range_logic
 
-        logic = z_logic & range_logic
+        logic = z_logic
 
         w,=numpy.where(logic)
-        print("    final remaining %d/%d" % (w.size,data.size))
-        if w.size == 0:
-            raise ValueError("No objects passed cuts")
+        #print("    final remaining %d/%d" % (w.size,data.size))
+        #if w.size == 0:
+        #    raise ValueError("No objects passed cuts")
        
         return w
 
     def get_radec_range_logic(self, ra, dec):
         """
+        not currently used
+
         apply cuts on ra,dec range if set
         """
 
