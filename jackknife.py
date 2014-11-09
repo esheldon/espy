@@ -86,16 +86,16 @@ def write_wjackknife_inputs(filename, vsum, wsum):
         wsum.tofile(fobj)
 
 def read_jackknife_outputs(filename):
-    import recfile
+    from esutil.recfile import Recfile
     with open(filename,'r') as fobj:
 
         vnvar = numpy.fromfile(fobj, sep=' ', count=1, dtype='i8')
         nvar=int(vnvar[0])
 
         dtype=[('mean','f8'),('err','f8')]
-        robj = recfile.Open(fobj,dtype=dtype,delim=' ',nrows=nvar)
-
+        robj=Recfile(fobj,dtype=dtype,delim=' ',nrows=nvar)
         d=robj.read()
+
         mean = d['mean'].copy()
 
         covar=numpy.fromfile(fobj, sep=' ', dtype='f8', count=nvar*nvar)
