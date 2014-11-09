@@ -307,7 +307,7 @@ def average_lensums_weighted_fast(lout, weights):
 
 def average_ratio(l1, l2):
     """
-    jackknife the ratio of dsig1/dsig2
+    jackknife (singly) the ratio of dsig1/dsig2
     """
     import jackknife
 
@@ -321,16 +321,8 @@ def average_ratio(l1, l2):
     dsum2=l2['dsum']
     dsum_tot2=comb2['dsum']
 
-    if 'dsensum' in l1.dtype.names:
-        wsum1=l1['dsensum']
-        wsum_tot1=comb1['dsensum']
-        wsum2=l2['dsensum']
-        wsum_tot2=comb2['dsensum']
-    else:
-        wsum1=l1['wsum']
-        wsum_tot1=comb1['wsum']
-        wsum2=l2['wsum']
-        wsum_tot2=comb2['wsum']
+    wsum1, wsum_tot1=_get_ratio_wsums(l1, comb1)
+    wsum2, wsum_tot2=_get_ratio_wsums(l2, comb2)
 
     r      = comb1['r'][0,:]
     ratio  = comb1['dsig'][0,:]/comb2['dsig'][0,:]
@@ -364,7 +356,20 @@ def average_ratio(l1, l2):
     return r, ratio, covar
 
 
+def _get_ratio_wsums(data, comb):
+    """
+    helper routine for average_ratio
+    get the appropriate denominator for dsum.  Will be dsensum for lensfit,
+    which is sum(weight*sensitivity), otherwise wsum which is sum(weight)
+    """
+    if 'dsensum' in data.dtype.names:
+        wsum=data['dsensum']
+        wsum_tot=comb['dsensum']
+    else:
+        wsum=data['wsum']
+        wsum_tot=comb['wsum']
 
+    return wsum, wsum_tot
 
 
 
