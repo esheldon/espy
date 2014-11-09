@@ -24,6 +24,11 @@ parser.add_argument("-y","--yrange",
                     help="y range for plot",
                     default=None)
 
+parser.add_argument("--title",
+                    default=None,
+                    help="add a title")
+
+
 def main():
     args = parser.parse_args()
 
@@ -45,6 +50,7 @@ def main():
                                ylog=False,
                                yrange=yrng,
                                labels=labels,
+                               title=args.title,
                                visible=False)
 
     # now add bmode
