@@ -16,5 +16,7 @@ from . import plotting
 
 from . import matchrand
 
+# generating randoms
+from . import randoms
 
 #from . import util
