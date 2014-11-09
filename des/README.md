@@ -121,6 +121,19 @@ Then perform the binning
 
     $ESPY_DIR/des/bin/bin-lenses run bin_scheme
 
+matching random point lens runs
+-------------------------------
+
+    $ESPY_DIR/des/bin/match-rand lens_run rand_run bin_scheme
+
+generating your own randoms
+---------------------------
+
+First make a random config.  Then generate nrand randoms
+and write to catalog cat_name
+
+    $ESPY_DIR/des/bin/make-randoms rand_conf nrand cat_name
+
 plots
 -----
 
