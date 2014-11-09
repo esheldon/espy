@@ -38,6 +38,7 @@ def plot_dsig(r, dsig, dsigerr, **kw):
     xlog=kw.get('xlog',True)
     ylog=kw.get('ylog',True)
     labels=kw.get('labels',None)
+    title=kw.get('title',None)
 
     ylabel=kw.get('ylabel',None)
 
@@ -45,10 +46,10 @@ def plot_dsig(r, dsig, dsigerr, **kw):
     if aspect_ratio is None:
         aspect_ratio=float(grid.nrow)/grid.ncol
     arr.aspect_ratio = aspect_ratio 
-
     arr.uniform_limits=True
     arr.xlog, arr.ylog = xlog, ylog
 
+    arr.title=title
     arr.xlabel = LABELS['rproj']
     if ylabel is None:
         if is_ortho:
