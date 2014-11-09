@@ -26,7 +26,11 @@ parser.add_argument("-y","--yrange",
                     default=None,
                     help="force y range")
 
-  
+parser.add_argument("--title",
+                    default=None,
+                    help="add a title")
+
+ 
 def main():
     args = parser.parse_args()
 
@@ -47,6 +51,7 @@ def main():
                                labels=labels,
                                ylog=(args.linear==False),
                                yrange=yrange,
+                               title=args.title,
                                visible=False)
 
     epsfile=des.files.get_binned_file(args.run,
