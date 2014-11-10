@@ -613,30 +613,6 @@ def get_match_dir(lens_run, rand_run, bin_scheme):
     totrun='%s-%s' % (lens_run, rand_run)
     d=get_run_dir(totrun)
 
-def get_match_binned_dir(lens_run, rand_run, bin_scheme):
-    """
-    lensdir/run/lrun_name-rrunname/binned
-    """
-
-    totrun='%s-%s' % (lens_run, rand_run)
-    return get_binned_dir(totrun, bin_scheme)
-
-def get_match_binned_file(lens_run, rand_run, bin_scheme, ext='fits'):
-    """
-    get the file holding binned data, or the basic plot file
-
-    parameters
-    ----------
-    run: string
-        the run identifier
-    bin_scheme: string
-        name for the binning scheme, e.g. bin-lambda08-z01
-    ext: string
-        default fits, could be eps etc.
-    """
-
-    totrun='%s-%s' % (lens_run, rand_run)
-    return get_binned_file(totrun, bin_scheme, ext=ext)
 
 def get_match_weights_dir(lens_run, rand_run, bin_scheme):
     """
@@ -670,13 +646,129 @@ def get_match_weights_file(lens_run, rand_run, bin_scheme, binnum=None, ext='fit
     return os.path.join(d, fname)
 
 
-#
-# corrected here
-#
+# these are just convenience to combine the run names
+def get_match_binned_dir(lens_run, rand_run, bin_scheme):
+    """
+    lensdir/run/lrun_name-rrunname/binned
+    """
+
+    totrun='%s-%s' % (lens_run, rand_run)
+    return get_binned_dir(totrun, bin_scheme)
+
+def get_match_binned_file(lens_run, rand_run, bin_scheme, ext='fits'):
+    """
+    get the file holding binned data, or the basic plot file
+
+    parameters
+    ----------
+    run: string
+        the run identifier
+    bin_scheme: string
+        name for the binning scheme, e.g. bin-lambda08-z01
+    ext: string
+        default fits, could be eps etc.
+    """
+
+    totrun='%s-%s' % (lens_run, rand_run)
+    return get_binned_file(totrun, bin_scheme, ext=ext)
 
 #
 # jackknifed here
 #
+
+def get_jack_dir(lens_run, rand_run, bin_scheme):
+    """
+    lensdir/run/lrun_name-rrunname/jack
+    """
+
+    totrun='%s-%s' % (lens_run, rand_run)
+    d=get_run_dir(totrun)
+    return os.path.join(d, 'jack/%s' % bin_scheme)
+
+def get_jack_file(lens_run, rand_run, bin_scheme, ext='fits'):
+    """
+    get the file holding jackknifed data, or the basic plot file
+
+    parameters
+    ----------
+    run: string
+        the run identifier
+    bin_scheme: string
+        name for the binning scheme, e.g. bin-lambda08-z01
+    ext: string
+        default fits, could be eps etc.
+    """
+
+    d=get_jack_dir(lens_run, rand_run, bin_scheme)
+
+    totrun='%s-%s' % (lens_run, rand_run)
+    fname="%s-%s-jack.%s" % (totrun, bin_scheme, ext)
+    return os.path.join(d, fname)
+
+#
+# corrected files here
+#
+
+def get_corr_binned_dir(lens_run, rand_run, bin_scheme):
+    """
+    lensdir/run/lrun_name-rrunname/corr-binned
+    """
+
+    totrun='%s-%s' % (lens_run, rand_run)
+    d=get_run_dir(totrun)
+    return os.path.join(d, 'corr-binned/%s' % bin_scheme)
+
+def get_corr_binned_file(lens_run, rand_run, bin_scheme, ext='fits'):
+    """
+    get the file holding corrected binned data, or the basic plot file
+
+    parameters
+    ----------
+    run: string
+        the run identifier
+    bin_scheme: string
+        name for the binning scheme, e.g. bin-lambda08-z01
+    ext: string
+        default fits, could be eps etc.
+    """
+
+    d=get_corr_binned_dir(lens_run, rand_run, bin_scheme)
+
+    totrun='%s-%s' % (lens_run, rand_run)
+    fname="%s-%s-corr.%s" % (totrun, bin_scheme, ext)
+    return os.path.join(d, fname)
+
+def get_corr_jack_dir(lens_run, rand_run, bin_scheme):
+    """
+    lensdir/run/lrun_name-rrunname/corr-jack
+    """
+
+    totrun='%s-%s' % (lens_run, rand_run)
+    d=get_run_dir(totrun)
+    return os.path.join(d, 'corr-jack/%s' % bin_scheme)
+
+def get_corr_jack_file(lens_run, rand_run, bin_scheme, ext='fits'):
+    """
+    get the file holding corrected jackknifed data, or the basic plot file
+
+    parameters
+    ----------
+    run: string
+        the run identifier
+    bin_scheme: string
+        name for the binning scheme, e.g. bin-lambda08-z01
+    ext: string
+        default fits, could be eps etc.
+    """
+
+    d=get_corr_jack_dir(lens_run, rand_run, bin_scheme)
+
+    totrun='%s-%s' % (lens_run, rand_run)
+    fname="%s-%s-jack-corr.%s" % (totrun, bin_scheme, ext)
+    return os.path.join(d, fname)
+
+
+
 
 
 #

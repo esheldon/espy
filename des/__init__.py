@@ -18,5 +18,6 @@ from . import matchrand
 
 # generating randoms
 from . import randoms
+from . import boost_factors
 
 #from . import util

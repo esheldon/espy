@@ -89,24 +89,20 @@ def average_lensums(lout, weights=None):
 
         # this is average wsum over lenses
         # we calculate clustering correction from this, wsum_mean/wsum_mean_random
-        wsum_mean = wsum/nlens
-        comb['wsum_mean'][0,i] = wsum_mean
-        comb['wsum_mean_err_simple'][0,i] = sqrt(wsum2/nlens - wsum_mean**2)/sqrt(nlens)
-
+        comb['wsum_mean'][0,i] = wsum_mean = wsum/nlens
 
     m,cov=jackknife.wjackknife(vsum=lout['dsum'], wsum=lout['wsum'])
     comb['dsigcov'][0,:,:] = cov
     comb['dsigcor'][0,:,:] = jackknife.covar2corr(cov)
     comb['dsigerr'][0,:] = sqrt(diag(cov))
 
-    # turns out this agrees with the above one
     w=numpy.ones(lout['wsum'].shape)
     m,cov = jackknife.wjackknife(vsum=lout['wsum'], wsum=w)
     comb['wsum_mean_err'][0,:] = sqrt(diag(cov))
 
     return comb
 
-def average_lensums_weighted(lout, weights):
+def average_lensums_weighted_slow(lout, weights):
     """
 
     Reduce the lens-by-lens lensums by summing over
@@ -292,15 +288,11 @@ def average_lensums_weighted_fast(lout, weights):
     comb['dsigerr'][0,:] = sqrt(diag(cov))
 
  
-    # make weights in shape of wsum
-    #w      = zeros(lout['wsum'].shape)
-    #w_wsum = zeros(lout['wsum'].shape)
-    #for i in xrange(lout.size):
-    #    w_wsum[i,:] = lout['wsum'][i,:]*weights[i]
-    #    w[i,:] = weights[i]
-    #m,cov = jackknife.wjackknife(vsum=w_wsum, wsum=w)
-    #comb['wsum_mean_err'][0,:] = sqrt(diag(cov))
+    # get wsum times broadcasted weights 
+    w_wsum = lout['wsum']*wa
+    m,cov = jackknife.wjackknife(vsum=w_wsum, wsum=wa)
 
+    comb['wsum_mean_err'][0,:] = sqrt(diag(cov))
     return comb
 
 
@@ -415,7 +407,6 @@ def averaged_dtype(nbin, shear_style=_DEFAULT_SHEAR_STYLE):
         ('osig','f8',nbin),
         ('wsum_mean','f8',nbin),
         ('wsum_mean_err','f8',nbin),
-        ('wsum_mean_err_simple','f8',nbin),
         ('npair','i8',nbin),
         ('rsum','f8',nbin),
         ('wsum','f8',nbin),
