@@ -29,3 +29,6 @@ z_col:      "z"
 # for matching to lens catalogs.
 # Can be "z" or "selection", or "selection-and-z"
 match_type: "z"
+
+#zmatch_method: "weight"
+zmatch_method: "remove"

@@ -33,3 +33,5 @@ extra_weight_col: "rand_weight"
 # for matching to lens catalogs.
 # Can be "z" or "selection", or "selection-and-z"
 match_type: "selection-and-z"
+
+zmatch_method: "weight"

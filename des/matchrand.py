@@ -98,7 +98,6 @@ class RandomMatcher(dict):
 
         weights = weighting.hist_match(rz, z[w], self['binsize'],
                                         extra_weights1=self.extra_weights)
-        weights *= ( 1.0/weights.max() )
 
         return w,weights
 
@@ -172,6 +171,10 @@ class RandomMatcher(dict):
         tit+=' rand: '+self['rand_run']
 
         print("    writing:",pngfile)
+
+        if weights is None:
+            weights=numpy.ones(rz.size)
+
         weighting.plot_results1d(rz, z, weights, self['binsize'], 
                                  pngfile=pngfile, title=tit,
                                  xlabel='z',
@@ -260,4 +263,139 @@ class RandomMatcher(dict):
 
         return bs
 
+class RandomMatcherRemove(RandomMatcher):
+    """
+    match randoms by z, using remove method
 
+    example
+    -------
+    rm = RandomMatcherRemove(lens_run, rand_run, bin_scheme)
+    rm.match()
+
+    outputs
+    -------
+    index files and binned files for the randoms are written
+    """
+
+    def match(self):
+        """
+        match according to the requested match type
+        """
+        import fitsio
+
+        nbin=self.binner.get_nbin()
+        bs=self._get_binned_struct()
+
+        fname=get_match_weights_file(self['lens_run'],self['rand_run'],self['bin_scheme'])
+        print("opening:",fname)
+        with fitsio.FITS(fname,'rw',clobber=True) as fits:
+            for binnum in xrange(nbin):
+                print("-"*70)
+                print("matching bin: %d/%d" % (binnum+1,nbin))
+
+                w,wr,weights,comb=self._run_matcher(binnum)
+                if weights is not None:
+                    st=numpy.zeros(wr.size, dtype=[('index','i8'),('weight','f8')])
+                    st['index']=wr
+                    st['weight']=weights
+                    fits.write(st)
+                else:
+                    fits.write(wr)
+
+                self._print_perc(wr)
+                self._plot_zhist(self.rz[wr], self.z[w], weights, binnum)
+
+                for n in comb.dtype.names:
+                    bs[n][binnum] = comb[n][0]
+
+        self._write_binned(bs)
+        self._write_html()
+
+    def _run_matcher(self, binnum):
+        """
+        run the appropriate matcher
+        """
+        if self['match_type']=='z':
+            w,wr,weights=self._match_one_by_z(binnum)
+        else:
+            w,wr,weights=self._match_one_by_selection_and_z(binnum)
+
+        print("    combining")
+        print("        weights","None" if weights is None else "not None")
+        comb = averaging.average_lensums(self.rdata[wr], weights=weights)
+        return w,wr,weights,comb
+
+    def _match_one_by_z(self, binnum):
+        """
+        match redshifts in this bin
+        """
+        z=self.z
+        rz=self.rz
+        nrand=rz.size
+
+        w=self.binner.select_bin(self.data, binnum)
+
+        wr,weights = self._do_z_match(rz, z[w], weights=self.extra_weights)
+        return w,wr,weights
+
+    def _match_one_by_selection_and_z(self, binnum):
+        """
+        match by applying the same selection to real and random data, as
+        well as redshift matching
+        """
+
+        z=self.z
+        rz=self.rz
+        nrand=rz.size
+
+        w=self.binner.select_bin(self.data, binnum)
+        wr0=self.binner.select_bin(self.rdata, binnum)
+
+        wr,weights=self._do_z_match(rz[wr0], z[w], weights=self.extra_weights)
+
+        wr=wr0[wr]
+        return w,wr,weights
+
+    def _do_z_match(self, rz, z, weights=None):
+        """
+        all the other match methods call this one
+        """
+
+        wr = weighting.hist_match_remove(rz, z, self['binsize'],
+                                         extra_weights1=weights)
+
+        if weights is None:
+            weights_out=None
+        else:
+            weights_out=weights[wr]
+
+        return wr,weights_out
+
+
+    def _print_perc(self, wr):
+        nkeep=wr.size
+        ntot=self.rz.size
+        perc=nkeep/float(ntot)
+        print("    percent kept: %d/%d = %0.2f" % (nkeep,ntot,perc))
+
+
+    def _write_html(self):
+        """
+        make an html file with all the z hist plots
+        """
+        from glob import glob
+        d=get_match_weights_dir(self['lens_run'],
+                                self['rand_run'],
+                                self['bin_scheme'])
+        command='cd %s; im2html -p *.png > zhist.html' % d
+
+        print("making html file")
+        os.system(command)
+
+    def _set_match_type(self):
+        """
+        set the match type and make sure it is valud
+        """
+        self['match_type'] = self['rrun_conf']['lens_conf']['match_type']
+        if self['match_type'] not in ['z','selection-and-z']:
+            raise ValueError("bad match type for remove: '%s'" % self['match_type'])

@@ -85,7 +85,10 @@ def calc_boost_factors(data, rand):
     corr_err = zeros(corr.shape) + 9999
 
     w=where( (data['wsum_mean'] > 0) & (rand['wsum_mean'] > 0) )
-    corr_err[w] = corr[w]*sqrt(   (derr[w]/data['wsum_mean'][w])**2
-                                + (rerr[w]/rand['wsum_mean'][w])**2 )
+
+    if w[0].size > 0:
+        dfrac = derr[w]/data['wsum_mean'][w]
+        rfrac = rerr[w]/rand['wsum_mean'][w]
+        corr_err[w] = corr[w]*sqrt( dfrac**2 + rfrac**2 )
 
     return corr, corr_err

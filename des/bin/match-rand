@@ -19,16 +19,27 @@ parser.add_argument("--binsize",
 parser.add_argument("--show", 
                     action='store_true',
                     help="show plots on the screen")
- 
+
 def main():
     args = parser.parse_args()
 
     rconf=des.files.cascade_config(args.rand_run)
-    matcher=des.matchrand.RandomMatcher(args.lens_run,
-                                        args.rand_run,
-                                        args.bin_scheme,
-                                        binsize=args.binsize,
-                                        show=args.show)
+
+    zmatch_method=rconf['lens_conf']['zmatch_method']
+    if zmatch_method=='weight':
+        print("using weight method")
+        matcher=des.matchrand.RandomMatcher(args.lens_run,
+                                            args.rand_run,
+                                            args.bin_scheme,
+                                            binsize=args.binsize,
+                                            show=args.show)
+    else:
+        print("using remove method")
+        matcher=des.matchrand.RandomMatcherRemove(args.lens_run,
+                                                  args.rand_run,
+                                                  args.bin_scheme,
+                                                  binsize=args.binsize,
+                                                  show=args.show)
 
     matcher.match()
 

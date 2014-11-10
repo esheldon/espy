@@ -206,7 +206,7 @@ def hist_match(data1, data2, binsize, extra_weights1=None):
         weights1 *= extra_weights1
     return weights1
 
-def hist_match_remove(data1, data2, binsize):
+def hist_match_remove(data1, data2, binsize, extra_weights1=None):
     """
 
     Similar to hist_match but instead of returning the weights, actually remove
@@ -217,7 +217,14 @@ def hist_match_remove(data1, data2, binsize):
     min2=data2.min()
     max2=data2.max()
 
-    h1,rev1 = histogram(data1, binsize=binsize, min=min2, max=max2, rev=True)
+    if extra_weights1 is not None:
+        bs1 = histogram(data1, binsize=binsize, min=min2, max=max2, rev=True,
+                        weights=extra_weights1)
+        h1=bs1['whist']
+        rev1=bs1['rev']
+    else:
+        h1,rev1=histogram(data1, binsize=binsize, min=min2, max=max2, rev=True)
+
     h2 = histogram(data2, min=min2, max=max2, binsize=binsize)
 
     if h1.size != h2.size:
@@ -241,10 +248,11 @@ def hist_match_remove(data1, data2, binsize):
             nkeep = int(w1.size*ratio[i])
             if nkeep > 0:
                 # sort method is faster here.
-                indices = eu.numpy_util.random_subset(w1.size, nkeep, method='sort')
+                indices = eu.random.random_indices(w1.size, nkeep)
                 keep.append(w1[indices])
 
     return eu.numpy_util.combine_arrlist(keep)
+
 
 class WeightCalculator(dict):
     def __init__(self, data1, data2):
