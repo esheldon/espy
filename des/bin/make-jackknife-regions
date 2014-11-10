@@ -1,0 +1,160 @@
+#!/usr/bin/env python
+"""
+generate jackknife regions for the specified catalog
+"""
+
+from __future__ import print_function
+import os
+import biggles
+import numpy
+import pcolors
+import esutil as eu
+from esutil.numpy_util import between
+import fitsio
+import converter
+import des
+import kmeans_radec
+
+import argparse
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("fname", help="fits file with ra/dec columns")
+parser.add_argument("des_region", help="name of the overall des region")
+parser.add_argument("njack", help="number of regions",type=int)
+
+parser.add_argument("--maxiter", help="max number of interations",
+                    type=int,default=100)
+
+def main():
+    args = parser.parse_args()
+
+    data=fitsio.read(args.fname)
+
+    data=trim_cat(data, args.des_region)
+    data=randomize_cat(data)
+
+    print("data size:",data.size)
+
+    radec=numpy.zeros( (data.size, 2) )
+    radec[:,0] = data['ra']
+    radec[:,1] = data['dec']
+
+    tol=1.0e-5
+    km=kmeans_radec.kmeans_sample(radec,
+                                  args.njack,
+                                  maxiter=args.maxiter,
+                                  tol=tol)
+    if not km.converged:
+        print("did not converge")
+        exit(1)
+
+
+    write_centers(args, km.centers)
+
+    make_plots(args, radec, km)
+
+
+def trim_cat(data, des_region):
+    print("trimming to region:",des_region)
+    conf=des.files.read_config('constants')
+    reginfo=conf['regions'][des_region]
+    ra_range=reginfo['ra_range']
+    dec_range=reginfo['dec_range']
+
+    w,=numpy.where(  between(data['ra'], ra_range[0],ra_range[1])
+                   & between(data['dec'], dec_range[0], dec_range[1]) )
+
+    data=data[w]
+    return data
+
+def randomize_cat(data):
+    print("randomizing catalog")
+    # randomize the catalog to help kmeans algorithm
+    r=numpy.random.random(data.size)
+    s=r.argsort()
+    data=data[s]
+
+    return data
+
+def write_centers(args, centers):
+    d=des.files.get_jackknife_centers_dir(args.des_region)
+    if not os.path.exists(d):
+        print("making dir:",d)
+        os.makedirs(d)
+
+    fname=des.files.get_jackknife_centers_file(args.des_region,
+                                               args.njack)
+    print("writing:",fname)
+    h={'file':args.fname}
+    fitsio.write(fname, centers, clobber=True, header=h)
+
+def make_plots(args, radec, km):
+    # now make a plot
+    ncolor=100
+    all_colors=pcolors.rainbow(ncolor)
+
+
+    points=['filled circle','diamond','square','circle','filled diamond',
+           'cross','star','octagon','filled square']
+
+    npoint=len(points)
+
+    h,rev=eu.stat.histogram(km.labels, rev=True)
+
+    ri=eu.random.random_indices(ncolor, h.size)
+    colors=[all_colors[i] for i in ri]
+
+    nbin=h.size
+
+    plt=biggles.FramedPlot()
+    size=0.7
+
+    for i in xrange(nbin):
+        if rev[i] != rev[i+1]:
+            w=rev[ rev[i]:rev[i+1] ]
+
+            color=colors[i]
+            ptype=points[i % npoint]
+            pts=biggles.Points(radec[w,0], radec[w,1], type=ptype,
+                               color=color, size=size)
+
+            plt.add(pts)
+
+    cpts=biggles.Points(km.centers[:,0], km.centers[:,1],
+                        type='filled circle', color='black')
+    plt.add( cpts )
+
+    ra=radec[:,0]
+    dec=radec[:,1]
+
+    rarange=ra.max()-ra.min()
+    decrange=dec.max()-dec.min()
+    plt.aspect_ratio = decrange/rarange
+    plt.xlabel='RA'
+    plt.ylabel='DEC'
+
+    epsfile=des.files.get_jackknife_centers_epsfile(args.des_region,
+                                                    args.njack,
+                                                    extra='regions')
+
+    print("writing:",epsfile)
+    plt.write_eps(epsfile)
+
+    #converter.convert(epsfile,dpi=150,verbose=True)
+
+
+    hpts=biggles.Histogram(h, x0=km.labels.min(), binsize=1)
+
+    hplt=biggles.FramedPlot()
+    hplt.add(hpts)
+    hplt.xlabel='kmeans cluster'
+
+    epsfile=des.files.get_jackknife_centers_epsfile(args.des_region,
+                                                    args.njack,
+                                                    extra='hist')
+
+    print("writing:",epsfile)
+    hplt.write_eps(epsfile)
+    #converter.convert(epsfile,dpi=100,verbose=True)
+
+main()
