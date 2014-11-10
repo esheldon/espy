@@ -23,6 +23,7 @@ def add_boost_factors(data, rand):
     corrected struct
     """
     import jackknife
+    import esutil as eu
 
     nrad=data['dsig'].shape[1]
 
@@ -31,7 +32,7 @@ def add_boost_factors(data, rand):
             ('boost_err','f8',nrad)]
     odata=eu.numpy_util.add_fields(data, add_dt)
 
-    corr, corr_err = calc_boost_factors(data[i],rand[i])
+    corr, corr_err = calc_boost_factors(data,rand)
 
     odata['boost']     = corr
     odata['boost_err'] = corr_err
@@ -48,7 +49,10 @@ def add_boost_factors(data, rand):
 
     for col in mcols2:
         odata[col] *= cclip2
-    odata['dsigcor'] = jackknife.covar2corr(odata['dsigcov'])
+
+    nbin=odata.size
+    for i in xrange(nbin):
+        odata['dsigcor'][i,:,:] = jackknife.covar2corr(odata['dsigcov'][i,:,:])
 
     return odata
 

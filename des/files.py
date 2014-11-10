@@ -672,6 +672,23 @@ def get_match_binned_file(lens_run, rand_run, bin_scheme, ext='fits'):
     totrun='%s-%s' % (lens_run, rand_run)
     return get_binned_file(totrun, bin_scheme, ext=ext)
 
+def read_match_binned(lens_run, rand_run, bin_scheme):
+    """
+    read the file holding binned data, or the basic plot file
+
+    parameters
+    ----------
+    run: string
+        the run identifier
+    bin_scheme: string
+        name for the binning scheme, e.g. bin-lambda08-z01
+    """
+
+
+    import fitsio
+    fname=get_match_binned_file(lens_run, rand_run, bin_scheme)
+    print("reading:",fname)
+    return fitsio.read(fname)
 #
 # jackknifed here
 #
