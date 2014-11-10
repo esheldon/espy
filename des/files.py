@@ -600,6 +600,7 @@ def read_binned(run, bin_scheme):
     import fitsio
 
     fname=get_binned_file(run,bin_scheme)
+    print("reading:",fname)
     return fitsio.read(fname)
 
 #
@@ -628,10 +629,14 @@ def get_match_weights_file(lens_run, rand_run, bin_scheme, binnum=None, ext='fit
 
     parameters
     ----------
-    run: string
+    lens_run: string
+        the run identifier
+    rand_run: string
         the run identifier
     bin_scheme: string
         name for the binning scheme, e.g. bin-lambda08-z01
+    binnum: int
+        bin number for weights file
     ext: string
         default fits, could be eps etc.
     """
@@ -661,7 +666,9 @@ def get_match_binned_file(lens_run, rand_run, bin_scheme, ext='fits'):
 
     parameters
     ----------
-    run: string
+    lens_run: string
+        the run identifier
+    rand_run: string
         the run identifier
     bin_scheme: string
         name for the binning scheme, e.g. bin-lambda08-z01
@@ -678,7 +685,9 @@ def read_match_binned(lens_run, rand_run, bin_scheme):
 
     parameters
     ----------
-    run: string
+    lens_run: string
+        the run identifier
+    rand_run: string
         the run identifier
     bin_scheme: string
         name for the binning scheme, e.g. bin-lambda08-z01
@@ -693,16 +702,15 @@ def read_match_binned(lens_run, rand_run, bin_scheme):
 # jackknifed here
 #
 
-def get_jack_dir(lens_run, rand_run, bin_scheme):
+def get_jack_dir(run, bin_scheme):
     """
     lensdir/run/lrun_name-rrunname/jack
     """
 
-    totrun='%s-%s' % (lens_run, rand_run)
-    d=get_run_dir(totrun)
+    d=get_run_dir(run)
     return os.path.join(d, 'jack/%s' % bin_scheme)
 
-def get_jack_file(lens_run, rand_run, bin_scheme, ext='fits'):
+def get_jack_file(run, bin_scheme, ext='fits'):
     """
     get the file holding jackknifed data, or the basic plot file
 
@@ -716,11 +724,26 @@ def get_jack_file(lens_run, rand_run, bin_scheme, ext='fits'):
         default fits, could be eps etc.
     """
 
-    d=get_jack_dir(lens_run, rand_run, bin_scheme)
+    d=get_jack_dir(run, bin_scheme)
 
-    totrun='%s-%s' % (lens_run, rand_run)
-    fname="%s-%s-jack.%s" % (totrun, bin_scheme, ext)
+    fname="%s-%s-jack.%s" % (run, bin_scheme, ext)
     return os.path.join(d, fname)
+
+def read_jack(run, bin_scheme):
+    """
+    read file holding jackknifed data, or the basic plot file
+
+    parameters
+    ----------
+    run: string
+        the run identifier
+    bin_scheme: string
+        name for the binning scheme, e.g. bin-lambda08-z01
+    """
+    import fitsio
+    fname=get_jack_file(run, bin_scheme)
+    print("reading:",fname)
+    return fitsio.read(fname)
 
 #
 # corrected files here
@@ -755,6 +778,26 @@ def get_corr_binned_file(lens_run, rand_run, bin_scheme, ext='fits'):
     fname="%s-%s-corr.%s" % (totrun, bin_scheme, ext)
     return os.path.join(d, fname)
 
+def read_corr_binned(lens_run, rand_run, bin_scheme):
+    """
+    read the file holding binned data, or the basic plot file
+
+    parameters
+    ----------
+    lens_run: string
+        the run identifier
+    rand_run: string
+        the run identifier
+    bin_scheme: string
+        name for the binning scheme, e.g. bin-lambda08-z01
+    """
+
+
+    import fitsio
+    fname=get_corr_binned_file(lens_run, rand_run, bin_scheme)
+    print("reading:",fname)
+    return fitsio.read(fname)
+
 def get_corr_jack_dir(lens_run, rand_run, bin_scheme):
     """
     lensdir/run/lrun_name-rrunname/corr-jack
@@ -785,6 +828,25 @@ def get_corr_jack_file(lens_run, rand_run, bin_scheme, ext='fits'):
     return os.path.join(d, fname)
 
 
+def read_corr_jack(lens_run, rand_run, bin_scheme):
+    """
+    read the file holding corrected jackknifed data, or the basic plot file
+
+    parameters
+    ----------
+    lens_run: string
+        the run identifier
+    rand_run: string
+        the run identifier
+    bin_scheme: string
+        name for the binning scheme, e.g. bin-lambda08-z01
+    """
+
+
+    import fitsio
+    fname=get_corr_jack_file(lens_run, rand_run, bin_scheme)
+    print("reading:",fname)
+    return fitsio.read(fname)
 
 
 
