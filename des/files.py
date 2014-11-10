@@ -677,3 +677,39 @@ def get_match_weights_file(lens_run, rand_run, bin_scheme, binnum=None, ext='fit
 #
 # jackknifed here
 #
+
+
+#
+# jackknife region center files
+#
+
+def get_jackknife_centers_dir(des_region):
+    """
+    directory holding center files
+    """
+    d=get_des_lensdir()
+    return os.path.join(d, 'jackknife-regions', des_region)
+
+def get_jackknife_centers_file(des_region, ncen):
+    """
+    file holding centers for the specified region
+    """
+    d=get_jackknife_centers_dir(des_region)
+
+    fname='jackknife-%s-%06d.fits' % (des_region, ncen)
+    return os.path.join(d, fname)
+
+def get_jackknife_centers_epsfile(des_region, ncen, extra=None):
+    """
+    file holding centers for the specified region
+    """
+    d=get_jackknife_centers_dir(des_region)
+
+    fname=['jackknife',des_region,'%06d' % ncen]
+    if extra is not None:
+        fname += [extra]
+
+    fname='-'.join(fname)
+    fname = '%s.eps' % fname
+
+    return os.path.join(d, fname)
