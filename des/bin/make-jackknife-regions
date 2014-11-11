@@ -28,8 +28,21 @@ parser.add_argument("--maxiter", help="max number of interations",
 def main():
     args = parser.parse_args()
 
+    print("reading:",args.fname)
     data=fitsio.read(args.fname)
 
+    ra=data['ra']
+    dec=data['dec']
+
+    maker=des.jackknife_regions.JackknifeMaker(ra, dec,
+                                               args.des_region,
+                                               args.njack,
+                                               maxiter=args.maxiter)
+    maker.run_kmeans()
+    maker.write_centers(orig_file=args.fname)
+    maker.make_plots()
+
+    '''
     data=trim_cat(data, args.des_region)
     data=randomize_cat(data)
 
@@ -52,6 +65,7 @@ def main():
     write_centers(args, km.centers)
 
     make_plots(args, radec, km)
+    '''
 
 
 def trim_cat(data, des_region):

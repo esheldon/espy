@@ -1,4 +1,4 @@
-comments: "same as rcat-001 but added ra dec range limited to spt-e"
+comments: "dec range limited to spt-e"
 
 lcat_name: "redmapper-6.2.12-random-erase"
 type: "random"

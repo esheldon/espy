@@ -20,4 +20,6 @@ from . import matchrand
 from . import randoms
 from . import boost_factors
 
+from . import jackknife_regions
+
 #from . import util
