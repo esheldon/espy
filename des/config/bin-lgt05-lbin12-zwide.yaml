@@ -44,6 +44,6 @@ bin_info:
               ["z_lambda", [0.2, 0.8], "()"] ]
 
     - label: '$\lambda  > 45$'
-      bins: [ ["lambda_chisq", [45.0, 1.0e06], "()"],
+      bins: [ ["lambda_chisq", [45.0, 1.0e+06], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 
