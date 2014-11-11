@@ -3,6 +3,7 @@ import numpy
 
 LABELS={}
 LABELS['rproj'] = r'R [Mpc]'
+LABELS['rproj_log'] = r'$log_{10}(R [Mpc])$'
 LABELS['dsig'] = r'$\Delta\Sigma ~[M_{\odot} pc^{-2}]$'
 LABELS['osig'] = r'$\Delta\Sigma_\times ~ [M_{\odot} pc^{-2}]$'
 
@@ -299,4 +300,76 @@ def get_framed_array(nplot):
     arr=biggles.FramedArray(grid.nrow, grid.ncol)
     return grid, arr
 
+def plot_corrmatrix(r, corr_matrices, **kw):
+    """
+    plot the correlation matrices
+
+    parameters
+    ----------
+    r: array
+        array with shape [nbin,nrad], e.g from a bin struct
+    corr_matrices: array
+        array with shape [nbin,nrad,nrad], e.g from a bin struct
+
+    kw: keywords
+        extra keywords
+    """
+    import biggles
+
+    biggles.configure('default','fontsize_min',0.9)
+
+    nbin = r.shape[0]
+
+    grid, arr = get_framed_array(nbin)
+
+    visible=kw.get('visible',True)
+    labels=kw.get('labels',None)
+    title=kw.get('title',None)
+
+    aspect_ratio=kw.get('aspect_ratio',None)
+    if aspect_ratio is None:
+        aspect_ratio=float(grid.nrow)/grid.ncol
+    arr.aspect_ratio = aspect_ratio 
+    arr.uniform_limits=True
+
+    arr.title=title
+    arr.xlabel = LABELS['rproj_log']
+    arr.ylabel = LABELS['rproj_log']
+
+    for i in xrange(nbin):
+        row, col = grid.get_rowcol(i)
+
+        log_ri=numpy.log10( r[i,:] )
+        dlogr = log_ri[-1]-log_ri[-2]
+
+        corr=corr_matrices[i,:,:].copy()
+
+        corr -= corr.min()
+        corr /= corr.max()
+        corr *= -1
+        corr += 1
+
+        plt=arr[row, col]
+
+        # I think this should really be the lower corner to the 
+        # upper corner
+        #ranges = ((log_ri[0]-dlogr,  log_ri[0]-dlogr),
+        #          (log_ri[-1]+dlogr, log_ri[-1]+dlogr))
+        ranges = ((log_ri[0],  log_ri[0]),
+                  (log_ri[-1], log_ri[-1]))
+
+
+        d = biggles.Density(corr, ranges)
+
+        plt.add(d)
+
+        if labels is not None:
+            lab=biggles.PlotLabel(0.9, 0.1, labels[i], halign='right',
+                                  color='red')
+            plt.add(lab)
+
+    if visible:
+        arr.show()
+
+    return arr
 

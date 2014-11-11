@@ -10,10 +10,22 @@ import argparse
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("run", help="run identifier")
 parser.add_argument("bin_scheme", help="bin scheme, e.g. bin-lambda01-z01")
+
+parser.add_argument("--jack",
+                    action='store_true',
+                    help=("jackknife using the jackreg_col "
+                          "specified in the config file"))
    
 def main():
     args = parser.parse_args()
 
-    des.binning.bin_run(args.run, args.bin_scheme)
+    if args.jack:
+        conf=des.files.cascade_config(args.run)
+        jackreg_col=conf['lens_conf']['jackreg_col']
+    else:
+        jackreg_col=None
+
+    des.binning.bin_run(args.run, args.bin_scheme,
+                        jackreg_col=jackreg_col)
 
 main()

@@ -895,3 +895,12 @@ def get_jackknife_centers_epsfile(des_region, ncen, extra=None):
     fname = '%s.eps' % fname
 
     return os.path.join(d, fname)
+
+def read_jackknife_centers(des_region, ncen):
+    """
+    read the file holding centers for the specified region
+    """
+    import fitsio
+    fname=get_jackknife_centers_file(des_region, ncen)
+    print("reading:",fname)
+    return fitsio.read(fname)

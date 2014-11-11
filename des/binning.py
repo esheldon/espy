@@ -7,7 +7,7 @@ from numpy import where, log10
 from .files import *
 from . import averaging
 
-def bin_run(run, bin_conf_name):
+def bin_run(run, bin_conf_name, jackreg_col=None):
     """
     Do the binning and write out a file
     """
@@ -16,10 +16,15 @@ def bin_run(run, bin_conf_name):
     data = read_collated(run)
 
     binner=Binner(bin_conf_name)
-    res = binner.bin(data)
+    res = binner.bin(data, jackreg_col=jackreg_col)
 
-    fname=get_binned_file(run, bin_conf_name)
-    d=get_binned_dir(run, bin_conf_name)
+    if jackreg_col is None:
+        fname=get_binned_file(run, bin_conf_name)
+        d=get_binned_dir(run, bin_conf_name)
+    else:
+        fname=get_jack_file(run, bin_conf_name)
+        d=get_jack_dir(run, bin_conf_name)
+
     if not os.path.exists(d):
         print("Making dir:",d)
         os.makedirs(d)
@@ -70,7 +75,7 @@ class Binner(dict):
 
         return bintags
 
-    def bin(self, data):
+    def bin(self, data, jackreg_col=None):
         """
         bin the data and return the result
         """
@@ -97,6 +102,7 @@ class Binner(dict):
 
             comb,w = reduce_from_ranges_many(data,
                                              range_info,
+                                             jackreg_col=jackreg_col,
                                              getind=True)
         
             bs['nlenses'][i] = w.size
@@ -126,7 +132,7 @@ class Binner(dict):
 
         return bs
 
-    def bin_one(self, data, binnum):
+    def bin_one(self, data, binnum, jackreg_col=None):
         """
 
         Although not used by bin(), this is useful for other programs such as
@@ -139,6 +145,7 @@ class Binner(dict):
         range_info = self['bin_info'][binnum]['bins']
         comb = reduce_from_ranges_many(data,
                                        range_info,
+                                       jackreg_col=jackreg_col,
                                        getind=True)
  
         return comb
@@ -165,7 +172,7 @@ class Binner(dict):
         return self.bin_info[binnum]['label']
 
 
-def reduce_from_ranges_many(data, tags_and_ranges, getind=False):
+def reduce_from_ranges_many(data, tags_and_ranges, jackreg_col=None, getind=False):
     """
 
     parameters
@@ -182,7 +189,7 @@ def reduce_from_ranges_many(data, tags_and_ranges, getind=False):
     logic = get_range_logic_many(data, tags_and_ranges)
     w,=where(logic)
 
-    comb = averaging.average_lensums(data[w])
+    comb = averaging.average_lensums(data[w],jackreg_col=jackreg_col)
 
     if getind:
         return comb, w

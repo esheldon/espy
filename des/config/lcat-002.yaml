@@ -28,3 +28,8 @@ ra_col:     "ra"
 dec_col:    "dec"
 z_col:      "z_lambda"
 lambda_col: "lambda_chisq"
+
+jackreg_col: "jack_region40"
+#jackreg_col: "jack_region60"
+#jackreg_col: "jack_region80"
+#jackreg_col: "jack_region100"

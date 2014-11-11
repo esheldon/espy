@@ -8,30 +8,16 @@ from .files import get_shear_style
 
 _DEFAULT_SHEAR_STYLE='reduced'
 
-def lens_wmom(data, tag, ind=None, sdev=False):
-    """
-    average a tag from a lensum struct using the lensing weights
-    """
-    import esutil as eu
-    if ind is None:
-        wts = data['weight']
-        tdata = data[tag]
-    else:
-        wts = data['weight'][ind]
-        tdata = data[tag][ind]
-
-    return eu.stat.wmom(tdata, wts, calcerr=True, sdev=sdev)
-
 #
 # Codes for combining the lensout "lensum" data and
 # getting averages
 #
 
-def average_lensums(lout, weights=None, region_col=None):
+def average_lensums(lout, weights=None, jackreg_col=None):
     """
     average over all the individual lensums
 
-    The covariance matrix is estimated from jackknifing If regions are sent,
+    The covariance matrix is estimated from jackknifing. If regions are sent,
     use them for jackknifing, otherwise jackknife one object at a time
 
     parameters
@@ -40,13 +26,13 @@ def average_lensums(lout, weights=None, region_col=None):
         Array containing the outputs from xshear
     weights: array, optional
         Optional weights
-    region_col: string, optional
+    jackreg_col: string, optional
         column name holding the jackknife region ids
     """
     import jackknife
 
     if weights is not None:
-        return average_lensums_weighted(lout,weights)
+        return average_lensums_weighted(lout,weights,jackreg_col=jackreg_col)
 
     nlens = lout.size
     nrad = lout['rsum'][0].size
@@ -83,27 +69,21 @@ def average_lensums(lout, weights=None, region_col=None):
     # we calculate boost factors from this, wsum_mean/wsum_mean_random
     comb['wsum_mean'] = comb['wsum']/nlens
 
-    # jackknifing for errors
-    m,cov = 
-    jdsum = lout['dsum']
-    if shear_style=='lensfit':
-        jwsum = lout['wsum']
-    else:
-        jwsum = lout['dsensum']
-
-    m,cov=get_jackknife_cov(lout, region_col=region_col)
+    # jackknife to get the covariance matrix
+    m,cov=jackknife_lensums(lout, jackreg_col=jackreg_col)
 
     comb['dsigcov'][0] = cov
     comb['dsigcor'][0] = jackknife.covar2corr(cov)
     comb['dsigerr'][0] = sqrt(diag(cov))
 
+    # also jackknife the wsums, used for errors on boost factors
     w=ones(lout['wsum'].shape)
     m,cov = jackknife.wjackknife(vsum=lout['wsum'], wsum=w)
 
     comb['wsum_mean_err'][0] = sqrt(diag(cov))
     return comb
 
-def get_jackknife_cov(data, region_col=None):
+def jackknife_lensums(data, jackreg_col=None):
     """
     jackknife the data. If regions are sent, use them for jackknifing,
     otherwise jackknife one object at a time
@@ -113,7 +93,7 @@ def get_jackknife_cov(data, region_col=None):
     data: array
         An array with fields 'dsum' and 'wsum'. If shear style
         is lensfit, dsensum is needed rather than wsum.
-    region_col: string, optional
+    jackreg_col: string, optional
         column name holding the jackknife region ids
 
     returns
@@ -127,12 +107,12 @@ def get_jackknife_cov(data, region_col=None):
     """
     import jackknife
 
-    jdsum, jwsum = get_jackknife_sums(data, region_col=region_col)
+    jdsum, jwsum = get_jackknife_sums(data, jackreg_col=jackreg_col)
     dsig,dsig_cov=jackknife.wjackknife(vsum=jdsum, wsum=jwsum)
 
     return dsig, dsig_cov
 
-def get_jackknife_sums(data, region_col=None):
+def get_jackknife_sums(data, jackreg_col=None, weights=None):
     """
     the sums for jackknifing.  If regions are sent, use them for jackknifing,
     otherwise jackknife one object at a time
@@ -142,8 +122,10 @@ def get_jackknife_sums(data, region_col=None):
     data: array
         An array with fields 'dsum' and 'wsum'. If shear style
         is lensfit, dsensum is needed rather than wsum.
-    region_col: string, optional
+    jackreg_col: string, optional
         column name holding the jackknife region ids
+    weights: array
+        Additional weights
     """
     from esutil.stat import histogram
 
@@ -155,37 +137,51 @@ def get_jackknife_sums(data, region_col=None):
     else:
         wcol='dsensum'
 
-    if region_col is None:
+    if jackreg_col is None:
         jdsum = data[dcol]
         jwsum = data[wcol]
     else:
-        regions=data[region_col]
+        print("using jackreg_col:",jackreg_col)
+        regions=data[jackreg_col]
 
         h,rev=histogram(regions, rev=True)
+
         nbin=h.size
-        jdsum=zeros(nbin)
-        jwsum=zeros(nbin)
+        nrad=data[dcol].shape[1]
+        jdsum=zeros( (nbin, nrad) )
+        jwsum=zeros( (nbin, nrad) )
+
         for i in xrange(nbin):
             if rev[i] != rev[i+1]:
                 w=rev[ rev[i]:rev[i+1] ]
 
-                jdsum[i] = data[dcol][w].sum()
-                jwsum[i] = data[wcol][w].sum()
+                jdsum[i] = data[dcol][w].sum(axis=0)
+                jwsum[i] = data[wcol][w].sum(axis=0)
 
         w,=where(h > 0)
-        jdsum=jdsum[w]
-        jwsum=jwsum[w]
+        jdsum=jdsum[w,:]
+        jwsum=jwsum[w,:]
 
     return jdsum, jwsum
 
 
-def average_lensums_weighted(lout, weights_in):
+def average_lensums_weighted(lout, weights_in, jackreg_col=None):
+    """
+    average over all the individual lensums with additional weights
+
+    The covariance matrix is estimated from jackknifing. If regions are sent,
+    use them for jackknifing, otherwise jackknife one object at a time
+
+    parameters
+    ----------
+    data: array
+        Array containing the outputs from xshear
+    weights: array
+        Additional weights
+    jackreg_col: string, optional
+        column name holding the jackknife region ids
     """
 
-    Reduce the lens-by-lens lensums by summing over
-    all the individual sums and producing averages
-
-    """
     import jackknife
 
     nlens = lout.size
@@ -232,16 +228,9 @@ def average_lensums_weighted(lout, weights_in):
 
     # we calculate boost factors from this, wsum_mean/wsum_mean_random
     comb['wsum_mean'] = comb['wsum']/totweights
-    #comb['wsum_mean'] = comb['wsum']/nlens
 
-    # jackknifing for errors
-    jdsum = lout['dsum']*wa
-    if shear_style=='lensfit':
-        jwsum = lout['wsum']*wa
-    else:
-        jwsum = lout['dsensum']*wa
-
-    m,cov=jackknife.wjackknife(vsum=jdsum, wsum=jwsum)
+    # jackknife to get the covariance matrix
+    m,cov=jackknife_lensums(lout, weights=weights, jackreg_col=jackreg_col)
 
     comb['dsigcov'][0] = cov
     comb['dsigcor'][0] = jackknife.covar2corr(cov)
@@ -249,7 +238,7 @@ def average_lensums_weighted(lout, weights_in):
  
 
     #
-    # jackknife the wsums
+    # also jackknife the wsums, used for errors on boost factors
     #
 
     # this will broadcase
@@ -330,6 +319,20 @@ def _get_ratio_wsums(data, comb):
         wsum_tot=comb['wsum']
 
     return wsum, wsum_tot
+
+def lens_wmom(data, tag, ind=None, sdev=False):
+    """
+    average a tag from a lensum struct using the lensing weights
+    """
+    import esutil as eu
+    if ind is None:
+        wts = data['weight']
+        tdata = data[tag]
+    else:
+        wts = data['weight'][ind]
+        tdata = data[tag][ind]
+
+    return eu.stat.wmom(tdata, wts, calcerr=True, sdev=sdev)
 
 
 
