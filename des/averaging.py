@@ -3,7 +3,7 @@ code to average lens outputs and certain tags
 """
 from __future__ import print_function
 import numpy
-from numpy import sqrt, diag, where, zeros, ones
+from numpy import sqrt, diag, where, zeros, ones, newaxis
 from .files import get_shear_style
 
 _DEFAULT_SHEAR_STYLE='reduced'
@@ -83,88 +83,6 @@ def average_lensums(lout, weights=None, jackreg_col=None):
     comb['wsum_mean_err'][0] = sqrt(diag(cov))
     return comb
 
-def jackknife_lensums(data, jackreg_col=None):
-    """
-    jackknife the data. If regions are sent, use them for jackknifing,
-    otherwise jackknife one object at a time
-
-    parameters
-    ----------
-    data: array
-        An array with fields 'dsum' and 'wsum'. If shear style
-        is lensfit, dsensum is needed rather than wsum.
-    jackreg_col: string, optional
-        column name holding the jackknife region ids
-
-    returns
-    -------
-    dsig, dsig_cov
-
-    dsig: array
-        The delta sigma in radial bins [nrad]
-    dsig_cov: array
-        The covariance matrix of delta sigma [nrad,nrad]
-    """
-    import jackknife
-
-    jdsum, jwsum = get_jackknife_sums(data, jackreg_col=jackreg_col)
-    dsig,dsig_cov=jackknife.wjackknife(vsum=jdsum, wsum=jwsum)
-
-    return dsig, dsig_cov
-
-def get_jackknife_sums(data, jackreg_col=None, weights=None):
-    """
-    the sums for jackknifing.  If regions are sent, use them for jackknifing,
-    otherwise jackknife one object at a time
-
-    parameters
-    ----------
-    data: array
-        An array with fields 'dsum' and 'wsum'. If shear style
-        is lensfit, dsensum is needed rather than wsum.
-    jackreg_col: string, optional
-        column name holding the jackknife region ids
-    weights: array
-        Additional weights
-    """
-    from esutil.stat import histogram
-
-    shear_style=get_shear_style(data)
-
-    dcol='dsum'
-    if shear_style=='lensfit':
-        wcol = 'wsum'
-    else:
-        wcol='dsensum'
-
-    if jackreg_col is None:
-        jdsum = data[dcol]
-        jwsum = data[wcol]
-    else:
-        print("using jackreg_col:",jackreg_col)
-        regions=data[jackreg_col]
-
-        h,rev=histogram(regions, rev=True)
-
-        nbin=h.size
-        nrad=data[dcol].shape[1]
-        jdsum=zeros( (nbin, nrad) )
-        jwsum=zeros( (nbin, nrad) )
-
-        for i in xrange(nbin):
-            if rev[i] != rev[i+1]:
-                w=rev[ rev[i]:rev[i+1] ]
-
-                jdsum[i] = data[dcol][w].sum(axis=0)
-                jwsum[i] = data[wcol][w].sum(axis=0)
-
-        w,=where(h > 0)
-        jdsum=jdsum[w,:]
-        jwsum=jwsum[w,:]
-
-    return jdsum, jwsum
-
-
 def average_lensums_weighted(lout, weights_in, jackreg_col=None):
     """
     average over all the individual lensums with additional weights
@@ -199,7 +117,7 @@ def average_lensums_weighted(lout, weights_in, jackreg_col=None):
     shear_style=get_shear_style(lout)
 
     # broadcast it
-    wa=weights[:,numpy.newaxis]
+    wa=weights[:,newaxis]
     comb = averaged_struct(nrad, shear_style=shear_style)
 
     # weight is the weight for the lens.  Call this weightsum to
@@ -251,6 +169,156 @@ def average_lensums_weighted(lout, weights_in, jackreg_col=None):
 
     comb['wsum_mean_err'][0] = sqrt(diag(cov))
     return comb
+
+def jackknife_lensums(data, jackreg_col=None, weights=None):
+    """
+    jackknife the data. If regions are sent, use them for jackknifing,
+    otherwise jackknife one object at a time
+
+    parameters
+    ----------
+    data: array
+        An array with fields 'dsum' and 'wsum'. If shear style
+        is lensfit, dsensum is needed rather than wsum.
+    jackreg_col: string, optional
+        column name holding the jackknife region ids
+    weights: array, optional
+        Additional weights per lens
+
+    returns
+    -------
+    dsig, dsig_cov
+
+    dsig: array
+        The delta sigma in radial bins [nrad]
+    dsig_cov: array
+        The covariance matrix of delta sigma [nrad,nrad]
+    """
+    import jackknife
+
+    jdsum, jwsum = get_jackknife_sums(data,
+                                      weights=weights,
+                                      jackreg_col=jackreg_col)
+    dsig,dsig_cov=jackknife.wjackknife(vsum=jdsum, wsum=jwsum)
+
+    return dsig, dsig_cov
+
+def get_jackknife_sums(data, jackreg_col=None, weights=None):
+    """
+    the sums for jackknifing.  If regions are sent, use them for jackknifing,
+    otherwise jackknife one object at a time
+
+    parameters
+    ----------
+    data: array
+        An array with fields 'dsum' and 'wsum'. If shear style
+        is lensfit, dsensum is needed rather than wsum.
+    jackreg_col: string, optional
+        column name holding the jackknife region ids
+    weights: array, optional
+        Additional weights
+    """
+    from esutil.stat import histogram
+
+    if weights is not None:
+        return get_jackknife_sums_weighted(data, weights,
+                                           jackreg_col=jackreg_col)
+
+    shear_style=get_shear_style(data)
+
+    dcol='dsum'
+    if shear_style=='lensfit':
+        wcol = 'wsum'
+    else:
+        wcol='dsensum'
+
+    if jackreg_col is None:
+        jdsum = data[dcol]
+        jwsum = data[wcol]
+    else:
+        print("using jackreg_col:",jackreg_col)
+        regions=data[jackreg_col]
+
+        h,rev=histogram(regions, rev=True)
+
+        nbin=h.size
+        nrad=data[dcol].shape[1]
+        jdsum=zeros( (nbin, nrad) )
+        jwsum=zeros( (nbin, nrad) )
+
+        for i in xrange(nbin):
+            if rev[i] != rev[i+1]:
+                w=rev[ rev[i]:rev[i+1] ]
+
+                jdsum[i] = data[dcol][w].sum(axis=0)
+                jwsum[i] = data[wcol][w].sum(axis=0)
+
+        w,=where(h > 0)
+        jdsum=jdsum[w,:]
+        jwsum=jwsum[w,:]
+
+    return jdsum, jwsum
+
+def get_jackknife_sums_weighted(data, weights, jackreg_col=None):
+    """
+    the sums for jackknifing.  If regions are sent, use them for jackknifing,
+    otherwise jackknife one object at a time
+
+    parameters
+    ----------
+    data: array
+        An array with fields 'dsum' and 'wsum'. If shear style
+        is lensfit, dsensum is needed rather than wsum.
+    weights: array
+        Additional weights
+    jackreg_col: string, optional
+        column name holding the jackknife region ids
+    """
+    from esutil.stat import histogram
+
+
+    shear_style=get_shear_style(data)
+
+    dcol='dsum'
+    if shear_style=='lensfit':
+        wcol = 'wsum'
+    else:
+        wcol='dsensum'
+
+    if jackreg_col is None:
+        # broadcast it
+        wa=weights[:,newaxis]
+        jdsum = data[dcol]*wa
+        jwsum = data[wcol]*wa
+    else:
+        print("using jackreg_col:",jackreg_col)
+        regions=data[jackreg_col]
+
+        h,rev=histogram(regions, rev=True)
+
+        nbin=h.size
+        nrad=data[dcol].shape[1]
+        jdsum=zeros( (nbin, nrad) )
+        jwsum=zeros( (nbin, nrad) )
+
+        for i in xrange(nbin):
+            if rev[i] != rev[i+1]:
+                w=rev[ rev[i]:rev[i+1] ]
+
+                # broadcast it
+                wa=weights[w]
+                wa=wa[:,newaxis]
+
+                # note leaving off trailing axis in subscripts
+                jdsum[i] = (data[dcol][w]*wa).sum(axis=0)
+                jwsum[i] = (data[wcol][w]*wa).sum(axis=0)
+
+        w,=where(h > 0)
+        jdsum=jdsum[w,:]
+        jwsum=jwsum[w,:]
+
+    return jdsum, jwsum
+
 
 
 
