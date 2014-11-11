@@ -4,6 +4,7 @@ code to average lens outputs and certain tags
 from __future__ import print_function
 import numpy
 from numpy import sqrt, diag, where, zeros, ones
+from .files import get_shear_style
 
 _DEFAULT_SHEAR_STYLE='reduced'
 
@@ -26,16 +27,21 @@ def lens_wmom(data, tag, ind=None, sdev=False):
 # getting averages
 #
 
-def average_lensums(lout, weights=None):
+def average_lensums(lout, weights=None, region_col=None):
     """
+    average over all the individual lensums
 
-    combine the lens-by-lens lensums by summing over
-    all the individual sums and producing averages
+    The covariance matrix is estimated from jackknifing If regions are sent,
+    use them for jackknifing, otherwise jackknife one object at a time
 
-    This uses the averaged_dtype
-
-    This is used by the binner routines
-
+    parameters
+    ----------
+    data: array
+        Array containing the outputs from xshear
+    weights: array, optional
+        Optional weights
+    region_col: string, optional
+        column name holding the jackknife region ids
     """
     import jackknife
 
@@ -45,10 +51,7 @@ def average_lensums(lout, weights=None):
     nlens = lout.size
     nrad = lout['rsum'][0].size
 
-    if 'dsensum' in lout.dtype.names:
-        shear_style='lensfit'
-    else:
-        shear_style='reduced'
+    shear_style=get_shear_style(lout)
 
     comb = averaged_struct(nrad, shear_style=shear_style)
 
@@ -81,13 +84,14 @@ def average_lensums(lout, weights=None):
     comb['wsum_mean'] = comb['wsum']/nlens
 
     # jackknifing for errors
+    m,cov = 
     jdsum = lout['dsum']
     if shear_style=='lensfit':
         jwsum = lout['wsum']
     else:
         jwsum = lout['dsensum']
 
-    m,cov=jackknife.wjackknife(vsum=jdsum, wsum=jwsum)
+    m,cov=get_jackknife_cov(lout, region_col=region_col)
 
     comb['dsigcov'][0] = cov
     comb['dsigcor'][0] = jackknife.covar2corr(cov)
@@ -98,6 +102,81 @@ def average_lensums(lout, weights=None):
 
     comb['wsum_mean_err'][0] = sqrt(diag(cov))
     return comb
+
+def get_jackknife_cov(data, region_col=None):
+    """
+    jackknife the data. If regions are sent, use them for jackknifing,
+    otherwise jackknife one object at a time
+
+    parameters
+    ----------
+    data: array
+        An array with fields 'dsum' and 'wsum'. If shear style
+        is lensfit, dsensum is needed rather than wsum.
+    region_col: string, optional
+        column name holding the jackknife region ids
+
+    returns
+    -------
+    dsig, dsig_cov
+
+    dsig: array
+        The delta sigma in radial bins [nrad]
+    dsig_cov: array
+        The covariance matrix of delta sigma [nrad,nrad]
+    """
+    import jackknife
+
+    jdsum, jwsum = get_jackknife_sums(data, region_col=region_col)
+    dsig,dsig_cov=jackknife.wjackknife(vsum=jdsum, wsum=jwsum)
+
+    return dsig, dsig_cov
+
+def get_jackknife_sums(data, region_col=None):
+    """
+    the sums for jackknifing.  If regions are sent, use them for jackknifing,
+    otherwise jackknife one object at a time
+
+    parameters
+    ----------
+    data: array
+        An array with fields 'dsum' and 'wsum'. If shear style
+        is lensfit, dsensum is needed rather than wsum.
+    region_col: string, optional
+        column name holding the jackknife region ids
+    """
+    from esutil.stat import histogram
+
+    shear_style=get_shear_style(data)
+
+    dcol='dsum'
+    if shear_style=='lensfit':
+        wcol = 'wsum'
+    else:
+        wcol='dsensum'
+
+    if region_col is None:
+        jdsum = data[dcol]
+        jwsum = data[wcol]
+    else:
+        regions=data[region_col]
+
+        h,rev=histogram(regions, rev=True)
+        nbin=h.size
+        jdsum=zeros(nbin)
+        jwsum=zeros(nbin)
+        for i in xrange(nbin):
+            if rev[i] != rev[i+1]:
+                w=rev[ rev[i]:rev[i+1] ]
+
+                jdsum[i] = data[dcol][w].sum()
+                jwsum[i] = data[wcol][w].sum()
+
+        w,=where(h > 0)
+        jdsum=jdsum[w]
+        jwsum=jwsum[w]
+
+    return jdsum, jwsum
 
 
 def average_lensums_weighted(lout, weights_in):
@@ -121,10 +200,7 @@ def average_lensums_weighted(lout, weights_in):
 
     totweights = weights.sum()
 
-    if 'dsensum' in lout.dtype.names:
-        shear_style='lensfit'
-    else:
-        shear_style='reduced'
+    shear_style=get_shear_style(lout)
 
     # broadcast it
     wa=weights[:,numpy.newaxis]

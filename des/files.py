@@ -373,6 +373,17 @@ def get_output_file(run, lens_chunk, source_tilename):
 
     return os.path.join(d, fname)
 
+def get_shear_style(data):
+    """
+    determine which shear style is used from the column names
+    """
+    if 'dsensum' in data.dtype.names:
+        shear_style='lensfit'
+    else:
+        shear_style='reduced'
+    return shear_style
+
+
 def get_lensum_dtype(nbin, shear_style):
     """
     get the dtype for the number of bins and shear type
