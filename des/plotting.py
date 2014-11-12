@@ -153,6 +153,15 @@ def _add_dsig_to_plot(plt, r, dsig, dsigerr, **kw):
                                   color=color, 
                                   type=type,
                                   minval=minval)
+        yrng_in=kw.get('yrange',None)
+        xrng_in=kw.get('xrange',None)
+
+        # over-ride
+        if yrng_in is not None:
+            yrng=yrng_in
+        if xrng_in is not None:
+            xrng=xrng_in
+
     else:
         opts=Curve(r, dsig*0 + lineval)
         plt.add(opts)
