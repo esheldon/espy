@@ -23,14 +23,14 @@ class JackknifeMaker(dict):
         set the data, trimmed and randomized
         """
 
+        ra,dec=trim_radec(ra, dec)
+        ra,dec=randomize_radec(ra, dec)
+
+        print("data size:",radec.shape[0])
+
         radec=numpy.zeros( (ra.size, 2) )
         radec[:,0] = ra
         radec[:,1] = dec
-
-        radec=self._trim_cat(radec)
-        radec=self._randomize_cat(radec)
-
-        print("data size:",radec.shape[0])
 
         self._radec=radec
 
@@ -46,37 +46,6 @@ class JackknifeMaker(dict):
         if not self._km.converged:
             raise RuntimeError("did not converge")
 
-
-    def _trim_cat(self, radec):
-        """
-        trim the data to the region of intereste
-        """
-        from esutil.numpy_util import between
-        print("trimming to region:",self._des_region)
-
-        conf=read_config('constants')
-        reginfo=conf['regions'][self._des_region]
-
-        ra_range=reginfo['ra_range']
-        dec_range=reginfo['dec_range']
-
-        w,=numpy.where(  between(radec[:,0], ra_range[0],ra_range[1])
-                       & between(radec[:,1], dec_range[0], dec_range[1]) )
-
-        radec=radec[w,:]
-        return radec
-
-    def _randomize_cat(self, radec):
-        """
-        randomize the catalog to help kmeans algorithm
-        """
-
-        print("randomizing catalog")
-        r=numpy.random.random(radec.shape[0])
-        s=r.argsort()
-        radec=radec[s,:]
-
-        return radec
 
     def write_centers(self, orig_file=None):
         """
@@ -182,3 +151,98 @@ class JackknifeMaker(dict):
         hplt.write_eps(epsfile)
         #converter.convert(epsfile,dpi=100,verbose=True)
 
+def get_jackknife_regions(ra, dec, des_region, njack):
+    """
+    get the jackknife regions associated with the input ra,dec
+    """
+    import kmeans_radec
+
+    radec=numpy.zeros( (ra.size, 2) )
+    radec[:,0] = ra
+    radec[:,1] = dec
+
+    centers=read_jackknife_centers(des_region, njack)
+
+    km=kmeans_radec.KMeans(centers)
+        
+    labels=km.find_nearest(radec)
+
+    return labels
+
+def add_jackknife_regions(data, des_region, njacks):
+    """
+    add a number of sets of jackknifes to the input recarray
+
+    the column names are 'jack_region%d'
+
+    parameters
+    ----------
+    data: array
+        array with 'ra' and 'dec' columns
+    des_region: string
+        des region, e.g. 'spte'
+    njacks: scalar, list or array
+        Number of jackknife regions e.g. 100 or [60,80,100]
+        There should be a corresponding center file
+    """
+    import esutil as eu
+
+    njacks=numpy.array(njacks, ndmin=1, dtype='i4')
+
+    dt=[]
+    for njack in njacks:
+        regname='jack_region%d' % njack
+        dt.append( (regname, 'i4') )
+
+    ndata=eu.numpy_util.add_fields(data, dt)
+
+    radec=numpy.zeros( (data.size, 2) )
+    radec[:,0] = data['ra']
+    radec[:,1] = data['dec']
+
+    for njack in njacks:
+        print("njack:",njack)
+
+        regname='jack_region%d' % njack
+
+        labels=get_jackknife_regions(data['ra'],
+                                     data['dec'],
+                                     des_region,
+                                     njack)
+
+        ndata[regname] = labels
+
+    return ndata
+
+
+def trim_radec(ra, dec, des_region, get_index=False):
+    """
+    trim the data to the region of intereste
+    """
+    from esutil.numpy_util import between
+    print("trimming to region:",des_region)
+
+    conf=read_config('constants')
+    reginfo=conf['regions'][des_region]
+
+    ra_range=reginfo['ra_range']
+    dec_range=reginfo['dec_range']
+
+    w,=numpy.where(  between(ra, ra_range[0],ra_range[1])
+                   & between(dec, dec_range[0], dec_range[1]) )
+
+    if get_index:
+        return w
+    else:
+        return ra[w], dec[w]
+
+def randomize_radec(ra, dec):
+    """
+    randomize the catalog to help kmeans algorithm
+    """
+
+    print("randomizing catalog")
+    r=numpy.random.random(ra.size)
+    s=r.argsort()
+
+    return ra[s], dec[s]
