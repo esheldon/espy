@@ -9,7 +9,6 @@ LABELS['osig'] = r'$\Delta\Sigma_\times ~ [M_{\odot} pc^{-2}]$'
 
 DEFAULT_MINVAL=1.0e-3
 
-
 def plot_dsig(r, dsig, dsigerr, **kw):
     """
     plot delta sigma, potentially on a grid if more than one bin
@@ -28,9 +27,10 @@ def plot_dsig(r, dsig, dsigerr, **kw):
     """
     import biggles
 
-    biggles.configure('default','fontsize_min',0.9)
-
     nbin = r.shape[0]
+
+    _set_biggles_defs(nbin)
+
 
     grid, arr = get_framed_array(nbin)
 
@@ -101,6 +101,9 @@ def plot_dsig_one(r, dsig, dsigerr, **kw):
     """
 
     from biggles import FramedPlot
+
+    nbin=1
+    _set_biggles_defs(nbin)
 
     visible=kw.get('visible',True)
     xlog=kw.get('xlog',True)
@@ -319,6 +322,7 @@ def plot_corrmatrix(r, corr_matrices, **kw):
     biggles.configure('default','fontsize_min',0.9)
 
     nbin = r.shape[0]
+    _set_biggles_defs(nbin)
 
     grid, arr = get_framed_array(nbin)
 
@@ -372,4 +376,18 @@ def plot_corrmatrix(r, corr_matrices, **kw):
         arr.show()
 
     return arr
+
+def _set_biggles_defs(nbin):
+    import biggles
+
+    if nbin==1:
+        biggles.configure('default','fontsize_min',3.0)
+    elif 2 <= nbin <= 4:
+        biggles.configure('default','fontsize_min',2)
+    else:
+        biggles.configure('default','fontsize_min',1.35)
+
+    biggles.configure('_HalfAxis','ticks_size',2.5)
+    biggles.configure('_HalfAxis','subticks_size',1.25)
+
 
