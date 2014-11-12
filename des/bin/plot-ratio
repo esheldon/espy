@@ -8,7 +8,7 @@ from __future__ import print_function
 import os,sys
 import argparse
 import numpy
-from numpy import sqrt, diag
+from numpy import sqrt, diag, zeros
 import des
 import esutil as eu
 import biggles
@@ -35,7 +35,6 @@ parser.add_argument("-y","--yrange",
 parser.add_argument("-c","--color",
                     default='black',
                     help="color for points")
-
 
 
 def main():
@@ -67,8 +66,13 @@ def main():
         t1=data1[w1]
         t2=data2[w2]
         
+        # average over all radii
+        print("getting ratio over all radii")
+        rall, rall_err=des.averaging.average_ratio_allrad(t1, t2)
+
         print("getting ratio, resampled errors")
         tr, tratio, tcov = des.averaging.average_ratio(t1, t2)
+
 
         terr=sqrt(diag(tcov))
 
@@ -77,9 +81,12 @@ def main():
 
         wt=1.0/terr**2
         wm,we=eu.stat.wmom(tratio, wt)
+        #ratmean[binnum]=wm
+        #ratmean_err[binnum]=we
 
+        #ratmean[binnum]=rall
         ratmean[binnum]=wm
-        ratmean_err[binnum]=we
+        ratmean_err[binnum]=rall_err
 
     binspec=des.files.read_config(args.bin_scheme)
     labels=[bi['label'] for bi in binspec['bin_info']]
@@ -107,7 +114,7 @@ def main():
         plt=arr[row,col]
 
         ls='<ratio> = %.3f +/- %.3f' % (ratmean[binnum],ratmean_err[binnum])
-        lab=biggles.PlotLabel(0.1,0.1, ls,halign='left')
+        lab=biggles.PlotLabel(0.1,0.9, ls,halign='left')
         plt.add(lab)
 
     if args.yrange is not None:
