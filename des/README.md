@@ -51,6 +51,8 @@ splitting things up.
 In this case we just read the scat directly and write it, so skip to the
 next step
 
+### final step
+
 Then make the source input for xshear.  This is pretty fast, no need currently
 to split it up
 
