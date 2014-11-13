@@ -253,7 +253,7 @@ class Matcher(object):
     """
     match the scat to the sigma crit
 
-    e.g. Matcher('ngmix009'
+    e.g. Matcher('ngmix009','v0.1.4','tpz')
     """
 
     def __init__(self, scat_name, pz_vers, pz_type):
