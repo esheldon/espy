@@ -322,26 +322,34 @@ def get_jackknife_sums_weighted(data, weights, jackreg_col=None):
 
 
 
-def average_ratio(l1, l2):
+def average_ratio(l1, l2, rad_index=None):
     """
     jackknife (singly) the ratio of dsig1/dsig2
-    """
 
-    comb1=average_lensums(l1)
-    comb2=average_lensums(l2)
+    todo: add jackreg_col= to do proper jackknifing
+    """
 
     nlens, nrad = l1['wsum'].shape
 
-    dsum1=l1['dsum']
-    dsum_tot1=comb1['dsum']
-    dsum2=l2['dsum']
-    dsum_tot2=comb2['dsum']
+    if rad_index is None:
+        rad_index=numpy.arange(nrad)
 
-    wsum1, wsum_tot1=_get_ratio_wsums(l1, comb1)
-    wsum2, wsum_tot2=_get_ratio_wsums(l2, comb2)
+    nrad=rad_index.size
 
-    r      = comb1['r'][0,:]
-    ratio  = comb1['dsig'][0,:]/comb2['dsig'][0,:]
+    dsum1=l1['dsum'][:,rad_index]
+    dsum_tot1=l1['dsum'][:,rad_index].sum(axis=0)
+    dsum2=l2['dsum'][:,rad_index]
+    dsum_tot2=l2['dsum'][:,rad_index].sum(axis=0)
+
+    wsum1, wsum_tot1=_get_ratio_wsums(l1, rad_index=rad_index)
+    wsum2, wsum_tot2=_get_ratio_wsums(l2, rad_index=rad_index)
+
+    dsig1  = dsum_tot1/wsum_tot1
+    dsig2  = dsum_tot2/wsum_tot2
+
+    r      = l1['rsum'][:,rad_index].sum(axis=0)/wsum_tot1
+    ratio  = dsig1/dsig2
+
     jmean1 = zeros(nrad)
     jmean2 = zeros(nrad)
     jratio = zeros(nrad)
@@ -373,36 +381,43 @@ def average_ratio(l1, l2):
 
 
 
-def _get_ratio_wsums(data, comb):
+def _get_ratio_wsums(data, rad_index=None):
     """
     helper routine for average_ratio
     get the appropriate denominator for dsum.  Will be dsensum for lensfit,
     which is sum(weight*sensitivity), otherwise wsum which is sum(weight)
     """
+
+    nlens,nrad=data['rsum'].shape
+    if rad_index is None:
+        rad_index=numpy.arange(nrad)
     if 'dsensum' in data.dtype.names:
-        wsum=data['dsensum']
-        wsum_tot=comb['dsensum']
+        wsum=data['dsensum'][:,rad_index]
+        wsum_tot=data['dsensum'][:,rad_index].sum(axis=0)
     else:
-        wsum=data['wsum']
-        wsum_tot=comb['wsum']
+        wsum=data['wsum'][:,rad_index]
+        wsum_tot=data['wsum'][:,rad_index].sum(axis=0)
 
     return wsum, wsum_tot
 
 
-def average_ratio_allrad(l1, l2):
+def average_ratio_allrad(l1, l2, rad_index=None):
     """
     jackknife summed over all radii
     """
 
     nlens,nrad = l1['dsum'].shape
 
-    dsum1     = l1['dsum'][:,0:nrad-1].sum(axis=1)
-    dsum_tot1 = l1['dsum'][:,0:nrad-1].sum()
-    dsum2     = l2['dsum'][:,0:nrad-1].sum(axis=1)
-    dsum_tot2 = l2['dsum'][:,0:nrad-1].sum()
+    if rad_index is None:
+        rad_index=numpy.arange(nrad)
 
-    wsum1, wsum_tot1 = _get_ratio_wsums_allrad(l1)
-    wsum2, wsum_tot2 = _get_ratio_wsums_allrad(l2)
+    dsum1     = l1['dsum'][:,rad_index].sum(axis=1)
+    dsum_tot1 = l1['dsum'][:,rad_index].sum()
+    dsum2     = l2['dsum'][:,rad_index].sum(axis=1)
+    dsum_tot2 = l2['dsum'][:,rad_index].sum()
+
+    wsum1, wsum_tot1 = _get_ratio_wsums_allrad(l1,rad_index=rad_index)
+    wsum2, wsum_tot2 = _get_ratio_wsums_allrad(l2,rad_index=rad_index)
 
     dsig1 = dsum_tot1/wsum_tot1
     dsig2 = dsum_tot2/wsum_tot2
@@ -426,18 +441,23 @@ def average_ratio_allrad(l1, l2):
 
     return ratio, err
 
-def _get_ratio_wsums_allrad(data):
+def _get_ratio_wsums_allrad(data, rad_index=None):
     """
     helper routine for average_ratio
     get the appropriate denominator for dsum.
     """
+
+    nlens,nrad=data['rsum'].shape
+    if rad_index is None:
+        rad_index=numpy.arange(nrad)
+
     nlens,nrad = data['dsum'].shape
     if 'dsensum' in data.dtype.names:
-        wsum=data['dsensum'][:,0:nrad-1].sum(axis=1)
-        wsum_tot=data['dsensum'][:,0:nrad-1].sum()
+        wsum=data['dsensum'][:,rad_index].sum(axis=1)
+        wsum_tot=data['dsensum'][:,rad_index].sum()
     else:
-        wsum=data['wsum'][:,0:nrad-1].sum(axis=1)
-        wsum_tot=data['wsum'][:,0:nrad-1].sum()
+        wsum=data['wsum'][:,rad_index].sum(axis=1)
+        wsum_tot=data['wsum'][:,rad_index].sum()
 
     return wsum, wsum_tot
 
