@@ -37,14 +37,63 @@ class DESPofz(object):
         self.h5.close()
 
     def __getitem__(self, arg):
+        """
+        ANNZ is currently broken
+        """
         data=self.table[arg]
-        data.dtype.names=('index','pofz')
+
+        if self.key=='TPZ':
+            data=self._extract_tpz(data)
+        else:
+            data=self._extract(data)
+
         return data
+
+    def _extract_tpz(self, data):
+        """
+        first two elements of "pofz" are mean and mode
+        or something
+        """
+
+        if len(data.shape)==0:
+            data=data.reshape([1])
+            is_scalar=True
+        else:
+            is_scalar=False
+
+        data.dtype.names = ['index','values']
+        nobj=data.size
+
+        nbins=data['values'].shape[1]-2
+
+        print("nobj:",nobj)
+
+        dt=[('index','i8'),('pofz','f2',nbins)]
+        ndata=numpy.zeros(nobj, dtype=dt)
+
+        ndata['index'] = data['index']
+        ndata['pofz']  = data['values'][:,2:]
+
+        if is_scalar:
+            ndata=ndata[0]
+        return ndata
+
+    def _extract(self, data):
+        """
+        pull out what we want
+        """
+
+        data.dtype.names = ['index','pofz','z_mean','z_peak']
+        return data
+
+
 
     def _load_h5py(self):
         import h5py
 
-        self.key, self.zvals = get_info(self.pz_vers, self.pz_type)
+        res = get_info(self.pz_vers, self.pz_type)
+        self.key, self.zvals = res
+
         self.fname=get_pz_h5_file(self.pz_vers)
 
         print("loading:",self.fname)
@@ -56,7 +105,9 @@ class DESPofz(object):
     def _load_pytables(self):
         import tables
 
-        self.key, self.zvals = get_info(self.pz_vers, self.pz_type)
+        res = get_info(self.pz_vers, self.pz_type)
+        self.key, self.zvals = res
+
         self.fname=get_pz_h5_file(self.pz_vers)
 
         print("loading:",self.fname)
@@ -276,8 +327,18 @@ def get_info(pz_vers, pz_type):
     nbins = info['nbins']
     key   = info['key']
 
-    z_values = numpy.linspace(0.0, z_max, nbins + 1)
-    z_values = (z_values[1:] + z_values[:-1]) / 2.0
+    if key=='TPZ':
+        dz = 0.007475
+
+        edge_low  = 0.005-dz/2
+        edge_high = 1.5-dz/2
+    else:
+        edge_low  = 0.0
+        edge_high = z_max
+
+    z_edges = numpy.linspace(edge_low, edge_high, nbins+1)
+
+    z_values = (z_edges[1:] + z_edges[:-1]) / 2.0
     return key, z_values
 
 
