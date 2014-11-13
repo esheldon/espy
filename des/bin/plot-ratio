@@ -36,6 +36,11 @@ parser.add_argument("-c","--color",
                     default='black',
                     help="color for points")
 
+parser.add_argument("--rad-range",
+                    default=None,
+                    help="min,max radius to use")
+
+
 
 def main():
     args = parser.parse_args()
@@ -50,6 +55,22 @@ def main():
     r=comb1['r'].copy()
     ratio=comb1['r']*0
     ratio_err=comb1['r']*0
+
+    nrad=r.shape[1]
+
+    if args.rad_range is not None:
+        rad_range=[float(tr) for tr in args.rad_range.split(',')]
+    else:
+        rad_range=[-9999.0,9999.0]
+
+    rmeans=r.mean(axis=0)
+    rad_index,=numpy.where( (rmeans > rad_range[0])
+                           &(rmeans < rad_range[1]) )
+    nrad=rad_index.size
+
+    r=r[:,rad_index]
+    ratio=r*0
+    ratio_err=r*0
 
     nbin=binner.get_nbin()
 
@@ -68,10 +89,12 @@ def main():
         
         # average over all radii
         print("getting ratio over all radii")
-        rall, rall_err=des.averaging.average_ratio_allrad(t1, t2)
+        rall, rall_err=des.averaging.average_ratio_allrad(t1, t2,
+                                                          rad_index=rad_index)
 
         print("getting ratio, resampled errors")
-        tr, tratio, tcov = des.averaging.average_ratio(t1, t2)
+        tr, tratio, tcov = des.averaging.average_ratio(t1, t2,
+                                                       rad_index=rad_index)
 
 
         terr=sqrt(diag(tcov))
@@ -87,6 +110,8 @@ def main():
         #ratmean[binnum]=rall
         ratmean[binnum]=wm
         ratmean_err[binnum]=rall_err
+
+        print("wmean:",wm,"rall:",rall)
 
     binspec=des.files.read_config(args.bin_scheme)
     labels=[bi['label'] for bi in binspec['bin_info']]
