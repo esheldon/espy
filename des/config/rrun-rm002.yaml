@@ -1,6 +1,6 @@
-# redmapper 6.2.12 with spt-e ra,dec cut
+# redmapper 6.2.12 erase with spt-e ra,dec cut
 # also bug fix in xshear putting too many objects in lower and upper bins
-lcat_vers: "lcat-rm001"
+lcat_vers: "rcat-rm001"
 
 # ngmix009 reduced, pz v0.1, skynet_mag_auto
 # matt's cuts
