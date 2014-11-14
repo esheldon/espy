@@ -48,7 +48,7 @@ def add_boost_factors(data, rand):
         odata[col] *= cclip
 
     for col in mcols2:
-        odata[col] *= cclip2
+        odata[col] *= cclip2[:,:,numpy.newaxis]
 
     nbin=odata.size
     for i in xrange(nbin):

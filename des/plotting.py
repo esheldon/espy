@@ -82,6 +82,7 @@ def plot_dsig(r, dsig, dsigerr, **kw):
     if visible:
         arr.show()
 
+    
     return arr
 
 def plot_dsig_one(r, dsig, dsigerr, **kw):
@@ -161,6 +162,7 @@ def _add_dsig_to_plot(plt, r, dsig, dsigerr, **kw):
             yrng=yrng_in
         if xrng_in is not None:
             xrng=xrng_in
+
 
     else:
         opts=Curve(r, dsig*0 + lineval)

@@ -80,6 +80,7 @@ def main():
     ratmean_err=numpy.zeros(nbin)
 
     for binnum in xrange(nbin):
+        print('-'*70)
         w1=binner.select_bin(data1, binnum)
         w2=binner.select_bin(data2, binnum)
         print(w1.size, w2.size)
@@ -96,7 +97,6 @@ def main():
         tr, tratio, tcov = des.averaging.average_ratio(t1, t2,
                                                        rad_index=rad_index)
 
-
         terr=sqrt(diag(tcov))
 
         ratio[binnum,:] = tratio
@@ -111,7 +111,7 @@ def main():
         ratmean[binnum]=wm
         ratmean_err[binnum]=rall_err
 
-        print("wmean:",wm,"rall:",rall)
+        print("wmean:",wm,"rall:",rall,"straight mean:",tratio.mean())
 
     binspec=des.files.read_config(args.bin_scheme)
     labels=[bi['label'] for bi in binspec['bin_info']]
@@ -138,7 +138,7 @@ def main():
         row,col=grid.get_rowcol(binnum)
         plt=arr[row,col]
 
-        ls='<ratio> = %.3f +/- %.3f' % (ratmean[binnum],ratmean_err[binnum])
+        ls='<r>=%.3f +/- %.3f' % (ratmean[binnum],ratmean_err[binnum])
         lab=biggles.PlotLabel(0.1,0.9, ls,halign='left')
         plt.add(lab)
 

@@ -202,7 +202,7 @@ def get_range_logic_many(data, tags_and_ranges):
     """
     logic = numpy.ones(data.size, dtype='bool')
     for tag_range in tags_and_ranges:
-        print("    ",tag_range)
+        #print("    ",tag_range)
         tag, range, range_type = tag_range
         logic = logic & get_range_logic(data, tag, range, range_type)
 
@@ -218,7 +218,7 @@ def get_range_logic(data, tag, brange, type):
     if maxval is None:
         maxval = data[tag].max()
 
-    print(minval,maxval)
+    #print(minval,maxval)
     if type == '[]':
         logic = (data[tag] >= minval) & (data[tag] <= maxval)
     elif type == '[)':
