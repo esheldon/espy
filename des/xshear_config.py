@@ -75,7 +75,10 @@ class XShearConfig(dict):
 
         conf=self['source_conf']
         chunk=0
-        fname=pz.get_scinv_file(conf['pz_vers'], conf['pz_type'], chunk)
+        fname=pz.get_scinv_file(conf['pz_vers'],
+                                conf['pz_type'],
+                                conf['cosmo_vers'],
+                                chunk=chunk)
         zlvals=fitsio.read(fname, ext='zlvals')
         return zlvals
 
