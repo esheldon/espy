@@ -91,7 +91,7 @@ xshear runs
 
 define a run, e.g.
 
-    $ESPY_DIR/des/config/run-001.yaml
+    $ESPY_DIR/des/config/run-rm004.yaml
 
 then write the xshear config and all wq files
 
