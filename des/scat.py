@@ -78,6 +78,7 @@ class XShearInput(dict):
             inf=get_scinv_matched_file(self['scat_name'],
                                        self['pz_vers'],
                                        self['pz_type'],
+                                       self['cosmo_vers'],
                                        tilename)
         else:
             ext=1
@@ -207,31 +208,34 @@ class XShearInput(dict):
                & (data[self['arate_col']] < self['arate_range'][1]) )
         return logic
 
-def match_scinv(scat_vers, tilenames=None):
+def match_scinv(scat_name, cosmo_vers, pz_vers, pz_type, tilenames=None):
     """
     match the dg scat to scinv using a Matcher
 
     parameters
     ----------
-    scat_vers: string
-        e.g. scat-001, implying a config/scat-001.yaml. This
-        holds the scat_name, pz_vers, pz_type etc.
+    scat_name: string
+        name of a Daniel Gruen dg catalog, e.g. ngmix009 which implies a
+        catalog dir ngmix009-dg
+
+    cosmo_vers: string
+        the cosmology version
+    pz_vers: string
+        p(z) version in the hdf5 file from Bonnett
+    pz_type: string
+        p(z) type in the hdf5 file from Bonnett
+    tilenames: list, optional
+        subset to process
     """
     import fitsio
 
-    conf=read_config(scat_vers)
-        
     if tilenames is None:
-        tilenames=get_tilenames(conf['scat_name'])
+        tilenames=get_tilenames(scat_name)
 
-    matcher=Matcher(conf['scat_name'],
-                    conf['pz_vers'],
-                    conf['pz_type'])
-
-    cvers=matcher.header['cosmo_vers'].strip()
-    if cvers != conf['cosmo_vers']:
-        raise RuntimeError("mismatch in cosmology: '%s' vs "
-                           "'%s'" % (cvers,conf['cosmo_vers']))
+    matcher=Matcher(scat_name,
+                    pz_vers,
+                    pz_type,
+                    cosmo_vers)
 
     ntile=len(tilenames)
     nuse=0
@@ -239,7 +243,7 @@ def match_scinv(scat_vers, tilenames=None):
         print("-"*70)
         print("processing tile %d/%d: %s" % (i+1,ntile,tilename))
         # not all tiles are in Daniel's match file
-        fname=get_dg_scat_file(conf['scat_name'], tilename)
+        fname=get_dg_scat_file(scat_name, tilename)
         if not os.path.exists(fname):
             print("skipping missing file:",fname)
             continue
@@ -256,14 +260,16 @@ class Matcher(object):
     e.g. Matcher('ngmix009','v0.1.4','tpz')
     """
 
-    def __init__(self, scat_name, pz_vers, pz_type):
+    def __init__(self, scat_name, pz_vers, pz_type, cosmo_vers):
         self.scat_name=scat_name
         self.pz_vers=pz_vers
         self.pz_type=pz_type
+        self.cosmo_vers=cosmo_vers
 
-        res = pz.read_scinv(self.pz_vers,
-                            self.pz_type,
-                            get_header=True)
+        res = read_scinv(self.pz_vers,
+                         self.pz_type,
+                         self.cosmo_vers,
+                         get_header=True)
         self.data, self.zlvals, self.header=res
         self.nz=self.zlvals.size
 
@@ -297,7 +303,8 @@ class Matcher(object):
         import fitsio
         d=get_scinv_matched_dir(self.scat_name,
                                 self.pz_vers,
-                                self.pz_type)
+                                self.pz_type,
+                                self.cosmo_vers)
         if not os.path.exists(d):
             print("making dir:",d)
             os.makedirs(d)
@@ -305,6 +312,7 @@ class Matcher(object):
         outf=get_scinv_matched_file(self.scat_name,
                                     self.pz_vers,
                                     self.pz_type,
+                                    self.cosmo_vers,
                                     tilename)
         print("writing to:",outf)
         with fitsio.FITS(outf,'rw',clobber=True) as fits:

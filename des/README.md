@@ -26,32 +26,36 @@ These run the make-scinv script.  Then combine the outputs
 source catalogs
 ---------------
 
-you need to define a source sample, e.g.
-
-    $ESPY_DIR/des/config/scat-001.yaml
-
-which will refer to an scat_name that points under the catalogs directory.  
-
-### when using full p(z)
-
-In this case, the config will also refer to the pz_vers and pz_type and
-cosmology.
-
-match the source catalog to the scinv in *tiles* not the chunks above.  This is
-assuming the source catalogs are broken up by tilename
-
-    $ESPY_DIR/des/bin/match-scinv $scat_vers
-    $ESPY_DIR/des/bin/match-scinv scat-001
-
-This is high memory, so I've been running it as a single job rather than
-splitting things up.
+First there are the original catalogs, currently only the Daniel Gruen matched
+catalogs, e.g. ngmix009-dg.
 
 ### when using point z
 
 In this case we just read the scat directly and write it, so skip to the
 next step
 
-### final step
+### when using full p(z)
+
+We want to match these to the scinv calculated above
+
+match the source catalog to the scinv in *tiles* not the chunks above.  This is
+assuming the source catalogs are broken up by tilename
+
+    $ESPY_DIR/des/bin/match-scinv $scat_name $pz_vers $pz_type $cosmo_vers
+    $ESPY_DIR/des/bin/match-scinv ngmix009 v0.1.5 tpz cosmo-01
+
+This is high memory, so I've been running it as a single job rather than
+splitting things up.
+
+input source catalogs for xshear
+--------------------------------
+
+you need to define a source sample, e.g.
+
+    $ESPY_DIR/des/config/scat-001.yaml
+
+which will refer to an scat_name that points under the catalogs directory,
+as well as p(z) version and type, and cosmology if using p(z)
 
 Then make the source input for xshear.  This is pretty fast, no need currently
 to split it up

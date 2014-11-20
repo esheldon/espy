@@ -8,9 +8,16 @@ import des
 import argparse
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("scat_vers", 
-                    help=("the scat version. corresponds to "
-                          "config/{version}.yaml.  E.g. scat-001"))
+parser.add_argument("scat_name", 
+                    help=("the scat name. corresponds to "
+                          "{name}-dg, matched files by Daniel Gruen"))
+
+parser.add_argument("cosmo_vers", help="cosmology config, e.g. cosmo-01")
+parser.add_argument("pz_vers", 
+                    help=("the version of the hdf file"))
+parser.add_argument("pz_type", 
+                    help=("the type or method of p(z)"))
+
 parser.add_argument("-t", "--tilename",
                     help="only match this tilename")
    
@@ -21,6 +28,10 @@ def main():
         tilenames=[args.tilename]
     else:
         tilenames=None
-    des.scat.match_scinv(args.scat_vers,tilenames=tilenames)
+    des.scat.match_scinv(args.scat_name,
+                         args.cosmo_vers,
+                         args.pz_vers,
+                         args.pz_type,
+                         tilenames=tilenames)
 
 main()

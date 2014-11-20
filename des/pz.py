@@ -19,17 +19,20 @@ class DESPofz(object):
     print dz[35:40]
     """
 
-    def __init__(self, pz_vers, pz_type, store='pytables'):
+    def __init__(self, pz_vers, pz_type, store='pandas'):
         self.pz_vers=pz_vers
         self.pz_type=pz_type
 
-        if store=='pytables':
-            self._load_pytables()
-        else:
-            self._load_h5py()
+        res = get_info(self.pz_vers, self.pz_type)
+        self.key, self.zvals = res
+        self.nz=self.zvals.size
+
+        self.fname=get_pz_h5_file(self.pz_vers)
+
+        self._load_pandas()
 
     def __len__(self):
-        return self.table.size
+        return self.size
 
     def __enter__(self):
         return self
@@ -37,55 +40,50 @@ class DESPofz(object):
         self.h5.close()
 
     def __getitem__(self, arg):
-        """
-        ANNZ is currently broken
-        """
-        data=self.table[arg]
-
-        if self.key=='TPZ':
-            data=self._extract_tpz(data)
+        if isinstance(arg, slice):
+            return self.read_range(arg.start, arg.stop)
         else:
-            data=self._extract(data)
+            start=int(arg)
+            return self.read_range(start, start+1)
 
+    def read_range(self, start, stop):
+        """
+        start: integer
+            starting row
+        stop: integer
+            ending row+1, as with a slice
+        """
+
+        selection=self.h5.select(self.key, start=start, stop=stop)
+        data=self._extract(selection)
         return data
 
-    def _extract_tpz(self, data):
+    def _extract(self, selection):
         """
-        first two elements of "pofz" are mean and mode
-        or something
-        """
-
-        if len(data.shape)==0:
-            data=data.reshape([1])
-            is_scalar=True
-        else:
-            is_scalar=False
-
-        data.dtype.names = ['index','values']
-        nobj=data.size
-
-        nbins=data['values'].shape[1]-2
-
-        print("nobj:",nobj)
-
-        dt=[('index','i8'),('pofz','f2',nbins)]
-        ndata=numpy.zeros(nobj, dtype=dt)
-
-        ndata['index'] = data['index']
-        ndata['pofz']  = data['values'][:,2:]
-
-        if is_scalar:
-            ndata=ndata[0]
-        return ndata
-
-    def _extract(self, data):
-        """
-        pull out what we want
+        pull out the p(z)
         """
 
-        data.dtype.names = ['index','pofz','z_mean','z_peak']
-        return data
+        index=selection.index
+        data=selection.values
 
+        nz=data.shape[1]-2
+        nzexp=self.nz
+        if nz != nzexp:
+            raise ValueError("mismatch in z vals size: %d vs %d" % (nz,nzexp))
+
+        nobj=data.shape[0]
+
+        dt=[('index','i8'),
+            ('z_mean','f2'),
+            ('z_peak','f2'),
+            ('pofz','f2',nz)]
+
+        newdata=numpy.zeros(nobj,dtype=dt)
+        newdata['index']  = index
+        newdata['z_mean'] = data[:,0]
+        newdata['z_peak'] = data[:,1]
+        newdata['pofz']   = data[:,2:]
+        return newdata
 
 
     def _load_h5py(self):
@@ -117,6 +115,12 @@ class DESPofz(object):
         self.table=node.table
         self.size=self.table.shape[0]
 
+    def _load_pandas(self):
+        import pandas
+        print("loading:",self.fname)
+        self.h5=pandas.HDFStore(self.fname)
+        self.size = self.h5.root.__getattr__(self.key).table.shape[0]
+
 
 def make_scinv_wq(cosmo_vers, pz_vers, pz_type, chunksize):
     """
@@ -131,7 +135,7 @@ def combine_scinv(cosmo_vers, pz_vers, pz_type, chunksize):
     combine all the chunks into one big file
     """
     import fitsio
-    outfile=get_scinv_file(pz_vers, pz_type)
+    outfile=get_scinv_file(pz_vers, pz_type, cosmo_vers)
     print("will write to:",outfile)
 
     chunk=0
@@ -141,7 +145,7 @@ def combine_scinv(cosmo_vers, pz_vers, pz_type, chunksize):
 
     with fitsio.FITS(outfile,'rw',clobber=True) as fits:
         for chunk in xrange(nchunk):
-            infile=get_scinv_file(pz_vers, pz_type, chunk=chunk)
+            infile=get_scinv_file(pz_vers, pz_type, cosmo_vers, chunk=chunk)
             print(infile)
 
             with fitsio.FITS(infile) as fits_in:
@@ -192,7 +196,7 @@ class SCinv(object):
             beg=self.chunk*self.chunksize
             end=(self.chunk+1)*self.chunksize
 
-            self.data = pofz[beg:end]
+            self.data   = pofz[beg:end]
             self.zsvals = pofz.zvals
         
         self.nchunk=nchunk
@@ -203,7 +207,7 @@ class SCinv(object):
         make the chunk
         """
         from lensing.sigmacrit import ScinvCalculator
-        outfile=get_scinv_file(self.pz_vers, self.pz_type, chunk=self.chunk)
+        outfile=get_scinv_file(self.pz_vers, self.pz_type, self.cosmo_vers, chunk=self.chunk)
         print("will write to:",outfile)
 
         data=self.data
@@ -229,7 +233,7 @@ class SCinv(object):
     def _get_output(self):
         out=numpy.zeros(self.data.size, dtype=[('index','i8'),
                                                ('scinv','f8',self.nzl)])
-        out['index'] = self.data['index'].astype('i8')
+        out['index'] = self.data['index']
         return out
 
 
@@ -257,7 +261,7 @@ class SCinv(object):
         write a wq script for each chunk
         """
 
-        dir=get_scinv_wq_dir(self.pz_vers, self.pz_type)
+        dir=get_scinv_wq_dir(self.pz_vers, self.pz_type, self.cosmo_vers)
         if not os.path.exists(dir):
             print("making dir:",dir)
             os.makedirs(dir)
@@ -266,7 +270,7 @@ class SCinv(object):
         for chunk in xrange(len(beglist)):
             beg=beglist[chunk]
             end=endlist[chunk]
-            fname=get_scinv_wq_file(self.pz_vers,self.pz_type,chunk)
+            fname=get_scinv_wq_file(self.pz_vers,self.pz_type,self.cosmo_vers, chunk)
 
             job_name='scinv-%s-%06d' % (self.pz_type, chunk)
             text=_wq_scinv.format(cosmo_vers=self.cosmo_vers,
@@ -342,15 +346,5 @@ def get_info(pz_vers, pz_type):
     return key, z_values
 
 
-
-def get_scinv_wq_dir(pz_vers, pz_type):
-    dir=os.environ['TMPDIR']
-    dir=os.path.join(dir,'des-scinv',pz_vers,pz_type)
-    return dir
-
-def get_scinv_wq_file(pz_vers, pz_type, chunk):
-    dir=get_scinv_wq_dir(pz_vers, pz_type)
-    name='DES_scinv_%s_%s_%06d.yaml' % (pz_vers, pz_type, chunk)
-    return os.path.join(dir, name)
 
 

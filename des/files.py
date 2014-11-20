@@ -147,13 +147,20 @@ def get_pz_h5_file(pz_vers):
 # sigmacrit files
 #
 
-def get_scinv_dir(pz_vers, pz_type):
+def get_scinv_dir(pz_vers, pz_type, cosmo_vers):
+    """
+    sigmacrit files for the give p(z) and cosmology
+    """
     dir=get_pz_vers_dir(pz_vers)
-    return os.path.join(dir, '%s-scinv' % pz_type)
+    return os.path.join(dir, 'scinv-%s-%s' % (pz_type,cosmo_vers))
 
-def get_scinv_file(pz_vers, pz_type, chunk=None):
-    dir=get_scinv_dir(pz_vers,pz_type)
-    name='DES_scinv_%s_%s' % (pz_vers, pz_type)
+
+def get_scinv_file(pz_vers, pz_type, cosmo_vers, chunk=None):
+    """
+    sigmacrit files for the give p(z) and cosmology
+    """
+    dir=get_scinv_dir(pz_vers,pz_type,cosmo_vers)
+    name='DES_scinv_%s_%s_%s' % (pz_vers, pz_type,cosmo_vers)
 
     if chunk is not None:
         dir=os.path.join(dir,'chunks')
@@ -161,9 +168,12 @@ def get_scinv_file(pz_vers, pz_type, chunk=None):
     name='%s.fits' % name
     return os.path.join(dir, name)
 
-def read_scinv(pz_vers, pz_type, chunk=None, get_header=False):
+def read_scinv(pz_vers, pz_type, cosmo_vers, chunk=None, get_header=False):
+    """
+    read the sigmacrit file for the give p(z) and cosmology
+    """
     import fitsio
-    fname=get_scinv_file(pz_vers, pz_type, chunk=None)
+    fname=get_scinv_file(pz_vers, pz_type, cosmo_vers, chunk=None)
 
     print("reading:",fname)
     with fitsio.FITS(fname) as fits:
@@ -179,6 +189,22 @@ def read_scinv(pz_vers, pz_type, chunk=None, get_header=False):
 
     return ret
 
+def get_scinv_wq_dir(pz_vers, pz_type, cosmo_vers):
+    """
+    wq submit files for calculating sigmacrit
+    """
+    d=get_scinv_dir(pz_vers, pz_type, cosmo_vers)
+    return os.path.join(d, 'wq')
+
+def get_scinv_wq_file(pz_vers, pz_type, cosmo_vers, chunk):
+    """
+    wq submit files for calculating sigmacrit
+    """
+    dir=get_scinv_wq_dir(pz_vers, pz_type, cosmo_vers)
+    name='DES_scinv_%s_%s_%s_%06d.yaml' % (pz_vers, pz_type, cosmo_vers, chunk)
+    return os.path.join(dir, name)
+
+
 #
 # daniel's matched files
 #
@@ -186,6 +212,9 @@ def read_scinv(pz_vers, pz_type, chunk=None, get_header=False):
 dg_name={'ngmix009':'{tilename}_{scat_name}m.fits.gz'}
 
 def get_dg_scat_file(scat_name, tilename):
+    """
+    daniel's matched files
+    """
     d=get_cat_dir(scat_name+'-dg')
     pattern=dg_name[scat_name]
 
@@ -193,6 +222,9 @@ def get_dg_scat_file(scat_name, tilename):
     return os.path.join(d, fname)
 
 def read_dg_scat(scat_name, tilename):
+    """
+    daniel's matched files
+    """
     import fitsio
     fname=get_dg_scat_file(scat_name, tilename)
     print("reading:",fname)
@@ -203,32 +235,34 @@ def read_dg_scat(scat_name, tilename):
 # original source files matched to the scinv outputs
 #
 
-def get_scinv_matched_dir(scat_name, pz_vers, pz_type):
+def get_scinv_matched_dir(scat_name, pz_vers, pz_type, cosmo_vers):
     """
     dir to hold the scinv matched files
     """
     d=get_cat_basedir()
-    pattern='{scat_name}-{pz_vers}-{pz_type}-match'
+    pattern='{scat_name}-{pz_vers}-{pz_type}-{cosmo_vers}-match'
     sub_dir=pattern.format(scat_name=scat_name,
                            pz_vers=pz_vers,
-                           pz_type=pz_type)
+                           pz_type=pz_type,
+                           cosmo_vers=cosmo_vers)
     return os.path.join(d, sub_dir)
 
-def get_scinv_matched_file(scat_name, pz_vers, pz_type, tilename):
+def get_scinv_matched_file(scat_name, pz_vers, pz_type, cosmo_vers, tilename):
     """
     source catalog matched to scinv file
     """
-    d=get_scinv_matched_dir(scat_name, pz_vers, pz_type)
+    d=get_scinv_matched_dir(scat_name, pz_vers, pz_type, cosmo_vers)
 
-    pattern='{tilename}-{scat_name}-{pz_vers}-{pz_type}-match.fits'
+    pattern='{tilename}-{scat_name}-{pz_vers}-{pz_type}-{cosmo_vers}-match.fits'
     fname=pattern.format(tilename=tilename,
                          scat_name=scat_name,
                          pz_vers=pz_vers,
-                         pz_type=pz_type)
+                         pz_type=pz_type,
+                         cosmo_vers=cosmo_vers)
 
     return os.path.join(d, fname)
 
-def read_scinv_matched(scat_name, pz_vers, pz_type, tilename):
+def read_scinv_matched(scat_name, pz_vers, pz_type, cosmo_vers, tilename):
     """
     read the matched file
     """
