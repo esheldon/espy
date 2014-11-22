@@ -1,0 +1,12 @@
+# redmapper 6.2.12 zmask randoms with spt-e ra,dec cut
+lcat_vers: "rcat-rm002"
+
+# ngmix009 reduced, pz v0.1.5, skynet_mag_auto
+# matt's cuts
+scat_vers: "scat-ngmix004"
+
+# this is used in xshear, not for the maskflags
+healpix_nside: 64
+
+# only applies if using point photoz
+#zdiff_min: 0.2
