@@ -229,7 +229,7 @@ class RandomMatcher(dict):
         self.z=self.data[self['lrun_conf']['lens_conf']['z_col']]
         self.rz=self.rdata[self['rrun_conf']['lens_conf']['z_col']]
 
-        weight_col=self['rrun_conf']['lens_conf'].get('extra_weight_col')
+        weight_col=self['rrun_conf']['lens_conf'].get('extra_weight_col',None)
         if weight_col is not None:
             self.extra_weights=self.rdata[weight_col]
         else:
