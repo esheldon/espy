@@ -29,7 +29,7 @@ def plot_dsig(r, dsig, dsigerr, **kw):
 
     nbin = r.shape[0]
 
-    _set_biggles_defs(nbin)
+    _set_biggles_defs(nbin, **kw)
 
 
     grid, arr = get_framed_array(nbin)
@@ -59,14 +59,20 @@ def plot_dsig(r, dsig, dsigerr, **kw):
             ylabel = LABELS['dsig']
     arr.ylabel=ylabel
 
-    for i in xrange(nbin):
+    for i in xrange(grid.nrow*grid.ncol):
+
         row, col = grid.get_rowcol(i)
-
-        ri=r[i,:]
-        dsigi=dsig[i,:]
-        dsigerri=dsigerr[i,:]
-
         plt=arr[row, col]
+
+        if i < nbin:
+
+            ri=r[i,:]
+            dsigi=dsig[i,:]
+            dsigerri=dsigerr[i,:]
+        else:
+            # use last usable one with white color
+            kw['color']='white'
+
         xrng, yrng = _add_dsig_to_plot(plt,
                                        ri,
                                        dsigi,
@@ -75,9 +81,11 @@ def plot_dsig(r, dsig, dsigerr, **kw):
         plt.xrange=xrng
         plt.yrange=yrng
 
-        if labels is not None:
-            lab=biggles.PlotLabel(0.1, 0.1, labels[i], halign='left')
-            plt.add(lab)
+        if i < nbin:
+            if labels is not None:
+                lab=biggles.PlotLabel(0.1, 0.1, labels[i], halign='left')
+                plt.add(lab)
+
 
     if visible:
         arr.show()
@@ -254,13 +262,21 @@ class Grid(object):
         from math import sqrt
 
         self.nplot=nplot
-        sq=int(sqrt(nplot))
-        if nplot==sq*sq:
-            self.nrow, self.ncol = sq,sq
-        elif nplot <= sq*(sq+1):
-            self.nrow, self.ncol = sq,sq+1
+
+        # first check some special cases
+        if nplot==8:
+            self.nrow, self.ncol = 2,4
         else:
-            self.nrow, self.ncol = sq+1,sq+1
+
+            sq=int(sqrt(nplot))
+            if nplot==sq*sq:
+                self.nrow, self.ncol = sq,sq
+            elif nplot <= sq*(sq+1):
+                self.nrow, self.ncol = sq,sq+1
+            else:
+                self.nrow, self.ncol = sq+1,sq+1
+
+        self.nplot_tot=self.nrow*self.ncol
 
     def get_rowcol(self, index):
         """
@@ -284,7 +300,7 @@ class Grid(object):
             arr[row,col].add( ... )
         """
 
-        imax=self.nplot-1
+        imax=self.nplot_tot-1
         if index > imax:
             raise ValueError("index too large %d > %d" % (index,imax))
 
@@ -388,15 +404,19 @@ def plot_corrmatrix(r, corr_matrices, **kw):
 
     return arr
 
-def _set_biggles_defs(nbin):
+def _set_biggles_defs(nbin, **kw):
     import biggles
 
-    if nbin==1:
-        biggles.configure('default','fontsize_min',3.0)
-    elif 2 <= nbin <= 4:
-        biggles.configure('default','fontsize_min',2)
+    if 'fontsize_min' in kw:
+        fmin=kw['fontsize_min']
+        biggles.configure('default','fontsize_min',fmin)
     else:
-        biggles.configure('default','fontsize_min',1.35)
+        if nbin==1:
+            biggles.configure('default','fontsize_min',3.0)
+        elif 2 <= nbin <= 4:
+            biggles.configure('default','fontsize_min',2)
+        else:
+            biggles.configure('default','fontsize_min',1.35)
 
     biggles.configure('_HalfAxis','ticks_size',2.5)
     biggles.configure('_HalfAxis','subticks_size',1.25)
