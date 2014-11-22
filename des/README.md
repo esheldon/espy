@@ -52,7 +52,7 @@ input source catalogs for xshear
 
 you need to define a source sample, e.g.
 
-    $ESPY_DIR/des/config/scat-001.yaml
+    $ESPY_DIR/des/config/scat-ngmix004.yaml
 
 which will refer to an scat_name that points under the catalogs directory,
 as well as p(z) version and type, and cosmology if using p(z)
@@ -61,7 +61,7 @@ Then make the source input for xshear.  This is pretty fast, no need currently
 to split it up
 
     $ESPY_DIR/des/bin/make-xshear-scat $scat_vers
-    $ESPY_DIR/des/bin/make-xshear-scat scat-001
+    $ESPY_DIR/des/bin/make-xshear-scat scat-ngmix004
     $ESPY_DIR/des/bin/make-xshear-scat -t DES0440-4623 scat-001
 
 lens catalogs
