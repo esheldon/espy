@@ -35,6 +35,12 @@ parser.add_argument("--rand-run",
                     default=None,
                     help="rand run for corrected files")
 
+parser.add_argument("--fmin",
+                    default=None,
+                    type=float,
+                    help="min fontisize")
+
+
 
 def get_data(args):
     from des import files
@@ -68,6 +74,10 @@ def main():
     binspec=des.files.read_config(args.bin_scheme)
     labels=[bi['label'] for bi in binspec['bin_info']]
 
+    kw={}
+    if args.fmin is not None:
+        kw['fontsize_min']=args.fmin
+
     plt=des.plotting.plot_dsig(data['r'],
                                data['dsig'],
                                data['dsigerr'],
@@ -75,7 +85,8 @@ def main():
                                ylog=(args.linear==False),
                                yrange=yrange,
                                title=args.title,
-                               visible=False)
+                               visible=False,
+                               **kw)
 
     print("writing:",epsfile)
     plt.write_eps(epsfile)
