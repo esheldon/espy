@@ -22,6 +22,10 @@ from optparse import OptionParser
 parser=OptionParser(__doc__)
 parser.add_option("-r","--recurse",action="store_true",
                   help="copy files recursively the directory")
+parser.add_option("--user", help="username")
+parser.add_option("--password", help="password")
+
+
 
 junk="""
 parser.add_option("--noindex",action="store_true",
@@ -83,18 +87,22 @@ def main():
     cut_dirs = get_cut_dirs(url)
 
     
-    command=['wget',
-             '--no-check-certificate',
-             '-nv', # not too verbose
-             '-N',  # timestamping
-             '-r',  # recursive
-             '-l '+depth,
-             '-nH',  # -nH prevents putting hostname directory here
-             '--cut-dirs=%s' % cut_dirs,
-             '--no-parent', # never ascend to parent dir
-             '--tries=50',
-             "--reject='index.html*'",
-             url]
+    command=['wget']
+    if options.user is not None:
+        command += ['--user=%s' % options.user, 
+                    '--password=%s' % options.password]
+
+    command += ['--no-check-certificate',
+                '-nv', # not too verbose
+                '-N',  # timestamping
+                '-r',  # recursive
+                '-l '+depth,
+                '-nH',  # -nH prevents putting hostname directory here
+                '--cut-dirs=%s' % cut_dirs,
+                '--no-parent', # never ascend to parent dir
+                '--tries=50',
+                "--reject='index.html*'",
+                url]
 
     print command
     retcode = subprocess.call(command)
