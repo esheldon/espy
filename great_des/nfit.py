@@ -10,6 +10,8 @@ from ngmix.fitting import print_pars
 from ngmix.gexceptions import GMixMaxIterEM, GMixRangeError
 from ngmix.observation import Observation
 
+from gmix_meds.util import FromPSFGuesser, FixedParsGuesser,FromFullParsGuesser
+
 import meds
 
 # starting new values for these
@@ -236,54 +238,16 @@ class MedsFit(dict):
 
         self.res['jacobian'] = self._get_jacobian(self.gal_cen_guess_pix)
 
-        #print('    fitting gal em 1gauss')
-        #self._fit_galaxy_em()
-        #self._fit_galaxy_psf_flux()
-
         if self['trim_image']:
             self._make_trimmed_image()
-        self._fit_galaxy_model()
 
-    def _fit_galaxy_em(self):
-        """
+        obs = self._get_observation()
+        obs.set_psf( self.res['psf_obs'] )
 
-        Fit a single gaussian with em to find a decent center.  We don't get a
-        flux out of that, but we can get flux using the _fit_flux routine
+        self._fit_galaxy_psf_flux(obs)
+        self._fit_galaxy_model(obs)
 
-        """
-
-        res=self.res
-
-        print("    fitting galaxy with em")
-        # first the structural fit
-        sigma_guess = sqrt( res['psf_gmix'].get_T()/2.0 )
-
-        jacobian = self._get_jacobian(self.gal_cen_guess_pix)
-
-        print('      sigma guess:',sigma_guess)
-        print('      cen guess:  ',self.gal_cen_guess_pix)
-        fitter=self._fit_em_1gauss(self.image,
-                                   jacobian, 
-                                   sigma_guess)
-
-        em_gmix = fitter.get_gmix()
-        print("      em gmix:",em_gmix)
-
-        # now get a flux
-        print('    fitting robust gauss flux')
-        flux, flux_err = self._fit_flux(self.image,
-                                        self.wt,
-                                        jacobian,
-                                        em_gmix)
-
-        res['em_gauss_flux'] = flux
-        res['em_gauss_flux_err'] = flux_err
-        res['em_gauss_cen'] = em_gmix.get_cen()
-        res['em_gmix'] = em_gmix
-        res['jacobian'] = jacobian
-
-
-    def _fit_galaxy_psf_flux(self):
+    def _fit_galaxy_psf_flux(self, obs):
         """
         Get flux fitting the psf model
 
@@ -291,40 +255,22 @@ class MedsFit(dict):
         """
 
         print("    fitting galaxy with psf")
-        res=self.res
 
-        gmix=res['psf_gmix'].copy()
-
-        # jacobian is not on the best center from
-        # the robust single gaussian fit
-        flux, flux_err = self._fit_flux(self.image,
-                                        self.wt,
-                                        res['jacobian'],
-                                        gmix)
-        res['psf_flux'] = flux
-        res['psf_flux_err'] = flux_err
-
-    def _fit_flux(self, image, weight_image, jacob, gmix):
-        """
-        Fit the flux from a fixed gmix model.  This is linear and always
-        succeeds.
-        """
-
-        fitter=ngmix.fitting.PSFFluxFitter(image,
-                                           weight_image,
-                                           jacob,
-                                           gmix)
+        fitter=ngmix.fitting.TemplateFluxFitter(obs, do_psf=True)
         fitter.go()
+
         res=fitter.get_result()
 
-        flux=res['flux']
-        flux_err=res['flux_err']
-        mess='         %s +/- %s' % (flux,flux_err)
-        print(mess)
 
-        return flux, flux_err
+        self.res['psf_flux_flags'] = res['flags']
+        self.res['psf_flux'] = res['flux']
+        self.res['psf_flux_err'] = res['flux_err']
+        self.res['psf_flux_s2n'] = res['flux']/res['flux_err']
 
-    def _fit_galaxy_model(self):
+        print("        psf flux: %g +/- %g" % (res['flux'],res['flux_err']))
+
+
+    def _fit_galaxy_model(self, obs):
         """
         Run through and fit all the models
         """
@@ -333,10 +279,17 @@ class MedsFit(dict):
         res=self.res
         model=self['fit_model']
 
+        if self.res['psf_flux_s2n'] < self['min_gauss_s2n']:
+            print("    gauss s/n too low:",gauss_res['s2n_w'])
+            self.res['flags'] |= S2N_TOO_LOW
+            return
 
-        obs = self._get_observation()
-        obs.set_psf( res['psf_obs'] )
+        print('    fitting',model,'using maxlike')
+        greedy_guesser=self._get_guesser_from_psf()
+        greedy_fitter=self._fit_simple_max(obs,model,greedy_guesser) 
 
+        self._print_galaxy_res(greedy_fitter)
+        '''
         print("    fitting gauss")
         gauss_guesser=self['prior'].sample
         gauss_fitter=self._fit_simple_mcmc(obs,
@@ -356,15 +309,20 @@ class MedsFit(dict):
         gauss_trials=gauss_fitter.get_trials()
         model_guesser=gmix_meds.nfit.FromMCMCGuesser(gauss_trials,
                                                      gauss_res['pars_err'])
+        '''
 
+        # faking errors
+        print('    fitting',model,'using mcmc')
+        greedy_res=greedy_fitter.get_result()
+        model_guesser = FromFullParsGuesser(greedy_res['pars'],greedy_res['pars']*0.1)
         fitter=self._fit_simple_mcmc(obs,
                                      model,
                                      model_guesser)
 
-        res['gauss_fitter'] = gauss_fitter
+        #res['gauss_fitter'] = gauss_fitter
+        res['greedy_fitter'] = greedy_fitter
         res['galaxy_fitter'] = fitter
         res['galaxy_res'] = fitter.get_result()
-        res['galaxy_lin_res'] = fitter.get_lin_result()
         res['flags'] = res['galaxy_res']['flags']
 
         self._add_shear_info(res['galaxy_res'], fitter)
@@ -401,7 +359,6 @@ class MedsFit(dict):
         weights = g_prior.get_prob_array2d(log_trials[:,2], log_trials[:,3])
 
         fitter.calc_result(weights=weights)
-        fitter.calc_lin_result(weights=weights)
 
         self.weights=weights
 
@@ -432,7 +389,8 @@ class MedsFit(dict):
         guess[:,2]=guess_shape[:,0]
         guess[:,3]=guess_shape[:,1]
 
-        guess[:,4] = log10( get_positive_guess(T,nwalkers,width=width) )
+        #guess[:,4] = log10( get_positive_guess(T,nwalkers,width=width) )
+        guess[:,4] = ( get_positive_guess(T,nwalkers,width=width) )
 
         # got anything better?
         guess[:,5] = log10( get_positive_guess(F,nwalkers,width=width) )
@@ -440,9 +398,42 @@ class MedsFit(dict):
         return guess
 
 
+    def _fit_simple_max(self, obs, model, guesser):
+        from ngmix.fitting import MaxSimple        
+
+        prior=self['prior_gflat']
+        guess=guesser(prior=prior)
+
+        fitter=MaxSimple(obs,
+                         model,
+                         prior=prior,
+                         method='Nelder-Mead')
+        fitter.run_max(guess)
+        return fitter
 
 
+    def _get_guesser_from_psf(self):
+        """
+        take flux guesses from psf take canonical center (0,0)
+        and near zero ellipticity.  Size is taken from around the
+        expected psf size, which is about 0.9''
 
+        The size will often be too big
+
+        """
+        print('        getting guess from psf')
+
+        dindex=self.dindex
+        data=self.data
+
+        psf_flux=self.res['psf_flux']
+        psf_flux=psf_flux.clip(min=0.1, max=1.0e9)
+
+        # arbitrary
+        T = 2*(0.9/2.35)**2
+
+        guesser=FromPSFGuesser(T, psf_flux)
+        return guesser
 
 
     def _load_image_and_weight(self):
@@ -805,13 +796,12 @@ class MedsFit(dict):
         pdict['trials'].write_img(width,height,trials_pname)
 
     def _print_galaxy_res(self, fitter):
-        log_res=fitter.get_result()
-        lin_res=fitter.get_lin_result()
+        res=fitter.get_result()
 
-        print_pars(lin_res['pars'], front="    pars: ")
-        print_pars(lin_res['pars_err'], front="    err:  ")
-        
-        print('        arate:',log_res['arate'],"s/n:",log_res['s2n_w'])
+        print_pars(res['pars'], front="        pars: ")
+        if 'pars_err' in res:
+            print_pars(res['pars_err'], front="        err:  ")
+            print('            arate:',res['arate'],"s/n:",res['s2n_w'])
 
 
     def _copy_to_output(self):
@@ -839,46 +829,25 @@ class MedsFit(dict):
 
         data=self.data
 
-        # em fit to convolved galaxy
-        #if 'em_gauss_flux' in allres:
-        #    data['em_gauss_flux'][dindex] = allres['em_gauss_flux']
-        #    data['em_gauss_flux_err'][dindex] = allres['em_gauss_flux_err']
-        #    data['em_gauss_cen'][dindex] = allres['em_gauss_cen']
-        #else:
-        #    print("        em gauss not found, not copying pars")
-        #    return
-
-        #if 'psf_flux' in allres:
-        #    data['psf_flux'][dindex] = allres['psf_flux']
-        #    data['psf_flux_err'][dindex] = allres['psf_flux_err']
-        #else:
-        #    print("        psf flux not found, not copying pars")
-        #    return
-
         # allres flags is or'ed with the galaxy fitting flags
         if allres['flags'] != 0:
             print("        Not copying pars due to failure")
             return
 
         res=allres['galaxy_res']
-        lin_res=allres['galaxy_lin_res']
 
         pars=res['pars']
         pars_cov=res['pars_cov']
-        lin_pars=lin_res['pars']
-        lin_pars_cov=lin_res['pars_cov']
 
-        T=lin_pars[4]
-        T_err=sqrt(lin_pars_cov[4, 4])
+        T=pars[4]
+        T_err=sqrt(pars_cov[4, 4])
 
-        flux=lin_pars[5]
-        flux_err=sqrt(lin_pars_cov[5, 5])
+        flux=pars[5]
+        flux_err=sqrt(pars_cov[5, 5])
 
         data['fit_flags'] = res['flags']
         data['pars'][dindex,:] = pars
         data['pars_cov'][dindex,:,:] = pars_cov
-        data['lin_pars'][dindex,:] = lin_pars
-        data['lin_pars_cov'][dindex,:,:] = lin_pars_cov
 
         data['flux'][dindex] = flux
         data['flux_err'][dindex] = flux_err
@@ -1053,18 +1022,9 @@ class MedsFit(dict):
             ('nimage_use','i4'),
             ('time','f8'),
 
-            #('em_gauss_flux','f8'),
-            #('em_gauss_flux_err','f8'),
-            #('em_gauss_cen','f8',2),
-
-            #('psf_flux',    'f8'),
-            #('psf_flux_err','f8'),
-
             ('fit_flags','i4'),
             ('pars','f8',np),
             ('pars_cov','f8',(np,np)),
-            ('lin_pars','f8',np),
-            ('lin_pars_cov','f8',(np,np)),
 
             ('flux','f8'),
             ('flux_err','f8'),

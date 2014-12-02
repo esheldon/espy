@@ -161,13 +161,11 @@ def get_T_prior_ngmix(conf):
     if T_prior_type == 'flat':
         pars=conf['T_prior_pars']
         T_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
-    elif T_prior_type =='lognormal':
+
+    elif T_prior_type =='TwoSidedErf':
         pars=conf['T_prior_pars']
-        T_prior=ngmix.priors.LogNormal(pars[0], pars[1])
-    elif T_prior_type=="cosmos_exp":
-        T_prior=ngmix.priors.TPriorCosmosExp()
-    elif T_prior_type=="cosmos_dev":
-        T_prior=ngmix.priors.TPriorCosmosDev()
+        T_prior=ngmix.priors.TwoSidedErf(*pars)
+
     else:
         raise ValueError("bad T prior type: %s" % T_prior_type)
 
@@ -185,6 +183,12 @@ def get_counts_prior_ngmix(conf):
     if counts_prior_type == 'flat':
         pars=conf['counts_prior_pars']
         counts_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
+
+    elif counts_prior_type =='TwoSidedErf':
+        pars=conf['counts_prior_pars']
+        counts_prior=ngmix.priors.TwoSidedErf(*pars)
+
+
     else:
         raise ValueError("bad counts prior type: %s" % counts_prior_type)
 

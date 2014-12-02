@@ -52,9 +52,11 @@ def get_input_file(**keys):
     ftype=keys['ftype']
 
     if noisefree and ftype=='meds':
-        fname='nbc2.%(ftype)s.%(fnum)03i.g%(gnum)02i.noisefree.fits'
+        fname='nbc.%(ftype)s.%(fnum)03i.g%(gnum)02i.noisefree.fits'
+        #fname='nbc2.%(ftype)s.%(fnum)03i.g%(gnum)02i.noisefree.fits'
     else:
-        fname='nbc2.%(ftype)s.%(fnum)03i.g%(gnum)02i.fits'
+        fname='nbc.%(ftype)s.%(fnum)03i.g%(gnum)02i.fits'
+        #fname='nbc2.%(ftype)s.%(fnum)03i.g%(gnum)02i.fits'
 
     fname=fname % keys
 
@@ -76,7 +78,8 @@ def get_psf_file(**keys):
     if 'res' not in keys:
         keys['res'] = 'lores'
 
-    fname='nbc2.psf.%(res)s.fits'
+    #fname='nbc2.psf.%(res)s.fits'
+    fname='nbc.psf.%(res)s.fits'
     fname=fname % keys
 
     return os.path.join(d,fname)
