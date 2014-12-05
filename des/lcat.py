@@ -45,8 +45,10 @@ class XShearInput(dict):
         conf=read_config(lcat_vers)
         self.update(conf)
 
+        
         cconf=read_config(self['cosmo_vers'])
         self.cosmo = cosmology.Cosmo(omega_m=cconf['omega_m'], H0=cconf['H0'])
+        self.mask_info=read_config(self['mask_vers'])
 
     def write_all(self):
         """
@@ -73,6 +75,9 @@ class XShearInput(dict):
         output['maskflags'] = self.get_maskflags(output['ra'],
                                                  output['dec'],
                                                  output['z'])
+        w,=numpy.where(output['maskflags'] > 0)
+        print("        keeping %d/%d maskflags" % (w.size,output.size))
+        output=output[w]
 
         fname=get_lcat_file(self['lcat_vers'], chunk)
         write_lcat(fname, output)
@@ -153,7 +158,10 @@ class XShearInput(dict):
         """
         get the maskflags
         """
-        mask_type=self.get('mask_type',None)
+
+        mask_info=self.mask_info
+        mask_type=mask_info['mask_type']
+
         if mask_type is None:
             return numpy.zeros(ra.size)
         else:
@@ -169,8 +177,8 @@ class XShearInput(dict):
             rmax = self['rmax']
             radius_degrees = rmax/Da*180./numpy.pi
 
-            print("    reading healpix map:",self['mask_file'])
-            hmap=hu.readDensityMap(self['mask_file'])
+            print("    reading healpix map:",mask_info['mask_file'])
+            hmap=hu.readDensityMap(mask_info['mask_file'])
             
             maskflags=numpy.zeros(ra.size, dtype='i8')
             print("    getting maskflags")
@@ -181,7 +189,7 @@ class XShearInput(dict):
                 maskflags[i] = hmap.check_quad(ra[i],
                                                dec[i],
                                                radius_degrees[i],
-                                               self['mask_ellip_max'])
+                                               mask_info['mask_ellip_max'])
 
             w,=numpy.where(maskflags > 1)
             print("    %d/%d had good quadrant pairs" % (w.size, ra.size))

@@ -51,11 +51,17 @@ def cascade_config(run):
     conf['lens_conf']=read_config(conf['lcat_vers'])
     conf['source_conf']=read_config(conf['scat_vers'])
     conf['cosmo_conf']=read_config(conf['lens_conf']['cosmo_vers'])
+    conf['mask_conf']=read_config(conf['lens_conf']['mask_vers'])
 
     lc=conf['lens_conf']['cosmo_vers']
     sc=conf['source_conf']['cosmo_vers']
     if lc != sc:
         raise ValueError("cosmo mismatch: '%s' '%s'" % (lc,sc))
+
+    lc=conf['lens_conf']['mask_vers']
+    sc=conf['source_conf']['mask_vers']
+    if lc != sc:
+        raise ValueError("mask version: '%s' '%s'" % (lc,sc))
 
     return conf
 

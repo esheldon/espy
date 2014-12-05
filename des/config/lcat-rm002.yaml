@@ -15,10 +15,13 @@ zmin: 0.2
 zmax: 0.8
 
 # this is "eq" or "sdss"
-mask_style: "equatorial"
-mask_type: "healpix"
-mask_file: "/astro/u/esheldon/masks/des/neff/sva1_gold_1.0_nside4096-64_ring_i_neff.fits"
-mask_ellip_max: 0.05
+#mask_style: "equatorial"
+#mask_type: "healpix"
+#mask_file: "/astro/u/esheldon/masks/des/neff/sva1_gold_1.0_nside4096-64_ring_i_neff.fits"
+#mask_ellip_max: 0.05
+
+# corresponds to a config file
+mask_vers: "mask-sva1-i-01"
 
 index_col:  "mem_match_id"
 ra_col:     "ra"

@@ -1,3 +1,4 @@
+# not used yet because mask is not right
 comments: |
     6.2.15 with ra dec range limited to spt-e
     trim to mask
