@@ -142,7 +142,7 @@ def fit_sersic(pars=None, show=False, eps=None, n_gauss=20, n_iter=5000, min_cov
     if pars is None:
         pars=get_pars()
     
-    gpfitter=fit_g(pars[:,3], **keys)
+    gpfitter,gplt,trials_plt=fit_input_g(pars[:,3], show=show, **keys)
 
     n_vals=pars[:,2:2+1]
     n_gmm=fit_gmix(n_vals, n_gauss, n_iter, min_covar=min_covar)
@@ -246,11 +246,11 @@ def get_pars():
     sersicn=data['sersicfit'][:,2]
     g = (1.0-q)/(1.0+q)
 
-    pars=numpy.zeros( (w.size, 4) )
-    pars[:,0] = logf[w]
-    pars[:,1] = logr[w]
-    pars[:,2] = sersicn[w]
-    pars[:,3] = g[w]
+    pars=numpy.zeros( (data.size, 4) )
+    pars[:,0] = logf
+    pars[:,1] = logr
+    pars[:,2] = sersicn
+    pars[:,3] = g
 
     return pars
 
@@ -346,49 +346,81 @@ def fit_gmix(data, n_gauss, n_iter, min_covar=MIN_COVAR):
 
     return gmm
 
+def fit_g(show=False, **keys):
+    """
+    Fit a function to ellipticity
+    """
+    pars=get_pars()
+    
+    gpfitter,gplt,trials_plt=fit_input_g(pars[:,3], show=show, **keys)
+    fit_eps=files.get_my_lackner_g_fits_plot()
+    trials_eps=files.get_my_lackner_g_trials_plot()
 
-def fit_g(g, **keys):
+    print("writing:",fit_eps)
+    gplt.write_eps(fit_eps)
+    print("writing:",trials_eps)
+    trials_plt.write_eps(trials_eps)
+
+    return pars
+
+def fit_input_g(g, show=False, **keys):
     """
     Fit only the g prior
     """
-    import great3
     import esutil as eu
     import biggles
     import mcmc
 
+    # do the fit
     binsize=0.02
-
     hdict=get_norm_hist(g, min=0, binsize=binsize)
-
-    yrange=[0.0, 1.1*(hdict['hist_norm']+hdict['hist_norm_err']).max()]
-    plt=eu.plotting.bscatter(hdict['center'],
-                             hdict['hist_norm'],
-                             yerr=hdict['hist_norm_err'],
-                             yrange=yrange,
-                             show=False)
-
     ivar = numpy.ones(hdict['center'].size)
     w,=numpy.where(hdict['hist_norm_err'] > 0.0)
     if w.size > 0:
         ivar[w] = 1.0/hdict['hist_norm_err'][w]**2
 
     gpfitter=GPriorFitterErf(hdict['center'],
-                          hdict['hist_norm'],
-                          ivar,**keys)
-
+                             hdict['hist_norm'],
+                             ivar,**keys)
     gpfitter.do_fit()
     gpfitter.print_result()
     res=gpfitter.get_result()
 
+    # make a plot
+    yrange=[0.0, 1.1*(hdict['hist_norm']+hdict['hist_norm_err']).max()]
+
+    plt=biggles.FramedPlot()
+    #plt.aspect_ratio=1
+    plt.aspect_ratio=1.0/1.618
+    plt.xlabel='e'
+    plt.ylabel='p(e)'
+    plt.yrange=yrange
+
+    pts=biggles.Points(hdict['center'], hdict['hist_norm'],
+                       type='filled circle')
+    pts.label='COSMOS'
+    perr=biggles.SymmetricErrorBarsY(hdict['center'],
+                                     hdict['hist_norm'],
+                                     hdict['hist_norm_err'])
+    plt.add(pts,perr)
+
+
     gvals=numpy.linspace(0.0, 1.0)
     model=gpfitter.get_model_val(res['pars'], g=gvals)
     crv=biggles.Curve(gvals, model, color='red')
+    crv.label='model'
     plt.add(crv)
 
-    mcmc.plot_results(gpfitter.trials)
-    plt.show()
+    key=biggles.PlotKey(0.9,0.9,[pts,crv],halign='right')
+    plt.add(key)
 
-    return gpfitter
+    trials_plt = mcmc.plot_results(gpfitter.trials,show=False)
+
+    if show:
+        plt.show()
+        trials_plt.show()
+
+    return gpfitter, plt, trials_plt
 
 class GPriorFitter(object):
     def __init__(self, xvals, yvals, ivar, nwalkers=100, burnin=1000, nstep=1000):

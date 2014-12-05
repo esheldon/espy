@@ -71,6 +71,26 @@ def get_my_lackner_sersicn_fits(n_gauss):
     path=os.path.join(d,fname)
     return path
 
+def get_my_lackner_g_fits_plot():
+    """
+    file holding my gaussian fits to lackner sersicn distribution
+    """
+    d=get_my_lackner_fits_dir()
+    fname='lackner-gfit-erf.eps'
+    path=os.path.join(d,fname)
+    return path
+
+def get_my_lackner_g_trials_plot():
+    """
+    file holding my gaussian fits to lackner sersicn distribution
+    """
+    d=get_my_lackner_fits_dir()
+    fname='lackner-gfit-erf-trials.eps'
+    path=os.path.join(d,fname)
+    return path
+
+
+
 def read_my_lackner_sersicn_fits(n_gauss):
     """
     read file holding my gaussian fits to lackner sersicn distribution
