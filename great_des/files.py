@@ -63,6 +63,27 @@ def get_input_file(**keys):
     fname=os.path.join(d, fname)
     return fname
 
+def read_input_file(**keys):
+    """
+    parameters
+    ----------
+    gdrun: keyword
+        The gdrun e.g. nbc-sva1-001
+    ftype: keyword
+        The file type, e.g. 'meds' 'truth'
+    fnum: keyword
+        The file number within given g set
+    gnum: keyword
+        The g (shear) number set
+
+    noisefree: bool
+        If true, return path to noisefree data; meds only.
+    """
+    import fitsio
+
+    fname=get_input_file(**keys)
+    return fitsio.read(fname)
+
 def get_psf_file(**keys):
     """
     parameters
