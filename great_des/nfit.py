@@ -279,8 +279,9 @@ class MedsFit(dict):
         res=self.res
         model=self['fit_model']
 
-        if self.res['psf_flux_s2n'] < self['min_gauss_s2n']:
-            print("    gauss s/n too low:",gauss_res['s2n_w'])
+        ps2n=self.res['psf_flux_s2n']
+        if ps2n < self['min_gauss_s2n']:
+            print("    gauss s/n too low:",ps2n)
             self.res['flags'] |= S2N_TOO_LOW
             return
 
