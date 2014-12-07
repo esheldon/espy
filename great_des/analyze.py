@@ -38,11 +38,16 @@ def select_good(data):
     """
     apply standard selection
     """
+
+    if 'T' in data.dtype.names:
+        Ts2n=data['T']/data['T_err']
+    else:
+        Ts2n=data['pars'][:,4]/sqrt(data['pars_cov'][:,4,4])
     w,=numpy.where(  (data['flags']==0)
                    & (data['s2n_w'] > MIN_S2N)
                    & (data['arate'] > MIN_ARATE)
                    & (data['arate'] < MAX_ARATE)
-                   & ( (data['T']/data['T_err']) > MIN_TS2N) )
+                   & (Ts2n  > MIN_TS2N) )
     return w
 
 def get_weights(data):
@@ -73,7 +78,7 @@ def fit_m_c(dlist):
     fitters=[lf1,lf2]
 
     plt=plot_gdiff_vs_gtrue(gtrue, gdiff, gdiff_err, fitters=[lf1,lf2])
-    plt.show()
+    #plt.show()
 
     return lf1,lf2
 
@@ -122,6 +127,7 @@ def calc_gmean(data):
 
     wts=get_weights(data)
 
+    '''
     g1sum = (data['g'][:,0]*wts).sum()
     g2sum = (data['g'][:,1]*wts).sum()
 
@@ -131,15 +137,14 @@ def calc_gmean(data):
     gmeas[0]=g1sum/g1sensum
     gmeas[1]=g2sum/g2sensum
     print("gmeas: ",gmeas)
+    '''
 
     wa=wts[:,newaxis]
     jdsum=data['g']*wa
     jwsum=data['g_sens']*wa
-    print(jdsum.shape)
+    #print(jdsum.shape)
 
-    slow=False
-    gmeas,gcov=jackknife.wjackknife(vsum=jdsum, wsum=jwsum, slow=slow)
-    print("gmeasj:",gmeas)
+    gmeas,gcov=jackknife.wjackknife(vsum=jdsum, wsum=jwsum)
 
     return gtrue, gmeas, gcov
 
@@ -183,6 +188,7 @@ class AnalyzerS2N(dict):
 
         color1='blue'
         color2='red'
+
         mcurve1=biggles.Curve(self.s2n, self.m[:,0], type='solid',
                              color=color1)
         merr1=biggles.SymmetricErrorBarsY(self.s2n, self.m[:,0], self.merr[:,0],
@@ -192,15 +198,28 @@ class AnalyzerS2N(dict):
         merr2=biggles.SymmetricErrorBarsY(self.s2n, self.m[:,1], self.merr[:,1],
                                           color=color2)
         
+        ccurve1=biggles.Curve(self.s2n, self.c[:,0], type='solid',
+                             color=color1)
+        cerr1=biggles.SymmetricErrorBarsY(self.s2n, self.c[:,0], self.cerr[:,0],
+                                          color=color1)
+        ccurve2=biggles.Curve(self.s2n, self.c[:,1], type='dashed',
+                             color=color2)
+        cerr2=biggles.SymmetricErrorBarsY(self.s2n, self.c[:,1], self.cerr[:,1],
+                                          color=color2)
+ 
         key=biggles.PlotKey(0.1,0.9,[mcurve1,mcurve2],halign='left')
+
         mcurve1.label=r'$g_1$'
         mcurve2.label=r'$g_2$'
+        ccurve1.label=r'$g_1$'
+        ccurve2.label=r'$g_2$'
 
         mplt.add( mcurve1, merr1, mcurve2, merr2, key )
+        cplt.add( ccurve1, cerr1, ccurve2, cerr2, key )
 
         if show:
             mplt.show()
-            #cplt.show()
+            cplt.show()
         return mplt, cplt
 
     def _calc_m_c(self, dlist):
@@ -243,7 +262,7 @@ class AnalyzerS2N(dict):
             merr[i,1],cerr[i,1] = lf2.perr
             s2n[i] = s2n_sum/wsum
 
-            print("s2n:",s2n)
+            print("s2n:",s2n[i])
             print("m1: %g +/- %g" % (m[i,0],merr[i,0]))
             print("m2: %g +/- %g" % (m[i,1],merr[i,1]))
             print("c1: %g +/- %g" % (c[i,0],cerr[i,0]))

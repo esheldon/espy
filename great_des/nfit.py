@@ -855,6 +855,13 @@ class MedsFit(dict):
         data['T'][dindex] = T
         data['T_err'][dindex] = T_err
 
+        if T_err != 0:
+            T_s2n = T/T_err
+        else:
+            T_s2n=-9999.0
+        data['T_s2n'][dindex]=T_s2n
+
+
         data['g'][dindex,:] = res['g']
         data['g_cov'][dindex,:,:] = res['g_cov']
 
@@ -1031,6 +1038,7 @@ class MedsFit(dict):
             ('flux_err','f8'),
             ('T','f8'),
             ('T_err','f8'),
+            ('T_s2n','f8'),
             ('g','f8',2),
             ('g_cov','f8',(2,2)),
 
