@@ -8,6 +8,7 @@ combine outputs
 from __future__ import print_function
 
 import os,sys
+import numpy
 import fitsio
 import esutil as eu
 
@@ -15,6 +16,28 @@ from great_des import files
 
 from optparse import OptionParser
 parser = OptionParser(__doc__)
+
+def read_output(**conf):
+    data0 = files.read_output(**conf)
+
+    add_dt=[('shear_true','f8',2)]
+    if 'T_s2n' not in data0.dtype.names:
+        do_T_s2n=True
+        add_dt += [('T_s2n','f8')]
+    else:
+        do_T_s2n=False
+
+    data=eu.numpy_util.add_fields(data0, add_dt)
+
+    if do_T_s2n:
+        T_s2n=numpy.zeros(data.size)-9999.0
+        w,=numpy.where(data['T_err'] != 0.0)
+        if w.size > 0:
+            T_s2n[w] = data['T'][w]/data['T_err'][w]
+
+        data['T_s2n']=T_s2n
+
+    return data
 
 def main():
     options, args = parser.parse_args(sys.argv[1:])
@@ -55,9 +78,11 @@ def main():
             for i in xrange(n):
                 conf['start'] = low[i]
                 conf['end'] = high[i]
-                data0 = files.read_output(**conf)
 
-                data=eu.numpy_util.add_fields(data0, [('shear_true','f8',2)])
+                #data0 = files.read_output(**conf)
+                #data=eu.numpy_util.add_fields(data0, [('shear_true','f8',2)])
+
+                data=read_output(**conf)
                 data['shear_true'][:,0] = truth_data['g1_true'][low[i]:high[i]+1]
                 data['shear_true'][:,1] = truth_data['g2_true'][low[i]:high[i]+1]
 
