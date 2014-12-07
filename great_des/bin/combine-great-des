@@ -35,7 +35,6 @@ def main():
     if not os.path.exists(d):
         os.makedirs(d)
     collated_file = files.get_collated_file(**conf)
-    collated_file=collated_file+'.test'
     print(collated_file)
 
 

@@ -144,6 +144,11 @@ class GaussFitter(object):
 
         return plt
 
+def fit_line(x, y, yerr=None):
+    lf=LineFitter(x, y, yerr=yerr)
+    lf.dofit()
+    return lf
+
 class LineFitter:
     def __init__(self, x, y, yerr=None):
         self.x=x

@@ -228,9 +228,9 @@ def get_jackknife_sums(data, jackreg_col=None, weights=None):
 
     dcol='dsum'
     if shear_style=='lensfit':
-        wcol = 'wsum'
-    else:
         wcol='dsensum'
+    else:
+        wcol = 'wsum'
 
     if jackreg_col is None:
         jdsum = data[dcol]
@@ -281,9 +281,9 @@ def get_jackknife_sums_weighted(data, weights, jackreg_col=None):
 
     dcol='dsum'
     if shear_style=='lensfit':
-        wcol = 'wsum'
-    else:
         wcol='dsensum'
+    else:
+        wcol = 'wsum'
 
     if jackreg_col is None:
         # broadcast it

@@ -39,7 +39,7 @@ def wjackknife(vsum=None, wsum=None, cleanup=True, slow=False, verbose=False):
         If True, remove the input and output files
 
     slow: bool, optional
-        If True, use the pury python version of the code.
+        If True, use the pure python version of the code.
     """
 
     if vsum is None or wsum is None:
