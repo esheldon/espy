@@ -126,11 +126,22 @@ Then perform the binning
 
 
     $ESPY_DIR/des/bin/bin-lenses run bin_scheme
+    $ESPY_DIR/des/bin/bin-lenses --jack run bin_scheme
 
 matching random point lens runs
 -------------------------------
 
     $ESPY_DIR/des/bin/match-rand lens_run rand_run bin_scheme
+
+calculating boost factors
+-------------------------
+
+    $ESPY_DIR/des/bin/boost-correct lens_run rand_run bin_scheme
+
+plotting the boost factors
+---------------------------
+
+    $ESPY_DIR/des/bin/plot-boost lens_run rand_run bin_scheme
 
 generating your own randoms
 ---------------------------
