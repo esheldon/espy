@@ -2,3 +2,8 @@ regions:
     spte:
         ra_range: [40.0, 95.0]
         dec_range: [-62.0, -42.0]
+    spte_subarea:
+        dec_range: [-60., -52.]
+        ra_range: [68., 77.]
+
+
