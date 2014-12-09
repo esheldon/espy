@@ -1,0 +1,30 @@
+comments: |
+
+    my uniform randoms over spt-e subarea. same as rm004subarea just a
+    different set of randoms
+
+lcat_name: "rand-spte-subarea01"
+type: "random"
+
+cosmo_vers: "cosmo-01"
+mask_vers: "mask-sva1-i-01"
+
+nchunk: 25
+
+nbin: 17
+rmin: 0.055
+rmax: 35.15
+
+zmin: 0.2
+zmax: 0.8
+
+index_col:  "rand_index"
+ra_col:     "ra"
+dec_col:    "dec"
+z_col:      "z"
+
+# for matching to lens catalogs.
+# Can be "z" or "selection", or "selection-and-z"
+match_type: "z"
+
+zmatch_method: "weight"
