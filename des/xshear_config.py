@@ -15,6 +15,7 @@ class XShearConfig(dict):
         self.comb.update(conf['lens_conf'])
         self.comb.update(conf['source_conf'])
         self.comb.update(conf['cosmo_conf'])
+        self.comb.update(conf['mask_conf'])
 
     def write(self):
         """
