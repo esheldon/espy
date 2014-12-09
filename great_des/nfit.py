@@ -10,7 +10,7 @@ from ngmix.fitting import print_pars
 from ngmix.gexceptions import GMixMaxIterEM, GMixRangeError
 from ngmix.observation import Observation
 
-from gmix_meds.util import FromPSFGuesser, FixedParsGuesser,FromFullParsGuesser
+from gmix_meds.util import FromPSFGuesser, FixedParsGuesser, FromFullParsGuesser
 
 import meds
 
@@ -286,44 +286,24 @@ class MedsFit(dict):
             return
 
         print('    fitting',model,'using maxlike')
-        greedy_guesser=self._get_guesser_from_psf()
-        greedy_fitter=self._fit_simple_max(obs,model,greedy_guesser) 
+        max_guesser=self._get_guesser_from_psf()
+        max_fitter=self._fit_simple_max(obs,model,max_guesser) 
 
-        self._print_galaxy_res(greedy_fitter)
-        '''
-        print("    fitting gauss")
-        gauss_guesser=self['prior'].sample
-        gauss_fitter=self._fit_simple_mcmc(obs,
-                                           'gauss',
-                                           gauss_guesser)
-
-        gauss_res=gauss_fitter.get_result()
-
-        self._print_galaxy_res(gauss_fitter)
-
-        if gauss_res['s2n_w'] < self['min_gauss_s2n']:
-            print("    gauss s/n too low:",gauss_res['s2n_w'])
-            self.res['flags'] |= S2N_TOO_LOW
-            return
-
-        print('    fitting',model)
-        gauss_trials=gauss_fitter.get_trials()
-        model_guesser=gmix_meds.nfit.FromMCMCGuesser(gauss_trials,
-                                                     gauss_res['pars_err'])
-        '''
+        self._print_galaxy_res(max_fitter)
 
         # faking errors
         print('    fitting',model,'using mcmc')
-        greedy_res=greedy_fitter.get_result()
-        model_guesser = FromFullParsGuesser(greedy_res['pars'],greedy_res['pars']*0.1)
+        max_res=max_fitter.get_result()
+        model_guesser = FromFullParsGuesser(max_res['pars'],max_res['pars']*0.1)
         fitter=self._fit_simple_mcmc(obs,
                                      model,
                                      model_guesser)
 
         #res['gauss_fitter'] = gauss_fitter
-        res['greedy_fitter'] = greedy_fitter
+        res['max_fitter'] = max_fitter
         res['galaxy_fitter'] = fitter
         res['galaxy_res'] = fitter.get_result()
+        res['max_res'] = max_fitter.get_result()
         res['flags'] = res['galaxy_res']['flags']
 
         self._add_shear_info(res['galaxy_res'], fitter)
@@ -408,7 +388,8 @@ class MedsFit(dict):
         fitter=MaxSimple(obs,
                          model,
                          prior=prior,
-                         method='Nelder-Mead')
+                         method='Nelder-Mead',
+                         maxiter=self['nm_pars']['maxiter'])
         fitter.run_max(guess)
         return fitter
 
@@ -799,10 +780,13 @@ class MedsFit(dict):
     def _print_galaxy_res(self, fitter):
         res=fitter.get_result()
 
-        print_pars(res['pars'], front="        pars: ")
+        print_pars(res['pars'], front="    pars: ")
         if 'pars_err' in res:
-            print_pars(res['pars_err'], front="        err:  ")
-            print('            arate:',res['arate'],"s/n:",res['s2n_w'])
+            print_pars(res['pars_err'], front="    err:  ")
+            if self['fitter']=='mcmc':
+                print('            arate:',res['arate'],"s/n:",res['s2n_w'])
+            elif 's2n_w' in res:
+                print("            s/n:",res['s2n_w'])
 
 
     def _copy_to_output(self):
@@ -836,9 +820,12 @@ class MedsFit(dict):
             return
 
         res=allres['galaxy_res']
+        res_max=allres['max_res']
 
         pars=res['pars']
         pars_cov=res['pars_cov']
+
+        pars_max=res_max['pars']
 
         T=pars[4]
         T_err=sqrt(pars_cov[4, 4])
@@ -849,6 +836,8 @@ class MedsFit(dict):
         data['fit_flags'] = res['flags']
         data['pars'][dindex,:] = pars
         data['pars_cov'][dindex,:,:] = pars_cov
+
+        data['pars_max'][dindex,:] = pars_max
 
         data['flux'][dindex] = flux
         data['flux_err'][dindex] = flux_err
@@ -865,7 +854,8 @@ class MedsFit(dict):
         data['g'][dindex,:] = res['g']
         data['g_cov'][dindex,:,:] = res['g_cov']
 
-        data['arate'][dindex] = res['arate']
+        if self['fitter']=='mcmc':
+            data['arate'][dindex] = res['arate']
 
         for sn in _stat_names:
             if sn in res:
@@ -1031,6 +1021,7 @@ class MedsFit(dict):
             ('time','f8'),
 
             ('fit_flags','i4'),
+            ('pars_max','f8',np),
             ('pars','f8',np),
             ('pars_cov','f8',(np,np)),
 
@@ -1087,6 +1078,112 @@ class MedsFit(dict):
 
      
         self.data=data
+
+class MedsFitMax(MedsFit):
+    def _fit_galaxy_model(self, obs):
+        """
+        Run through and fit all the models
+        """
+        import gmix_meds.nfit
+
+        res=self.res
+        model=self['fit_model']
+
+        ps2n=self.res['psf_flux_s2n']
+        if ps2n < self['min_gauss_s2n']:
+            print("    gauss s/n too low:",ps2n)
+            self.res['flags'] |= S2N_TOO_LOW
+            return
+
+        print('    fitting',model,'using maxlike')
+        max_guesser=self._get_guesser_from_psf()
+        max_fitter=self._fit_simple_max(obs,model,max_guesser) 
+        fitres=max_fitter.get_result()
+
+        for i in xrange(self['nm_ntry']):
+            max_fitter=self._fit_simple_max(obs,model,max_guesser) 
+            fitres=max_fitter.get_result()
+            #print(fitres)
+            bestlk = max_fitter.calc_lnprob(fitres['pars'])
+            if fitres['flags']==0:
+                break
+
+            print_pars(fitres['pars'], front="        iter: %d lnp: %s pars:" % (i+1,bestlk))
+
+            # fake errors
+            #max_guesser = FromFullParsGuesser(fitres['pars'],fitres['pars']*0.1)
+            max_guesser = FixedParsGuesser(fitres['pars'],fitres['pars']*0.1)
+
+        print_pars(fitres['pars'], front="    nm pars:")
+        print("    nm lnp:",bestlk)
+        print("    fitting",model,"with lm")
+        # fake error, don't need it
+        lm_guesser = FixedParsGuesser(fitres['pars'],fitres['pars']*0.1)
+        #lm_guesser = FromFullParsGuesser(fitres['pars'],fitres['pars']*0.1)
+        lm_fitter=self._fit_simple_lm(obs,model,max_guesser) 
+        lmres=lm_fitter.get_result()
+
+        # if we run LM, need to add pars_cov, pars_err, g_cov to the result
+        # dict from the NM fitter
+        fitres['flags'] = lmres['flags']
+        if lmres['flags']==0:
+            fitres['pars_cov'] = lmres['pars_cov']
+            fitres['pars_err'] = lmres['pars_err']
+            fitres['g']        = lmres['g']
+            fitres['g_cov']    = lmres['g_cov']
+        else:
+            fitres['g'] = fitres['pars'][2:2+2]
+
+        # fool _copy_galaxy_pars by setting the fitters to the same
+        # fitter
+
+        res['max_fitter'] = max_fitter
+        res['galaxy_fitter'] = max_fitter
+        res['galaxy_res'] = fitres
+        res['max_res'] = fitres
+        res['flags'] = res['galaxy_res']['flags']
+
+        self._print_galaxy_res(max_fitter)
+
+    def _fit_simple_lm(self, obs, model, guesser):
+        """
+        fit model with guess from input guesser
+
+        guesser input should be fixed pars guesser
+        """
+        from ngmix.fitting import LMSimple
+
+        # fixed pars guesser takes no prior
+        guess=guesser()
+
+        prior=self['prior_gflat']
+
+        ntry=self['lm_ntry']
+        for i in xrange(ntry):
+            print_pars(guess, front="        lm guess:")
+
+            fitter=LMSimple(obs,
+                            model,
+                            prior=prior,
+                            lm_pars=self['lm_pars'])
+
+            fitter.run_lm(guess)
+            res=fitter.get_result()
+            bestlk = fitter.calc_lnprob(res['pars'])
+
+            if res['flags']==0:
+                break
+
+            print("        lnp:",bestlk)
+
+            if i == 0:
+                guesser = FromFullParsGuesser(guess, guess*0.1)
+            guess=guesser(prior=prior)
+
+        print("    lm lnp:",bestlk)
+        res['ntry']=i+1
+        return fitter
+
 
 _em2_fguess=array([0.5793612389470884,1.621860687127999])
 _em2_pguess=array([0.596510042804182,0.4034898268889178])

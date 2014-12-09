@@ -203,6 +203,8 @@ def get_g_prior(conf):
 
     if g_prior_type=='cosmos-sersic':
         g_prior=ngmix.priors.make_gprior_cosmos_sersic(type='erf')
+    elif g_prior_type=='zdiskerf':
+        g_prior=ngmix.priors.ZDisk2DErf()
     else:
         raise ValueError("implement gprior '%s'")
 
@@ -304,13 +306,22 @@ def run_fitter(files, conf, checkpoint_data=None):
 
 
 
-    gm=great_des.nfit.MedsFit(files['meds'],
-                              files['truth'],
-                              files['psf'],
-                              checkpoint_data=checkpoint_data,
-                              prior=prior,
-                              prior_gflat=prior_gflat,
-                              **conf)
+    if conf['fitter']=='mcmc':
+        fitclass=great_des.nfit.MedsFit
+    elif conf['fitter']=='max':
+        fitclass=great_des.nfit.MedsFitMax
+    else:
+        raise ValueError("bad fitter: '%s'" % conf['fitter'])
+
+    # for fitter=='max' only the flat prior is used
+    gm=fitclass(files['meds'],
+                files['truth'],
+                files['psf'],
+                checkpoint_data=checkpoint_data,
+                prior=prior,
+                prior_gflat=prior_gflat,
+                **conf)
+
     gm.do_fits()
     data=gm.get_data()
 

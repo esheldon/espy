@@ -1,5 +1,7 @@
 run: "nfit-03"
 
+fitter: 'mcmc'
+
 # min s2n_w from gauss fit before we do regular fit
 min_gauss_s2n: 4.0
 
