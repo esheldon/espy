@@ -12,7 +12,7 @@ class DESPofz(object):
     """
     Wrapper for hdf5 file
 
-    dz=DESPofz('0.1', 'skynet')
+    dz=DESPofz('v0.1', 'skynet')
 
     print dz.zvals
     print dz[35]
@@ -336,6 +336,11 @@ def get_info(pz_vers, pz_type):
 
         edge_low  = 0.005-dz/2
         edge_high = 1.5-dz/2
+    elif key=='TPZ2':
+        dz = 0.007475
+
+        edge_low  = 0.005-dz/2
+        edge_high = 1.8-dz/2
     else:
         edge_low  = 0.0
         edge_high = z_max

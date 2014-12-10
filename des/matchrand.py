@@ -295,11 +295,13 @@ class RandomMatcherRemove(RandomMatcher):
 
                 w,wr,weights,comb=self._run_matcher(binnum)
                 if weights is not None:
+                    print("    writing kept ones with weights")
                     st=numpy.zeros(wr.size, dtype=[('index','i8'),('weight','f8')])
                     st['index']=wr
                     st['weight']=weights
                     fits.write(st)
                 else:
+                    print("    writing kept ones ")
                     fits.write(wr)
 
                 self._print_perc(wr)

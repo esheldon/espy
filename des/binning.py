@@ -105,7 +105,7 @@ class Binner(dict):
                                              jackreg_col=jackreg_col,
                                              getind=True)
         
-            bs['nlenses'][i] = w.size
+            #bs['nlenses'][i] = w.size
             print("    found",w.size,"in bin")
             # first copy all common tags
             for n in comb.dtype.names:

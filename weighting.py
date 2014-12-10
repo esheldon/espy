@@ -91,9 +91,7 @@ def plot_results1d(data1, data2, weights1, binsize,
     h1w=h1wdict['whist']/float(h1wdict['whist'].sum())
     h2=h2dict['hist']/float(h2dict['hist'].sum())
 
-    h2err = numpy.sqrt(h2dict['hist'])/float(h2dict['hist'].sum())
     hdiff = h2-h1w
-    hdifferr = h2err
 
 
     #arr=biggles.FramedArray(2,1)
@@ -127,13 +125,12 @@ def plot_results1d(data1, data2, weights1, binsize,
     pltdiff=biggles.FramedPlot()
 
     phdiff = biggles.Points(h1dict['center'], hdiff)
-    phdifferr = biggles.SymmetricErrorBarsY(h1dict['center'], hdiff, hdifferr)
 
     zero=biggles.Curve([xmin,xmax],[0,0])
 
     plab=biggles.PlotLabel(0.05,0.9,plabtext,halign='left')
     
-    pltdiff.add(phdiff, phdifferr, zero, plab)
+    pltdiff.add(phdiff, zero, plab)
     pltdiff.xlabel = xlabel
     pltdiff.ylabel = '%s-%s weighted' % (label2, label1)
 

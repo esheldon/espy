@@ -41,33 +41,35 @@ def average_lensums(lout, weights=None, jackreg_col=None):
 
     comb = averaged_struct(nrad, shear_style=shear_style)
 
+    comb['nlenses'][0]=nlens
+
     # weight is the weight for the lens.  Call this weightsum to
     # indicate a sum over multiple lenses
-    comb['weightsum'] = lout['weight'].sum()
+    comb['weightsum'][0] = lout['weight'].sum()
 
-    comb['totpairs'] = lout['totpairs'].sum()
+    comb['totpairs'][0] = lout['totpairs'].sum()
     
-    comb['npair'] = lout['npair'].sum(axis=0)
-    comb['rsum']  = lout['rsum'].sum(axis=0)
-    comb['wsum']  = lout['wsum'].sum(axis=0)
-    comb['dsum']  = lout['dsum'].sum(axis=0)
-    comb['osum']  = lout['osum'].sum(axis=0)
+    comb['npair'][0] = lout['npair'].sum(axis=0)
+    comb['rsum'][0]  = lout['rsum'].sum(axis=0)
+    comb['wsum'][0]  = lout['wsum'].sum(axis=0)
+    comb['dsum'][0]  = lout['dsum'].sum(axis=0)
+    comb['osum'][0]  = lout['osum'].sum(axis=0)
 
     # averages
-    comb['r'] = comb['rsum']/comb['wsum']
+    comb['r'][0] = comb['rsum']/comb['wsum']
 
     if shear_style=='lensfit':
-        comb['dsensum'] = lout['dsensum'].sum(axis=0)
-        comb['osensum'] = lout['osensum'].sum(axis=0)
-        comb['dsig'] = comb['dsum']/comb['dsensum']
-        comb['osig'] = comb['osum']/comb['osensum']
+        comb['dsensum'][0] = lout['dsensum'].sum(axis=0)
+        comb['osensum'][0] = lout['osensum'].sum(axis=0)
+        comb['dsig'][0] = comb['dsum']/comb['dsensum']
+        comb['osig'][0] = comb['osum']/comb['osensum']
     else:
-        comb['dsig'] = comb['dsum']/comb['wsum']
-        comb['osig'] = comb['osum']/comb['wsum']
+        comb['dsig'][0] = comb['dsum']/comb['wsum']
+        comb['osig'][0] = comb['osum']/comb['wsum']
 
     # this is average wsum over lenses
     # we calculate boost factors from this, wsum_mean/wsum_mean_random
-    comb['wsum_mean'] = comb['wsum']/nlens
+    comb['wsum_mean'][0] = comb['wsum']/nlens
 
     # jackknife to get the covariance matrix
     m,cov=jackknife_lensums(lout, jackreg_col=jackreg_col)
@@ -513,7 +515,8 @@ def averaged_struct(nrad, n=1, shear_style=_DEFAULT_SHEAR_STYLE):
     return numpy.zeros(n, dtype=dt)
 
 def averaged_dtype(nrad, shear_style=_DEFAULT_SHEAR_STYLE):
-    dt=[('weightsum','f8'),       # this is total of weight for each lens
+    dt=[('nlenses','i8'),
+        ('weightsum','f8'),       # this is total of weight for each lens
         ('totpairs','i8'),
         ('r','f8',nrad),
         ('dsig','f8',nrad),
@@ -546,7 +549,8 @@ def lensbin_dtype(nrbin, shear_style=_DEFAULT_SHEAR_STYLE, bintags=None):
     """
     This is the same as averaged_dtype but with the averages added
     """
-    dt=[('nlenses','i8')]
+    #dt=[('nlenses','i8')]
+    dt=[]
     if bintags is not None:
         if not isinstance(bintags,list):
             bintags = [bintags]
