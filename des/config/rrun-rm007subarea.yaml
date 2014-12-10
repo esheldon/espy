@@ -1,0 +1,12 @@
+# my randoms cut to spte subarea. Same as rrun-007 but different
+# set of randoms
+lcat_vers: "rcat-rm006subarea"
+
+# ngmix009, pz v0.1, skynet_mag_auto, Matt's cuts
+scat_vers: "scat-ngmix001"
+
+# this is used in xshear, not for the maskflags
+healpix_nside: 64
+
+# only applies if using point photoz
+#zdiff_min: 0.2
