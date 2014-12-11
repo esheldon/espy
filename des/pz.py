@@ -5,8 +5,12 @@ code for p(zs) and scinv(zl)
 from __future__ import print_function
 import os
 import numpy
+from numpy import where, isnan
 
 from .files import *
+
+NAN_IN_POFZ=2**0
+NAN_IN_SCINV=2**1
 
 class DESPofz(object):
     """
@@ -162,6 +166,8 @@ def combine_scinv(cosmo_vers, pz_vers, pz_type, chunksize):
                     zvals=fits_in['zlvals'][:]
                     fits.write(zvals,extname='zlvals')
 
+    print("output is in:",outfile)
+
 class SCinv(object):
     """
     create scinv in chunks
@@ -191,13 +197,15 @@ class SCinv(object):
 
             if self.chunk > (nchunk-1):
                 raise RuntimeError("chunk %d out of bounds: "
-                                   "[0,%d)" % (chunk,nchunk))
+                                   "[0,%d)" % (self.chunk,nchunk))
 
             beg=self.chunk*self.chunksize
             end=(self.chunk+1)*self.chunksize
 
             self.data   = pofz[beg:end]
             self.zsvals = pofz.zvals
+
+            self.beg=beg
         
         self.nchunk=nchunk
 
@@ -226,14 +234,28 @@ class SCinv(object):
         for i in xrange(nobj):
             if (i==0) or ((i+1) % printstep) == 0:
                 print("    %d/%d" % (i+1,nobj))
+
+            w,=where(isnan(data['pofz'][i,:]))
+            if w.size > 0:
+                print("    found nan in pofz: %d (absolute %d)" % (i,self.beg + i))
+                out['flags'][i] = NAN_IN_POFZ
+                continue
+
             out['scinv'][i,:]=scalc.calc_mean_scinv(zs, data['pofz'][i,:])
+
+            w,=where(isnan(out['scinv'][i,:]))
+            if w.size > 0:
+                print("    found nan in scinv: %d (absolute %d)" % (i,self.beg + i))
+                out['flags'][i] = NAN_IN_SCINV
 
         self._write_data(outfile, scalc.zlvals, out)
 
     def _get_output(self):
         out=numpy.zeros(self.data.size, dtype=[('index','i8'),
+                                               ('flags','i4'),
                                                ('scinv','f8',self.nzl)])
         out['index'] = self.data['index']
+        out['scinv'] = -9999
         return out
 
 
@@ -268,8 +290,6 @@ class SCinv(object):
 
         beglist,endlist=get_chunks(self.chunksize, self.nchunk)
         for chunk in xrange(len(beglist)):
-            beg=beglist[chunk]
-            end=endlist[chunk]
             fname=get_scinv_wq_file(self.pz_vers,self.pz_type,self.cosmo_vers, chunk)
 
             job_name='scinv-%s-%06d' % (self.pz_type, chunk)
