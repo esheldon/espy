@@ -41,8 +41,8 @@ We want to match these to the scinv calculated above
 match the source catalog to the scinv in *tiles* not the chunks above.  This is
 assuming the source catalogs are broken up by tilename
 
-    $ESPY_DIR/des/bin/match-scinv $scat_name $pz_vers $pz_type $cosmo_vers
-    $ESPY_DIR/des/bin/match-scinv ngmix009 v0.1.5 tpz cosmo-01
+    $ESPY_DIR/des/bin/match-scinv $scat_name $cosmo_vers $pz_vers $pz_type
+    $ESPY_DIR/des/bin/match-scinv ngmix009 cosmo-01 v0.1.5 tpz
 
 This is high memory, so I've been running it as a single job rather than
 splitting things up.
