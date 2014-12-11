@@ -215,7 +215,8 @@ def get_scinv_wq_file(pz_vers, pz_type, cosmo_vers, chunk):
 # daniel's matched files
 #
 
-dg_name={'ngmix009':'{tilename}_{scat_name}m.fits.gz'}
+dg_name={'ngmix009':'{tilename}_{scat_name}m.fits.gz',
+         'ngmix010':'{tilename}_im3shapev72_ngmix_009_010.fits.gz'}
 
 def get_dg_scat_file(scat_name, tilename):
     """
