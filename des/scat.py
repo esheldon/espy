@@ -167,20 +167,43 @@ class XShearInput(dict):
         """
         select based on flags and other cuts
         """
+
+        exists_logic=self.get_exists_logic(data)
         flag_logic=self.get_flag_logic(data)
         sg_logic=self.get_sg_logic(data)
+        scinv_logic=self.get_scinv_logic(data)
         cut_logic=self.get_cut_logic(data)
 
-        logic=flag_logic & sg_logic & cut_logic
+        logic=exists_logic & flag_logic & sg_logic & scinv_logic &cut_logic
         w,=numpy.where(logic)
         return w
+
+    def get_exists_logic(self, data):
+        """
+        some catalogs have multiple catalogs in them and an exists flag
+        """
+
+        if 'exists_col' in self:
+            logic = data[self['exists_col']] == 1
+            w,=numpy.where(logic)
+            print("    kept %d/%d that 'exists'" % (w.size, data.size))
+        else:
+            logic = numpy.ones(data.size, dtype='bool')
+
+        return logic
 
     def get_flag_logic(self, data):
         """
         get logic for sx flags and other flags
         """
-        logic=(  (data[self['sxflags_col']]==0)
-               & (data[self['flags_col']]==0) )
+        sxlogic = data[self['sxflags_col']]==0
+        flogic  = data[self['flags_col']]==0
+        w,=numpy.where(sxlogic)
+        print("    kept %d/%d sxflags" % (w.size, data.size))
+        w,=numpy.where(flogic)
+        print("    kept %d/%d source flags" % (w.size, data.size))
+
+        logic = sxlogic & flogic
         return logic
 
     def get_sg_logic(self, data):
@@ -193,9 +216,20 @@ class XShearInput(dict):
                                 data[self['class_star_col']],
                                 data[self['spread_model_col']],
                                 data[self['spreaderr_model_col']])
+            w,=numpy.where(logic)
+            print("    kept %d/%d galaxies" % (w.size, data.size))
         else:
             raise ValueError("bad sg_type: '%s'" % self['sg_type'])
 
+        return logic
+
+    def get_scinv_logic(self, data):
+        """
+        cut bad p(z) or scinv
+        """
+        logic=data[self['scinv_flags_col']]==0
+        w,=numpy.where(logic)
+        print("    kept %d/%d good scinv" % (w.size, data.size))
         return logic
 
     def get_cut_logic(self, data):
@@ -206,8 +240,12 @@ class XShearInput(dict):
                & (data[self['Ts2n_col']] > self['Ts2n_min'])
                & (data[self['arate_col']] > self['arate_range'][0])
                & (data[self['arate_col']] < self['arate_range'][1]) )
+        w,=numpy.where(logic)
+        print("    kept %d/%d cuts" % (w.size, data.size))
         return logic
 
+
+ 
 def match_scinv(scat_name, cosmo_vers, pz_vers, pz_type, tilenames=None):
     """
     match the dg scat to scinv using a Matcher
@@ -291,8 +329,10 @@ class Matcher(object):
             return
 
         dg_data=dg_data[mdg]
-        newdata=nu.add_fields(dg_data, [('scinv','f8',self.nz)])
+        add_dt=[('scinv_flags','i4'),('scinv','f8',self.nz)]
+        newdata=nu.add_fields(dg_data, add_dt)
         newdata['scinv'] = self.data['scinv'][msc,:]
+        newdata['scinv_flags'] = self.data['flags'][msc,:]
 
         self._write_data(newdata, tilename)
 
