@@ -27,7 +27,8 @@ def get_input_dir(**keys):
         The great des run e.g. nbc-sva1-001
     """
     h=os.environ['HOME']
-    d=os.path.join(h, 'lensing','great-des', keys['gdrun'], 'data')
+    #d=os.path.join(h, 'lensing','great-des', keys['gdrun'], 'data')
+    d=os.path.join(h, 'lensing','great-des', keys['gdrun'])
     return d
 
 def get_input_file(**keys):

@@ -383,16 +383,19 @@ class MedsFit(dict):
         from ngmix.fitting import MaxSimple        
 
         prior=self['prior_gflat']
-        guess=guesser(prior=prior)
-
         fitter=MaxSimple(obs,
                          model,
                          prior=prior,
                          method='Nelder-Mead',
                          maxiter=self['nm_pars']['maxiter'])
-        fitter.run_max(guess)
-        return fitter
 
+        for i in xrange(self['nm_ntry']):
+            guess=guesser(prior=prior)
+            fitter.run_max(guess)
+            res=fitter.get_result()
+            if res['flags']==0:
+                break
+        return fitter
 
     def _get_guesser_from_psf(self):
         """
@@ -787,6 +790,8 @@ class MedsFit(dict):
                 print('            arate:',res['arate'],"s/n:",res['s2n_w'])
             elif 's2n_w' in res:
                 print("            s/n:",res['s2n_w'])
+        else:
+            print("    NO ERRORS PRESENT")
 
 
     def _copy_to_output(self):
@@ -816,8 +821,16 @@ class MedsFit(dict):
 
         # allres flags is or'ed with the galaxy fitting flags
         if allres['flags'] != 0:
-            print("        Not copying pars due to failure")
-            return
+            if self['fitter']=='mcmc':
+                print("        Not copying pars due to failure")
+                return
+
+            # for max fitter, we might "fail" but still have something
+            # worth copying.  But if there are no errors, there is no
+            # point in continuing
+            if 'pars_err' not in allres:
+                print("        Not copying pars due to failure")
+                return
 
         res=allres['galaxy_res']
         res_max=allres['max_res']
@@ -1100,40 +1113,6 @@ class MedsFitMax(MedsFit):
         max_fitter=self._fit_simple_max(obs,model,max_guesser) 
         fitres=max_fitter.get_result()
 
-        for i in xrange(self['nm_ntry']):
-            max_fitter=self._fit_simple_max(obs,model,max_guesser) 
-            fitres=max_fitter.get_result()
-            #print(fitres)
-            bestlk = max_fitter.calc_lnprob(fitres['pars'])
-            if fitres['flags']==0:
-                break
-
-            print_pars(fitres['pars'], front="        iter: %d lnp: %s pars:" % (i+1,bestlk))
-
-            # fake errors
-            #max_guesser = FromFullParsGuesser(fitres['pars'],fitres['pars']*0.1)
-            max_guesser = FixedParsGuesser(fitres['pars'],fitres['pars']*0.1)
-
-        print_pars(fitres['pars'], front="    nm pars:")
-        print("    nm lnp:",bestlk)
-        print("    fitting",model,"with lm")
-        # fake error, don't need it
-        lm_guesser = FixedParsGuesser(fitres['pars'],fitres['pars']*0.1)
-        #lm_guesser = FromFullParsGuesser(fitres['pars'],fitres['pars']*0.1)
-        lm_fitter=self._fit_simple_lm(obs,model,max_guesser) 
-        lmres=lm_fitter.get_result()
-
-        # if we run LM, need to add pars_cov, pars_err, g_cov to the result
-        # dict from the NM fitter
-        fitres['flags'] = lmres['flags']
-        if lmres['flags']==0:
-            fitres['pars_cov'] = lmres['pars_cov']
-            fitres['pars_err'] = lmres['pars_err']
-            fitres['g']        = lmres['g']
-            fitres['g_cov']    = lmres['g_cov']
-        else:
-            fitres['g'] = fitres['pars'][2:2+2]
-
         # fool _copy_galaxy_pars by setting the fitters to the same
         # fitter
 
@@ -1144,46 +1123,6 @@ class MedsFitMax(MedsFit):
         res['flags'] = res['galaxy_res']['flags']
 
         self._print_galaxy_res(max_fitter)
-
-    def _fit_simple_lm(self, obs, model, guesser):
-        """
-        fit model with guess from input guesser
-
-        guesser input should be fixed pars guesser
-        """
-        from ngmix.fitting import LMSimple
-
-        # fixed pars guesser takes no prior
-        guess=guesser()
-
-        prior=self['prior_gflat']
-
-        ntry=self['lm_ntry']
-        for i in xrange(ntry):
-            print_pars(guess, front="        lm guess:")
-
-            fitter=LMSimple(obs,
-                            model,
-                            prior=prior,
-                            lm_pars=self['lm_pars'])
-
-            fitter.run_lm(guess)
-            res=fitter.get_result()
-            bestlk = fitter.calc_lnprob(res['pars'])
-
-            if res['flags']==0:
-                break
-
-            print("        lnp:",bestlk)
-
-            if i == 0:
-                guesser = FromFullParsGuesser(guess, guess*0.1)
-            guess=guesser(prior=prior)
-
-        print("    lm lnp:",bestlk)
-        res['ntry']=i+1
-        return fitter
-
 
 _em2_fguess=array([0.5793612389470884,1.621860687127999])
 _em2_pguess=array([0.596510042804182,0.4034898268889178])

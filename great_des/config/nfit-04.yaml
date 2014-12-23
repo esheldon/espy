@@ -9,10 +9,10 @@ min_gauss_s2n: 4.0
 # and whitening has been done
 noisefree: False
 
-gdrun: "nbc-sva1-003"
+gdrun: "nbc-sva1-004"
 
 # number per g number, index 0-1
-nf: 400
+nf: 600
 
 # shear numbers 0-7
 ng: 8
@@ -36,7 +36,7 @@ trim_nsigma: 5
 
 nm_ntry: 5
 nm_pars:
-    maxiter: 2000
+    maxiter: 4000
 
 lm_ntry: 5
 lm_pars:
