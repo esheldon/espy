@@ -203,6 +203,17 @@ def get_wq_file(**keys):
 
     return fname
 
+def get_collate_wq_file(**keys):
+    d=get_wq_dir(**keys)
+
+    fname='%(run)s-g%(gnum)02i-collate.yaml'
+    fname=fname % keys
+
+    fname=os.path.join(d, fname)
+
+    return fname
+
+
 def get_output_file(**keys):
     """
     parameters

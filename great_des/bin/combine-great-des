@@ -20,7 +20,17 @@ parser = OptionParser(__doc__)
 def read_output(**conf):
     data0 = files.read_output(**conf)
 
-    add_dt=[('shear_true','f8',2)]
+    add_dt=[('shear_true','f8',2),
+            ('psf_e','f8',2),
+            ('fwhm','f4'),
+            ('id_shear','i8'),
+            ('id_psf','i8')]
+    if 'T' not in data0.dtype.names:
+        add_dt += [('T','f8'),('T_err','f8')]
+        do_T=True
+    else:
+        do_T=False
+
     if 'T_s2n' not in data0.dtype.names:
         do_T_s2n=True
         add_dt += [('T_s2n','f8')]
@@ -28,6 +38,10 @@ def read_output(**conf):
         do_T_s2n=False
 
     data=eu.numpy_util.add_fields(data0, add_dt)
+                
+    if do_T:
+        data['T'] = data['pars'][:,4]
+        data['T_err'] = numpy.sqrt(data['pars_cov'][:,4,4])
 
     if do_T_s2n:
         T_s2n=numpy.zeros(data.size)-9999.0
@@ -85,6 +99,11 @@ def main():
                 data=read_output(**conf)
                 data['shear_true'][:,0] = truth_data['g1_true'][low[i]:high[i]+1]
                 data['shear_true'][:,1] = truth_data['g2_true'][low[i]:high[i]+1]
+                data['psf_e'][:,0] = truth_data['psf_e1'][low[i]:high[i]+1]
+                data['psf_e'][:,1] = truth_data['psf_e2'][low[i]:high[i]+1]
+                data['fwhm'] = truth_data['fwhm'][low[i]:high[i]+1]
+                data['id_shear'] = truth_data['id_shear'][low[i]:high[i]+1]
+                data['id_psf'] = truth_data['id_psf'][low[i]:high[i]+1]
 
                 if data.size != nper:
                     err="data size mismatch: expected %d got %d"

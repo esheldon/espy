@@ -4,7 +4,7 @@
 
 Geneate the wq files
 """
-
+from __future__ import print_function
 import os,sys
 from sys import stderr
 
@@ -18,91 +18,48 @@ template="""
 command: |
     source ~/.bashrc
     module unload espy && module load espy/work
-    work_dir="$TMPDIR-$RANDOM-$RANDOM"
 
-    mkdir -p $work_dir
+    $ESPY_DIR/great_des/bin/combine-great-des %(run)s %(gnum)s
 
-    $ESPY_DIR/great_des/bin/fit-great-des \\
-        --work-dir=$work_dir \\
-        --obj-range %(start)d,%(end)d \\
-        $ESPY_DIR/great_des/config/%(run)s.yaml \\
-        %(meds_file)s \\
-        %(truth_file)s \\
-        %(psf_file)s \\
-        %(output_file)s
-
-    rm -r $work_dir
-
+mode: bynode
 job_name: "%(job_name)s"
 """
+
 
 class WQMaker(object):
     def __init__(self, run):
         self.run=run
-        self.conf=great_des.files.read_config(run=run)
-        self.config_file=great_des.files.get_config_file(run=run)
+        self.config=files.read_config(run=run)
 
     def make_wq(self):
         self.make_output_dirs()
 
-
-        gdtype=self.conf['gdtype']
-        gdrun=self.conf['gdrun']
-        ng=self.conf['ng']
-        nf=self.conf['nf']
-        nper=self.conf['nper']
-
+        ng=self.config['ng']
         for gnum in xrange(ng):
-            for fnum in xrange(nf):
-                low,high = files.get_chunk_ranges(gdtype=gdtype,
-                                                  gdrun=gdrun,
-                                                  fnum=fnum,
-                                                  gnum=gnum,
-                                                  nper=nper)
+            text=self.get_text(gnum)
+            fname=files.get_collate_wq_file(run=self.run, gnum=gnum)
+            print("writing:",fname)
+            with open(fname,'w') as fobj:
+                fobj.write(text)
 
-                nr = len(low)
-                for i in xrange(nr):
-                    start=low[i]
-                    end=high[i]
-                    wqfile=files.get_wq_file(run=self.run,
-                                             fnum=fnum,
-                                             gnum=gnum,
-                                             start=start,
-                                             end=end)
-                    print wqfile
-
-                    text=self.get_text(fnum=fnum,
-                                       gnum=gnum,
-                                       start=start,
-                                       end=end)
-                    with open(wqfile,'w') as fobj:
-                        fobj.write(text)
-
-    def get_text(self, **keys):
-
-        keys.update( self.conf )
-        keys['ftype'] = 'meds'
-        keys['meds_file']=files.get_input_file(**keys)
-        keys['ftype'] = 'truth'
-        keys['truth_file']=files.get_input_file(**keys)
-        keys['psf_file']=files.get_psf_file(**keys)
-        keys['output_file'] = files.get_output_file(**keys)
-        
-        keys['config_file'] = self.config_file
-
-        keys['job_name']='%(run)s-%(start)05d-%(end)05d' % keys
-
-        text = template % keys
-
+    def get_text(self, gnum):
+        job_name=self.get_job_name(gnum)
+        text=template % {'run':self.run,
+                         'gnum':gnum,
+                         'job_name':job_name}
         return text
+
+    def get_job_name(self, gnum):
+        job_name='combine-%s-%s' % (self.run, gnum)
+        return job_name
 
     def make_output_dirs(self):
         wq_dir=files.get_wq_dir(run=self.run)
-        output_dir = files.get_output_dir(run=self.run)
+        collated_dir = files.get_collated_dir(run=self.run)
 
-        for dir in [wq_dir,output_dir]:
+        for dir in [wq_dir,collated_dir]:
             if not os.path.exists( dir ):
-                print 'making dir:',dir
+                print('making dir:',dir)
                 os.makedirs(dir)
 
 def main():

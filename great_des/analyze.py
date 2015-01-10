@@ -1,7 +1,6 @@
 from __future__ import print_function
 import numpy
-from numpy import diag, sqrt, newaxis
-import esutil as eu
+from numpy import diag, sqrt, newaxis, where
 from . import files
 
 MIN_ARATE=0.3
@@ -11,7 +10,7 @@ MIN_TS2N=2.0
 
 SN=0.16
 
-def load_data(run, select=True):
+def load_data(run, select=True, **keys):
     """
     load all g collated files into a list of structs
     """
@@ -24,31 +23,53 @@ def load_data(run, select=True):
 
         print("reading:",fname)
         data=fitsio.read(fname)
+        data=add_T(data)
 
         if select:
             print("    selecting")
-            w=select_good(data)
-            print("    kept %d/%d" % (w.size, data.size))
-            data=data[w]
+            data=select_good(data, **keys)
 
         dlist.append(data)
     return dlist
 
-def select_good(data):
+def add_T(data):
+    import esutil as eu
+
+    if 'T' not in data.dtype.names:
+        print("adding T")
+        T = data['pars'][:,4]
+        Terr = sqrt(data['pars_cov'][:,4,4])
+        ndata=eu.numpy_util.add_fields(data,[('T','f8'),('T_err','f8')])
+        ndata['T']=T
+        ndata['T_err']=Terr
+        data=ndata
+
+    return data
+
+def select_good(data,
+                min_arate=MIN_ARATE,
+                max_arate=MAX_ARATE,
+                min_s2n=MIN_S2N,
+                min_ts2n=MIN_TS2N):
     """
     apply standard selection
     """
 
-    if 'T' in data.dtype.names:
-        Ts2n=data['T']/data['T_err']
-    else:
-        Ts2n=data['pars'][:,4]/sqrt(data['pars_cov'][:,4,4])
-    w,=numpy.where(  (data['flags']==0)
-                   & (data['s2n_w'] > MIN_S2N)
-                   & (data['arate'] > MIN_ARATE)
-                   & (data['arate'] < MAX_ARATE)
-                   & (Ts2n  > MIN_TS2N) )
-    return w
+    Ts2n=data['T']/data['T_err']
+
+    logic = (  (data['flags']==0)
+             & (data['fit_flags']==0)
+             & (data['s2n_w'] > min_s2n)
+             & (Ts2n  > min_ts2n) )
+
+    if 'arate' in data.dtype.names:
+        logic = logic & (data['arate'] > min_arate) & (data['arate'] < max_arate)
+
+    w,=where(logic)
+    print("    kept %d/%d" % (w.size, data.size))
+
+    data=data[w]
+    return data
 
 def get_weights(data):
     """
@@ -141,7 +162,10 @@ def calc_gmean(data):
 
     wa=wts[:,newaxis]
     jdsum=data['g']*wa
-    jwsum=data['g_sens']*wa
+    if 'g_sens' in data.dtype.names:
+        jwsum=data['g_sens']*wa
+    else:
+        jwsum=numpy.ones( data['g'].shape )*wa
     #print(jdsum.shape)
 
     gmeas,gcov=jackknife.wjackknife(vsum=jdsum, wsum=jwsum)
@@ -214,8 +238,10 @@ class AnalyzerS2N(dict):
         ccurve1.label=r'$g_1$'
         ccurve2.label=r'$g_2$'
 
-        mplt.add( mcurve1, merr1, mcurve2, merr2, key )
-        cplt.add( ccurve1, cerr1, ccurve2, cerr2, key )
+        zc=biggles.Curve( self.s2n, self.s2n*0 )
+
+        mplt.add( mcurve1, merr1, mcurve2, merr2, zc, key )
+        cplt.add( ccurve1, cerr1, ccurve2, cerr2, zc, key )
 
         if show:
             mplt.show()
@@ -275,6 +301,7 @@ class AnalyzerS2N(dict):
         self.cerr = cerr
 
     def _do_hist1(self, data):
+        import esutil as eu
         log_s2n = numpy.log10( data['s2n_w'] )
         minl = numpy.log10( self.min_s2n )
         maxl = numpy.log10( self.max_s2n )
@@ -285,3 +312,75 @@ class AnalyzerS2N(dict):
                                 rev=True)
 
         return rev
+
+def plot_e_vs_sigma(data,
+                    use_true_fwhm=False,
+                    yrange=None,
+                    nbin=None,
+                    nperbin=None,
+                    min_lsigma=-1.,
+                    max_lsigma=-0.1,
+                    title=None,
+                    show=False):
+    import biggles
+    import esutil as eu
+
+    shear_true=data['shear_true'].mean(axis=0)
+
+    colors=['blue','red']
+    types=['filled circle','filled diamond']
+
+    if use_true_fwhm:
+        log_sigma = numpy.log10( data['fwhm']/2.35*0.27 )
+    else:
+        log_sigma = numpy.log10( numpy.sqrt( 0.5*data['T'] ) )
+
+    weights = get_weights(data)
+
+    bs1=eu.stat.Binner(log_sigma, data['g'][:,0], weights=weights)
+    bs2=eu.stat.Binner(log_sigma, data['g'][:,1], weights=weights)
+
+    bs1.dohist(min=min_lsigma,
+               max=max_lsigma,
+               nbin=nbin,
+               nperbin=nperbin)
+    bs2.dohist(min=min_lsigma,
+               max=max_lsigma,
+               nbin=nbin,
+               nperbin=nperbin)
+
+    bs1.calc_stats()
+    bs2.calc_stats()
+
+    plt=biggles.FramedPlot()
+    plt.xrange=[0.9*min_lsigma, 1.1*max_lsigma]
+    plt.aspect_ratio=1
+    plt.title=title
+    plt.xlabel=r'$log_{10}( \sigma [arcsec] )$'
+    plt.ylabel='<e>'
+
+
+    pts1=biggles.Points(bs1['xmean'],bs1['ymean'],type=types[0],color=colors[0])
+    err1=biggles.SymmetricErrorBarsY(bs1['xmean'],bs1['ymean'],bs1['yerr'],
+                                     color=colors[0])
+
+    pts2=biggles.Points(bs2['xmean'],bs2['ymean'],type=types[1],color=colors[1])
+    err2=biggles.SymmetricErrorBarsY(bs2['xmean'],bs2['ymean'],bs2['yerr'],
+                                     color=colors[1])
+
+    sc1 = biggles.Curve(bs1['xmean'], bs1['xmean']*0 + shear_true[0])
+    sc2 = biggles.Curve(bs1['xmean'], bs1['xmean']*0 + shear_true[1])
+
+    pts1.label=r'$e_1$'
+    pts2.label=r'$e_2$'
+
+    key=biggles.PlotKey(0.1,0.9,[pts1,pts2])
+
+    plt.add(sc1,sc2,pts1,err1,pts2,err2,key)
+
+    if yrange is not None:
+        plt.yrange=yrange
+
+    if show:
+        plt.show()
+    return plt

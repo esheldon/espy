@@ -1077,6 +1077,8 @@ class MedsFit(dict):
         data['pars_cov'] = PDEFVAL
         data['flux'] = DEFVAL
         data['flux_err'] = PDEFVAL
+        data['T'] = DEFVAL
+        data['T_err'] = PDEFVAL
         data['g'] = DEFVAL
         data['g_cov'] = PDEFVAL
 
