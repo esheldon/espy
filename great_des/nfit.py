@@ -10,7 +10,7 @@ from ngmix.fitting import print_pars
 from ngmix.gexceptions import GMixMaxIterEM, GMixRangeError
 from ngmix.observation import Observation
 
-from gmix_meds.util import FromPSFGuesser, FixedParsGuesser, FromFullParsGuesser
+from gmix_meds.util import FromPSFGuesser, FixedParsGuesser, FromParsGuesser
 
 import meds
 
@@ -163,6 +163,7 @@ class MedsFit(dict):
 
         # for checkpointing
         self.data['processed'][self.dindex]=1
+        self.data['nimage_use'][self.dindex] = 1
         self.data['number'][self.dindex] = self.meds['number'][self.mindex]
 
         self._fit_psf()
@@ -280,8 +281,8 @@ class MedsFit(dict):
         model=self['fit_model']
 
         ps2n=self.res['psf_flux_s2n']
-        if ps2n < self['min_gauss_s2n']:
-            print("    gauss s/n too low:",ps2n)
+        if ps2n < self['min_s2n']:
+            print("    psf s/n too low:",ps2n)
             self.res['flags'] |= S2N_TOO_LOW
             return
 
@@ -291,10 +292,10 @@ class MedsFit(dict):
 
         self._print_galaxy_res(max_fitter)
 
-        # faking errors
+        # faking errors, as they are not needed
         print('    fitting',model,'using mcmc')
         max_res=max_fitter.get_result()
-        model_guesser = FromFullParsGuesser(max_res['pars'],max_res['pars']*0.1)
+        model_guesser = FromParsGuesser(max_res['pars'],max_res['pars']*0.1)
         fitter=self._fit_simple_mcmc(obs,
                                      model,
                                      model_guesser)
@@ -382,14 +383,16 @@ class MedsFit(dict):
     def _fit_simple_max(self, obs, model, guesser):
         from ngmix.fitting import MaxSimple        
 
+        nm_pars=self['nm_pars']
+
         prior=self['prior_gflat']
         fitter=MaxSimple(obs,
                          model,
                          prior=prior,
                          method='Nelder-Mead',
-                         maxiter=self['nm_pars']['maxiter'])
+                         **nm_pars)
 
-        for i in xrange(self['nm_ntry']):
+        for i in xrange(nm_pars['ntry']):
             guess=guesser(prior=prior)
             fitter.run_max(guess)
             res=fitter.get_result()
@@ -786,7 +789,7 @@ class MedsFit(dict):
         print_pars(res['pars'], front="    pars: ")
         if 'pars_err' in res:
             print_pars(res['pars_err'], front="    err:  ")
-            if self['fitter']=='mcmc':
+            if 'arate' in res:
                 print('            arate:',res['arate'],"s/n:",res['s2n_w'])
             elif 's2n_w' in res:
                 print("            s/n:",res['s2n_w'])
