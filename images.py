@@ -66,19 +66,7 @@ def view(image, **keys):
     if 'title' in keys:
         plt.title=keys['title']
 
-    s = im.shape
-    if 'xdr' in keys and 'ydr' in keys:
-        xdr=keys['xdr']
-        ydr=keys['ydr']
-        ranges = ((xdr[0], ydr[0]), (xdr[1], ydr[1]))
-
-        x=numpy.linspace(xdr[0],xdr[1],s[0])
-        y=numpy.linspace(ydr[0],ydr[1],s[1])
-    else:
-        # this is a difference from Contours which can be alarming
-        ranges = ((-0.5, -0.5), (s[0]-0.5, s[1]-0.5))
-        x=None
-        y=None
+    x, y, ranges = _extract_data_ranges(im.shape, **keys)
 
     def_contour_color='black'
     if 'dens' in type:
@@ -117,6 +105,22 @@ def view(image, **keys):
 
     return plt
 
+def _extract_data_ranges(imshape, **keys):
+    if 'xdr' in keys and 'ydr' in keys:
+        xdr=keys['xdr']
+        ydr=keys['ydr']
+        ranges = ((xdr[0], ydr[0]), (xdr[1], ydr[1]))
+
+        x=numpy.linspace(xdr[0],xdr[1],imshape[0])
+        y=numpy.linspace(ydr[0],ydr[1],imshape[1])
+    else:
+        # this is a difference from Contours which can be alarming
+        ranges = ((-0.5, -0.5), (imshape[0]-0.5, imshape[1]-0.5))
+        x=None
+        y=None
+
+    return x, y, ranges
+ 
 def make_combined_mosaic(imlist):
     """
     only works if all images are same size
@@ -266,11 +270,24 @@ def multiview(image, **keys):
     imrows = image[:, cen[1]]
     imcols = image[cen[0], :]
     
+    # in case xdr, ydr were sent
+    x, y, ranges = _extract_data_ranges(image.shape, **keys)
+    if x is not None:
+        x0 = ranges[0][0]
+        y0 = ranges[0][1]
+        xbinsize=x[1]-x[0]
+        ybinsize=y[1]-y[0]
+    else:
+        x0=0
+        y0=0
+        xbinsize=1
+        ybinsize=1
+
 
     crossplt = biggles.FramedPlot()
-    hrows = biggles.Histogram(imrows, color='blue')
+    hrows = biggles.Histogram(imrows, x0=y0, binsize=ybinsize, color='blue')
     hrows.label = 'Center rows'
-    hcols = biggles.Histogram(imcols, color='red')
+    hcols = biggles.Histogram(imcols, x0=x0, binsize=xbinsize, color='red')
     hcols.label = 'Center columns'
 
     key = biggles.PlotKey(0.1, 0.9, [hrows, hcols])
