@@ -2,6 +2,7 @@ import lensing
 import os
 import esutil as eu
 from esutil.ostools import path_join
+import numpy
 
 def write_configs(run):
     rc = ObjshearRunConfig(run)
@@ -37,8 +38,17 @@ class ObjshearRunConfig(dict):
         
     def make_zlvals(self):
         import sigmacrit
-        sconf = self['scinv_config']
-        return linspace(sconf['zlmin'],sconf['zlmax'],sconf['nzl'])
+        src_conf=self['src_config']
+        if 'zlmin' in src_conf:
+            zlmin=src_conf['zlmin']
+            zlmax=src_conf['zlmax']
+            nzl=src_conf['nzl']
+        else:
+            sconf = self['scinv_config']
+            zlmin=sconf['zlmin']
+            zlmax=sconf['zlmax']
+            nzl=sconf['nzl']
+        return numpy.linspace(zlmin,zlmax,nzl)
 
     # inputs to objshear
     def write_config(self):

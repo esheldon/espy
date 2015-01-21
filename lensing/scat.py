@@ -473,6 +473,8 @@ class DR8RMandCatalog(GenericSrcCatalog):
     Rachel's shapes collated with p(z) 12
 
     the photoz are already in the catalog, we just specify cosmology in the source sample file
+
+    So we just run split() instead of create-objshear-input
     """
     def __init__(self, sample):
 
@@ -513,9 +515,12 @@ class DR8RMandCatalog(GenericSrcCatalog):
         else:
             columns=None
 
-        return fitsio.read(fname, columns=columns)
+        data=fitsio.read(fname, columns=columns)
 
-    def split(self, data=None):
+        return data
+
+
+    def split(self):
         """
         Split the source file into nsplit parts
         """
@@ -526,8 +531,10 @@ class DR8RMandCatalog(GenericSrcCatalog):
 
         print('splitting into:',self['nsplit'])
 
-        if data is None:
-            data = self.read_original(with_scinv=True, for_output=True)
+        data = self.read_original(with_scinv=True, for_output=True)
+
+        print("changing sign of e1")
+        data['e1'] *= -1
 
         ntot = data.size
         nper = ntot/nsplit
