@@ -468,6 +468,157 @@ class DR8RegaussCatalog(GenericSrcCatalog):
         print("  #rows:",self.pzcols['photoid'].size)
 
 
+class DR8RMandCatalog(GenericSrcCatalog):
+    """
+    Rachel's shapes collated with p(z) 12
+
+    the photoz are already in the catalog, we just specify cosmology in the source sample file
+    """
+    def __init__(self, sample):
+
+        conf = lensing.files.read_config('scat', sample)
+        self.update(conf)
+        for k in conf:
+            self[k] = conf[k]
+
+        self['cosmo'] = lensing.files.read_config('cosmo',self['cosmo_sample'])
+
+        if 'dr8rmand' not in self['catalog']:
+            raise ValueError("Expected dr8regauss as catalog")
+
+    def original_file(self, with_scinv=False):
+        dir=os.environ['LENSDIR']
+        if with_scinv:
+            fname='photoz-matched-scinv.fits'
+        else:
+            fname='photoz-matched.fits'
+        fname=os.path.join(dir, 'catalogs','rachel-catalogs',fname)
+        return fname
+
+    def read_original(self, with_scinv=False, for_output=False):
+        """
+        catalog matched to photozs
+        """
+        import fitsio
+        fname=self.original_file(with_scinv=with_scinv)
+        print("reading:",fname)
+
+        if for_output:
+            columns=['ra','dec','e1','e2','err','mag','R']
+            if self['sigmacrit_style'] == 2:
+                columns.append('scinv')
+            else:
+                columns.append('pz')
+            print("    reading columns:",columns)
+        else:
+            columns=None
+
+        return fitsio.read(fname, columns=columns)
+
+    def split(self, data=None):
+        """
+        Split the source file into nsplit parts
+        """
+        
+        nsplit = self['nsplit']
+        if nsplit == 0:
+            return
+
+        print('splitting into:',self['nsplit'])
+
+        if data is None:
+            data = self.read_original(with_scinv=True, for_output=True)
+
+        ntot = data.size
+        nper = ntot/nsplit
+        nleft = ntot % nsplit
+
+        for i in xrange(nsplit):
+
+            beg = i*nper
+            end = (i+1)*nper
+            if i == (nsplit-1):
+                end += nleft
+            sdata = data[beg:end]
+
+            lensing.files.scat_write_ascii(sample=self['sample'],
+                                           data=sdata,
+                                           src_split=i)
+
+    def _extract(self, data):
+        """
+        pull out the columns we want
+        """
+        if self['sigmacrit_style']==2:
+            names += ['scinv']
+        pass
+
+    def get_zsvals(self):
+        import columns
+        dir=os.path.expanduser('~/photoz/weighting/dr8/pofz-12.cols/')
+        cols=columns.Columns(dir)
+
+        zbins=cols['zbins'][:]
+
+        zs = (zbins['zmax']+zbins['zmin'])/2
+        return zs
+
+    def add_scinv(self, show=False):
+        import fitsio
+        import zphot
+        from . import sigmacrit
+        import biggles
+
+        zsvals = self.get_zsvals()
+        cosmo=self['cosmo']
+        scalc = sigmacrit.ScinvCalculator(self['zlmin'],
+                                          self['zlmax'],
+                                          self['nzl'], 
+                                          zsvals[0],
+                                          zsvals[-1],
+                                          H0=cosmo['H0'],
+                                          omega_m=cosmo['omega_m'])
+
+        n_zlens=scalc.nzl
+        
+        data = self.read_original()
+        dt=data.dtype.descr
+        new_dtype=[]
+        for d in dt:
+            if d[0] != 'pofz':
+                new_dtype.append(d)
+
+        new_dtype += [('scinv','f8',n_zlens)]
+
+        out = numpy.zeros(data.size, dtype=new_dtype)
+        eu.numpy_util.ahelp(out)
+
+        print("copying common fields")
+        eu.numpy_util.copy_fields(data, out)
+
+
+        print('adding scinv to each')
+        for i in xrange(data.size):
+            if ((i+1) % 1000) == 0:
+                print("%s/%s  %.1f%%" % (i+1,data.size,float(i+1)/data.size*100.))
+
+            out['scinv'][i,:] = scalc.calc_mean_scinv(zsvals, data['pofz'][i])
+
+            if show:
+                biggles.plot(scalc.zlvals, out['scinv'][i], type='solid')
+                key=raw_input('hit a key (q to quit): ')
+                if key=='q':
+                    return
+
+        h=copy.deepcopy(cosmo)
+        h['zlvals'] = list(scalc.zlvals)
+
+        outf=self.original_file(with_scinv=True)
+        print("writing scinv file:",outf)
+
+        fitsio.write(outf, out, header=h, clobber=True)
+
+
 class DESMockCatalog(dict):
     """
     This is just for reading the original catalog
