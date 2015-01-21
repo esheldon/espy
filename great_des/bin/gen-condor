@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 """
-    %prog [options] run
-
 Geneate the condor files
 """
 from __future__ import print_function
@@ -11,11 +9,13 @@ from sys import stderr
 import great_des
 from great_des import files
 
-from optparse import OptionParser
-parser = OptionParser(__doc__)
+from argparse import ArgumentParser
+parser = ArgumentParser(__doc__)
 
-parser.add_option('--missing',action='store_true',
-                  help="only write jobs for missing files")
+parser.add_argument('run',help="great des run identifier")
+parser.add_argument('--gvals',help="g values to process, csv")
+parser.add_argument('--missing',action='store_true',
+                    help="only write jobs for missing files")
 
 
 _master_template="""#!/bin/bash
@@ -138,7 +138,7 @@ class CondorMaker(object):
         
         os.system('chmod 755 %s' % self.master_file)
 
-    def make_condor(self):
+    def make_condor(self, gvals=None):
 
         conf=self.conf
         gdrun=conf['gdrun']
@@ -152,8 +152,16 @@ class CondorMaker(object):
         start_new_file=True
         fobj=None
 
-        for gnum in xrange(ng):
+        if gvals is None:
+            gvals = list(range(ng))
+
+        ngvals_use=len(gvals)
+        print("processing gvals:",gvals)
+
+        for ignum,gnum in enumerate(gvals):
+            print("    gnum: %d  %d/%d" % (gnum,ignum+1,ngvals_use))
             for fnum in xrange(nf):
+                print("        fnum: %d/%d" % (fnum+1,nf))
 
                 #print("gnum:",gnum,"fnum:",fnum)
                 low,high = files.get_chunk_ranges(gdrun=gdrun,
@@ -222,14 +230,14 @@ class CondorMaker(object):
                 os.makedirs(dir)
 
 def main():
-    options, args = parser.parse_args(sys.argv[1:])
-    if len(args) < 1:
-        parser.print_help()
-        sys.exit(45)
+    args = parser.parse_args()
 
-    run=args[0]
-    cm = CondorMaker(run, missing=options.missing)
-    cm.make_condor()
+    gvals=args.gvals
+    if gvals is not None:
+        gvals=[int(g) for g in gvals.split(',')]
+
+    cm = CondorMaker(args.run, missing=args.missing)
+    cm.make_condor(gvals=gvals)
     cm.make_master()
 
 main()
