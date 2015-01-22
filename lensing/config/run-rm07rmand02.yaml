@@ -1,0 +1,17 @@
+run:           "rm07rmand02"
+lens_sample:   "rm07"
+src_sample:    "rmand02"
+
+# for healpix
+nside:         64
+
+comment: | 
+
+    lenses:
+
+        Red mapper
+        sample: "rm07"
+        catalog: "redmapper-dr8-5.10-lgt05"
+
+    sources:
+        rachels shapes and scrit(zl) from my p(z)

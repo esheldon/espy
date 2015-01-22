@@ -533,8 +533,9 @@ class DR8RMandCatalog(GenericSrcCatalog):
 
         data = self.read_original(with_scinv=True, for_output=True)
 
-        print("changing sign of e1")
-        data['e1'] *= -1
+        print("multiplying by 0.5 and changing sign of e1")
+        data['e1'] *= -0.5
+        data['e2'] *=  0.5
 
         ntot = data.size
         nper = ntot/nsplit

@@ -8,6 +8,7 @@ pzrun:              "11"
 zlmin:              0.02
 zlmax:              0.41
 dzl:                0.015
+nzl:                27
 
 scinv_sample: "02"
 
