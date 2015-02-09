@@ -119,7 +119,7 @@ def plot_results(trials, **keys):
     biggles.configure( 'default', 'fontsize_min', fontsize_min)
     weights=keys.get('weights',None)
 
-    binfac=keys.get('binfac',0.2)
+    nbin=keys.get('nbin',35)
     names=keys.get('names',None)
     show=keys.get('show',True)
     ptypes=keys.get('ptypes',['linear']*npars)
@@ -146,15 +146,14 @@ def plot_results(trials, **keys):
 
         if ptypes[i] == 'linear':
             vals=trials[:,i]
-            bsize = binfac*errs[i]
             xlabel=name
         else:
             vals=numpy.log10(trials[:,i])
-            bsize=0.2*vals.std()
+            #bsize=0.2*vals.std()
             xlabel=r'$log_{10}(%s)$' % name
-
         hdict = esutil.stat.histogram(vals,
-                                      binsize=bsize, 
+                                      #binsize=bsize, 
+                                      nbin=nbin,
                                       weights=weights,
                                       more=True)
         if weights is not None:
@@ -165,7 +164,7 @@ def plot_results(trials, **keys):
             hist=hdict['hist']
             hplot = biggles.Histogram(hdict['hist'], 
                                       x0=hdict['low'][0], 
-                                      binsize=bsize)
+                                      binsize=hdict['binsize'])
         plti=biggles.FramedPlot()
 
         plti.xlabel=xlabel
