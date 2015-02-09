@@ -94,3 +94,32 @@ def test_compare():
 
     gm.compare1d(data, 0.05)
 
+def test_truncated():
+    """
+    this demonstrates that it doesn't work
+    """
+    import ngmix
+    import biggles
+
+    nsamp=1000000
+    ptrunc=ngmix.priors.TruncatedSimpleGauss2D(0.0, 0.98, 0.4, 0.4, 1.0)
+
+    g1,g2 = ptrunc.sample(nsamp)
+
+    g=numpy.vstack( (g1,g2) ).T
+
+    gmm=mixture.GMM(n_components=1, covariance_type='full')
+
+    gmm.fit(g)
+
+    gs=gmm.sample(nsamp)
+
+    hc=biggles.make_histc(g[:,1], nbin=100, min=0.0, max=1.0, label='data', color='blue')
+    hcs=biggles.make_histc(gs[:,1], nbin=100, min=0.0, max=1.0, label='fit',color='red')
+
+    key=biggles.PlotKey(0.1,0.9,[hc,hcs], halign='left')
+
+    plt=biggles.FramedPlot(xlabel='g2')
+    plt.add( hc, hcs, key )
+
+    plt.show()
