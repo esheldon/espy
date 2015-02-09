@@ -1,5 +1,23 @@
+from __future__ import print_function, division
 import numpy
 import scipy.optimize
+
+def histogauss(data, guess=None, **keys):
+    fitter=GaussFitter(data, **keys)
+
+    if guess is None:
+        mn=data.mean()
+        sig=data.std()
+        A=float(data.size)
+        guess=[mn, sig, A]
+
+        print("generated guess:",guess)
+
+    fitter.dofit(guess)
+
+    plt=fitter.make_plot(**keys)
+
+    return plt
 
 class GaussFitter(object):
     """
@@ -24,11 +42,12 @@ class GaussFitter(object):
     def dofit(self, guess):
         """
         Run the lm fitter
+
+        guess is [mean, sigma, amp]
         """
 
         self._make_hist()
 
-        print 'running leastsq'
         res=scipy.optimize.leastsq(self._errfunc,
                                    guess,
                                    full_output=1)
@@ -91,7 +110,7 @@ class GaussFitter(object):
         import esutil as eu
 
         if not hasattr(self, 'x'):
-            print 'histogramming'
+            print('histogramming')
             self.conf['more']=True
             h=eu.stat.histogram(self.data, **self.conf)
 
@@ -101,7 +120,7 @@ class GaussFitter(object):
             if self.use_error:
                 self.yerr=numpy.sqrt(h['hist'])
 
-    def make_plot(self, show=False):
+    def make_plot(self, **keys):
         """
         compare fit to data
         """
@@ -109,7 +128,7 @@ class GaussFitter(object):
 
         model=self.eval_pars(self.pars)
 
-        plt=biggles.FramedPlot()
+        plt=biggles.FramedPlot(**keys)
 
         x0=self.x[0]
         binsize=self.x[1]-self.x[0]
@@ -129,7 +148,7 @@ class GaussFitter(object):
         key=biggles.PlotKey(0.1, 0.9, [h, fh], halign='left')
         plt.add(key)
 
-        mnstr='mn: %g +/- %g' % (self.pars[0],self.perr[0])
+        mnstr=r'$\mu: %g +/- %g$' % (self.pars[0],self.perr[0])
         sigstr=r'$\sigma: %g +/- %g$' % (self.pars[1],self.perr[1])
         ampstr='amp: %g +/- %g' % (self.pars[2],self.perr[2])
 
@@ -139,6 +158,7 @@ class GaussFitter(object):
 
         plt.add(mnlab, siglab, amplab)
 
+        show=keys.get('show',True)
         if show:
             plt.show()
 
@@ -235,8 +255,8 @@ def test_line(show=False):
     y += yerr*numpy.random.randn(len(x))
 
     lf = LineFitter(x, y, yerr=yerr)
-    print 'guess:',lf.guess
-    print lf
+    print('guess:',lf.guess)
+    print(lf)
 
     if show:
         import biggles
