@@ -3,7 +3,7 @@ import os
 from sys import stderr,stdout
 import time
 import numpy
-from numpy import array, sqrt, zeros
+from numpy import array, sqrt, zeros, log, exp
 
 import ngmix
 from ngmix.fitting import print_pars
@@ -323,22 +323,25 @@ class MedsFit(dict):
         from ngmix.fitting import MCMCSimple
 
         # note flat on g!
-        prior=self['prior_gflat']
+        prior=self['search_prior']
 
-        guess=guesser(n=self['nwalkers'])
+        epars=self['emcee_pars']
+
+        guess=guesser(n=epars['nwalkers'])
 
         fitter=MCMCSimple(obs,
                           model,
                           prior=prior,
-                          nwalkers=self['nwalkers'],
-                          mca_a=self['mca_a'])
+                          use_logpars=self['use_logpars'],
+                          nwalkers=epars['nwalkers'],
+                          mca_a=epars['a'])
 
-        pos=fitter.run_mcmc(guess,self['burnin'])
-        pos=fitter.run_mcmc(pos,self['nstep'])
+        pos=fitter.run_mcmc(guess,epars['burnin'])
+        pos=fitter.run_mcmc(pos,epars['nstep'],thin=epars['thin'])
 
         g_prior = self['prior'].g_prior
-        log_trials = fitter.get_trials()
-        weights = g_prior.get_prob_array2d(log_trials[:,2], log_trials[:,3])
+        trials = fitter.get_trials()
+        weights = g_prior.get_prob_array2d(trials[:,2], trials[:,3])
 
         fitter.calc_result(weights=weights)
 
@@ -381,24 +384,51 @@ class MedsFit(dict):
 
 
     def _fit_simple_max(self, obs, model, guesser):
-        from ngmix.fitting import MaxSimple        
+        from ngmix.fitting import MaxSimple
 
-        nm_pars=self['nm_pars']
+        max_pars=self['max_pars']
+        if max_pars['method']=='lm':
+            return self._fit_simple_lm(obs, model, guesser)
 
-        prior=self['prior_gflat']
+        prior=self['search_prior']
         fitter=MaxSimple(obs,
                          model,
                          prior=prior,
-                         method='Nelder-Mead',
-                         **nm_pars)
+                         use_logpars=self['use_logpars'],
+                         **max_pars)
 
-        for i in xrange(nm_pars['ntry']):
+        for i in xrange(max_pars['ntry']):
             guess=guesser(prior=prior)
+            print_pars(guess,front='    guess: ')
+
+            fitter.run_max(guess, **max_pars)
+            res=fitter.get_result()
+            if res['flags']==0:
+                break
+        return fitter
+
+    def _fit_simple_lm(self, obs, model, guesser):
+        from ngmix.fitting import LMSimple
+
+        max_pars=self['max_pars']
+
+        prior=self['search_prior']
+        fitter=LMSimple(obs,
+                        model,
+                        prior=prior,
+                        use_logpars=self['use_logpars'],
+                        lm_pars=max_pars['lm_pars'])
+
+        for i in xrange(max_pars['ntry']):
+            guess=guesser(prior=prior)
+            print_pars(guess,front='    guess: ')
+
             fitter.run_max(guess)
             res=fitter.get_result()
             if res['flags']==0:
                 break
         return fitter
+
 
     def _get_guesser_from_psf(self):
         """
@@ -420,7 +450,12 @@ class MedsFit(dict):
         # arbitrary
         T = 2*(0.9/2.35)**2
 
-        guesser=FromPSFGuesser(T, psf_flux)
+        if self['use_logpars']:
+            scaling='log'
+        else:
+            scaling='linear'
+
+        guesser=FromPSFGuesser(T, psf_flux, scaling=scaling)
         return guesser
 
 
@@ -498,8 +533,6 @@ class MedsFit(dict):
         ntry,maxiter,tol = self._get_em_pars()
         for i in xrange(ntry):
             guess = self._get_em_guess(sigma_guess, ngauss)
-            #print("em guess:")
-            #print(guess)
             try:
                 fitter=self._do_fit_em_with_full_guess(new_obs,
                                                        sky,
@@ -729,6 +762,7 @@ class MedsFit(dict):
         """
         self._compare_gal(fitter)
         self._make_trials_plot(fitter)
+        self._plot_autocorr(fitter)
 
     def _compare_gal(self, fitter):
         """
@@ -737,6 +771,7 @@ class MedsFit(dict):
         import images
 
         model=self['fit_model']
+        title = '%d %s' % (self.mindex, model)
 
         gmix = fitter.get_gmix()
 
@@ -755,6 +790,7 @@ class MedsFit(dict):
                                   label1='galaxy',
                                   label2=model,
                                   show=False)
+        plt.title=title
         pname='gal-resid-%06d-%s.png' % (self.mindex,model)
 
         resid_std = (image-model_image).std()
@@ -769,32 +805,74 @@ class MedsFit(dict):
         """
 
         model=self['fit_model']
-        width,height=800,800
 
+        title = '%d %s' % (self.mindex, model)
+
+        width,height=800,800
         weights=self.weights
-        pdict=fitter.make_plots(title=model, weights=weights)
+        pdict=fitter.make_plots(title=title, weights=weights, do_triangle=True)
+        pdict['trials'].title=title
 
         if 'wtrials' in pdict:
             wtrials_pname='wtrials-%06d-%s.png' % (self.mindex,model)
             print("          ",wtrials_pname)
+
+            pdict['wtrials'].title=title
             pdict['wtrials'].write_img(width,height,wtrials_pname)
 
         trials_pname='trials-%06d-%s.png' % (self.mindex,model)
         print("          ",trials_pname)
         pdict['trials'].write_img(width,height,trials_pname)
 
+        if 'triangle' in pdict:
+            pname='triangle-%06d-%s.png' % (self.mindex,model)
+            print("          ",pname)
+            pdict['triangle'].savefig(pname)
+
+
+
+    def _plot_autocorr(self, fitter):
+        """
+        Plot the trials
+        """
+
+        model=self['fit_model']
+
+        trials=fitter.get_trials()
+
+        plot_arr = plot_autocorr(trials)
+        plot_arr.title = '%d %s' % (self.mindex, model)
+
+        width,height=800,800
+
+        pname='autocorr-%06d-%s.png' % (self.mindex,model)
+
+        print("          ",pname)
+        plot_arr.write_img(width, height, pname)
+
+
+
     def _print_galaxy_res(self, fitter):
         res=fitter.get_result()
 
         print_pars(res['pars'], front="    pars: ")
+
+        mess=""
         if 'pars_err' in res:
             print_pars(res['pars_err'], front="    err:  ")
             if 'arate' in res:
-                print('            arate:',res['arate'],"s/n:",res['s2n_w'])
+                mess="            s/n: %.1f  arate: %.2f  tau: %.1f"
+                tup = (res['s2n_w'],res['arate'],res['tau'])
+                mess=mess % tup
+                print("            s/n: %.1f  arate: %.2f  tau: %.1f" % tup)
             elif 's2n_w' in res:
-                print("            s/n:",res['s2n_w'])
+                mess="            s/n: %.1f" % res['s2n_w']
+                if 'nfev' in res:
+                    mess="%s nfev: %d" % (mess,res['nfev'])
+
+                print(mess)
         else:
-            print("    NO ERRORS PRESENT")
+            print("    NO COV PRESENT")
 
 
     def _copy_to_output(self):
@@ -841,19 +919,19 @@ class MedsFit(dict):
         pars=res['pars']
         pars_cov=res['pars_cov']
 
-        pars_max=res_max['pars']
-
         T=pars[4]
         T_err=sqrt(pars_cov[4, 4])
 
         flux=pars[5]
         flux_err=sqrt(pars_cov[5, 5])
 
-        data['fit_flags'] = res['flags']
         data['pars'][dindex,:] = pars
         data['pars_cov'][dindex,:,:] = pars_cov
 
-        data['pars_max'][dindex,:] = pars_max
+        data['max_flags'][dindex] = res_max['flags']
+        data['pars_max'][dindex,:] = res_max['pars']
+        if 'pars_cov' in res_max:
+            data['pars_max_cov'][dindex,:,:] = res_max['pars_cov']
 
         data['flux'][dindex] = flux
         data['flux_err'][dindex] = flux_err
@@ -872,6 +950,7 @@ class MedsFit(dict):
 
         if self['fitter']=='mcmc':
             data['arate'][dindex] = res['arate']
+            data['tau'][dindex] = res['tau']
 
         for sn in _stat_names:
             if sn in res:
@@ -1036,10 +1115,12 @@ class MedsFit(dict):
             ('nimage_use','i4'),
             ('time','f8'),
 
-            ('fit_flags','i4'),
-            ('pars_max','f8',np),
             ('pars','f8',np),
             ('pars_cov','f8',(np,np)),
+
+            ('max_flags','i4'),
+            ('pars_max','f8',np),
+            ('pars_max_cov','f8',(np,np)),
 
             ('flux','f8'),
             ('flux_err','f8'),
@@ -1055,7 +1136,7 @@ class MedsFit(dict):
            ]
 
         if self['fitter'] == 'mcmc':
-            dt += [('arate','f8')]
+            dt += [('arate','f8'),('tau','f8')]
 
         if self['do_shear']:
             dt += [('P', 'f8'),
@@ -1074,10 +1155,11 @@ class MedsFit(dict):
         #data['em_gauss_flux_err'] = PDEFVAL
         #data['em_gauss_cen'] = DEFVAL
 
-        data['fit_flags'] = NO_ATTEMPT
 
         data['pars'] = DEFVAL
         data['pars_cov'] = PDEFVAL
+        data['pars_max'] = DEFVAL
+        data['pars_max_cov'] = PDEFVAL
         data['flux'] = DEFVAL
         data['flux_err'] = PDEFVAL
         data['T'] = DEFVAL
@@ -1108,8 +1190,8 @@ class MedsFitMax(MedsFit):
         model=self['fit_model']
 
         ps2n=self.res['psf_flux_s2n']
-        if ps2n < self['min_gauss_s2n']:
-            print("    gauss s/n too low:",ps2n)
+        if ps2n < self['min_s2n']:
+            print("    psf s/n too low:",ps2n)
             self.res['flags'] |= S2N_TOO_LOW
             return
 
@@ -1229,5 +1311,31 @@ def get_shape_guess(g1, g2, n, width=0.01):
         guess[i,1] = shape_new.g2
 
     return guess
+
+def plot_autocorr(trials, window=100, show=False, **kw):
+    import biggles
+    import emcee
+
+    arr=biggles.FramedArray(trials.shape[1], 1)
+    arr.uniform_limits=True
+
+    func=emcee.autocorr.function(trials)
+    tau2 = emcee.autocorr.integrated_time(trials, window=window)
+
+    xvals=numpy.arange(func.shape[0])
+    zc=biggles.Curve( [0,func.shape[0]-1],[0,0] )
+
+    for i in xrange(trials.shape[1]):
+        pts=biggles.Curve(xvals,func[:,i],color='blue')
+        
+        lab=biggles.PlotLabel(0.9,0.9,
+                              r'$%s tau\times 2: %s$' % (i,tau2[i]),
+                              halign='right')
+        arr[i,0].add(pts,zc,lab)
+
+    if show:
+        arr.show(**kw)
+
+    return arr
 
 
