@@ -1,4 +1,3 @@
-# running max like only
 run: "nfit-06"
 fitter: "mcmc"
 
