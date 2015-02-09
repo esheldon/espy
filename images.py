@@ -150,7 +150,7 @@ def make_combined_mosaic(imlist):
     return imtot
 
 
-def view_mosaic(imlist, combine=False, **keys):
+def view_mosaic(imlist, titles=None, combine=False, **keys):
     import biggles
 
     if combine:
@@ -170,7 +170,12 @@ def view_mosaic(imlist, combine=False, **keys):
         row=i/ncol
         col=i % ncol
 
-        implt=view(im, **tkeys)
+        if titles is not None:
+            title=titles[i]
+        else:
+            title=None
+
+        implt=view(im, title=title, **tkeys)
         tab[row,col] = implt
 
     show=keys.get('show',True)
