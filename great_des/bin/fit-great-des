@@ -205,6 +205,9 @@ def get_g_prior(conf):
         g_prior=ngmix.priors.make_gprior_cosmos_sersic(type='erf')
     elif g_prior_type=='zdiskerf':
         g_prior=ngmix.priors.ZDisk2DErf()
+    elif g_prior_type=='ba':
+        sigma=conf["g_prior_sigma"]
+        g_prior=ngmix.priors.GPriorBA(sigma)
     else:
         raise ValueError("implement gprior '%s'")
 
@@ -299,10 +302,15 @@ def run_fitter(files, conf, checkpoint_data=None):
                            T_prior,
                            counts_prior)
 
-    prior_gflat = PriorSimpleSep(cen_prior,
-                                 g_prior_flat,
-                                 T_prior,
-                                 counts_prior)
+    if conf['g_prior_during']:
+        g_search_prior = g_prior
+    else:
+        g_search_prior = g_prior_flat
+
+    search_prior = PriorSimpleSep(cen_prior,
+                                  g_search_prior,
+                                  T_prior,
+                                  counts_prior)
 
 
 
@@ -319,7 +327,7 @@ def run_fitter(files, conf, checkpoint_data=None):
                 files['psf'],
                 checkpoint_data=checkpoint_data,
                 prior=prior,
-                prior_gflat=prior_gflat,
+                search_prior=search_prior,
                 **conf)
 
     gm.do_fits()
@@ -327,7 +335,30 @@ def run_fitter(files, conf, checkpoint_data=None):
 
     return data
 
-def setup_work_files(options, meds_file, psf_file):
+def setup_work_files(options, meds_file):
+    """
+    Set up local, possibly sub-range meds files
+    """
+
+    meds_file_full=meds_file
+    extracted=None
+    rng=get_range( options.obj_range )
+    rng_send=None
+
+    if rng is not None:
+        if options.work_dir is not None:
+            # note variable extracted is cleaned up when MedsExtractors get
+            # garbage collected
+            extracted=get_sub(meds_file, rng, options.work_dir)
+            meds_file_full=meds_file
+            meds_file= extracted.sub_file
+            rng_send=None
+        else:
+            rng_send=rng
+
+    return rng_send, meds_file, meds_file_full, extracted
+
+def setup_work_files_old(options, meds_file, psf_file):
     """
     Set up local, possibly sub-range meds files
     """
@@ -355,7 +386,7 @@ def setup_work_files(options, meds_file, psf_file):
         tmp_psf=None
     return rng_send, meds_file, meds_file_full, extracted, tmp_psf
 
- 
+
 def write_data(data, out_file):
     """
     write the actual data.  clobber existing
@@ -392,14 +423,16 @@ def go(files, options):
 
     pprint.pprint(conf)
 
-    rng_send,meds_file,meds_file_full,extracted,tmp_psf=\
-                        setup_work_files(options,files['meds'],files['psf'])
+    #rng_send,meds_file,meds_file_full,extracted,tmp_psf=\
+    #                    setup_work_files(options,files['meds'],files['psf'])
+    rng_send,meds_file,meds_file_full,extracted=\
+                        setup_work_files(options,files['meds'])
 
     files['meds'] = meds_file
     files['meds_full'] = meds_file_full
-    files['tmp_psf'] = tmp_psf
-    if tmp_psf is not None:
-        files['psf'] = tmp_psf.local_file
+    #files['tmp_psf'] = tmp_psf
+    #if tmp_psf is not None:
+    #    files['psf'] = tmp_psf.local_file
 
     # if work_dir is sent, we do range by extracting it, see above, so
     # rng_send would be None
