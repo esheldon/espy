@@ -391,6 +391,7 @@ class MedsFit(dict):
             return self._fit_simple_lm(obs, model, guesser)
 
         prior=self['search_prior']
+        print("search prior:",prior)
         fitter=MaxSimple(obs,
                          model,
                          prior=prior,
@@ -857,14 +858,18 @@ class MedsFit(dict):
 
         print_pars(res['pars'], front="    pars: ")
 
-        mess=""
         if 'pars_err' in res:
             print_pars(res['pars_err'], front="    err:  ")
             if 'arate' in res:
                 mess="            s/n: %.1f  arate: %.2f  tau: %.1f"
                 tup = (res['s2n_w'],res['arate'],res['tau'])
                 mess=mess % tup
-                print("            s/n: %.1f  arate: %.2f  tau: %.1f" % tup)
+                print(mess)
+            elif 'efficiency' in res:
+                mess="            s/n: %.1f  neff: %.1f  efficiency: %.2f"
+                tup = (res['s2n_w'],res['neff'],res['efficiency'])
+                mess=mess % tup
+                print(mess)
             elif 's2n_w' in res:
                 mess="            s/n: %.1f" % res['s2n_w']
                 if 'nfev' in res:
@@ -951,15 +956,21 @@ class MedsFit(dict):
         if self['fitter']=='mcmc':
             data['arate'][dindex] = res['arate']
             data['tau'][dindex] = res['tau']
+        elif self['fitter']=='isample':
+            data['nsample'][dindex] = res['nsample']
+            data['efficiency'][dindex] = res['efficiency']
+            data['neff'][dindex] = res['neff']
+            #data['niter'][dindex] = res['niter']
 
         for sn in _stat_names:
             if sn in res:
                 data[sn][dindex] = res[sn]
 
-        if self['do_shear']:
+        if 'P' in res:
             data['P'][dindex] = res['P']
             data['Q'][dindex,:] = res['Q']
             data['R'][dindex,:,:] = res['R']
+        if 'g_sens' in res:
             data['g_sens'][dindex,:] = res['g_sens']
 
     def _load_meds(self):
@@ -1136,7 +1147,9 @@ class MedsFit(dict):
            ]
 
         if self['fitter'] == 'mcmc':
-            dt += [('arate','f8'),('tau','f8')]
+            dt += [('arate','f4'),('tau','f4')]
+        elif self['fitter']=='isample':
+            dt += [('nsample','i4'),('efficiency','f4'),('neff','f4')]#,('niter','i2')]
 
         if self['do_shear']:
             dt += [('P', 'f8'),
@@ -1176,6 +1189,10 @@ class MedsFit(dict):
             data['R'] = DEFVAL
             data['g_sens'] = DEFVAL
 
+        if self['fitter']=='isample':
+            data['nsample']    = DEFVAL
+            data['efficiency'] = DEFVAL
+            data['neff']       = DEFVAL
      
         self.data=data
 
@@ -1210,6 +1227,169 @@ class MedsFitMax(MedsFit):
         res['flags'] = res['galaxy_res']['flags']
 
         self._print_galaxy_res(max_fitter)
+
+
+class MedsFitISample(MedsFit):
+    def _fit_galaxy_model(self, obs):
+        """
+        Run through and fit all the models
+        """
+        import gmix_meds.nfit
+        
+        assert self['g_prior_during']==True,"g prior must be during"
+
+        ipars=self['isample_pars']
+
+        res=self.res
+        model=self['fit_model']
+
+        ps2n=self.res['psf_flux_s2n']
+        if ps2n < self['min_s2n']:
+            print("    psf s/n too low:",ps2n)
+            self.res['flags'] |= S2N_TOO_LOW
+            return
+
+        print('    fitting',model,'using maxlike')
+        max_guesser=self._get_guesser_from_psf()
+        max_fitter=self._fit_simple_max(obs,model,max_guesser) 
+        max_res=max_fitter.get_result()
+
+        res['max_fitter'] = max_fitter
+        res['max_res'] = max_res
+
+        if max_res['flags'] != 0:
+            sampler=None
+        else:            
+            self._try_replace_cov(max_fitter)
+            self._print_galaxy_res(max_fitter)
+
+            use_fitter = max_fitter
+            niter=len(ipars['nsample'])
+            for i,nsample in enumerate(ipars['nsample']):
+                sampler=self._make_sampler(use_fitter)
+                sampler.make_samples(nsample)
+
+                sampler.set_iweights(max_fitter.calc_lnprob)
+                sampler.calc_result()
+
+                tres=sampler.get_result()
+
+                print("    neff iter %d: %.2f" % (i,tres['neff']))
+                use_fitter = sampler
+                '''
+                if tres['neff'] >= ipars['neff_min']:
+                    break 
+                
+                if i < ipars['niter']-1:
+                    print("        low neff",tres['neff'])
+                    use_fitter = sampler
+                '''
+
+        self._add_shear_info(sampler)
+
+        res['galaxy_fitter'] = sampler
+        res['galaxy_res'] = sampler.get_result()
+        res['flags'] = res['galaxy_res']['flags']
+
+        self._print_galaxy_res(sampler)
+
+        if self['make_plots']:
+            self._do_gal_plots(res['galaxy_fitter'])
+
+
+    def _add_shear_info(self, sampler):
+        """
+        lensfit and pqr
+
+        call calc_result *before* calling this method
+        """
+
+        maxres = self.res['max_res']
+
+        # this is the full prior
+        prior=self['search_prior']
+        g_prior=prior.g_prior
+
+        iweights = sampler.get_iweights()
+        samples = sampler.get_samples()
+        g_vals=samples[:,2:2+2]
+
+        remove_prior=True
+
+        res=sampler.get_result()
+
+        # keep for later if we want to make plots
+        self.weights=iweights
+
+        # we are going to mutate the result dict owned by the sampler
+        res['s2n_w'] = maxres['s2n_w']
+
+        ls=ngmix.lensfit.LensfitSensitivity(g_vals,
+                                            g_prior,
+                                            weights=iweights,
+                                            remove_prior=remove_prior)
+        g_sens = ls.get_g_sens()
+        g_mean = ls.get_g_mean()
+
+        res['g_sens'] = g_sens
+        res['nuse'] = ls.get_nuse()
+
+        # not able to use extra weights yet
+        '''
+        pqrobj=ngmix.pqr.PQR(g, g_prior,
+                             shear_expand=self.shear_expand,
+                             remove_prior=remove_prior)
+
+
+        P,Q,R = pqrobj.get_pqr()
+        res['P']=P
+        res['Q']=Q
+        res['R']=R
+        '''
+
+    def _make_sampler(self, fitter):
+        from ngmix.fitting import GCovSampler, GCovSamplerT
+        from numpy.linalg import LinAlgError
+
+        ipars=self['isample_pars']
+
+        res=fitter.get_result()
+        icov = res['pars_cov']*ipars['ifactor']**2
+
+        try:
+            if ipars['sampler']=='T':
+                sampler=GCovSamplerT(res['pars'],
+                                     icov,
+                                     ipars['df'],
+                                     min_err=ipars['min_err'],
+                                     max_err=ipars['max_err'])
+            else:
+                sampler=GCovSampler(res['pars'],
+                                    icov,
+                                    min_err=ipars['min_err'],
+                                    max_err=ipars['max_err'])
+        except LinAlgError:
+            raise TryAgainError("bad cov")
+
+        return sampler
+
+
+    def _try_replace_cov(self, fitter):
+        """
+        the lm cov sucks, try to replace it
+        """
+
+        # reference to res
+        res=fitter.get_result()
+
+        print("        replacing cov")
+        max_pars=self['max_pars']
+        fitter.calc_cov(max_pars['cov_h'], max_pars['cov_m'])
+
+        if res['flags'] != 0:
+            print("        replacement failed")
+            res['flags']=0
+
 
 _em2_fguess=array([0.5793612389470884,1.621860687127999])
 _em2_pguess=array([0.596510042804182,0.4034898268889178])
