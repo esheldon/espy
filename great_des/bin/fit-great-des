@@ -158,7 +158,10 @@ def get_T_prior_ngmix(conf):
     if T_prior_type is None:
         return None
 
-    if T_prior_type == 'flat':
+    if T_prior_type=='Normal':
+        pars=conf['T_prior_pars']
+        T_prior=ngmix.priors.Normal(pars[0], pars[1])
+    elif T_prior_type == 'flat':
         pars=conf['T_prior_pars']
         T_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
 
@@ -180,7 +183,11 @@ def get_counts_prior_ngmix(conf):
     if counts_prior_type is None:
         return None
 
-    if counts_prior_type == 'flat':
+    if counts_prior_type == 'TruncatedNormal':
+        pars=conf['counts_prior_pars']
+        counts_prior=ngmix.priors.TruncatedGaussian(*pars)
+
+    elif counts_prior_type == 'flat':
         pars=conf['counts_prior_pars']
         counts_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
 
@@ -318,6 +325,8 @@ def run_fitter(files, conf, checkpoint_data=None):
         fitclass=great_des.nfit.MedsFit
     elif conf['fitter']=='max':
         fitclass=great_des.nfit.MedsFitMax
+    elif conf['fitter']=='isample':
+        fitclass=great_des.nfit.MedsFitISample
     else:
         raise ValueError("bad fitter: '%s'" % conf['fitter'])
 
