@@ -45,10 +45,6 @@ isample_pars:
     min_err: [1.0e-4,1.0e-4,1.0e-3,1.0e-3,1.0e-4,1.0e-4]
     max_err: [1.0,1.0,1.0,1.0,1.0,1.0]
 
-    # number of tries for max fitter
-    max_fitter: "lm"
-    max_tries: 4
-
 # lm with my covariance
 max_pars:
     method: 'lm'
@@ -67,7 +63,6 @@ use_cen_prior: True
 # pixel scale is 0.27''
 cen_width: 0.07
 
-# from fitting to all cosmos galaxies in galsim data
 g_prior_type: "ba"
 g_prior_sigma: 0.3
 g_prior_during: True

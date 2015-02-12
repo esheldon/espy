@@ -38,6 +38,8 @@ PSF_TOL=1.0e-5
 EM_MAX_TRY=3
 EM_MAX_ITER=100
 
+ISAMP_BAD_COV=2**7
+
 _CHECKPOINTS_DEFAULT_MINUTES=[10,30,60,90]
 
 class MedsFit(dict):
@@ -957,7 +959,6 @@ class MedsFit(dict):
             data['arate'][dindex] = res['arate']
             data['tau'][dindex] = res['tau']
         elif self['fitter']=='isample':
-            data['nsample'][dindex] = res['nsample']
             data['efficiency'][dindex] = res['efficiency']
             data['neff'][dindex] = res['neff']
             #data['niter'][dindex] = res['niter']
@@ -1149,7 +1150,7 @@ class MedsFit(dict):
         if self['fitter'] == 'mcmc':
             dt += [('arate','f4'),('tau','f4')]
         elif self['fitter']=='isample':
-            dt += [('nsample','i4'),('efficiency','f4'),('neff','f4')]#,('niter','i2')]
+            dt += [('efficiency','f4'),('neff','f4')]#,('niter','i2')]
 
         if self['do_shear']:
             dt += [('P', 'f8'),
@@ -1190,7 +1191,6 @@ class MedsFit(dict):
             data['g_sens'] = DEFVAL
 
         if self['fitter']=='isample':
-            data['nsample']    = DEFVAL
             data['efficiency'] = DEFVAL
             data['neff']       = DEFVAL
      
@@ -1267,6 +1267,9 @@ class MedsFitISample(MedsFit):
             niter=len(ipars['nsample'])
             for i,nsample in enumerate(ipars['nsample']):
                 sampler=self._make_sampler(use_fitter)
+                if sampler is None:
+                    break
+
                 sampler.make_samples(nsample)
 
                 sampler.set_iweights(max_fitter.calc_lnprob)
@@ -1274,24 +1277,21 @@ class MedsFitISample(MedsFit):
 
                 tres=sampler.get_result()
 
-                print("    neff iter %d: %.2f" % (i,tres['neff']))
+                print("    eff iter %d: %.2f" % (i,tres['efficiency']))
                 use_fitter = sampler
-                '''
-                if tres['neff'] >= ipars['neff_min']:
-                    break 
-                
-                if i < ipars['niter']-1:
-                    print("        low neff",tres['neff'])
-                    use_fitter = sampler
-                '''
 
-        self._add_shear_info(sampler)
+        if sampler is None:
+            gres={'flags':ISAMP_BAD_COV}
+            res['flags']=ISAMP_BAD_COV
+        else:
+            self._add_shear_info(sampler)
+            gres=sampler.get_result()
+            res['flags'] = gres['flags']
+            self._print_galaxy_res(sampler)
 
         res['galaxy_fitter'] = sampler
-        res['galaxy_res'] = sampler.get_result()
-        res['flags'] = res['galaxy_res']['flags']
+        res['galaxy_res'] = gres
 
-        self._print_galaxy_res(sampler)
 
         if self['make_plots']:
             self._do_gal_plots(res['galaxy_fitter'])
@@ -1369,7 +1369,8 @@ class MedsFitISample(MedsFit):
                                     min_err=ipars['min_err'],
                                     max_err=ipars['max_err'])
         except LinAlgError:
-            raise TryAgainError("bad cov")
+            print("        bad cov")
+            sampler=None
 
         return sampler
 

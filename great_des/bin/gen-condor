@@ -161,7 +161,8 @@ class CondorMaker(object):
         for ignum,gnum in enumerate(gvals):
             print("    gnum: %d  %d/%d" % (gnum,ignum+1,ngvals_use))
             for fnum in xrange(nf):
-                print("        fnum: %d/%d" % (fnum+1,nf))
+                if (fnum % 10) == 0:
+                    print("        fnum: %d/%d" % (fnum+1,nf))
 
                 #print("gnum:",gnum,"fnum:",fnum)
                 low,high = files.get_chunk_ranges(gdrun=gdrun,
