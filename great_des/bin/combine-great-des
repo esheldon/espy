@@ -21,8 +21,8 @@ def read_output(**conf):
     data0 = files.read_output(**conf)
 
     add_dt=[('shear_true','f8',2),
-            ('psf_e','f8',2),
-            ('fwhm','f4'),
+            ('psf_true_e','f8',2),
+            ('fwhm_true','f4'),
             ('id_shear','i8'),
             ('id_psf','i8')]
     if 'T' not in data0.dtype.names:
@@ -66,8 +66,6 @@ def main():
 
     conf['gnum'] = gnum
 
-    nper=conf['nper']
-
     d = files.get_collated_dir(**conf)
     if not os.path.exists(d):
         os.makedirs(d)
@@ -97,17 +95,22 @@ def main():
                 #data=eu.numpy_util.add_fields(data0, [('shear_true','f8',2)])
 
                 data=read_output(**conf)
-                data['shear_true'][:,0] = truth_data['g1_true'][low[i]:high[i]+1]
-                data['shear_true'][:,1] = truth_data['g2_true'][low[i]:high[i]+1]
-                data['psf_e'][:,0] = truth_data['psf_e1'][low[i]:high[i]+1]
-                data['psf_e'][:,1] = truth_data['psf_e2'][low[i]:high[i]+1]
-                data['fwhm'] = truth_data['fwhm'][low[i]:high[i]+1]
-                data['id_shear'] = truth_data['id_shear'][low[i]:high[i]+1]
-                data['id_psf'] = truth_data['id_psf'][low[i]:high[i]+1]
+                tbeg=low[i]
+                tend=high[i]+1
 
-                if data.size != nper:
+                assert(numpy.all(data['number'][:] == truth_data['id'][tbeg:tend])),"ids must match"
+                data['shear_true'][:,0] = truth_data['g1_true'][tbeg:tend]
+                data['shear_true'][:,1] = truth_data['g2_true'][tbeg:tend]
+                data['psf_true_e'][:,0] = truth_data['psf_e1'][tbeg:tend]
+                data['psf_true_e'][:,1] = truth_data['psf_e2'][tbeg:tend]
+                data['fwhm_true'] = truth_data['fwhm'][tbeg:tend]
+                data['id_shear'] = truth_data['id_shear'][tbeg:tend]
+                data['id_psf'] = truth_data['id_psf'][tbeg:tend]
+
+                nexpect=(high[i]-low[i])+1
+                if data.size != nexpect:
                     err="data size mismatch: expected %d got %d"
-                    raise IOError(err % (nper,data.size))
+                    raise IOError(err % (nexpect,data.size))
 
 
                 if first:
