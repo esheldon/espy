@@ -37,8 +37,8 @@ isample_pars:
     sampler: "T"
 
     # first iteration 500, next 2000
-    # 500 gives 20% slowdown, 1000 40%
-    # 500 gives efficiency 0.19 +/- 0.06, 1000 0.22 +/-  0.07
+    # 500 start gives 20% slowdown, 1000 40%
+    # 500 start gives final efficiency 0.19 +/- 0.06, 1000 0.22 +/-  0.07
     nsample: [500,2000]
     ifactor: 1.0
     df: 2.1
