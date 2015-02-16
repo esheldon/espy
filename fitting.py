@@ -50,6 +50,7 @@ class GaussFitter(object):
 
         res=scipy.optimize.leastsq(self._errfunc,
                                    guess,
+                                   maxfev=4000,
                                    full_output=1)
 
         self.pars, self.pcov0, self.infodict, self.errmsg, self.ier = res
