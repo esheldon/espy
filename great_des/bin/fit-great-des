@@ -34,6 +34,24 @@ parser.add_option("--profile", action='store_true',
                   help=("Profile the code using cProfile"))
 
 
+class TempFile(object):
+    def __init__(self, fname):
+        self.fname=fname
+
+    def cleanup(self):
+        if os.path.exists(self.fname):
+            print('removing temp file:',self.fname)
+            os.remove(self.fname)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.cleanup()
+    def __del__(self):
+        self.cleanup()
+
+
 class RemoteFile(object):
     def __init__(self, remote_file, local_dir='/tmp'):
         self.local_dir=local_dir
@@ -216,7 +234,7 @@ def get_g_prior(conf):
         sigma=conf["g_prior_sigma"]
         g_prior=ngmix.priors.GPriorBA(sigma)
     else:
-        raise ValueError("implement gprior '%s'")
+        raise ValueError("implement gprior '%s'" % g_prior_type)
 
     return g_prior
 
@@ -253,6 +271,37 @@ def get_sub(meds_file, rng, work_dir):
                                  cleanup=True)
 
     return extracted
+
+def get_truth_sub_fname(fname, rng, work_dir):
+    """
+    local file holding subset
+    """
+    rng_string = '%s-%s' % (rng[0], rng[1])
+
+    bname = os.path.basename(fname)
+    bname = bname.replace('.fits','')
+
+    bname = '%s-%s.fits' % (bname, rng_string)
+
+    newf = os.path.join(work_dir, bname)
+
+    return newf
+
+def get_truth_sub(truth_file, rng, work_dir):
+    """
+    Local files will get cleaned up
+    """
+
+    print(truth_file)
+    newf = get_truth_sub_fname(truth_file, rng, work_dir)
+    with fitsio.FITS(truth_file) as fits:
+        data=fits[1][rng[0]:rng[1]+1]
+
+    print("writing truth sub:",newf)
+    fitsio.write(newf, data, clobber=True)
+
+    return TempFile(newf)
+
 
 def get_range(rng_string):
     if rng_string is not None:
@@ -344,13 +393,16 @@ def run_fitter(files, conf, checkpoint_data=None):
 
     return data
 
-def setup_work_files(options, meds_file):
+def setup_work_files(options, meds_file, truth_file):
     """
     Set up local, possibly sub-range meds files
     """
 
     meds_file_full=meds_file
+    truth_file_full=truth_file
+
     extracted=None
+    truth_extracted=None
     rng=get_range( options.obj_range )
     rng_send=None
 
@@ -358,14 +410,17 @@ def setup_work_files(options, meds_file):
         if options.work_dir is not None:
             # note variable extracted is cleaned up when MedsExtractors get
             # garbage collected
-            extracted=get_sub(meds_file, rng, options.work_dir)
-            meds_file_full=meds_file
+            extracted=get_sub(meds_file_full, rng, options.work_dir)
             meds_file= extracted.sub_file
+
+            truth_extracted=get_truth_sub(truth_file_full, rng, options.work_dir)
+            truth_file=truth_extracted.fname
+
             rng_send=None
         else:
             rng_send=rng
 
-    return rng_send, meds_file, meds_file_full, extracted
+    return rng_send, meds_file, meds_file_full, extracted, truth_file, truth_file_full, truth_extracted
 
 def setup_work_files_old(options, meds_file, psf_file):
     """
@@ -434,14 +489,13 @@ def go(files, options):
 
     #rng_send,meds_file,meds_file_full,extracted,tmp_psf=\
     #                    setup_work_files(options,files['meds'],files['psf'])
-    rng_send,meds_file,meds_file_full,extracted=\
-                        setup_work_files(options,files['meds'])
+    rng_send,meds_file,meds_file_full,extracted,truth_file,truth_file_full,truth_extracted=\
+                        setup_work_files(options,files['meds'],files['truth'])
 
     files['meds'] = meds_file
     files['meds_full'] = meds_file_full
-    #files['tmp_psf'] = tmp_psf
-    #if tmp_psf is not None:
-    #    files['psf'] = tmp_psf.local_file
+    files['truth'] = truth_file
+    files['truth_full'] = truth_file_full
 
     # if work_dir is sent, we do range by extracting it, see above, so
     # rng_send would be None
