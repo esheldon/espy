@@ -1,6 +1,6 @@
 from __future__ import print_function
 import numpy
-from numpy import diag, sqrt, newaxis, where
+from numpy import diag, sqrt, newaxis, where, log10
 from . import files
 
 MIN_ARATE=0.3
@@ -171,6 +171,43 @@ def calc_gmean(data):
     gmeas,gcov=jackknife.wjackknife(vsum=jdsum, wsum=jwsum)
 
     return gtrue, gmeas, gcov
+
+def quick_shear(data, ishear, w=None, getall=False, use_weights=True):
+    import esutil as eu 
+
+    if w is None:
+        print("selecting")
+        w,=where(data['flags']==0)
+
+    if use_weights:
+        print("getting weights")
+        weights=get_weights(data[w])
+    else:
+        weights=None
+
+    print("binner")
+    b=eu.stat.Binner(log10( data['s2n_w'][w] ), data['g'][w,ishear], weights=weights)
+    b.dohist(min=log10(10), max=log10(300), nbin=12)
+    b.calc_stats()
+
+    print("sens binner")
+    bs=eu.stat.Binner(log10( data['s2n_w'][w] ), data['g_sens'][w,ishear], weights=weights)
+    bs.dohist(min=log10(10), max=log10(300), nbin=12)
+    bs.calc_stats()
+
+    if use_weights:
+        shear=b['wymean']/bs['wymean']
+        shear_err=shear*sqrt( (b['wyerr']/b['wymean'])**2 + (bs['wyerr']/bs['wymean'])**2 )
+    else:
+        shear=b['ymean']/bs['ymean']
+        shear_err=shear*sqrt( (b['yerr']/b['ymean'])**2 + (bs['yerr']/bs['ymean'])**2 )
+
+    s2n= b['xmean']
+
+    if getall:
+        return s2n, shear, shear_err, b, bs
+    else:
+        return s2n, shear, shear_err
 
 class AnalyzerS2N(dict):
     """
