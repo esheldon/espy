@@ -1,4 +1,21 @@
-sersic
-
-    - try lm fit for start  
-    - try trimming to 5-sigma from em1 fit
+- nfit-17
+    - trying cosmos prior.
+        - notes before run
+            - efficiency is much lower, factor of two.
+            - looking at the shapes I get from the noisefree runs, it seems the
+              prior I have (from lackner) is also not correct, or at least does
+              not match what I find.  If this run looks a bit better, we might
+              try refitting the prior.
+        - looks the same at high s/n
+- nfit-old04
+    - mcmc, cosmos prior, prior *not during*, TwoSidedErf on others
+    - notes before run
+        - I noticed that even the noisefree ones had significantly wrong shape,
+          and it turns out the sensitivity correction from nfit-02 was close to
+          what was needed to correct it!  So odd.
+        - So I'm rerunning with close to what I did in nfit-02, most noteworthy
+          being no g prior during. If it works maybe the problem is prior
+          during is just not sampling wide enough.  this would also imply that
+          isample needs to be done without prior during.
+        - will surprise me a bit, since the difference wasn't that big in the
+          nsim runs I did, but note I only tried for high s/n and tight pdfs
