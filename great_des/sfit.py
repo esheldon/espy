@@ -55,6 +55,8 @@ class MedsFitBase(dict):
         sigma_guess=self['psf_fwhm_guess']/2.35
         self['psf_Tguess'] = 2*sigma_guess**2
 
+        self['make_plots']=self.get('make_plots',False)
+
     def get_data(self):
         """
         get a reference to the data structure
@@ -71,7 +73,7 @@ class MedsFitBase(dict):
             self.dindex=dindex
             self.mindex=mindex
 
-            print("%d:%d  %d:%d" % (dindex, last, self['start'],self['end']))
+            print("%d:%d  %d:%d" % (dindex, last, mindex,self['end']))
 
             self.data['number'][dindex] = mindex
 
@@ -89,6 +91,8 @@ class MedsFitBase(dict):
 
             self.copy_galaxy_result()
             self.print_galaxy_result()
+            if self['make_plots']:
+                self.do_gal_plots()
 
     def fit_psf(self):
         """
@@ -116,6 +120,9 @@ class MedsFitBase(dict):
         else:
             print("    psf fitting failed")
             self.data['flags'][dindex] = PSF_FIT_FAILURE
+
+        if self['make_plots']:
+            self.compare_psf()
 
         return res['flags']
 
@@ -204,6 +211,83 @@ class MedsFitBase(dict):
         if res['flags'] != 0:
             print("        replacement failed")
             res['flags']=0
+
+    def compare_psf(self):
+        """
+        compare psf image to best fit model
+        """
+        import images
+
+        fitter=self.psf_fitter
+
+        model=self['psf_model']
+
+        obs=self.psf_obs
+        if 'em' in model:
+            model_image = fitter.make_image(counts=obs.image.sum())
+        else:
+            gm=fitter.get_gmix()
+            j=obs.get_jacobian()
+            model_image = gm.make_image(obs.image.shape,
+                                        jacobian=j)
+
+        plt=images.compare_images(obs.image,
+                                  model_image,
+                                  label1='psf',
+                                  label2=model,
+                                  show=False)
+
+        pname='psf-resid-%s-%06d.png' % (model, self.mindex)
+        print("          ",pname)
+        plt.write_img(1400,800,pname)
+
+    def do_gal_plots(self):
+        """
+        Make residual plot and trials plot
+        """
+        res=self.gal_fitter.get_result()
+        if res['flags'] != 0:
+            return
+
+        self.compare_gal()
+        #self.make_trials_plot()
+        #self.plot_autocorr()
+
+    def compare_gal(self):
+        """
+        compare psf image to best fit model
+        """
+        import images
+
+        fitter=self.gal_fitter
+
+        model=self['fit_model']
+        title = '%d %s' % (self.mindex, model)
+
+        gmix = fitter.get_gmix()
+
+        obs = self.obs
+        res=fitter.get_result()
+
+        psf_gmix = self.psf_obs.get_gmix()
+        gmix_conv = gmix.convolve(psf_gmix)
+
+        image=obs.image
+        model_image = gmix_conv.make_image(image.shape,
+                                           jacobian=obs.get_jacobian())
+
+        plt=images.compare_images(image,
+                                  model_image,
+                                  label1='galaxy',
+                                  label2=model,
+                                  show=False)
+        plt.title=title
+        pname='gal-resid-%06d-%s.png' % (self.mindex,model)
+
+        resid_std = (image-model_image).std()
+        print("    residual std:",resid_std)
+        print("          ",pname)
+        plt.write_img(1400,800,pname)
 
 
     def get_jacobian(self):
@@ -304,6 +388,8 @@ class MedsFitBase(dict):
             print("    galaxy fit failure")
             data['flags'][dindex] = GAL_FIT_FAILURE
             return
+        else:
+            data['flags'][dindex]=0
 
         data['pars'][dindex] = res['pars']
         data['pars_cov'][dindex] = res['pars_cov']
@@ -420,7 +506,7 @@ class MedsFitMax(MedsFitBase):
                          max_pars['lm_pars'],
                          guesser,
                          use_logpars=self['use_logpars'],
-                         prior=self['prior'])
+                         prior=self['search_prior'])
 
         runner.go(ntry=max_pars['ntry'])
 
