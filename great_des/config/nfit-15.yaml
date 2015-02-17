@@ -1,3 +1,4 @@
+# mcmc
 # turb psf, guess from em
 run: "nfit-15"
 fitter: "mcmc"
