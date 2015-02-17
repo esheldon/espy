@@ -19,7 +19,7 @@ nf: 100
 ng: 8
 
 # size of processing chunks
-nper: 1300
+nper: 900
 
 psf_model: "turb"
 psf_method: 'lm'
