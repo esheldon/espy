@@ -23,6 +23,8 @@ def read_output(**conf):
     add_dt=[('shear_true','f8',2),
             ('psf_true_e','f8',2),
             ('fwhm_true','f4'),
+            ('flux_true','f8'),
+            ('s2n_true','f8'),
             ('id_shear','i8'),
             ('id_psf','i8')]
     if 'T' not in data0.dtype.names:
@@ -104,6 +106,9 @@ def main():
                 data['psf_true_e'][:,0] = truth_data['psf_e1'][tbeg:tend]
                 data['psf_true_e'][:,1] = truth_data['psf_e2'][tbeg:tend]
                 data['fwhm_true'] = truth_data['fwhm'][tbeg:tend]
+                data['flux_true'][:] = truth_data['flux'][tbeg:tend]
+                data['s2n_true'][:] = truth_data['snr'][tbeg:tend]
+
                 data['id_shear'] = truth_data['id_shear'][tbeg:tend]
                 data['id_psf'] = truth_data['id_psf'][tbeg:tend]
 

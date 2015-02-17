@@ -240,13 +240,8 @@ def get_g_prior(conf):
 
 def get_cen_prior_ngmix(conf):
     import ngmix
-    use_cen_prior=conf.get('use_cen_prior',False)
-    if use_cen_prior:
-        width=conf.get('cen_width',1.0)
-        return ngmix.priors.CenPrior(0.0, 0.0, width,width)
-    else:
-        return None
-
+    width=conf.get('cen_width',1.0)
+    return ngmix.priors.CenPrior(0.0, 0.0, width,width)
 
 def get_sub_fname(fname, rng, work_dir):
     rng_string = '%s-%s' % (rng[0], rng[1])
@@ -338,7 +333,7 @@ def get_checkpoint_data(out_file):
 
     return checkpoint_file, data
 
-def run_fitter(files, conf, checkpoint_data=None):
+def run_fitter(files, conf, options, checkpoint_data=None):
     """
     Do the fit
     """
@@ -376,6 +371,10 @@ def run_fitter(files, conf, checkpoint_data=None):
         fitclass=great_des.nfit.MedsFitMax
     elif conf['fitter']=='isample':
         fitclass=great_des.nfit.MedsFitISample
+    elif conf['fitter']=='max-s':
+        fitclass=great_des.sfit.MedsFitMax
+        if options.work_dir is not None:
+            raise RuntimeError("no work dir supported for sfit")
     else:
         raise ValueError("bad fitter: '%s'" % conf['fitter'])
 
@@ -504,7 +503,7 @@ def go(files, options):
     conf['config_file']=files['config']
     conf['checkpoint_file']=checkpoint_file
 
-    data=run_fitter(files, conf, checkpoint_data=checkpoint_data)
+    data=run_fitter(files, conf, options, checkpoint_data=checkpoint_data)
 
     write_data(data, files['out'])
 
