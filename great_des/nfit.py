@@ -362,7 +362,14 @@ class MedsFit(dict):
         # faking errors, as they are not needed
         print('    fitting',model,'using mcmc')
         max_res=max_fitter.get_result()
-        model_guesser = FromFullParsGuesser(max_res['pars'],max_res['pars']*0.1)
+
+        w,=numpy.where(numpy.isfinite(max_res['pars']))
+        if w.size != len(max_res['pars']):
+            print("        bad max pars, reverting guesser to",max_guesser)
+            model_guesser = max_guesser
+        else:
+            model_guesser = FromFullParsGuesser(max_res['pars'],max_res['pars']*0.1)
+            #print("        using guesser",model_guesser)
         fitter=self._fit_simple_mcmc(obs,
                                      model,
                                      model_guesser)
