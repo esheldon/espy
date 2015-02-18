@@ -33,8 +33,11 @@ psf_fwhm_guess: 0.9
 
 fit_model: "exp"
 
-# guess for max like
+# guess for max like unless draw-prior, for which
+# we use it for all fits
 guesser_type: "em"
+
+
 gal_em_ntry: 200
 gal_em_maxiter: 5000
 gal_em_tol: 5.0e-4

@@ -24,3 +24,7 @@
 - nfit-old05
     - same as old04 but now reverting walkers to 80, 400 burnin, 800 steps
       thin=1
+    - looks about the same
+    - so max is coming out 0.43, exp. value. 0.38.  max corrects to 0.05...
+- nfit-old06
+    - drawing guesses for walkers from prior

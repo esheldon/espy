@@ -356,20 +356,24 @@ class MedsFit(dict):
         print('    fitting',model,'using maxlike')
         max_guesser=self._get_guesser()
         max_fitter=self._fit_simple_max(obs,model,max_guesser) 
+        max_res=max_fitter.get_result()
 
         self._print_galaxy_res(max_fitter)
 
-        # faking errors, as they are not needed
         print('    fitting',model,'using mcmc')
-        max_res=max_fitter.get_result()
 
-        w,=numpy.where(numpy.isfinite(max_res['pars']))
-        if w.size != len(max_res['pars']):
-            print("        bad max pars, reverting guesser to",max_guesser)
-            model_guesser = max_guesser
+        if self['guesser_type']=='draw-prior':
+            print("    using draw prior for guess")
+            model_guesser=self._get_guesser()
         else:
-            model_guesser = FromFullParsGuesser(max_res['pars'],max_res['pars']*0.1)
-            #print("        using guesser",model_guesser)
+            w,=numpy.where(numpy.isfinite(max_res['pars']))
+            if max_res['flags'] != 0 or w.size != len(max_res['pars']):
+                print("        bad max pars, reverting guesser to",max_guesser)
+                model_guesser = max_guesser
+            else:
+                model_guesser = FromFullParsGuesser(max_res['pars'],
+                                                    max_res['pars']*0.1)
+
         fitter=self._fit_simple_mcmc(obs,
                                      model,
                                      model_guesser)
@@ -487,7 +491,7 @@ class MedsFit(dict):
         elif type=='flux-and-prior':
             guesser=self._get_guess_from_flux_and_prior()
         elif type=='draw-prior':
-            guesser=self['search_prior'].sample
+            guesser=self['prior'].sample
         elif type=='em':
             guesser=self._get_guesser_from_em()
         else:
@@ -931,8 +935,8 @@ class MedsFit(dict):
         if 'pars_err' in res:
             print_pars(res['pars_err'], front=efront)
             if 'arate' in res:
-                mess="            s/n: %.1f  arate: %.2f  tau: %.1f"
-                tup = (res['s2n_w'],res['arate'],res['tau'])
+                mess="            s/n: %.1f  arate: %.2f  tau: %.1f chi2per: %.2f"
+                tup = (res['s2n_w'],res['arate'],res['tau'],res['chi2per'])
                 mess=mess % tup
                 print(mess)
             elif 'efficiency' in res:
