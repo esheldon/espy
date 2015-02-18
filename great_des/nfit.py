@@ -220,7 +220,7 @@ class MedsFit(dict):
                 psf_gmix = fitter.get_gmix()
                 #print("psf fit:")
                 #print(psf_gmix)
-                print("psf fwhm:",2.35*sqrt( psf_gmix.get_T()/2. ))
+                print("    psf fwhm:",2.35*sqrt( psf_gmix.get_T()/2. ))
 
                 self.res['psf_gmix']=psf_gmix
 

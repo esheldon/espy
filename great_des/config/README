@@ -19,3 +19,8 @@
           isample needs to be done without prior during.
         - will surprise me a bit, since the difference wasn't that big in the
           nsim runs I did, but note I only tried for high s/n and tight pdfs
+    - looks bad still
+    - maybe it is number of walkers?
+- nfit-old05
+    - same as old04 but now reverting walkers to 80, 400 burnin, 800 steps
+      thin=1
