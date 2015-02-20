@@ -20,38 +20,16 @@ parser = OptionParser(__doc__)
 def read_output(**conf):
     data0 = files.read_output(**conf)
 
-    add_dt=[('shear_true','f8',2),
+    add_dt=[('fnum','i4'),
+            ('shear_true','f8',2),
             ('psf_true_e','f8',2),
             ('fwhm_true','f4'),
             ('flux_true','f8'),
             ('s2n_true','f8'),
             ('id_shear','i8'),
             ('id_psf','i8')]
-    if 'T' not in data0.dtype.names:
-        add_dt += [('T','f8'),('T_err','f8')]
-        do_T=True
-    else:
-        do_T=False
-
-    if 'T_s2n' not in data0.dtype.names:
-        do_T_s2n=True
-        add_dt += [('T_s2n','f8')]
-    else:
-        do_T_s2n=False
 
     data=eu.numpy_util.add_fields(data0, add_dt)
-                
-    if do_T:
-        data['T'] = data['pars'][:,4]
-        data['T_err'] = numpy.sqrt(data['pars_cov'][:,4,4])
-
-    if do_T_s2n:
-        T_s2n=numpy.zeros(data.size)-9999.0
-        w,=numpy.where(data['T_err'] != 0.0)
-        if w.size > 0:
-            T_s2n[w] = data['T'][w]/data['T_err'][w]
-
-        data['T_s2n']=T_s2n
 
     return data
 
@@ -100,7 +78,15 @@ def main():
                 tbeg=low[i]
                 tend=high[i]+1
 
-                assert(numpy.all(data['number'][:] == truth_data['id'][tbeg:tend])),"ids must match"
+                test=numpy.all(data['number'][:] == truth_data['id'][tbeg:tend])
+                if not test:
+                    print("ids do not match")
+                    w,=numpy.where(data['number'] != truth_data['id'][tbeg:tend])
+                    for ibad in w:
+                        print(data['number'][ibad],truth_data['id'][tbeg + ibad])
+                    stop
+
+                data['fnum'] = fnum
                 data['shear_true'][:,0] = truth_data['g1_true'][tbeg:tend]
                 data['shear_true'][:,1] = truth_data['g2_true'][tbeg:tend]
                 data['psf_true_e'][:,0] = truth_data['psf_e1'][tbeg:tend]
