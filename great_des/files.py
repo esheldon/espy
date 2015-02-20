@@ -52,17 +52,25 @@ def get_input_file(**keys):
     noisefree=keys.get("noisefree",False)
     ftype=keys['ftype']
 
+    front=get_front(**keys)
+
     if noisefree and ftype=='meds':
-        fname='nbc.%(ftype)s.%(fnum)03i.g%(gnum)02i.noisefree.fits'
-        #fname='nbc2.%(ftype)s.%(fnum)03i.g%(gnum)02i.noisefree.fits'
+        bname=front+'.%(ftype)s.%(fnum)03i.g%(gnum)02i.noisefree.fits'
     else:
-        fname='nbc.%(ftype)s.%(fnum)03i.g%(gnum)02i.fits'
-        #fname='nbc2.%(ftype)s.%(fnum)03i.g%(gnum)02i.fits'
+        bname=front+'.%(ftype)s.%(fnum)03i.g%(gnum)02i.fits'
 
-    fname=fname % keys
+    bname=bname % keys
 
-    fname=os.path.join(d, fname)
+    fname=os.path.join(d, bname)
     return fname
+
+def get_front(**keys):
+    gdrun=keys['gdrun']
+    if gdrun=='nbc-sva1-001':
+        front='nbc2'
+    else:
+        front='nbc'
+    return front
 
 def read_input_file(**keys):
     """
@@ -100,8 +108,9 @@ def get_psf_file(**keys):
     if 'res' not in keys:
         keys['res'] = 'lores'
 
-    #fname='nbc2.psf.%(res)s.fits'
-    fname='nbc.psf.%(res)s.fits'
+    front=get_front(**keys)
+
+    fname=front+'.psf.%(res)s.fits'
     fname=fname % keys
 
     return os.path.join(d,fname)
