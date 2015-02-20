@@ -11,7 +11,9 @@ from ngmix.gexceptions import GMixMaxIterEM, GMixRangeError
 from ngmix.observation import Observation
 from ngmix.jacobian import Jacobian
 
+import gmix_meds
 from gmix_meds.util import FromPSFGuesser, FixedParsGuesser, FromParsGuesser, FromFullParsGuesser
+from gmix_meds.util import TFluxAndPriorGuesser, FluxAndPriorGuesser
 
 from .nfit import srandu
 
@@ -56,6 +58,8 @@ class MedsFitBase(dict):
         self['psf_Tguess'] = 2*sigma_guess**2
 
         self['make_plots']=self.get('make_plots',False)
+
+        self['randomize_psf'] = self.get('randomize_psf',False)
 
     def get_data(self):
         """
@@ -148,9 +152,10 @@ class MedsFitBase(dict):
         read the image and weight data
         """
 
-        ext=self.truth['id_psf'][self.mindex]
+        ext=self.get_psf_ext()
 
         self['psf_id'] = ext
+        self.data['psf_id'][self.dindex] = ext
 
         image0 = self.psf_obj[ext][:,:]
 
@@ -164,16 +169,41 @@ class MedsFitBase(dict):
         jacob=self.get_jacobian()
         self.psf_obs = Observation(image, weight=weight, jacobian=jacob)
 
+    def get_psf_ext(self):
+        if self['randomize_psf']:
+            ext=numpy.random.randint(0,self.npsf)
+            print("getting random psf:",ext)
+        else:
+            ext=self.truth['id_psf'][self.mindex]
+
+        return ext
+
     def make_galaxy_observation(self):
         """
         read the image and weight data
         """
 
         image = self.meds.get_cutout(self.mindex, 0)
-        if self['noisefree']:
-            weight = image*0 + 1.0/self['skynoise']**2
+
+        calc_weight=self.get('calc_weight',False)
+        if calc_weight:
+            import esutil as eu
+            border=5
+            nrow,ncol=image.shape
+            row,col=numpy.mgrid[0:nrow, 0:ncol]
+            w=numpy.where((row < 5) | (row > (nrow-5-1)) 
+                          | (col < 5) | (col > (ncol-5-1))  )
+
+            mn, skysig_meas = eu.stat.sigma_clip(image[w].ravel())
+            print("    skysig_meas: %g" % skysig_meas)
+
+            weight = 0*image + 1.0/skysig_meas**2
+
         else:
-            weight = self.meds.get_cutout(self.mindex, 0, type='weight')
+            if self['noisefree']:
+                weight = image*0 + 1.0/self['skynoise']**2
+            else:
+                weight = self.meds.get_cutout(self.mindex, 0, type='weight')
 
         jacob=self.get_jacobian()
         self.obs = Observation(image, weight=weight, jacobian=jacob)
@@ -195,6 +225,46 @@ class MedsFitBase(dict):
         guesser=FromPSFGuesser(T, flux, scaling=scaling)
 
         return guesser
+
+    def get_flux_and_prior_guesser(self):
+        """
+        from the psf flux and the prior
+        """
+
+        psf_flux=self.data['psf_flux'][self.dindex]
+        psf_flux=psf_flux.clip(min=0.1, max=1.0e9)
+
+        if self['use_logpars']:
+            scaling='log'
+        else:
+            scaling='linear'
+
+        guesser=FluxAndPriorGuesser(psf_flux, self['prior'],scaling=scaling)
+        return guesser
+
+    def get_T_flux_and_prior_guesser(self):
+        """
+        from the psf flux and the prior
+        """
+
+        psf_gmix = self.psf_obs.get_gmix()
+        psf_T = psf_gmix.get_T()
+
+        psf_flux=self.data['psf_flux'][self.dindex]
+        psf_flux=psf_flux.clip(min=0.1, max=1.0e9)
+
+        if self['use_logpars']:
+            scaling='log'
+        else:
+            scaling='linear'
+
+        guesser=TFluxAndPriorGuesser(psf_T,
+                                     psf_flux,
+                                     self['prior'],
+                                     scaling=scaling)
+        return guesser
+
+
 
     def try_replace_cov(self, fitter):
         """
@@ -316,6 +386,7 @@ class MedsFitBase(dict):
 
         print("loading:",self['psf_file'])
         self.psf_obj = fitsio.FITS(self['psf_file'])
+        self.npsf = len(self.psf_obj)
 
     def set_indices(self):
         """
@@ -352,7 +423,7 @@ class MedsFitBase(dict):
         psf_gmix=fitter.get_gmix()
         g1,g2,T=psf_gmix.get_g1g2T()
 
-        print("    psf_id: %d psf_fwhm: %.3f g: %.3g,%.3g" % (self['psf_id'],sqrt(T/2)*2.35,g1,g2) )
+        print("    psf_id: %d psf_fwhm: %.3f g: %.3g %.3g" % (self['psf_id'],sqrt(T/2)*2.35,g1,g2) )
         print_pars(res['pars'],    front='    psf_pars: ')
         print_pars(res['pars_err'],front='    psf_perr: ')
 
@@ -418,6 +489,7 @@ class MedsFitBase(dict):
 
         if 'pars' in res:
             print_pars(res['pars'],    front='    gal_pars: ')
+        if 'pars_err' in res:
             print_pars(res['pars_err'],front='    gal_perr: ')
 
     def make_dtype(self):
@@ -433,6 +505,7 @@ class MedsFitBase(dict):
             ('number','i4'),
             ('flags','i4'),
 
+            ('psf_id','i4'),
             ('psf_flags','i4'),
             ('psf_nfev','i4'),
             ('psf_g','f8',2),
@@ -500,10 +573,10 @@ class MedsFitMax(MedsFitBase):
 
         max_pars=self['max_pars']
 
-        guesser=self.get_psf_guesser()
+        guesser=self.get_guesser()
         runner=MaxRunner(self.obs,
                          self['fit_model'],
-                         max_pars['lm_pars'],
+                         max_pars,
                          guesser,
                          use_logpars=self['use_logpars'],
                          prior=self['search_prior'])
@@ -513,8 +586,23 @@ class MedsFitMax(MedsFitBase):
         self.gal_fitter=runner.fitter
 
         res=self.gal_fitter.get_result()
-        if res['flags']==0:
-            self.try_replace_cov(self.gal_fitter)
+        #if res['flags']==0 and max_pars['method']=='lm':
+        #    self.try_replace_cov(self.gal_fitter)
+
+    def get_guesser(self):
+        """
+        get max guesser
+        """
+        gtype=self['max_guesser']
+        if gtype == "psf":
+            guesser=self.get_psf_guesser()
+        elif gtype == "T-flux-and-prior":
+            guesser=self.get_T_flux_and_prior_guesser()
+        elif gtype == "flux-and-prior":
+            guesser=self.get_flux_and_prior_guesser()
+        else:
+            raise ValueError("bad max guesser type: '%s'" % gtype)
+        return guesser
 
     def copy_galaxy_result(self):
         """
@@ -633,31 +721,79 @@ class MaxRunner(object):
     """
     wrapper to generate guesses and run the psf fitter a few times
     """
-    def __init__(self, obs, model, lm_pars, guesser, use_logpars=True, prior=None):
+    def __init__(self, obs, model, pars, guesser, use_logpars=True, prior=None):
         self.obs=obs
+
+        self.pars=pars
+        self.method=pars['method']
+        if self.method == 'lm':
+            self.send_pars=pars['lm_pars']
+        else:
+            self.send_pars=pars
 
         mess="model should be exp or dev,got '%s'" % model
         assert model in ['exp','dev'],mess
 
         self.model=model
-        self.lm_pars=lm_pars
         self.use_logpars=use_logpars
         self.prior=prior
+
+        self.bestof = pars.get('bestof',1)
 
         self.guesser=guesser
 
     def go(self, ntry=1):
+        if self.method=='lm':
+            method=self._go_lm
+        elif self.method=='nm':
+            method=self._go_nm
+        else:
+            raise ValueError("bad method '%s'" % self.method)
+
+        lnprob_max=-numpy.inf
+        fitter_best=None
+        for i in xrange(self.bestof):
+            method(ntry=ntry)
+
+            res=self.fitter.get_result()
+            if res['flags']==0:
+                if res['lnprob'] > lnprob_max:
+                    lnprob_max = res['lnprob']
+                    fitter_best=self.fitter
+        
+        if fitter_best is not None:
+            self.fitter=fitter_best
+
+    def _go_lm(self, ntry=1):
         from ngmix.fitting import LMSimple
 
         for i in xrange(ntry):
             guess=self.guesser()
             fitter=LMSimple(self.obs,
                             self.model,
-                            lm_pars=self.lm_pars,
+                            lm_pars=self.send_pars,
                             use_logpars=self.use_logpars,
                             prior=self.prior)
 
             fitter.go(guess)
+
+            res=fitter.get_result()
+            if res['flags']==0:
+                break
+
+        self.fitter=fitter
+
+    def _go_nm(self, ntry=1):
+        from ngmix.fitting import MaxSimple
+
+        for i in xrange(ntry):
+            guess=self.guesser()
+            fitter=MaxSimple(self.obs, self.model,
+                             method='Nelder-Mead',
+                             use_logpars=self.use_logpars,
+                             prior=self.prior)
+
+            fitter.run_max(guess, **self.send_pars)
 
             res=fitter.get_result()
             if res['flags']==0:
