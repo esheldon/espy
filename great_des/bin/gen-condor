@@ -97,6 +97,8 @@ Executable      = %(master_script)s
 # condor always raises it to 60-90 Meg
 Image_Size      = %(image_size)s
 
+Requirements = (Machine != "rcas2259") && (Machine != "rcas2259.rcf.bnl.gov")
+
 # we need this or nothing works
 GetEnv = True
 
