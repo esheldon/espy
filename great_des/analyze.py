@@ -172,7 +172,9 @@ def calc_gmean(data):
 
     return gtrue, gmeas, gcov
 
-def quick_shear(data, ishear, w=None, getall=False, use_weights=True):
+def quick_shear(data, ishear, g=None, nbin=11,
+                s2n_field='s2n_true',
+                w=None, getall=False, use_weights=True, min_s2n=10.0, max_s2n=300.0):
     import esutil as eu 
 
     if w is None:
@@ -185,14 +187,20 @@ def quick_shear(data, ishear, w=None, getall=False, use_weights=True):
     else:
         weights=None
 
+    min_logs2n = log10(min_s2n)
+    max_logs2n = log10(max_s2n)
+
+    if g is None:
+        g=data['g'][:,ishear]
+
     print("binner")
-    b=eu.stat.Binner(log10( data['s2n_w'][w] ), data['g'][w,ishear], weights=weights)
-    b.dohist(min=log10(10), max=log10(300), nbin=12)
+    b=eu.stat.Binner(log10( data[s2n_field][w] ), g[w], weights=weights)
+    b.dohist(min=min_logs2n, max=max_logs2n, nbin=nbin)
     b.calc_stats()
 
     print("sens binner")
-    bs=eu.stat.Binner(log10( data['s2n_w'][w] ), data['g_sens'][w,ishear], weights=weights)
-    bs.dohist(min=log10(10), max=log10(300), nbin=12)
+    bs=eu.stat.Binner(log10( data[s2n_field][w] ), data['g_sens'][w,ishear], weights=weights)
+    bs.dohist(min=min_logs2n, max=max_logs2n, nbin=nbin)
     bs.calc_stats()
 
     if use_weights:
@@ -208,6 +216,48 @@ def quick_shear(data, ishear, w=None, getall=False, use_weights=True):
         return s2n, shear, shear_err, b, bs
     else:
         return s2n, shear, shear_err
+
+
+def quick_pqr(data, nbin=11, s2n_field='s2n_true',
+              w=None, getall=False, min_s2n=10.0, max_s2n=300.0):
+    import ngmix
+    import esutil as eu 
+
+    if w is None:
+        print("selecting")
+        w,=numpy.where(data['flags']==0)
+
+    min_logs2n = log10(min_s2n)
+    max_logs2n = log10(max_s2n)
+
+    shear     = numpy.zeros( (nbin,2) )
+    shear_err = numpy.zeros( (nbin,2) )
+    shear_cov = numpy.zeros( (nbin,2,2) )
+
+    logs2n = log10( data[s2n_field][w] )
+    hdict=eu.stat.histogram(logs2n, min=log10(min_s2n),max=log10(max_s2n),
+                            nbin=nbin, more=True)
+
+    rev=hdict['rev']
+    for i in xrange(nbin):
+        if rev[i] != rev[i+1]:
+            ww=rev[ rev[i]:rev[i+1] ]
+
+            wtmp=w[ww]
+            tshear, tshear_cov = ngmix.pqr.calc_shear(data['P'][wtmp],
+                                                      data['Q'][wtmp,:],
+                                                      data['R'][wtmp,:,:])
+            
+            terr=sqrt(diag(tshear_cov))
+
+            shear[i,:] = tshear
+            shear_err[i,:] = terr
+            shear_cov[i,:,:] = tshear_cov
+
+
+    return hdict, shear, shear_err, shear_cov
+
+
 
 class AnalyzerS2N(dict):
     """

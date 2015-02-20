@@ -3,7 +3,7 @@ import os
 from sys import stderr,stdout
 import time
 import numpy
-from numpy import array, sqrt, zeros, log, exp
+from numpy import array, sqrt, zeros, log, exp, where
 
 import ngmix
 from ngmix.fitting import print_pars
@@ -24,8 +24,7 @@ BIG_PDEFVAL=9.999e9
 NO_CUTOUTS=2**0
 PSF_FIT_FAILURE=2**1
 PSF_LARGE_OFFSETS=2**2
-EXP_FIT_FAILURE=2**3
-DEV_FIT_FAILURE=2**4
+GAL_FIT_FAILURE=2**3
 EM_FIT_FAILURE=2**5
 
 BOX_SIZE_TOO_BIG=2**6
@@ -96,11 +95,9 @@ class MedsFit(dict):
         self['obj_range']=self.get('obj_range',None)
         self['make_plots']=self.get('make_plots',False)
 
-        self._setup_checkpoints()
         self._set_index_list()
-
-        if self._checkpoint_data is None:
-            self._make_struct()
+        self._make_struct()
+        self._setup_checkpoints()
 
     def get_data(self):
         """
@@ -133,14 +130,14 @@ class MedsFit(dict):
 
         for dindex in xrange(num):
 
-            if self.data['processed'][dindex]==1:
-                # was checkpointed
-                continue
-
             self.dindex = dindex
             self.mindex = self.index_list[dindex]
 
             print( 'index: %d:%d' % (self.mindex,last), )
+
+            if self.data['processed'][dindex]==1:
+                print("already processed")
+                continue
 
             self._load_psf_image()
             self._load_image_and_weight()
@@ -353,44 +350,58 @@ class MedsFit(dict):
             self.res['flags'] |= S2N_TOO_LOW
             return
 
-        print('    fitting',model,'using maxlike')
-        max_guesser=self._get_guesser()
-        max_fitter=self._fit_simple_max(obs,model,max_guesser) 
-        max_res=max_fitter.get_result()
-
-        self._print_galaxy_res(max_fitter)
-
-        print('    fitting',model,'using mcmc')
-
-        if self['guesser_type']=='draw-prior':
-            print("    using draw prior for guess")
-            model_guesser=self._get_guesser()
+        if self['guesser_type'] == 'em':
+            model_guesser = self._get_guesser()
+        elif self['guesser_type']=='gauss':
+            #gauss_guesser=self['prior'].sample
+            gauss_guesser=self._get_guesser_from_em()
+            print('    fitting gauss using mcmc')
+            fitter=self._fit_simple_mcmc(obs,
+                                         'gauss',
+                                         gauss_guesser)
+            self._print_galaxy_res(fitter)
+            model_guesser=FromChainGuesser(fitter.get_trials()) 
         else:
-            w,=numpy.where(numpy.isfinite(max_res['pars']))
-            if max_res['flags'] != 0 or w.size != len(max_res['pars']):
-                print("        bad max pars, reverting guesser to",max_guesser)
-                model_guesser = max_guesser
-            else:
-                model_guesser = FromFullParsGuesser(max_res['pars'],
-                                                    max_res['pars']*0.1)
+            print('    fitting',model,'using maxlike')
+            max_guesser=self._get_guesser()
+            max_fitter=self._fit_simple_max(obs,model,max_guesser) 
+            max_res=max_fitter.get_result()
 
+            res['max_fitter'] = max_fitter
+            res['max_res'] = max_fitter.get_result()
+
+            self._print_galaxy_res(max_fitter)
+
+
+            if self['guesser_type']=='draw-prior':
+                print("    using draw prior for guess")
+                model_guesser=self._get_guesser()
+            else:
+                w,=numpy.where(numpy.isfinite(max_res['pars']))
+                if max_res['flags'] != 0 or w.size != len(max_res['pars']):
+                    print("        bad max pars, reverting guesser to",max_guesser)
+                    model_guesser = max_guesser
+                else:
+                    model_guesser = FromFullParsGuesser(max_res['pars'],
+                                                        max_res['pars']*0.1)
+        print('    fitting',model,'using mcmc')
         fitter=self._fit_simple_mcmc(obs,
                                      model,
                                      model_guesser)
+        
+        if fitter is None:
+            res['flags'] = GAL_FIT_FAILURE
+        else:
+            res['galaxy_fitter'] = fitter
+            res['galaxy_res'] = fitter.get_result()
+            res['flags'] = res['galaxy_res']['flags']
 
-        #res['gauss_fitter'] = gauss_fitter
-        res['max_fitter'] = max_fitter
-        res['galaxy_fitter'] = fitter
-        res['galaxy_res'] = fitter.get_result()
-        res['max_res'] = max_fitter.get_result()
-        res['flags'] = res['galaxy_res']['flags']
+            self._add_shear_info(res['galaxy_res'], fitter)
 
-        self._add_shear_info(res['galaxy_res'], fitter)
+            self._print_galaxy_res(fitter)
 
-        self._print_galaxy_res(fitter)
-
-        if self['make_plots']:
-            self._do_gal_plots(res['galaxy_fitter'])
+            if self['make_plots']:
+                self._do_gal_plots(res['galaxy_fitter'])
 
 
     def _fit_simple_mcmc(self, obs, model, guesser):
@@ -414,8 +425,12 @@ class MedsFit(dict):
                           nwalkers=epars['nwalkers'],
                           mca_a=epars['a'])
 
-        pos=fitter.run_mcmc(guess,epars['burnin'])
-        pos=fitter.run_mcmc(pos,epars['nstep'],thin=epars['thin'])
+        try:
+            pos=fitter.run_mcmc(guess,epars['burnin'])
+            pos=fitter.run_mcmc(pos,epars['nstep'],thin=epars['thin'])
+        except ValueError as err:
+            print("problem with emcee: %s" % str(err)) 
+            return None
 
         if self['g_prior_during']:
             weights=None
@@ -577,16 +592,34 @@ class MedsFit(dict):
         """
         Load the image, weight map
         """
-
+        import esutil as eu
         dindex=self.dindex
         mindex=self.mindex
         
         self.image = self.meds.get_cutout(mindex,0).astype('f8')
-        if self['noisefree']:
-            print("    improvising weight")
-            self.wt = 0*self.image + (1.0/self['skynoise']**2)
+
+        calc_weight=self.get('calc_weight',False)
+        if calc_weight:
+            #wt_tmp = self.meds.get_cutout(mindex,0,type='weight').astype('f8')
+            #print(wt_tmp)
+            #skysig_wt=sqrt(1.0/wt_tmp.mean())
+            border=5
+            nrow,ncol=self.image.shape
+            row,col=numpy.mgrid[0:nrow, 0:ncol]
+            w=numpy.where((row < 5) | (row > (nrow-5-1)) 
+                          | (col < 5) | (col > (ncol-5-1))  )
+
+            mn, skysig_meas = eu.stat.sigma_clip(self.image[w].ravel())
+            print("    skysig_meas: %g" % skysig_meas)
+
+            self.wt = 0*self.image + 1.0/skysig_meas**2
+
         else:
-            self.wt = self.meds.get_cutout(mindex,0,type='weight').astype('f8')
+            if self['noisefree']:
+                print("    improvising weight")
+                self.wt = 0*self.image + (1.0/self['skynoise']**2)
+            else:
+                self.wt = self.meds.get_cutout(mindex,0,type='weight').astype('f8')
 
         self.gal_cen_guess_pix=(array(self.image.shape)-1)/2.
         self.data['nimage_tot'][dindex] = 1
@@ -602,6 +635,8 @@ class MedsFit(dict):
         self.psf_image = self.psf_fobj[psf_id].read().astype('f8')
         
         self.psf_cen_guess_pix=(array(self.psf_image.shape)-1)/2.
+
+        self.data['psf_id'][self.dindex] = psf_id
 
     def _get_jacobian(self, cen=None):
         jdict = self.meds.get_jacobian(self.mindex,0)
@@ -930,7 +965,8 @@ class MedsFit(dict):
             front= "    pars: "
             efront="    err:  "
 
-        print_pars(res['pars'], front=front)
+        if 'pars' in res:
+            print_pars(res['pars'], front=front)
 
         if 'pars_err' in res:
             print_pars(res['pars_err'], front=efront)
@@ -1005,7 +1041,6 @@ class MedsFit(dict):
                 return
 
         res=allres['galaxy_res']
-        res_max=allres['max_res']
 
         pars=res['pars']
         pars_cov=res['pars_cov']
@@ -1019,10 +1054,12 @@ class MedsFit(dict):
         data['pars'][dindex,:] = pars
         data['pars_cov'][dindex,:,:] = pars_cov
 
-        data['max_flags'][dindex] = res_max['flags']
-        data['pars_max'][dindex,:] = res_max['pars']
-        if 'pars_cov' in res_max:
-            data['pars_max_cov'][dindex,:,:] = res_max['pars_cov']
+        if 'max_res' in allres:
+            res_max=allres['max_res']
+            data['max_flags'][dindex] = res_max['flags']
+            data['pars_max'][dindex,:] = res_max['pars']
+            if 'pars_cov' in res_max:
+                data['pars_max_cov'][dindex,:,:] = res_max['pars_cov']
 
         data['flux'][dindex] = flux
         data['flux_err'][dindex] = flux_err
@@ -1128,11 +1165,8 @@ class MedsFit(dict):
 
         self._checkpoint_data=self.get('checkpoint_data',None)
         if self._checkpoint_data is not None:
-            self.data=self._checkpoint_data['data']
-
-            # need the data to be native for the operation below
-            fitsio.fitslib.array_to_native(self.data, inplace=True)
-
+            import esutil as eu
+            eu.numpy_util.copy_fields(self._checkpoint_data['data'], self.data)
 
     def _try_checkpoint(self, tm):
         """
@@ -1196,6 +1230,7 @@ class MedsFit(dict):
         else:
             remove_prior=False
 
+
         ls=ngmix.lensfit.LensfitSensitivity(g, g_prior, remove_prior=remove_prior)
         res['g_sens'] = ls.get_g_sens()
         res['nuse'] = ls.get_nuse()
@@ -1223,6 +1258,7 @@ class MedsFit(dict):
             ('nimage_use','i4'),
             ('time','f8'),
 
+            ('psf_id','i4'),
             ('psf_g','f8',2),
             ('psf_T','f8'),
 
@@ -1359,7 +1395,7 @@ class MedsFitISample(MedsFit):
         if max_res['flags'] != 0:
             sampler=None
         else:
-            if self['max_pars']['method']=='lm':
+            if self['max_pars']['replace_cov']:
                 self._try_replace_cov(max_fitter)
 
             self._print_galaxy_res(max_fitter)
@@ -1655,3 +1691,29 @@ def plot_autocorr(trials, window=100, show=False, **kw):
     return arr
 
 
+class FromChainGuesser(object):
+    def __init__(self, trials):
+        self.trials=trials
+
+    def __call__(self, n=None, **keys):
+        """
+        get a random sample from the best points
+        """
+        import random
+
+        if n is None:
+            is_scalar=True
+            n=1
+        else:
+            is_scalar=False
+
+        trials=self.trials
+        np = trials.shape[0]
+
+        rand_int = random.sample(xrange(np), n)
+        guess=trials[rand_int, :]
+
+        if is_scalar:
+            guess=guess[0,:]
+
+        return guess
