@@ -18,6 +18,7 @@ def fit_prior(show=False):
     xdata=hd['center']
     ydata=hd['hist'].astype('f8')
 
-    pg3=ngmix.priors.GPriorGreat3Exp()
+    #pg3=ngmix.priors.GPriorGreat3Exp()
+    pg3=ngmix.priors.GPriorGreatDES(gmax=0.985)
 
-    pg3.dofit_lm(hd['center'], hd['hist'].astype('f8'), show=show)
+    pg3.dofit(hd['center'], hd['hist'].astype('f8'), show=show)
