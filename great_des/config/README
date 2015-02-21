@@ -84,6 +84,25 @@
     - trying broader priors and recalculating the noise
     - no different
 
+### Checked out the old versions and got same result as nfit-02 ###
+
+- Also checked
+    - prior gives consistent answers
+    - LensfitSensitivity on same samples gives same mean and sensitivity
+
+    - generate a psf image and convolved galaxy image and fit it with both
+      codes, it should give same fit
+        - images are identical
+        - max like fits agree
+        - emcee mean of pars agree to third digit
+        - sensitivities agree to 2nd digit
+        - consistent with jacobian as well
+        - with prior looks similar, not exact....
+    - * test on meds files, outside of any framework, just write a new script
+      (start with great-des or e2e)
+    - * new one is 1.8 times slower... where is that coming from?
+        - partly from copying psf gmix every time, no need...
+        still the mcmc part is 40% slower
 
 If error is in jacobian somehow, maybe add pixel scale to an nsim run?
 
