@@ -970,6 +970,8 @@ class MedsFit(dict):
 
         if 'pars_err' in res:
             print_pars(res['pars_err'], front=efront)
+            if 'g_sens' in res:
+                print("            g_sens: [%.2f, %.2f]" % (res['g_sens'][0],res['g_sens'][1]))
             if 'arate' in res:
                 mess="            s/n: %.1f  arate: %.2f  tau: %.1f chi2per: %.2f"
                 tup = (res['s2n_w'],res['arate'],res['tau'],res['chi2per'])
