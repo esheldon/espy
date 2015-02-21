@@ -2,7 +2,7 @@ from __future__ import print_function, division
 import os
 import numpy
 
-def fit_prior(show=False, gmax_data=0.975, gmax=1.0):
+def fit_prior(type='great-des', show=False, gmax_data=0.975, gmax=1.0):
     import esutil as eu
     import ngmix
 
@@ -12,11 +12,20 @@ def fit_prior(show=False, gmax_data=0.975, gmax=1.0):
     xdata=hd['center']
     ydata=hd['hist'].astype('f8')
 
-    #pg3=ngmix.priors.GPriorGreat3Exp()
-    pg3=ngmix.priors.GPriorGreatDES(gmax=gmax)
-    #pg3=ngmix.priors.GPriorGreatDES2(gmax=gmax)
+    if type=='no-exp':
+        p=ngmix.priors.GPriorGreatDESNoExp(gmax=gmax)
+    elif type=='great-des':
+        p=ngmix.priors.GPriorGreatDES(gmax=gmax)
+    elif type=='great-des2':
+        p=ngmix.priors.GPriorGreatDES2()
+    elif type=='ba':
+        p=ngmix.priors.GPriorBA(0.2)
+    elif type=='merf':
+        p=ngmix.priors.GPriorMErf()
+    else:
+        raise ValueError("bad type '%s'" % type)
 
-    pg3.dofit(hd['center'], hd['hist'].astype('f8'), show=show)
+    p.dofit(hd['center'], hd['hist'].astype('f8'), show=show)
 
 def cache_data(gmax_data):
     import fitsio
