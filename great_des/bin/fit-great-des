@@ -228,11 +228,18 @@ def get_g_prior(conf):
 
     if g_prior_type=='cosmos-sersic':
         g_prior=ngmix.priors.make_gprior_cosmos_sersic(type='erf')
+
+    elif g_prior_type=='great-des':
+        g_prior=ngmix.priors.GPriorGreatDES(conf['g_prior_pars'],
+                                            gmax=conf['g_prior_max'])
+
     elif g_prior_type=='zdiskerf':
         g_prior=ngmix.priors.ZDisk2DErf()
+
     elif g_prior_type=='ba':
         sigma=conf["g_prior_sigma"]
         g_prior=ngmix.priors.GPriorBA(sigma)
+
     else:
         raise ValueError("implement gprior '%s'" % g_prior_type)
 
