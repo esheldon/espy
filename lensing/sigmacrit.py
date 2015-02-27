@@ -1,3 +1,10 @@
+"""
+ScinvCalculator, a class to calculate the mean inverse
+critical density as a function of lens redshift from
+a source p(z)
+
+Erin Sheldon, BNL
+"""
 from __future__ import print_function
 import os
 import numpy
