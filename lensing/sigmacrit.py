@@ -7,11 +7,6 @@ from esutil.ostools import path_join
 from esutil.numpy_util import where1
 from math import pi as PI
 
-try:
-    import zphot
-except:
-    print("could not load module zphot")
-
 class ScinvCalculator:
     def __init__(self,
                  zlmin,
