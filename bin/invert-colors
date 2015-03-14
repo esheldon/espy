@@ -1,9 +1,17 @@
 #!/usr/bin/env python
 from __future__ import print_function, division
-import sys
 
-fname_in=sys.argv[1]
-fname_out=sys.argv[2]
+from argparse import ArgumentParser
+
+parser=ArgumentParser(__doc__)
+
+parser.add_argument('infile',help="input file")
+parser.add_argument('outfile',help="output file")
+
+args=parser.parse_args()
+
+fname_in=args.infile
+fname_out=args.outfile
 
 if fname_in == fname_out:
     raise ValueError("input and output are same file")
