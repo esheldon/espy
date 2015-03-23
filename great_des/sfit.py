@@ -716,6 +716,14 @@ class PSFRunner(object):
         Fguess = self.obs.image.sum()
         self.guess0=array( [0.0, 0.0, 0.0, 0.0, Tguess, Fguess] )
 
+class CompositeMaxRunner(object):
+    """
+    wrapper to generate guesses and run the psf fitter a few times
+    """
+    def __init__(self, obs, pars, guesser, fracdev, TdByTe,
+                 use_logpars=True, prior=None):
+        pass
+
 
 class MaxRunner(object):
     """
