@@ -328,6 +328,10 @@ def compare_images(im1, im2, **keys):
     ymin=keys.get('min',None)
     ymax=keys.get('max',None)
 
+    color1=keys.get('color1','blue')
+    color2=keys.get('color2','orange')
+    colordiff=keys.get('colordiff','red')
+
     nrow=2
     if cross_sections:
         ncol=3
@@ -399,12 +403,12 @@ def compare_images(im1, im2, **keys):
         resrows = resid[:,cen[1]]
         rescols = resid[cen[0],:]
 
-        him1rows = biggles.Histogram(im1rows, color='blue')
-        him1cols = biggles.Histogram(im1cols, color='blue')
-        him2rows = biggles.Histogram(im2rows, color='orange')
-        him2cols = biggles.Histogram(im2cols, color='orange')
-        hresrows = biggles.Histogram(resrows, color='red')
-        hrescols = biggles.Histogram(rescols, color='red')
+        him1rows = biggles.Histogram(im1rows, color=color1)
+        him1cols = biggles.Histogram(im1cols, color=color1)
+        him2rows = biggles.Histogram(im2rows, color=color2)
+        him2cols = biggles.Histogram(im2cols, color=color2)
+        hresrows = biggles.Histogram(resrows, color=colordiff)
+        hrescols = biggles.Histogram(rescols, color=colordiff)
 
         him1rows.label = label1
         him2rows.label = label2
