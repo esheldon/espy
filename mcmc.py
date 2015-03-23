@@ -112,6 +112,7 @@ def plot_results(trials, **keys):
     """
     import biggles
     import esutil
+    from esutil.numpy_util import where1, between
 
     npars=trials.shape[1]
 
@@ -122,7 +123,8 @@ def plot_results(trials, **keys):
     nbin=keys.get('nbin',35)
     names=keys.get('names',None)
     show=keys.get('show',True)
-    ptypes=keys.get('ptypes',['linear']*npars)
+
+    nsigma=keys.get('nsigma',None)
 
     means,cov = extract_stats(trials,weights=weights)
     errs=sqrt(diag(cov)) 
@@ -137,42 +139,40 @@ def plot_results(trials, **keys):
         else:
             name=r'$p_{%d}$' % i
 
-        burn_plot_i = esutil.plotting.bscatter(ind,trials[:,i],
-                                               type='solid',
-                                               xlabel='step',
-                                               ylabel=name,
-                                               show=False)
+        use_trials=trials[:,i]
+        use_ind=ind
+        use_wts=weights
+        if nsigma is not None:
+            w=where1(between(trials[:,i],
+                             means[i]-nsigma*errs[i],
+                             means[i]+nsigma*errs[i]))
+            use_trials = trials[w,i]
+            use_ind=ind[w]
+            if weights is not None:
+                use_wts=weights[w]
+
+        burn_plot_i = biggles.plot(use_ind,
+                                   use_trials,
+                                   type='solid',
+                                   xlabel='step',
+                                   ylabel=name,
+                                   visible=False)
         plt[i,0] = burn_plot_i
 
-        if ptypes[i] == 'linear':
-            vals=trials[:,i]
-            xlabel=name
-        else:
-            vals=numpy.log10(trials[:,i])
-            #bsize=0.2*vals.std()
-            xlabel=r'$log_{10}(%s)$' % name
-        hdict = esutil.stat.histogram(vals,
-                                      #binsize=bsize, 
-                                      nbin=nbin,
-                                      weights=weights,
-                                      more=True)
-        if weights is not None:
-            hist=hdict['whist']
-            hplot = biggles.Curve(hdict['center'],
-                                  hdict['whist'])
-        else:
-            hist=hdict['hist']
-            hplot = biggles.Histogram(hdict['hist'], 
-                                      x0=hdict['low'][0], 
-                                      binsize=hdict['binsize'])
+
+        hcurve,bin_edges,harray = biggles.make_histc(use_trials,
+                                                     nbin=nbin,
+                                                     weights=use_wts,
+                                                     get_hdata=True)
+
         plti=biggles.FramedPlot()
 
-        plti.xlabel=xlabel
+        plti.xlabel=name
 
-        hmax=hist.max()
+        hmax=harray.max()
         plti.yrange=[-0.05*hmax, 1.2*hmax]
 
-        plti.add(hplot)
+        plti.add(hcurve)
             
         lab = r'$<%s> = %0.4g \pm %0.4g$' % (name,means[i],errs[i])
         plab = biggles.PlotLabel(0.1,0.8,lab,
