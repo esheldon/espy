@@ -236,7 +236,7 @@ class LineFitter:
         """
         pars order same as for numpy.poly1d
         """
-        return self.pars[0]*self.x + self.pars[1]
+        return self.pars[0]*x + self.pars[1]
 
     def __repr__(self):
         if self.perr is not None:
