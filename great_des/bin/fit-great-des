@@ -378,10 +378,6 @@ def run_fitter(files, conf, options, checkpoint_data=None):
         fitclass=great_des.nfit.MedsFitMax
     elif conf['fitter']=='isample':
         fitclass=great_des.nfit.MedsFitISample
-    elif conf['fitter']=='max-s':
-        fitclass=great_des.sfit.MedsFitMax
-        if options.work_dir is not None:
-            raise RuntimeError("no work dir supported for sfit")
     else:
         raise ValueError("bad fitter: '%s'" % conf['fitter'])
 
@@ -398,6 +394,75 @@ def run_fitter(files, conf, options, checkpoint_data=None):
     data=gm.get_data()
 
     return data
+
+def run_sfitter(files, conf, options, checkpoint_data=None):
+    """
+    Do the fit
+    """
+    import great_des
+    import great3
+    import ngmix
+    from ngmix.joint_prior import PriorSimpleSep
+    from ngmix.priors import ZDisk2D, CenPrior
+
+    if options.work_dir is not None:
+        raise RuntimeError("no work dir supported for sfit")
+
+    mpars=conf['model_pars']
+    if 'joint_prior' in mpars:
+        jp=mpars['joint_prior']
+        cen_width=jp['cen_prior_pars'][0]
+
+        g_prior_type=jp.get('g_prior_type',None)
+        g_prior_pars=jp.get('g_prior_pars',None)
+
+        prior=great3.joint_prior.make_joint_prior_simple(jp['name'],
+                                                         jp['partype'],
+                                                         cen_width,
+                                                         g_prior_type=g_prior_type,
+                                                         g_prior_pars=g_prior_pars)
+    else:
+        cen_prior=great3.nfit.get_cen_prior(mpars['cen_prior_type'],
+                                            pars=mpars['cen_prior_pars'])
+
+        g_prior=great3.nfit.get_g_prior(mpars['g_prior_type'],
+                                        pars=mpars['g_prior_pars'])
+        T_prior=great3.nfit.get_T_prior(mpars['T_prior_type'],
+                                        pars=mpars['T_prior_pars'])
+        counts_prior=great3.nfit.get_counts_prior(mpars['counts_prior_type'],
+                                                  pars=mpars['counts_prior_pars'])
+
+        prior=ngmix.joint_prior.PriorSimpleSep(cen_prior,
+                                               g_prior,
+                                               T_prior,
+                                               counts_prior)
+
+
+    
+    mpars=conf['model_pars']
+    if conf['fitter']=='max':
+        if mpars['model']=='cm':
+            fitclass=great_des.sfit.CompositeMedsFitMax
+        else:
+            fitclass=great_des.sfit.MedsFitMax
+    elif conf['fitter']=='isample':
+        fitclass=great_des.nfit.MedsFitISample
+    else:
+        raise ValueError("bad fitter: '%s'" % conf['fitter'])
+
+    # for fitter=='max' only the flat prior is used
+    gm=fitclass(files['meds'],
+                files['truth'],
+                files['psf'],
+                checkpoint_data=checkpoint_data,
+                prior=prior,
+                **conf)
+
+    gm.do_fits()
+    data=gm.get_data()
+
+    return data
+
 
 def setup_work_files(options, meds_file, truth_file):
     """
@@ -510,7 +575,10 @@ def go(files, options):
     conf['config_file']=files['config']
     conf['checkpoint_file']=checkpoint_file
 
-    data=run_fitter(files, conf, options, checkpoint_data=checkpoint_data)
+    if 'sfit' in files['config']:
+        data=run_sfitter(files, conf, options, checkpoint_data=checkpoint_data)
+    else:
+        data=run_fitter(files, conf, options, checkpoint_data=checkpoint_data)
 
     write_data(data, files['out'])
 

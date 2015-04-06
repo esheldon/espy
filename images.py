@@ -315,7 +315,9 @@ def multiview(image, **keys):
 
     show = keys.get('show', True)
     if show:
-        tab.show()
+        width=keys.get('width',None)
+        height=keys.get('height',None)
+        tab.show(width=width, height=height)
     return tab
 
 def compare_images(im1, im2, **keys):

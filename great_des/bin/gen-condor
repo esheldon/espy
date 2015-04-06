@@ -1,7 +1,4 @@
 #!/usr/bin/env python
-"""
-Geneate the condor files
-"""
 from __future__ import print_function
 import os,sys
 from sys import stderr
@@ -10,12 +7,16 @@ import great_des
 from great_des import files
 
 from argparse import ArgumentParser
-parser = ArgumentParser(__doc__)
+parser = ArgumentParser()
 
 parser.add_argument('run',help="great des run identifier")
 parser.add_argument('--gvals',help="g values to process, csv")
 parser.add_argument('--missing',action='store_true',
                     help="only write jobs for missing files")
+
+parser.add_argument('--nperfile',default=1000, type=int,
+                    help="number per file")
+
 
 
 _master_template="""#!/bin/bash
@@ -23,8 +24,8 @@ function run_fit {
     echo "host: $(hostname)"
     echo "will write to file: $output"
 
+    #--work-dir=$tmpdir                \\
     $ESPY_DIR/great_des/bin/fit-great-des \\
-        --work-dir=$tmpdir                \\
         --obj-range ${start},${end}       \\
         ${config_file}                    \\
         ${meds_file}                      \\
@@ -115,7 +116,7 @@ Queue
 
 
 class CondorMaker(object):
-    def __init__(self, run, missing=False):
+    def __init__(self, run, jobs_per_file, missing=False):
         self.run=run
         self.missing=missing
 
@@ -128,7 +129,7 @@ class CondorMaker(object):
         self.condor_template_head = _condor_template_head % {'master_script':self.master_file,
                                                              'image_size':self.image_size}
 
-        self.jobs_per_file=1000
+        self.jobs_per_file=jobs_per_file
 
         self.make_output_dirs()
 
@@ -167,10 +168,11 @@ class CondorMaker(object):
                     print("        fnum: %d/%d" % (fnum+1,nf))
 
                 #print("gnum:",gnum,"fnum:",fnum)
-                low,high = files.get_chunk_ranges(gdrun=gdrun,
-                                                  fnum=fnum,
-                                                  gnum=gnum,
-                                                  nper=nper)
+                if ignum==0 and fnum==0:
+                    low,high = files.get_chunk_ranges(gdrun=gdrun,
+                                                      fnum=fnum,
+                                                      gnum=gnum,
+                                                      nper=nper)
 
                 nr = len(low)
                 for i in xrange(nr):
@@ -239,7 +241,7 @@ def main():
     if gvals is not None:
         gvals=[int(g) for g in gvals.split(',')]
 
-    cm = CondorMaker(args.run, missing=args.missing)
+    cm = CondorMaker(args.run, args.jobs_per_file, missing=args.missing)
     cm.make_condor(gvals=gvals)
     cm.make_master()
 

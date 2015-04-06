@@ -11,10 +11,6 @@ from ngmix.gexceptions import GMixMaxIterEM, GMixRangeError
 from ngmix.observation import Observation
 from ngmix.jacobian import Jacobian
 
-import gmix_meds
-from gmix_meds.util import FromPSFGuesser, FixedParsGuesser, FromParsGuesser, FromFullParsGuesser
-from gmix_meds.util import TFluxAndPriorGuesser, FluxAndPriorGuesser
-
 from .nfit import srandu
 
 import fitsio
@@ -54,7 +50,7 @@ class MedsFitBase(dict):
         deal with default parameters and conversions
         """
         # in arcsec
-        sigma_guess=self['psf_fwhm_guess']/2.35
+        sigma_guess=self['psf_pars']['fwhm_guess']/2.35
         self['psf_Tguess'] = 2*sigma_guess**2
 
         self['make_plots']=self.get('make_plots',False)
@@ -72,80 +68,114 @@ class MedsFitBase(dict):
         loop and fit all objects
         """
 
+        t0=time.time()
+
         last=self.indices.size-1
         for dindex,mindex in enumerate(self.indices):
             self.dindex=dindex
             self.mindex=mindex
 
-            print("%d:%d  %d:%d" % (dindex, last, mindex,self['end']))
+            print("%d:%d  %d:%d" % (dindex, last, mindex, self['end']))
 
             self.data['number'][dindex] = mindex
 
             self.make_psf_observation()
             self.make_galaxy_observation()
 
-            psf_flags=self.fit_psf()
+            self.run_fitters()
 
-            if psf_flags != 0:
-                continue
-
-            self.fit_psf_flux()
-
-            self.fit_galaxy()
-
-            self.copy_galaxy_result()
-            self.print_galaxy_result()
             if self['make_plots']:
+                self.compare_psf()
                 self.do_gal_plots()
 
-    def fit_psf(self):
-        """
-        load the observation and do the fit
-        """
+        tm=time.time()-t0
+        num=len(self.indices)
+        print("time:",tm)
+        print("time per:",tm/num)
 
-        psf_runner=PSFRunner(self.psf_obs,
-                             self['psf_model'],
-                             self['psf_Tguess'],
-                             self['psf_max_pars'])
+    def run_fitters(self):
+        from great3.generic import PSFFailure,GalFailure
 
-        psf_runner.go(ntry=self['psf_ntry'])
+        dindex=self.dindex
+        boot=self.get_bootstrapper()
+        self.boot=boot
 
-        self.psf_fitter = psf_runner.fitter
+        try:
 
-        res=self.psf_fitter.get_result()
+            self.fit_psf()
+            self.fit_psf_flux()
 
-        if res['flags']==0:
-            #print("    psf success, setting psf in obs")
-            gmix=self.psf_fitter.get_gmix()
-            self.psf_obs.set_gmix(gmix)
-            self.obs.set_psf(self.psf_obs)
+            try:
 
-            self.copy_psf_result()
-        else:
+                self.fit_galaxy()
+                self.copy_galaxy_result()
+                self.print_galaxy_result()
+
+            except GalFailure:
+                print("    galaxy fitting failed")
+                self.data['flags'][dindex] = GAL_FIT_FAILURE
+
+        except PSFFailure:
             print("    psf fitting failed")
             self.data['flags'][dindex] = PSF_FIT_FAILURE
 
-        if self['make_plots']:
-            self.compare_psf()
 
-        return res['flags']
+    def fit_psf(self):
+
+        dindex=self.dindex
+        boot=self.boot
+
+        psf_pars=self['psf_pars']
+
+        boot.fit_psf(psf_pars['model'],
+                     Tguess=self['psf_Tguess'],
+                     ntry=psf_pars['ntry'])
+
+        self.psf_fitter=self.boot.get_psf_fitter()
+
+        self.copy_psf_result()
 
     def fit_psf_flux(self):
         """
-        use psf as a template, measure flux (linear)
+        fit psf model to galaxy with one free parameter for flux
         """
-        fitter=ngmix.fitting.TemplateFluxFitter(self.obs, do_psf=True)
-        fitter.go()
+        boot=self.boot
+        dindex=self.dindex
 
-        res=fitter.get_result()
+        boot.fit_gal_psf_flux()
 
         data=self.data
-        data['psf_flux'][self.dindex] = res['flux']
-        data['psf_flux_err'][self.dindex] = res['flux_err']
+        data['psf_flux'][dindex] = boot.psf_flux
+        data['psf_flux_err'][dindex] = boot.psf_flux_err
 
-        print("    psf flux: %.3g +/- %.3g" % (res['flux'],res['flux_err']))
+    def fit_galaxy(self):
+        """
+        over-ride for different fitters
+        """
+        raise RuntimeError("over-ride me")
 
-        self.psf_flux_fitter=fitter
+    def fit_max(self):
+        """
+        do a maximum likelihood fit
+        """
+        boot=self.boot
+
+        model=self['model_pars']['model']
+        max_pars=self['max_pars']
+
+        boot.fit_max(model,
+                     max_pars,
+                     prior=self['prior'],
+                     ntry=max_pars['ntry'])
+
+
+    def get_bootstrapper(self):
+        """
+        get the bootstrapper for fitting psf through galaxy
+        """
+        from great3.sfit import get_bootstrapper
+        boot = get_bootstrapper(self.psf_obs, self.obs)
+        return boot
 
     def make_psf_observation(self):
         """
@@ -159,12 +189,13 @@ class MedsFitBase(dict):
 
         image0 = self.psf_obj[ext][:,:]
 
-        image = image0 + numpy.random.normal(scale=self['psf_addnoise'],
+        noise=self['psf_pars']['addnoise']
+        image = image0 + numpy.random.normal(scale=noise,
                                              size=image0.shape)
 
         weight = image.copy()
         weight *= 0
-        weight += 1.0/self['psf_addnoise']**2
+        weight += 1.0/noise**2
 
         jacob=self.get_jacobian()
         self.psf_obs = Observation(image, weight=weight, jacobian=jacob)
@@ -213,6 +244,7 @@ class MedsFitBase(dict):
         """
         get guesser based of size of psf and psf flux
         """
+        from gmix_meds.util import FromPSFGuesser
         data=self.data
         T=data['psf_T'][self.dindex]
         flux=data['psf_flux'][self.dindex]
@@ -231,6 +263,8 @@ class MedsFitBase(dict):
         from the psf flux and the prior
         """
 
+        from gmix_meds.util import FluxAndPriorGuesser
+
         psf_flux=self.data['psf_flux'][self.dindex]
         psf_flux=psf_flux.clip(min=0.1, max=1.0e9)
 
@@ -246,6 +280,7 @@ class MedsFitBase(dict):
         """
         from the psf flux and the prior
         """
+        from gmix_meds.util import TFluxAndPriorGuesser
 
         psf_gmix = self.psf_obs.get_gmix()
         psf_T = psf_gmix.get_T()
@@ -290,7 +325,7 @@ class MedsFitBase(dict):
 
         fitter=self.psf_fitter
 
-        model=self['psf_model']
+        model=self['psf_pars']['model']
 
         obs=self.psf_obs
         if 'em' in model:
@@ -331,7 +366,7 @@ class MedsFitBase(dict):
 
         fitter=self.gal_fitter
 
-        model=self['fit_model']
+        model=self['model_pars']['model']
         title = '%d %s' % (self.mindex, model)
 
         gmix = fitter.get_gmix()
@@ -432,7 +467,7 @@ class MedsFitBase(dict):
         data['psf_T'][self.dindex] = T
 
     def get_namer(self):
-        from gmix_meds.util import Namer
+        from great3.generic import Namer
 
         if self['use_logpars']:
             n=Namer('log')
@@ -499,7 +534,7 @@ class MedsFitBase(dict):
 
         n=self.get_namer()
 
-        np=ngmix.gmix.get_model_npars(self['fit_model'])
+        np=ngmix.gmix.get_model_npars(self['model_pars']['model'])
 
         dt=[
             ('number','i4'),
@@ -563,46 +598,59 @@ class MedsFitBase(dict):
     
         self.data=data
 
+    def set_fracdev_prior(self):
+
+        self['fracdev_grid']=self.get('fracdev_grid',None)
+
+        prun=self.get('fracdev_prior',None)
+        if prun is not None:
+            from ngmix.gmix import GMixND
+
+            if 'cgc' in prun:
+                experiment="control"
+            elif 'rgc' in prun:
+                experiment="real_galaxy"
+            else:
+                raise ValueError("expected rgc or cgc in run")
+
+            partype=self.get('fracdev_prior_type','fracdev')
+            pars=files.read_prior(experiment=experiment,
+                                  obs_type="ground",
+                                  shear_type="constant",
+                                  run=prun,
+                                  partype=partype,
+                                  ext="fits")
+
+            means=pars['means']
+            if len(means.shape)==1:
+                means=means.reshape(pars['means'].size,1)
+
+            fracdev_prior=GMixND(pars['weights'],
+                                 means,
+                                 pars['covars'])
+
+            s2n_max=\
+                    self.get('fracdev_prior_s2nmax',1.0e9)
+            fracdev_range = self.get('fracdev_range',[-2,2])
+            fracdev_prior.s2n_max=s2n_max
+            # not applied during prior evaluation, just stored
+            # here for convenience
+            fracdev_prior.fracdev_range=fracdev_range
+
+        else:
+            fracdev_prior=None
+
+        self['fracdev_prior']=fracdev_prior
+
 
 class MedsFitMax(MedsFitBase):
     def fit_galaxy(self):
         """
         fit with max like, using a MaxRunner object
         """
-        data=self.data
+        self.fit_max()
 
-        max_pars=self['max_pars']
-
-        guesser=self.get_guesser()
-        runner=MaxRunner(self.obs,
-                         self['fit_model'],
-                         max_pars,
-                         guesser,
-                         use_logpars=self['use_logpars'],
-                         prior=self['search_prior'])
-
-        runner.go(ntry=max_pars['ntry'])
-
-        self.gal_fitter=runner.fitter
-
-        res=self.gal_fitter.get_result()
-        #if res['flags']==0 and max_pars['method']=='lm':
-        #    self.try_replace_cov(self.gal_fitter)
-
-    def get_guesser(self):
-        """
-        get max guesser
-        """
-        gtype=self['max_guesser']
-        if gtype == "psf":
-            guesser=self.get_psf_guesser()
-        elif gtype == "T-flux-and-prior":
-            guesser=self.get_T_flux_and_prior_guesser()
-        elif gtype == "flux-and-prior":
-            guesser=self.get_flux_and_prior_guesser()
-        else:
-            raise ValueError("bad max guesser type: '%s'" % gtype)
-        return guesser
+        self.gal_fitter=self.boot.get_max_fitter()
 
     def copy_galaxy_result(self):
         """
@@ -632,6 +680,69 @@ class MedsFitMax(MedsFitBase):
     def make_struct(self):
         super(MedsFitMax,self).make_struct()
         self.data['nfev'] = PDEFVAL
+
+
+
+class CompositeMedsFitMax(MedsFitMax):
+    def __init__(self, *args, **keys):
+        super(CompositeMedsFitMax,self).__init__(*args, **keys)
+        self.set_fracdev_prior()
+
+    def fit_galaxy(self):
+        """
+        fit with max like, using a MaxRunner object
+        """
+        self.fit_max()
+
+        self.gal_fitter=self.boot.get_max_fitter()
+
+    def copy_galaxy_result(self):
+        """
+        extra copies beyond the default
+        """
+        super(MedsFitMax,self).copy_galaxy_result()
+        res=self.gal_fitter.get_result()
+        if 'fracdev' in res:
+            self.data['fracdev'][self.dindex] = res['fracdev']
+            self.data['fracdev_err'][self.dindex] = res['fracdev_err']
+
+    '''
+    def print_galaxy_result(self):
+        super(CompositeMedsFitMax,self).print_galaxy_result()
+        res=self.gal_fitter.get_result()
+
+        if 'fracdev' in res:
+            tup=(res['fracdev'],res['fracdev_err'])
+            print("    fracdev: %.3f +/- %.3f" % tup)
+    '''
+
+    def make_dtype(self):
+        super(MedsFitMax,self).make_dtype()
+
+        self.dtype += [
+            ('fracdev','f8'),
+            ('fracdev_err','f8'),
+        ]
+
+    def make_struct(self):
+        super(MedsFitMax,self).make_struct()
+        self.data['fracdev'] = PDEFVAL
+        self.data['fracdev_err'] = PDEFVAL
+
+    def get_bootstrapper(self):
+        """
+        get the bootstrapper for fitting psf through galaxy
+        """
+        from great3.sfit import get_bootstrapper
+        
+        # keywords pass on fracdev_prior and fracdev_grid
+        boot = get_bootstrapper(self.psf_obs,
+                                self.obs,
+                                type='composite',
+                                **self)
+        return boot
+
+
 
 class MedsFitShearBase(MedsFitBase):
     def fit_galaxy(self):

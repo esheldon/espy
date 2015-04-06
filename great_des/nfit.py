@@ -10,8 +10,6 @@ from ngmix.fitting import print_pars
 from ngmix.gexceptions import GMixMaxIterEM, GMixRangeError
 from ngmix.observation import Observation
 
-from gmix_meds.util import FromPSFGuesser, FixedParsGuesser, FromParsGuesser, FromFullParsGuesser
-
 import meds
 
 # starting new values for these
@@ -340,6 +338,7 @@ class MedsFit(dict):
         Run through and fit all the models
         """
         import gmix_meds.nfit
+        from gmix_meds.util import FromFullParsGuesser
 
         res=self.res
         model=self['fit_model']
@@ -523,6 +522,7 @@ class MedsFit(dict):
         The size will often be too big
 
         """
+        from gmix_meds.util import FromPSFGuesser
         print('        getting guess from psf')
 
         psf_flux=self.res['psf_flux']
@@ -1485,7 +1485,7 @@ class MedsFitISample(MedsFit):
         '''
 
     def _make_sampler(self, fitter):
-        from ngmix.fitting import GCovSampler, GCovSamplerT
+        from ngmix.fitting import ISampler
         from numpy.linalg import LinAlgError
 
         ipars=self['isample_pars']
@@ -1494,17 +1494,12 @@ class MedsFitISample(MedsFit):
         icov = res['pars_cov']*ipars['ifactor']**2
 
         try:
-            if ipars['sampler']=='T':
-                sampler=GCovSamplerT(res['pars'],
-                                     icov,
-                                     ipars['df'],
-                                     min_err=ipars['min_err'],
-                                     max_err=ipars['max_err'])
-            else:
-                sampler=GCovSampler(res['pars'],
-                                    icov,
-                                    min_err=ipars['min_err'],
-                                    max_err=ipars['max_err'])
+            sampler=ISampler(res['pars'],
+                             icov,
+                             ipars['df'],
+                             min_err=ipars['min_err'],
+                             max_err=ipars['max_err'])
+
         except LinAlgError:
             print("        bad cov")
             sampler=None
