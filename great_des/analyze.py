@@ -1,6 +1,6 @@
 from __future__ import print_function
 import numpy
-from numpy import diag, sqrt, newaxis, where, log10
+from numpy import diag, sqrt, newaxis, where, log10, ones
 from . import files
 
 MIN_ARATE=0.3
@@ -8,7 +8,16 @@ MAX_ARATE=0.6
 MIN_S2N=10.0
 MIN_TS2N=2.0
 
-SN=0.16
+SN=0.22
+
+SHEARS={0: [ 0.05,  0.  ],
+        1: [ 0.  ,  0.05],
+        2: [-0.05,  0.  ],
+        3: [ 0.  , -0.05],
+        4: [ 0.03536,  0.03536],
+        5: [ 0.03536, -0.03536],
+        6: [-0.03536, -0.03536],
+        7: [-0.03536,  0.03536]}
 
 def load_data(run, select=True, **keys):
     """
@@ -23,7 +32,6 @@ def load_data(run, select=True, **keys):
 
         print("reading:",fname)
         data=fitsio.read(fname)
-        data=add_T(data)
 
         if select:
             print("    selecting")
@@ -32,38 +40,53 @@ def load_data(run, select=True, **keys):
         dlist.append(data)
     return dlist
 
-def add_T(data):
-    import esutil as eu
-
-    if 'T' not in data.dtype.names:
-        print("adding T")
-        T = data['pars'][:,4]
-        Terr = sqrt(data['pars_cov'][:,4,4])
-        ndata=eu.numpy_util.add_fields(data,[('T','f8'),('T_err','f8')])
-        ndata['T']=T
-        ndata['T_err']=Terr
-        data=ndata
-
-    return data
 
 def select_good(data,
                 min_arate=MIN_ARATE,
                 max_arate=MAX_ARATE,
                 min_s2n=MIN_S2N,
-                min_ts2n=MIN_TS2N):
+                min_Ts2n=MIN_TS2N,
+                max_g=1.0):
     """
     apply standard selection
     """
 
-    Ts2n=data['T']/data['T_err']
+    logic = ones(data.size, dtype=bool)
 
-    logic = (  (data['flags']==0)
-             & (data['fit_flags']==0)
-             & (data['s2n_w'] > min_s2n)
-             & (Ts2n  > min_ts2n) )
+    elogic = (data['flags']==0)
+    w,=where(elogic)
+    if w.size != data.size:
+        print("    kept %d/%d from flags" % (w.size, data.size))
+        logic = logic & elogic
+
+    elogic = (data['s2n_w'] > min_s2n)
+    w,=where(elogic)
+    if w.size != data.size:
+        print("    kept %d/%d from s2n > %g" % (w.size, data.size, min_s2n))
+        logic = logic & elogic
+
+    elogic = (data['T_s2n'] > min_Ts2n)
+    w,=where(elogic)
+    if w.size != data.size:
+        print("    kept %d/%d from Ts2n > %g" % (w.size, data.size, min_Ts2n))
+        logic = logic & elogic
+
+    g = numpy.sqrt( data['g'][:,0]**2 + data['g'][:,1]**2 )
+    elogic = (g < max_g)
+    w,=where(elogic)
+    if w.size != data.size:
+        print("    kept %d/%d from g < %g" % (w.size, data.size, max_g))
+        logic = logic & elogic
+
 
     if 'arate' in data.dtype.names:
-        logic = logic & (data['arate'] > min_arate) & (data['arate'] < max_arate)
+        elogic = (data['arate'] > min_arate) & (data['arate'] < max_arate)
+        w,=where(elogic)
+        if w.size != data.size:
+            print("    kept %d/%d from arate [%g,%g]" % (w.size, data.size,
+                                                         min_arate,max_arate))
+            logic = logic & elogic
+
 
     w,=where(logic)
     print("    kept %d/%d" % (w.size, data.size))
@@ -75,7 +98,7 @@ def get_weights(data):
     """
     a good set of weights
     """
-    csum=data['g_cov'][:,0,0] + 2*data['g_cov'][:,0,1] + data['g_cov'][:,1,1]
+    csum=data['g_cov'][:,0,0] + data['g_cov'][:,1,1]
     wts=1.0/(2*SN**2 + csum)
     return wts
 
@@ -101,7 +124,21 @@ def fit_m_c(dlist):
     plt=plot_gdiff_vs_gtrue(gtrue, gdiff, gdiff_err, fitters=[lf1,lf2])
     #plt.show()
 
-    return lf1,lf2
+    m1,c1 = lf1.pars
+    m1err,c1err = lf1.perr
+    m2,c2 = lf2.pars
+    m2err,c2err = lf2.perr
+
+    res={'m1':m1,
+         'm1err':m1err,
+         'm2':m2,
+         'm2err':m2err,
+         'c1':c1,
+         'c1err':c1err,
+         'c2':c2,
+         'c2err':c2err}
+
+    return res
 
 def plot_gdiff_vs_gtrue(gtrue, gdiff, gdiff_err, fitters=None):
     """
@@ -368,11 +405,11 @@ class AnalyzerS2N(dict):
 
                 cut_dlist.append(td)
 
-            lf1,lf2 = fit_m_c(cut_dlist)
-            m[i,0],c[i,0] = lf1.pars
-            m[i,1],c[i,1] = lf2.pars
-            merr[i,0],cerr[i,0] = lf1.perr
-            merr[i,1],cerr[i,1] = lf2.perr
+            res = fit_m_c(cut_dlist)
+            m[i,0],c[i,0] = res['m1'],res['c1']
+            m[i,1],c[i,1] = res['m2'],res['c2']
+            merr[i,0],cerr[i,0] = res['m1err'],res['c1err']
+            merr[i,1],cerr[i,1] = res['m2err'],res['c2err']
             s2n[i] = s2n_sum/wsum
 
             print("s2n:",s2n[i])
