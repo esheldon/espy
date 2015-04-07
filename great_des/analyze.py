@@ -46,6 +46,9 @@ def select_good(data,
                 max_arate=MAX_ARATE,
                 min_s2n=MIN_S2N,
                 min_Ts2n=MIN_TS2N,
+                fracdev_err_max=None,
+                cut_fracdev_exact=False,
+                fracdev_range=None,
                 max_g=1.0):
     """
     apply standard selection
@@ -78,6 +81,29 @@ def select_good(data,
         print("    kept %d/%d from g < %g" % (w.size, data.size, max_g))
         logic = logic & elogic
 
+    if fracdev_range is not None:
+        elogic = (  (data['fracdev'] > fracdev_range[0])
+                  & (data['fracdev'] < fracdev_range[1]) )
+        w,=where(elogic)
+        if w.size != data.size:
+            mess="    kept %d/%d from fracdev [%g,%g]"
+            print(mess % (w.size, data.size, fracdev_range[0],fracdev_range[1]))
+            logic = logic & elogic
+
+
+    if fracdev_err_max is not None:
+        elogic = (data['fracdev_err'] < fracdev_err_max)
+        w,=where(elogic)
+        if w.size != data.size:
+            print("    kept %d/%d from fracdev_err < %g" % (w.size, data.size, fracdev_err_max))
+            logic = logic & elogic
+
+    if cut_fracdev_exact:
+        elogic = (data['fracdev'] != 0.0) & (data['fracdev'] != 1.0)
+        w,=where(elogic)
+        if w.size != data.size:
+            print("    kept %d/%d from fracdev exact" % (w.size, data.size))
+            logic = logic & elogic
 
     if 'arate' in data.dtype.names:
         elogic = (data['arate'] > min_arate) & (data['arate'] < max_arate)

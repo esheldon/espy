@@ -168,7 +168,6 @@ class MedsFitBase(dict):
                      prior=self['prior'],
                      ntry=max_pars['ntry'])
 
-
     def get_bootstrapper(self):
         """
         get the bootstrapper for fitting psf through galaxy
@@ -480,7 +479,7 @@ class MedsFitBase(dict):
         """
         copy some subset of the psf parameters
         """
-
+        from pprint import pprint
         n=self.get_namer()
 
         data=self.data
@@ -489,6 +488,7 @@ class MedsFitBase(dict):
         fitter=self.gal_fitter
 
         res=fitter.get_result()
+        #pprint(res)
 
         if res['flags'] != 0:
             print("    galaxy fit failure")
@@ -598,49 +598,9 @@ class MedsFitBase(dict):
     
         self.data=data
 
-    def set_fracdev_prior(self):
-
+    def set_fracdev_stuff(self):
         self['fracdev_grid']=self.get('fracdev_grid',None)
-
-        prun=self.get('fracdev_prior',None)
-        if prun is not None:
-            from ngmix.gmix import GMixND
-
-            if 'cgc' in prun:
-                experiment="control"
-            elif 'rgc' in prun:
-                experiment="real_galaxy"
-            else:
-                raise ValueError("expected rgc or cgc in run")
-
-            partype=self.get('fracdev_prior_type','fracdev')
-            pars=files.read_prior(experiment=experiment,
-                                  obs_type="ground",
-                                  shear_type="constant",
-                                  run=prun,
-                                  partype=partype,
-                                  ext="fits")
-
-            means=pars['means']
-            if len(means.shape)==1:
-                means=means.reshape(pars['means'].size,1)
-
-            fracdev_prior=GMixND(pars['weights'],
-                                 means,
-                                 pars['covars'])
-
-            s2n_max=\
-                    self.get('fracdev_prior_s2nmax',1.0e9)
-            fracdev_range = self.get('fracdev_range',[-2,2])
-            fracdev_prior.s2n_max=s2n_max
-            # not applied during prior evaluation, just stored
-            # here for convenience
-            fracdev_prior.fracdev_range=fracdev_range
-
-        else:
-            fracdev_prior=None
-
-        self['fracdev_prior']=fracdev_prior
+        self['fracdev_prior'] = self.get('fracdev_prior',None)
 
 
 class MedsFitMax(MedsFitBase):
@@ -650,7 +610,6 @@ class MedsFitMax(MedsFitBase):
         """
         self.fit_max()
 
-        self.gal_fitter=self.boot.get_max_fitter()
 
     def copy_galaxy_result(self):
         """
@@ -686,38 +645,20 @@ class MedsFitMax(MedsFitBase):
 class CompositeMedsFitMax(MedsFitMax):
     def __init__(self, *args, **keys):
         super(CompositeMedsFitMax,self).__init__(*args, **keys)
-        self.set_fracdev_prior()
-
-    def fit_galaxy(self):
-        """
-        fit with max like, using a MaxRunner object
-        """
-        self.fit_max()
-
-        self.gal_fitter=self.boot.get_max_fitter()
+        self.set_fracdev_stuff()
 
     def copy_galaxy_result(self):
         """
         extra copies beyond the default
         """
-        super(MedsFitMax,self).copy_galaxy_result()
+        super(CompositeMedsFitMax,self).copy_galaxy_result()
         res=self.gal_fitter.get_result()
         if 'fracdev' in res:
             self.data['fracdev'][self.dindex] = res['fracdev']
             self.data['fracdev_err'][self.dindex] = res['fracdev_err']
 
-    '''
-    def print_galaxy_result(self):
-        super(CompositeMedsFitMax,self).print_galaxy_result()
-        res=self.gal_fitter.get_result()
-
-        if 'fracdev' in res:
-            tup=(res['fracdev'],res['fracdev_err'])
-            print("    fracdev: %.3f +/- %.3f" % tup)
-    '''
-
     def make_dtype(self):
-        super(MedsFitMax,self).make_dtype()
+        super(CompositeMedsFitMax,self).make_dtype()
 
         self.dtype += [
             ('fracdev','f8'),
@@ -725,7 +666,7 @@ class CompositeMedsFitMax(MedsFitMax):
         ]
 
     def make_struct(self):
-        super(MedsFitMax,self).make_struct()
+        super(CompositeMedsFitMax,self).make_struct()
         self.data['fracdev'] = PDEFVAL
         self.data['fracdev_err'] = PDEFVAL
 
@@ -751,7 +692,7 @@ class MedsFitShearBase(MedsFitBase):
     def make_dtype(self):
         super(MedsFitShearBase,self).make_dtype()
 
-        np=ngmix.gmix.get_model_npars(self['fit_model'])
+        np=ngmix.gmix.get_model_npars(self['model_pars']['model'])
         self.dtype += [
             ('max_flags','i4'),
             ('max_pars','f8',np),
@@ -777,13 +718,151 @@ class MedsFitShearBase(MedsFitBase):
 
  
 class MedsFitISample(MedsFitShearBase):
+    def fit_galaxy(self):
+        """
+        call super to fit max like
+        """
+        super(MedsFitISample,self).fit_galaxy()
+        self.fit_max()
+        self.do_isample()
+
+        self.add_shear_info()
+
+        self.gal_fitter=self.boot.get_isampler()
+
+    def do_isample(self):
+        """
+        run isample on the bootstrapper
+        """
+        ipars=self['isample_pars']
+        self.boot.isample(ipars, prior=self['prior'])
+
+    def add_shear_info(self):
+        """
+        add shear information based on the gal_fitter
+        """
+
+        boot=self.boot
+        max_fitter=boot.get_max_fitter()
+        sampler=boot.get_isampler()
+
+        # this is the full prior
+        prior=self['prior']
+        g_prior=prior.g_prior
+
+        iweights = sampler.get_iweights()
+        samples = sampler.get_samples()
+        g_vals=samples[:,2:2+2]
+
+        res=sampler.get_result()
+
+        # keep for later if we want to make plots
+        self.weights=iweights
+
+        # we are going to mutate the result dict owned by the sampler
+        stats = max_fitter.get_fit_stats(res['pars'])
+        res.update(stats)
+
+        ls=ngmix.lensfit.LensfitSensitivity(g_vals,
+                                            g_prior,
+                                            weights=iweights,
+                                            remove_prior=True)
+        g_sens = ls.get_g_sens()
+        g_mean = ls.get_g_mean()
+
+        res['g_sens'] = g_sens
+        res['nuse'] = ls.get_nuse()
+
+        # not able to use extra weights yet
+        '''
+        pqrobj=ngmix.pqr.PQR(g, g_prior,
+                             shear_expand=self.shear_expand,
+                             remove_prior=remove_prior)
+
+
+        P,Q,R = pqrobj.get_pqr()
+        res['P']=P
+        res['Q']=Q
+        res['R']=R
+        '''
+
+    def print_galaxy_result(self):
+        super(MedsFitISample,self).print_galaxy_result()
+        res=self.gal_fitter.get_result()
+
+        if 's2n_w' in res:
+            tup=(res['s2n_w'],res['chi2per'])
+            print("    s2n: %.1f chi2per: %.3f" % tup)
+
+    def copy_galaxy_result(self):
+        """
+        extra copies beyond the default
+        """
+        super(MedsFitISample,self).copy_galaxy_result()
+        res=self.gal_fitter.get_result()
+        if 'g_sens' in res:
+            data=self.data
+            dindex=self.dindex
+            data['g_sens'][dindex,:]   = res['g_sens']
+            data['efficiency'][dindex] = res['efficiency']
+            data['neff'][dindex]       = res['neff']
+
+
     def make_dtype(self):
-        super(MedsFitIsample,self).make_dtype()
+        super(MedsFitISample,self).make_dtype()
 
         self.dtype += [
             ('efficiency','f4'),
             ('neff','f4'),
         ]
+
+class CompositeMedsFitISample(MedsFitISample):
+
+    def copy_galaxy_result(self):
+        """
+        extra copies beyond the default
+        """
+        super(CompositeMedsFitISample,self).copy_galaxy_result()
+        res=self.gal_fitter.get_result()
+        if 'fracdev' in res:
+            data=self.data
+            dindex=self.dindex
+            data['fracdev'][dindex]        = res['fracdev']
+            data['fracdev_noclip'][dindex] = res['fracdev_noclip']
+            data['fracdev_err'][dindex]    = res['fracdev_err']
+            data['TdByTe'][dindex]         = res['TdByTe']
+
+    def make_dtype(self):
+        super(CompositeMedsFitISample,self).make_dtype()
+
+        self.dtype += [
+            ('fracdev','f8'),
+            ('fracdev_noclip','f8'),
+            ('fracdev_err','f8'),
+            ('TdByTe','f8'),
+        ]
+
+    def make_struct(self):
+        super(CompositeMedsFitISample,self).make_struct()
+        self.data['fracdev'] = PDEFVAL
+        self.data['fracdev_noclip'] = PDEFVAL
+        self.data['fracdev_err'] = PDEFVAL
+        self.data['TdByTe'] = PDEFVAL
+
+    def get_bootstrapper(self):
+        """
+        get the bootstrapper for fitting psf through galaxy
+        """
+        from great3.sfit import get_bootstrapper
+        
+        # keywords pass on fracdev_prior and fracdev_grid
+        boot = get_bootstrapper(self.psf_obs,
+                                self.obs,
+                                type='composite',
+                                **self)
+        return boot
+
+
 
 class PSFRunner(object):
     """

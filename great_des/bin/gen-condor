@@ -241,7 +241,7 @@ def main():
     if gvals is not None:
         gvals=[int(g) for g in gvals.split(',')]
 
-    cm = CondorMaker(args.run, args.jobs_per_file, missing=args.missing)
+    cm = CondorMaker(args.run, args.nperfile, missing=args.missing)
     cm.make_condor(gvals=gvals)
     cm.make_master()
 

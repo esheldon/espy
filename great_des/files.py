@@ -126,6 +126,18 @@ def get_output_dir(**keys):
     d=os.path.join(h, 'lensing','great-des',keys['run'], 'output')
     return d
 
+def get_prior_dir(**keys):
+    """
+    parameters
+    ----------
+    run: keyword
+        The processing run
+    """
+    h=os.environ['HOME']
+    d=os.path.join(h, 'lensing','great-des',keys['run'], 'prior')
+    return d
+
+
 def get_collated_dir(**keys):
     """
     parameters
@@ -246,6 +258,53 @@ def get_output_file(**keys):
     fname=os.path.join(d, fname)
 
     return fname
+
+def get_prior_file(**keys):
+    """
+    parameters
+    ----------
+    run: string, keyword
+        String representing the run, e.g. nfit-noisefree-04
+    partype: string, keyword
+        Something extra to identify this
+    ext: string, keyword, optional
+        Extension for file, default 'fits' 
+    """
+    d=get_prior_dir(**keys)
+
+    fname='%(run)s-%(partype)s'
+    fname=fname % keys
+
+    ext=keys.get('ext','fits')
+    fname = '%s.%s' % (fname, ext)
+
+    fname=os.path.join(d, fname)
+
+    return fname
+
+def read_prior(**keys):
+    """
+    parameters
+    ----------
+    run: string, keyword
+        String representing the run, e.g. sfit-noisefree-c01
+    partype: string, keyword
+        Something extra to identify this
+    ext: string, keyword, optional
+        Extension for file, default 'fits' 
+    """
+    import fitsio
+    from ngmix.gmix import GMixND
+
+    fname=get_prior_file(**keys)
+    print "reading:",fname
+    data = fitsio.read(fname)
+
+    prior = GMixND(data['weights'],
+                   data['means'],
+                   data['covars'])
+    return prior
+    
 
 def get_collated_file(**keys):
     """

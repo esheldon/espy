@@ -402,7 +402,7 @@ def run_sfitter(files, conf, options, checkpoint_data=None):
     import great_des
     import great3
     import ngmix
-    from ngmix.joint_prior import PriorSimpleSep
+    from ngmix.joint_prior import PriorSimpleSep, JointPriorSimpleHybrid
     from ngmix.priors import ZDisk2D, CenPrior
 
     if options.work_dir is not None:
@@ -411,16 +411,22 @@ def run_sfitter(files, conf, options, checkpoint_data=None):
     mpars=conf['model_pars']
     if 'joint_prior' in mpars:
         jp=mpars['joint_prior']
-        cen_width=jp['cen_prior_pars'][0]
+        cen_width=jp['cen_width']
 
-        g_prior_type=jp.get('g_prior_type',None)
-        g_prior_pars=jp.get('g_prior_pars',None)
+        cen_prior = CenPrior(0.0, 0.0, cen_width, cen_width)
 
-        prior=great3.joint_prior.make_joint_prior_simple(jp['name'],
-                                                         jp['partype'],
-                                                         cen_width,
-                                                         g_prior_type=g_prior_type,
-                                                         g_prior_pars=g_prior_pars)
+        g_prior_pars=jp['g_prior_pars']
+        g_prior = ngmix.priors.GPriorGreatDES(pars=jp['g_prior_pars'],
+                                              gmax=1.0)
+
+        TF_prior=great_des.files.read_prior(run=jp['TF_prior_run'],
+                                            partype=jp['TF_partype'])
+
+        conf['prior']=JointPriorSimpleHybrid(cen_prior, g_prior, TF_prior)
+
+        if 'fracdev_prior_run' in jp:
+            conf['fracdev_prior']=great_des.files.read_prior(run=jp['fracdev_prior_run'],
+                                                             partype=jp['fracdev_partype'])
     else:
         cen_prior=great3.nfit.get_cen_prior(mpars['cen_prior_type'],
                                             pars=mpars['cen_prior_pars'])
@@ -432,10 +438,10 @@ def run_sfitter(files, conf, options, checkpoint_data=None):
         counts_prior=great3.nfit.get_counts_prior(mpars['counts_prior_type'],
                                                   pars=mpars['counts_prior_pars'])
 
-        prior=ngmix.joint_prior.PriorSimpleSep(cen_prior,
-                                               g_prior,
-                                               T_prior,
-                                               counts_prior)
+        conf['prior']=PriorSimpleSep(cen_prior,
+                                     g_prior,
+                                     T_prior,
+                                     counts_prior)
 
 
     
@@ -446,7 +452,10 @@ def run_sfitter(files, conf, options, checkpoint_data=None):
         else:
             fitclass=great_des.sfit.MedsFitMax
     elif conf['fitter']=='isample':
-        fitclass=great_des.nfit.MedsFitISample
+        if mpars['model']=='cm':
+            fitclass=great_des.sfit.CompositeMedsFitISample
+        else:
+            fitclass=great_des.sfit.MedsFitISample
     else:
         raise ValueError("bad fitter: '%s'" % conf['fitter'])
 
@@ -455,7 +464,6 @@ def run_sfitter(files, conf, options, checkpoint_data=None):
                 files['truth'],
                 files['psf'],
                 checkpoint_data=checkpoint_data,
-                prior=prior,
                 **conf)
 
     gm.do_fits()
