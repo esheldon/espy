@@ -98,6 +98,10 @@ class MedsFitBase(dict):
 
         dindex=self.dindex
         boot=self.get_bootstrapper()
+
+        # find the center and reset the jacobian
+        boot.find_cen()
+
         self.boot=boot
 
         try:
