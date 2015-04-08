@@ -77,7 +77,7 @@ class MedsFitBase(dict):
 
             print("%d:%d  %d:%d" % (dindex, last, mindex, self['end']))
 
-            self.data['number'][dindex] = mindex
+            self.data['number'][dindex] = self.meds['number'][mindex]
 
             self.make_psf_observation()
             self.make_galaxy_observation()
@@ -432,12 +432,14 @@ class MedsFitBase(dict):
         """
 
         obj_range = self.get('obj_range',None)
-        self['start'] = obj_range[0]
-        self['end'] = obj_range[1]
 
         if obj_range is not None:
+            self['start'] = obj_range[0]
+            self['end'] = obj_range[1]
             self.indices = arange(obj_range[0], obj_range[1]+1)
         else:
+            self['start']=0
+            self['end']=self.meds.size-1
             self.indices = arange(self.meds.size)
 
     def copy_psf_result(self):

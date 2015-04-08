@@ -24,8 +24,8 @@ function run_fit {
     echo "host: $(hostname)"
     echo "will write to file: $output"
 
-    #--work-dir=$tmpdir                \\
     $ESPY_DIR/great_des/bin/fit-great-des \\
+        --work-dir=$tmpdir                \\
         --obj-range ${start},${end}       \\
         ${config_file}                    \\
         ${meds_file}                      \\

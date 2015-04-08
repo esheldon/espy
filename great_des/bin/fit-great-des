@@ -405,8 +405,8 @@ def run_sfitter(files, conf, options, checkpoint_data=None):
     from ngmix.joint_prior import PriorSimpleSep, JointPriorSimpleHybrid
     from ngmix.priors import ZDisk2D, CenPrior
 
-    if options.work_dir is not None:
-        raise RuntimeError("no work dir supported for sfit")
+    #if options.work_dir is not None:
+    #    raise RuntimeError("no work dir supported for sfit")
 
     mpars=conf['model_pars']
     if 'joint_prior' in mpars:
