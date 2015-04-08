@@ -1,7 +1,7 @@
 run: "sfit-c01"
 fitter: "isample"
 
-espy_githash: "e9395850f8b6c501267c50da8b68ab9345404103"
+espy_githash: "665a8c24f5091f1e1b3c85cef6b1feb828655b30"
 ngmix_githash: "d6f534a86ffe07e85209854ebdb7f7c98f57981e"
 great3_githash: "7e130d35bb35116bee4e06fb9c227a19e6c9eb72"
 
