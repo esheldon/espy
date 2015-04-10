@@ -1,3 +1,13 @@
+New runs
+    - sfit-noisefree-c01
+        - error, did not use flat priors
+    * sfit-noisefree-c02
+        - flat priors
+        - need to refit the priors from these, replace in the noisy run
+
+
+
+
 - nfit-17
     - trying cosmos prior.
         - notes before run
