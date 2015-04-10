@@ -1,3 +1,4 @@
+# DONT USE: didn't use flat priors
 run: "sfit-noisefree-c01"
 fitter: "max"
 
