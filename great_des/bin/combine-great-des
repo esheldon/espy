@@ -27,7 +27,11 @@ def read_output(**conf):
             ('flux_true','f8'),
             ('s2n_true','f8'),
             ('id_shear','i8'),
-            ('id_psf','i8')]
+            ('id_psf','i8'),
+            ('true_e','f4',2),
+            ('true_hlr','f4')]
+
+
 
     data=eu.numpy_util.add_fields(data0, add_dt)
 
@@ -63,6 +67,11 @@ def main():
             print(truth_file)
             truth_data=fitsio.read(truth_file)
 
+            if 'shape_e1' in truth_data.dtype.names:
+                add_true_e=True
+            else:
+                add_true_e=False
+
             low,high = files.get_chunk_ranges(**conf)
             n=len(low)
 
@@ -97,6 +106,12 @@ def main():
 
                 data['id_shear'] = truth_data['id_shear'][tbeg:tend]
                 data['id_psf'] = truth_data['id_psf'][tbeg:tend]
+
+                if add_true_e:
+                    data['true_e'][:,0] = truth_data['shape_e1'][tbeg:tend]
+                    data['true_e'][:,1] = truth_data['shape_e2'][tbeg:tend]
+                    data['true_hlr'] = truth_data['sersic_hlr'][tbeg:tend]
+
 
                 nexpect=(high[i]-low[i])+1
                 if data.size != nexpect:
