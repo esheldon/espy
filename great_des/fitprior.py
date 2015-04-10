@@ -6,14 +6,19 @@ from . import analyze, files
 
 GMAX_HIGHS2N=0.985
 
-def fit_g_prior(run, type='great-des', show=False, gmax_data=GMAX_HIGHS2N, gmax=1.0):
+def fit_g_prior(run, type='great-des', show=False, gmax=1.0, **keys):
+    """
+    this gmax is not the max in the cuts, but in the prior and histogram
+    """
     import esutil as eu
     import ngmix
 
+    # higher s/n requirements than for flux/T fits
     g=cache_data(run, 'g',
                  min_s2n=100.0,
                  min_Ts2n=30.0,
-                 max_g=gmax_data)
+                 **keys)
+
     hd=eu.stat.histogram(g, nbin=100, min=0, max=gmax,more=True)
 
     xdata=hd['center']
@@ -41,8 +46,8 @@ def fit_log_TF_prior(run,
                      min_covar=1.0e-6,
                      n_iter=5000,
                      show=False,
-                     max_g=GMAX_HIGHS2N,
-                     nkeep=NKEEP_DEFAULT):
+                     nkeep=NKEEP_DEFAULT,
+                     **keys):
 
     partype='log_TF'
     par_labels=['log(T)','log(F)']
@@ -51,15 +56,12 @@ def fit_log_TF_prior(run,
                        partype,
                        par_labels,
 
-                       min_s2n=1.0,
-                       min_Ts2n=10.0,
-                       max_g=max_g,
-
                        ngauss=ngauss,
                        min_covar=min_covar,
                        n_iter=n_iter,
                        show=show,
-                       nkeep=nkeep)
+                       nkeep=nkeep,
+                       **keys)
 
 
 def fit_log_F_fracdev_prior(run,
@@ -67,9 +69,8 @@ def fit_log_F_fracdev_prior(run,
                             min_covar=1.0e-6,
                             n_iter=5000,
                             show=False,
-                            max_g=GMAX_HIGHS2N,
-                            cut_fracdev_exact=True,
-                            nkeep=NKEEP_DEFAULT):
+                            nkeep=NKEEP_DEFAULT,
+                            **keys):
 
     partype='log_F_fracdev'
     par_labels=['log(F)','fracdev']
@@ -78,18 +79,12 @@ def fit_log_F_fracdev_prior(run,
                        partype,
                        par_labels,
 
-                       min_s2n=1.0,
-                       min_Ts2n=10.0,
-                       max_g=max_g,
-                       fracdev_err_max=0.05,
-                       cut_fracdev_exact=cut_fracdev_exact,
-                       fracdev_range=[-1.0,2.0],
-
                        ngauss=ngauss,
                        min_covar=min_covar,
                        n_iter=n_iter,
                        show=show,
-                       nkeep=nkeep)
+                       nkeep=nkeep,
+                       **keys)
 
 def _fit_prior_generic(run,
                        partype,
@@ -98,6 +93,7 @@ def _fit_prior_generic(run,
                        min_covar=1.0e-6,
                        n_iter=5000,
                        show=False,
+
                        **keys): # extra keys for cache and selection
 
     import esutil as eu
@@ -154,12 +150,24 @@ def make_ngauss_output(weights, means, covars):
     output['covars']=covars
     return output
 
-def cache_data(run, type, nkeep=None, **keys):
+def cache_data(run,
+               type,
+               nkeep=None,
+               **keys):
     """
     type should be g or log_TF
     """
     import esutil as eu
     import fitsio
+
+    keys['min_s2n']=keys.get('min_s2n',1.0)
+    keys['min_Ts2n']=keys.get('minTs2n',10.0)
+    keys['max_g']=keys.get('max_g',GMAX_HIGHS2N)
+
+    keys['fracdev_err_max']=keys.get('fracdev_err_max',0.05)
+    keys['cut_fracdev_exact']=keys.get('cut_fracdev_exact',True)
+    keys['fracdev_range']=keys.get('fracdev_range',[-1.0,2.0])
+
 
     tmpdir=os.environ['TMPDIR']
     cachename=os.path.join(tmpdir,'%s-%s.fits' % (run,type))
@@ -280,8 +288,6 @@ def _plot_single(data, samples, comps, do_ylog=False):
     import esutil as eu
     import pcolors
 
-    ucomp=numpy.unique(comps)
-    print(ucomp.size,"unique comps:",ucomp)
     valmin=data.min()
     valmax=data.max()
 
@@ -321,7 +327,6 @@ def _plot_single(data, samples, comps, do_ylog=False):
     icolor=0
     for i in xrange(h.size):
         if rev[i] != rev[i+1]:
-            print("plotting component:",icolor)
             w=rev[ rev[i]:rev[i+1] ]
 
             frac=float(w.size)/comps.size
