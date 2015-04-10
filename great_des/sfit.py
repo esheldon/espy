@@ -447,6 +447,8 @@ class MedsFitBase(dict):
         copy some subset of the psf parameters
         """
 
+        ppars=self['psf_pars']
+
         data=self.data
         fitter=self.psf_fitter
 
@@ -456,6 +458,8 @@ class MedsFitBase(dict):
 
         if 'nfev' in res:
             data['psf_nfev'][self.dindex] = res['nfev']
+        elif 'numiter' in res:
+            data['psf_nfev'][self.dindex] = res['numiter']
 
         if res['flags'] != 0:
             return
@@ -464,8 +468,12 @@ class MedsFitBase(dict):
         g1,g2,T=psf_gmix.get_g1g2T()
 
         print("    psf_id: %d psf_fwhm: %.3f g: %.3g %.3g" % (self['psf_id'],sqrt(T/2)*2.35,g1,g2) )
-        print_pars(res['pars'],    front='    psf_pars: ')
-        print_pars(res['pars_err'],front='    psf_perr: ')
+
+        if 'em' in ppars['model']:
+            print("    niter: %d fdiff: %g" % (res['numiter'],res['fdiff']))
+        else:
+            print_pars(res['pars'],    front='    psf_pars: ')
+            print_pars(res['pars_err'],front='    psf_perr: ')
 
         data['psf_g'][self.dindex, 0] = g1
         data['psf_g'][self.dindex, 1] = g2
@@ -503,8 +511,16 @@ class MedsFitBase(dict):
         else:
             data['flags'][dindex]=0
 
+        jacob=self.boot.gal_obs.jacobian
+        jrow, jcol = jacob.get_cen()
+        scale = jacob.get_scale()
+        row = jrow + res['pars'][0]/scale
+        col = jcol + res['pars'][1]/scale
+
         data['pars'][dindex] = res['pars']
         data['pars_cov'][dindex] = res['pars_cov']
+
+        data['cen_pix'][dindex] = array([row,col])
 
         data['g'][dindex] = res['g']
         data['g_cov'][dindex] = res['g_cov']
@@ -558,6 +574,7 @@ class MedsFitBase(dict):
             ('pars','f8',np),
             ('pars_cov','f8',(np,np)),
 
+            ('cen_pix','f8',2),
             (n('flux'),'f8'),
             (n('flux_err'),'f8'),
             (n('T'),'f8'),
@@ -615,6 +632,7 @@ class MedsFitMax(MedsFitBase):
         fit with max like, using a MaxRunner object
         """
         self.fit_max()
+        self.gal_fitter=self.boot.get_max_fitter()
 
 
     def copy_galaxy_result(self):
