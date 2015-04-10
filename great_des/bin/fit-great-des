@@ -438,6 +438,9 @@ def run_sfitter(files, conf, options, checkpoint_data=None):
         counts_prior=great3.nfit.get_counts_prior(mpars['counts_prior_type'],
                                                   pars=mpars['counts_prior_pars'])
 
+        print("g_prior:",g_prior)
+        print("T_prior:",T_prior)
+        print("counts_prior:",counts_prior)
         conf['prior']=PriorSimpleSep(cen_prior,
                                      g_prior,
                                      T_prior,
