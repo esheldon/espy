@@ -42,6 +42,7 @@ def load_data(run, select=True, **keys):
 
 
 def select_good(data,
+                min_T=None,
                 min_arate=MIN_ARATE,
                 max_arate=MAX_ARATE,
                 min_s2n=MIN_S2N,
@@ -81,28 +82,11 @@ def select_good(data,
         print("    kept %d/%d from g < %g" % (w.size, data.size, max_g))
         logic = logic & elogic
 
-    if fracdev_range is not None:
-        elogic = (  (data['fracdev'] > fracdev_range[0])
-                  & (data['fracdev'] < fracdev_range[1]) )
+    if min_T is not None:
+        elogic = (data['log_T'] > min_T)
         w,=where(elogic)
         if w.size != data.size:
-            mess="    kept %d/%d from fracdev [%g,%g]"
-            print(mess % (w.size, data.size, fracdev_range[0],fracdev_range[1]))
-            logic = logic & elogic
-
-
-    if fracdev_err_max is not None:
-        elogic = (data['fracdev_err'] < fracdev_err_max)
-        w,=where(elogic)
-        if w.size != data.size:
-            print("    kept %d/%d from fracdev_err < %g" % (w.size, data.size, fracdev_err_max))
-            logic = logic & elogic
-
-    if cut_fracdev_exact:
-        elogic = (data['fracdev'] != 0.0) & (data['fracdev'] != 1.0)
-        w,=where(elogic)
-        if w.size != data.size:
-            print("    kept %d/%d from fracdev exact" % (w.size, data.size))
+            print("    kept %d/%d from log_T > %g" % (w.size, data.size, min_T))
             logic = logic & elogic
 
     if 'arate' in data.dtype.names:
@@ -112,6 +96,31 @@ def select_good(data,
             print("    kept %d/%d from arate [%g,%g]" % (w.size, data.size,
                                                          min_arate,max_arate))
             logic = logic & elogic
+
+    if 'fracdev' in data.dtype.names:
+        if fracdev_range is not None:
+            elogic = (  (data['fracdev'] > fracdev_range[0])
+                      & (data['fracdev'] < fracdev_range[1]) )
+            w,=where(elogic)
+            if w.size != data.size:
+                mess="    kept %d/%d from fracdev [%g,%g]"
+                print(mess % (w.size, data.size, fracdev_range[0],fracdev_range[1]))
+                logic = logic & elogic
+
+
+        if fracdev_err_max is not None:
+            elogic = (data['fracdev_err'] < fracdev_err_max)
+            w,=where(elogic)
+            if w.size != data.size:
+                print("    kept %d/%d from fracdev_err < %g" % (w.size, data.size, fracdev_err_max))
+                logic = logic & elogic
+
+        if cut_fracdev_exact:
+            elogic = (data['fracdev'] != 0.0) & (data['fracdev'] != 1.0)
+            w,=where(elogic)
+            if w.size != data.size:
+                print("    kept %d/%d from fracdev exact" % (w.size, data.size))
+                logic = logic & elogic
 
 
     w,=where(logic)
@@ -128,7 +137,7 @@ def get_weights(data):
     wts=1.0/(2*SN**2 + csum)
     return wts
 
-def fit_m_c(dlist):
+def fit_m_c(dlist, show=False, doprint=False):
     """
     get m and c
     """
@@ -148,7 +157,6 @@ def fit_m_c(dlist):
     fitters=[lf1,lf2]
 
     plt=plot_gdiff_vs_gtrue(gtrue, gdiff, gdiff_err, fitters=[lf1,lf2])
-    #plt.show()
 
     m1,c1 = lf1.pars
     m1err,c1err = lf1.perr
@@ -163,6 +171,18 @@ def fit_m_c(dlist):
          'c1err':c1err,
          'c2':c2,
          'c2err':c2err}
+
+    if doprint:
+        mess="""
+m1: %(m1)g +/- %(m1err)g
+m2: %(m2)g +/- %(m2err)g
+c1: %(c1)g +/- %(c1err)g
+c2: %(c2)g +/- %(c2err)g""".strip()
+        mess = mess % res
+        print(mess)
+
+    if show:
+        plt.show()
 
     return res
 
