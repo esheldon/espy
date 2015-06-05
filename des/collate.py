@@ -5,6 +5,7 @@ collate outputs
 """
 
 from __future__ import print_function
+import numpy
 from .files import *
 
 class Collator(dict):
@@ -50,7 +51,36 @@ class Collator(dict):
         comb=comb[mc]
 
         print("collating")
-        newdata=eu.numpy_util.add_fields(orig, comb.dtype.descr)
+
+        add_dt = comb.dtype.descr + [('se1','f8'),('se2','f8'),('se','f8')]
+        newdata=eu.numpy_util.add_fields(orig, add_dt)
         eu.numpy_util.copy_fields(comb, newdata)
 
+        self.add_sellip(newdata)
+
         return newdata
+
+    def add_sellip(self, data):
+        data['se1']=9999
+        data['se2']=9999
+        data['se']=9999
+
+        print("adding sellip")
+
+        w,=numpy.where(data['weight'] > 0.0)
+
+        if w.size > 0:
+            print("    %d/%d with weight > 0" % (w.size,data.size))
+
+            xxsum=data['xxsum'][w]
+            xysum=data['xysum'][w]
+            yysum=data['yysum'][w]
+
+            T = xxsum + yysum
+            e1 = (xxsum - yysum)/T
+            e2 = 2*xysum/T
+            e=numpy.sqrt(e1**2 + e2**2)
+
+            data['se1'][w] = e1
+            data['se2'][w] = e2
+            data['se'][w] = e

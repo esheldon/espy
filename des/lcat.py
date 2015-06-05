@@ -19,6 +19,8 @@ from esutil.numpy_util import between
 
 from .files import *
 
+QUADEQ_ALL_OK = 31
+
 def make_xshear_input(lcat_vers, chunk=None):
     """
     write xshear input files
@@ -59,6 +61,7 @@ class XShearInput(dict):
         
         cconf=read_config(self['cosmo_vers'])
         self.cosmo = cosmology.Cosmo(omega_m=cconf['omega_m'], H0=cconf['H0'])
+
         self.mask_info=read_config(self['mask_vers'])
 
     def write_all(self):
@@ -174,9 +177,12 @@ class XShearInput(dict):
         mask_type=mask_info['mask_type']
 
         if mask_type is None:
-            return numpy.zeros(ra.size)
+            print("        setting all maskflags to QUADEQ_ALL_OK")
+            return numpy.zeros(ra.size, dtype='i8') + QUADEQ_ALL_OK
         else:
             import healpix_util as hu
+
+
             if mask_type != 'healpix':
                 raise ValueError("only healpix supported for now")
 
@@ -204,6 +210,7 @@ class XShearInput(dict):
 
             w,=numpy.where(maskflags > 1)
             print("    %d/%d had good quadrant pairs" % (w.size, ra.size))
+
         return maskflags
 
 

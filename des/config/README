@@ -1,0 +1,11 @@
+tried checking the ellip calc. from the mask by adding ellip
+in 2*theta space to a branch of xshear. These are in
+
+run-rm005-ngmix-skynet002-02.yaml
+
+and the bin file
+
+bin-lgt05-zwide-e05.yaml
+
+I didn't see any difference adding 0.05 e cut over the existing
+one

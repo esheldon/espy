@@ -62,8 +62,11 @@ def cascade_config(run):
 
     lc=conf['lens_conf']['mask_vers']
     sc=conf['source_conf']['mask_vers']
-    if lc != sc:
-        raise ValueError("mask version: '%s' '%s'" % (lc,sc))
+
+    # OK for one of them to be none
+    if lc != 'mask-none' and sc != 'mask-none':
+        if lc != sc:
+            raise ValueError("mask version: '%s' '%s'" % (lc,sc))
 
     return conf
 
@@ -497,6 +500,10 @@ def get_lensum_dtype(nbin, shear_style):
     dt=[('index','i8'),
         ('weight','f8'),
         ('totpairs','i8'),
+
+        ('xxsum','f8'),
+        ('xysum','f8'),
+        ('yysum','f8'),
 
         ('npair','i8',nbin),
 
