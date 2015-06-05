@@ -7,6 +7,8 @@ confusion
 
 from __future__ import print_function
 import os
+import numpy
+import fitsio
 
 #
 # configuration files
@@ -116,7 +118,6 @@ def read_lcat_original(lcat_name):
     """
     read the original input file
     """
-    import fitsio
     fname=get_lcat_original_file(lcat_name)
     print("reading:",fname)
     return fitsio.read(fname, lower=True)
@@ -178,7 +179,6 @@ def read_scinv(pz_vers, pz_type, cosmo_vers, chunk=None, get_header=False):
     """
     read the sigmacrit file for the give p(z) and cosmology
     """
-    import fitsio
     fname=get_scinv_file(pz_vers, pz_type, cosmo_vers, chunk=None)
 
     print("reading:",fname)
@@ -212,8 +212,47 @@ def get_scinv_wq_file(pz_vers, pz_type, cosmo_vers, chunk):
 
 
 #
-# daniel's matched files
+# scat files
 #
+
+# these are more generic
+def get_orig_scat_file(scat_name, tilename):
+    """
+    original scat files, split by tile
+
+    parameters
+    ----------
+    scat_name: string
+        e.g. ngmix011-v14
+    tilename: string
+        the tilename
+    """
+    if '-dg' in scat_name:
+        fname=get_dg_scat_file(scat_name, tilename)
+    else:
+        d=get_cat_dir(scat_name)
+        fname='{scat_name}-{tilename}.fits'.format(scat_name=scat_name,
+                                                   tilename=tilename)
+        fname=os.path.join(d, fname)
+
+    return fname
+
+def read_orig_scat(scat_name, tilename):
+    """
+    read scat files, split by tile
+
+    parameters
+    ----------
+    scat_name: string
+        e.g. ngmix011-v14
+    tilename: string
+        the tilename
+    """
+
+    fname=get_orig_scat_file(scat_name, tilename)
+    print("reading:",fname)
+    return fitsio.read(fname)
+
 
 dg_name={'ngmix009':'{tilename}_{scat_name}m.fits.gz',
          'ngmix010':'{tilename}_im3shapev72_ngmix_009_010.fits.gz'}
@@ -232,10 +271,37 @@ def read_dg_scat(scat_name, tilename):
     """
     daniel's matched files
     """
-    import fitsio
     fname=get_dg_scat_file(scat_name, tilename)
     print("reading:",fname)
     return fitsio.read(fname, lower=True)
+
+def get_orig_scat_file_full(scat_name):
+    """
+    original file, all tiles combined
+
+    parameters
+    ----------
+    scat_name: string
+        e.g. ngmix011-v14
+    """
+    d=get_cat_dir(scat_name)
+    fname='{scat_name}.fits'.format(scat_name=scat_name)
+    return os.path.join(d, fname)
+
+def read_orig_scat_full(scat_name):
+    """
+    read original file, all tiles combined
+
+    parameters
+    ----------
+    scat_name: string
+        e.g. ngmix011-v14
+    """
+
+    fname=get_orig_scat_file_full(scat_name)
+    print("reading:",fname)
+    return fitsio.read(fname)
+
 
 
 #
@@ -273,7 +339,6 @@ def read_scinv_matched(scat_name, pz_vers, pz_type, cosmo_vers, tilename):
     """
     read the matched file
     """
-    import fitsio
     pass
 
 #
@@ -602,8 +667,6 @@ def read_collated(run):
     run: string
         the run identifier, e.g. run-001
     """
-    import fitsio
-
     fname=get_collated_file(run)
     print("reading:",fname)
     return fitsio.read(fname)
@@ -649,7 +712,6 @@ def read_binned(run, bin_scheme):
     bin_scheme: string
         name for the binning scheme, e.g. bin-lambda08-z01
     """
-    import fitsio
 
     fname=get_binned_file(run,bin_scheme)
     print("reading:",fname)
@@ -745,8 +807,6 @@ def read_match_binned(lens_run, rand_run, bin_scheme):
         name for the binning scheme, e.g. bin-lambda08-z01
     """
 
-
-    import fitsio
     fname=get_match_binned_file(lens_run, rand_run, bin_scheme)
     print("reading:",fname)
     return fitsio.read(fname)
@@ -792,7 +852,6 @@ def read_jack(run, bin_scheme):
     bin_scheme: string
         name for the binning scheme, e.g. bin-lambda08-z01
     """
-    import fitsio
     fname=get_jack_file(run, bin_scheme)
     print("reading:",fname)
     return fitsio.read(fname)
@@ -844,8 +903,6 @@ def read_corr_binned(lens_run, rand_run, bin_scheme):
         name for the binning scheme, e.g. bin-lambda08-z01
     """
 
-
-    import fitsio
     fname=get_corr_binned_file(lens_run, rand_run, bin_scheme)
     print("reading:",fname)
     return fitsio.read(fname)
@@ -894,8 +951,6 @@ def read_corr_jack(lens_run, rand_run, bin_scheme):
         name for the binning scheme, e.g. bin-lambda08-z01
     """
 
-
-    import fitsio
     fname=get_corr_jack_file(lens_run, rand_run, bin_scheme)
     print("reading:",fname)
     return fitsio.read(fname)
@@ -941,7 +996,91 @@ def read_jackknife_centers(des_region, ncen):
     """
     read the file holding centers for the specified region
     """
-    import fitsio
     fname=get_jackknife_centers_file(des_region, ncen)
     print("reading:",fname)
     return fitsio.read(fname)
+
+#
+# cacheing tilenames from the db, since they are not stored
+# in the flat catalogs
+#
+
+def get_tilenames(tablename, full=False):
+    """
+    parameters
+    ----------
+    tablename: string
+        table where data is read originally
+    full: bool
+        If True, return the full data with coadd_objects_id
+        and tilename for each object
+    """
+
+    print("getting tile list for:",tablename)
+
+    data=load_tilenames_cache(tablename)
+
+    if full:
+        return data
+    else:
+        tilenames=numpy.unique(data['tilename'])
+        print("found",tilenames.size,"tiles")
+        return tilenames
+
+def load_tilenames_cache(tablename):
+    """
+    write the tilenames to a file
+
+    parameters
+    ----------
+    tablename: string
+        table where data is read originally
+    full: bool
+        If True, return the full data with coadd_objects_id
+        and tilename for each object
+    """
+    import desdb
+    fname=get_tilename_cache_file(tablename)
+
+    if not os.path.exists(fname):
+        print("    caching from database")
+        dir=get_tilename_cache_dir()
+        if not os.path.exists(dir):
+            print("making dir:",dir)
+            os.makedirs(dir)
+
+        with desdb.Connection() as conn:
+            q="""
+    select
+        coadd_objects_id, tilename
+    from
+        %s\n""" % tablename
+
+            print(q)
+            data=conn.quick(q, array=True)
+            
+        print("    writing to:",fname)
+        fitsio.write(fname, data, clobber=True)
+    else:
+        print("    reading:",fname)
+        data=fitsio.read(fname)
+
+    return data
+
+
+def get_tilename_cache_dir():
+    """
+    directory to hold cache
+    """
+    d=get_des_lensdir()
+    return os.path.join(d, 'tilename_cache')
+
+def get_tilename_cache_file(tablename):
+    """
+    file to hold tilenames
+    """
+    dir=get_tilename_cache_dir()
+    fname='%s-tilenames.fits' % tablename
+    return os.path.join(dir, fname)
+
+

@@ -1,5 +1,16 @@
 """
 code to create xshear input files
+
+    first run the reformat-and-trim.py to add jackknife regioins, randomize
+    ra,dec.  currently this is just a script in one of the directories
+
+    then run 
+    
+        /bin/make-lcat-wq lcat-vers
+        
+    to make wq scripts for doing the lcat creation, which involves the quad
+    checks. These scripts run /bin/make-xshear-lcat
+
 """
 from __future__ import print_function
 import numpy

@@ -285,6 +285,8 @@ def get_collate_wq_file(run):
 
 _make_lcat_wq_template="""
 command: |
+    source ~esheldon/.bashrc
+    . ~/shell_scripts/deslens-prepare.sh
     lcat_vers={lcat_vers}
     chunk={chunk}
     $ESPY_DIR/des/bin/make-xshear-lcat --chunk $chunk $lcat_vers
@@ -344,7 +346,7 @@ job_name: "%(job_name)s"
 
 _redshear_template="""
 command: |
-    source ~/.bashrc
+    source ~esheldon/.bashrc
     module load xshear/work
 
     dir=%(reduced_dir)s
@@ -359,6 +361,7 @@ job_name: "%(job_name)s"
 
 _combine_template="""
 command: |
+    source ~esheldon/.bashrc
     dir=%(combined_dir)s
     outf=%(combined_file)s
     mkdir -p $dir
@@ -374,7 +377,8 @@ job_name: "%(job_name)s"
 
 _collate_template="""
 command: |
-    source ~/.bashrc
+    source ~esheldon/.bashrc
+    . ~/shell_scripts/deslens-prepare.sh
     $ESPY_DIR/des/bin/collate %(run)s
 
     echo

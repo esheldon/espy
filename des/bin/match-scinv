@@ -20,6 +20,8 @@ parser.add_argument("pz_type",
 
 parser.add_argument("-t", "--tilename",
                     help="only match this tilename")
+parser.add_argument("--scat-table",
+                    help="tilenames are from this table")
    
 def main():
     args = parser.parse_args()
@@ -32,6 +34,6 @@ def main():
                          args.cosmo_vers,
                          args.pz_vers,
                          args.pz_type,
-                         tilenames=tilenames)
+                         tilenames=tilenames,scat_table=args.scat_table)
 
 main()

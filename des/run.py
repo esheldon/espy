@@ -8,7 +8,6 @@ from __future__ import print_function
 from .files import *
 from .import scat
 from . import lcat
-from . import output
 
 from .wqscripts import XShearWQJob, RedshearWQJob, CombineWQJob, CollateWQJob
 from .xshear_config import XShearConfig
@@ -56,7 +55,7 @@ class Run(dict):
         write all the chunks and tiles
         """
         lens_nchunk=self['lens_conf']['nchunk']
-        tilenames=scat.get_tilenames(self['source_conf']['scat_name'])
+        tilenames=scat.get_tilenames(self['source_conf']['scat_table'])
 
         ntile=len(tilenames)
         for lens_chunk in xrange(lens_nchunk):
