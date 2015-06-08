@@ -2,7 +2,7 @@
 # also bug fix in xshear putting too many objects in lower and upper bins
 lcat_vers: "lcat-rm005"
 
-# ngmix010, pz v0.1.7, skynet_mag_auto, Matt's cuts
+# ngmix011, pz v0.1.7, skynet_mag_auto, Matt's cuts, peter's mask
 scat_vers: "scat-ngmix-skynet002"
 
 # this is used in xshear, not for the maskflags

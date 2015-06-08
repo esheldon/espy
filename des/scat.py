@@ -211,17 +211,8 @@ class XShearInput(dict):
 
         logic = numpy.ones(data.size, dtype=bool)
         if 'mask_vers' in self:
-            import healpix_util as hu
 
-            mask_info=self.mask_info
-            mask_type=mask_info['mask_type']
-
-            if mask_type != 'healpix':
-                raise ValueError("only healpix supported for now")
-
-            print("    reading healpix map:",mask_info['mask_file'])
-            hmap=hu.readDensityMap(mask_info['mask_file'])
-
+            hmap = self._get_density_map()
             weight=hmap.get_weight(data[self['ra_col']], data[self['dec_col']])
 
             logic = logic & (weight > 0)
@@ -231,6 +222,20 @@ class XShearInput(dict):
 
         return logic
 
+    def _get_density_map(self):
+        if not hasattr(self, '_hmap'):
+            import healpix_util as hu
+
+            mask_info=self.mask_info
+            mask_type=mask_info['mask_type']
+
+            if mask_type != 'healpix':
+                raise ValueError("only healpix supported for now")
+
+            print("    reading healpix map:",mask_info['mask_file'])
+            self._hmap=hu.readDensityMap(mask_info['mask_file'])
+
+        return self._hmap
 
     def get_exists_logic(self, data):
         """
