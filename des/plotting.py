@@ -31,8 +31,9 @@ def plot_dsig(r, dsig, dsigerr, **kw):
 
     _set_biggles_defs(nbin, **kw)
 
-
     grid, arr = get_framed_array(nbin)
+    if 'arr' in kw:
+        arr=kw['arr']
 
     visible=kw.get('visible',True)
     is_ortho=kw.get('is_ortho',False)

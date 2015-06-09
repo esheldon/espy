@@ -87,10 +87,6 @@ def main():
 
         arr[row,col].add(pts, err)
 
-    epsfile=des.files.get_binned_file(args.run,
-                                             args.bin_scheme,
-                                             ext='eps')
-    epsfile=epsfile.replace('.eps','-bmode.eps')
     print("writing:",epsfile)
     arr.write_eps(epsfile)
 
