@@ -83,7 +83,11 @@ class RandomMatcher(dict):
             w,weights=self._match_one_by_selection_and_z(binnum)
 
         print("    combining")
-        comb = averaging.average_lensums(self.rdata, weights=weights)
+        jackreg_col=self['rrun_conf']['lens_conf'].get('jackreg_col',None)
+        print("        using jackknifes:",jackreg_col)
+        comb = averaging.average_lensums(self.rdata,
+                                         weights=weights,
+                                         jackreg_col=jackreg_col)
         return w,weights,comb
 
     def _match_one_by_z(self, binnum):
@@ -202,6 +206,13 @@ class RandomMatcher(dict):
         fname=get_match_binned_file(self['lens_run'],
                                     self['rand_run'],
                                     self['bin_scheme'])
+
+        d=os.path.dirname(fname)
+        try:
+            os.makedirs(d)
+        except:
+            pass
+
         print("writing binned:",fname)
         fitsio.write(fname,bs,clobber=True)
 

@@ -1,6 +1,5 @@
-# using old i-band only mask/density map from eli's depth maps
 comments: |
-    this is peters mask from the actual density of sources
+    using old i-band only mask/density map from elis depth maps
 
 lcat_name: "redmapper-6.3.3-lgt05"
 type: "lenses"

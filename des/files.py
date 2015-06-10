@@ -732,7 +732,9 @@ def get_match_dir(lens_run, rand_run, bin_scheme):
     """
     lensdir/run/lrun_name-rrunname
     """
-    totrun='%s-%s' % (lens_run, rand_run)
+
+    rrun = replace_rrun(rand_run)
+    totrun='%s-%s' % (lens_run, rrun)
     d=get_run_dir(totrun)
 
 
@@ -764,7 +766,8 @@ def get_match_weights_file(lens_run, rand_run, bin_scheme, binnum=None, ext='fit
 
     d=get_match_weights_dir(lens_run, rand_run, bin_scheme)
 
-    totrun='%s-%s' % (lens_run, rand_run)
+    rrun = replace_rrun(rand_run)
+    totrun='%s-%s' % (lens_run, rrun)
     if binnum is not None:
         fname="%s-%s-%02d-weights.%s" % (totrun, bin_scheme, binnum, ext)
     else:
@@ -778,7 +781,8 @@ def get_match_binned_dir(lens_run, rand_run, bin_scheme):
     lensdir/run/lrun_name-rrunname/binned
     """
 
-    totrun='%s-%s' % (lens_run, rand_run)
+    rrun = replace_rrun(rand_run)
+    totrun='%s-%s' % (lens_run, rrun)
     return get_binned_dir(totrun, bin_scheme)
 
 def get_match_binned_file(lens_run, rand_run, bin_scheme, ext='fits'):
@@ -797,7 +801,8 @@ def get_match_binned_file(lens_run, rand_run, bin_scheme, ext='fits'):
         default fits, could be eps etc.
     """
 
-    totrun='%s-%s' % (lens_run, rand_run)
+    rrun = replace_rrun(rand_run)
+    totrun='%s-%s' % (lens_run, rrun)
     return get_binned_file(totrun, bin_scheme, ext=ext)
 
 def read_match_binned(lens_run, rand_run, bin_scheme):
@@ -872,7 +877,8 @@ def get_corr_binned_dir(lens_run, rand_run, bin_scheme):
     lensdir/run/lrun_name-rrunname/corr-binned
     """
 
-    totrun='%s-%s' % (lens_run, rand_run)
+    rrun = replace_rrun(rand_run)
+    totrun='%s-%s' % (lens_run, rrun)
     d=get_run_dir(totrun)
     return os.path.join(d, 'corr-binned/%s' % bin_scheme)
 
@@ -892,7 +898,8 @@ def get_corr_binned_file(lens_run, rand_run, bin_scheme, ext='fits'):
 
     d=get_corr_binned_dir(lens_run, rand_run, bin_scheme)
 
-    totrun='%s-%s' % (lens_run, rand_run)
+    rrun = replace_rrun(rand_run)
+    totrun='%s-%s' % (lens_run, rrun)
     fname="%s-%s-corr.%s" % (totrun, bin_scheme, ext)
     return os.path.join(d, fname)
 
@@ -1091,3 +1098,5 @@ def get_tilename_cache_file(tablename):
     return os.path.join(dir, fname)
 
 
+def replace_rrun(rrun):
+    return rrun.replace('rrun-','').replace('run-','')

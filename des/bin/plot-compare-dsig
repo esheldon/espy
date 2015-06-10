@@ -9,6 +9,8 @@ import os,sys
 import des
 import argparse
 import numpy
+import esutil as eu
+import biggles
 
 from esutil.stat import wmom
 from esutil.numpy_util import between
@@ -44,6 +46,10 @@ parser.add_argument("--fmin",
 parser.add_argument("--radrange",
                     default=None,
                     help="rad range for averaging ratio")
+
+parser.add_argument("--labels",
+                    default=None,
+                    help="labels for each run, default run name")
 
 
 
@@ -109,6 +115,9 @@ def main():
     if args.fmin is not None:
         kw['fontsize_min']=args.fmin
 
+    xrng=[0.5*min(data1['r'].min(),data2['r'].min()),
+          1.5*max(data1['r'].max(),data2['r'].max())]
+
     arr=des.plotting.plot_dsig(data1['r'],
                                data1['dsig'],
                                data1['dsigerr'],
@@ -118,6 +127,7 @@ def main():
                                title=args.title,
                                visible=False,
                                color='red',
+                               xrange=xrng,
                                **kw)
 
     des.plotting.plot_dsig(data2['r'],
@@ -129,37 +139,52 @@ def main():
                            title=args.title,
                            visible=False,
                            color='blue',
+                           xrange=xrng,
                            arr=arr,
                            **kw)
 
+    if args.labels is not None:
+        labels=[l for l in args.labels.split(',')]
+    else:
+        labels=[args.run1, args.run2]
+        labels=[l.replace('run-','') for l in labels]
 
-    rat = data1['dsig']/data2['dsig']
-    raterr = rat*numpy.sqrt(  (data1['dsigerr']/data1['dsig'])**2
-                            + (data2['dsigerr']/data2['dsig'])**2 )
+    p1,p2=eu.plotting.fake_filled_circles(labels, colors=['red','blue'])
 
-    get_ratio_mean(data1['r'], rat, raterr, args.radrange)
-    rarr=des.plotting.plot_dsig(data1['r'],
-                                rat,
-                                raterr,
-                                labels=labels,
-                                ylog=False,
-                                title=args.title,
-                                visible=False,
-                                lineval=1,
-                                **kw)
-
-
+    key=biggles.PlotKey(0.9, 0.9, [p1,p2], halign='right')
+    arr[0,0].add(key)
 
     makedir(epsfile)
     print("writing:",epsfile)
     arr.write_eps(epsfile)
 
-    print("writing:",epsfile_rat)
-    rarr.write_eps(epsfile_rat)
 
 
     if args.visible:
         arr.show()
-        rarr.show()
+
+    if data1['dsig'].size == data2['dsig'].size:
+        rat = data1['dsig']/data2['dsig']
+        raterr = rat*numpy.sqrt(  (data1['dsigerr']/data1['dsig'])**2
+                                + (data2['dsigerr']/data2['dsig'])**2 )
+
+        get_ratio_mean(data1['r'], rat, raterr, args.radrange)
+        rarr=des.plotting.plot_dsig(data1['r'],
+                                    rat,
+                                    raterr,
+                                    labels=labels,
+                                    ylog=False,
+                                    title=args.title,
+                                    visible=False,
+                                    lineval=1,
+                                    **kw)
+
+        print("writing:",epsfile_rat)
+        rarr.write_eps(epsfile_rat)
+        if args.visible:
+            rarr.show()
+    else:
+        print("runs have different number of bins, not doing ratio")
+
 
 main()
