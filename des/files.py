@@ -926,7 +926,8 @@ def get_corr_jack_dir(lens_run, rand_run, bin_scheme):
     lensdir/run/lrun_name-rrunname/corr-jack
     """
 
-    totrun='%s-%s' % (lens_run, rand_run)
+    rrun = replace_rrun(rand_run)
+    totrun='%s-%s' % (lens_run, rrun)
     d=get_run_dir(totrun)
     return os.path.join(d, 'corr-jack/%s' % bin_scheme)
 
@@ -946,7 +947,8 @@ def get_corr_jack_file(lens_run, rand_run, bin_scheme, ext='fits'):
 
     d=get_corr_jack_dir(lens_run, rand_run, bin_scheme)
 
-    totrun='%s-%s' % (lens_run, rand_run)
+    rrun = replace_rrun(rand_run)
+    totrun='%s-%s' % (lens_run, rrun)
     fname="%s-%s-jack-corr.%s" % (totrun, bin_scheme, ext)
     return os.path.join(d, fname)
 
