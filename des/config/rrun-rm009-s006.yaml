@@ -1,0 +1,14 @@
+comments: |
+    redmapper-6.3.3-random-lgt05.fits
+
+# 10 Mpc
+lcat_vers: "rcat-rm009"
+
+# ubermem removed statistically
+scat_vers: "scat-006"
+
+# this is used in xshear, not for the maskflags
+healpix_nside: 64
+
+# only applies if using point photoz
+#zdiff_min: 0.2
