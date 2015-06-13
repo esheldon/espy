@@ -30,7 +30,8 @@ lambda_col: "lambda_chisq"
 
 # for matching to lens catalogs.
 # Can be "z" or "selection", or "selection-and-z"
-match_type: "selection-and-z"
+#match_type: "selection-and-z"
+match_type: "selection"
 
 zmatch_method: "weight"
 
