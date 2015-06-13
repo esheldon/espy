@@ -71,11 +71,10 @@ class XShearWQJob(dict):
         with open(fname,'w') as fobj:
             fobj.write(text)
 
-    def get_text(self):
+    def get_info(self):
         """
-        get the wq job text
+        get info related to this job
         """
-
         c={}
         c['config_file']=get_xshear_config_file(self['run'])
 
@@ -88,6 +87,14 @@ class XShearWQJob(dict):
         job_name='%(run)s-%(lens_chunk)06d-%(source_tilename)s'
         c['job_name']=job_name % self
 
+        return c
+
+    def get_text(self):
+        """
+        get the wq job text
+        """
+
+        c=self.get_info()
         text=_xshear_wq_template % c
 
         return text
