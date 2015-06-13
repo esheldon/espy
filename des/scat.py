@@ -7,9 +7,12 @@ example steps:
 
     scat_path=$LENSDIR/catalogs/ngmix011-v15/des_sv_wl_ngmix.fits
     info_path=$LENSDIR/catalogs/ngmix011-v15/des_sv_wl_info.fits
-    scat_name='ngmix011-v15'
+    scat_name='ngmix011-v15b'
     tablename='ngmix011'
     create_matt_cat(scat_path, info_path, tablename, scat_name)
+
+    # split everything by coadd tile
+    split_orig_scat_by_tile(scat_name, tablename)
 
     # you can run this from bin/match-scinv as well
     cosmo_vers='cosmo-01'
@@ -19,7 +22,7 @@ example steps:
     match_scinv(scat_name, cosmo_vers, pz_vers, pz_type, scat_table=scat_table)
 
     # then run script from /bin
-    make-xshear-scat ngmix011
+    make-xshear-scat ngmix011-v15b
 
 precursor will be creating the scinv for the p(z) catalog.  See the .pz module
 """
@@ -511,8 +514,8 @@ def create_matt_cat(scat_path, info_path, tablename, scat_name, remove_cat=None)
 
     e.g.
 
-    scat_path=$LENSDIR/catalogs/ngmix011-v15/des_sv_wl_ngmix.fits
-    info_path=$LENSDIR/catalogs/ngmix011-v15/des_sv_wl_info.fits
+    scat_path='$LENSDIR/catalogs/ngmix011-v15/des_sv_wl_ngmix.fits'
+    info_path='$LENSDIR/catalogs/ngmix011-v15/des_sv_wl_info.fits'
     scat_name='ngmix011-v15'
     tablename='ngmix011'
     remove_cat=$LENSDIR/catalogs/redmapper-6.3.3-lgt05-ubermem/redmapper-6.3.3-lgt05-ubermem.fits
@@ -538,15 +541,25 @@ def create_matt_cat(scat_path, info_path, tablename, scat_name, remove_cat=None)
     if remove_cat is not None:
         print("reading remove cat:",remove_cat)
         rmcat=fitsio.read(remove_cat,lower=True)
-        ms,mr = eu.numpy_util.match(scat['coadd_objects_id'],rmcat['id'])
-        print("    removing %d/%d" % (ms.size, scat.size))
-        del rmcat
-        if ms.size > 0:
-            ind0 = numpy.arange(scat.size)
-            ind = numpy.delete(ind0, ms)
-            print("    keeping %d/%d" % (ind.size, scat.size))
-            scat=scat[ind]
-            info=info[ind]
+
+        # remove with probability equal to membership probability
+        r=numpy.random.random(rmcat.size)
+        w,=numpy.where(rmcat['p'] > r)
+        print("    %d/%d of rmcat passed random "
+              "membership probability test" % (w.size,rmcat.size))
+
+        if w.size > 0:
+            rmcat=rmcat[w]
+
+            ms,mr = eu.numpy_util.match(scat['coadd_objects_id'],rmcat['id'])
+            print("    removing %d/%d" % (ms.size, scat.size))
+
+            if ms.size > 0:
+                ind0 = numpy.arange(scat.size)
+                ind = numpy.delete(ind0, ms)
+                print("    keeping %d/%d" % (ind.size, scat.size))
+                scat=scat[ind]
+                info=info[ind]
 
     add_dt = [('ra','f8'), ('dec','f8'),
               ('tilename','S12'),('photoz_bin','i4')]
@@ -573,6 +586,7 @@ def create_matt_cat(scat_path, info_path, tablename, scat_name, remove_cat=None)
     del tile_data
 
     fname = get_orig_scat_file_full(scat_name)
+    eu.ostools.makedirs_fromfile(fname,verbose=True)
 
     print("writing:",fname)
     fitsio.write(fname, output, clobber=True)
