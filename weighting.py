@@ -311,7 +311,6 @@ class WeightNearest(dict):
         """
         data type for input 1
         """
-        # first col is not used, we will make it an id
         #return [('id','i8'),('junk2','f8'),('weight','f8'), ('data','f8',self.ndim)]
         return [('junk1','f8'),('junk2','f8'),('weight','f8'), ('data','f8',self.ndim)]
 
