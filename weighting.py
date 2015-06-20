@@ -706,7 +706,7 @@ fi
 
 def test_gaussians(npass=1,
                    n_near1=5,
-                   n_near2=100,
+                   n_near2=10,
                    n1=100000,
                    n2=10000,
                    show=False, epsfile=None):
@@ -719,7 +719,7 @@ def test_gaussians(npass=1,
 
     # we want to weight this set to look like the second
     ngauss1=3
-    npergauss1=n1/ngauss1
+    npergauss1=n1//ngauss1
     ntot1=npergauss1*ngauss1
     cen1=[ 1.0+0.1*srandu(ndim),
            0.9+0.1*srandu(ndim),
@@ -731,7 +731,7 @@ def test_gaussians(npass=1,
     data1=zeros( (ntot1, ndim) )
 
     ngauss2=3
-    npergauss2=n1/ngauss1
+    npergauss2=n1//ngauss1
     ntot2=npergauss2*ngauss2
 
     cen2=[ 1.0+0.1*srandu(ndim),
