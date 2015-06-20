@@ -1,16 +1,22 @@
 """
+Codes to match the distributions of two populations
 
-Multiple methods
-----------------
-hist_match: 
-    simply derive weights so that the boxcar histograms are proportional
-
-hist_match_remove:
-    remove objects until the boxcar histograms match.
+weight_match:
+    derive weights so that the distributiins of two populations
+    are proportional in N-dimensional space. Uses WeightNearest
 
 WeightNearest:
     A class wrapping the nearest neighbor weighting code
+    derive weights so that the distributiins of two populations
+    are proportional in N-dimensional space
 
+hist_match: 
+    derive weights so that the boxcar histograms are proportional
+    1-D only
+
+hist_match_remove:
+    remove objects until the boxcar histograms match.
+    1-D only
 """
 
 from __future__ import print_function
