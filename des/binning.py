@@ -32,6 +32,17 @@ def bin_run(run, bin_conf_name, jackreg_col=None):
     print("writing:",fname)
     fitsio.write(fname, res, clobber=True)
 
+    for i in xrange(binner.get_nbin()):
+        plt=binner.plot_radec(data,i)
+        epsname=fname.replace('.fits','-%02d-radec.eps' % i)
+        pngname=epsname.replace('.eps','.png')
+        print(pngname)
+        plt.write_img(1000,1000,pngname)
+
+    command='cd %s; im2html -p *.png > radec.html' % d
+    print("making html file")
+    os.system(command)
+
 class Binner(dict):
     """
     bin any
@@ -166,11 +177,29 @@ class Binner(dict):
         w,=where(logic)
         return w
 
+    def plot_radec(self, data, binnum):
+        import biggles
+        import esutil as eu
 
+        w=self.select_bin(data, binnum)
 
-    def bin_label(self, binnum):
-        return self.bin_info[binnum]['label']
+        plt=biggles.FramedPlot()
+        plt.xlabel='RA'
+        plt.ylabel='DEC'
 
+        pts=biggles.Points(data['ra'], data['dec'], type='filled circle', size=0.1)
+        bpts=biggles.Points(data['ra'][w], data['dec'][w], type='filled circle', size=0.25,
+                            color='red')
+        plt.add(pts, bpts)
+
+        lab=self.get_label(binnum)
+        fpts, fbpts=eu.plotting.fake_points(['filled circle']*2,
+                                            ['all',lab],
+                                            colors=['black','red'])
+        key=biggles.PlotKey(0.9,0.9, [fpts, fbpts], halign='right')
+        plt.add(key)
+
+        return plt
 
 def reduce_from_ranges_many(data, tags_and_ranges, jackreg_col=None, getind=False):
     """

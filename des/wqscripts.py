@@ -71,11 +71,10 @@ class XShearWQJob(dict):
         with open(fname,'w') as fobj:
             fobj.write(text)
 
-    def get_text(self):
+    def get_info(self):
         """
-        get the wq job text
+        get info related to this job
         """
-
         c={}
         c['config_file']=get_xshear_config_file(self['run'])
 
@@ -88,6 +87,14 @@ class XShearWQJob(dict):
         job_name='%(run)s-%(lens_chunk)06d-%(source_tilename)s'
         c['job_name']=job_name % self
 
+        return c
+
+    def get_text(self):
+        """
+        get the wq job text
+        """
+
+        c=self.get_info()
         text=_xshear_wq_template % c
 
         return text
@@ -285,6 +292,8 @@ def get_collate_wq_file(run):
 
 _make_lcat_wq_template="""
 command: |
+    #source ~esheldon/.bashrc
+    . ~/shell_scripts/deslens-prepare.sh
     lcat_vers={lcat_vers}
     chunk={chunk}
     $ESPY_DIR/des/bin/make-xshear-lcat --chunk $chunk $lcat_vers
@@ -295,7 +304,7 @@ job_name: {job_name}
 
 _xshear_wq_template="""
 command: |
-    source ~esheldon/.bashrc
+    #source ~esheldon/.bashrc
 
     hostname
     module load xshear/work
@@ -344,7 +353,7 @@ job_name: "%(job_name)s"
 
 _redshear_template="""
 command: |
-    source ~/.bashrc
+    #source ~esheldon/.bashrc
     module load xshear/work
 
     dir=%(reduced_dir)s
@@ -359,6 +368,7 @@ job_name: "%(job_name)s"
 
 _combine_template="""
 command: |
+    #source ~esheldon/.bashrc
     dir=%(combined_dir)s
     outf=%(combined_file)s
     mkdir -p $dir
@@ -374,7 +384,8 @@ job_name: "%(job_name)s"
 
 _collate_template="""
 command: |
-    source ~/.bashrc
+    #source ~esheldon/.bashrc
+    . ~/shell_scripts/deslens-prepare.sh
     $ESPY_DIR/des/bin/collate %(run)s
 
     echo

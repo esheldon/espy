@@ -101,7 +101,9 @@ def view(image, **keys):
 
     show=keys.get('show',True)
     if show:
-        plt.show()
+        width=keys.get('width',None)
+        height=keys.get('height',None)
+        plt.show(width=width, height=height)
 
     return plt
 

@@ -13,10 +13,10 @@ import biggles
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("run", help="run identifier")
 parser.add_argument("bin_scheme", help="bin scheme, e.g. bin-lgt05-zwide")
-parser.add_argument("-t","--type", 
+parser.add_argument("type", 
                     help="type to plot",
-                    choices=['bin', 'corr', 'jack'],
-                    default='bin')
+                    choices=['binned', 'jack', 'corr-binned', 'corr-jack'])
+
 parser.add_argument("-v","--visible",action='store_true',
                     help="show plot on screen")
    
@@ -28,13 +28,31 @@ parser.add_argument("--title",
                     default=None,
                     help="add a title")
 
+def get_data(args):
+    from des import files
+    if args.type=='binned':
+        data=files.read_binned(args.run, args.bin_scheme)
+        epsfile=files.get_binned_file(args.run, args.bin_scheme, ext='eps')
+    elif args.type=='jack':
+        data=files.read_jack(args.run, args.bin_scheme)
+        epsfile=files.get_jack_file(args.run, args.bin_scheme, ext='eps')
+    elif args.type=='corr-binned':
+        data=files.read_corr_binned(args.run, args.rand_run, args.bin_scheme)
+        epsfile=files.get_corr_binned_file(args.run, args.rand_run,
+                                           args.bin_scheme, ext='eps')
+    elif args.type=='corr-jack':
+        data=files.read_corr_jack(args.run, args.rand_run, args.bin_scheme)
+        epsfile=files.get_corr_jack_file(args.run, args.rand_run,
+                                         args.bin_scheme, ext='eps')
+
+    epsfile=epsfile.replace('.eps','-bmode.eps')
+    return data, epsfile
+
 
 def main():
     args = parser.parse_args()
 
-    if args.type=='bin':
-        data=des.files.read_binned(args.run,
-                                          args.bin_scheme)
+    data, epsfile = get_data(args)
 
     binspec=des.files.read_config(args.bin_scheme)
     labels=[bi['label'] for bi in binspec['bin_info']]
@@ -69,10 +87,6 @@ def main():
 
         arr[row,col].add(pts, err)
 
-    epsfile=des.files.get_binned_file(args.run,
-                                             args.bin_scheme,
-                                             ext='eps')
-    epsfile=epsfile.replace('.eps','-bmode.eps')
     print("writing:",epsfile)
     arr.write_eps(epsfile)
 

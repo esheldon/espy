@@ -33,6 +33,7 @@ def add_boost_factors(data, rand):
     odata=eu.numpy_util.add_fields(data, add_dt)
 
     corr, corr_err = calc_boost_factors(data,rand)
+    #corr, corr_err = calc_boost_factors_noweight(data,rand)
 
     odata['boost']     = corr
     odata['boost_err'] = corr_err
@@ -91,4 +92,48 @@ def calc_boost_factors(data, rand):
         rfrac = rerr[w]/rand['wsum_mean'][w]
         corr_err[w] = corr[w]*sqrt( dfrac**2 + rfrac**2 )
 
+    return corr, corr_err
+
+def calc_boost_factors_noweight(data, rand):
+    """
+    calculate the boost factor and its error
+
+    parameters
+    ----------
+    data: array
+        An array with fields 'wsum_mean' and 'wsum_mean_err'
+    rand: array
+        An array with fields 'wsum_mean' and 'wsum_mean_err'
+
+    returns
+    -------
+    corr, corr_err
+
+    corr: array
+        The correction. An array with the same shape as the input wsum_mean
+    corr_err: array
+        The error, an array with the same shape as the input wsum_mean
+    """
+
+    print(data['nlenses'],rand['nlenses'])
+    apairs = data['npair'].astype('f8')/data['nlenses']
+    arpairs = rand['npair'].astype('f8')/rand['nlenses']
+
+    print(apairs)
+    print(arpairs)
+    corr = apairs/arpairs
+
+    derr = sqrt(data['npair'])/data['nlenses']
+    rerr = sqrt(rand['npair'])/rand['nlenses']
+
+    corr_err = zeros(corr.shape) + 9999
+
+    w=where( (data['npair'] > 0) & (rand['npair'] > 0) )
+
+    if w[0].size > 0:
+        dfrac = derr[w]/apairs[w]
+        rfrac = rerr[w]/arpairs[w]
+        corr_err[w] = corr[w]*sqrt( dfrac**2 + rfrac**2 )
+
+    print(corr,corr_err)
     return corr, corr_err

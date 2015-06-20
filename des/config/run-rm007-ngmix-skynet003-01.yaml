@@ -1,0 +1,13 @@
+# using old i-band density map
+# redmapper 6.2.15, lambda > 5 with spt-e ra,dec cut
+# also bug fix in xshear putting too many objects in lower and upper bins
+lcat_vers: "lcat-rm007"
+
+# ngmix011, pz v0.1.7, skynet_mag_auto, Matt's cuts, old i-band mask
+scat_vers: "scat-ngmix-skynet003"
+
+# this is used in xshear, not for the maskflags
+healpix_nside: 64
+
+# only applies if using point photoz
+#zdiff_min: 0.2

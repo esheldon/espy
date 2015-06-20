@@ -27,7 +27,7 @@ def main():
 
     zmatch_method=rconf['lens_conf']['zmatch_method']
     if zmatch_method=='weight':
-        print("using weight method")
+        print("using select or weight method")
         matcher=des.matchrand.RandomMatcher(args.lens_run,
                                             args.rand_run,
                                             args.bin_scheme,
