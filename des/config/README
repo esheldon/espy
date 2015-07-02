@@ -10,6 +10,9 @@ scat-006
     - skynet from p(z) file v0.1.7
     - short name!
 
+scat-007
+    - same as 006 but using the summed p(z) instead of individual p(z)
+
 lenses
 ------
 lcat-rm006
