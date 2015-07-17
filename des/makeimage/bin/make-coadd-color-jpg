@@ -1,139 +1,28 @@
 #!/usr/bin/env python
+"""
+make a color jpg for the input coadd run
+"""
 from __future__ import print_function
 
-import sys
-import os
-import glob
-import esutil as eu
-from esutil import wcsutil
-from numpy import array, zeros, flipud
-from PIL import Image
-import images
-
 import des
-import fitsio
+from des.makeimage.pretty_coadd import make_coadd_jpg,DEFAULT_RELEASE 
 
 from argparse import ArgumentParser
 parser=ArgumentParser(__doc__)
 
-parser.add_argument("gfile",help="g band file")
-parser.add_argument("rfile",help="r band file")
-parser.add_argument("ifile",help="i band file")
-parser.add_argument("outfile",help="i band file")
+parser.add_argument("run",help="coadd run")
 
-parser.add_argument('-r','--rebin',default=None,
+parser.add_argument('-r','--rebin',default=None,type=int,
                   help="rebin factor")
-parser.add_argument('-c','--clobber',action='store_true',
-                  help="write files even if they already exist")
 
-NOMINAL_EXPTIME=900.0
-# lower makes it dark
-#SCALE=.004
-SCALE=.030
-#SCALE=.001
-
-# lower makes it dark, higher makes it washed out
-#NONLINEAR=.16
-NONLINEAR=.12
-
-def make_dir(fname):
-    dname=os.path.dirname(fname)
-    if dname=='':
-        return
-
-    if not os.path.exists(dname):
-        print('making dirs:',dname)
-        os.makedirs(dname)
-
-class ImageTrans(object):
-    def __init__(self, filename):
-        image,header=fitsio.read(filename,ext=1,header=True)
-
-        self.image=image
-        self.header=header
-
-        self.band=header['FILTER'].split()[0]
-        self.exptime=header['exptime']
-
-    def flip_ud(self):
-        print("    flipping",self.band)
-        self.image = flipud(self.image)
-
-    def transpose(self):
-        print("    transposing",self.band)
-        self.image = self.image.transpose()
-
-    def rebin(self, rebin):
-
-        print("    rebinning",self.band)
-        image=self.image
-
-        nrows,ncols=image.shape
-
-        # pad nrows,ncols for rebin
-        row_remain=(nrows % rebin)
-        if row_remain != 0:
-            nrows += (rebin-row_remain)
-        col_remain=(ncols % rebin)
-        if col_remain != 0:
-            ncols += (rebin-col_remain)
-
-        imrebin=zeros( (nrows, ncols), dtype='f4' )
-
-        imrebin[0:image.shape[0], 0:image.shape[1]] = image[:,:]
-
-        imrebin = images.rebin(imrebin, rebin)
-
-        del self.image
-        self.image=imrebin
-
-    def scale_image(self):
-        print('    scaling',self.band, self.exptime)
-
-        self.image *= (NOMINAL_EXPTIME/self.exptime)
+parser.add_argument('--release',default=DEFAULT_RELEASE,
+                  help="use settings for the specified release")
 
 
 def main():
+
     args = parser.parse_args()
+    make_coadd_jpg(args.run, rebin=args.rebin, release=args.release)
 
-    outfile=os.path.expanduser(args.outfile)
-
-    rebin=args.rebin
-    if rebin is not None:
-        rebin=int(rebin)
-
-    imlist=[]
-    for fname in [args.gfile, args.rfile, args.ifile]:
-        print(fname)
-        im = ImageTrans(fname)
-        im.scale_image()
-        im.flip_ud()
-        #im.transpose()
-        if rebin is not None:
-            im.rebin(rebin)
-        
-        imlist.append(im)
-        print()
-
-    print('getting scaled color')
-    scales= array([1.0, 1.1, 2.0])
-    scales= SCALE*scales
-    nonlinear=NONLINEAR
-
-    print('getting color image')
-    colorim=images.get_color_image(imlist[2].image,
-                                   imlist[1].image,
-                                   imlist[0].image,
-                                   scales=scales,
-                                   nonlinear=nonlinear,
-                                   satval=100)
-
-    print('bytescaling')
-    colorim = images.bytescale(colorim)
-
-    print('writing:',outfile)
-    pim=Image.fromarray(colorim)
-    make_dir(outfile)
-    pim.save(outfile, quality=90)
 
 main()

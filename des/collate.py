@@ -41,6 +41,11 @@ class Collator(dict):
         orig=read_lcat_original(self['lens_conf']['lcat_name'])
         comb=read_combined(self['run'])
 
+        if 'xxsum' in comb.dtype.names:
+            doellip=True
+        else:
+            doellip=False
+
         print("matching")
         index_col=self['lens_conf']['index_col']
         mo,mc=eu.numpy_util.match(orig[index_col], comb['index'])
@@ -52,11 +57,17 @@ class Collator(dict):
 
         print("collating")
 
-        add_dt = comb.dtype.descr + [('se1','f8'),('se2','f8'),('se','f8')]
-        newdata=eu.numpy_util.add_fields(orig, add_dt)
-        eu.numpy_util.copy_fields(comb, newdata)
+        if doellip:
+            add_dt = comb.dtype.descr + [('se1','f8'),('se2','f8'),('se','f8')]
+        else:
+            add_dt = comb.dtype.descr
 
-        self.add_sellip(newdata)
+        newdata=eu.numpy_util.add_fields(orig, add_dt)
+
+        if doellip:
+            self.add_sellip(newdata)
+
+        eu.numpy_util.copy_fields(comb, newdata)
 
         return newdata
 

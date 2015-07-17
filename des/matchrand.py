@@ -7,7 +7,6 @@ from .files import *
 from . import binning
 from . import averaging
 
-import weighting
 
 class RandomMatcher(dict):
     """
@@ -143,6 +142,8 @@ class RandomMatcher(dict):
         match redshifts in this bin, but apply no selection to
         the randoms
         """
+        import weighting
+
         z=self.z
         rz=self.rz
         nrand=rz.size
@@ -175,6 +176,7 @@ class RandomMatcher(dict):
         well as redshift matching
         """
 
+        import weighting
 
         z=self.z
         rz=self.rz
@@ -197,6 +199,8 @@ class RandomMatcher(dict):
         """
         plot the z hist for data, randoms, and weighted randoms
         """
+        import weighting
+
         pngfile=get_match_weights_file(self['lens_run'],
                                        self['rand_run'],
                                        self['bin_scheme'],
@@ -463,6 +467,8 @@ class RandomMatcherRemove(RandomMatcher):
         """
         all the other match methods call this one
         """
+
+        import weighting
 
         wr = weighting.hist_match_remove(rz, z, self['binsize'],
                                          extra_weights1=weights)

@@ -10,12 +10,12 @@ bin_info:
               ["z_lambda", [0.2, 0.8], "()"] ]
 
 
-    - label: '$\lambda  \in [12.7,23.2]$'
-      bins: [ ["lambda_chisq", [12.7, 23.2], "()"],
+    - label: '$\lambda  \in [12.7,20.0]$'
+      bins: [ ["lambda_chisq", [12.7, 20.0], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 
 
-    - label: '$\lambda  > 23.2$'
-      bins: [ ["lambda_chisq", [23.2, 1.0e+06], "()"],
+    - label: '$\lambda  > 20.0$'
+      bins: [ ["lambda_chisq", [20.0, 1.0e+06], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 

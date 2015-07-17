@@ -1,0 +1,35 @@
+#!/usr/bin/env python
+"""
+make a color jpg from the specified files
+"""
+from __future__ import print_function
+
+import des
+from des.makeimage.pretty_coadd import make_jpg
+
+from argparse import ArgumentParser
+parser=ArgumentParser(__doc__)
+
+parser.add_argument("gfile",help="g band file")
+parser.add_argument("rfile",help="r band file")
+parser.add_argument("ifile",help="i band file")
+parser.add_argument("outfile",help="output image file")
+
+parser.add_argument('-r','--rebin',default=None,type=int,
+                  help="rebin factor")
+
+parser.add_argument('--release',default='y1',
+                  help="use settings for the specified release")
+
+
+def main():
+
+    args = parser.parse_args()
+
+    make_jpg(args.gfile, args.rfile, args.ifile,
+             args.outfile,
+             rebin=args.rebin,
+             release=args.release)
+
+
+main()

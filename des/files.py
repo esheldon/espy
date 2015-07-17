@@ -167,6 +167,7 @@ def get_scinv_sum_colname(scat_vers):
     name='%s_pz_sum_scinv' % scat_vers
     name=name.replace('-','_')
     return name
+
 def get_scinv_zl_colname(scat_vers):
     name='%s_zlgrid' % scat_vers
     name=name.replace('-','_')
@@ -522,9 +523,9 @@ def get_lensum_dtype(nbin, shear_style):
         ('weight','f8'),
         ('totpairs','i8'),
 
-        ('xxsum','f8'),
-        ('xysum','f8'),
-        ('yysum','f8'),
+        #('xxsum','f8'),
+        #('xysum','f8'),
+        #('yysum','f8'),
 
         ('npair','i8',nbin),
 

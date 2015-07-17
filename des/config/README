@@ -31,6 +31,12 @@ run-rm006-s006
     - scat-006
         - ngmix011-v15b
         - skynet
+run-rm006-s007
+    - lcat-rm006 (10Mpc)
+    - scat-007
+        - ngmix011-v15b
+        - skynet
+        - summed p(z)/scinv(zl)
 
 rrun-rm009-s006
     - 10Mpc, matches with run-rm006-s006
