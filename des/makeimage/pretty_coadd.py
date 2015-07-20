@@ -143,13 +143,15 @@ class RGBImageMaker(object):
             #SCALE=.010*sqrt(2.0)
             SCALE=.010*sqrt(2.0)
             relative_scales= array([1.00, 1.2, 2.0])
-        else:
+        elif self.release=='sva1':
             # SVA seems to want a different scaling
             print('getting scaled color for sv')
             #SCALE=.050*0.666
             SCALE=.050*0.88
             #relative_scales= array([1.1, 1.1, 2.0])
             relative_scales= array([1.00, 1.2, 2.5])
+        else:
+            raise ValueError("bad release: '%s'" % self.release)
 
         scales= SCALE*relative_scales
 
