@@ -1,49 +1,53 @@
+# artificially set 20.1 to 20.0
+#[5.0, 5.5, 6.7, 8.0, 9.4, 11.3, 13.6, 16.4, 20.1, 25.1, 33.1, 47.5]
+#[5.5, 6.7, 8.0, 9.4, 11.3, 13.6, 16.4, 20.1, 25.1, 33.1, 47.5, 178.9]
+
 bin_info:
-    - label: '$\lambda  \in [5.0,5.6]$'
-      bins: [ ["lambda_chisq", [5.0, 5.6], "()"],
+    - label: '$\lambda  \in [5.0,5.5]$'
+      bins: [ ["lambda_chisq", [5.0, 5.5], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 
-    - label: '$\lambda  \in [5.6,6.5]$'
-      bins: [ ["lambda_chisq", [5.6, 6.5], "()"],
+    - label: '$\lambda  \in [5.5,6.7]$'
+      bins: [ ["lambda_chisq", [5.5, 6.7], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 
-    - label: '$\lambda  \in [6.5,7.6]$'
-      bins: [ ["lambda_chisq", [6.5, 7.6], "()"],
+    - label: '$\lambda  \in [6.7,8.0]$'
+      bins: [ ["lambda_chisq", [6.7, 8.0], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 
-    - label: '$\lambda  \in [7.6,9.0]$'
-      bins: [ ["lambda_chisq", [7.6, 9.0], "()"],
+    - label: '$\lambda  \in [8.0,9.4]$'
+      bins: [ ["lambda_chisq", [8.0, 9.4], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 
-    - label: '$\lambda  \in [9.0,10.6]$'
-      bins: [ ["lambda_chisq", [9.0, 10.6], "()"],
+    - label: '$\lambda  \in [9.4,11.3]$'
+      bins: [ ["lambda_chisq", [9.4, 11.3], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 
-    - label: '$\lambda  \in [10.6,12.7]$'
-      bins: [ ["lambda_chisq", [10.6, 12.7], "()"],
+    - label: '$\lambda  \in [11.3,13.6]$'
+      bins: [ ["lambda_chisq", [11.3, 13.6], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 
-    - label: '$\lambda  \in [12.7,15.3]$'
-      bins: [ ["lambda_chisq", [12.7, 15.3], "()"],
+    - label: '$\lambda  \in [13.6,16.4]$'
+      bins: [ ["lambda_chisq", [13.6, 16.4], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 
-    - label: '$\lambda  \in [15.3,18.8]$'
-      bins: [ ["lambda_chisq", [15.3, 18.8], "()"],
+    - label: '$\lambda  \in [16.4,20.0]$'
+      bins: [ ["lambda_chisq", [16.4, 20.0], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 
-    - label: '$\lambda  \in [18.8,23.2]$'
-      bins: [ ["lambda_chisq", [18.8, 23.2], "()"],
+    - label: '$\lambda  \in [20.0,25.1]$'
+      bins: [ ["lambda_chisq", [20.0, 25.1], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 
-    - label: '$\lambda  \in [23.2,30.8]$'
-      bins: [ ["lambda_chisq", [23.2, 30.8], "()"],
+    - label: '$\lambda  \in [25.1,33.1]$'
+      bins: [ ["lambda_chisq", [25.1, 33.1], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 
-    - label: '$\lambda  \in [30.8,45.0]$'
-      bins: [ ["lambda_chisq", [30.8, 45.0], "()"],
+    - label: '$\lambda  \in [33.1,47.5]$'
+      bins: [ ["lambda_chisq", [33.1, 47.5], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 
-    - label: '$\lambda  > 45$'
-      bins: [ ["lambda_chisq", [45.0, 1.0e+06], "()"],
+    - label: '$\lambda  > 47.5$'
+      bins: [ ["lambda_chisq", [47.5, 1.0e+06], "()"],
               ["z_lambda", [0.2, 0.8], "()"] ]
 

@@ -35,7 +35,7 @@ def average_lensums(lout, weights=None, jackreg_col=None):
         print("        using extra weights in averages")
         return average_lensums_weighted(lout,weights,jackreg_col=jackreg_col)
 
-    print("yes using no weights")
+    #print("yes using no weights")
 
     nlens = lout.size
     nrad = lout['rsum'][0].size
