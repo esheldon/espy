@@ -2,13 +2,8 @@ from __future__ import print_function
 
 import sys
 import os
-import glob
-import esutil as eu
-from esutil import wcsutil
 import numpy
 from numpy import array, zeros, flipud, where, sqrt
-
-import des
 import fitsio
 
 NOMINAL_EXPTIME=900.0
@@ -86,20 +81,38 @@ class RGBImageMaker(object):
             im = ImageTrans(fname)
             imlist.append(im)
 
-        for im in imlist:
+        for i,im in enumerate(imlist):
             #im.scale_image()
             im.flip_ud()
+            #im.zero_bad_weightmap()
             #im.transpose()
             if self.rebin is not None:
                 im.rebin(rebin)
-            
+
+            """
+            minval=0.001
+            if i==0:
+                bad_logic = im.weight < minval
+            else:
+                bad_logic = bad_logic | (im.weight < minval)
+            """
             print()
+
+        """
+        wbad=numpy.where(bad_logic)
+        if wbad[0].size != 0:
+            print("zeroing",wbad[0].size,"pixels")
+            for im in imlist:
+
+                image=im.image
+                print("max in bad:",image[wbad].max())
+                image[wbad]=0.0
+                print("max in bad after:",image[wbad].max())
+        """
 
         self.imlist=imlist
 
     def make_image(self):
-        import images
-
         import images
 
         self._make_imlist()
@@ -185,6 +198,7 @@ class ImageTrans(object):
         w=where(wt < minval)
 
         if w[0].size > 0:
+            print("        zeroing",w[0].size,"bad pixels")
             print("        max val from image:",self.image[w].max())
             self.image[w] = 0.0
 
@@ -197,7 +211,7 @@ class ImageTrans(object):
         self.image = self.image.transpose()
 
     def rebin(self, rebin):
-
+        import images
         print("    rebinning",self.band)
         image=self.image
 
