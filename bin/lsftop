@@ -58,10 +58,6 @@ class LSFWatcher:
         
         self.command=_command
 
-        self.MINUTE=60
-        self.HOUR=self.MINUTE*60
-        self.DAY=self.HOUR*24
-
         self.headers=('JOBID','USER','STAT','QUEUE','FROM_HOST','EXEC_HOST','JOB_NAME','SUBMIT_TIME')
         self.hdict={}
         for h in self.headers:
