@@ -58,7 +58,7 @@ class XShearConfig(dict):
             if 'zdiff_min' in comb:
                 tmp=_config_zdiff_min % comb
                 text.append(tmp)
-        elif comb['scinv_style']=="interp":
+        elif 'interp' in comb['scinv_style']:
             zlvals_string=self.get_zlvals_string()
             tmp=_config_interp % {'zlvals':zlvals_string}
             text.append(tmp)
@@ -75,12 +75,20 @@ class XShearConfig(dict):
         from . import pz
 
         conf=self['source_conf']
-        chunk=0
-        fname=pz.get_scinv_file(conf['pz_vers'],
-                                conf['pz_type'],
-                                conf['cosmo_vers'],
-                                chunk=chunk)
-        zlvals=fitsio.read(fname, ext='zlvals')
+
+        if conf['scinv_style']=='interp-summed':
+            cols=pz.open_pz_columns(conf['pz_vers'],
+                                    conf['pz_type'])
+
+            colname=get_scinv_zl_colname(self['scat_vers'])
+            zlvals = cols[colname][:]
+        else:
+            chunk=0
+            fname=pz.get_scinv_file(conf['pz_vers'],
+                                    conf['pz_type'],
+                                    conf['cosmo_vers'],
+                                    chunk=chunk)
+            zlvals=fitsio.read(fname, ext='zlvals')
         return zlvals
 
 

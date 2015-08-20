@@ -31,8 +31,9 @@ def plot_dsig(r, dsig, dsigerr, **kw):
 
     _set_biggles_defs(nbin, **kw)
 
-
     grid, arr = get_framed_array(nbin)
+    if 'arr' in kw:
+        arr=kw['arr']
 
     visible=kw.get('visible',True)
     is_ortho=kw.get('is_ortho',False)
@@ -200,17 +201,6 @@ def _add_dsig_to_plot(plt, r, dsig, dsigerr, **kw):
 
             std=ytot.std()
             yrng=[wm-3.0*std, wm+3.0*std]
-            '''
-            if yrng[0] < 0:
-                yrng[0] *= 1.1
-            else:
-                yrng[0] *= 0.9
-
-            if yrng[1] < 0:
-                yrng[1] *= 0.9
-            else:
-                yrng[1] *= 1.1
-            '''
 
     return xrng, yrng
 

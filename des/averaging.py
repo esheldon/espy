@@ -32,7 +32,10 @@ def average_lensums(lout, weights=None, jackreg_col=None):
     import jackknife
 
     if weights is not None:
+        print("        using extra weights in averages")
         return average_lensums_weighted(lout,weights,jackreg_col=jackreg_col)
+
+    #print("yes using no weights")
 
     nlens = lout.size
     nrad = lout['rsum'][0].size
@@ -56,20 +59,20 @@ def average_lensums(lout, weights=None, jackreg_col=None):
     comb['osum'][0]  = lout['osum'].sum(axis=0)
 
     # averages
-    comb['r'][0] = comb['rsum']/comb['wsum']
+    comb['r'][0] = comb['rsum'][0]/comb['wsum'][0]
 
     if shear_style=='lensfit':
         comb['dsensum'][0] = lout['dsensum'].sum(axis=0)
         comb['osensum'][0] = lout['osensum'].sum(axis=0)
-        comb['dsig'][0] = comb['dsum']/comb['dsensum']
-        comb['osig'][0] = comb['osum']/comb['osensum']
+        comb['dsig'][0] = comb['dsum'][0]/comb['dsensum'][0]
+        comb['osig'][0] = comb['osum'][0]/comb['osensum'][0]
     else:
-        comb['dsig'][0] = comb['dsum']/comb['wsum']
-        comb['osig'][0] = comb['osum']/comb['wsum']
+        comb['dsig'][0] = comb['dsum'][0]/comb['wsum'][0]
+        comb['osig'][0] = comb['osum'][0]/comb['wsum'][0]
 
     # this is average wsum over lenses
     # we calculate boost factors from this, wsum_mean/wsum_mean_random
-    comb['wsum_mean'][0] = comb['wsum']/nlens
+    comb['wsum_mean'][0] = comb['wsum'][0]/nlens
 
     # jackknife to get the covariance matrix
     m,cov=jackknife_lensums(lout, jackreg_col=jackreg_col)
@@ -97,7 +100,7 @@ def average_lensums_weighted(lout, weights_in, jackreg_col=None):
     data: array
         Array containing the outputs from xshear
     weights: array
-        Additional weights
+        Additional weights for each lens
     jackreg_col: string, optional
         column name holding the jackknife region ids
     """

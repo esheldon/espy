@@ -8,7 +8,6 @@ from __future__ import print_function
 from .files import *
 from .import scat
 from . import lcat
-from . import output
 
 from .wqscripts import XShearWQJob, RedshearWQJob, CombineWQJob, CollateWQJob
 from .xshear_config import XShearConfig
@@ -56,7 +55,7 @@ class Run(dict):
         write all the chunks and tiles
         """
         lens_nchunk=self['lens_conf']['nchunk']
-        tilenames=scat.get_tilenames(self['source_conf']['scat_name'])
+        tilenames=scat.get_tilenames(self['source_conf']['scat_table'])
 
         ntile=len(tilenames)
         for lens_chunk in xrange(lens_nchunk):
@@ -70,6 +69,27 @@ class Run(dict):
                     job.write()
                 else:
                     print("    skipping due to missing scat")
+
+    def check_xshear_output(self):
+        """
+        write all the chunks and tiles
+        """
+        lens_nchunk=self['lens_conf']['nchunk']
+        tilenames=scat.get_tilenames(self['source_conf']['scat_table'])
+
+        ntile=len(tilenames)
+        for lens_chunk in xrange(lens_nchunk):
+            print("    checking chunk: %d/%d" % (lens_chunk+1, lens_nchunk))
+            for i,tilename in enumerate(tilenames):
+                # first check if this source catalog exists
+                if self._scat_exists(tilename):
+                    job=XShearWQJob(self['run'],
+                                    lens_chunk,
+                                    tilename)
+                    info=job.get_info()
+                    if not os.path.exists(info['output_file']):
+                        print("missing output:",info['output_file'])
+
 
     def write_redshear_wq(self):
         """

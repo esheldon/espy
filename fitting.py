@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 import numpy
 import scipy.optimize
+from pprint import pprint
 
 def histogauss(data, guess=None, **keys):
     fitter=GaussFitter(data, **keys)
@@ -14,6 +15,8 @@ def histogauss(data, guess=None, **keys):
         print("generated guess:",guess)
 
     fitter.dofit(guess)
+    res=fitter.get_result()
+    pprint(res)
 
     plt=fitter.make_plot(**keys)
 

@@ -5,6 +5,7 @@ collate outputs
 """
 
 from __future__ import print_function
+import numpy
 from .files import *
 
 class Collator(dict):
@@ -40,6 +41,11 @@ class Collator(dict):
         orig=read_lcat_original(self['lens_conf']['lcat_name'])
         comb=read_combined(self['run'])
 
+        if 'xxsum' in comb.dtype.names:
+            doellip=True
+        else:
+            doellip=False
+
         print("matching")
         index_col=self['lens_conf']['index_col']
         mo,mc=eu.numpy_util.match(orig[index_col], comb['index'])
@@ -50,7 +56,42 @@ class Collator(dict):
         comb=comb[mc]
 
         print("collating")
-        newdata=eu.numpy_util.add_fields(orig, comb.dtype.descr)
+
+        if doellip:
+            add_dt = comb.dtype.descr + [('se1','f8'),('se2','f8'),('se','f8')]
+        else:
+            add_dt = comb.dtype.descr
+
+        newdata=eu.numpy_util.add_fields(orig, add_dt)
+
+        if doellip:
+            self.add_sellip(newdata)
+
         eu.numpy_util.copy_fields(comb, newdata)
 
         return newdata
+
+    def add_sellip(self, data):
+        data['se1']=9999
+        data['se2']=9999
+        data['se']=9999
+
+        print("adding sellip")
+
+        w,=numpy.where(data['weight'] > 0.0)
+
+        if w.size > 0:
+            print("    %d/%d with weight > 0" % (w.size,data.size))
+
+            xxsum=data['xxsum'][w]
+            xysum=data['xysum'][w]
+            yysum=data['yysum'][w]
+
+            T = xxsum + yysum
+            e1 = (xxsum - yysum)/T
+            e2 = 2*xysum/T
+            e=numpy.sqrt(e1**2 + e2**2)
+
+            data['se1'][w] = e1
+            data['se2'][w] = e2
+            data['se'][w] = e

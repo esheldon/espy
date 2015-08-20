@@ -1,5 +1,16 @@
 """
 code to create xshear input files
+
+    first run the reformat-and-trim.py to add jackknife regioins, randomize
+    ra,dec.  currently this is just a script in one of the directories
+
+    then run 
+    
+        /bin/make-lcat-wq lcat-vers
+        
+    to make wq scripts for doing the lcat creation, which involves the quad
+    checks. These scripts run /bin/make-xshear-lcat
+
 """
 from __future__ import print_function
 import numpy
@@ -7,6 +18,8 @@ import cosmology
 from esutil.numpy_util import between
 
 from .files import *
+
+QUADEQ_ALL_OK = 31
 
 def make_xshear_input(lcat_vers, chunk=None):
     """
@@ -48,6 +61,7 @@ class XShearInput(dict):
         
         cconf=read_config(self['cosmo_vers'])
         self.cosmo = cosmology.Cosmo(omega_m=cconf['omega_m'], H0=cconf['H0'])
+
         self.mask_info=read_config(self['mask_vers'])
 
     def write_all(self):
@@ -89,8 +103,19 @@ class XShearInput(dict):
         ndata=self.get_struct(data.size)
 
         ndata['index'] = data[self['index_col']]
-        ndata['ra'] = data[self['ra_col']]
-        ndata['dec'] = data[self['dec_col']]
+
+        if self['ra_col'] == 'ra_cent':
+            cen_index = self['cen_index']
+            print("    using ra_cent[%d]" % cen_index)
+
+            ra = data[self['ra_col']][:,cen_index]
+            dec = data[self['dec_col']][:,cen_index]
+        else:
+            ra = data[self['ra_col']]
+            dec = data[self['dec_col']]
+
+        ndata['ra'] = ra
+        ndata['dec'] = dec
         ndata['z'] = data[self['z_col']]
         
         return ndata
@@ -100,16 +125,10 @@ class XShearInput(dict):
         apply any cuts
         """
         z_logic=self.get_z_logic(data[self['z_col']])
-        #range_logic = self.get_radec_range_logic(data[self['ra_col']],
-        #                                         data[self['dec_col']])
-        #logic = z_logic & range_logic
 
         logic = z_logic
 
         w,=numpy.where(logic)
-        #print("    final remaining %d/%d" % (w.size,data.size))
-        #if w.size == 0:
-        #    raise ValueError("No objects passed cuts")
        
         return w
 
@@ -163,9 +182,12 @@ class XShearInput(dict):
         mask_type=mask_info['mask_type']
 
         if mask_type is None:
-            return numpy.zeros(ra.size)
+            print("        setting all maskflags to QUADEQ_ALL_OK")
+            return numpy.zeros(ra.size, dtype='i8') + QUADEQ_ALL_OK
         else:
             import healpix_util as hu
+
+
             if mask_type != 'healpix':
                 raise ValueError("only healpix supported for now")
 
@@ -193,6 +215,7 @@ class XShearInput(dict):
 
             w,=numpy.where(maskflags > 1)
             print("    %d/%d had good quadrant pairs" % (w.size, ra.size))
+
         return maskflags
 
 
