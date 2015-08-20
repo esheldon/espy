@@ -11,7 +11,11 @@ Description
         bjobs -w
    
     The job listing is refreshed regularly, by default every 120 seconds.   Hit
-    any key to update immediately.  Hit 'q' or control-c to quit."""
+    any key to update immediately.  Hit 'q' or control-c to quit.
+    
+    By default no colors are used. Use -d or -l to use colors for a dark or light
+    background
+"""
 from __future__ import print_function
 import os
 import sys
@@ -89,7 +93,8 @@ class LSFWatcher:
             for h in self.headers:
                 lengths[h.lower()] = len(h)
 
-            nprint = min(len(out), self.maxy3-1)
+            #nprint = min(len(out), self.maxy3-1)
+            nprint = min(len(out), self.maxy3)
             line_splits = []
             for ii in xrange(len(out)):
                 line = out[ii]
@@ -263,19 +268,25 @@ class LSFWatcher:
 
         elif self.background=='dark':
 
-            self.colors['njobs'] = curses.color_pair(cyan)
+            self.colors['njobs'] = curses.color_pair(magenta)
 
             self.colors['run'] = curses.color_pair(green)
-            self.colors['pending'] = curses.color_pair(magenta)
+            self.colors['pending'] = curses.color_pair(yellow)
             self.colors['suspended'] = curses.color_pair(red)
 
 
         else:
-            self.colors['njobs'] = curses.color_pair(magenta)
+            #self.colors['njobs'] = curses.color_pair(magenta)
 
-            self.colors['run'] = curses.color_pair(green)
-            self.colors['pending'] = curses.color_pair(magenta)
-            self.colors['suspended'] = curses.color_pair(red)
+            #self.colors['run'] = curses.color_pair(green)
+            #self.colors['pending'] = curses.color_pair(magenta)
+            #self.colors['suspended'] = curses.color_pair(red)
+
+            self.colors['njobs'] = curses.color_pair(default)
+
+            self.colors['run'] = curses.color_pair(default)
+            self.colors['pending'] = curses.color_pair(default)
+            self.colors['suspended'] = curses.color_pair(default)
 
 
 # 
