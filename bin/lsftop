@@ -136,8 +136,8 @@ class LSFWatcher:
                 ls = line_splits[ii]
                 line = fmt % ls
                 self.win3.addstr(ii,0,line[0:self.maxx3-1])
-            self.win2.refresh()
-            self.win3.refresh()
+        self.win2.refresh()
+        self.win3.refresh()
 
     def setup_windows(self, stdscr):
         self.make_color_pairs()
