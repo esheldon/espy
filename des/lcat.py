@@ -103,8 +103,19 @@ class XShearInput(dict):
         ndata=self.get_struct(data.size)
 
         ndata['index'] = data[self['index_col']]
-        ndata['ra'] = data[self['ra_col']]
-        ndata['dec'] = data[self['dec_col']]
+
+        if self['ra_col'] == 'ra_cent':
+            cen_index = self['cen_index']
+            print("    using ra_cent[%d]" % cen_index)
+
+            ra = data[self['ra_col']][:,cen_index]
+            dec = data[self['dec_col']][:,cen_index]
+        else:
+            ra = data[self['ra_col']]
+            dec = data[self['dec_col']]
+
+        ndata['ra'] = ra
+        ndata['dec'] = dec
         ndata['z'] = data[self['z_col']]
         
         return ndata
@@ -114,16 +125,10 @@ class XShearInput(dict):
         apply any cuts
         """
         z_logic=self.get_z_logic(data[self['z_col']])
-        #range_logic = self.get_radec_range_logic(data[self['ra_col']],
-        #                                         data[self['dec_col']])
-        #logic = z_logic & range_logic
 
         logic = z_logic
 
         w,=numpy.where(logic)
-        #print("    final remaining %d/%d" % (w.size,data.size))
-        #if w.size == 0:
-        #    raise ValueError("No objects passed cuts")
        
         return w
 

@@ -360,7 +360,7 @@ def define_bins(var_input, lastmin, alpha=0.6666, visible=False, prompt=False):
     minbin = list(reversed(minbin))
     maxbin = list(reversed(maxbin))
     minbin.append(maxbin[-1])
-    maxbin.append(None)
+    maxbin.append(var_input.max())
     
     minstr=[]
     maxstr=[]

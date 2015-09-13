@@ -10,10 +10,16 @@ scat-006
     - skynet from p(z) file v0.1.7
     - short name!
 
+scat-007
+    - same as 006 but using the summed p(z) instead of individual p(z)
+
 lenses
 ------
 lcat-rm006
     - 10 Mpc
+lcat-rm006b
+    - 10 Mpc
+    - 2nd best position
 rcat-rm009
     - 10 Mpc
 
@@ -28,6 +34,20 @@ run-rm006-s006
     - scat-006
         - ngmix011-v15b
         - skynet
+run-rm006b-s006
+    - lcat-rm006b (10Mpc)
+        - using 2nd best position
+    - scat-006
+        - ngmix011-v15b
+        - skynet
+
+
+run-rm006-s007
+    - lcat-rm006 (10Mpc)
+    - scat-007
+        - ngmix011-v15b
+        - skynet
+        - summed p(z)/scinv(zl)
 
 rrun-rm009-s006
     - 10Mpc, matches with run-rm006-s006

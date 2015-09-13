@@ -14,12 +14,17 @@ example steps:
     # split everything by coadd tile
     split_orig_scat_by_tile(scat_name, tablename)
 
+    # for individual p(z)/scinv(zl)
     # you can run this from bin/match-scinv as well
-    cosmo_vers='cosmo-01'
-    pz_vers='v0.1.7'
-    pz_type: 'skynet_mag_auto'
-    scat_table='ngmix011'
-    match_scinv(scat_name, cosmo_vers, pz_vers, pz_type, scat_table=scat_table)
+        cosmo_vers='cosmo-01'
+        pz_vers='v0.1.7'
+        pz_type: 'skynet_mag_auto'
+        scat_table='ngmix011'
+        match_scinv(scat_name, cosmo_vers, pz_vers, pz_type, scat_table=scat_table)
+
+    # if summed p(z)/scinv(zl) you need to fun
+        make_summed_pofz(scat_vers)
+        make_summed_scinv(scat_vers)
 
     # then run script from /bin
     make-xshear-scat ngmix011-v15b
@@ -28,6 +33,7 @@ precursor will be creating the scinv for the p(z) catalog.  See the .pz module
 """
 from __future__ import print_function
 import numpy
+from numpy import zeros, ones, where, array, isnan, newaxis
 from .files import *
 from . import pz, sg
 
@@ -73,6 +79,9 @@ class XShearInput(dict):
         if 'mask_vers' in self:
             self.mask_info=read_config(self['mask_vers'])
 
+        if self['scinv_style'] == 'interp-summed':
+            self._load_summed_scinv()
+
     def write(self, tilename):
         """
         select objects and write the ascii inputs
@@ -96,7 +105,6 @@ class XShearInput(dict):
         """
         read the input catalog
         """
-        import fitsio
 
         if self['scinv_style']=='interp':
             ext='model_fits'
@@ -107,8 +115,7 @@ class XShearInput(dict):
                                        tilename)
         else:
             ext=1
-            inf=get_orig_scat_file(self['scat_name'],
-                                   tilename)
+            inf=get_orig_scat_file(self['scat_name'], tilename)
             
         if not os.path.exists(inf):
             print("skipping missing file:",inf)
@@ -139,12 +146,18 @@ class XShearInput(dict):
         if self['scinv_style']=='interp':
             nzl=data[self['scinv_col']].shape[1]
             dt += [(self['scinv_col'],'f8',nzl)]
+        elif self['scinv_style']=='interp-summed':
+            nzl=self.scinv_data.size
+            dt += [('scinv','f8',nzl)]
         else:
             dt += [(self['z_col'],'f8')]
 
         newdata=numpy.zeros(data.size, dtype=dt)
 
         copy_fields(data, newdata)
+
+        if self['scinv_style']=='interp-summed':
+            newdata['scinv'] = self.scinv_data[newaxis,:]
 
         var=(2*self['shapenoise']**2
              +     data[self['e_cov_11_col']]
@@ -304,9 +317,12 @@ class XShearInput(dict):
         """
         cut bad p(z) or scinv
         """
-        logic=data[self['scinv_flags_col']]==0
-        w,=numpy.where(logic)
-        print("    kept %d/%d good scinv" % (w.size, data.size))
+        if self['scinv_style']=='interp':
+            logic=data[self['scinv_flags_col']]==0
+            w,=numpy.where(logic)
+            print("    kept %d/%d good scinv" % (w.size, data.size))
+        else:
+            return ones(data.size, dtype=bool)
         return logic
 
     def get_cut_logic(self, data):
@@ -360,8 +376,134 @@ class XShearInput(dict):
         print("    kept %d/%d all cuts" % (w.size, data.size))
         return logic
 
+    def _load_summed_scinv(self):
+        """
+        load the summed scinv data
+        """
+        scat_vers=self['scat_vers']
 
- 
+        scinv_colname=get_scinv_sum_colname(scat_vers)
+        zlgrid_colname=get_scinv_zl_colname(scat_vers)
+
+        cols=pz.open_pz_columns(self['pz_vers'],self['pz_type'])
+
+        self.scinv_zlgrid = cols[zlgrid_colname][:]
+        self.scinv_data   = cols[scinv_colname][:]
+
+
+def make_summed_pofz(scat_vers, tilenames=None):
+    """
+    match the dg scat to scinv using a Matcher
+
+    parameters
+    ----------
+    scat_vers: string
+        name of a source catalog version e.g. scat-006
+    tilenames: list, optional
+        subset to process, for testing
+    """
+    import fitsio
+
+    pz_sum_colname=get_pz_sum_colname(scat_vers)
+    print("will write to column: '%s'" % pz_sum_colname)
+
+    xi=XShearInput(scat_vers)
+    cols=pz.open_pz_columns(xi['pz_vers'],xi['pz_type'])
+
+    zvals = cols['zgrid'][:]
+    pzsum=zeros(zvals.size)
+
+    if tilenames is None:
+        tilenames=get_tilenames(xi['scat_table'])
+
+    ntile=len(tilenames)
+    ntile_use=0
+    nuse=0
+    first=True
+
+    for i,tilename in enumerate(tilenames):
+        print("-"*70)
+        print("processing tile %d/%d: %s" % (i+1,ntile,tilename))
+
+        data=xi.read_input_data(tilename)
+        if data is None:
+            # not all tiles are present
+            continue
+
+        w=xi.select(data)
+
+        indices=data['coadd_objects_id'][w]
+
+        matches = cols['index'].match( indices )
+        nmatches=matches.size
+        print("    matches: %d/%d" % (nmatches, indices.size))
+
+        pofz = cols['pofz'][matches]
+
+        good=zeros(nmatches, dtype='i8')
+        for mi in xrange(nmatches):
+            wnan,=where(isnan(pofz[mi,:]))
+            if wnan.size == 0:
+                good[mi]=1
+        
+        wgood,=where(good)
+        if wgood.size > 0:
+            print("    not NaN: %d/%d" % (wgood.size, nmatches))
+            pofz = pofz[wgood,:]
+
+            pzsum += pofz.sum(axis=0)
+
+        ntile_use += 1
+        nuse += wgood.size
+
+        if False and i>5:
+            from biggles import plot
+            plot(zvals, pzsum)
+            break
+
+    print("finally used: %d/%d tiles" % (ntile_use, ntile))
+    print("summed %d p(z)" % nuse)
+
+    print("writing to column: '%s'" % pz_sum_colname)
+    cols.write_column(pz_sum_colname, pzsum, create=True)
+
+def make_summed_scinv(scat_vers):
+    """
+    Create the 1/sigma_crit(zl) for the summed p(z)
+
+    parameters
+    ----------
+    scat_vers: string
+        name of a source catalog version e.g. scat-006
+    """
+    from lensing.sigmacrit import ScinvCalculator
+
+    conf=read_config(scat_vers)
+    cosmo_conf = read_config(conf['cosmo_vers'])
+
+    cols=pz.open_pz_columns(conf['pz_vers'],conf['pz_type'])
+    colname=get_pz_sum_colname(scat_vers)
+
+    scinv_colname=get_scinv_sum_colname(scat_vers)
+    zlgrid_colname=get_scinv_zl_colname(scat_vers)
+    print("writing to columns:",zlgrid_colname,scinv_colname)
+
+    data=cols.read_columns(['zgrid',colname])
+
+    scalc=ScinvCalculator(conf['zlmin'],
+                          conf['zlmax'],
+                          conf['nzl'],
+                          data['zgrid'][0],
+                          data['zgrid'][-1],
+                          H0=cosmo_conf['H0'],
+                          omega_m=cosmo_conf['omega_m'])
+
+    scinv=scalc.calc_mean_scinv(data['zgrid'], data[colname])
+
+    cols.write_column(zlgrid_colname, scalc.zlvals, create=True)
+    cols.write_column(scinv_colname, scinv, create=True)
+
+
 def match_scinv(scat_name, cosmo_vers, pz_vers, pz_type, tilenames=None, scat_table=None):
     """
     match the dg scat to scinv using a Matcher

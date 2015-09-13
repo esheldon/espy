@@ -12,7 +12,17 @@ from .files import *
 NAN_IN_POFZ=2**0
 NAN_IN_SCINV=2**1
 
-class DESPofz(object):
+def open_pz_columns(pz_vers, pz_type):
+    """
+    open the p(z) columns database
+    """
+    import columns
+    cdir=get_pz_columns_dir(pz_vers, pz_type)
+
+    cols=columns.Columns(cdir)
+    return cols
+
+class DESPofzPandas(object):
     """
     Wrapper for hdf5 file
 
@@ -23,7 +33,7 @@ class DESPofz(object):
     print dz[35:40]
     """
 
-    def __init__(self, pz_vers, pz_type, store='pandas'):
+    def __init__(self, pz_vers, pz_type):
         self.pz_vers=pz_vers
         self.pz_type=pz_type
 
@@ -49,6 +59,41 @@ class DESPofz(object):
         else:
             start=int(arg)
             return self.read_range(start, start+1)
+
+    def convert2columns(self, chunksize=100000):
+        """
+        convert the hdf5/pandas to a columns db
+        """
+        import columns
+
+        cdir=get_pz_columns_dir(self.pz_vers, self.pz_type)
+        print("using columns directory: '%s'" % cdir)
+        cols=columns.Columns(cdir)
+        if cols.dir_exists():
+            raise RuntimeError("columns dir already exists: '%s'" % cdir)
+
+        cols.create()
+
+        print("writing z column")
+        cols.write_column('zgrid', self.zvals)
+
+        nchunk = self.size//chunksize
+        nleft = self.size % chunksize
+
+        if nleft > 0:
+            nchunk += 1
+
+        for i in xrange(nchunk):
+            print("chunk: %d/%d" % (i+1,nchunk))
+            beg=i*chunksize
+            end=(i+1)*chunksize
+
+            data=self[beg:end]
+            cols.write_columns(data)
+
+        for colname in ['index']:
+            print("creating index for column: '%s'" % colname)
+            cols[colname].create_index()
 
     def read_range(self, start, stop):
         """
@@ -104,6 +149,7 @@ class DESPofz(object):
         self.table=self.h5[self.key]['table']
         self.size=self.table.size
 
+    '''
     def _load_pytables(self):
         import tables
 
@@ -118,6 +164,7 @@ class DESPofz(object):
         node=self.h5.getNode('/'+self.key)
         self.table=node.table
         self.size=self.table.shape[0]
+    '''
 
     def _load_pandas(self):
         import pandas

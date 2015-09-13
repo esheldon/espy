@@ -1,0 +1,320 @@
+#!/usr/bin/env python
+"""
+    %prog [options username] 
+
+    Display statistics about the lsf queue, refreshing at regular intervals.
+
+Description
+
+    This program runs 
+
+        bjobs -w
+   
+    The job listing is refreshed regularly, by default every 120 seconds.   Hit
+    any key to update immediately.  Hit 'q' or control-c to quit.
+    
+    By default no colors are used. Use -d or -l to use colors for a dark or light
+    background
+"""
+from __future__ import print_function
+import os
+import sys
+from sys import stderr
+import subprocess
+from optparse import OptionParser
+
+import curses
+try:
+    # newer version 
+    import curses.wrapper.wrapper as curses_wrapper
+except:
+    import curses.wrapper as curses_wrapper
+
+parser=OptionParser(__doc__)
+parser.add_option("-r","--refresh",default=120, 
+    help="refresh rate in seconds.  default is %default")
+parser.add_option("-d","--dark",action="store_true", 
+    help="Use a color scheme appropriate for dark backgrounds")
+parser.add_option("-l","--light",action="store_true", 
+    help="Use a color scheme appropriate for light backgrounds")
+
+default=1
+black=0+2
+red=1+2
+green=2+2
+yellow=3+2
+blue=4+2
+magenta=5+2
+cyan=6+2
+white=7+2
+
+# don't have to be too careful about things like widths of fields in the
+# formats since we will process the results anyway
+
+_command="bjobs -w"
+
+
+class LSFWatcher:
+    def __init__(self, **keys):
+
+        self.refresh_rate=keys.get('refresh_rate',30)
+        self.background=keys.get('background',None)
+        
+        self.command=_command
+
+        self.headers=('JOBID','USER','STAT','QUEUE','FROM_HOST','EXEC_HOST','JOB_NAME','SUBMIT_TIME')
+        self.hdict={}
+        for h in self.headers:
+            self.hdict[h.lower()] = h
+
+        self.nperline=len(self.headers) + 2
+        curses_wrapper(self.watch)
+
+
+    def watch(self, stdscr):
+
+        self.setup_windows(stdscr)
+
+        # wait for refresh seconds for user input before refreshing.  If the
+        # user input is anything but 'q' then refresh again
+
+        tout_ms = self.refresh_rate*1000
+        self.win1.timeout(tout_ms)
+        while 1:
+            self.win1.erase()
+            self.win2.erase()
+            self.win3.erase()
+
+            out = self.get_listing()
+            out = out.split('\n')
+
+            stats={'njobs':0,'run':0,'pending':0,'suspended':0}
+            lengths={}
+            for h in self.headers:
+                lengths[h.lower()] = len(h)
+
+            #nprint = min(len(out), self.maxy3-1)
+            nprint = min(len(out), self.maxy3)
+            line_splits = []
+            for ii in xrange(len(out)):
+                line = out[ii]
+                if len(line) > 0:
+
+                    ls = line.split()
+                    if ls[0] == 'JOBID':
+                        # this is the header
+                        continue
+
+                    stats['njobs'] += 1
+                    lsplit = self.process_line(ls,stats,lengths, dolengths=(ii < nprint))
+                    if ii < nprint:
+                        line_splits.append(lsplit)
+
+            self.write_statline(stats)
+            self.write_job_listing(line_splits, lengths)
+
+            c = self.win1.getch()
+            if c == ord('q'): 
+                break
+
+    def write_job_listing(self, line_splits, lengths):
+
+        if len(line_splits) > 0:
+            fmt  = ' %(jobid)-' + str(lengths['jobid']) +'s  ' 
+            fmt += '%(user)-'  + str(lengths['user']) + 's  '
+            fmt += '%(stat)-'  + str(lengths['stat']) + 's  '
+            fmt += '%(queue)-'  + str(lengths['queue']) + 's  '
+            fmt += '%(from_host)-'  + str(lengths['from_host']) + 's  '
+            fmt += '%(exec_host)-'  + str(lengths['exec_host']) + 's  '
+            fmt += '%(job_name)-'  + str(lengths['job_name']) + 's  '
+            fmt += '%(submit_time)-'  + str(lengths['submit_time']) + 's'
+
+            header = fmt % self.hdict
+            self.win2.addstr(0,0,header[0:self.maxx2-1])
+
+            for ii in xrange(len(line_splits)):
+                ls = line_splits[ii]
+                line = fmt % ls
+                self.win3.addstr(ii,0,line[0:self.maxx3-1])
+        self.win2.refresh()
+        self.win3.refresh()
+
+    def setup_windows(self, stdscr):
+        self.make_color_pairs()
+        self.set_colors()
+
+        self.maxy, self.maxx = stdscr.getmaxyx()
+
+        x0 = 0
+
+        # the stats
+        y1 = 0
+        sizey1 = 3
+        self.win1 = curses.newwin(sizey1, self.maxx, y1, x0)
+
+        # the header line
+        sizey2 = 1
+        y2 = sizey1
+        self.win2 = curses.newwin(sizey2, self.maxx, y2, x0)
+
+        self.win3 = curses.newwin(self.maxy-sizey1-sizey2, 
+                                  self.maxx, 
+                                  sizey1+sizey2, 
+                                  x0)
+        self.maxy2, self.maxx2 = self.win2.getmaxyx()
+        self.maxy3, self.maxx3 = self.win3.getmaxyx()
+
+    def write_statline(self, stats):
+
+        win = self.win1
+
+        win.erase()
+        colors=self.colors
+
+        win.addstr(1, 0, ' ')
+
+        win.addstr('Jobs: ', colors['njobs'] )
+        win.addstr('%s ' % stats['njobs'])
+
+        win.addstr('Running: ', colors['run'])
+        win.addstr('%s ' % stats['run'])
+        win.addstr('Pending: ', colors['pending'])
+        win.addstr('%s ' % stats['pending'])
+
+        win.addstr('Suspended: ', colors['suspended'])
+        win.addstr('%s ' % stats['suspended'])
+
+        win.refresh()
+
+    def process_line(self, ls, stats, lengths, dolengths=True):
+        """
+        process the line and return a new line with
+        the executable represented only as the basname,
+        and rcf.bnl.gov removed from the slot name
+
+        """
+
+        if len(ls) >= self.nperline:
+            res={}
+            (res['jobid'],
+             res['user'],
+             res['stat'],
+             res['queue'],
+             res['from_host'],
+             res['exec_host'],
+             res['job_name'],
+             res['mon'],
+             res['day'],
+             res['time']) = ls
+
+        else:
+            raise ValueError("Expected %d results from "
+                             "listing, got %d: %s" % (self.nperline,len(ls),' '.join(ls)))
+
+        res['submit_time'] = ' '.join([res['mon'],res['day'],res['time']])
+        del res['mon']
+        del res['day']
+        del res['time']
+
+        if res['stat'] == 'RUN':
+            stats['run'] += 1
+        elif res['stat'] == 'PEND':
+            stats['pending'] += 1
+        elif 'SUSP' in res['stat']:
+            stats['suspended'] += 1
+
+        if dolengths:
+            for key in res:
+                if key in lengths:
+                    lengths[key] = max(lengths[key], len(res[key]))
+                else:
+                    lengths[key] = len(res[key])
+        
+        return res
+
+    def get_listing(self):
+
+        pobj=subprocess.Popen(self.command, 
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              shell=True)
+        stdout_ret, stderr_ret = pobj.communicate()
+        return stdout_ret
+
+
+
+
+    def make_color_pairs(self):
+        curses.use_default_colors()
+        curses.init_pair(default, -1, -1)
+        bkgd_color=-1
+
+        curses.init_pair(black, curses.COLOR_BLACK, bkgd_color)
+        curses.init_pair(red, curses.COLOR_RED, bkgd_color)
+        curses.init_pair(green, curses.COLOR_GREEN, bkgd_color)
+        curses.init_pair(yellow, curses.COLOR_YELLOW, bkgd_color)
+        curses.init_pair(blue, curses.COLOR_BLUE, bkgd_color)
+        curses.init_pair(magenta, curses.COLOR_MAGENTA, bkgd_color)
+        curses.init_pair(cyan, curses.COLOR_CYAN, bkgd_color)
+        curses.init_pair(white, curses.COLOR_WHITE, bkgd_color)
+
+    def set_colors(self):
+        self.colors={}
+        if self.background=='light':
+            self.colors['njobs'] = curses.color_pair(blue)
+
+            self.colors['run'] = curses.color_pair(green)
+            self.colors['pending'] = curses.color_pair(magenta)
+            self.colors['suspended'] = curses.color_pair(red)
+
+        elif self.background=='dark':
+
+            self.colors['njobs'] = curses.color_pair(magenta)
+
+            self.colors['run'] = curses.color_pair(green)
+            self.colors['pending'] = curses.color_pair(yellow)
+            self.colors['suspended'] = curses.color_pair(red)
+
+
+        else:
+            #self.colors['njobs'] = curses.color_pair(magenta)
+
+            #self.colors['run'] = curses.color_pair(green)
+            #self.colors['pending'] = curses.color_pair(magenta)
+            #self.colors['suspended'] = curses.color_pair(red)
+
+            self.colors['njobs'] = curses.color_pair(default)
+
+            self.colors['run'] = curses.color_pair(default)
+            self.colors['pending'] = curses.color_pair(default)
+            self.colors['suspended'] = curses.color_pair(default)
+
+
+# 
+# main program
+#
+
+def main():
+
+    try:
+        options, args = parser.parse_args(sys.argv[1:])
+
+        dark  = options.dark
+        light = options.light
+
+        if dark:
+            background='dark'
+        elif light:
+            background='light'
+        else:
+            background=None
+
+        watcher = LSFWatcher(refresh_rate=int(options.refresh), 
+                             background=background)
+
+        return
+
+    except KeyboardInterrupt:
+        pass
+
+
+main()

@@ -1,0 +1,147 @@
+#!/usr/bin/env python
+"""
+    %prog [options] file1 file2 ....
+
+convert the jobs in the specified condor files to lsf jobs, each in their own
+file
+
+the condor file should be similar to this (extra stuff can exist)
+
+Executable = /some/path
+
++job_name = "some name"
+Arguments = "some args"
+
++job_name = "some name"
+Arguments = "some args"
+
+etc.
+
+The file will be the same as the job name with spaces replaced by dashes
+"""
+
+from __future__ import print_function
+import os,sys
+
+
+from optparse import OptionParser
+parser = OptionParser(__doc__)
+
+parser.add_option("--outdir",default=None,
+                  help=("write in specified directory, "
+                        "default is same dir as condor file"))
+
+parser.add_option("--queue","-q",default='long',
+                  help=("lsf q to use"))
+parser.add_option("--ncores","-n",default=1,
+                  help=("number of cores to use"))
+
+
+
+parser.add_option("--extra-commands",default="",
+                  help=("extra shell comments to run, e.g. source a file"))
+
+parser.add_option("--walltime",default="24:00",
+                  help=("walltime, default 24:00"))
+
+
+
+def process_file(fname):
+
+    exec_found=False
+    job_names=[]
+    args_list=[]
+
+    with open(fname) as fobj:
+
+        for line in fobj:
+            line=line.strip()
+
+            if line[0:10].lower() =='executable':
+                exec_found=True
+                exec_file=line.split('=')[1].strip()
+            else:
+                if line[0:9].lower() == '+job_name':
+                    job_name=line.split('=')[1].strip()
+                    job_name=job_name.replace('"','').replace("'",'').replace(' ','-')
+                    job_names.append(job_name)
+
+                if line[0:9].lower() == 'arguments':
+                    args = line.split('=')[1].strip()
+                    args_list.append(args)
+
+    if not exec_found:
+        raise ValueError("no line with executable = ")
+
+    if len(job_names) != len(args_list):
+        raise ValueError("found %d job_names but "
+                         "%d args" % (len(job_names), len(args_list)))
+
+    return exec_file, job_names, args_list
+
+_template="""#!/bin/bash
+#BSUB -q {queue}
+#BSUB -J {job_name}
+#BSUB -n {ncores}
+#BSUB -oo ./{job_name}.oe
+#BSUB -W {walltime}
+#BSUB -R "linux64 && rhel60 && scratch > 2"
+
+echo "working on host: $(hostname)"
+
+{extra_commands}
+{exec_file} {args}
+"""
+
+
+
+def write_jobs(exec_file, job_names, args_list, outdir, extra_commands, queue, ncores, walltime):
+
+    outdir=os.path.abspath(outdir)
+
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
+    njob=len(job_names)
+    i=0
+    for job_name, args in zip(job_names, args_list):
+        fname = '%s.lsf' % job_name
+        fname=os.path.join(outdir, fname)
+
+        if (i % 1000) == 0:
+            print("%d/%d" % (i+1,njob),job_name, fname)
+            print(args)
+            print()
+
+        wqtext = _template.format(exec_file=exec_file,
+                                  args=args,
+                                  job_name=job_name,
+                                  extra_commands=extra_commands,
+                                  queue=queue,
+                                  walltime=walltime,
+                                  ncores=ncores)
+
+        with open(fname,'w') as fobj:
+            fobj.write(wqtext)
+        i+=1
+
+def main():
+
+    options, flist = parser.parse_args(sys.argv[1:])
+    if len(flist) < 1:
+        parser.print_help()
+        sys.exit(45)
+
+
+    for fname in flist:
+        exec_file, job_names, args_list = process_file(fname)
+
+        if options.outdir is None:
+            outdir=os.path.dirname(fname)
+        else:
+            outdir=options.outdir
+
+        write_jobs(exec_file, job_names, args_list, outdir, options.extra_commands, options.queue, options.ncores, options.walltime)
+    
+if __name__=="__main__":
+    main()

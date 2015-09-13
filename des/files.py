@@ -153,6 +153,28 @@ def get_pz_h5_file(pz_vers):
     name='DES_photoz_PDFS_%s.h5' % pz_vers
     return os.path.join(dir, name)
 
+def get_pz_columns_dir(pz_vers, pz_type):
+    dir=get_pz_vers_dir(pz_vers)
+    cdir = dir+'-%s.cols' % pz_type
+    return cdir
+
+def get_pz_sum_colname(scat_vers):
+    name='%s_pz_sum' % scat_vers
+    name=name.replace('-','_')
+    return name
+
+def get_scinv_sum_colname(scat_vers):
+    name='%s_pz_sum_scinv' % scat_vers
+    name=name.replace('-','_')
+    return name
+
+def get_scinv_zl_colname(scat_vers):
+    name='%s_zlgrid' % scat_vers
+    name=name.replace('-','_')
+    return name
+
+
+
 #
 # sigmacrit files
 #
@@ -501,9 +523,9 @@ def get_lensum_dtype(nbin, shear_style):
         ('weight','f8'),
         ('totpairs','i8'),
 
-        ('xxsum','f8'),
-        ('xysum','f8'),
-        ('yysum','f8'),
+        #('xxsum','f8'),
+        #('xysum','f8'),
+        #('yysum','f8'),
 
         ('npair','i8',nbin),
 

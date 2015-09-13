@@ -33,6 +33,10 @@ parser.add_argument("--linear",action='store_true',
 parser.add_argument("-y","--yrange",
                     default=None,
                     help="force y range")
+parser.add_argument("--ratio-yrange",
+                    default=None,
+                    help="force ratio y range")
+
 
 parser.add_argument("--title",
                     default=None,
@@ -106,10 +110,14 @@ def main():
 
     yrange=args.yrange
     if yrange is not None:
-        yrange=[float(v) for v in args.yrange.split(',')]
+        yrange=[float(v) for v in yrange.split(',')]
+    ratio_yrange=args.ratio_yrange
+    if ratio_yrange is not None:
+        ratio_yrange=[float(v) for v in ratio_yrange.split(',')]
+
 
     binspec=des.files.read_config(args.bin_scheme)
-    labels=[bi['label'] for bi in binspec['bin_info']]
+    blabels=[bi['label'] for bi in binspec['bin_info']]
 
     kw={}
     if args.fmin is not None:
@@ -121,7 +129,7 @@ def main():
     arr=des.plotting.plot_dsig(data1['r'],
                                data1['dsig'],
                                data1['dsigerr'],
-                               labels=labels,
+                               labels=blabels,
                                ylog=(args.linear==False),
                                yrange=yrange,
                                title=args.title,
@@ -133,7 +141,7 @@ def main():
     des.plotting.plot_dsig(data2['r'],
                            data2['dsig'],
                            data2['dsigerr'],
-                           labels=labels,
+                           labels=blabels,
                            ylog=(args.linear==False),
                            yrange=yrange,
                            title=args.title,
@@ -167,13 +175,17 @@ def main():
         rat = data1['dsig']/data2['dsig']
         raterr = rat*numpy.sqrt(  (data1['dsigerr']/data1['dsig'])**2
                                 + (data2['dsigerr']/data2['dsig'])**2 )
+        raterr = raterr*0
 
         get_ratio_mean(data1['r'], rat, raterr, args.radrange)
+        ylabel=r'$\Delta \Sigma %s / %s$' % tuple(labels)
         rarr=des.plotting.plot_dsig(data1['r'],
                                     rat,
                                     raterr,
-                                    labels=labels,
                                     ylog=False,
+                                    ylabel=ylabel,
+                                    labels=blabels,
+                                    yrange=ratio_yrange,
                                     title=args.title,
                                     visible=False,
                                     lineval=1,
