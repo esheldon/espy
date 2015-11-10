@@ -38,7 +38,7 @@ class RandomMatcher(dict):
         self['show']=show
 
         self.binner=binning.Binner(self['bin_scheme'])
-        
+
         self._make_dirs()
         self._set_data()
 
