@@ -1,6 +1,4 @@
-# redmapper 6.2.15, lambda > 5 with spt-e ra,dec cut
-# also bug fix in xshear putting too many objects in lower and upper bins
-# 2nd best center
+# redmapper 6.3.3, lambda > 5 with spt-e ra,dec cut
 lcat_vers: "lcat-rm006b"
 
 # ngmix011, pz v0.1.7, skynet_mag_auto, Matt's cuts, peter's mask
