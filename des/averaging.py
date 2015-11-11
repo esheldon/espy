@@ -51,7 +51,7 @@ def average_lensums(lout, weights=None, jackreg_col=None):
     comb['weightsum'][0] = lout['weight'].sum()
 
     comb['totpairs'][0] = lout['totpairs'].sum()
-    
+
     comb['npair'][0] = lout['npair'].sum(axis=0)
     comb['rsum'][0]  = lout['rsum'].sum(axis=0)
     comb['wsum'][0]  = lout['wsum'].sum(axis=0)
