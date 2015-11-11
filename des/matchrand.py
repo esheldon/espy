@@ -108,6 +108,11 @@ class RandomMatcher(dict):
         """
         run the appropriate matcher
         """
+        col=self.get('extra_weight_col',None)
+        if col is not Noen and self['match_type'] != 'selection':
+            raise NotImplementedError("implement extra_weight_col for match "
+                                      "type '%s'" % self['match_type'])
+
         if self['match_type']=='z':
             # just force the redshift distributions to match
             # weights is matched to w
@@ -117,7 +122,12 @@ class RandomMatcher(dict):
         elif self['match_type']=='selection':
             print("    using selection only")
             w,wr=self._match_one_by_selection(binnum)
-            rand_weights=None
+
+            if col is not None:
+                print("    adding weights: '%s'" % col)
+                rand_weights=self.data[col][wr]
+            else:
+                rand_weights=None
 
         elif self['match_type'] == 'selection-and-z':
             # apply selection *and* force redshift distributions to match
