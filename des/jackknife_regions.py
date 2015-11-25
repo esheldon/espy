@@ -23,14 +23,15 @@ class JackknifeMaker(dict):
         set the data, trimmed and randomized
         """
 
-        ra,dec=trim_radec(ra, dec)
+        ra,dec=trim_radec(ra, dec, self._des_region)
         ra,dec=randomize_radec(ra, dec)
 
-        print("data size:",radec.shape[0])
 
         radec=numpy.zeros( (ra.size, 2) )
         radec[:,0] = ra
         radec[:,1] = dec
+
+        print("data size:",radec.shape[0])
 
         self._radec=radec
 
@@ -70,7 +71,7 @@ class JackknifeMaker(dict):
 
         fitsio.write(fname, self._km.centers, clobber=True, header=h)
 
-    def make_plots(self):
+    def make_plots(self, write_eps=True, show=False):
         """
         plot regions and histogram
         """
@@ -131,10 +132,6 @@ class JackknifeMaker(dict):
                                               self._njack,
                                               extra='regions')
 
-        print("writing:",epsfile)
-        plt.write_eps(epsfile)
-
-        #converter.convert(epsfile,dpi=150,verbose=True)
 
 
         hpts=biggles.Histogram(h, x0=self._km.labels.min(), binsize=1)
@@ -143,13 +140,25 @@ class JackknifeMaker(dict):
         hplt.add(hpts)
         hplt.xlabel='kmeans cluster'
 
-        epsfile=get_jackknife_centers_epsfile(self._des_region,
+        hepsfile=get_jackknife_centers_epsfile(self._des_region,
                                               self._njack,
                                               extra='hist')
 
-        print("writing:",epsfile)
-        hplt.write_eps(epsfile)
-        #converter.convert(epsfile,dpi=100,verbose=True)
+
+
+        if write_eps:
+
+            print("writing:",epsfile)
+            plt.write_eps(epsfile)
+            converter.convert(epsfile,dpi=150,verbose=True)
+
+            print("writing:",hepsfile)
+            hplt.write_eps(hepsfile)
+            converter.convert(hepsfile,dpi=100,verbose=True)
+
+        if show:
+            plt.show()
+            hplt.show()
 
 def get_jackknife_regions(ra, dec, des_region, njack):
     """
