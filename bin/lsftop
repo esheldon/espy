@@ -21,7 +21,7 @@ import os
 import sys
 from sys import stderr
 import subprocess
-from optparse import OptionParser
+from argparse import ArgumentParser
 
 import curses
 try:
@@ -30,13 +30,19 @@ try:
 except:
     import curses.wrapper as curses_wrapper
 
-parser=OptionParser(__doc__)
-parser.add_option("-r","--refresh",default=120, 
-    help="refresh rate in seconds.  default is %default")
-parser.add_option("-d","--dark",action="store_true", 
+DEFAULT_REFRESH=120
+
+parser=ArgumentParser()
+parser.add_argument("-r","--refresh",
+    help="refresh rate in seconds, default %d." % DEFAULT_REFRESH)
+parser.add_argument("-d","--dark",action="store_true", 
     help="Use a color scheme appropriate for dark backgrounds")
-parser.add_option("-l","--light",action="store_true", 
+parser.add_argument("-l","--light",action="store_true", 
     help="Use a color scheme appropriate for light backgrounds")
+
+parser.add_argument("-p","--pattern",
+    help="only show jobs that contain the input pattern")
+
 
 default=1
 black=0+2
@@ -52,14 +58,17 @@ white=7+2
 # formats since we will process the results anyway
 
 _command="bjobs -w"
+_config_file='~/.lsftoprc'
 
 
-class LSFWatcher:
+class LSFWatcher(dict):
     def __init__(self, **keys):
 
-        self.refresh_rate=keys.get('refresh_rate',30)
-        self.background=keys.get('background',None)
-        
+        self.load_config()
+        self.update(keys)
+        self.set_defaults()
+
+       
         self.command=_command
 
         self.headers=('JOBID','USER','STAT','QUEUE','FROM_HOST','EXEC_HOST','JOB_NAME','SUBMIT_TIME')
@@ -78,7 +87,7 @@ class LSFWatcher:
         # wait for refresh seconds for user input before refreshing.  If the
         # user input is anything but 'q' then refresh again
 
-        tout_ms = self.refresh_rate*1000
+        tout_ms = self['refresh_rate']*1000
         self.win1.timeout(tout_ms)
         while 1:
             self.win1.erase()
@@ -98,6 +107,7 @@ class LSFWatcher:
             line_splits = []
             for ii in xrange(len(out)):
                 line = out[ii]
+
                 if len(line) > 0:
 
                     ls = line.split()
@@ -105,9 +115,14 @@ class LSFWatcher:
                         # this is the header
                         continue
 
+                    if self['pattern'] is not None:
+                        if self['pattern'] not in line:
+                            continue
+
                     stats['njobs'] += 1
                     lsplit = self.process_line(ls,stats,lengths, dolengths=(ii < nprint))
-                    if ii < nprint:
+                    #if ii < nprint:
+                    if stats['njobs'] < nprint:
                         line_splits.append(lsplit)
 
             self.write_statline(stats)
@@ -240,8 +255,21 @@ class LSFWatcher:
         stdout_ret, stderr_ret = pobj.communicate()
         return stdout_ret
 
-
-
+    def set_defaults(self):
+        """
+        set options not set in the config or command line
+        """
+        self['refresh_rate']=self.get('refresh_rate',DEFAULT_REFRESH)
+        self['background']=self.get('background',None)
+        self['pattern']=self.get('pattern',None)
+ 
+    def load_config(self):
+        cfile=os.path.expanduser(_config_file)
+        if os.path.exists(cfile):
+            import yaml
+            with open(cfile) as f:
+                tc = yaml.load(f)
+                self.update(tc)
 
     def make_color_pairs(self):
         curses.use_default_colors()
@@ -259,14 +287,14 @@ class LSFWatcher:
 
     def set_colors(self):
         self.colors={}
-        if self.background=='light':
+        if self['background']=='light':
             self.colors['njobs'] = curses.color_pair(blue)
 
             self.colors['run'] = curses.color_pair(green)
             self.colors['pending'] = curses.color_pair(magenta)
             self.colors['suspended'] = curses.color_pair(red)
 
-        elif self.background=='dark':
+        elif self['background']=='dark':
 
             self.colors['njobs'] = curses.color_pair(magenta)
 
@@ -296,21 +324,21 @@ class LSFWatcher:
 def main():
 
     try:
-        options, args = parser.parse_args(sys.argv[1:])
+        args=parser.parse_args()
 
-        dark  = options.dark
-        light = options.light
+        keys={}
+        if args.dark:
+            keys['background']='dark'
+        elif args.light:
+            keys['background']='light'
 
-        if dark:
-            background='dark'
-        elif light:
-            background='light'
-        else:
-            background=None
+        if args.pattern is not None:
+            keys['pattern'] = args.pattern
 
-        watcher = LSFWatcher(refresh_rate=int(options.refresh), 
-                             background=background)
+        if args.refresh is not None:
+            keys['refresh_rate'] = int(args.refresh)
 
+        watcher = LSFWatcher(**keys)
         return
 
     except KeyboardInterrupt:
