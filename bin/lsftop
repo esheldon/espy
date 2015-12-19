@@ -120,7 +120,7 @@ class LSFWatcher(dict):
                             continue
 
                     stats['njobs'] += 1
-                    lsplit = self.process_line(ls,stats,lengths, dolengths=(ii < nprint))
+                    lsplit = self.process_line(ls,stats,lengths, dolengths=(stats['njobs'] < nprint))
                     #if ii < nprint:
                     if stats['njobs'] < nprint:
                         line_splits.append(lsplit)
