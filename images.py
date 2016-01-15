@@ -182,7 +182,9 @@ def view_mosaic(imlist, titles=None, combine=False, **keys):
 
     show=keys.get('show',True)
     if show:
-        tab.show()
+        width=keys.get('width',None)
+        height=keys.get('height',None)
+        tab.show(width=width, height=height)
     
     return tab
 

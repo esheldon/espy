@@ -175,8 +175,10 @@ def fit_line(x, y, yerr=None):
 
 class LineFitter:
     def __init__(self, x, y, yerr=None):
-        self.x=x
-        self.y=y
+        self.x=numpy.array(x,dtype='f8',ndmin=1)
+        self.y=numpy.array(y,dtype='f8',ndmin=1)
+        if yerr is not None:
+            yerr=numpy.array(yerr,dtype='f8',ndmin=1)
         self.yerr=yerr
         self.set_guess()
         self.dofit()
