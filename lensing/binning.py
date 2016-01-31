@@ -755,11 +755,11 @@ class AnyBinner(BinnerBase):
             raise ValueError("bin number must be in [0,%d]" % (self['nbin']-1,))
 
         range_info = self.bin_info[binnum]['bins']
-        comb = reduce_from_ranges_many(data,
-                                       range_info,
-                                       getind=True)
+        comb,w = reduce_from_ranges_many(data,
+                                         range_info,
+                                         getind=True)
  
-        return comb
+        return w
 
 
 

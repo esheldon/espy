@@ -152,19 +152,9 @@ def lensdir():
         raise ValueError("LENSDIR is not set")
     return os.environ['LENSDIR']
 
-def hdfs_dir():
-    """
-    my area in hdfs
-    """
-    return 'hdfs://astro0034.rcf.bnl.gov/user/esheldon/lensing'
-
-def local_dir():
-    """
-    This is a temporary "local" area on each node
-    """
-    return '/data/objshear/lensing'
-
-
+def sdss_lensdir():
+    ld=lensdir()
+    return os.path.join(ld, 'sdss-lensing')
 
 def sample_dir(**keys):
     """
@@ -179,21 +169,13 @@ def sample_dir(**keys):
     type=keys.get('type',None)
     sample=keys.get('sample',None)
     name=keys.get('name',None)
-    fs=keys.get('fs','nfs')
 
     if type not in finfo:
         if type+'-split' in finfo:
             type=type+'-split'
         else:
             raise ValueError("Unknown file type: '%s'" % type)
-    if fs == 'nfs':
-        d = lensdir()
-    elif fs == 'hdfs':
-        d = hdfs_dir()
-    elif fs == 'local':
-        d = local_dir()
-    else:
-        raise ValueError("file system not recognized: %s" % fs)
+    d = sdss_lensdir()
 
     dsub = finfo[type]['subdir'].format(sample=sample, name=name)
     d = path_join(d,dsub)
@@ -427,7 +409,7 @@ def collated_read(**keys):
     fname=collated_file(**keys)
     verbose=keys.get('verbose',True)
     print('Reading collated:',fname,file=stderr)
-    return eu.io.read(fname,verbose=verbose)
+    return eu.io.read(fname,verbose=verbose)#, rows=numpy.arange(10000))
 
 def lensout_file(**keys):
     """
