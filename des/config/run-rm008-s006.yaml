@@ -1,5 +1,6 @@
 # redmapper 6.3.3, lambda > 5 with spt-e ra,dec cut
-lcat_vers: "lcat-rm006b"
+# rmax 5.0
+lcat_vers: "lcat-rm008"
 
 # ngmix011, pz v0.1.7, skynet_mag_auto, Matt's cuts, peter's mask
 # ubermem removed by probability

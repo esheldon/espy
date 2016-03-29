@@ -79,12 +79,13 @@ def main():
                                title=args.title,
                                minval=1.0e-5,
                                visible=False,
+                               type=['solid','filled circle'],
                                **kw)
 
     print("writing:",epsfile)
     plt.write_eps(epsfile)
 
     if args.visible:
-        plt.show()
+        plt.show(width=800, height=800)
 
 main()

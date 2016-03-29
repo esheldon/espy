@@ -154,14 +154,30 @@ def _add_dsig_to_plot(plt, r, dsig, dsigerr, **kw):
     ylog=kw.get('ylog',True)
     minval=kw.get('minval',DEFAULT_MINVAL)
     color=kw.get('color','black')
-    type=kw.get('type','filled circle')
+
+    types=kw.get('type','filled circle')
+
+    if types is None:
+        types=['filled circle']
+
+    if not isinstance(types,list):
+        types=[types]
+
+    ctypes=[]
+    for t in types:
+        if t in ["solid","dotdashed","dotted","dotdotdashed",
+                 "shortdashed","dotdotdotdashed",
+                 "longdashed"]:
+            ctypes.append(Curve)
+        else:
+            ctypes.append(Points)
 
     lineval=kw.get('lineval',0.0)
 
     if ylog:
         xrng,yrng=add_to_log_plot(plt, r, dsig, dsigerr, 
+                                  types,ctypes,
                                   color=color, 
-                                  type=type,
                                   minval=minval)
         yrng_in=kw.get('yrange',None)
         xrng_in=kw.get('xrange',None)
@@ -177,9 +193,10 @@ def _add_dsig_to_plot(plt, r, dsig, dsigerr, **kw):
         opts=Curve(r, dsig*0 + lineval)
         plt.add(opts)
 
-        pts=Points(r, dsig, type=type, color=color)
+        for type,ctype in zip(types,ctypes):
+            tmp=ctype(r, dsig, type=type, color=color)
+            plt.add(tmp)
 
-        plt.add(pts)
         epts=SymmetricErrorBarsY(r, dsig, dsigerr, color=color)
         plt.add(epts)
 
@@ -205,21 +222,26 @@ def _add_dsig_to_plot(plt, r, dsig, dsigerr, **kw):
     return xrng, yrng
 
 def add_to_log_plot(plt, x, y, yerr, 
-                    color='black', type='filled circle',
+                    types,ctypes,
+                    color='black',
                     minval=DEFAULT_MINVAL):
     import esutil as eu
     from biggles import Points, ErrorBarsY
+
+
     w, = numpy.where(y > minval)
     if w.size > 0:
-        p = Points(x[w], y[w],type=type,color=color)
-        plt.add(p)
+
+        for type,ctype in zip(types,ctypes):
+            p = ctype(x[w], y[w],type=type,color=color)
+            plt.add(p)
     else:
         p=None
 
 
     ehigh = y + yerr
     elow  = y - yerr
-    
+
     # only show errors where y+yerr is greater than the min value.
     w,=numpy.where(ehigh > minval)
     if w.size > 0:
@@ -244,7 +266,7 @@ class Grid(object):
     """
     def __init__(self, nplot):
         self.set_grid(nplot)
-    
+
     def set_grid(self, nplot):
         """
         set the grid given the number of plots

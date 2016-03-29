@@ -27,7 +27,7 @@ example steps:
         make_summed_scinv(scat_vers)
 
     # then run script from /bin
-    make-xshear-scat ngmix011-v15b
+    make-xshear-scat scat-008
 
 precursor will be creating the scinv for the p(z) catalog.  See the .pz module
 """

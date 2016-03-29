@@ -38,7 +38,7 @@ class RandomMatcher(dict):
         self['show']=show
 
         self.binner=binning.Binner(self['bin_scheme'])
-        
+
         self._make_dirs()
         self._set_data()
 
@@ -63,8 +63,6 @@ class RandomMatcher(dict):
 
             w,wr,rand_weights,comb=self._run_matcher(binnum)
 
-            # rand_weights should be None
-            assert rand_weights is None,"rand_weights should be non for select method"
             self._plot_zhist(self.rz[wr], self.z[w], rand_weights, binnum)
             self._plot_radec(self.data[w], self.rdata[wr], binnum)
 
@@ -108,6 +106,13 @@ class RandomMatcher(dict):
         """
         run the appropriate matcher
         """
+        rlconf = self['rrun_conf']['lens_conf']
+        col=rlconf.get('extra_weight_col',None)
+
+        if col is not None and self['match_type'] != 'selection':
+            raise NotImplementedError("implement extra_weight_col for match "
+                                      "type '%s'" % self['match_type'])
+
         if self['match_type']=='z':
             # just force the redshift distributions to match
             # weights is matched to w
@@ -117,7 +122,12 @@ class RandomMatcher(dict):
         elif self['match_type']=='selection':
             print("    using selection only")
             w,wr=self._match_one_by_selection(binnum)
-            rand_weights=None
+
+            if col is not None:
+                print("        adding weights: '%s'" % col)
+                rand_weights=self.rdata[col][wr]
+            else:
+                rand_weights=None
 
         elif self['match_type'] == 'selection-and-z':
             # apply selection *and* force redshift distributions to match
@@ -160,10 +170,6 @@ class RandomMatcher(dict):
 
         no weights are derived to force a match on the redshift distributions
         """
-
-        z=self.z
-        rz=self.rz
-        nrand=rz.size
 
         w=self.binner.select_bin(self.data, binnum)
         wr=self.binner.select_bin(self.rdata, binnum)

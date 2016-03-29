@@ -49,7 +49,7 @@ class Run(dict):
         self.write_redshear_wq()
         self.write_combine_wq()
         self.write_collate_wq()
-    
+
     def write_xshear_wq(self):
         """
         write all the chunks and tiles
@@ -123,6 +123,3 @@ class Run(dict):
         fname=scat.get_scat_file(self['scat_vers'],
                                  tilename)
         return os.path.exists(fname)
-
-                                    
-

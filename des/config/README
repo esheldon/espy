@@ -21,6 +21,14 @@ lcat-rm006b
     - 10 Mpc
     - 2nd best position
 rcat-rm009
+    - redmapper-6.3.3-random-lgt05
+    - 10 Mpc
+rcat-rm010
+    - redmapper-6.3.3-random-lgt05
+    - ~4 Mpc
+
+rcat-rm011
+    - redmapper-6.3.3-random-zmask2-lgt05
     - 10 Mpc
 
 runs
