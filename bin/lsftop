@@ -1,27 +1,26 @@
 #!/usr/bin/env python
 """
-    %prog [options username] 
-
     Display statistics about the lsf queue, refreshing at regular intervals.
 
-Description
+    This program runs `bjobs -w` and parses the output.
 
-    This program runs 
-
-        bjobs -w
-   
     The job listing is refreshed regularly, by default every 120 seconds.   Hit
     any key to update immediately.  Hit 'q' or control-c to quit.
-    
+
     By default no colors are used. Use -d or -l to use colors for a dark or light
     background
+
+    A file ~/.lsftoprc can be used to change the default configuration.  E.g.
+
+        background: dark
+        refresh_rate: 60
 """
 from __future__ import print_function
 import os
 import sys
 from sys import stderr
 import subprocess
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 
 import curses
 try:
@@ -32,16 +31,17 @@ except:
 
 DEFAULT_REFRESH=120
 
-parser=ArgumentParser()
+parser=ArgumentParser(formatter_class=RawDescriptionHelpFormatter,
+                      description=__doc__)
 parser.add_argument("-r","--refresh",
     help="refresh rate in seconds, default %d." % DEFAULT_REFRESH)
-parser.add_argument("-d","--dark",action="store_true", 
+parser.add_argument("-d","--dark",action="store_true",
     help="Use a color scheme appropriate for dark backgrounds")
-parser.add_argument("-l","--light",action="store_true", 
+parser.add_argument("-l","--light",action="store_true",
     help="Use a color scheme appropriate for light backgrounds")
 
 parser.add_argument("-p","--pattern",
-    help="only show jobs that contain the input pattern")
+    help="only show jobs that contain the input pattern. Currently this is a straight string match, not a regex")
 
 
 default=1
@@ -68,7 +68,6 @@ class LSFWatcher(dict):
         self.update(keys)
         self.set_defaults()
 
-       
         self.command=_command
 
         self.headers=('JOBID','USER','STAT','QUEUE','FROM_HOST','EXEC_HOST','JOB_NAME','SUBMIT_TIME')
@@ -97,7 +96,7 @@ class LSFWatcher(dict):
             out = self.get_listing()
             out = out.split('\n')
 
-            stats={'njobs':0,'run':0,'pending':0,'suspended':0}
+            stats={'njobs':0,'run':0,'pending':0,'suspended':0,'unknown':0}
             lengths={}
             for h in self.headers:
                 lengths[h.lower()] = len(h)
@@ -129,13 +128,13 @@ class LSFWatcher(dict):
             self.write_job_listing(line_splits, lengths)
 
             c = self.win1.getch()
-            if c == ord('q'): 
+            if c == ord('q'):
                 break
 
     def write_job_listing(self, line_splits, lengths):
 
         if len(line_splits) > 0:
-            fmt  = ' %(jobid)-' + str(lengths['jobid']) +'s  ' 
+            fmt  = ' %(jobid)-' + str(lengths['jobid']) +'s  '
             fmt += '%(user)-'  + str(lengths['user']) + 's  '
             fmt += '%(stat)-'  + str(lengths['stat']) + 's  '
             fmt += '%(queue)-'  + str(lengths['queue']) + 's  '
@@ -172,9 +171,9 @@ class LSFWatcher(dict):
         y2 = sizey1
         self.win2 = curses.newwin(sizey2, self.maxx, y2, x0)
 
-        self.win3 = curses.newwin(self.maxy-sizey1-sizey2, 
-                                  self.maxx, 
-                                  sizey1+sizey2, 
+        self.win3 = curses.newwin(self.maxy-sizey1-sizey2,
+                                  self.maxx,
+                                  sizey1+sizey2,
                                   x0)
         self.maxy2, self.maxx2 = self.win2.getmaxyx()
         self.maxy3, self.maxx3 = self.win3.getmaxyx()
@@ -198,6 +197,10 @@ class LSFWatcher(dict):
 
         win.addstr('Suspended: ', colors['suspended'])
         win.addstr('%s ' % stats['suspended'])
+
+        win.addstr('Unknown: ', colors['unknown'])
+        win.addstr('%s ' % stats['unknown'])
+
 
         win.refresh()
 
@@ -237,6 +240,8 @@ class LSFWatcher(dict):
             stats['pending'] += 1
         elif 'SUSP' in res['stat']:
             stats['suspended'] += 1
+        elif 'UNK' in res['stat']:
+            stats['unknown'] += 1
 
         if dolengths:
             for key in res:
@@ -244,12 +249,12 @@ class LSFWatcher(dict):
                     lengths[key] = max(lengths[key], len(res[key]))
                 else:
                     lengths[key] = len(res[key])
-        
+
         return res
 
     def get_listing(self):
 
-        pobj=subprocess.Popen(self.command, 
+        pobj=subprocess.Popen(self.command,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               shell=True)
         stdout_ret, stderr_ret = pobj.communicate()
@@ -293,6 +298,7 @@ class LSFWatcher(dict):
             self.colors['run'] = curses.color_pair(green)
             self.colors['pending'] = curses.color_pair(magenta)
             self.colors['suspended'] = curses.color_pair(red)
+            self.colors['unknown'] = curses.color_pair(red)
 
         elif self['background']=='dark':
 
@@ -301,20 +307,17 @@ class LSFWatcher(dict):
             self.colors['run'] = curses.color_pair(green)
             self.colors['pending'] = curses.color_pair(yellow)
             self.colors['suspended'] = curses.color_pair(red)
+            self.colors['unknown'] = curses.color_pair(red)
 
 
         else:
-            #self.colors['njobs'] = curses.color_pair(magenta)
-
-            #self.colors['run'] = curses.color_pair(green)
-            #self.colors['pending'] = curses.color_pair(magenta)
-            #self.colors['suspended'] = curses.color_pair(red)
 
             self.colors['njobs'] = curses.color_pair(default)
 
             self.colors['run'] = curses.color_pair(default)
             self.colors['pending'] = curses.color_pair(default)
             self.colors['suspended'] = curses.color_pair(default)
+            self.colors['unknown'] = curses.color_pair(default)
 
 
 # 

@@ -67,7 +67,13 @@ def average_lensums(lout, weights=None):
         comb['osum'][0,i] = osum
 
         # averages
-        comb['r'][0,i] = rsum/wsum
+        tr = rsum/wsum
+        if tr > 100:
+            # old style probably
+            comb['r'][0,i] = rsum/npair
+        else:
+            comb['r'][0,i] = tr
+
         comb['dsig'][0,i] = dsum/wsum
         comb['osig'][0,i] = osum/wsum
 
@@ -150,7 +156,12 @@ def average_lensums_weighted(lout, weights):
         comb['osum'][0,i]  = w_osum
 
         # averages
-        comb['r'][0,i] = rsum/w_wsum
+        tr = rsum/w_wsum
+        if tr > 100:
+            # probably old way
+            comb['r'][0,i] = rsum/weights.sum()
+        else:
+            comb['r'][0,i] = tr
 
         comb['dsig'][0,i] = w_dsum/w_wsum
         comb['osig'][0,i] = w_osum/w_wsum

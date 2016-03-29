@@ -22,6 +22,7 @@ def histogauss(data, guess=None, **keys):
 
     return plt
 
+
 class GaussFitter(object):
     """
     Fit a 1-d gaussian
@@ -167,6 +168,17 @@ class GaussFitter(object):
             plt.show()
 
         return plt
+
+class LogNormalFitter(GaussFitter):
+    def eval_pars(self, pars):
+        """
+        [cen, sigma, amp]
+        """
+        import ngmix
+        p=ngmix.priors.LogNormal(pars[0],pars[1])
+
+        return pars[2]*p.get_prob_array(self.x)
+
 
 def fit_line(x, y, yerr=None, **kw):
     lf=LineFitter(x, y, yerr=yerr, **kw)
