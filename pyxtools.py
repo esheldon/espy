@@ -1,42 +1,149 @@
+from __future__ import print_function
+import numpy
 from pyx import *
 from pyx.graph import axis
 
 
-def plot(x, y, g=None, **kw):
+def plot(x, y, **kw):
     """
     first try to make a sensible interactive wrapper
+
+    parameters
+    ----------
+    x: array or list
+        x data to plot
+    y: array or list
+        y data to plot
+    dx: array or list
+        Error bars on x
+    dy: array or list
+        Error bars on y
+    sym: string, optional
+        Symbol name (circle,cross,diamond,plus,square,triangle)
+    line: string, optional
+        Line type
+    color: string
+        Color name from rgb.txt
+    g: graphxy object
+        Plot data into this object instead of creating a new one
+    file: string
+        File to write. Note some attributes of the g cannot be changed
+        after writing, so running plot(.., g=g) again may not work.
+
+    keywords for graphxy
     """
 
-    if g is None:
-        gkw=_unpack_graphxy_keywords(**kw)
-        gkw['width'] = gkw.get('width',8)
-        xaxis,yaxis = _get_axes(**kw)
-        g = graph.graphxy(x=xaxis, y=yaxis, **gkw)
+    plotter=Plotter(x,y,**kw)
+    plotter.plot()
 
-    if 'color' in kw:
-        color=colors.get_rgb(kw['color'])
-        symbolattrs=[deco.filled([color])]
-    else:
-        color=colors.get_rgb('black')
+    fname=kw.get('file',None)
+    if fname is not None:
+        # copy since we can't modify some graph styles after
+        # writing
+        plotter.g.writetofile(fname)
 
-    if 'sym' in kw:
-        sym=symbols.get_symbol(kw['sym'])
-    else:
-        sym=symbols.get_symbol('circle')
+    return plotter.g
 
-    values=graph.data.values(x=list(x),y=list(y))
-    symbol=graph.style.symbol(
-        symbol=sym,
-        size=0.1,
-        symbolattrs=symbolattrs,
-    )
+class Plotter(object):
+    """
+    for use with the interactive plot() command
+    """
+    def __init__(self, x, y, **kw):
+        self.x=x
+        self.y=y
+        self.dx=kw.pop('dx',None)
+        self.dy=kw.pop('dy',None)
+        self.g=kw.pop('g',None)
+        self.kw=kw
 
-    g.plot(values,[symbol])
+        self._set_graph_and_axes()
+        self._set_symbol()
+        self._set_values()
+        #self._set_color()
 
-    if 'file' in kw:
-        g.writetofile(kw['file'])
+    def _set_graph_and_axes(self):
+        if self.g is None:
+            gkw=_unpack_graphxy_keywords(self.kw)
+            gkw['width'] = gkw.get('width',8)
+            xaxis,xlog,yaxis,ylog = _get_axes(self.kw)
+            self.g = graph.graphxy(x=xaxis, y=yaxis, **gkw)
 
-    return g
+            self.xlog=xlog
+            self.ylog=ylog
+
+
+    def _set_symbol(self):
+        kw=self.kw
+
+        self.styles=[]
+        if 'sym' in kw:
+            self.sym=symbols.get_symbol(kw['sym'])
+        else:
+            self.sym=symbols.get_symbol('circle')
+
+        if 'color' in kw:
+            clr=colors.get_rgb(kw['color'])
+        else:
+            clr=colors.get_rgb('black')
+        self.symbolattrs=[clr,deco.filled([clr])]
+
+        self.symbol=graph.style.symbol(
+            symbol=self.sym,
+            size=kw.get('size',0.075),
+            symbolattrs=self.symbolattrs,
+        )
+        self.styles=[self.symbol]
+
+        if self.dy is not None:
+            if 'errcolor' in kw:
+                errclr=colors.get_rgb(kw['errcolor'])
+            else:
+                errclr=clr
+            self.styles += [graph.style.errorbar(errorbarattrs=[errclr])]
+
+
+
+    def _set_color(self):
+        """
+        call after _set_symbol
+        """
+        kw=self.kw
+        if 'color' in kw:
+            clr=colors.get_rgb(kw['color'])
+        else:
+            clr=colors.get_rgb('black')
+        self.symbolattrs=[clr,deco.filled([clr])]
+
+        if dy is not None:
+            if 'errcolor' in kw:
+                errclr=colors.get_rgb(kw['errcolor'])
+            else:
+                errclr=clr
+            self.styles += [graph.style.errorbar(errorbarattrs=[errclr])]
+
+    def _set_values(self):
+        args={'x':list(self.x), 'y':list(self.y)}
+
+        if self.dy is not None:
+            if self.ylog:
+                # clip way below the value
+                w,=numpy.where(self.y > 0)
+                if w.size > 0:
+                    # need something better than this
+                    lowest=1.0e-6*self.y[w].min()
+                    ylower=(self.y-self.dy).clip(lowest)
+                    yupper=(self.y+self.dy).clip(lowest)
+
+                    args['ymin'] = ylower
+                    args['ymax'] = yupper
+
+        self.values=graph.data.values(**args)
+
+    def plot(self):
+        """
+        add values to the plot
+        """
+        self.g.plot(self.values,styles=self.styles)
 
 _graphxy_kw=[
     'xpos','ypos','width', 'height', 'ratio',
@@ -44,7 +151,7 @@ _graphxy_kw=[
     'xaxisat', 'yaxisat', 'axes']
 
 
-def _unpack_graphxy_keywords(**kwin):
+def _unpack_graphxy_keywords(kwin):
     kw={}
     for key in kwin:
         if key in _graphxy_kw:
@@ -52,7 +159,7 @@ def _unpack_graphxy_keywords(**kwin):
 
     return kw
 
-def _get_axes(**kw):
+def _get_axes(kw):
     xlog=kw.get('xlog',False)
     ylog=kw.get('ylog',False)
 
@@ -87,7 +194,7 @@ def _get_axes(**kw):
     else:
         yaxis = axis.lin(**ykw)
 
-    return xaxis, yaxis
+    return xaxis, xlog, yaxis, ylog
 
 def test_log():
     import numpy
@@ -219,6 +326,20 @@ class Symbols(object):
         return sym
 
 symbols=Symbols()
+
+_linedict={
+    'solid': style.linestyle.solid,
+}
+
+class Linestyles(object):
+    def get_style(self, linename):
+        line=_linedict.get(linename,None)
+        if line is None:
+            raise ValueError("bad line style name: '%s'" % linename)
+        return line
+
+linestyles=Linestyles()
+
 
 class Color(object):
     """
