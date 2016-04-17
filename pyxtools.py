@@ -101,8 +101,6 @@ class Plotter(object):
                 errclr=clr
             self.styles += [graph.style.errorbar(errorbarattrs=[errclr])]
 
-
-
     def _set_color(self):
         """
         call after _set_symbol
@@ -345,6 +343,9 @@ class Color(object):
     """
     translate color names from rgb.txt to pyx.color.rgb instances
     """
+    def __call__(self, name):
+        return self.get_rgb(name)
+
     def get_rgb(self, name_in):
         if isinstance(name_in, color.rgb):
             return name_in
