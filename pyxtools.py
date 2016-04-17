@@ -1,5 +1,7 @@
 from __future__ import print_function
+import os
 import numpy
+import tempfile
 from pyx import *
 from pyx.graph import axis
 
@@ -42,7 +44,22 @@ def plot(x, y, **kw):
         # writing
         plotter.g.writetofile(fname)
 
-    return plotter.g
+    g=plotter.g
+
+    if True==kw.get('show',False):
+        _do_show(g, **kw)
+
+    return g
+
+def _do_show(g, **kw):
+    fname=kw.get('file',None)
+    if fname is None:
+        fname=tempfile.mktemp(suffix='.pdf')
+    g.writetofile(fname)
+
+    viewer=kw.get('viewer','evince')
+    cmd='{viewer} {fname} &> /dev/null &'
+    os.system(cmd.format(viewer=viewer,fname=fname))
 
 class Plotter(object):
     """
@@ -89,7 +106,7 @@ class Plotter(object):
 
         self.symbol=graph.style.symbol(
             symbol=self.sym,
-            size=kw.get('size',0.075),
+            size=kw.get('size',0.1),
             symbolattrs=self.symbolattrs,
         )
         self.styles=[self.symbol]
