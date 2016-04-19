@@ -31,6 +31,8 @@ def plot(x, y, **kw):
     file: string
         File to write. Note some attributes of the g cannot be changed
         after writing, so running plot(.., g=g) again may not work.
+    show: bool
+        If True, bring up the image in a viewer
 
     keywords for graphxy
     """
@@ -38,28 +40,125 @@ def plot(x, y, **kw):
     plotter=Plotter(x,y,**kw)
     plotter.plot()
 
-    fname=kw.get('file',None)
-    if fname is not None:
-        # copy since we can't modify some graph styles after
-        # writing
-        plotter.g.writetofile(fname)
-
     g=plotter.g
 
-    if True==kw.get('show',False):
-        _do_show(g, **kw)
+    _writefile_maybe(g, **kw)
+    _show_maybe(g, **kw)
 
     return g
 
-def _do_show(g, **kw):
-    fname=kw.get('file',None)
-    if fname is None:
-        fname=tempfile.mktemp(suffix='.pdf')
-    g.writetofile(fname)
+def imview(image, **kw):
+    """
+    plot the image
 
-    viewer=kw.get('viewer','evince')
-    cmd='{viewer} {fname} &> /dev/null &'
-    os.system(cmd.format(viewer=viewer,fname=fname))
+    parameters
+    ----------
+    image: array
+        A numpy array
+    """
+    if len(image.shape) != 2:
+        raise ValueError("image should be 2d")
+
+    # we can allow the user to specify physical bounds as well
+    xmin = 0
+    xmax = image.shape[0]-1
+    ymin = 0
+    ymax = image.shape[1]-1
+    x, y = numpy.mgrid[
+        0:image.shape[0],
+        0:image.shape[1],
+    ]
+
+
+    # need to convert to lists for pyx
+    data = list(zip(x.flat, y.flat, image.flat))
+
+    kw['xmin']=xmin
+    kw['xmax']=xmax
+    kw['ymin']=ymin
+    kw['ymax']=ymax
+    xaxis, xlog, yaxis, ylog=_get_axes(kw)
+    assert xlog==False and ylog==False,"no log axes for images"
+
+    g = graph.graphxy(
+        height=8, width=8,
+        x=xaxis,
+        y=yaxis,
+    )
+
+    scale_title=kw.get('scale_title','')
+    coloraxis=graph.axis.linear(
+        min=0,
+        max=image.max(),
+        title=scale_title
+    )
+
+    # make a keyword for the color scheme
+    gradient=color.gradient.ReverseGrey
+    pstyle=graph.style.density(gradient=gradient, coloraxis=coloraxis)
+
+    pdata=graph.data.points(data, x=1, y=2, color=3)
+    g.plot(pdata, styles=[pstyle])
+
+    _writefile_maybe(g, **kw)
+    _show_maybe(g, **kw)
+
+    return g
+
+
+def write(g, fname, **kw):
+    """
+    Write the pyx object to a file. Supported types are
+    png, jpg, pdf, eps, ps.  For newer pyx svg is supported
+
+    parameters
+    ----------
+    pyxobj: a pyx object
+        e.g. a graph or canvas
+    fname: string
+        File name.  The type will be inferred from the extensions
+    **kw:
+        other keywords such as resolution (or dpi for short)
+    """
+    _writefile_maybe(g, file=fname, **kw)
+
+def _writefile_maybe(g, **kw):
+    fname=kw.get('file',None)
+    if fname is not None:
+        if 'png' in fname or 'jpg' in fname:
+
+            if 'dpi' in kw:
+                res=kw['dpi']
+            else:
+                res=kw.get('resolution',200)
+
+            g.writeGSfile(fname, resolution=res)
+        else:
+            g.writetofile(fname)
+
+def _show_maybe(g, **kw):
+    if True==kw.get('show',False):
+        _do_show(g, **kw)
+
+
+def _do_show(g, **kw):
+    import time
+    fname = tempfile.mktemp(suffix='.png')
+
+
+
+    kw['file'] = fname
+    _writefile_maybe(g, **kw)
+
+    _tflist.add(fname)
+
+
+    viewer=_config['viewer']
+    #cmd='{viewer} {fname} &> /dev/null &'
+    cmd='{viewer} {fname}  &'
+    cmd=cmd.format(viewer=viewer,fname=fname)
+    os.system(cmd)
+
 
 class Plotter(object):
     """
@@ -298,7 +397,7 @@ def test_basic():
     g.writePDFfile("points-and-line")
     #g.writeSVGfile("points")
 
-def test_image():
+def test_image(**kw):
     import numpy
     from pyx import color, graph
 
@@ -310,6 +409,9 @@ def test_image():
     sigma=0.5
     x, y = numpy.mgrid[xmin:xmax:npts*1j, ymin:ymax:npts*1j]
     z = numpy.exp( -(x**2 + y**2)/(2*sigma**2) )
+
+    imview(z, **kw)
+    '''
     data = list(zip(x.flat, y.flat, z.flat))
 
     g = graph.graphxy(height=8, width=8,
@@ -320,6 +422,7 @@ def test_image():
                                 coloraxis=graph.axis.linear(min=0, max=z.max(),
                                                             title="$V$"))])
     g.writePDFfile("image")
+    '''
 
 _symdict={
     'circle': graph.style.symbol.circle,
@@ -1071,3 +1174,43 @@ _rgbdict = {
     'yellowgreen': (154, 205, 50)
 }
 
+
+class TempFileList(object):
+    def __init__(self):
+        self.flist=[]
+
+    def add(self, fname):
+        self.flist.append(fname)
+
+    def cleanup(self):
+        for f in self.flist:
+            try:
+                #print("removing:",f)
+                os.remove(f)
+            except:
+                pass
+
+    def __enter__(self):
+        return self
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.cleanup()
+    def __del__(self):
+        self.cleanup()
+
+_default_conf={
+    'viewer':'eog', # probably available on most systems
+}
+def _load_config():
+    import yaml
+
+    conf=_default_conf
+    fname=os.path.expanduser('~/.pyxtools')
+
+    if os.path.exists(fname):
+        with open(fname) as fobj:
+            tconf=yaml.load(fobj)
+        conf.update(tconf)
+    return conf
+
+_tflist=TempFileList()
+_config=_load_config()
