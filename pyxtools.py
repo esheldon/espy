@@ -6,7 +6,7 @@ from pyx import *
 from pyx.graph import axis
 
 
-def plot(x, y, **kw):
+def plot(x, y, dx=None, dy=None, **kw):
     """
     first try to make a sensible interactive wrapper
 
@@ -37,15 +37,17 @@ def plot(x, y, **kw):
     keywords for graphxy
     """
 
-    plotter=Plotter(x,y,**kw)
-    plotter.plot()
+    plt=kw.pop('plt',None)
 
-    g=plotter.g
+    if plt is None:
+        plt=Plotter(**kw)
 
-    _writefile_maybe(g, **kw)
-    _show_maybe(g, **kw)
+    plt.plot(x, y, dx=dx, dy=dy, **kw)
 
-    return g
+    _writefile_maybe(plt.g, **kw)
+    _show_maybe(plt.g, **kw)
+
+    return plt
 
 def imview(image, **kw):
     """
@@ -164,105 +166,250 @@ class Plotter(object):
     """
     for use with the interactive plot() command
     """
-    def __init__(self, x, y, **kw):
-        self.x=x
-        self.y=y
-        self.dx=kw.pop('dx',None)
-        self.dy=kw.pop('dy',None)
-        self.g=kw.pop('g',None)
-        self.kw=kw
+    def __init__(self, **kw):
+        self.value_sets=[]
+        self.style_sets=[]
 
-        self._set_graph_and_axes()
-        self._set_symbol()
-        self._set_values()
-        #self._set_color()
+        self.graph_kw=kw
+        self.xlog=kw.get('xlog',False)
+        self.ylog=kw.get('ylog',False)
+        self.g=None
 
-    def _set_graph_and_axes(self):
+        self.xmin=None
+        self.xmax=None
+        self.ymin=None
+        self.ymax=None
+
+    def plot(self, x, y, dx=None, dy=None, **kw):
+        """
+        add values to the plot
+        """
+        styles=[]
+
+        values, xrng, yrng =self._get_values(x, y, dx=dx, dy=dy)
+
+
+        self._set_ranges(xrng, yrng)
+
+        #if self.g is None:
+        #    self.g=self._get_graph_and_axes(xrng, yrng, **self.graph_kw)
+        self.g=self._get_graph_and_axes(xrng, yrng, **self.graph_kw)
+
+        styles=self._set_symbol(styles, dx=dx, dy=dy, **kw)
+
+        self.value_sets.append(values)
+        self.style_sets.append(styles)
+
+        for i in xrange(len(self.value_sets)):
+            self.g.plot(
+                self.value_sets[i],
+                styles=self.style_sets[i]
+            )
+
+    def write(self, filename, **kw):
+        """
+        write to a plot file
+
+        parameters
+        ----------
+        filename: string
+            file type determined from extension
+        **kw:
+            extra keywords
+        """
         if self.g is None:
-            gkw=_unpack_graphxy_keywords(self.kw)
-            gkw['width'] = gkw.get('width',8)
-            xaxis,xlog,yaxis,ylog = _get_axes(self.kw)
-            self.g = graph.graphxy(x=xaxis, y=yaxis, **gkw)
+            raise RuntimeError("plot some data first")
 
-            self.xlog=xlog
-            self.ylog=ylog
+        kw['file'] = filename
+        _writefile_maybe(self.g, **kw)
+
+    def show(self, **kw):
+        """
+        show the plot
+
+        parameters
+        ----------
+        **kw:
+            extra keywords
+        """
+        if self.g is None:
+            raise RuntimeError("plot some data first")
+
+        kw['show']=True
+        _show_maybe(self.g, **kw)
+
+    def _set_ranges(self, xrng, yrng):
+        if self.xmin is None:
+            self.xmin=xrng[0]
+        else:
+            self.xmin=min(self.xmin, xrng[0])
+
+        if self.xmax is None:
+            self.xmax=xrng[1]
+        else:
+            self.xmax=max(self.xmax, xrng[1])
 
 
-    def _set_symbol(self):
-        kw=self.kw
+        if self.ymin is None:
+            self.ymin=yrng[0]
+        else:
+            self.ymin=min(self.ymin, yrng[0])
 
-        self.styles=[]
+        if self.ymax is None:
+            self.ymax=yrng[1]
+        else:
+            self.ymax=max(self.ymax, yrng[1])
+
+
+    def _get_graph_and_axes(self, xrng, yrng, **kw):
+        gkw=_unpack_graphxy_keywords(kw)
+        gkw['width'] = gkw.get('width',8)
+
+        self.xlog=kw.get('xlog',False)
+        self.ylog=kw.get('ylog',False)
+
+        xdiff=xrng[1]-xrng[0]
+        ydiff=yrng[1]-yrng[0]
+
+        if 'xmin' not in kw:
+            kw['xmin'] = _get_prng(xrng[0], xdiff, 'low', log=self.xlog)
+        if 'xmax' not in kw:
+            kw['xmax'] = _get_prng(xrng[1], xdiff, 'high', log=self.xlog)
+        if 'ymin' not in kw:
+            kw['ymin'] = _get_prng(yrng[0], ydiff, 'low', log=self.ylog)
+        if 'ymax' not in kw:
+            kw['ymax'] = _get_prng(yrng[1], ydiff, 'high', log=self.ylog)
+
+        xaxis,xlog,yaxis,ylog = _get_axes(kw)
+        g = graph.graphxy(x=xaxis, y=yaxis, **gkw)
+
+        return g
+
+    def _set_symbol(self, styles, dx=None, dy=None, **kw):
+
         if 'sym' in kw:
-            self.sym=symbols.get_symbol(kw['sym'])
+            sym=symbols.get_symbol(kw['sym'])
         else:
-            self.sym=symbols.get_symbol('circle')
+            sym=symbols.get_symbol('circle')
 
         if 'color' in kw:
-            clr=colors.get_rgb(kw['color'])
+            clr=colors(kw['color'])
         else:
-            clr=colors.get_rgb('black')
-        self.symbolattrs=[clr,deco.filled([clr])]
+            clr=colors('black')
 
-        self.symbol=graph.style.symbol(
-            symbol=self.sym,
+        symbolattrs=[clr,deco.filled([clr])]
+
+        symbol=graph.style.symbol(
+            symbol=sym,
             size=kw.get('size',0.1),
-            symbolattrs=self.symbolattrs,
+            symbolattrs=symbolattrs,
         )
-        self.styles=[self.symbol]
+        styles += [symbol]
 
-        if self.dy is not None:
+        if dx is not None or dy is not None:
             if 'errcolor' in kw:
-                errclr=colors.get_rgb(kw['errcolor'])
+                errclr=colors(kw['errcolor'])
             else:
                 errclr=clr
-            self.styles += [graph.style.errorbar(errorbarattrs=[errclr])]
+            styles += [graph.style.errorbar(errorbarattrs=[errclr])]
 
-    def _set_color(self):
-        """
-        call after _set_symbol
-        """
-        kw=self.kw
-        if 'color' in kw:
-            clr=colors.get_rgb(kw['color'])
-        else:
-            clr=colors.get_rgb('black')
-        self.symbolattrs=[clr,deco.filled([clr])]
+        return styles
 
-        if dy is not None:
-            if 'errcolor' in kw:
-                errclr=colors.get_rgb(kw['errcolor'])
-            else:
-                errclr=clr
-            self.styles += [graph.style.errorbar(errorbarattrs=[errclr])]
+    def _get_values(self, x, y, dx=None, dy=None):
+        args={'x':list(x), 'y':list(y)}
 
-    def _set_values(self):
-        args={'x':list(self.x), 'y':list(self.y)}
+        xrng=[x.min(), x.max()]
+        yrng=[y.min(), y.max()]
 
-        if self.dy is not None:
-            if self.ylog:
+        if dx is not None:
+            if self.xlog:
                 # clip way below the value
-                w,=numpy.where(self.y > 0)
+                w,=numpy.where(x > 0)
                 if w.size > 0:
                     # need something better than this
-                    lowest=1.0e-6*self.y[w].min()
-                    ylower=(self.y-self.dy).clip(lowest)
-                    yupper=(self.y+self.dy).clip(lowest)
+                    lowest=1.0e-6*x[w].min()
+                    xlower=(x-dx).clip(lowest)
+                    xupper=(x+dx).clip(lowest)
+
+                    args['xmin'] = xlower
+                    args['xmax'] = xupper
+
+                    xrng[0]=xlower.min()
+                    xrng[1]=xupper.max()
+            else:
+                xrng[0] = (x-dx).min()
+                xrng[1] = (x+dx).max()
+                args['dx'] = dx
+
+        if dy is not None:
+            if self.ylog:
+                # clip way below the value
+                w,=numpy.where(y > 0)
+                if w.size > 0:
+                    # need something better than this
+                    lowest=1.0e-6*y[w].min()
+                    ylower=(y-dy).clip(lowest)
+                    yupper=(y+dy).clip(lowest)
 
                     args['ymin'] = ylower
                     args['ymax'] = yupper
 
-        self.values=graph.data.values(**args)
+                    yrng[0]=ylower.min()
+                    yrng[1]=yupper.max()
+            else:
+                yrng[0] = (y-dy).min()
+                yrng[1] = (y+dy).max()
+                args['dy'] = dy
 
-    def plot(self):
-        """
-        add values to the plot
-        """
-        self.g.plot(self.values,styles=self.styles)
+
+        values=graph.data.values(**args)
+
+        return values, xrng, yrng
 
 _graphxy_kw=[
     'xpos','ypos','width', 'height', 'ratio',
     'key','backgroundattrs','axesdist', 'flipped',
     'xaxisat', 'yaxisat', 'axes']
+
+def _get_prngold(x, type, log=False):
+    if log:
+        if type=='low':
+            r=0.5*x
+        else:
+            r=1.5*x
+    else:
+        if type=='low':
+            if x < 0:
+                r=1.2*x
+            else:
+                r=0.8*x
+        else:
+            if x < 0:
+                r=0.8*x
+            else:
+                r=1.2*x
+
+    print("x:",x,"r:",r)
+    return r
+
+def _get_prng(x, diff, type, log=False):
+
+    frac=0.075
+    if log:
+        if type=='low':
+            r=0.5*x
+        else:
+            r=1.5*x
+    else:
+
+        fdiff=diff*frac
+        if type=='low':
+            r = x - fdiff
+        else:
+            r = x + fdiff
+
+    print("x:",x,"r:",r)
+    return r
 
 
 def _unpack_graphxy_keywords(kwin):
@@ -410,19 +557,8 @@ def test_image(**kw):
     x, y = numpy.mgrid[xmin:xmax:npts*1j, ymin:ymax:npts*1j]
     z = numpy.exp( -(x**2 + y**2)/(2*sigma**2) )
 
-    imview(z, **kw)
-    '''
-    data = list(zip(x.flat, y.flat, z.flat))
-
-    g = graph.graphxy(height=8, width=8,
-                      x=graph.axis.linear(min=xmin, max=xmax, title="$x$"),
-                      y=graph.axis.linear(min=ymin, max=ymax, title="$y$"))
-    g.plot(graph.data.points(data, x=1, y=2, color=3),
-           [graph.style.density(gradient=color.gradient.ReverseGrey,
-                                coloraxis=graph.axis.linear(min=0, max=z.max(),
-                                                            title="$V$"))])
-    g.writePDFfile("image")
-    '''
+    g=imview(z, **kw)
+    return g
 
 _symdict={
     'circle': graph.style.symbol.circle,
