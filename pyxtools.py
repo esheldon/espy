@@ -29,8 +29,7 @@ def plot(x, y, dx=None, dy=None, **kw):
     g: graphxy object
         Plot data into this object instead of creating a new one
     file: string
-        File to write. Note some attributes of the g cannot be changed
-        after writing, so running plot(.., g=g) again may not work.
+        File to write
     show: bool
         If True, bring up the image in a viewer
 
