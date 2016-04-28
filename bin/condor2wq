@@ -11,9 +11,11 @@ Executable = /some/path
 
 +job_name = "some name"
 Arguments = "some args"
+Queue
 
 +job_name = "some name"
 Arguments = "some args"
+Queue
 
 etc.
 
