@@ -180,6 +180,12 @@ def view_mosaic(imlist, titles=None, combine=False, **keys):
         implt=view(im, title=title, **tkeys)
         tab[row,col] = implt
 
+    # aspect is ysize/xsize
+    aspect=keys.get('aspect',None)
+    if aspect is None:
+        aspect = float(nrow)/ncol
+    tab.aspect_ratio=aspect
+
     show=keys.get('show',True)
     if show:
         width=keys.get('width',None)

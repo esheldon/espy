@@ -388,7 +388,6 @@ def _get_prngold(x, type, log=False):
             else:
                 r=1.2*x
 
-    print("x:",x,"r:",r)
     return r
 
 def _get_prng(x, diff, type, log=False):

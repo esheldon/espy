@@ -187,7 +187,7 @@ class Submitter(object):
                     time.sleep(self.poll)
 
     def _print_subline(self, script, i, ntot):
-        perc=int( i/float(ntot) )
+        perc=int( 100*i/float(ntot) )
         date = datetime.datetime.now().strftime('%H:%M:%S')
         print("submitting %s %d/%d (%i%%): %s" % (date,i+1,ntot,perc,script))
 
