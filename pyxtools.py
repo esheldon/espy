@@ -406,7 +406,6 @@ def _get_prng(x, diff, type, log=False):
         else:
             r = x + fdiff
 
-    print("x:",x,"r:",r)
     return r
 
 
