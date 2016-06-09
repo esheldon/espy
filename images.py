@@ -107,11 +107,14 @@ def _writefile_maybe(plt, **keys):
             plt.write_eps(file)
 
 def _show_maybe(plt, **keys):
-    if 'show' not in keys:
+    show=keys.get('show',None)
+    if show is None:
         if 'file' in keys and keys['file'] is not None:
             # don't show anything if show not explicitly
             # sent and we are writing a file
             show=False
+        else:
+            show=True
     else:
         show=keys['show']
 
