@@ -95,7 +95,7 @@ def view(image, **keys):
         file=os.path.expanduser(file)
         if '.png' in file:
             png_dims=keys.get('dims',[800,800])
-            plt.write_img(dims[0],dims[1],pngfile)
+            plt.write_img(png_dims[0],png_dims[1],file)
         else:
             plt.write_eps(file)
 
