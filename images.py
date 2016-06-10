@@ -90,22 +90,45 @@ def view(image, **keys):
     if 'ylabel' in keys:
         plt.ylabel=keys['ylabel']
 
+    _writefile_maybe(plt, **keys)
+    _show_maybe(plt, **keys)
+
+    return plt
+
+def _writefile_maybe(plt, **keys):
     if 'file' in keys and keys['file'] is not None:
         file=os.path.expandvars(keys['file'])
         file=os.path.expanduser(file)
         if '.png' in file:
-            png_dims=keys.get('dims',[800,800])
-            plt.write_img(png_dims[0],png_dims[1],file)
+            dims=keys.get('dims',[800,800])
+            plt.write_img(dims[0],dims[1],file)
         else:
             plt.write_eps(file)
 
-    show=keys.get('show',True)
-    if show:
-        width=keys.get('width',None)
-        height=keys.get('height',None)
-        plt.show(width=width, height=height)
+def _show_maybe(plt, **keys):
+    show=keys.get('show',None)
+    if show is None:
+        if 'file' in keys and keys['file'] is not None:
+            # don't show anything if show not explicitly
+            # sent and we are writing a file
+            show=False
+        else:
+            show=True
+    else:
+        show=keys['show']
 
-    return plt
+    if show:
+        dims=keys.get('dims',None)
+        if dims is None:
+            width=keys.get('width',None)
+            height=keys.get('height',None)
+            if width is None:
+                dims=[800,800]
+            else:
+                dims=[width,height]
+
+        plt.show(width=dims[0], height=dims[1])
+
 
 def _extract_data_ranges(imshape, **keys):
     if 'xdr' in keys and 'ydr' in keys:
@@ -186,12 +209,9 @@ def view_mosaic(imlist, titles=None, combine=False, **keys):
         aspect = float(nrow)/ncol
     tab.aspect_ratio=aspect
 
-    show=keys.get('show',True)
-    if show:
-        width=keys.get('width',None)
-        height=keys.get('height',None)
-        tab.show(width=width, height=height)
-    
+    _writefile_maybe(tab, **keys)
+    _show_maybe(tab, **keys)
+
     return tab
 
 def get_grid(nplot):
@@ -279,6 +299,8 @@ def multiview(image, **keys):
 
     keys2 = copy.copy(keys)
     keys2['show'] = False
+    keys2['file'] = None
+
     imp = view(image, **keys2)
 
     # cross-section across rows
@@ -319,15 +341,9 @@ def multiview(image, **keys):
     tab[0,0] = imp
     tab[0,1] = crossplt
 
-    #title=keys.get('title',None)
-    #if title:
-    #    tab.title=title
 
-    show = keys.get('show', True)
-    if show:
-        width=keys.get('width',None)
-        height=keys.get('height',None)
-        tab.show(width=width, height=height)
+    _writefile_maybe(tab, **keys)
+    _show_maybe(tab, **keys)
     return tab
 
 def compare_images(im1, im2, **keys):
@@ -374,6 +390,7 @@ def compare_images(im1, im2, **keys):
 
     tkeys=copy.deepcopy(keys)
     tkeys['show']=False
+    tkeys['file']=None
     im1plt=view(im1, **tkeys)
     im2plt=view(im2, **tkeys)
 
@@ -448,12 +465,8 @@ def compare_images(im1, im2, **keys):
         tab[0,1] = im2plt
         tab[1,0] = residplt
 
-    if show:
-        width=keys.get('width',None)
-        height=keys.get('height',None)
-        tab.show(width=width, height=height)
-
-    biggles.configure( 'default', 'fontsize_min', 1.25)
+    _writefile_maybe(tab, **keys)
+    _show_maybe(tab, **keys)
 
     return tab
 
