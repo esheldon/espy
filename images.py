@@ -77,8 +77,13 @@ def view(image, **keys):
     if 'cont' in type:
         levels=keys.get('levels',8)
         if levels is not None:
+            if 'zrange' in keys:
+                zrange=keys['zrange']
+            else:
+                zrange=numpy.percentile(im, [10.0,90.0])
+
             ccolor = keys.get('ccolor',def_contour_color)
-            c = biggles.Contours(im,x=x,y=y,color=ccolor)
+            c = biggles.Contours(im,x=x,y=y,color=ccolor,zrange=zrange)
             c.levels = levels
             plt.add(c)
 
@@ -295,7 +300,10 @@ def multiview(image, **keys):
     cen = keys.get('cen', None)
     if cen is None:
         # use the middle as center
-        cen = [(image.shape[0]-1)/2., (image.shape[1]-1)/2.]
+        cen = [
+            int(round( (image.shape[0]-1)/2. )),
+            int(round( (image.shape[1]-1)/2. )),
+        ]
 
     keys2 = copy.copy(keys)
     keys2['show'] = False
@@ -425,12 +433,14 @@ def compare_images(im1, im2, **keys):
 
     # cross-sections
     if cross_sections:
-        im1rows = im1[:,cen[1]]
-        im1cols = im1[cen[0],:]
-        im2rows = im2[:,cen[1]]
-        im2cols = im2[cen[0],:]
-        resrows = resid[:,cen[1]]
-        rescols = resid[cen[0],:]
+        cen0=int(cen[0])
+        cen1=int(cen[1])
+        im1rows = im1[:,cen1]
+        im1cols = im1[cen0,:]
+        im2rows = im2[:,cen1]
+        im2cols = im2[cen0,:]
+        resrows = resid[:,cen1]
+        rescols = resid[cen0,:]
 
         him1rows = biggles.Histogram(im1rows, color=color1)
         him1cols = biggles.Histogram(im1cols, color=color1)

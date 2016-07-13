@@ -53,6 +53,15 @@ parser.add_argument(
           "that will be submitted and exit."),
 )
 
+parser.add_argument(
+    "--suball",
+    action='store_true',
+    help=("submit all scripts (not previously submitted) "
+          "without counting the existing jobs"),
+)
+
+
+
 def execute_command(cmd):
     pobj = subprocess.Popen(
         cmd,
@@ -81,11 +90,15 @@ def submit_condor_script(script_path):
         except:
             print("could not remove existing submitted file:",subname)
 
-    ds=eu.ostools.DirStack()
-    ds.push(dirname)
+    if dirname != '':
+        ds=eu.ostools.DirStack()
+        ds.push(dirname)
+
     cmd=["condor_submit",scriptbase]
     sout, serr, exit_status=execute_command(cmd)
-    ds.pop()
+
+    if dirname != '':
+        ds.pop()
 
     print(sout)
     if serr != "":
@@ -142,13 +155,15 @@ class Submitter(object):
                  nmax=DEF_NJOBS,
                  poll=DEF_POLL,
                  force=False,
-                 dryrun=False):
+                 dryrun=False,
+                 suball=False):
 
         self.script_files_all=script_files_all
         self.nmax=nmax
         self.poll=poll
         self.force=force
         self.dryrun=dryrun
+        self.suball=suball
 
         self._set_scripts_to_submit()
 
@@ -161,26 +176,37 @@ class Submitter(object):
         if self.dryrun or nscript==0:
             return
 
-        counter=JobCounter()
+        if not self.suball:
+            counter=JobCounter()
+            njobs=-1
 
         for iscript,script in enumerate(scripts):
 
             if iscript > 0:
                 time.sleep(self.poll)
 
+            ntry=4
+            itry=0
             while True:
-                njobs=counter()
+                if not self.suball:
+                    njobs=counter()
 
-                if njobs <= self.nmax:
+                if self.suball or njobs <= self.nmax:
                     self._print_subline(script,iscript,nscript)
 
                     status=submit_condor_script(script)
 
                     if status != 0:
-                        print("error submitting script, halting")
-                        return
+                        print("error submitting script, trying "
+                              "again after one minute")
+                        time.sleep(60.0)
 
-                    break
+                        itry += 1
+                        if itry >= ntry:
+                            print("    giving up on this file after",itry,"tries")
+                            break
+                    else:
+                        break
 
                 else:
                     print("%d jobs is plenty (> %d)" % (njobs,self.nmax))
@@ -223,6 +249,7 @@ def main():
             poll=args.poll,
             force=args.force,
             dryrun=args.dryrun,
+            suball=args.suball,
         )
         submitter.go()
 

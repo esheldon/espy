@@ -59,8 +59,9 @@ def process_file(fname):
                     job_names.append(job_name)
 
                 if line[0:9].lower() == 'arguments':
-                    args = line.split('=')[1].strip()
-                    args_list.append(args)
+                    args = line.split('=')[1:]
+                    args='='.join(args)
+                    args_list.append(args.strip())
 
     if not exec_found:
         raise ValueError("no line with executable = ")
