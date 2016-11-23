@@ -100,6 +100,68 @@ def view(image, **keys):
 
     return plt
 
+
+def view_profile(image, **keys): 
+    """
+    View the image as a radial profile vs radius from the center.
+
+    If show=False just return the plot object.
+
+    Values below zero are clipped, so pre-subtract any background as
+    necessary.
+
+    parameters
+    ----------
+    image or r,g,b: ndarray
+        The image(s) as a 2-d array or 
+    cen: [c1,c2], optional
+        Optional center
+    show: bool
+        Set False to not show the image in an X window.
+    file: string
+        Write the image to the intput file name.  .png will be written
+        as a png file, else an eps file.
+    width, height: integers
+        Size for output
+    **kw:
+        keywords for the FramedPlot and for the output image dimensions
+        width
+    """
+    import biggles
+
+    plt=keys.pop('plt',None)
+    show=keys.pop('show',True)
+    cen=keys.pop('cen',None)
+
+    if cen is None:
+        cen=(numpy.array(image.shape)-1.0)/2.0
+    else:
+        assert len(cen)==2,"cen must have two elements"
+
+    rows,cols=numpy.mgrid[
+        0:image.shape[0],
+        0:image.shape[1],
+    ]
+
+    rows = rows.astype('f8')-cen[0]
+    cols = cols.astype('f8')-cen[1]
+
+    r = numpy.sqrt(rows**2 + cols**2).ravel()
+    s = r.argsort()
+    r=r[s]
+    imravel = image.ravel()[s]
+
+    #pts = biggles.Points(r, imravel, size=size, type=type, **keys)
+    keys['visible']=False
+    plt = biggles.plot(r, imravel, plt=plt, **keys)
+
+    _writefile_maybe(plt, **keys)
+    _show_maybe(plt, show=show,**keys)
+
+    return plt
+
+
+
 def _writefile_maybe(plt, **keys):
     if 'file' in keys and keys['file'] is not None:
         file=os.path.expandvars(keys['file'])
