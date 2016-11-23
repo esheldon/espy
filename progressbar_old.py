@@ -149,6 +149,13 @@ class ProgressBar(object):
             self.lines * (terminal.UP + terminal.BOL + terminal.CLEAR_EOL)
         )
 
+    def __enter__(self):
+        return self
+    def __exit__(self, exception_type, exception_value, traceback):
+        pass
+        #self.close()
+
+
 
 def _test(block='=', empty=' '):
     import time
@@ -163,3 +170,15 @@ def test_simple():
 
 def test_utf8():
     _test(block='▣', empty='□')
+
+
+def test_with():
+    import time
+
+    with ProgressBar() as pbar:
+        n=100
+        for i in xrange(n):
+            pbar.render(frac=(i+1)/float(n))
+            time.sleep(0.1)
+
+
