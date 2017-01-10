@@ -1,0 +1,175 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+import socket
+import sys
+import os
+import random
+import subprocess
+import time
+import datetime
+
+import argparse
+
+import esutil as eu
+
+
+
+parser=argparse.ArgumentParser()
+
+parser.add_argument('files',
+                    nargs='+',
+                    help='list of files or a file holding the flist if -F is set')
+
+parser.add_argument("-p","--poll", default=30,
+        help=("time between polls of running jobs when we are at max allowed"
+              "jobs, default %default"))
+
+parser.add_argument("-n", "--njobs", type=int,default=10000, 
+                  help="max number of jobs, default %default")
+
+parser.add_argument("-s", "--sleep-time", type=float,default=0, 
+                  help=("minimum time to sleep between individual submisions."
+                        "default %default"))
+
+parser.add_argument("-f", "--force", action="store_true",
+                  help="force starting of all jobs, even if a .submitted file is present.")
+parser.add_argument("-F","--isfile",  action="store_true",
+                  help=("The argument is a list of files to submit, "
+                       "rather than the list being the arguments"))
+
+parser.add_argument("-d", "--dryrun", action='store_true', 
+                  help="dry run.  Just print number of jobs and exit.")
+
+parser.add_argument("--rand", action="store_true",help="randomize the order of files")
+
+
+
+
+def get_njobs():
+    cmd = 'bjobs | grep -v FROM_HOST | wc -l'
+    status, stdout_ret, stderr_ret = eu.ostools.exec_process(cmd)
+
+    if status != 0:
+        raise RuntimeError("erro executing bjobs: %d" % status)
+
+    try:
+        njobs = int(stdout_ret)
+    except:
+        njobs = 0
+
+    return njobs
+
+def get_submitted_fname(fname):
+    return fname+'.submitted'
+
+
+def load_flist(fname):
+    flist=[]
+    with open(fname) as fobj:
+        for line in fobj:
+            f=line.strip()
+
+            flist.append(f)
+
+    return flist
+
+class JobSubmitter(object):
+    def __init__(self, args):
+
+        self.args=args
+
+        if args.isfile:
+            self.flist=load_flist(args.files[0])
+        else:
+            self.flist=args.files
+
+        self.dryrun=args.dryrun
+
+        if args.rand:
+            random.shuffle(self.flist)
+
+        print("number in list:           %s" % len(self.flist))
+        print("will limit to maxjobs:    %s" % self.args.njobs)
+     
+        self.dirstack=eu.ostools.DirStack(verbose=False)
+
+    def touch_subf(self,subf):
+        if not os.path.exists(subf):
+            with open(subf,'w') as fobj:
+                fobj.write('submitted')
+
+    def sub_jobs(self):
+        if self.dryrun:
+            return
+
+        nfiles=len(self.flist)
+        diffjobs=0
+        for i,fname in enumerate(self.flist):
+
+            perc=100.*(i+1)/float(nfiles)
+
+            subf=get_submitted_fname(fname)
+
+            if not os.path.exists(subf) or self.args.force:
+
+                if diffjobs <= 0:
+
+                    njobs = get_njobs()
+                    diffjobs = self.args.njobs - njobs
+                    while diffjobs <= 0:
+                        time.sleep(self.args.poll)
+                        njobs = get_njobs()
+                        diffjobs = self.args.njobs - njobs
+
+                    print( "Found %s jobs  diffjobs: %s" % (njobs,diffjobs))
+
+                dirname,bname=os.path.split(fname)
+                if dirname != '':
+                    self.dirstack.push(dirname)
+
+                date = datetime.datetime.now().strftime('%H:%M:%S')
+                print("    submitting %s %s %s/%s (%i%%)" % (bname,date,i+1,nfiles,perc))
+
+                self.sub(bname)
+
+                if dirname != '':
+                    self.dirstack.pop()
+
+                self.touch_subf(subf)
+
+                diffjobs -= 1
+
+                # minimum time in case above is fast
+                if self.args.sleep_time > 0:
+                    time.sleep(self.args.sleep_time)
+
+    def sub(self, bname):
+
+        cmd = 'bsub < %s' % bname
+        status, stdout_ret, stderr_ret = eu.ostools.exec_process(cmd)
+        if status != 0:
+            raise RuntimeError("erro subitting job %s" % bname)
+
+   
+
+
+
+def main():
+    """
+    Just to provide a clean exit when we get keyboard interrupts
+    """
+
+    try:
+        args = parser.parse_args()
+
+        submitter=JobSubmitter(args)
+
+        submitter.sub_jobs()
+
+    except KeyboardInterrupt:
+        sys.exit(1)
+
+
+
+main()
