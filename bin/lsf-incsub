@@ -78,6 +78,7 @@ class JobSubmitter(object):
             self.flist=load_flist(args.files[0])
         else:
             self.flist=args.files
+        self.nfiles=len(self.flist)
 
         self.dryrun=args.dryrun
 
@@ -89,57 +90,78 @@ class JobSubmitter(object):
      
         self.dirstack=eu.ostools.DirStack(verbose=False)
 
-    def touch_subf(self,subf):
+    def _touch_subf(self,subf):
         if not os.path.exists(subf):
             with open(subf,'w') as fobj:
                 fobj.write('submitted')
 
-    def sub_jobs(self):
-        if self.dryrun:
-            return
+    def _submit_batch(self, current, njobs_to_submit):
+        nsubmitted=0
 
-        nfiles=len(self.flist)
-        diffjobs=0
-        for i,fname in enumerate(self.flist):
+        while nsubmitted < njobs_to_submit:
+            if current >= (self.nfiles-1):
+                break
 
-            perc=100.*(i+1)/float(nfiles)
-
+            fname=self.flist[current]
             subf=get_submitted_fname(fname)
 
             if not os.path.exists(subf) or self.args.force:
 
-                if diffjobs <= 0:
-
-                    njobs = get_njobs()
-                    diffjobs = self.args.njobs - njobs
-                    while diffjobs <= 0:
-                        time.sleep(self.args.poll)
-                        njobs = get_njobs()
-                        diffjobs = self.args.njobs - njobs
-
-                    print( "Found %s jobs  diffjobs: %s" % (njobs,diffjobs))
+                perc=100.*(current+1)/float(self.nfiles)
 
                 dirname,bname=os.path.split(fname)
+
                 if dirname != '':
                     self.dirstack.push(dirname)
 
                 date = datetime.datetime.now().strftime('%H:%M:%S')
-                print("    submitting %s %s %s/%s (%i%%)" % (bname,date,i+1,nfiles,perc))
+                print("    submitting %s %s %s/%s (%i%%)" % (bname,date,current+1,self.nfiles,perc))
 
-                self.sub(bname)
+                self._sub(bname)
 
                 if dirname != '':
                     self.dirstack.pop()
 
-                self.touch_subf(subf)
+                self._touch_subf(subf)
 
-                diffjobs -= 1
+                nsubmitted += 1
 
-                # minimum time in case above is fast
                 if self.args.sleep_time > 0:
                     time.sleep(self.args.sleep_time)
 
-    def sub(self, bname):
+            current += 1
+
+        return current
+
+    def go(self):
+        if self.dryrun:
+            return
+
+        diffjobs=0
+
+        current=0
+        njobs, diffjobs = self._get_diffjobs()
+
+        while True:
+            if diffjobs > 0:
+                print( "Found %s jobs  diffjobs: %s" % (njobs,diffjobs))
+
+                current = self._submit_batch(current, diffjobs)
+
+                if current >= (self.nfiles-1):
+                    break
+
+                time.sleep(self.args.poll)
+
+                njobs, diffjobs = self._get_diffjobs()
+
+    def _get_diffjobs(self):
+        njobs = get_njobs()
+        diffjobs = self.args.njobs - get_njobs()
+        return njobs, diffjobs
+
+
+    def _sub(self, bname):
 
         cmd = 'bsub < %s' % bname
         status, stdout_ret, stderr_ret = eu.ostools.exec_process(cmd)
@@ -160,7 +182,7 @@ def main():
 
         submitter=JobSubmitter(args)
 
-        submitter.sub_jobs()
+        submitter.go()
 
     except KeyboardInterrupt:
         sys.exit(1)
