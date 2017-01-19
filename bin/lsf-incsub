@@ -23,10 +23,6 @@ parser.add_argument("-p","--poll", default=30,
 parser.add_argument("-n", "--njobs", type=int,default=10000, 
                   help="max number of jobs, default 10000")
 
-parser.add_argument("-s", "--sleep-time", type=float,default=0, 
-                  help=("minimum time to sleep between individual submisions."
-                        "default 0"))
-
 parser.add_argument("-f", "--force", action="store_true",
                   help="force starting of all jobs, even if a .submitted file is present.")
 parser.add_argument("-F","--isfile",  action="store_true",
@@ -126,9 +122,6 @@ class JobSubmitter(object):
 
                 nsubmitted += 1
 
-                if self.args.sleep_time > 0:
-                    time.sleep(self.args.sleep_time)
-
             current += 1
 
         return current
@@ -151,9 +144,8 @@ class JobSubmitter(object):
                 if current >= (self.nfiles-1):
                     break
 
-                time.sleep(self.args.poll)
-
-                njobs, diffjobs = self._get_diffjobs()
+            time.sleep(self.args.poll)
+            njobs, diffjobs = self._get_diffjobs()
 
     def _get_diffjobs(self):
         njobs = get_njobs()
