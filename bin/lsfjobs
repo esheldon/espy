@@ -70,7 +70,9 @@ class LSFLister(dict):
 
                 line_splits.append(lsplit)
 
+        print()
         self.write_statline(stats)
+        print()
         self.write_job_listing(line_splits, lengths)
 
     def write_job_listing(self, line_splits, lengths):
