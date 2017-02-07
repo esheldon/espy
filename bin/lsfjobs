@@ -1,0 +1,233 @@
+#!/usr/bin/env python
+"""
+    Display statistics about the lsf queue
+
+    This program runs `bjobs -w` and parses the output.
+"""
+from __future__ import print_function
+import os
+import sys
+from sys import stderr
+import subprocess
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+
+
+parser=ArgumentParser(formatter_class=RawDescriptionHelpFormatter,
+                      description=__doc__)
+
+parser.add_argument("-p","--pattern",
+    help="only show jobs that contain the input pattern. Currently this is a straight string match, not a regex")
+
+
+# don't have to be too careful about things like widths of fields in the
+# formats since we will process the results anyway
+
+_command="bjobs -w"
+
+class LSFLister(dict):
+    def __init__(self, **keys):
+
+        self.update(keys)
+        self.set_defaults()
+
+        self.command=_command
+
+        self.headers=('JOBID','USER','STAT','QUEUE','FROM_HOST','EXEC_HOST','JOB_NAME','SUBMIT_TIME')
+        self.hdict={}
+        for h in self.headers:
+            self.hdict[h.lower()] = h
+
+        self.nperline=len(self.headers) + 2
+
+
+    def go(self):
+
+        out = self.get_listing()
+        out = out.split('\n')
+
+        stats={'njobs':0,'run':0,'pending':0,'suspended':0,'unknown':0}
+        lengths={}
+        for h in self.headers:
+            lengths[h.lower()] = len(h)
+
+        line_splits = []
+        for ii in xrange(len(out)):
+            line = out[ii]
+
+            if len(line) > 0:
+
+                ls = line.split()
+                if ls[0] == 'JOBID':
+                    # this is the header
+                    continue
+
+                if self['pattern'] is not None:
+                    if self['pattern'] not in line:
+                        continue
+
+                stats['njobs'] += 1
+                lsplit = self.process_line(ls,stats,lengths)
+
+                line_splits.append(lsplit)
+
+        self.write_statline(stats)
+        self.write_job_listing(line_splits, lengths)
+
+    def write_job_listing(self, line_splits, lengths):
+
+        if len(line_splits) > 0:
+            fmt  = ' %(jobid)-' + str(lengths['jobid']) +'s  '
+            fmt += '%(user)-'  + str(lengths['user']) + 's  '
+            fmt += '%(stat)-'  + str(lengths['stat']) + 's  '
+            fmt += '%(queue)-'  + str(lengths['queue']) + 's  '
+            fmt += '%(from_host)-'  + str(lengths['from_host']) + 's  '
+            fmt += '%(exec_host)-'  + str(lengths['exec_host']) + 's  '
+            fmt += '%(job_name)-'  + str(lengths['job_name']) + 's  '
+            fmt += '%(submit_time)-'  + str(lengths['submit_time']) + 's'
+
+            header = fmt % self.hdict
+            print(header)
+
+            #self.win2.addstr(0,0,header[0:self.maxx2-1])
+
+            for ii in xrange(len(line_splits)):
+                ls = line_splits[ii]
+                line = fmt % ls
+                print(line)
+                #self.win3.addstr(ii,0,line[0:self.maxx3-1])
+
+    def write_statline(self, stats):
+
+        line=" Jobs: %(njobs)s Running: %(run)s Pending: %(pending)s Suspended: %(suspended)s Unknown: %(unknown)s"
+
+        line = line % stats
+
+        print(line)
+
+    def process_line(self, ls, stats, lengths):
+        """
+        process the line and return a new line with
+        the executable represented only as the basname,
+        and rcf.bnl.gov removed from the slot name
+
+        """
+
+        if len(ls) >= self.nperline:
+            res={}
+            (res['jobid'],
+             res['user'],
+             res['stat'],
+             res['queue'],
+             res['from_host'],
+             res['exec_host'],
+             res['job_name'],
+             res['mon'],
+             res['day'],
+             res['time']) = ls
+
+        else:
+            raise ValueError("Expected %d results from "
+                             "listing, got %d: %s" % (self.nperline,len(ls),' '.join(ls)))
+
+        res['submit_time'] = ' '.join([res['mon'],res['day'],res['time']])
+        del res['mon']
+        del res['day']
+        del res['time']
+
+        if res['stat'] == 'RUN':
+            stats['run'] += 1
+        elif res['stat'] == 'PEND':
+            stats['pending'] += 1
+        elif 'SUSP' in res['stat']:
+            stats['suspended'] += 1
+        elif 'UNK' in res['stat']:
+            stats['unknown'] += 1
+
+        for key in res:
+            if key in lengths:
+                lengths[key] = max(lengths[key], len(res[key]))
+            else:
+                lengths[key] = len(res[key])
+
+        return res
+
+    def get_listing(self):
+
+        pobj=subprocess.Popen(self.command,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              shell=True)
+        stdout_ret, stderr_ret = pobj.communicate()
+        return stdout_ret
+
+    def set_defaults(self):
+        """
+        set options not set in the config or command line
+        """
+        self['pattern']=self.get('pattern',None)
+
+    def make_color_pairs(self):
+        curses.use_default_colors()
+        curses.init_pair(default, -1, -1)
+        bkgd_color=-1
+
+        curses.init_pair(black, curses.COLOR_BLACK, bkgd_color)
+        curses.init_pair(red, curses.COLOR_RED, bkgd_color)
+        curses.init_pair(green, curses.COLOR_GREEN, bkgd_color)
+        curses.init_pair(yellow, curses.COLOR_YELLOW, bkgd_color)
+        curses.init_pair(blue, curses.COLOR_BLUE, bkgd_color)
+        curses.init_pair(magenta, curses.COLOR_MAGENTA, bkgd_color)
+        curses.init_pair(cyan, curses.COLOR_CYAN, bkgd_color)
+        curses.init_pair(white, curses.COLOR_WHITE, bkgd_color)
+
+    def set_colors(self):
+        self.colors={}
+        if self['background']=='light':
+            self.colors['njobs'] = curses.color_pair(blue)
+
+            self.colors['run'] = curses.color_pair(green)
+            self.colors['pending'] = curses.color_pair(magenta)
+            self.colors['suspended'] = curses.color_pair(red)
+            self.colors['unknown'] = curses.color_pair(red)
+
+        elif self['background']=='dark':
+
+            self.colors['njobs'] = curses.color_pair(magenta)
+
+            self.colors['run'] = curses.color_pair(green)
+            self.colors['pending'] = curses.color_pair(yellow)
+            self.colors['suspended'] = curses.color_pair(red)
+            self.colors['unknown'] = curses.color_pair(red)
+
+
+        else:
+
+            self.colors['njobs'] = curses.color_pair(default)
+
+            self.colors['run'] = curses.color_pair(default)
+            self.colors['pending'] = curses.color_pair(default)
+            self.colors['suspended'] = curses.color_pair(default)
+            self.colors['unknown'] = curses.color_pair(default)
+
+
+# 
+# main program
+#
+
+def main():
+
+    try:
+        args=parser.parse_args()
+
+        keys={}
+        if args.pattern is not None:
+            keys['pattern'] = args.pattern
+
+
+        lister = LSFLister(**keys)
+        lister.go()
+
+    except IOError:
+        # to deal with pipes
+        pass
+
+main()
