@@ -80,7 +80,7 @@ def view(image, **keys):
             if 'zrange' in keys:
                 zrange=keys['zrange']
             else:
-                zrange=numpy.percentile(im, [10.0,90.0])
+                zrange=numpy.percentile(im, [1.0,100.0])
 
             ccolor = keys.get('ccolor',def_contour_color)
             c = biggles.Contours(im,x=x,y=y,color=ccolor,zrange=zrange)

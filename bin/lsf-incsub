@@ -95,7 +95,7 @@ class JobSubmitter(object):
         nsubmitted=0
 
         while nsubmitted < njobs_to_submit:
-            if current >= (self.nfiles-1):
+            if current >= self.nfiles:
                 break
 
             fname=self.flist[current]
@@ -141,7 +141,7 @@ class JobSubmitter(object):
 
                 current = self._submit_batch(current, diffjobs)
 
-                if current >= (self.nfiles-1):
+                if current >= self.nfiles:
                     break
 
             time.sleep(self.args.poll)
