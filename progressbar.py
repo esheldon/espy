@@ -8,158 +8,281 @@
 #  - everything is keywords now
 #  - Added update() to only render when a change in the percent
 #    or message has occurred.
+#  2016-11-23
+# - made Terminal class from Alramli's terminal module
+# - now takes number on construction
+# - can use in a with context
 
-"""Draws an animated terminal progress bar
+"""
+Draws an animated terminal progress bar
 Usage:
-    p = ProgressBar("blue")
-    p.render(percentage, message)
+    n = 100
+    with ProgressBar(n) as pbar:
+        for i in xrange(n):
+            # do something
+            p.update()
 """
  
-import terminal
 import sys
- 
+import time
+
+class Terminal(object):
+    COLORS = "BLUE GREEN CYAN RED MAGENTA YELLOW WHITE BLACK".split()
+
+    # List of terminal controls, you can add more to the list.
+    CONTROLS = {
+        'BOL':'cr', 'UP':'cuu1', 'DOWN':'cud1', 'LEFT':'cub1', 'RIGHT':'cuf1',
+        'CLEAR_SCREEN':'clear', 'CLEAR_EOL':'el', 'CLEAR_BOL':'el1',
+        'CLEAR_EOS':'ed', 'BOLD':'bold', 'BLINK':'blink', 'DIM':'dim',
+        'REVERSE':'rev', 'UNDERLINE':'smul', 'NORMAL':'sgr0',
+        'HIDE_CURSOR':'cinvis', 'SHOW_CURSOR':'cnorm'
+    }
+
+    # List of numeric capabilities
+    VALUES = {
+        'COLUMNS':'cols', # Width of the terminal (None for unknown)
+        'LINES':'lines',  # Height of the terminal (None for unknown)
+        'MAX_COLORS': 'colors',
+    }
+
+    def __init__(self):
+        self._setup()
+
+    def _setup(self):
+        """
+        Set the terminal control strings
+        """
+        import curses
+
+        # Initializing the terminal
+        curses.setupterm()
+
+        # Get the color escape sequence template or '' if not supported
+        # setab and setaf are for ANSI escape sequences
+
+        bgColorSeq = curses.tigetstr('setab') or curses.tigetstr('setb') or ''
+        fgColorSeq = curses.tigetstr('setaf') or curses.tigetstr('setf') or ''
+
+        for color in self.COLORS:
+            # Get the color index from curses
+            colorIndex = getattr(curses, 'COLOR_%s' % color)
+
+            # Set the color escape sequence after filling the template with
+            # index
+            setattr(self, color, curses.tparm(fgColorSeq, colorIndex))
+
+            # Set background escape sequence
+            setattr(
+                self,
+                'BG_%s' % color, curses.tparm(bgColorSeq, colorIndex)
+            )
+        for control in self.CONTROLS:
+            # Set the control escape sequence
+            setattr(
+                self,
+                control,
+                curses.tigetstr(self.CONTROLS[control]) or '',
+            )
+
+        for value in self.VALUES:
+            # Set terminal related values
+            setattr(self, value, curses.tigetnum(self.VALUES[value]))
+
 class ProgressBar(object):
-    """Terminal progress bar class"""
+    """
+    Terminal progress bar class
+    """
     TEMPLATE = (
-     '%(percent)-3s%% %(color)s%(progress)s%(normal)s%(empty)s %(message)s\n'
+    #'%(message)s%(percent)3s%% [%(color)s%(progress)s%(normal)s%(empty)s]\n'
+    #PADDING = 8
+    '%(message)s%(percent)3s%% ETA: %(eta)8s [%(color)s%(progress)s%(normal)s%(empty)s]\n'
     )
-    TEMPLATE_BRACKET = (
-     '%(percent)3s%% [%(color)s%(progress)s%(normal)s%(empty)s] %(message)s\n'
-    )
-    PADDING = 8
+    PADDING = 22
  
-    def __init__(self, color=None, width=None, block='=', empty='-'):
+    def __init__(self,
+                 num,
+                 color=None,
+                 width=None,
+                 block='=',
+                 empty=' ',
+                 message=None):
         """
-        color -- color name (BLUE GREEN CYAN RED MAGENTA YELLOW WHITE BLACK)
-        width -- bar width (optinal)
-        block -- progress display character (default '=')
-        empty -- bar display character (default ' ')
+        parameters
+        ----------
+        num: integer
+            number of items
+        color: string, optional
+            terminal color name (BLUE GREEN CYAN RED MAGENTA YELLOW WHITE BLACK)
+        width: integer, optional
+            width; default is the terminal width.
+        block: string, optional
+            progress display character (default '=')
+        empty: string, optional
+            empty bar display character (default ' ')
         """
+
+        self.time_start = time.time()
+        self.terminal = Terminal()
+
+        self.num = num
+
         if color:
-            self.color = getattr(terminal, color.upper())
+            self.color = getattr(self.terminal, color.upper())
         else:
             self.color = ''
-        if width and width < terminal.COLUMNS - self.PADDING:
+
+        if width and width < self.terminal.COLUMNS - self.PADDING:
             self.width = width
         else:
             # Adjust to the width of the terminal
-            self.width = terminal.COLUMNS - self.PADDING
+            self.width = self.terminal.COLUMNS - self.PADDING
+
         self.block = block
         self.empty = empty
         self.progress = None
         self.lines = 0
 
+        self.current=0
         self.percent_old=-9999
-        self.message_old='nothing'
+        self.eta_old='blah'
+        self.message=message
  
-    def update(self, **keys):
+    def update(self):
         """
-        Same as render but only print if there has been an update.
+        print the progress bar if there has been an update.
 
         An update is when the integer percentage has changed or the message has
         changed.
-
-        parameters
-        ----------
-        frac: float, optional
-            The fraction finished.  Percent is 100*frac
-        message: string, optional
-            A message to print to the right
         """
 
-        percent, message=self.get_percent_message(**keys)
+        self.current += 1
 
-        if not self.is_updated(percent=percent, message=message):
+        percent=self.get_percent_message()
+        eta=self.get_eta_string()
+
+        if not self.is_updated(percent, eta):
             return
+
         self.percent_old=percent
-        self.message_old=message
+        self.eta_old=eta
 
+        self._render(percent, eta)
 
-        self.render(**keys)
-
-    def is_updated(self, percent=None, message=None):
-        if percent is not None:
-            if percent == self.percent_old:
-                return False
-            else:
-                return True
-        if message is not None:
-            if message==self.message_old:
-                return False
-            else:
-                return True
+    def is_updated(self, percent, eta):
+        if percent == self.percent_old and eta == self.eta_old:
+            return False
+        else:
+            return True
         return False
 
-    def render(self, **keys):
+    def _render(self, percent, eta):
         """
         Print the progress bar
 
         parameters
         ----------
-        frac: float, optional
-            The fraction finished.  Percent is 100*frac
-        message: string, optional
-            A message to print to the right
+        precent: float, optional
+            The percent finished.
         """
 
-        percent, message=self.get_percent_message(**keys)
-
         inline_msg_len = 0
-        if message:
+        if self.message:
             # The length of the first line in the message
-            inline_msg_len = len(message.splitlines()[0])
-        if inline_msg_len + self.width + self.PADDING > terminal.COLUMNS:
+            inline_msg_len = len(self.message.splitlines()[0])
+            message = '%s ' % self.message
+        else:
+            message = ''
+
+        if inline_msg_len + self.width + self.PADDING > self.terminal.COLUMNS:
             # The message is too long to fit in one line.
             # Adjust the bar width to fit.
-            bar_width = terminal.COLUMNS - inline_msg_len -self.PADDING
+            bar_width = self.terminal.COLUMNS - inline_msg_len -self.PADDING
         else:
             bar_width = self.width
  
         # Check if render is called for the first time
         if self.progress != None:
             self.clear()
+
         self.progress = (bar_width * percent) / 100
-        data = self.TEMPLATE_BRACKET % {
+
+        data = self.TEMPLATE % {
             'percent': percent,
+            'eta':eta,
             'color': self.color,
             'progress': self.block * self.progress,
-            'normal': terminal.NORMAL,
+            'normal': self.terminal.NORMAL,
             'empty': self.empty * (bar_width - self.progress),
             'message': message
         }
         sys.stdout.write(data)
         sys.stdout.flush()
-        # The number of lines printed
+
+        self.data=data
         self.lines = len(data.splitlines())
  
-    def get_percent_message(self, **keys):
-        frac=keys.get('frac',None)
-        message=keys.get('message','')
+    def get_percent_message(self):
+        frac = float(self.current)/self.num
+        percent=int(100*frac)
+        return percent
 
-        if frac is not None:
-            percent=int(100*frac)
-        else:
-            percent=None
 
-        return percent, message
+    def get_eta_string(self):
+        tm = time.time()
+        telapse = tm - self.time_start
+
+        time_per = telapse/self.current
+
+        nleft = self.num - self.current
+
+        eta = nleft*time_per
+
+        return time.strftime('%H:%M:%S', time.gmtime(eta))
 
     def clear(self):
         """Clear all printed lines"""
         sys.stdout.write(
-            self.lines * (terminal.UP + terminal.BOL + terminal.CLEAR_EOL)
+            self.lines * (self.terminal.UP + self.terminal.BOL + self.terminal.CLEAR_EOL)
         )
 
+    def __enter__(self):
+        return self
+    def __exit__(self, exception_type, exception_value, traceback):
+        pass
 
-def _test(block='=', empty=' '):
-    import time
-    bar=ProgressBar(block=block, empty=empty, width=70)
+
+
+def _test(message='frac', block='=', empty=' ', color=None):
     n=100
+
+    bar=ProgressBar(
+        n,
+        block=block,
+        empty=empty,
+        width=70,
+        color=color,
+        message=message,
+    )
     for i in xrange(n):
-        bar.render(frac=(i+1)/float(n), message='fraction')
+        bar.update()
         time.sleep(0.1)
 
-def test_simple():
-    _test()
+def test_simple(message='frac'):
+    _test(message=message)
 
-def test_utf8():
-    _test(block='▣', empty='□')
+def test_utf8(message='fraac'):
+    _test(block='▣', empty='□', message=message)
+
+def test_utf8_color(message='frac'):
+    _test(block='▣', empty='□', color='green', message=message)
+
+
+def test_with(message='frac'):
+
+    n=100
+    with ProgressBar(n, message='frac') as pbar:
+        for i in xrange(n):
+            pbar.update()
+            time.sleep(0.1)
+
+

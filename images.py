@@ -77,8 +77,13 @@ def view(image, **keys):
     if 'cont' in type:
         levels=keys.get('levels',8)
         if levels is not None:
+            if 'zrange' in keys:
+                zrange=keys['zrange']
+            else:
+                zrange=numpy.percentile(im, [1.0,100.0])
+
             ccolor = keys.get('ccolor',def_contour_color)
-            c = biggles.Contours(im,x=x,y=y,color=ccolor)
+            c = biggles.Contours(im,x=x,y=y,color=ccolor,zrange=zrange)
             c.levels = levels
             plt.add(c)
 
@@ -90,22 +95,107 @@ def view(image, **keys):
     if 'ylabel' in keys:
         plt.ylabel=keys['ylabel']
 
+    _writefile_maybe(plt, **keys)
+    _show_maybe(plt, **keys)
+
+    return plt
+
+
+def view_profile(image, **keys): 
+    """
+    View the image as a radial profile vs radius from the center.
+
+    If show=False just return the plot object.
+
+    Values below zero are clipped, so pre-subtract any background as
+    necessary.
+
+    parameters
+    ----------
+    image or r,g,b: ndarray
+        The image(s) as a 2-d array or 
+    cen: [c1,c2], optional
+        Optional center
+    show: bool
+        Set False to not show the image in an X window.
+    file: string
+        Write the image to the intput file name.  .png will be written
+        as a png file, else an eps file.
+    width, height: integers
+        Size for output
+    **kw:
+        keywords for the FramedPlot and for the output image dimensions
+        width
+    """
+    import biggles
+
+    plt=keys.pop('plt',None)
+    show=keys.pop('show',True)
+    cen=keys.pop('cen',None)
+
+    if cen is None:
+        cen=(numpy.array(image.shape)-1.0)/2.0
+    else:
+        assert len(cen)==2,"cen must have two elements"
+
+    rows,cols=numpy.mgrid[
+        0:image.shape[0],
+        0:image.shape[1],
+    ]
+
+    rows = rows.astype('f8')-cen[0]
+    cols = cols.astype('f8')-cen[1]
+
+    r = numpy.sqrt(rows**2 + cols**2).ravel()
+    s = r.argsort()
+    r=r[s]
+    imravel = image.ravel()[s]
+
+    #pts = biggles.Points(r, imravel, size=size, type=type, **keys)
+    keys['visible']=False
+    plt = biggles.plot(r, imravel, plt=plt, **keys)
+
+    _writefile_maybe(plt, **keys)
+    _show_maybe(plt, show=show,**keys)
+
+    return plt
+
+
+
+def _writefile_maybe(plt, **keys):
     if 'file' in keys and keys['file'] is not None:
         file=os.path.expandvars(keys['file'])
         file=os.path.expanduser(file)
         if '.png' in file:
-            png_dims=keys.get('dims',[800,800])
-            plt.write_img(dims[0],dims[1],pngfile)
+            dims=keys.get('dims',[800,800])
+            plt.write_img(dims[0],dims[1],file)
         else:
             plt.write_eps(file)
 
-    show=keys.get('show',True)
-    if show:
-        width=keys.get('width',None)
-        height=keys.get('height',None)
-        plt.show(width=width, height=height)
+def _show_maybe(plt, **keys):
+    show=keys.get('show',None)
+    if show is None:
+        if 'file' in keys and keys['file'] is not None:
+            # don't show anything if show not explicitly
+            # sent and we are writing a file
+            show=False
+        else:
+            show=True
+    else:
+        show=keys['show']
 
-    return plt
+    if show:
+        dims=keys.get('dims',None)
+        if dims is None:
+            width=keys.get('width',None)
+            height=keys.get('height',None)
+            if width is None:
+                dims=[800,800]
+            else:
+                dims=[width,height]
+
+        plt.show(width=dims[0], height=dims[1])
+
 
 def _extract_data_ranges(imshape, **keys):
     if 'xdr' in keys and 'ydr' in keys:
@@ -180,12 +270,15 @@ def view_mosaic(imlist, titles=None, combine=False, **keys):
         implt=view(im, title=title, **tkeys)
         tab[row,col] = implt
 
-    show=keys.get('show',True)
-    if show:
-        width=keys.get('width',None)
-        height=keys.get('height',None)
-        tab.show(width=width, height=height)
-    
+    # aspect is ysize/xsize
+    aspect=keys.get('aspect',None)
+    if aspect is None:
+        aspect = float(nrow)/ncol
+    tab.aspect_ratio=aspect
+
+    _writefile_maybe(tab, **keys)
+    _show_maybe(tab, **keys)
+
     return tab
 
 def get_grid(nplot):
@@ -269,10 +362,15 @@ def multiview(image, **keys):
     cen = keys.get('cen', None)
     if cen is None:
         # use the middle as center
-        cen = [(image.shape[0]-1)/2., (image.shape[1]-1)/2.]
+        cen = [
+            int(round( (image.shape[0]-1)/2. )),
+            int(round( (image.shape[1]-1)/2. )),
+        ]
 
     keys2 = copy.copy(keys)
     keys2['show'] = False
+    keys2['file'] = None
+
     imp = view(image, **keys2)
 
     # cross-section across rows
@@ -313,15 +411,9 @@ def multiview(image, **keys):
     tab[0,0] = imp
     tab[0,1] = crossplt
 
-    #title=keys.get('title',None)
-    #if title:
-    #    tab.title=title
 
-    show = keys.get('show', True)
-    if show:
-        width=keys.get('width',None)
-        height=keys.get('height',None)
-        tab.show(width=width, height=height)
+    _writefile_maybe(tab, **keys)
+    _show_maybe(tab, **keys)
     return tab
 
 def compare_images(im1, im2, **keys):
@@ -368,6 +460,7 @@ def compare_images(im1, im2, **keys):
 
     tkeys=copy.deepcopy(keys)
     tkeys['show']=False
+    tkeys['file']=None
     im1plt=view(im1, **tkeys)
     im2plt=view(im2, **tkeys)
 
@@ -402,12 +495,14 @@ def compare_images(im1, im2, **keys):
 
     # cross-sections
     if cross_sections:
-        im1rows = im1[:,cen[1]]
-        im1cols = im1[cen[0],:]
-        im2rows = im2[:,cen[1]]
-        im2cols = im2[cen[0],:]
-        resrows = resid[:,cen[1]]
-        rescols = resid[cen[0],:]
+        cen0=int(cen[0])
+        cen1=int(cen[1])
+        im1rows = im1[:,cen1]
+        im1cols = im1[cen0,:]
+        im2rows = im2[:,cen1]
+        im2cols = im2[cen0,:]
+        resrows = resid[:,cen1]
+        rescols = resid[cen0,:]
 
         him1rows = biggles.Histogram(im1rows, color=color1)
         him1cols = biggles.Histogram(im1cols, color=color1)
@@ -442,12 +537,8 @@ def compare_images(im1, im2, **keys):
         tab[0,1] = im2plt
         tab[1,0] = residplt
 
-    if show:
-        width=keys.get('width',None)
-        height=keys.get('height',None)
-        tab.show(width=width, height=height)
-
-    biggles.configure( 'default', 'fontsize_min', 1.25)
+    _writefile_maybe(tab, **keys)
+    _show_maybe(tab, **keys)
 
     return tab
 
