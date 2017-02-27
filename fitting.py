@@ -20,7 +20,7 @@ def histogauss(data, guess=None, **keys):
 
     plt=fitter.doplot(**keys)
 
-    return plt
+    return plt, res
 
 
 class GaussFitter(object):
