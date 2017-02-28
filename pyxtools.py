@@ -132,7 +132,7 @@ def _writefile_maybe(g, **kw):
             if 'dpi' in kw:
                 res=kw['dpi']
             else:
-                res=kw.get('resolution',200)
+                res=kw.get('resolution',100)
 
             g.writeGSfile(fname, resolution=res)
         else:
@@ -1482,6 +1482,36 @@ class FramedPlot(object):
         kw['file'] = filename
         _writefile_maybe(g, **kw)
 
+    def show(self, **kw):
+        """
+        show in an x window
+        """
+        import time
+        from subprocess import Popen, PIPE
+
+        fname = tempfile.mktemp(suffix='.png')
+        print(fname)
+        self.write(fname, **kw)
+
+        cmd='feh -B white %s' % fname
+        p = Popen(
+            ['feh','-B','white',fname],
+            #stdout=PIPE,
+            #stderr=PIPE,
+        )
+
+        #time.sleep(0.1)
+        #ret=os.system(cmd)
+
+        #if ret != 0:
+        #    raise RuntimeError("failed to show %s to %s" % fname)
+
+        #try:
+        #    os.remove(fname)
+        #except:
+        #    pass
+
+
     def add(self, *args):
         """
         add something to the plot
@@ -1521,7 +1551,7 @@ def test_framed_plot():
 
     pts = Points(
         x, y,
-        color='red',
+        color='blue',
         filled=True,
         line='solid',
     )
@@ -1530,8 +1560,6 @@ def test_framed_plot():
         color='black',
         stroked=True,
     )
-
-
 
 
     plt = FramedPlot(
@@ -1544,4 +1572,5 @@ def test_framed_plot():
     )
     plt.add(opts, pts)
 
-    plt.write("test.png")
+    #plt.write("test.png")
+    plt.show(dpi=150)
