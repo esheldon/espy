@@ -309,7 +309,8 @@ class LineFitter(object):
 
 
     def get_poly(self):
-        return numpy.poly1d(self.pars)
+        res=self.get_result()
+        return numpy.poly1d(res['pars'])
 
     def __call__(self, x):
         """

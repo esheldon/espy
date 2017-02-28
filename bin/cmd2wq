@@ -10,6 +10,10 @@ import wq
 parser=ArgumentParser(__doc__)
 parser.add_argument('commands',help='commands to run, a valid shell line')
 
+parser.add_argument('--extra',
+                    help=('extra commands to run before the main command, '
+                         'e.g. setting up environment'))
+
 parser.add_argument('--repeat',type=int,default=1,
                     help='how many times to repeat the command when it is a one-liner, not a file')
 
@@ -24,23 +28,31 @@ parser.add_argument('--from-cmd',action='store_true',
 
 _template="""
 command: |
+    {extra}
     {commands}
 
 job_name: "{job_name}"
 """
 class CmdConverter(object):
-    def __init__(self, cmd, job_name):
+    def __init__(self, cmd, job_name, extra=None):
         """
         cmd must be all one line
         """
         self.cmd=cmd
         self.job_name=job_name
+
+        if extra is None:
+            self.extra=''
+        else:
+            self.extra=extra
+
         self.wq_script=self._cmd2yaml()
 
     def get_wq_script(self):
         return self.wq_script
     def _cmd2yaml(self):
         return _template.format(commands=self.cmd,
+                                extra=self.extra,
                                 job_name=self.job_name)
 
 def get_job_name(prefix, i, name_fmt):
@@ -63,7 +75,7 @@ def main():
         job_name=get_job_name(args.prefix, i, name_fmt)
         fname = job_name+'.yaml'
 
-        conv=CmdConverter(command,job_name)
+        conv=CmdConverter(command,job_name,extra=args.extra)
         text=conv.get_wq_script() 
 
         print fname
