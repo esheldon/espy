@@ -3,6 +3,7 @@ import os
 import numpy
 from numpy import log10
 import tempfile
+import copy
 from pyx import *
 from pyx.graph import axis
 
@@ -582,6 +583,7 @@ symbols=Symbols()
 _linedict={
     'solid': style.linestyle.solid,
     'dashed': style.linestyle.dashed,
+    'dotted': style.linestyle.dotted,
     'dashdotted': style.linestyle.dashdotted,
 }
 
@@ -1393,8 +1395,7 @@ class Points(object):
         sym=kw.pop('sym',None)
         line=kw.pop('line',None)
 
-        # default to a symbol if nothing is
-        # specified
+        # default to a symbol if nothing is specified
 
         if sym is None and line is None:
             sym='circle'
@@ -1419,37 +1420,32 @@ class Points(object):
             styles += [linest]
 
 
-
-        # symbol styles
         if sym is not None:
             sym=symbols.get_symbol(sym)
-        else:
-            sym=symbols.get_symbol('circle')
 
+            symcolor=kw.pop('symcolor',None)
+            if symcolor is not None:
+                symcolor=colors(symcolor)
+            else:
+                symcolor=color
 
-        symcolor=kw.pop('symcolor',None)
-        if symcolor is not None:
-            symcolor=colors(symcolor)
-        else:
-            symcolor=color
+            filled=kw.get('filled',False)
+            stroked=kw.get('stroked',False)
 
-        filled=kw.get('filled',False)
-        stroked=kw.get('stroked',False)
+            if not filled and not stroked:
+                filled=True
 
-        if not filled and not stroked:
-            filled=True
+            if filled:
+                symbolattrs += [symcolor,deco.filled([symcolor])]
+            if stroked:
+                symbolattrs += [symcolor,deco.stroked([symcolor])]
 
-        if filled:
-            symbolattrs += [symcolor,deco.filled([symcolor])]
-        if stroked:
-            symbolattrs += [symcolor,deco.stroked([symcolor])]
-
-        symbol=graph.style.symbol(
-            symbol=sym,
-            size=kw.get('size',0.1),
-            symbolattrs=symbolattrs,
-        )
-        styles += [symbol]
+            symbol=graph.style.symbol(
+                symbol=sym,
+                size=kw.get('size',0.1),
+                symbolattrs=symbolattrs,
+            )
+            styles += [symbol]
 
 
         cols=self.data.columns
@@ -1520,7 +1516,7 @@ class Function(Points):
         self.styles = styles
 
 
-class FramedPlot(object):
+class Plot(object):
     def __init__(self, **kw):
         self.kw=kw
 
@@ -1558,24 +1554,7 @@ class FramedPlot(object):
         print(fname)
         self.write(fname, **kw)
 
-        cmd='feh -B white %s' % fname
-        p = Popen(
-            ['feh','-B','white',fname],
-            #stdout=PIPE,
-            #stderr=PIPE,
-        )
-
-        #time.sleep(0.1)
-        #ret=os.system(cmd)
-
-        #if ret != 0:
-        #    raise RuntimeError("failed to show %s to %s" % fname)
-
-        #try:
-        #    os.remove(fname)
-        #except:
-        #    pass
-
+        p = Popen(['feh','-B','white',fname])
 
     def add(self, *args):
         """
@@ -1596,10 +1575,17 @@ class FramedPlot(object):
 
     def _get_graph_and_axes(self, **kw):
 
+        if 'aspect_ratio' in kw:
+            kw['ratio'] = kw['aspect_ratio']
+
         key = kw.pop('key',None)
+
 
         gkw=_unpack_graphxy_keywords(kw)
         gkw['width'] = gkw.get('width',8)
+        height=gkw.get('height',None)
+        if height is None:
+            aspect_ratio = gkw
 
 
         xaxis,xlog,yaxis,ylog = _get_axes(kw)
@@ -1607,6 +1593,7 @@ class FramedPlot(object):
             x=xaxis,
             y=yaxis,
             key=key,
+            #title='blah',
             **gkw)
 
         return g
@@ -1631,7 +1618,7 @@ def test_framed_plot():
     )
 
     key=graph.key.key(pos='br')
-    plt = FramedPlot(
+    plt = Plot(
         xlog=False,
         ylog=True,
         xmin=0.5*x.min(),
@@ -1651,3 +1638,60 @@ def test_framed_plot():
 
     plt.write("test.pdf")
     #plt.show(dpi=150)
+
+def example1():
+
+    x = numpy.arange( 0, 3*numpy.pi, numpy.pi/30 )
+    c = numpy.cos(x)
+    s = numpy.sin(x)
+
+    p = Plot(
+        title = "title",
+        xlabel = r"$x$",
+        ylabel = r"$\Theta$",
+        ratio=1.0,
+    )
+
+    #p.add( biggles.FillBetween(x, c, x, s) )
+    p.add( Points(x, c, line='solid', color="red") )
+    p.add( Points(x, s, line='solid', color="blue") )
+
+    p.write("example1.png")
+    p.write("example1.eps")
+    p.write("example1.pdf")
+    p.show()
+
+def example2():
+
+    key=graph.key.key(pos='tl')
+    p = Plot(
+        xmin=0,xmax=100,
+        ymin=0,ymax=100,
+        ratio = 1,
+        key=key,
+    )
+
+    x = numpy.arange( 0, 100, 5 )
+    yA = numpy.random.normal( 40, 10, (len(x),) )
+    yB = x + numpy.random.normal( 0, 5, (len(x),) )
+
+    a = Points(
+        x, yA,
+        sym="circle", stroked=True,
+        label = "a points",
+    )
+
+    b = Points(
+        x, yB,
+        sym='circle', filled=True,
+        label='b points',
+    )
+
+    l = Function('y(x) = x', line='dotted', label='slope')
+
+    p.add( a, b, l )
+
+    p.write("example2.png")
+    p.write("example2.eps")
+    p.write("example2.pdf")
+    p.show()
