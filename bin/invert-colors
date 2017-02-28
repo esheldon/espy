@@ -22,15 +22,20 @@ with open(fname_in) as fin:
         for line in fin:
 
             ls=line.split()
-            if len(ls) >= 4 and ls[3] in ['SetCFg','SetCBg']:
-                r=float(ls[0])
-                g=float(ls[1])
-                b=float(ls[2])
+            if len(ls) >= 4 and ls[3] in ['SetCFg','SetCBg','setrgbcolor']:
+                try:
+                    print("old line:",line)
+                    r=float(ls[0])
+                    g=float(ls[1])
+                    b=float(ls[2])
 
-                ls[0] = '%g' % (1.0-r,)
-                ls[1] = '%g' % (1.0-g,)
-                ls[2] = '%g' % (1.0-b,)
+                    ls[0] = '%g' % (1.0-r,)
+                    ls[1] = '%g' % (1.0-g,)
+                    ls[2] = '%g' % (1.0-b,)
 
-                line=' '.join(ls)
+                    line=' '.join(ls)+'\n'
+                    print("new line:",line)
+                except ValueError:
+                    pass
 
             fout.write(line)

@@ -1,6 +1,7 @@
 from __future__ import print_function
 import os
 import numpy
+from numpy import log10
 import tempfile
 from pyx import *
 from pyx.graph import axis
@@ -131,7 +132,7 @@ def _writefile_maybe(g, **kw):
             if 'dpi' in kw:
                 res=kw['dpi']
             else:
-                res=kw.get('resolution',200)
+                res=kw.get('resolution',100)
 
             g.writeGSfile(fname, resolution=res)
         else:
@@ -580,6 +581,8 @@ symbols=Symbols()
 
 _linedict={
     'solid': style.linestyle.solid,
+    'dashed': style.linestyle.dashed,
+    'dashdotted': style.linestyle.dashdotted,
 }
 
 class Linestyles(object):
@@ -1347,3 +1350,227 @@ def _load_config():
 
 _tflist=TempFileList()
 _config=_load_config()
+
+class Points(object):
+
+    def __init__(self, x, y, **kw):
+        self._set_values(x, y, **kw)
+
+        self._set_styles(**kw)
+
+    def _set_values(self, x, y, **kw):
+        args={'x':list(x), 'y':list(y)}
+
+        xerr=kw.pop('xerr',None)
+        yerr=kw.pop('yerr',None)
+
+        if xerr is not None:
+            args['dx'] = list(xerr)
+        if yerr is not None:
+            args['dy'] = list(yerr)
+
+        self.values=graph.data.values(**args)
+
+    def _set_styles(self, **kw):
+
+        styles=[]
+
+        symbolattrs=[]
+
+        sym=kw.pop('sym',None)
+        line=kw.pop('line',None)
+
+        # default to a symbol if nothing is
+        # specified
+
+        if sym is None and line is None:
+            sym='circle'
+
+
+        # symbol styles
+        if sym is not None:
+            sym=symbols.get_symbol(sym)
+        else:
+            sym=symbols.get_symbol('circle')
+
+        color=kw.pop('color',None)
+        if color is not None:
+            clr=colors(color)
+        else:
+            clr=colors('black')
+
+        symcolor=kw.pop('symcolor',None)
+        if symcolor is not None:
+            clr=colors(symcolor)
+        else:
+            symcolor=color
+
+        filled=kw.get('filled',False)
+        stroked=kw.get('stroked',False)
+
+        if not filled and not stroked:
+            filled=True
+
+        if filled:
+            symbolattrs += [clr,deco.filled([clr])]
+        if stroked:
+            symbolattrs += [clr,deco.stroked([clr])]
+
+        symbol=graph.style.symbol(
+            symbol=sym,
+            size=kw.get('size',0.1),
+            symbolattrs=symbolattrs,
+        )
+        styles += [symbol]
+
+        # line styles
+
+        if line is not None:
+            line = linestyles.get_style(line)
+            lineattrs=[]
+
+            linecolor=kw.pop('linecolor',None)
+            if linecolor is not None:
+                linecolor=colors(linecolor)
+            else:
+                linecolor=clr
+
+            linest=graph.style.line(
+                lineattrs=[linecolor,line],
+            )
+            styles += [linest]
+
+
+        cols=self.values.columns
+
+        if 'dx' in cols or 'dy' in cols:
+            if 'errcolor' in kw:
+                errclr=colors(kw['errcolor'])
+            else:
+                errclr=clr
+            styles += [graph.style.errorbar(errorbarattrs=[errclr])]
+
+        self.styles = styles
+
+
+
+
+class FramedPlot(object):
+    def __init__(self, **kw):
+        self.kw=kw
+
+        self._content=[]
+
+    def write(self, filename, **kw):
+        """
+        write to a plot file
+
+        parameters
+        ----------
+        filename: string
+            file type determined from extension
+        **kw:
+            extra keywords
+        """
+        
+        keywords={}
+        keywords.update(self.kw)
+        keywords.update(kw)
+
+        g = self._get_plot(**keywords)
+
+        kw['file'] = filename
+        _writefile_maybe(g, **kw)
+
+    def show(self, **kw):
+        """
+        show in an x window
+        """
+        import time
+        from subprocess import Popen, PIPE
+
+        fname = tempfile.mktemp(suffix='.png')
+        print(fname)
+        self.write(fname, **kw)
+
+        cmd='feh -B white %s' % fname
+        p = Popen(
+            ['feh','-B','white',fname],
+            #stdout=PIPE,
+            #stderr=PIPE,
+        )
+
+        #time.sleep(0.1)
+        #ret=os.system(cmd)
+
+        #if ret != 0:
+        #    raise RuntimeError("failed to show %s to %s" % fname)
+
+        #try:
+        #    os.remove(fname)
+        #except:
+        #    pass
+
+
+    def add(self, *args):
+        """
+        add something to the plot
+        """
+        self._content += list(args)
+
+    def _get_plot(self, **kw):
+        g = self._get_graph_and_axes(**kw)
+
+        for obj in self._content:
+            g.plot(
+                obj.values,
+                styles=obj.styles,
+            )
+
+        return g
+
+    def _get_graph_and_axes(self, **kw):
+        gkw=_unpack_graphxy_keywords(kw)
+        gkw['width'] = gkw.get('width',8)
+
+
+        xaxis,xlog,yaxis,ylog = _get_axes(kw)
+        g = graph.graphxy(x=xaxis, y=yaxis, **gkw)
+
+        return g
+
+
+def test_framed_plot():
+    x=numpy.logspace(log10(1), log10(9.0), 10)
+    ytrue = x**2
+
+
+    yerr = 0.2*ytrue
+
+    y = ytrue + yerr*numpy.random.normal(size=ytrue.size)
+
+    pts = Points(
+        x, y,
+        color='blue',
+        filled=True,
+        line='solid',
+    )
+    opts = Points(
+        x, y, yerr=yerr,
+        color='black',
+        stroked=True,
+    )
+
+
+    plt = FramedPlot(
+        xlog=False,
+        ylog=True,
+        ymin=0.5,
+        ymax=200,
+        xlabel=r'$R  ~[h^{-1} $Mpc$]$',
+        ylabel=r'$M ~[~$M$_{\odot}$~]',
+    )
+    plt.add(opts, pts)
+
+    #plt.write("test.png")
+    plt.show(dpi=150)

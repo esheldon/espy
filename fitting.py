@@ -18,9 +18,9 @@ def histogauss(data, guess=None, **keys):
     res=fitter.get_result()
     pprint(res)
 
-    plt=fitter.make_plot(**keys)
+    plt=fitter.doplot(**keys)
 
-    return plt
+    return plt, res
 
 
 class GaussFitter(object):
@@ -125,7 +125,7 @@ class GaussFitter(object):
             if self.use_error:
                 self.yerr=numpy.sqrt(h['hist'])
 
-    def make_plot(self, **keys):
+    def doplot(self, **keys):
         """
         compare fit to data
         """
@@ -207,6 +207,58 @@ class LineFitter(object):
             self.a = kw.get("a",2.0)
 
         self._set_guess(**kw)
+
+    def doplot(self, **keys):
+        import biggles
+
+        show=keys.pop('show',False)
+        file=keys.pop('file',None)
+
+        res=self.get_result()
+        ply = self.get_poly()
+
+        plt=biggles.FramedPlot()
+
+        pts = biggles.Points(
+            self.x, self.y,
+            type='filled circle',
+            size=2,
+        )
+        pts.label='data'
+
+        plt.add(pts)
+        if self.yerr is not None:
+            err = biggles.SymmetricErrorBarsY(
+                self.x, self.y, self.yerr,
+            )
+            plt.add(err)
+
+        line = biggles.Curve(
+            self.x, ply(self.x),
+            color='blue',
+        )
+        line.label='%.3g x + %.3g' % tuple(res['pars'])
+        plt.add(line)
+
+        key=biggles.PlotKey(
+            0.1,0.9,[pts,line],
+            halign='left',
+        )
+        plt.add(key)
+
+        if show:
+            plt.show(**keys)
+        if file is not None:
+            print("writing:",file)
+            if '.eps' in file:
+                plt.write_eps(file)
+            elif '.png' in file:
+                width=keys.pop('width',800)
+                height=keys.pop('height',800)
+                plt.write_img(width,height,file)
+
+        return plt
+
 
     def get_result(self):
         return self._result
