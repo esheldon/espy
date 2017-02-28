@@ -1351,31 +1351,44 @@ def _load_config():
 _tflist=TempFileList()
 _config=_load_config()
 
+
 class Points(object):
+    """
+    class representing data points
+    """
 
     def __init__(self, x, y, **kw):
-        self._set_values(x, y, **kw)
+        self._set_data(x, y, **kw)
 
         self._set_styles(**kw)
 
-    def _set_values(self, x, y, **kw):
-        args={'x':list(x), 'y':list(y)}
+    def _set_data(self, x, y, **kw):
+        args={'x':x, 'y':y}
 
+        title=kw.get('label',None)
         xerr=kw.pop('xerr',None)
         yerr=kw.pop('yerr',None)
 
+        if title is not None:
+            args['title']=title
         if xerr is not None:
-            args['dx'] = list(xerr)
+            args['dx'] = xerr
         if yerr is not None:
-            args['dy'] = list(yerr)
+            args['dy'] = yerr
 
-        self.values=graph.data.values(**args)
+        self.data=graph.data.values(**args)
 
     def _set_styles(self, **kw):
 
         styles=[]
 
         symbolattrs=[]
+
+        color=kw.pop('color',None)
+        if color is not None:
+            color=colors(color)
+        else:
+            color=colors('black')
 
         sym=kw.pop('sym',None)
         line=kw.pop('line',None)
@@ -1387,21 +1400,36 @@ class Points(object):
             sym='circle'
 
 
+        # line styles first, since if we have both we usually
+        # prefer the curve under the points
+
+        if line is not None:
+            line = linestyles.get_style(line)
+            lineattrs=[]
+
+            linecolor=kw.pop('linecolor',None)
+            if linecolor is not None:
+                linecolor=colors(linecolor)
+            else:
+                linecolor=color
+
+            linest=graph.style.line(
+                lineattrs=[linecolor,line],
+            )
+            styles += [linest]
+
+
+
         # symbol styles
         if sym is not None:
             sym=symbols.get_symbol(sym)
         else:
             sym=symbols.get_symbol('circle')
 
-        color=kw.pop('color',None)
-        if color is not None:
-            clr=colors(color)
-        else:
-            clr=colors('black')
 
         symcolor=kw.pop('symcolor',None)
         if symcolor is not None:
-            clr=colors(symcolor)
+            symcolor=colors(symcolor)
         else:
             symcolor=color
 
@@ -1412,9 +1440,9 @@ class Points(object):
             filled=True
 
         if filled:
-            symbolattrs += [clr,deco.filled([clr])]
+            symbolattrs += [symcolor,deco.filled([symcolor])]
         if stroked:
-            symbolattrs += [clr,deco.stroked([clr])]
+            symbolattrs += [symcolor,deco.stroked([symcolor])]
 
         symbol=graph.style.symbol(
             symbol=sym,
@@ -1423,36 +1451,73 @@ class Points(object):
         )
         styles += [symbol]
 
-        # line styles
 
-        if line is not None:
-            line = linestyles.get_style(line)
-            lineattrs=[]
-
-            linecolor=kw.pop('linecolor',None)
-            if linecolor is not None:
-                linecolor=colors(linecolor)
-            else:
-                linecolor=clr
-
-            linest=graph.style.line(
-                lineattrs=[linecolor,line],
-            )
-            styles += [linest]
-
-
-        cols=self.values.columns
+        cols=self.data.columns
 
         if 'dx' in cols or 'dy' in cols:
             if 'errcolor' in kw:
                 errclr=colors(kw['errcolor'])
             else:
-                errclr=clr
+                errclr=color
             styles += [graph.style.errorbar(errorbarattrs=[errclr])]
 
         self.styles = styles
 
 
+class Function(Points):
+    """
+    represent a function string, passes as a tring
+    """
+    def __init__(self,
+                 eq_def,
+                 **kw):
+
+        self._set_data(eq_def, **kw)
+        self._set_styles(**kw)
+
+    def _set_data(self, eq_def, **kw):
+
+        keys={}
+        title=kw.pop('label',None)
+        if title is not None:
+            keys['title']=title
+
+        keys['min']=kw.pop('min',None)
+        keys['max']=kw.pop('max',None)
+        keys['points']=kw.pop('points',100)
+        self.data = graph.data.function(
+            eq_def,
+            **keys
+        )
+
+    def _set_styles(self, **kw):
+
+        styles=[]
+
+        color=kw.pop('color',None)
+        if color is not None:
+            color=colors(color)
+        else:
+            color=colors('black')
+
+        line=kw.pop('line','solid')
+
+        line = linestyles.get_style(line)
+
+        linecolor=kw.pop('linecolor',None)
+        if linecolor is not None:
+            linecolor=colors(linecolor)
+        else:
+            linecolor=color
+
+        linest=graph.style.line(
+            lineattrs=[linecolor,line],
+        )
+        styles += [linest]
+
+        cols=self.data.columns
+
+        self.styles = styles
 
 
 class FramedPlot(object):
@@ -1523,54 +1588,66 @@ class FramedPlot(object):
 
         for obj in self._content:
             g.plot(
-                obj.values,
+                obj.data,
                 styles=obj.styles,
             )
 
         return g
 
     def _get_graph_and_axes(self, **kw):
+
+        key = kw.pop('key',None)
+
         gkw=_unpack_graphxy_keywords(kw)
         gkw['width'] = gkw.get('width',8)
 
 
         xaxis,xlog,yaxis,ylog = _get_axes(kw)
-        g = graph.graphxy(x=xaxis, y=yaxis, **gkw)
+        g = graph.graphxy(
+            x=xaxis,
+            y=yaxis,
+            key=key,
+            **gkw)
 
         return g
 
 
 def test_framed_plot():
-    x=numpy.logspace(log10(1), log10(9.0), 10)
+    #x=numpy.logspace(log10(1), log10(9.0), 10)
+    x=numpy.linspace(2, 19, 10)
     ytrue = x**2
-
 
     yerr = 0.2*ytrue
 
     y = ytrue + yerr*numpy.random.normal(size=ytrue.size)
 
     pts = Points(
-        x, y,
-        color='blue',
+        x, y, yerr=yerr,
+        color='red',
         filled=True,
         line='solid',
-    )
-    opts = Points(
-        x, y, yerr=yerr,
-        color='black',
-        stroked=True,
+        linecolor='black',
+        label='data',
     )
 
-
+    key=graph.key.key(pos='br')
     plt = FramedPlot(
         xlog=False,
         ylog=True,
-        ymin=0.5,
-        ymax=200,
+        xmin=0.5*x.min(),
+        xmax=1.1*x.max(),
         xlabel=r'$R  ~[h^{-1} $Mpc$]$',
         ylabel=r'$M ~[~$M$_{\odot}$~]',
+        key=key,
     )
-    plt.add(opts, pts)
 
-    #plt.write("test.png")
-    plt.show(dpi=150)
+    eq = Function(
+        'y(x) = x**2',
+        line='dashed',
+        color='blue',
+        label='model',
+    )
+    plt.add(pts, eq)
+
+    plt.write("test.pdf")
+    #plt.show(dpi=150)
