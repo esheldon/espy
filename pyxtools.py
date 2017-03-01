@@ -1538,10 +1538,12 @@ class Plot(object):
         keywords.update(self.kw)
         keywords.update(kw)
 
-        g = self._get_plot(**keywords)
+        g = self.get_plot(**keywords)
 
         kw['file'] = filename
         _writefile_maybe(g, **kw)
+
+        return g
 
     def show(self, **kw):
         """
@@ -1552,9 +1554,11 @@ class Plot(object):
 
         fname = tempfile.mktemp(suffix='.png')
         print(fname)
-        self.write(fname, **kw)
+        g = self.write(fname, **kw)
 
         p = Popen(['feh','-B','white',fname])
+
+        return g
 
     def add(self, *args):
         """
@@ -1562,7 +1566,10 @@ class Plot(object):
         """
         self._content += list(args)
 
-    def _get_plot(self, **kw):
+    def get_plot(self, **kw):
+        """
+        get the graph object
+        """
         g = self._get_graph_and_axes(**kw)
 
         for obj in self._content:
@@ -1695,3 +1702,114 @@ def example2():
     p.write("example2.eps")
     p.write("example2.pdf")
     p.show()
+
+def example3():
+    """
+    0,0 is bottom left in pyx land, but it is more common for
+    "first" to be upper left
+    """
+    c = canvas.canvas()
+    
+    g1 = graph.graphxy(
+        width=8,
+        x=axis.lin(title=r'$x_1$'),
+        y=axis.lin(title=r'$y_1$'),
+    )
+    g1.plot(
+        [graph.data.function("y(x)=0", min=0, max=1),
+        graph.data.function("y(x)=2*exp(-30*x)-exp(-3*x)", min=0, max=1)],
+    )
+
+    c.insert(g1)
+
+    g2 = graph.graphxy(
+        width=8,
+        ypos=g1.height+1.5,
+        x=axis.lin(title=r'$x_2$'),
+        y=axis.lin(title=r'$y_2$'),
+    )
+
+    c.insert(g2)
+    g2.plot(graph.data.function("y(x)=cos(20*x)*exp(-2*x)",min=0,max=2))
+
+    g3 = graph.graphxy(
+        width=8,
+        ypos=g1.height+1.5,
+        xpos=g1.width+2.0,
+        x=axis.lin(title=r'$x_3$'),
+        y=axis.lin(title=r'$y_3$'),
+    )
+    g3.plot(graph.data.function("y(x)=cos(20*x)*exp(-2*x)",min=0,max=2))
+    c.insert(g3)
+
+    g4 = graph.graphxy(
+        width=8,
+        #ypos=g1.height,
+        xpos=g1.width+2.0,
+        x=axis.lin(title=r'$x_4$'),
+        y=axis.lin(title=r'$y_4$'),
+    )
+    g4.plot(graph.data.function("y(x)=cos(20*x)*exp(-2*x)",min=0,max=2))
+    c.insert(g4)
+
+
+
+
+    c.writePDFfile("example3.pdf")
+
+def example4():
+    
+    g = graph.graphxy(
+        width=8,
+        x=axis.lin(title=r'$x_1$'),
+        y=axis.lin(min=-1,max=1.5,title=r'$y_1$'),
+    )
+    g.plot(
+        graph.data.function("y(x)=2*exp(-30*x)-exp(-3*x)",
+                            min=0, max=1),
+    )
+
+    insetparams = dict(
+        labeldist=0.2,
+        labelattrs=[text.size.footnotesize],
+    )
+
+    p=axis.painter.regular(**insetparams)
+    gi = graph.graphxy(
+        width=3,
+        x=axis.lin(min=0, max=2, painter=p),
+        y=axis.lin(painter=p),
+    )
+    gi.plot(graph.data.function("y(x)=cos(20*x)*exp(-2*x)",
+                                min=0,max=2))
+
+    x, y = g.vpos(0.9, 0.9)
+    g.insert(gi, [trafo.translate(x-gi.bbox().right(), y-gi.bbox().top())])
+
+
+    g.writePDFfile("example4.pdf")
+
+def example5():
+
+    x = numpy.linspace(-3.5, 3.5, 20)
+    y = numpy.exp( - 0.5*x**2 )
+
+    key=graph.key.key(pos='tl')
+    g = graph.graphxy(
+        width=8,
+        key=key,
+    )
+
+    d = graph.data.values(
+        x=x,
+        y=y,
+        title='data',
+    )
+
+    lineattrs=[colors('blue')]
+    styles=[
+        graph.style.histogram(lineattrs=lineattrs),
+    ]
+    g.plot(d, styles=styles)
+    g.writePDFfile("example5.pdf")
+
