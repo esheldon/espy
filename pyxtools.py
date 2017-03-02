@@ -50,7 +50,7 @@ def plot(x, y, dx=None, dy=None, **kw):
 
     return plt
 
-def imview(image, **kw):
+def imview(image_in, **kw):
     """
     plot the image
 
@@ -59,8 +59,16 @@ def imview(image, **kw):
     image: array
         A numpy array
     """
-    if len(image.shape) != 2:
+    if len(image_in.shape) != 2:
         raise ValueError("image should be 2d")
+
+    image = image_in.transpose()
+
+    width=kw.pop('width',8)
+    height=kw.pop('height',None)
+    if height is None:
+        # pyx transposes apparently
+        height = width*float(image.shape[1])/image.shape[0]
 
     # we can allow the user to specify physical bounds as well
     xmin = 0
@@ -84,14 +92,15 @@ def imview(image, **kw):
     assert xlog==False and ylog==False,"no log axes for images"
 
     g = graph.graphxy(
-        height=8, width=8,
+        width=width,
+        height=height,
         x=xaxis,
         y=yaxis,
     )
 
     scale_title=kw.get('scale_title','')
     coloraxis=graph.axis.linear(
-        min=0,
+        min=image.min(),
         max=image.max(),
         title=scale_title
     )
@@ -551,10 +560,31 @@ def test_image(**kw):
     xmin = -xmax
     ymax = 1.6
     ymin = -ymax
-    npts = 101
-    sigma=0.5
-    x, y = numpy.mgrid[xmin:xmax:npts*1j, ymin:ymax:npts*1j]
-    z = numpy.exp( -(x**2 + y**2)/(2*sigma**2) )
+
+    dims=[25,33]
+    x, y = numpy.mgrid[0:dims[0], 0:dims[1]]
+
+    cen1 = (numpy.array(dims)-1.0)/2.0
+    sigma1=2.0
+
+    xd1=x-cen1[0]
+    yd1=y-cen1[1]
+    z1 = numpy.exp( -(xd1**2 + 0.2*xd1*yd1 + 0.8*yd1**2)/(2*sigma1**2) )
+
+    cen2 = cen1 + [5.5, 0]
+    sigma2=1.5
+
+    xd2=x-cen2[0]
+    yd2=y-cen2[1]
+    z2 = numpy.exp( -(0.7*xd2**2 + 0.2*xd2*yd2 + 0.2*yd2**2)/(2*sigma2**2) )
+
+    z = z1+0.2*z2
+
+
+    z += numpy.random.normal(
+        scale=0.02,
+        size=z.shape,
+    )
 
     g=imview(z, **kw)
     return g
@@ -1336,7 +1366,7 @@ class TempFileList(object):
         self.cleanup()
 
 _default_conf={
-    'viewer':'eog', # probably available on most systems
+    'viewer':'feh -B white', # probably available on most systems
 }
 def _load_config():
     import yaml
@@ -1753,9 +1783,8 @@ def example3():
     c.insert(g4)
 
 
-
-
     c.writePDFfile("example3.pdf")
+    c.writeGSfile("example3.png")
 
 def example4():
     
@@ -1788,15 +1817,20 @@ def example4():
 
 
     g.writePDFfile("example4.pdf")
+    g.writeGSfile("example4.png")
 
 def example5():
 
-    x = numpy.linspace(-3.5, 3.5, 20)
-    y = numpy.exp( - 0.5*x**2 )
+    data = numpy.random.normal(loc=0.2, scale=1.2, size=1000)
+
+    x = numpy.linspace(-3.5, 3.5, 30)
+    y = numpy.exp( - 0.5*(x-0.1)**2 )
 
     key=graph.key.key(pos='tl')
     g = graph.graphxy(
         width=8,
+        x=axis.lin(title=r'$score$'),
+        y=axis.lin(min=0, max=1.1),
         key=key,
     )
 
@@ -1808,8 +1842,9 @@ def example5():
 
     lineattrs=[colors('blue')]
     styles=[
-        graph.style.histogram(lineattrs=lineattrs),
+        graph.style.histogram(lineattrs=lineattrs,steps=1),
     ]
     g.plot(d, styles=styles)
     g.writePDFfile("example5.pdf")
+    g.writeGSfile("example5.png")
 
