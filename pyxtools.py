@@ -1545,12 +1545,17 @@ class Function(Points):
 
         self.styles = styles
 
-
-class Plot(object):
+class PlotBase(object):
     def __init__(self, **kw):
         self.kw=kw
 
         self._content=[]
+
+    def add(self, *args):
+        """
+        add something to the plot
+        """
+        self._content += list(args)
 
     def write(self, filename, **kw):
         """
@@ -1590,15 +1595,18 @@ class Plot(object):
 
         return g
 
-    def add(self, *args):
-        """
-        add something to the plot
-        """
-        self._content += list(args)
-
+class Plot(PlotBase):
     def get_plot(self, **kw):
         """
-        get the graph object
+        get the graph object and add the content
+
+        We need to allow for different types of objects
+        being added.  Can learn from biggles here how
+        to split things up.
+
+        for example, we might want to add another plot to this
+        plot using insert; would probably want it to be a new
+        class Insert etc.
         """
         g = self._get_graph_and_axes(**kw)
 
@@ -1635,6 +1643,7 @@ class Plot(object):
 
         return g
 
+FramedPlot=Plot
 
 def test_framed_plot():
     #x=numpy.logspace(log10(1), log10(9.0), 10)
@@ -1799,6 +1808,7 @@ def example4():
     )
 
     insetparams = dict(
+        #height = width*float(image.shape[0])/image.shape[1]
         labeldist=0.2,
         labelattrs=[text.size.footnotesize],
     )
