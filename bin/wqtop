@@ -24,10 +24,9 @@ from optparse import OptionParser
 
 import curses
 try:
-    # newer version 
     import curses.wrapper.wrapper as curses_wrapper
-except:
-    import curses.wrapper as curses_wrapper
+except ImportError:
+    from curses import wrapper as curses_wrapper
 
 parser=OptionParser(__doc__)
 parser.add_option("-u","--user",default=None, 
@@ -145,27 +144,21 @@ class WQWatcher:
         self.scr.refresh()
 
     def get_wq_ls_output(self):
-
-        pobj=subprocess.Popen(self.ls_command, 
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              shell=True)
-        stdout_ret, stderr_ret = pobj.communicate()
-        return stdout_ret
+        return self._run_cmd(self.ls_command)
 
     def get_wq_stat_output(self):
-
-        pobj=subprocess.Popen(self.stat_command, 
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              shell=True)
-        stdout_ret, stderr_ret = pobj.communicate()
-        return stdout_ret
+        return self._run_cmd(self.stat_command)
 
     def get_wq_users_output(self):
+        return self._run_cmd(self.users_command)
 
-        pobj=subprocess.Popen(self.users_command, 
+    def _run_cmd(self, cmd):
+        pobj=subprocess.Popen(cmd, 
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               shell=True)
         stdout_ret, stderr_ret = pobj.communicate()
+
+        stdout_ret = stdout_ret.decode('utf-8')
         return stdout_ret
 
 
@@ -186,40 +179,37 @@ class WQWatcher:
         return statline, lines
 
     def extract_stat_lines(self, data, users=None):
+
         statline=''
 
         lines = data.split('\n')
+        keeplines=[]
+
         if len(lines) == 0:
+            print("zero lines")
+            return statline,keeplines
+
+        while True:
+            statline=lines.pop()
+            if len(statline) != 0:
+                break
+            
+            if len(lines)==0:
+                break
+
+        if len(lines)==0:
             return statline,lines
 
-        # pop empty one at bottom
-        if len(lines) == 0:
-            return statline,lines
-        crap=lines.pop()
-        if len(lines) == 0:
-            return statline,lines
+        for line in lines:
+            if len(line) > 0:
+                keeplines.append( line )
 
-        statline = lines.pop()
-
-        # pop blank line
-        if len(lines) == 0:
-            return statline,lines
-        crap=lines.pop()
-        if len(lines) == 0:
-            return statline,lines
-
-        # pop blank line at top too
-        if len(lines) == 0:
-            return statline,lines
-        crap=lines.pop(0)
-        if len(lines) == 0:
-            return statline,lines
-
-        lines += [''] + users.split('\n')
+        keeplines += [''] + users.split('\n')
 
         lines = lines[0:self.maxy2-2-1]
 
-        return statline, lines
+        return statline, keeplines
+
 
 
     def setup_windows(self, stdscr):
@@ -235,10 +225,10 @@ class WQWatcher:
             # split in half with a divider line
             xsize = self.maxx
             if (xsize % 2) == 0:
-                xs1 = xsize/2
+                xs1 = xsize//2
                 xs2 = xs1-1
             else:
-                xs1 = xsize/2
+                xs1 = xsize//2
                 xs2 = xs1
             x01 = 0
             y01 = 0
@@ -258,10 +248,10 @@ class WQWatcher:
             # split in half with a divider line
             ysize = self.maxy
             if (ysize % 2) == 0:
-                ys1 = ysize/2
+                ys1 = ysize//2
                 ys2 = ys1-1
             else:
-                ys1 = ysize/2
+                ys1 = ysize//2
                 ys2 = ys1
             x01 = 0
             y01 = 0
