@@ -205,6 +205,12 @@ def _extract_data_ranges(imshape, **keys):
 
         x=numpy.linspace(xdr[0],xdr[1],imshape[0])
         y=numpy.linspace(ydr[0],ydr[1],imshape[1])
+    elif 'ranges' in keys:
+        ranges = keys['ranges']
+        xmin,ymin = ranges[0]
+        xmax,ymax = ranges[1]
+        x=numpy.linspace(xmin, xmax, imshape[0])
+        y=numpy.linspace(ymin, ymax, imshape[1])
     else:
         # this is a difference from Contours which can be alarming
         ranges = ((-0.5, -0.5), (imshape[0]-0.5, imshape[1]-0.5))
