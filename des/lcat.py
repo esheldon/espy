@@ -14,8 +14,11 @@ code to create xshear input files
 """
 from __future__ import print_function
 import numpy
-import cosmology
 from esutil.numpy_util import between
+try:
+    import cosmology
+except ImportError:
+    pass
 
 from .files import *
 
