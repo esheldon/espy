@@ -4,7 +4,53 @@ try:
 except:
     xrange=range
 
+import numpy
 import esutil as eu
+
+def plot_hist2d(x, y, **kw):
+    """
+    create a 2-d histogram of the data and view it
+
+
+    parameters
+    ----------
+    x: array
+        x data
+    y: array
+        y data
+
+    log: bool
+        If true, plot the log of the histogram, default
+        True
+    xlabel: string
+        label for x axis
+    ylabel: string
+        label for y axis
+
+    **kw:
+        keywords for the histogram2d routine
+
+    dependencies
+    ------------
+    esutil
+    images
+    """
+    import images
+
+    dolog=kw.pop('log',True)
+
+    kw['more']=True
+    hdict = eu.stat.histogram2d(x, y, **kw)
+
+    hist = hdict['hist']
+    if dolog:
+        hist = numpy.log10( hist.clip(min=0.1) )
+
+    kw['transpose'] = False
+    kw['ranges'] = hdict['ranges']
+    plt = images.view(hist, **kw)
+
+    return plt
 
 def multihist(data, binfac=0.1, **kw):
     """
