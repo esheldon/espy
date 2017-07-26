@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import sys
 import os
+import subprocess
 import numpy
 from numpy import array, zeros, flipud, where, sqrt
 import fitsio
@@ -9,9 +10,9 @@ import fitsio
 NOMINAL_EXPTIME=900.0
 
 NONLINEAR=.12
-DEFAULT_RELEASE='y1a1'
+DEFAULT_CAMPAIGN='y3a1_coadd'
 
-def make_coadd_jpg(run, rebin=None, release=DEFAULT_RELEASE):
+def make_coadd_jpg(run, rebin=None, campaign=DEFAULT_CAMPAIGN):
     """
     make a color jpeg for the specified run
 
@@ -21,8 +22,8 @@ def make_coadd_jpg(run, rebin=None, release=DEFAULT_RELEASE):
         DES coadd run
     rebin: int, optional
         Amount to rebin image
-    release: string
-        Release; scaling differs for different releases
+    campaign: string
+        campaign; scaling differs for different campaigns
         currently y1a1 and sva1
     """
     cj=CoaddJPGFiles(run, rebin=rebin)
@@ -32,11 +33,11 @@ def make_coadd_jpg(run, rebin=None, release=DEFAULT_RELEASE):
              cj['ifile'],
              cj['jpg_file'],
              rebin=rebin,
-             release=release)
+             campaign=campaign)
 
 def make_jpg(gfile, rfile, ifile, outfile,
              rebin=None,
-             release=DEFAULT_RELEASE):
+             campaign=DEFAULT_CAMPAIGN):
     """
     make a color jpeg for the specified files
 
@@ -48,14 +49,14 @@ def make_jpg(gfile, rfile, ifile, outfile,
         Output jpeg file
     rebin: int, optional
         Amount to rebin image
-    release: string
-        Release; scaling differs for different releases
+    campaign: string
+        campaign; scaling differs for different campaigns
         currently y1a1 and sva1
     """
 
     image_maker=RGBImageMaker(gfile, rfile, ifile,
                               rebin=rebin,
-                              release=release)
+                              campaign=campaign)
 
     image_maker.make_image()
     image_maker.write_image(outfile)
@@ -63,14 +64,14 @@ def make_jpg(gfile, rfile, ifile, outfile,
 class RGBImageMaker(object):
     def __init__(self, gfile, rfile, ifile,
                  rebin=None,
-                 release=DEFAULT_RELEASE):
+                 campaign=DEFAULT_CAMPAIGN):
 
         self.gfile=gfile
         self.rfile=rfile
         self.ifile=ifile
 
         self.rebin=rebin
-        self.release=release
+        self.campaign=campaign
 
         self.satval=1.0e9
 
@@ -147,7 +148,16 @@ class RGBImageMaker(object):
 
     def _get_scales(self):
         # this will be i,r,g -> r,g,b
-        if self.release=='y1a1':
+        print('getting scaled color for',self.campaign)
+        if self.campaign.lower()=='y3a1_coadd':
+            # smaller scale means darker, so noise is more suppressed
+            # compared to the peak. remember it is all scaled below
+            # one, so we are also cutting off some point in the image
+            #SCALE=.010
+            #SCALE=.010*sqrt(2.0)
+            SCALE=.010*sqrt(2.0)
+            relative_scales= array([1.00, 1.2, 2.0])
+        elif self.campaign=='y1a1':
             print('getting scaled color for y1')
             # smaller scale means darker, so noise is more suppressed
             # compared to the peak. remember it is all scaled below
@@ -156,7 +166,7 @@ class RGBImageMaker(object):
             #SCALE=.010*sqrt(2.0)
             SCALE=.010*sqrt(2.0)
             relative_scales= array([1.00, 1.2, 2.0])
-        elif self.release=='sva1':
+        elif self.campaign=='sva1':
             # SVA seems to want a different scaling
             print('getting scaled color for sv')
             #SCALE=.050*0.666
@@ -164,7 +174,7 @@ class RGBImageMaker(object):
             #relative_scales= array([1.1, 1.1, 2.0])
             relative_scales= array([1.00, 1.2, 2.5])
         else:
-            raise ValueError("bad release: '%s'" % self.release)
+            raise ValueError("bad campaign: '%s'" % self.campaign)
 
         scales= SCALE*relative_scales
 
@@ -253,32 +263,127 @@ def make_dir(fname):
 
 
 class CoaddJPGFiles(dict):
-    def __init__(self, run, rebin=None):
-        self['run']=run
-        self['tile']=run.split('_')[-1]
+    def __init__(self, campaign, tilename, rebin=None, cleanup=True):
+        self['campaign'] = campaign.upper()
+        self['tilename'] = tilename
+        self._bands=['g','r','i']
 
-        self.rebin=rebin
+        self._rebin=rebin
+        self.cleanup=cleanup
 
         self._set_files()
 
     def _set_files(self):
-        d=self.get_coadd_dir()
         odir=self.get_output_dir()
 
-        jpg_name='%(tile)s_gri' % self
+        jpg_name='%(tilename)s_gri' % self
 
-        if self.rebin is not None:
-            jpg_name='%s_rebin%02d' % (jpg_name,int(self.rebin))
+        if self._rebin is not None:
+            jpg_name='%s_rebin%02d' % (jpg_name,int(self._rebin))
         jpg_name='%s.jpg' % jpg_name
-        jpg_name=os.path.join(odir, jpg_name)
+        self['jpg_file'] =os.path.join(odir, jpg_name)
 
-        self['jpg_file'] = jpg_name
-        for band in ['g','r','i']:
-            fname='%s_%s.fits.fz' % (self['tile'], band)
+        for band in self._bands:
+            self['%sfile' % band] = self.get_coadd_file(band)
+            self['%sfile_remote' % band] = self.get_remote_coadd_file(band)
 
-            fname=os.path.join(d, fname)
-            self[band+'file'] = fname
+    def get_remote_coadd_file(self, band):
+        """
+        local location of coadd fits file
+        """
+        return os.path.join(
+            self.get_temp_dir(),
+            os.path.expandvars('$DESREMOTE_RSYNC'),
+            self._get_coadd_path(band),
+        )
 
+    def get_coadd_file(self, band):
+        """
+        local location of coadd fits file
+        """
+        return os.path.join(
+            self.get_temp_dir(),
+            self._get_coadd_path(band),
+        )
+
+    def _get_coadd_path(self, band):
+        """
+        get local location for coadd file
+        """
+        flist=self.get_flist()
+
+        key = '%s-%s' % (self['tilename'], band)
+        return flist[key]
+
+
+    def get_flist(self):
+        """
+        get the coadd file list
+        """
+        if not hasattr(self, '_flist'):
+            import yaml
+            flist_file=self.get_flist_file()
+            with open(flist_file) as fobj:
+                self._flist = yaml.load(fobj)
+
+        return self._flist
+
+    def get_list_dir(self):
+        """
+        we keep lists here
+        """
+        return os.path.expandvars('$DESDATA/jpg/lists')
+
+    def get_flist_file(self):
+        """
+        holds paths to coadds
+        """
+        dir=self.get_list_dir()
+        fname='coadd-flist-%(campaign)s.yaml' % self['campaign']
+        return os.path.join(dir, fname)
+
+
+    def get_temp_dir(self):
+        """
+        temporary location for the input fits files
+        """
+        return os.path.join(
+            self.get_output_dir(),
+            'sources',
+        )
+
+    def get_output_dir(self):
+        """
+        location for the image and temp files
+        """
+        d='$DESDATA/jpg/%(campaign)s/%(tilename)s' % self
+        d=os.path.expandvars(d)
+        return d
+
+    def sync(self):
+        """
+        sync the coadd images
+        """
+        odir=self.get_temp_dir()
+        if not os.path.exists(odir):
+            os.makedirs(odir)
+
+        for band in self._bands:
+            remote_url=self.get_remote_coadd_file(band)
+            cmd = r"""
+            rsync                                   \
+                -aP                                 \
+                --password-file $DES_RSYNC_PASSFILE \
+                %(remote_url)s/ \
+                %(local_dir)s/
+            """ % dict(
+                remote_url=remote_url,
+                local_dir=odir,
+            )
+
+            subprocess.check_call(cmd,shell=True)
+
+    '''
     def get_coadd_dir(self):
         d='$DESDATA/OPS/coadd/%(run)s/coadd' % self
         d=os.path.expandvars(d)
@@ -288,5 +393,5 @@ class CoaddJPGFiles(dict):
         d='$DESDATA/jpg/OPS/coadd/%(run)s/coadd' % self
         d=os.path.expandvars(d)
         return d
-
+    '''
 
