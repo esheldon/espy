@@ -92,6 +92,11 @@ def view(image, **keys):
             c.levels = levels
             plt.add(c)
 
+    if 'xrange' in keys:
+        plt.xrange=keys['xrange']
+    if 'yrange' in keys:
+        plt.yrange=keys['yrange']
+
     # make sure the pixels look square
     plt.aspect_ratio = im.shape[1]/float(im.shape[0])
 
