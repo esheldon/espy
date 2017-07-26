@@ -3,6 +3,7 @@ import os
 import numpy
 from numpy import log10
 import tempfile
+import copy
 from pyx import *
 from pyx.graph import axis
 
@@ -49,7 +50,7 @@ def plot(x, y, dx=None, dy=None, **kw):
 
     return plt
 
-def imview(image, **kw):
+def imview(image_in, **kw):
     """
     plot the image
 
@@ -58,8 +59,16 @@ def imview(image, **kw):
     image: array
         A numpy array
     """
-    if len(image.shape) != 2:
+    if len(image_in.shape) != 2:
         raise ValueError("image should be 2d")
+
+    image = image_in.transpose()
+
+    width=kw.pop('width',8)
+    height=kw.pop('height',None)
+    if height is None:
+        # pyx transposes apparently
+        height = width*float(image.shape[1])/image.shape[0]
 
     # we can allow the user to specify physical bounds as well
     xmin = 0
@@ -83,14 +92,15 @@ def imview(image, **kw):
     assert xlog==False and ylog==False,"no log axes for images"
 
     g = graph.graphxy(
-        height=8, width=8,
+        width=width,
+        height=height,
         x=xaxis,
         y=yaxis,
     )
 
     scale_title=kw.get('scale_title','')
     coloraxis=graph.axis.linear(
-        min=0,
+        min=image.min(),
         max=image.max(),
         title=scale_title
     )
@@ -550,10 +560,31 @@ def test_image(**kw):
     xmin = -xmax
     ymax = 1.6
     ymin = -ymax
-    npts = 101
-    sigma=0.5
-    x, y = numpy.mgrid[xmin:xmax:npts*1j, ymin:ymax:npts*1j]
-    z = numpy.exp( -(x**2 + y**2)/(2*sigma**2) )
+
+    dims=[25,33]
+    x, y = numpy.mgrid[0:dims[0], 0:dims[1]]
+
+    cen1 = (numpy.array(dims)-1.0)/2.0
+    sigma1=2.0
+
+    xd1=x-cen1[0]
+    yd1=y-cen1[1]
+    z1 = numpy.exp( -(xd1**2 + 0.2*xd1*yd1 + 0.8*yd1**2)/(2*sigma1**2) )
+
+    cen2 = cen1 + [5.5, 0]
+    sigma2=1.5
+
+    xd2=x-cen2[0]
+    yd2=y-cen2[1]
+    z2 = numpy.exp( -(0.7*xd2**2 + 0.2*xd2*yd2 + 0.2*yd2**2)/(2*sigma2**2) )
+
+    z = z1+0.2*z2
+
+
+    z += numpy.random.normal(
+        scale=0.02,
+        size=z.shape,
+    )
 
     g=imview(z, **kw)
     return g
@@ -582,6 +613,7 @@ symbols=Symbols()
 _linedict={
     'solid': style.linestyle.solid,
     'dashed': style.linestyle.dashed,
+    'dotted': style.linestyle.dotted,
     'dashdotted': style.linestyle.dashdotted,
 }
 
@@ -1334,7 +1366,7 @@ class TempFileList(object):
         self.cleanup()
 
 _default_conf={
-    'viewer':'eog', # probably available on most systems
+    'viewer':'feh -B white', # probably available on most systems
 }
 def _load_config():
     import yaml
@@ -1393,8 +1425,7 @@ class Points(object):
         sym=kw.pop('sym',None)
         line=kw.pop('line',None)
 
-        # default to a symbol if nothing is
-        # specified
+        # default to a symbol if nothing is specified
 
         if sym is None and line is None:
             sym='circle'
@@ -1419,37 +1450,32 @@ class Points(object):
             styles += [linest]
 
 
-
-        # symbol styles
         if sym is not None:
             sym=symbols.get_symbol(sym)
-        else:
-            sym=symbols.get_symbol('circle')
 
+            symcolor=kw.pop('symcolor',None)
+            if symcolor is not None:
+                symcolor=colors(symcolor)
+            else:
+                symcolor=color
 
-        symcolor=kw.pop('symcolor',None)
-        if symcolor is not None:
-            symcolor=colors(symcolor)
-        else:
-            symcolor=color
+            filled=kw.get('filled',False)
+            stroked=kw.get('stroked',False)
 
-        filled=kw.get('filled',False)
-        stroked=kw.get('stroked',False)
+            if not filled and not stroked:
+                filled=True
 
-        if not filled and not stroked:
-            filled=True
+            if filled:
+                symbolattrs += [symcolor,deco.filled([symcolor])]
+            if stroked:
+                symbolattrs += [symcolor,deco.stroked([symcolor])]
 
-        if filled:
-            symbolattrs += [symcolor,deco.filled([symcolor])]
-        if stroked:
-            symbolattrs += [symcolor,deco.stroked([symcolor])]
-
-        symbol=graph.style.symbol(
-            symbol=sym,
-            size=kw.get('size',0.1),
-            symbolattrs=symbolattrs,
-        )
-        styles += [symbol]
+            symbol=graph.style.symbol(
+                symbol=sym,
+                size=kw.get('size',0.1),
+                symbolattrs=symbolattrs,
+            )
+            styles += [symbol]
 
 
         cols=self.data.columns
@@ -1519,12 +1545,17 @@ class Function(Points):
 
         self.styles = styles
 
-
-class FramedPlot(object):
+class PlotBase(object):
     def __init__(self, **kw):
         self.kw=kw
 
         self._content=[]
+
+    def add(self, *args):
+        """
+        add something to the plot
+        """
+        self._content += list(args)
 
     def write(self, filename, **kw):
         """
@@ -1542,10 +1573,12 @@ class FramedPlot(object):
         keywords.update(self.kw)
         keywords.update(kw)
 
-        g = self._get_plot(**keywords)
+        g = self.get_plot(**keywords)
 
         kw['file'] = filename
         _writefile_maybe(g, **kw)
+
+        return g
 
     def show(self, **kw):
         """
@@ -1556,34 +1589,25 @@ class FramedPlot(object):
 
         fname = tempfile.mktemp(suffix='.png')
         print(fname)
-        self.write(fname, **kw)
+        g = self.write(fname, **kw)
 
-        cmd='feh -B white %s' % fname
-        p = Popen(
-            ['feh','-B','white',fname],
-            #stdout=PIPE,
-            #stderr=PIPE,
-        )
+        p = Popen(['feh','-B','white',fname])
 
-        #time.sleep(0.1)
-        #ret=os.system(cmd)
+        return g
 
-        #if ret != 0:
-        #    raise RuntimeError("failed to show %s to %s" % fname)
-
-        #try:
-        #    os.remove(fname)
-        #except:
-        #    pass
-
-
-    def add(self, *args):
+class Plot(PlotBase):
+    def get_plot(self, **kw):
         """
-        add something to the plot
-        """
-        self._content += list(args)
+        get the graph object and add the content
 
-    def _get_plot(self, **kw):
+        We need to allow for different types of objects
+        being added.  Can learn from biggles here how
+        to split things up.
+
+        for example, we might want to add another plot to this
+        plot using insert; would probably want it to be a new
+        class Insert etc.
+        """
         g = self._get_graph_and_axes(**kw)
 
         for obj in self._content:
@@ -1596,10 +1620,17 @@ class FramedPlot(object):
 
     def _get_graph_and_axes(self, **kw):
 
+        if 'aspect_ratio' in kw:
+            kw['ratio'] = kw['aspect_ratio']
+
         key = kw.pop('key',None)
+
 
         gkw=_unpack_graphxy_keywords(kw)
         gkw['width'] = gkw.get('width',8)
+        height=gkw.get('height',None)
+        if height is None:
+            aspect_ratio = gkw
 
 
         xaxis,xlog,yaxis,ylog = _get_axes(kw)
@@ -1607,10 +1638,12 @@ class FramedPlot(object):
             x=xaxis,
             y=yaxis,
             key=key,
+            #title='blah',
             **gkw)
 
         return g
 
+FramedPlot=Plot
 
 def test_framed_plot():
     #x=numpy.logspace(log10(1), log10(9.0), 10)
@@ -1631,7 +1664,7 @@ def test_framed_plot():
     )
 
     key=graph.key.key(pos='br')
-    plt = FramedPlot(
+    plt = Plot(
         xlog=False,
         ylog=True,
         xmin=0.5*x.min(),
@@ -1651,3 +1684,177 @@ def test_framed_plot():
 
     plt.write("test.pdf")
     #plt.show(dpi=150)
+
+def example1():
+
+    x = numpy.arange( 0, 3*numpy.pi, numpy.pi/30 )
+    c = numpy.cos(x)
+    s = numpy.sin(x)
+
+    p = Plot(
+        title = "title",
+        xlabel = r"$x$",
+        ylabel = r"$\Theta$",
+        ratio=1.0,
+    )
+
+    #p.add( biggles.FillBetween(x, c, x, s) )
+    p.add( Points(x, c, line='solid', color="red") )
+    p.add( Points(x, s, line='solid', color="blue") )
+
+    p.write("example1.png")
+    p.write("example1.eps")
+    p.write("example1.pdf")
+    p.show()
+
+def example2():
+
+    key=graph.key.key(pos='tl')
+    p = Plot(
+        xmin=0,xmax=100,
+        ymin=0,ymax=100,
+        ratio = 1,
+        key=key,
+    )
+
+    x = numpy.arange( 0, 100, 5 )
+    yA = numpy.random.normal( 40, 10, (len(x),) )
+    yB = x + numpy.random.normal( 0, 5, (len(x),) )
+
+    a = Points(
+        x, yA,
+        sym="circle", stroked=True,
+        label = "a points",
+    )
+
+    b = Points(
+        x, yB,
+        sym='circle', filled=True,
+        label='b points',
+    )
+
+    l = Function('y(x) = x', line='dotted', label='slope')
+
+    p.add( a, b, l )
+
+    p.write("example2.png")
+    p.write("example2.eps")
+    p.write("example2.pdf")
+    p.show()
+
+def example3():
+    """
+    0,0 is bottom left in pyx land, but it is more common for
+    "first" to be upper left
+    """
+    c = canvas.canvas()
+    
+    g1 = graph.graphxy(
+        width=8,
+        x=axis.lin(title=r'$x_1$'),
+        y=axis.lin(title=r'$y_1$'),
+    )
+    g1.plot(
+        [graph.data.function("y(x)=0", min=0, max=1),
+        graph.data.function("y(x)=2*exp(-30*x)-exp(-3*x)", min=0, max=1)],
+    )
+
+    c.insert(g1)
+
+    g2 = graph.graphxy(
+        width=8,
+        ypos=g1.height+1.5,
+        x=axis.lin(title=r'$x_2$'),
+        y=axis.lin(title=r'$y_2$'),
+    )
+
+    c.insert(g2)
+    g2.plot(graph.data.function("y(x)=cos(20*x)*exp(-2*x)",min=0,max=2))
+
+    g3 = graph.graphxy(
+        width=8,
+        ypos=g1.height+1.5,
+        xpos=g1.width+2.0,
+        x=axis.lin(title=r'$x_3$'),
+        y=axis.lin(title=r'$y_3$'),
+    )
+    g3.plot(graph.data.function("y(x)=cos(20*x)*exp(-2*x)",min=0,max=2))
+    c.insert(g3)
+
+    g4 = graph.graphxy(
+        width=8,
+        #ypos=g1.height,
+        xpos=g1.width+2.0,
+        x=axis.lin(title=r'$x_4$'),
+        y=axis.lin(title=r'$y_4$'),
+    )
+    g4.plot(graph.data.function("y(x)=cos(20*x)*exp(-2*x)",min=0,max=2))
+    c.insert(g4)
+
+
+    c.writePDFfile("example3.pdf")
+    c.writeGSfile("example3.png")
+
+def example4():
+    
+    g = graph.graphxy(
+        width=8,
+        x=axis.lin(title=r'$x_1$'),
+        y=axis.lin(min=-1,max=1.5,title=r'$y_1$'),
+    )
+    g.plot(
+        graph.data.function("y(x)=2*exp(-30*x)-exp(-3*x)",
+                            min=0, max=1),
+    )
+
+    insetparams = dict(
+        #height = width*float(image.shape[0])/image.shape[1]
+        labeldist=0.2,
+        labelattrs=[text.size.footnotesize],
+    )
+
+    p=axis.painter.regular(**insetparams)
+    gi = graph.graphxy(
+        width=3,
+        x=axis.lin(min=0, max=2, painter=p),
+        y=axis.lin(painter=p),
+    )
+    gi.plot(graph.data.function("y(x)=cos(20*x)*exp(-2*x)",
+                                min=0,max=2))
+
+    x, y = g.vpos(0.9, 0.9)
+    g.insert(gi, [trafo.translate(x-gi.bbox().right(), y-gi.bbox().top())])
+
+
+    g.writePDFfile("example4.pdf")
+    g.writeGSfile("example4.png")
+
+def example5():
+
+    data = numpy.random.normal(loc=0.2, scale=1.2, size=1000)
+
+    x = numpy.linspace(-3.5, 3.5, 30)
+    y = numpy.exp( - 0.5*(x-0.1)**2 )
+
+    key=graph.key.key(pos='tl')
+    g = graph.graphxy(
+        width=8,
+        x=axis.lin(title=r'$score$'),
+        y=axis.lin(min=0, max=1.1),
+        key=key,
+    )
+
+    d = graph.data.values(
+        x=x,
+        y=y,
+        title='data',
+    )
+
+    lineattrs=[colors('blue')]
+    styles=[
+        graph.style.histogram(lineattrs=lineattrs,steps=1),
+    ]
+    g.plot(d, styles=styles)
+    g.writePDFfile("example5.pdf")
+    g.writeGSfile("example5.png")
+

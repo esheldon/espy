@@ -2,6 +2,7 @@
 """
     %prog [options] script1 script2 script3 ...
 """
+from __future__ import print_function
 
 import socket
 import sys
@@ -79,8 +80,8 @@ def send_message(message, timeout=None, crash_on_timeout=False):
         try:
             rdict = yaml.load(data)
         except:
-            print 'YAML err:'
-            print data
+            print( 'YAML err:' )
+            print( data )
             sys.exit(1)
 
         if 'error' in rdict:
@@ -91,7 +92,7 @@ def send_message(message, timeout=None, crash_on_timeout=False):
 
     except:
         es=sys.exc_info()
-        print 'caught exception type:', es[0],'details:',es[1]
+        print( 'caught exception type:', es[0],'details:',es[1] )
         rdict=None
     finally:
         sock.close()
@@ -125,8 +126,7 @@ class JobLister(dict):
                 resp = send_message(message)
                 break
             except:
-                print >>stderr,("error listing jobs, trying "
-                                "again after 30 seconds")
+                print("error listing jobs, trying again after 30 seconds")
                 time.sleep(30)
 
         self.jobs = [r for r in resp['response'] if r['user'] == self.user]
@@ -180,9 +180,9 @@ def go(flist, options):
 
     user=os.environ['USER']
 
-    print >>stderr,"submitting jobs for user: %s" % user
-    print >>stderr,"number in list:           %s" % len(flist)
-    print >>stderr,"will limit to maxjobs:    %s" % maxjobs
+    print("submitting jobs for user: %s" % user)
+    print("number in list:           %s" % len(flist))
+    print("will limit to maxjobs:    %s" % maxjobs)
     if options.dryrun:
         return
 
@@ -199,18 +199,16 @@ def go(flist, options):
                     time.sleep(polltime)
                     lister=JobLister(user)
                     diffjobs = maxjobs - lister.njobs
-                print >>stderr,("Found %s jobs  "
-                                "diffjobs: %s" % (lister.njobs,diffjobs))
+                print("Found %s jobs diffjobs: %s" % (lister.njobs,diffjobs))
 
             date = datetime.datetime.now().strftime('%H:%M:%S')
-            print >>stderr,\
-              "    submitting %s %s %s/%s (%i%%)" % (fname,date,i+1,nfiles,perc)
+            print("    submitting %s %s %s/%s (%i%%)" % (fname,date,i+1,nfiles,perc))
             submit_job(fname,req)
 
             diffjobs -= 1
 
             # this helps when the file system is slow
-            os.system('wq &> /dev/null')
+            #os.system('wq 1> /dev/null 2> /dev/null')
 
             # minimum time in case above is fast
             time.sleep(sleep_time)
