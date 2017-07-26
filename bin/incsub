@@ -23,7 +23,7 @@ parser.add_option("--poll", default=30,
         help=("time between polls of wq status when we are at max allowed"
               "jobs, default %default"))
 parser.add_option("-r","--req",default=None,help="over-ride requirements")
-parser.add_option("-n", "--njobs", default=50, 
+parser.add_option("-n", "--njobs", default=1000, 
                   help="max number of jobs, default %default")
 parser.add_option("-s", "--sleep-time", default=.2, 
                   help=("minimum time to sleep between individual submisions."
