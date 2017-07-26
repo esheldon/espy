@@ -48,6 +48,12 @@ def plot_hist2d(x, y, **kw):
 
     kw['transpose'] = False
     kw['ranges'] = hdict['ranges']
+
+    # we want exact ranges here, to avoid confusing areas
+    # of black where there is no histogram
+    kw['xrange'] = [hdict['ranges'][0][0], hdict['ranges'][1][0]]
+    kw['yrange'] = [hdict['ranges'][0][1], hdict['ranges'][1][1]]
+
     plt = images.view(hist, **kw)
 
     return plt
