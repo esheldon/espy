@@ -3,6 +3,7 @@ from __future__ import print_function
 import sys
 import os
 import subprocess
+import shutil
 import numpy
 from numpy import array, zeros, flipud, where, sqrt
 import fitsio
@@ -12,7 +13,7 @@ NOMINAL_EXPTIME=900.0
 NONLINEAR=.12
 DEFAULT_CAMPAIGN='y3a1_coadd'
 
-def make_coadd_jpg(campaign, tilename, rebin=None, cleanup=True):
+def make_coadd_jpg(campaign, tilename, rebin=None, clean=True, type='jpg'):
     """
     make a color jpeg for the specified run
 
@@ -25,6 +26,12 @@ def make_coadd_jpg(campaign, tilename, rebin=None, cleanup=True):
     rebin: int, optional
         Amount to rebin image
     """
+
+    if isinstance(type,list):
+        types=type
+    else:
+        types=[type]
+
     files=Files(campaign, tilename, rebin=rebin)
     files.sync()
 
@@ -34,9 +41,11 @@ def make_coadd_jpg(campaign, tilename, rebin=None, cleanup=True):
     )
 
     image_maker.make_image()
-    image_maker.write_image()
 
-    if cleanup:
+    for type in types:
+        image_maker.write_image(type)
+
+    if clean:
         files.clean()
 
 class RGBImageMaker(object):
@@ -113,15 +122,22 @@ class RGBImageMaker(object):
 
         self.colorim=colorim
 
-    def write_image(self):
+    def write_image(self, image_type):
         from PIL import Image
 
-        outfile=self.files['jpg_file']
-        print('writing:',outfile)
+        kw={}
 
         pim=Image.fromarray(self.colorim)
-        make_dir(outfile)
-        pim.save(outfile, quality=90)
+
+        outfile=self.files['output_front'] + '.' + image_type
+
+        if image_type == 'jpg':
+            kw['quality'] = 90
+        elif image_type == 'tiff':
+            kw['compression'] = 'jpeg'
+
+        print('writing:',outfile)
+        pim.save(outfile, **kw)
 
     def _get_scales(self):
         # this will be i,r,g -> r,g,b
@@ -248,13 +264,13 @@ class Files(dict):
     """
     deal with files, including syncing
     """
-    def __init__(self, campaign, tilename, rebin=None, cleanup=True):
+    def __init__(self, campaign, tilename, rebin=None, clean=True):
         self['campaign'] = campaign.upper()
         self['tilename'] = tilename
         self._bands=['g','r','i']
 
         self._rebin=rebin
-        self.cleanup=cleanup
+        self._clean=clean
 
         self._set_files()
 
@@ -371,15 +387,29 @@ class Files(dict):
             print("removing sources:",odir)
             shutil.rmtree(odir)
 
+    def get_output_front(self):
+        """
+        location of a jpeg file
+        """
+        odir=self.get_output_dir()
+        front='%(tilename)s_gri' % self
+
+        if self._rebin is not None:
+            front='%s_rebin%02d' % (front,int(self._rebin))
+        return os.path.join(odir, front)
+
+    def get_tiff_file(self):
+        """
+        location of a tiff file
+        """
+        jpg_file = self.get_jpg_file()
+        return jpg_file.replace('.jpg','.tiff')
+
+
     def _set_files(self):
         odir=self.get_output_dir()
 
-        jpg_name='%(tilename)s_gri' % self
-
-        if self._rebin is not None:
-            jpg_name='%s_rebin%02d' % (jpg_name,int(self._rebin))
-        jpg_name='%s.jpg' % jpg_name
-        self['jpg_file'] =os.path.join(odir, jpg_name)
+        self['output_front'] = self.get_output_front()
 
         for band in self._bands:
             self['%sfile' % band] = self.get_coadd_file(band)
