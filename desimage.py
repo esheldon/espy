@@ -12,72 +12,50 @@ NOMINAL_EXPTIME=900.0
 NONLINEAR=.12
 DEFAULT_CAMPAIGN='y3a1_coadd'
 
-def make_coadd_jpg(run, rebin=None, campaign=DEFAULT_CAMPAIGN):
+def make_coadd_jpg(campaign, tilename, rebin=None, cleanup=True):
     """
     make a color jpeg for the specified run
 
     parameters
     ----------
-    run: string
+    campaign: string
+        campaign, e.g. y3a1_coadd
+    tilename: string
         DES coadd run
     rebin: int, optional
         Amount to rebin image
-    campaign: string
-        campaign; scaling differs for different campaigns
-        currently y1a1 and sva1
     """
-    cj=CoaddJPGFiles(run, rebin=rebin)
+    files=Files(campaign, tilename, rebin=rebin)
+    files.sync()
 
-    make_jpg(cj['gfile'],
-             cj['rfile'],
-             cj['ifile'],
-             cj['jpg_file'],
-             rebin=rebin,
-             campaign=campaign)
-
-def make_jpg(gfile, rfile, ifile, outfile,
-             rebin=None,
-             campaign=DEFAULT_CAMPAIGN):
-    """
-    make a color jpeg for the specified files
-
-    parameters
-    ----------
-    gfile, rfile, ifile: string
-        DES g,r,i coadd files
-    outfile: string
-        Output jpeg file
-    rebin: int, optional
-        Amount to rebin image
-    campaign: string
-        campaign; scaling differs for different campaigns
-        currently y1a1 and sva1
-    """
-
-    image_maker=RGBImageMaker(gfile, rfile, ifile,
-                              rebin=rebin,
-                              campaign=campaign)
+    image_maker=RGBImageMaker(
+        files,
+        rebin=rebin,
+    )
 
     image_maker.make_image()
-    image_maker.write_image(outfile)
+    image_maker.write_image()
+
+    if cleanup:
+        files.clean()
 
 class RGBImageMaker(object):
-    def __init__(self, gfile, rfile, ifile,
-                 rebin=None,
-                 campaign=DEFAULT_CAMPAIGN):
+    """
+    class to actually make the color image and write it
+    """
+    def __init__(self,
+                 files,
+                 rebin=None):
 
-        self.gfile=gfile
-        self.rfile=rfile
-        self.ifile=ifile
-
+        self.files=files
         self.rebin=rebin
-        self.campaign=campaign
 
         self.satval=1.0e9
 
     def _make_imlist(self):
         imlist=[]
-        for fname in [self.gfile, self.rfile, self.ifile]:
+        files=self.files
+        for fname in [files['gfile'], files['rfile'], files['ifile']]:
             print(fname)
             im = ImageTrans(fname)
             imlist.append(im)
@@ -135,12 +113,11 @@ class RGBImageMaker(object):
 
         self.colorim=colorim
 
-    def write_image(self, outfile):
+    def write_image(self):
         from PIL import Image
-        print('writing:',outfile)
 
-        outfile=os.path.expanduser(outfile)
-        outfile=os.path.expandvars(outfile)
+        outfile=self.files['jpg_file']
+        print('writing:',outfile)
 
         pim=Image.fromarray(self.colorim)
         make_dir(outfile)
@@ -148,8 +125,9 @@ class RGBImageMaker(object):
 
     def _get_scales(self):
         # this will be i,r,g -> r,g,b
-        print('getting scaled color for',self.campaign)
-        if self.campaign.lower()=='y3a1_coadd':
+        campaign=self.files['campaign'].upper()
+        print('getting scaled color for',campaign)
+        if campaign=='Y3A1_COADD':
             # smaller scale means darker, so noise is more suppressed
             # compared to the peak. remember it is all scaled below
             # one, so we are also cutting off some point in the image
@@ -157,7 +135,7 @@ class RGBImageMaker(object):
             #SCALE=.010*sqrt(2.0)
             SCALE=.010*sqrt(2.0)
             relative_scales= array([1.00, 1.2, 2.0])
-        elif self.campaign=='y1a1':
+        elif campaign=='Y1A1':
             print('getting scaled color for y1')
             # smaller scale means darker, so noise is more suppressed
             # compared to the peak. remember it is all scaled below
@@ -166,7 +144,7 @@ class RGBImageMaker(object):
             #SCALE=.010*sqrt(2.0)
             SCALE=.010*sqrt(2.0)
             relative_scales= array([1.00, 1.2, 2.0])
-        elif self.campaign=='sva1':
+        elif campaign=='SVA1':
             # SVA seems to want a different scaling
             print('getting scaled color for sv')
             #SCALE=.050*0.666
@@ -174,7 +152,7 @@ class RGBImageMaker(object):
             #relative_scales= array([1.1, 1.1, 2.0])
             relative_scales= array([1.00, 1.2, 2.5])
         else:
-            raise ValueError("bad campaign: '%s'" % self.campaign)
+            raise ValueError("bad campaign: '%s'" % campaign)
 
         scales= SCALE*relative_scales
 
@@ -262,7 +240,10 @@ def make_dir(fname):
         os.makedirs(dname)
 
 
-class CoaddJPGFiles(dict):
+class Files(dict):
+    """
+    deal with files, including syncing
+    """
     def __init__(self, campaign, tilename, rebin=None, cleanup=True):
         self['campaign'] = campaign.upper()
         self['tilename'] = tilename
@@ -273,26 +254,12 @@ class CoaddJPGFiles(dict):
 
         self._set_files()
 
-    def _set_files(self):
-        odir=self.get_output_dir()
-
-        jpg_name='%(tilename)s_gri' % self
-
-        if self._rebin is not None:
-            jpg_name='%s_rebin%02d' % (jpg_name,int(self._rebin))
-        jpg_name='%s.jpg' % jpg_name
-        self['jpg_file'] =os.path.join(odir, jpg_name)
-
-        for band in self._bands:
-            self['%sfile' % band] = self.get_coadd_file(band)
-            self['%sfile_remote' % band] = self.get_remote_coadd_file(band)
 
     def get_remote_coadd_file(self, band):
         """
         local location of coadd fits file
         """
         return os.path.join(
-            self.get_temp_dir(),
             os.path.expandvars('$DESREMOTE_RSYNC'),
             self._get_coadd_path(band),
         )
@@ -303,7 +270,7 @@ class CoaddJPGFiles(dict):
         """
         return os.path.join(
             self.get_temp_dir(),
-            self._get_coadd_path(band),
+            os.path.basename(self._get_coadd_path(band)),
         )
 
     def _get_coadd_path(self, band):
@@ -321,10 +288,17 @@ class CoaddJPGFiles(dict):
         get the coadd file list
         """
         if not hasattr(self, '_flist'):
-            import yaml
             flist_file=self.get_flist_file()
-            with open(flist_file) as fobj:
-                self._flist = yaml.load(fobj)
+            print("reading:",flist_file)
+            data=fitsio.read(flist_file)
+
+            flist={}
+            for i in xrange(data.size):
+                key=data['key'][i].strip()
+                path=data['path'][i].strip()
+                flist[key] = path
+
+            self._flist = flist
 
         return self._flist
 
@@ -339,7 +313,7 @@ class CoaddJPGFiles(dict):
         holds paths to coadds
         """
         dir=self.get_list_dir()
-        fname='coadd-flist-%(campaign)s.yaml' % self['campaign']
+        fname='coadd-flist-%(campaign)s.fits' % self
         return os.path.join(dir, fname)
 
 
@@ -368,30 +342,42 @@ class CoaddJPGFiles(dict):
         if not os.path.exists(odir):
             os.makedirs(odir)
 
+        remote_url=self.get_remote_coadd_file('g')
+        remote_url = remote_url.replace('_g.fits','_[g,r,i].fits')
+        cmd = r"""
+    rsync                                   \
+        -aP                                 \
+        --password-file $DES_RSYNC_PASSFILE \
+        %(remote_url)s \
+        %(local_dir)s/
+        """ % dict(
+            remote_url=remote_url,
+            local_dir=odir,
+        )
+
+        print(cmd)
+        subprocess.check_call(cmd,shell=True)
+
+    def clean(self):
+        """
+        clean up the source files
+        """
+        odir=self.get_temp_dir()
+        if os.path.exists(odir):
+            print("removing sources:",odir)
+            shutil.rmtree(odir)
+
+    def _set_files(self):
+        odir=self.get_output_dir()
+
+        jpg_name='%(tilename)s_gri' % self
+
+        if self._rebin is not None:
+            jpg_name='%s_rebin%02d' % (jpg_name,int(self._rebin))
+        jpg_name='%s.jpg' % jpg_name
+        self['jpg_file'] =os.path.join(odir, jpg_name)
+
         for band in self._bands:
-            remote_url=self.get_remote_coadd_file(band)
-            cmd = r"""
-            rsync                                   \
-                -aP                                 \
-                --password-file $DES_RSYNC_PASSFILE \
-                %(remote_url)s/ \
-                %(local_dir)s/
-            """ % dict(
-                remote_url=remote_url,
-                local_dir=odir,
-            )
-
-            subprocess.check_call(cmd,shell=True)
-
-    '''
-    def get_coadd_dir(self):
-        d='$DESDATA/OPS/coadd/%(run)s/coadd' % self
-        d=os.path.expandvars(d)
-        return d
-
-    def get_output_dir(self):
-        d='$DESDATA/jpg/OPS/coadd/%(run)s/coadd' % self
-        d=os.path.expandvars(d)
-        return d
-    '''
+            self['%sfile' % band] = self.get_coadd_file(band)
+            self['%sfile_remote' % band] = self.get_remote_coadd_file(band)
 

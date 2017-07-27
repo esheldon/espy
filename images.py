@@ -1,4 +1,9 @@
 from __future__ import print_function
+try:
+    xrange
+except:
+    xrange=range
+
 import os
 import numpy
 from numpy import array, arcsinh, zeros,where
@@ -86,6 +91,11 @@ def view(image, **keys):
             c = biggles.Contours(im,x=x,y=y,color=ccolor,zrange=zrange)
             c.levels = levels
             plt.add(c)
+
+    if 'xrange' in keys:
+        plt.xrange=keys['xrange']
+    if 'yrange' in keys:
+        plt.yrange=keys['yrange']
 
     # make sure the pixels look square
     plt.aspect_ratio = im.shape[1]/float(im.shape[0])
@@ -205,6 +215,12 @@ def _extract_data_ranges(imshape, **keys):
 
         x=numpy.linspace(xdr[0],xdr[1],imshape[0])
         y=numpy.linspace(ydr[0],ydr[1],imshape[1])
+    elif 'ranges' in keys:
+        ranges = keys['ranges']
+        xmin,ymin = ranges[0]
+        xmax,ymax = ranges[1]
+        x=numpy.linspace(xmin, xmax, imshape[0])
+        y=numpy.linspace(ymin, ymax, imshape[1])
     else:
         # this is a difference from Contours which can be alarming
         ranges = ((-0.5, -0.5), (imshape[0]-0.5, imshape[1]-0.5))

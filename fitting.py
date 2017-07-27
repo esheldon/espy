@@ -137,7 +137,7 @@ class GaussFitter(object):
 
         x0=self.x[0]
         binsize=self.x[1]-self.x[0]
-        h=biggles.Histogram(self.y, x0=x0, binsize=binsize, color='black')
+        h=biggles.Histogram(self.y, x0=x0, binsize=binsize)
         h.label='data'
 
         plt.add(h)

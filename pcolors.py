@@ -1,4 +1,8 @@
 import colorsys
+try:
+    xrange
+except:
+    xrange = range
 
 def rainbow(num, type='hex'):
     """
@@ -30,7 +34,9 @@ def rainbow(num, type='hex'):
         if type == 'rgb':
             colors.append( (r,g,b) )
         elif type == 'hex':
-            colors.append( rgb_to_hex( (r,g,b) ) )
+
+            rgb = (int(r), int(g), int(b))
+            colors.append( rgb_to_hex(rgb) )
         else:
             raise ValueError("color type should be 'rgb' or 'hex'")
 
