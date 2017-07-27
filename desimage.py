@@ -131,9 +131,13 @@ class RGBImageMaker(object):
             # smaller scale means darker, so noise is more suppressed
             # compared to the peak. remember it is all scaled below
             # one, so we are also cutting off some point in the image
-            #SCALE=.010
+
+            # same as Y1
             #SCALE=.010*sqrt(2.0)
-            SCALE=.010*sqrt(2.0)
+            #relative_scales= array([1.00, 1.2, 2.0])
+
+            #SCALE=.020*sqrt(2.0)
+            SCALE=.015*sqrt(2.0)
             relative_scales= array([1.00, 1.2, 2.0])
         elif campaign=='Y1A1':
             print('getting scaled color for y1')
