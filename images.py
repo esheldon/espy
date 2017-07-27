@@ -245,6 +245,8 @@ def make_combined_mosaic(imlist):
 def view_mosaic(imlist, titles=None, combine=False, **keys):
     import biggles
 
+    tabtitle=keys.pop('title',None)
+
     if combine:
         imtot=make_combined_mosaic(imlist)
         return view(imtot, **keys)
@@ -275,6 +277,8 @@ def view_mosaic(imlist, titles=None, combine=False, **keys):
     if aspect is None:
         aspect = float(nrow)/ncol
     tab.aspect_ratio=aspect
+
+    tab.title=tabtitle
 
     _writefile_maybe(tab, **keys)
     _show_maybe(tab, **keys)
