@@ -11,20 +11,20 @@ parser=ArgumentParser()
 parser.add_argument(
     'fname',
     nargs='+',
-    help='file or list of files to delete',
+    help='Files to delete.  Can include directories if -r is set',
 )
 parser.add_argument(
     '-F',
     '--isfile',
     action='store_true',
-    help='the argument is a file with one path per line',
+    help='The argument is a file with one path per line',
 )
 
 parser.add_argument(
     '-r',
     '--recursive',
     action='store_true',
-    help='remove each argument recursively',
+    help='remove directories recursively',
 )
 parser.add_argument(
     '-d',
