@@ -33,10 +33,31 @@ parser.add_argument(
     help="don't actually remove anything",
 )
 
+parser.add_argument(
+    '--sleep',
+    type=float,
+    default=None,
+    help="sleep this many seconds between iterations",
+)
+
+parser.add_argument(
+    '--show-items',
+    action='store_true',
+    help="show items after they are deleted",
+)
 
 
-def PBar(iterable, desc='', total=None, leave=True, file=sys.stderr,
-         mininterval=0.5, miniters=1, n_bars=20):
+
+def PBar(iterable,
+         desc='',
+         total=None,
+         leave=True,
+         file=sys.stderr,
+         mininterval=0.5,
+         miniters=1,
+         n_bars=20,
+         show_items=False,
+         sleep=None):
     """
     Get an iterable object, and return an iterator which acts exactly like the
     iterable, but prints a progress meter and updates it every time a value is
@@ -73,20 +94,29 @@ def PBar(iterable, desc='', total=None, leave=True, file=sys.stderr,
     prefix = desc+': ' if desc else ''
     
     sp = StatusPrinter(file)
-    sp.print_status(prefix + format_meter(0, total, 0, n_bars=n_bars))
+
+    text=prefix + format_meter(0, total, 0, n_bars=n_bars)
+    sp.print_status(text)
     
     start_t = last_print_t = time.time()
     last_print_n = 0
     n = 0
     for obj in iterable:
         yield obj
+        if sleep is not None:
+            time.sleep(sleep)
+
         # Now the object was created and processed, so we can print the meter.
         n += 1
         if n - last_print_n >= miniters:
             # We check the counter first, to reduce the overhead of time.time()
             cur_t = time.time()
             if cur_t - last_print_t >= mininterval:
-                sp.print_status(prefix + format_meter(n, total, cur_t-start_t, n_bars=n_bars))
+
+                text = prefix + format_meter(n, total, cur_t-start_t, n_bars=n_bars)
+                if show_items:
+                    text += ' %s' % str(obj)
+                sp.print_status(text)
                 last_print_n = n
                 last_print_t = cur_t
     
@@ -182,7 +212,7 @@ class Remover(object):
         if nf == 0:
             return
 
-        for f in PBar(flist):
+        for f in PBar(flist, show_items=self.args.show_items, sleep=self.args.sleep):
             if not self.args.dryrun:
                 if os.path.isdir(f):
                     shutil.rmtree(f)
