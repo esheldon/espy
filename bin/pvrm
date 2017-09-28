@@ -101,17 +101,12 @@ def PBar(iterable,
     start_t = last_print_t = time.time()
     last_print_n = 0
     n = 0
-    for obj in iterable:
-        yield obj
-        if sleep is not None:
-            time.sleep(sleep)
+    for i,obj in enumerate(iterable):
 
-        # Now the object was created and processed, so we can print the meter.
-        n += 1
-        if n - last_print_n >= miniters:
+        if i==0 or n - last_print_n >= miniters:
             # We check the counter first, to reduce the overhead of time.time()
             cur_t = time.time()
-            if cur_t - last_print_t >= mininterval:
+            if i==0 or cur_t - last_print_t >= mininterval:
 
                 text = prefix + format_meter(n, total, cur_t-start_t, n_bars=n_bars)
                 if show_items:
@@ -119,6 +114,13 @@ def PBar(iterable,
                 sp.print_status(text)
                 last_print_n = n
                 last_print_t = cur_t
+
+
+        yield obj
+        n += 1
+        if sleep is not None:
+            time.sleep(sleep)
+
     
     if not leave:
         sp.print_status('')
