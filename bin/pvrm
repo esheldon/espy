@@ -41,6 +41,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '-s',
     '--show-items',
     action='store_true',
     help="show items after they are deleted",
