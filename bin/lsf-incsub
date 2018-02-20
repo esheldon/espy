@@ -24,8 +24,8 @@ parser.add_argument("-s","--sleep", type=float, default=None,
               "not to sleep at all"))
 
 
-parser.add_argument("-n", "--njobs", type=int,default=10000, 
-                  help="max number of jobs, default 10000")
+parser.add_argument("-n", "--njobs", type=int,default=5000, 
+                  help="max number of jobs, default 5000")
 
 parser.add_argument("-f", "--force", action="store_true",
                   help="force starting of all jobs, even if a .submitted file is present.")
