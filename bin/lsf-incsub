@@ -16,6 +16,9 @@ parser.add_argument('files',
                     nargs='+',
                     help='list of files or a file holding the flist if -F is set')
 
+parser.add_argument("--pattern", default=None,
+        help=("Only count jobs that match the pattern"))
+
 parser.add_argument("-p","--poll", default=30,
         help=("time between polls of running jobs when we are at max allowed"
               "jobs, default 30 seconds"))
@@ -37,23 +40,6 @@ parser.add_argument("-d", "--dryrun", action='store_true',
                   help="dry run.  Just print number of jobs and exit.")
 
 parser.add_argument("--rand", action="store_true",help="randomize the order of files")
-
-
-
-
-def get_njobs():
-    cmd = 'bjobs | grep -v FROM_HOST | wc -l'
-    status, stdout_ret, stderr_ret = eu.ostools.exec_process(cmd)
-
-    if status != 0:
-        raise RuntimeError("erro executing bjobs: %d" % status)
-
-    try:
-        njobs = int(stdout_ret)
-    except:
-        njobs = 0
-
-    return njobs
 
 def get_submitted_fname(fname):
     return fname+'.submitted'
@@ -154,9 +140,34 @@ class JobSubmitter(object):
             time.sleep(self.args.poll)
             njobs, diffjobs = self._get_diffjobs()
 
+    def _get_njobs(self):
+        cmd = [
+            'bjobs',
+            'grep -v FROM_HOST',
+        ]
+        if self.args.pattern is not None:
+            cmd += ['grep %s' % self.args.pattern]
+
+        cmd += ['wc -l']
+
+        cmd = ' | '.join(cmd)
+
+        #cmd = 'bjobs | grep -v FROM_HOST | wc -l'
+        status, stdout_ret, stderr_ret = eu.ostools.exec_process(cmd)
+
+        if status != 0:
+            raise RuntimeError("erro executing bjobs: %d" % status)
+
+        try:
+            njobs = int(stdout_ret)
+        except:
+            njobs = 0
+
+        return njobs
+
     def _get_diffjobs(self):
-        njobs = get_njobs()
-        diffjobs = self.args.njobs - get_njobs()
+        njobs = self._get_njobs()
+        diffjobs = self.args.njobs - njobs
         return njobs, diffjobs
 
 
