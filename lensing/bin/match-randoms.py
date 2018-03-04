@@ -7,7 +7,7 @@ Description:
     Match redshift histograms between the lenses
     and random.  Writes out a file holding the lens averages.
     
-    bintype and nbin are required
+    bintype is required
 """
 
 from __future__ import print_function
@@ -38,9 +38,6 @@ parser.add_option("--erf-sigma-field",default=None,
 parser.add_option("-t",dest="bintype",default=None,
                   help="The type of binning, default %default")
 
-parser.add_option("-n",dest="nbin",default=None,
-                  help="The number of bins, default %default")
-
 parser.add_option("-b",dest="binsize",default=0.01,
     help="Binsize to use in z for hist matching, default %default")
 
@@ -65,18 +62,18 @@ def main():
     randrun=args[1]
 
     bintype=options.bintype
-    nbin=int(options.nbin)
     binsize=float(options.binsize)
     show=options.show
 
-    if bintype is None or nbin is None:
+    if bintype is None:
         raise ValueError("currently demand some kind of binning")
 
     conf=lensing.files.cascade_config(lensrun)
     z_field=conf['lens_config']['z_field']
     print('z_field:',z_field)
 
-    b = lensing.binning.instantiate_binner(bintype, nbin)
+    b = lensing.binning.instantiate_binner(bintype)
+    nbin=b.get_nbin()
 
     # read collated lens catalog and select lenses with the
     # bin criteria.  Then match the randoms redshift histogram
@@ -93,14 +90,14 @@ def main():
 
     weights_file=lensing.files.sample_file(type='weights',
                                            sample=lensrun,
-                                           name=b.name(),
+                                           name=b.get_name(),
                                            extra=outextra)
 
     print("opening weights file for writing:",weights_file)
     wfits=fitsio.FITS(weights_file,'rw',clobber=True)
 
-    html_name=lensing.files.sample_file(type='binned-plots', 
-                                        sample=lensrun, name=b.name(),
+    html_name=lensing.files.sample_file(type='binned-plots',
+                                        sample=lensrun, name=b.get_name(),
                                         extra=outextra, ext='html')
 
     makedir_fromfile(html_name)
@@ -116,7 +113,7 @@ def main():
 
         pngfile=lensing.files.sample_file(type='binned-plots',
                                           sample=lensrun,
-                                          name=b.name(),
+                                          name=b.get_name(),
                                           extra=png_extra, ext='png')
 
 
@@ -129,7 +126,7 @@ def main():
 
         extra_weights=None
         if options.erf_mean_field is not None:
-            print("erf weights from:",options.erf_mean_field) 
+            print("erf weights from:",options.erf_mean_field)
             if options.erf_sigma_field is None:
                 raise ValueError("send both --erf-mean-field and --erf-sigma-field")
 
@@ -152,7 +149,7 @@ def main():
         print("combining randoms with weights")
         comb = lensing.outputs.average_lensums(rand, weights=weights)
 
-        weighting.plot_results1d(rand['z'], z[w], weights, binsize, 
+        weighting.plot_results1d(rand['z'], z[w], weights, binsize,
                                  pngfile=pngfile, title=tit, show=show)
 
         wstruct=zeros(weights.size, dtype=[('weights','f8')])
@@ -174,6 +171,6 @@ def main():
     wfits.close()
 
     lensing.files.sample_write(data=output,type='binned',
-                               sample=lensrun,name=b.name(),extra=outextra)
+                               sample=lensrun,name=b.get_name(),extra=outextra)
 
 main()

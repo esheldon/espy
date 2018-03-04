@@ -1,0 +1,46 @@
+#!/usr/bin/env python
+"""
+bin lenses by the specified scheme
+"""
+from __future__ import print_function
+import os,sys
+import des
+import argparse
+
+parser = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument("lens_run", help="lens run identifier")
+parser.add_argument("rand_run", help="randoms run identifier")
+parser.add_argument("bin_scheme", help="bin scheme, e.g. bin-lambda01-z01")
+parser.add_argument("--binsize", 
+                    help="binsize for z hist matching and plotting",
+                    default=0.01,type=float)
+   
+parser.add_argument("--show", 
+                    action='store_true',
+                    help="show plots on the screen")
+
+def main():
+    args = parser.parse_args()
+
+    rconf=des.files.cascade_config(args.rand_run)
+
+    zmatch_method=rconf['lens_conf']['zmatch_method']
+    if zmatch_method=='weight':
+        print("using select or weight method")
+        matcher=des.matchrand.RandomMatcher(args.lens_run,
+                                            args.rand_run,
+                                            args.bin_scheme,
+                                            binsize=args.binsize,
+                                            show=args.show)
+    else:
+        print("using remove method")
+        matcher=des.matchrand.RandomMatcherRemove(args.lens_run,
+                                                  args.rand_run,
+                                                  args.bin_scheme,
+                                                  binsize=args.binsize,
+                                                  show=args.show)
+
+    matcher.match()
+
+main()

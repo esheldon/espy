@@ -11,6 +11,64 @@ def fit_gauss1d(data, **keys):
 
     return gm
 
+class MyGMM(mixture.GMM):
+    """
+    override sample
+    """
+    def samples_and_comps(self, n_samples=1, random_state=None):
+        """Generate random samples from the model.
+
+        Parameters
+        ----------
+        n_samples : int, optional
+            Number of samples to generate. Defaults to 1.
+        get_comp: bool, optional
+            If True, return the component from which each
+            sample was drawn
+
+        Returns
+        -------
+        (X,comps)
+
+        X : array_like, shape (n_samples, n_features)
+            List of samples
+
+        comp: array, shape n_samples
+            List of components
+        """
+        import numpy as np
+        from sklearn.mixture.gmm import sample_gaussian
+        from sklearn.utils import check_random_state
+
+        if random_state is None:
+            random_state = self.random_state
+        random_state = check_random_state(random_state)
+
+        weight_cdf = np.cumsum(self.weights_)
+
+        X = np.empty((n_samples, self.means_.shape[1]))
+        rand = random_state.rand(n_samples)
+        # decide which component to use for each sample
+        comps = weight_cdf.searchsorted(rand)
+        # for each component, generate all needed samples
+        for comp in range(self.n_components):
+            # occurrences of current component in X
+            comp_in_X = (comp == comps)
+            # number of those occurrences
+            num_comp_in_X = comp_in_X.sum()
+            if num_comp_in_X > 0:
+                if self.covariance_type == 'tied':
+                    cv = self.covars_
+                elif self.covariance_type == 'spherical':
+                    cv = self.covars_[comp][0]
+                else:
+                    cv = self.covars_[comp]
+                X[comp_in_X] = sample_gaussian(
+                    self.means_[comp], cv, self.covariance_type,
+                    num_comp_in_X, random_state=random_state).T
+
+        return X, comps
+
 class GaussMix(mixture.GMM):
     """
 
@@ -94,3 +152,32 @@ def test_compare():
 
     gm.compare1d(data, 0.05)
 
+def test_truncated():
+    """
+    this demonstrates that it doesn't work
+    """
+    import ngmix
+    import biggles
+
+    nsamp=1000000
+    ptrunc=ngmix.priors.TruncatedSimpleGauss2D(0.0, 0.98, 0.4, 0.4, 1.0)
+
+    g1,g2 = ptrunc.sample(nsamp)
+
+    g=numpy.vstack( (g1,g2) ).T
+
+    gmm=mixture.GMM(n_components=1, covariance_type='full')
+
+    gmm.fit(g)
+
+    gs=gmm.sample(nsamp)
+
+    hc=biggles.make_histc(g[:,1], nbin=100, min=0.0, max=1.0, label='data', color='blue')
+    hcs=biggles.make_histc(gs[:,1], nbin=100, min=0.0, max=1.0, label='fit',color='red')
+
+    key=biggles.PlotKey(0.1,0.9,[hc,hcs], halign='left')
+
+    plt=biggles.FramedPlot(xlabel='g2')
+    plt.add( hc, hcs, key )
+
+    plt.show()

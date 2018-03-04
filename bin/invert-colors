@@ -1,0 +1,41 @@
+#!/usr/bin/env python
+from __future__ import print_function, division
+
+from argparse import ArgumentParser
+
+parser=ArgumentParser(__doc__)
+
+parser.add_argument('infile',help="input file")
+parser.add_argument('outfile',help="output file")
+
+args=parser.parse_args()
+
+fname_in=args.infile
+fname_out=args.outfile
+
+if fname_in == fname_out:
+    raise ValueError("input and output are same file")
+
+with open(fname_in) as fin:
+    with open(fname_out,'w') as fout:
+
+        for line in fin:
+
+            ls=line.split()
+            if len(ls) >= 4 and ls[3] in ['SetCFg','SetCBg','setrgbcolor']:
+                try:
+                    print("old line:",line)
+                    r=float(ls[0])
+                    g=float(ls[1])
+                    b=float(ls[2])
+
+                    ls[0] = '%g' % (1.0-r,)
+                    ls[1] = '%g' % (1.0-g,)
+                    ls[2] = '%g' % (1.0-b,)
+
+                    line=' '.join(ls)+'\n'
+                    print("new line:",line)
+                except ValueError:
+                    pass
+
+            fout.write(line)

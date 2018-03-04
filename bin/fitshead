@@ -7,6 +7,7 @@ Print out the fits header.  Defaults to extension 0
 
 Requires fitsio or pyfits
 """
+from __future__ import print_function
 
 from __future__ import print_function
 

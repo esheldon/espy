@@ -1,0 +1,62 @@
+comment: |
+    bpz p(z) v0.1.7 
+    trimmed to spt-e
+    Matts new cuts for ngmix010
+
+scat_name: "ngmix010"
+
+cosmo_vers: "cosmo-01"
+
+# not yet used
+mask_vers: "mask-sva1-i-01"
+
+pz_vers: "v0.1.7"
+pz_type: "bpz"
+
+shear_style: "lensfit"
+scinv_style: "interp"
+scinv_col: "scinv"
+scinv_flags_col: "scinv_flags"
+
+# e1 only needed for old ngmix
+minus_e1: True
+minus_e2: False
+
+# support this as well in the future
+#scinv_style: 'point'
+#z_col: 'zp'
+
+sxflags_col: "flags_i"
+mag_auto_col: "mag_auto_i"
+mag_psf_col: "mag_psf_i"
+class_star_col: "class_star_i"
+spread_model_col: "spread_model_i"
+spreaderr_model_col: "spreaderr_model_i"
+
+ra_col: "alphawin_j2000_r"
+dec_col: "deltawin_j2000_r"
+
+exists_col: "ngmix010_exists"
+flags_col: "ngmix010_exp_flags"
+e1_col: "ngmix010_exp_e_1"
+e2_col: "ngmix010_exp_e_2"
+e_cov_11_col: "ngmix010_exp_e_cov_1_1"
+e_cov_12_col: "ngmix010_exp_e_cov_1_2"
+e_cov_22_col: "ngmix010_exp_e_cov_2_2"
+
+e1sens_col: "ngmix010_exp_e_sens_1"
+e2sens_col: "ngmix010_exp_e_sens_2"
+
+arate_col: "ngmix010_exp_arate"
+T_col: "ngmix010_exp_t"
+Ts2n_col: "ngmix010_exp_t_s2n"
+s2n_col: "ngmix010_exp_s2n_w"
+
+
+# Matt's cut on Ts2n.  Lower s/n to 10. arate up to 0.4, which is
+# a negligible difference.
+
+sg_type: "modest"
+s2n_min: 10.0
+Ts2n_min: 4.0
+arate_range: [0.4,0.6]

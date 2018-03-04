@@ -1,0 +1,5 @@
+run from a different directory since these will write files
+run find-release-radec.py to get the tiles and ra,dec
+run plot-map.py to make a density map and over plot the tiles
+
+(optionally run add-depth.py to add depth information and make a new file)

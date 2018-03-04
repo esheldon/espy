@@ -1,5 +1,5 @@
 """
-    %prog [options] run bintype nbin
+    %prog [options] run bintype
 
 Description:
 
@@ -37,13 +37,12 @@ options,args = parser.parse_args(sys.argv[1:])
 
 
 def main():
-    if len(args) < 3:
+    if len(args) < 2:
         parser.print_help()
         sys.exit(1)
 
     run = args[0]
     bintype = args[1]
-    nbin = int(args[2])
 
     yrng=options.yrange
     if yrng is not None:
@@ -53,7 +52,8 @@ def main():
         xrng=[float(x) for x in xrng.split(',')]
 
     if options.randrun is not None:
-        b = lensing.binning.instantiate_binner(bintype, nbin)
+        b = lensing.binning.instantiate_binner(bintype)
+        nbin=b.get_nbin()
         for i in xrange(nbin):
             b.compare_random(run, options.type, i, options.randrun, 
                              xrange=xrng, yrange=yrng)
@@ -61,7 +61,7 @@ def main():
         return
 
 
-    b = lensing.binning.instantiate_binner(bintype, nbin)
+    b = lensing.binning.instantiate_binner(bintype)
     if options.compare_osig:
         b.plot_dsig_osig_byrun(run, options.type, show=options.show, range4var=[0.5,100.0],
                                linear=options.linear, yrange=yrng, xrange=xrng)
@@ -69,7 +69,8 @@ def main():
         b.plot_osig_byrun_1var(run, options.type, show=options.show)
     else:
         if options.run2 is not None:
-            b.plot_dsig_2runs(run, options.run2, options.type, show=options.show)
+            b.plot_dsig_2runs(run, options.run2, options.type, show=options.show,
+                              linear=options.linear, yrange=yrng, xrange=xrng)
         else:
             b.plot_dsig_byrun_1var(run, options.type, show=options.show, yrnge=yrng)
 

@@ -39,7 +39,7 @@ def wjackknife(vsum=None, wsum=None, cleanup=True, slow=False, verbose=False):
         If True, remove the input and output files
 
     slow: bool, optional
-        If True, use the pury python version of the code.
+        If True, use the pure python version of the code.
     """
 
     if vsum is None or wsum is None:
@@ -86,16 +86,16 @@ def write_wjackknife_inputs(filename, vsum, wsum):
         wsum.tofile(fobj)
 
 def read_jackknife_outputs(filename):
-    import recfile
+    from esutil.recfile import Recfile
     with open(filename,'r') as fobj:
 
         vnvar = numpy.fromfile(fobj, sep=' ', count=1, dtype='i8')
         nvar=int(vnvar[0])
 
         dtype=[('mean','f8'),('err','f8')]
-        robj = recfile.Open(fobj,dtype=dtype,delim=' ',nrows=nvar)
-
+        robj=Recfile(fobj,dtype=dtype,delim=' ',nrows=nvar)
         d=robj.read()
+
         mean = d['mean'].copy()
 
         covar=numpy.fromfile(fobj, sep=' ', dtype='f8', count=nvar*nvar)

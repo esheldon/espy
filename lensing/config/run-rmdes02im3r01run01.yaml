@@ -1,0 +1,24 @@
+run:           "rmdes02im3r01run01"
+lens_sample:   "rmdes02"
+src_sample:    "im3r01"
+
+# for healpix
+nside:         64
+
+comment: | 
+
+    this version with code update and new run naming convention
+
+    rmax ~10
+    In this one we calculate the moments of the source positions
+
+    lenses:
+
+        Red mapper
+        sample: "rmdes02"
+        catalog: "redmapper-des-5.9-lgt05"
+
+
+    sources:
+        catalog:            "im3shape-v3-gold-nn"
+        band:               "r"

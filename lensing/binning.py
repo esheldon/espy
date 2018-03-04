@@ -40,35 +40,42 @@ try:
 except:
     pass
 
-def instantiate_binner(type, nbin):
-    if type == 'lambda':
-        b = LambdaBinner(nbin)
-    elif type=='ilum':
-        b = ILumBinner(nbin)
-    elif type == 'n200':
-        b = N200Binner(nbin)
-    elif type == 'mz':
-        b = MZBinner(nbin)
-    elif type == 'vz':
-        b = VoidZBinner(nbin)
+def instantiate_binner(type, nbin=None):
+    if nbin is None:
+        # this is the bin type name, corresponds to a file
+        # bin-{type}.yaml
+        b = AnyBinner(type)
     else:
-        raise ValueError("unsupported binner type: '%s'" % type)
+        if type == 'lambda':
+            b = LambdaBinner(nbin)
+        elif type=='ilum':
+            b = ILumBinner(nbin)
+        elif type == 'n200':
+            b = N200Binner(nbin)
+        elif type == 'mz':
+            b = MZBinner(nbin)
+        elif type == 'vz':
+            b = VoidZBinner(nbin)
+        else:
+            raise ValueError("unsupported binner type: '%s'" % type)
     return b
 
 
-def bin_lenses_byrun(run, type, nbin):
-    b=instantiate_binner(type, nbin)
+def bin_lenses_byrun(run, type, nbin=None):
+    b=instantiate_binner(type, nbin=nbin)
     b.bin_byrun(run)
 
 class BinnerBase(dict):
-    def __init__(self, nbin, fs='nfs'):
+    def __init__(self, nbin, fs='nfs', **keys):
         self['nbin'] = nbin
+        self.update(keys)
+
         self.fs=fs
         self.set_bin_ranges()
 
         self.dpi=150
 
-    def name(self):
+    def get_name(self):
         raise RuntimeError("override this method")
 
     def bin_byrun(self, run):
@@ -76,7 +83,7 @@ class BinnerBase(dict):
         Do the binning and write out a file
         """
 
-        name=self.name()
+        name=self.get_name()
         d = lensing.files.sample_read(type='collated',sample=run,fs=self.fs)
         res = self.bin(d)
 
@@ -122,8 +129,8 @@ class BinnerBase(dict):
         yrng=keys.get('yrange',None)
 
         extra='randmatch-%s' % randrun
-        data = lensing.files.sample_read(type=type, sample=lensrun, name=self.name())
-        rand = lensing.files.sample_read(type='binned', sample=lensrun, name=self.name(), 
+        data = lensing.files.sample_read(type=type, sample=lensrun, name=self.get_name())
+        rand = lensing.files.sample_read(type='binned', sample=lensrun, name=self.get_name(), 
                                          extra=extra)
 
         zpts=biggles.Curve( [0.9*data['r'].min(), 1.1*data['r'].max()], [0,0])
@@ -137,7 +144,7 @@ class BinnerBase(dict):
             plt.yrange=yrng
 
         plt.xlabel=r'$r [h^{-1} Mpc]$'
-        plt.ylabel=r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+        plt.ylabel=r'$\Delta\Sigma ~ [M_{\odot} pc^{-2}]$'
 
         pts=biggles.Points(data['r'][binnum], data['dsig'][binnum],
                            type='filled circle')
@@ -159,7 +166,7 @@ class BinnerBase(dict):
             
         epsfile=lensing.files.sample_file(type=type+'-plots',
                                           sample=lensrun,
-                                          name=self.name(),
+                                          name=self.get_name(),
                                           extra='%s-%02i' % (randrun,binnum),
                                           ext='eps')
         plt.write_eps(epsfile)
@@ -175,7 +182,7 @@ class BinnerBase(dict):
 
         linear=keys.get('linear',False)
 
-        name = self.name()
+        name = self.get_name()
         data=lensing.files.sample_read(type=type,sample=run,name=name)
 
         max_binnum = self['nbin']-1
@@ -266,7 +273,7 @@ class BinnerBase(dict):
             plt=self.plot_dsig_osig_byrun_bin(run, type, binnum, **keys)
             epsfile=lensing.files.sample_file(type=type+'-plots',
                                               sample=run,
-                                              name=self.name(),
+                                              name=self.get_name(),
                                               extra='osig-comp-%02i' % binnum,
                                               ext='eps')
             makedirs_fromfile(epsfile)
@@ -292,7 +299,7 @@ class BinnerBase(dict):
 
         """
 
-        name = self.name()
+        name = self.get_name()
         data=lensing.files.sample_read(type=type,sample=run,name=name)
 
         # this is for the screen: currently tuned for my big screen!
@@ -331,14 +338,22 @@ class BinnerBase(dict):
             nrow = 1
             ncol = 2
             aspect_ratio=float(nrow)/ncol
+        elif self['nbin']==1:
+            nrow=1
+            ncol=1
+            aspect_ratio=1.0
         else:
             raise ValueError("Unsupported nbin: %s" % self['nbin'])
 
-        pa = FramedArray(nrow, ncol)
+        if self['nbin']==1:
+            pa = FramedPlot()
+        else:
+            pa = FramedArray(nrow, ncol)
+
         pa.aspect_ratio = aspect_ratio
 
         pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{\odot} pc^{-2}]$'
 
         if xrnge is None:
             xrnge = [0.01,60.0]
@@ -352,14 +367,16 @@ class BinnerBase(dict):
 
         row = -1
 
-        low, high = self.bin_ranges()
-
         i = 0
         for i in xrange(self['nbin']):
             col = i % ncol
             if col == 0:
                 row += 1
 
+            if self['nbin']==1:
+                send_plt=pa
+            else:
+                send_plt=pa[row,col]
             eu.plotting.bscatter(data['r'][i],
                                  data['dsig'][i],
                                  yerr=data['dsigerr'][i],
@@ -367,12 +384,12 @@ class BinnerBase(dict):
                                  yrange=yrnge,
                                  xlog=True,ylog=True,
                                  show=False, 
-                                 plt=pa[row,col],
+                                 plt=send_plt,
                                  size=2)
             label = self.bin_label(i)
             pl = PlotLabel(.85, .85, label, halign='right')
 
-            pa[row,col].add(pl)
+            send_plt.add(pl)
 
 
         if show:
@@ -409,7 +426,7 @@ class BinnerBase(dict):
 
         """
 
-        name = self.name()
+        name = self.get_name()
         data=lensing.files.sample_read(type=type,sample=run,name=name)
 
         # this is for the screen: currently tuned for my big screen!
@@ -447,7 +464,7 @@ class BinnerBase(dict):
         pa.aspect_ratio = aspect_ratio
 
         pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-        pa.ylabel = r'$\Delta\Sigma_{\times} [M_{sun} pc^{-2}]$'
+        pa.ylabel = r'$\Delta\Sigma_{\times} [M_{\odot} pc^{-2}]$'
 
         xrnge = [0.01,60.0]
         yrnge = [-20,20]
@@ -496,7 +513,7 @@ class BinnerBase(dict):
         pa.write_eps(epsfile)
         converter.convert(epsfile, dpi=self.dpi, verbose=True)
 
-    def plot_dsig_2runs(self, run1, run2, type, show=False):
+    def plot_dsig_2runs(self, run1, run2, type,show=False, **kw):
         """
 
         Make an array of plots with each plot a bin in one variable.  
@@ -514,13 +531,13 @@ class BinnerBase(dict):
 
         """
 
-        name = self.name()
+        name = self.get_name()
         data1=lensing.files.sample_read(type=type,sample=run1,name=name)
         data2=lensing.files.sample_read(type=type,sample=run2,name=name)
         color1='blue'
         color2='red'
         sym1='filled circle'
-        sym2='square'
+        sym2='filled diamond'
         width=4
         size1=2
         size2=3
@@ -533,6 +550,7 @@ class BinnerBase(dict):
         biggles.configure('_HalfAxis','subticks_size',1.5)
         biggles.configure('linewidth',0.6)
 
+        doarray=True
         if self['nbin'] == 12:
             nrow = 3
             ncol = 4
@@ -541,32 +559,62 @@ class BinnerBase(dict):
             nrow = 4
             ncol = 4
             aspect_ratio = 1.0
+        elif self['nbin']==1:
+            doarray=False
         else:
             raise ValueError("Unsupported nbin: %s" % self['nbin'])
 
-        pa = FramedArray(nrow, ncol)
-        pa.aspect_ratio = aspect_ratio
+        if doarray:
+            pa = FramedArray(nrow, ncol)
+            pa.aspect_ratio = aspect_ratio
+        else:
+            pa=FramedPlot()
+            pa.aspect_ratio=1
 
         pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{\odot} pc^{-2}]$'
 
-        xrnge = [0.01,60.0]
-        yrnge = [1.e-2,8000]
+        linear=kw.get('linear',False)
+        xrnge=kw.get('xrange',None)
+        yrnge=kw.get('yrange',None)
+
+        if xrnge is None:
+            xrnge = [0.01,60.0]
+        if not linear:
+            pa.ylog = True
+            if yrnge is None:
+                yrnge = [1.e-2,8000]
+        else:
+            if yrnge is None:
+                ymin=min(data1['dsig'].min(), data2['dsig'].min())
+                if ymin > 0:
+                    ymin=0.9*ymin
+                else:
+                    ymin=1.1*ymin
+                ymax=max(data1['dsig'].max(), data2['dsig'].max())
+                if ymax > 0:
+                    ymax=1.1*ymax
+                else:
+                    ymax=0.9*ymax
+
+
         pa.xrange = xrnge
         pa.yrange = yrnge
         pa.xlog = True
-        pa.ylog = True
+
 
 
         row = -1
 
-        low, high = self.bin_ranges()
-
         i = 0
         for i in xrange(self['nbin']):
-            col = i % ncol
-            if col == 0:
-                row += 1
+            if doarray:
+                col = i % ncol
+                if col == 0:
+                    row += 1
+                plt=pa[row,col]
+            else:
+                plt=pa
 
             pdict2=eu.plotting.bscatter(data2['r'][i],
                                         data2['dsig'][i],
@@ -575,7 +623,7 @@ class BinnerBase(dict):
                                         yrange=yrnge,
                                         xlog=True,ylog=True,
                                         show=False, 
-                                        plt=pa[row,col],
+                                        plt=plt,
                                         color=color2,
                                         label=run2,
                                         type=sym2,
@@ -589,7 +637,7 @@ class BinnerBase(dict):
                                         yrange=yrnge,
                                         xlog=True,ylog=True,
                                         show=False, 
-                                        plt=pa[row,col],
+                                        plt=plt,
                                         color=color1,
                                         type=sym1,
                                         label=run1,
@@ -597,19 +645,30 @@ class BinnerBase(dict):
                                         dict=True)
 
             if i == (self['nbin']-1):
-                key=PlotKey(0.9,0.2,[pdict1['p'],pdict2['p']],halign='right')
-                pa[row,col].add(key)
+                key=PlotKey(0.2,0.2,[pdict1['p'],pdict2['p']])
+                plt.add(key)
 
             label = self.bin_label(i)
             pl = PlotLabel(.85, .85, label, halign='right')
 
-            pa[row,col].add(pl)
+            plt.add(pl)
+
+            if linear:
+                plt.add(biggles.Curve([xrnge[0],xrnge[1]],[0.0,0.0]))
 
 
         if show:
             pa.show()
 
-        epsfile=lensing.files.sample_file(type=type+'-plots',sample=run1,name=name,extra='allplot-'+run2,ext='eps')
+        if linear:
+            extra='linear-allplot-'+run2
+        else:
+            extra='allplot-'+run2
+        epsfile=lensing.files.sample_file(type=type+'-plots',
+                                          sample=run1,
+                                          name=name,
+                                          extra=extra,
+                                          ext='eps')
         d = os.path.dirname(epsfile)
         if not os.path.exists(d):
             print("making dir:",d)
@@ -620,12 +679,98 @@ class BinnerBase(dict):
 
 
 
+class AnyBinner(BinnerBase):
+    """
+    bin any
+    """
+
+    def __init__(self, bin_conf_name, fs='nfs', **keys):
+        self.update(keys)
+        self['name']=bin_conf_name
+        self.bin_conf = lensing.files.read_config('bin',bin_conf_name)
+        self.bin_info = self.bin_conf['bin_info']
+
+        self['nbin'] = len(self.bin_info)
+
+        self.fs=fs
+        self.dpi=150
+
+    def get_name(self):
+        return self['name']
+    def get_nbin(self):
+        return self['nbin']
+
+    def bin(self, data):
+        """
+        call also call base method bin_byrun
+        """
+        nrbin = data['rsum'][0].size
+
+        bi0 = self.bin_info[0]['bins']
+        bintags = [ri[0] for ri in bi0]
+        print("bintags:",bintags)
+        bs = lensbin_struct(nrbin, bintags=bintags, n=self['nbin'])
+
+        print("len(data):",len(data))
+        print("len(bin_info):",len(self.bin_info))
+        for i,bin_info in enumerate(self.bin_info):
+            range_info = bin_info['bins']
+
+            comb,w = reduce_from_ranges_many(data,
+                                             range_info,
+                                             getind=True)
+        
+            bs['nlenses'][i] = w.size
+            print("    found",w.size,"in bin")
+            # first copy all common tags
+            for n in comb.dtype.names:
+                bs[n][i] = comb[n][0]
+
+            for bi in range_info:
+                field_name=bi[0]
+                mn='%s_mean' % field_name
+                en='%s_err' % field_name
+                sn='%s_sdev' % field_name
+                rn='%s_range' % field_name
+
+                # now the things we are averaging by lens weight
+                mean,err,sdev = lens_wmom(data, field_name, ind=w, sdev=True)
+                bs[mn][i] = mean
+                bs[en][i] = err
+                bs[sn][i] = sdev
+                bs[rn][i] = data[field_name][w].min(), data[field_name][w].max()
+
+            i+=1
+
+        return bs
+
+    def select_bin(self, data, binnum):
+        """
+
+        Although not used by bin(), this is useful for other programs such as
+        the random hist matching and correction code
+
+        """
+        if binnum > self['nbin']:
+            raise ValueError("bin number must be in [0,%d]" % (self['nbin']-1,))
+
+        range_info = self.bin_info[binnum]['bins']
+        comb,w = reduce_from_ranges_many(data,
+                                         range_info,
+                                         getind=True)
+ 
+        return w
+
+
+
+    def bin_label(self, binnum):
+        return self.bin_info[binnum]['label']
 
 
 class VoidZBinner(BinnerBase):
     range_type='()'
 
-    def name(self):
+    def get_name(self):
         return 'z-%02d' % self['nbin']
 
     def set_bin_ranges(self):
@@ -729,11 +874,18 @@ class LambdaBinner(BinnerBase):
     """
     RedMapper binner on lambda
     """
+    lambda_field = 'lambda_chisq'
     range_type='()'
 
-    lambda_field = 'lambda_chisq'
+    # play with the range
+    e_field = 'pe'
+    e_range=[0.0, 0.2]
+    e_range_type='[)'
+
     z_field = 'z_lambda'
-    def name(self):
+    z_range_type='()'
+
+    def get_name(self):
         return 'lambda-%02d' % self['nbin']
 
     def bin(self, data):
@@ -760,11 +912,24 @@ class LambdaBinner(BinnerBase):
                 print('lambda > %0.2f' % l)
 
             print("    reducing and jackknifing by lens")
-            comb,w = reduce_from_ranges(data,
-                                        lambda_field,
-                                        lamrange, 
-                                        range_type=self.range_type,
-                                        getind=True)
+            range_info=[(lambda_field, lamrange, self.range_type)]
+
+            if 'zrange' in self and self['zrange'] is not None:
+                zrange=self['zrange']
+                zrange_info = (z_field, zrange, self.z_range_type)
+                range_info.append(zrange_info)
+            elif hasattr(self,'z_lowlim'):
+                zrange=[self.z_lowlim[i], self.z_highlim[i]]
+                zrange_info = (z_field, zrange, self.z_range_type)
+                range_info.append(zrange_info)
+
+            if self.e_field in data.dtype.names:
+                e_range_info = (self.e_field, self.e_range, self.e_range_type)
+                range_info.append(e_range_info)
+
+            comb,w = reduce_from_ranges_many(data,
+                                             range_info,
+                                             getind=True)
         
             print("    found",w.size,"in bin")
             # first copy all common tags
@@ -952,6 +1117,11 @@ class LambdaBinner(BinnerBase):
         elif self['nbin'] == 6:
             lowlim = [20.0, 20.8, 25.9, 32.2, 41.3, 58.0]
             highlim = [20.8, 25.9, 32.2, 41.3, 58.0, 1.e6]
+        elif self['nbin'] == 1:
+            lowlim=[20.0]
+            highlim=[1.e6]
+            self.z_lowlim=[0.1]
+            self.z_highlim=[0.3]
         else:
             raise ValueError("Unsupported nbin: %d\n", self['nbin'])
 
@@ -991,7 +1161,7 @@ class ILumBinner(BinnerBase):
     # in units of L* 
     ilum_field = 'ilum'
     z_field = 'zred2'
-    def name(self):
+    def get_name(self):
         return 'ilum-%02d' % self['nbin']
 
     def bin(self, data):
@@ -1118,7 +1288,7 @@ class N200Binner(BinnerBase):
     #    self['nbin'] = nbin
     #    self.set_bin_ranges()
     range_type='[]'
-    def name(self):
+    def get_name(self):
         return 'n200-%02d' % self['nbin']
 
 
@@ -1201,7 +1371,7 @@ class N200Binner(BinnerBase):
 
         """
 
-        name = self.name()
+        name = self.get_name()
         data=lensing.files.sample_read(type='binned',sample=run,name=name)
 
         biggles.configure('screen','width', 1140)
@@ -1218,7 +1388,7 @@ class N200Binner(BinnerBase):
         pa.aspect_ratio = 1.0/1.5
 
         pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{\odot} pc^{-2}]$'
 
         xrnge = [0.01,60.0]
         yrnge = [1.e-2,8000]
@@ -1281,7 +1451,7 @@ class MZBinner(dict):
     def __init__(self, nmass, nz):
         self['nmass'] = nmass
         self['nz']    = nz
-    def name(self):
+    def get_name(self):
         return 'm%02iz%01i' % (self['nmass'],self['nz'])
 
     def bin_byrun(self, run):
@@ -1289,7 +1459,7 @@ class MZBinner(dict):
         Do the binning and write out a file
         """
 
-        name=self.name()
+        name=self.get_name()
         d = lensing.files.sample_read(type='collated',sample=run)
         res = self.bin(d)
 
@@ -1360,7 +1530,7 @@ class MZBinner(dict):
 
         """
 
-        name = self.name()
+        name = self.get_name()
         data=lensing.files.lensbin_read(run,name)
 
         biggles.configure('screen','width', 1140)
@@ -1378,7 +1548,7 @@ class MZBinner(dict):
         pa.aspect_ratio = 1.0/1.5
 
         pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-        pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+        pa.ylabel = r'$\Delta\Sigma ~ [M_{\odot} pc^{-2}]$'
         pa.xrange = [0.01,60.0]
         pa.yrange = [1.e-2,8000]
         pa.xlog = True
@@ -1453,7 +1623,7 @@ class MZBinner(dict):
             nex=''
             ex=None
 
-        name=self.name()
+        name=self.get_name()
         d = lensing.files.sample_read(type='fit', sample=run, name=name, extra=ex)
 
         plt = FramedPlot()
@@ -1502,16 +1672,16 @@ class MZBinner(dict):
         plt.xrange = [0.5*d['m200_mean'].min(), 1.5*d['m200_mean'].max()]
         if not residual:
             plt.yrange = [0.5*d[tag+'_fit'].min(), 1.5*d[tag+'_fit'].max()]
-            plt.ylabel = r'$M_{200}^{fit} [h^{-1} M_{sun}]$'
+            plt.ylabel = r'$M_{200}^{fit} [h^{-1} M_{\odot}]$'
             plt.add(Curve([0.1,1.e15],[0.1,1.e15]))
         else:
-            #plt.ylabel = r'$M_{true}-M_{fit} [h^{-1} M_{sun}]$'
+            #plt.ylabel = r'$M_{true}-M_{fit} [h^{-1} M_{\odot}]$'
             #plt.ylabel = r'$(M_{200}^{true}-M_{200}^{fit})/M_{200}^{true}$'
             if yrange is not None:
                 plt.yrange=yrange
             plt.ylabel = '(true-fit)/true'
             plt.add(Curve([0.1,1.e15],[0.0,0.0]))
-        plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{sun}]$'
+        plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{\odot}]$'
         plt.xlog = True
         if not residual:
             plt.ylog = True
@@ -1558,7 +1728,7 @@ class MZBinner(dict):
         residual: boolean, optional
             Plot the residual from true value.
         """
-        name=self.name()
+        name=self.get_name()
         d = lensing.files.sample_read(type='invert',sample=run,name=name)
 
         plt = FramedPlot()
@@ -1604,14 +1774,14 @@ class MZBinner(dict):
         plt.xrange = [0.5*d['m200_mean'].min(), 1.5*d['m200_mean'].max()]
         if not residual:
             plt.yrange = [0.5*d[tag].min(), 1.5*d[tag].max()]
-            plt.ylabel = r'$M_{200}^{inv} [h^{-1} M_{sun}]$'
+            plt.ylabel = r'$M_{200}^{inv} [h^{-1} M_{\dot}]$'
             plt.add(Curve([0.1,1.e15],[0.1,1.e15]))
         else:
             if yrange is not None:
                 plt.yrange=yrange
             plt.ylabel = '(true-inv)/true'
             plt.add(Curve([0.1,1.e15],[0.0,0.0]))
-        plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{sun}]$'
+        plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{\odot}]$'
         plt.xlog = True
         if not residual:
             plt.ylog = True
@@ -1821,7 +1991,7 @@ def plot_mzbin_byrun(run, nmass, nz, show=False):
     pa.aspect_ratio = 1.0/1.5
 
     pa.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-    pa.ylabel = r'$\Delta\Sigma ~ [M_{sun} pc^{-2}]$'
+    pa.ylabel = r'$\Delta\Sigma ~ [M_{\odot} pc^{-2}]$'
     pa.xrange = [0.01,60.0]
     pa.yrange = [1.e-2,8000]
     pa.xlog = True
@@ -1928,14 +2098,14 @@ def plot_mzbin_invmass_byrun(run, nmass, nz, type='',
     plt.xrange = [0.5*d['m200_mean'].min(), 1.5*d['m200_mean'].max()]
     if not residual:
         plt.yrange = [0.5*d[tag].min(), 1.5*d[tag].max()]
-        plt.ylabel = r'$M_{200}^{inv} [h^{-1} M_{sun}]$'
+        plt.ylabel = r'$M_{200}^{inv} [h^{-1} M_{\odot}]$'
         plt.add(Curve([0.1,1.e15],[0.1,1.e15]))
     else:
         if yrange is not None:
             plt.yrange=yrange
         plt.ylabel = '(true-inv)/true'
         plt.add(Curve([0.1,1.e15],[0.0,0.0]))
-    plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{sun}]$'
+    plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{\odot}]$'
     plt.xlog = True
     if not residual:
         plt.ylog = True
@@ -2027,16 +2197,16 @@ def plot_mzbin_mass_byrun(run, nmass, nz,
     plt.xrange = [0.5*d['m200_mean'].min(), 1.5*d['m200_mean'].max()]
     if not residual:
         plt.yrange = [0.5*d[tag+'_fit'].min(), 1.5*d[tag+'_fit'].max()]
-        plt.ylabel = r'$M_{200}^{fit} [h^{-1} M_{sun}]$'
+        plt.ylabel = r'$M_{200}^{fit} [h^{-1} M_{\odot}]$'
         plt.add(Curve([0.1,1.e15],[0.1,1.e15]))
     else:
-        #plt.ylabel = r'$M_{true}-M_{fit} [h^{-1} M_{sun}]$'
+        #plt.ylabel = r'$M_{true}-M_{fit} [h^{-1} M_{\odot}]$'
         #plt.ylabel = r'$(M_{200}^{true}-M_{200}^{fit})/M_{200}^{true}$'
         if yrange is not None:
             plt.yrange=yrange
         plt.ylabel = '(true-fit)/true'
         plt.add(Curve([0.1,1.e15],[0.0,0.0]))
-    plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{sun}]$'
+    plt.xlabel = r'$M_{200}^{true} [h^{-1} M_{\odot}]$'
     plt.xlog = True
     if not residual:
         plt.ylog = True
@@ -2078,8 +2248,11 @@ def combine_mzbin_lensum_from_ranges(data, tag, trange, zrange=None,getind=False
 
 
 def reduce_from_ranges(data, 
-                       tag, range1, range_type = '[)', 
-                       tag2=None, range2=None, range2_type = '[)',
+                       tag, range1,
+                       range_type = '[)', 
+                       tag2=None,
+                       range2=None,
+                       range2_type = '[)',
                        getind=False):
     """
 
@@ -2104,7 +2277,35 @@ def reduce_from_ranges(data,
     else:
         return comb
  
+def reduce_from_ranges_many(data, tags_and_ranges, getind=False):
+    """
 
+    parameters
+    ----------
+    data: ndarray with fields
+        The lensum data
+    tags_and_ranges: list
+        each element in the list is of the form
+            (tagname, range, range_type)
+    getind: bool
+        If True, get the indices from data that are in range
+    """
+
+    logic = numpy.ones(data.size, dtype='bool')
+    for tag_range in tags_and_ranges:
+        print("    ",tag_range)
+        tag, range, range_type = tag_range
+        logic = logic & get_range_logic(data, tag, range, range_type)
+
+    w=where1(logic)
+
+    comb = lensing.outputs.average_lensums(data[w])
+
+    if getind:
+        return comb, w
+    else:
+        return comb
+ 
 def get_range_logic(data, tag, brange, type):
     minval,maxval = brange
     if minval is None:
@@ -2112,6 +2313,7 @@ def get_range_logic(data, tag, brange, type):
     if maxval is None:
         maxval = data[tag].max()
 
+    print(minval,maxval)
     if type == '[]':
         logic = (data[tag] >= minval) & (data[tag] <= maxval)
     elif type == '[)':
@@ -2196,7 +2398,7 @@ def lensbin_dtype(nrbin, bintags=None):
     This is the same as lensing.outputs.averaged_dtype
     but with the averages added
     """
-    dt=[]
+    dt=[('nlenses','i8')]
     if bintags is not None:
         if not isinstance(bintags,list):
             bintags = [bintags]

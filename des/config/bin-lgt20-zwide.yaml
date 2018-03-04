@@ -1,0 +1,4 @@
+bin_info:
+    - label: '$\lambda > 20'
+      bins: [ ["lambda_chisq", [20.0, 1.0e+06], "()"],
+              ["z_lambda", [0.2, 0.8], "()"] ]

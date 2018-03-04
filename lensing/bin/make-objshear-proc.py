@@ -5,7 +5,7 @@ Description:
 
     Create config and shear/reduce wq scripts
 
-    version is the code version, e.g. gsens, im3
+    version is the code version, e.g. gsens, im3, mom
 
     types is by default 
         config,shear

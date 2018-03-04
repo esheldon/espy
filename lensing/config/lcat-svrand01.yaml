@@ -26,4 +26,4 @@ nrand: 20000000
 
 nsplit: 100
 
-masktype: sdss
+mask_type: sdss

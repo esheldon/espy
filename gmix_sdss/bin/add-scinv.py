@@ -85,19 +85,21 @@ def add_scinv(gmix_run, scinv_sample,
 
 
     print("")
-    scalc = lensing.sigmacrit.ScinvCalculator(zs,
-                                              scinv_conf['dzl'], 
-                                              scinv_conf['zlmin'],
+    scalc = lensing.sigmacrit.ScinvCalculator(scinv_conf['zlmin'],
                                               scinv_conf['zlmax'],
+                                              scinv_conf['nzl'], 
+                                              zs[0],
+                                              zs[-1],
                                               H0=cosmo['H0'],
                                               omega_m=cosmo['omega_m'])
+
 
     zlvals = scalc.zlvals
 
     meta={'scinv_sample':scinv_sample,
           'zlmin':scinv_conf['zlmin'],
           'zlmax':scinv_conf['zlmax'],
-          'dzl':scinv_conf['dzl'],
+          'nzl':scinv_conf['nzl'],
           'zlvals':zlvals}
 
     print("opening corresponding p(z) columns: '%s'\n" % pzrun)

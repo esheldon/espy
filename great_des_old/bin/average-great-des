@@ -1,0 +1,91 @@
+#!/usr/bin/env python
+"""
+    %prog [options] run gnum
+
+average outputs
+"""
+
+import os,sys
+import numpy
+from numpy import diag, sqrt, where, zeros
+import fitsio
+import esutil as eu
+
+from great_des import files
+import lensing
+
+from optparse import OptionParser
+parser = OptionParser(__doc__)
+
+def get_dtype(conf):
+    dt=[]
+    dt += [('nuse','i8'),
+           ('shear','f8',2),
+           ('shear_err','f8',2),
+           ('shear_cov','f8',(2,2)),
+           ('g_sens','f8',2),
+           ('shear_lensfit','f8',2),
+           ('shear_err_lensfit','f8',2),
+           ('shear_true', 'f8', 2)]
+    return dt
+
+def main():
+    options, args = parser.parse_args(sys.argv[1:])
+    if len(args) < 2:
+        parser.print_help()
+        sys.exit(45)
+
+    run=args[0]
+    gnum=int(args[1])
+
+    conf=files.read_config(run=run)
+    conf['gnum'] = gnum
+
+    data=files.read_collated(**conf)
+
+    dt=get_dtype(conf)
+    output=zeros(1, dtype=dt)
+
+    #w,=where(data['flags']==0)
+    w,=where( (data['flags']==0) & (data['arate'] < 0.6) & (data['arate'] > 0.4) )
+
+    wts=zeros( (w.size, 2) )
+    wts[:,0] = 1.0/(0.32**2 + data['g_cov'][w,0,0] + data['g_cov'][w,1,1])
+    wts[:,1] = wts[:,0]
+
+    w_sum = wts.sum(axis=0)
+    g_sum = (data['g'][w,:]*wts).sum(axis=0)
+    g_sens_sum = (data['g_sens'][w,:]*wts).sum(axis=0)
+
+    g_mean = g_sum/w_sum
+    g_sens_mean = g_sens_sum/w_sum
+
+    shear_lensfit = g_mean/g_sens_mean
+
+    print 'using: %d/%d' % (w.size, data.size)
+    sh,cov=lensing.pqr.pqr_jackknife(data['P'][w],
+                                     data['Q'][w],
+                                     data['R'][w],
+                                     is_ring=False,
+                                     chunksize=100)
+    err=sqrt(diag(cov))
+    output['nuse'][0] = w.size
+    output['shear'][0,:] = sh
+    output['shear_err'][0,:] = err
+    output['shear_cov'][0,:,:] = cov
+
+    output['g_sens'][0,:] = g_sens_mean
+    output['shear_lensfit'][0,:] = shear_lensfit
+    output['shear_err_lensfit'][0,:] = err/g_sens_mean
+
+    output['shear_true'] = data['shear_true'].mean(axis=0)
+
+    mess='sh1: %.4g +/- %.4g  sh2: %.4g +/- %.4g'
+    mess=mess % (sh[0], err[0], sh[1], err[1])
+    print mess
+
+    fname = files.get_averaged_file(**conf)
+    print 'writing:',fname
+    fitsio.write(fname, output, clobber=True)
+
+main()

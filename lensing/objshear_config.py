@@ -2,13 +2,13 @@ import lensing
 import os
 import esutil as eu
 from esutil.ostools import path_join
+import numpy
 
 def write_configs(run):
     rc = ObjshearRunConfig(run)
     rc.write_config()
 
-
-MASK_STYLES = {None:1, 'sdss':2}
+MASK_STYLES = {None:1, 'sdss':2, 'healpix':3}
 
 class ObjshearRunConfig(dict):
     """
@@ -38,10 +38,17 @@ class ObjshearRunConfig(dict):
         
     def make_zlvals(self):
         import sigmacrit
-        sconf = self['scinv_config']
-        return sigmacrit.make_zlvals(sconf['dzl'],
-                                     sconf['zlmin'],
-                                     sconf['zlmax'])
+        src_conf=self['src_config']
+        if 'zlmin' in src_conf:
+            zlmin=src_conf['zlmin']
+            zlmax=src_conf['zlmax']
+            nzl=src_conf['nzl']
+        else:
+            sconf = self['scinv_config']
+            zlmin=sconf['zlmin']
+            zlmax=sconf['zlmax']
+            nzl=sconf['nzl']
+        return numpy.linspace(zlmin,zlmax,nzl)
 
     # inputs to objshear
     def write_config(self):
@@ -54,8 +61,8 @@ class ObjshearRunConfig(dict):
         # "auto" file class for hdfs that returns the open
         # file handle for the local file?
 
-        masktype=self['lens_config']['masktype']
-        mask_style=MASK_STYLES[masktype]
+        mask_type=self['lens_config']['mask_type']
+        mask_style=MASK_STYLES[mask_type]
 
         if self.fs=='hdfs':
             hdfs_file= eu.hdfs.HDFSFile(config_file)

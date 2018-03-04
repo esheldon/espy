@@ -1,0 +1,91 @@
+#!/usr/bin/env python
+"""
+plot dsig for the input run and binning scheme
+
+Note jack also implies corr
+"""
+from __future__ import print_function
+import os,sys
+import des
+import argparse
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("run", help="run identifier")
+parser.add_argument("rand_run", help="random run identifier")
+parser.add_argument("bin_scheme", help="bin scheme, e.g. bin-lgt05-zwide")
+
+parser.add_argument("type", 
+                    help="type to plot",
+                    choices=['corr-binned', 'corr-jack'])
+
+parser.add_argument("-v","--visible",action='store_true',
+                    help="show plot on screen")
+
+parser.add_argument("--linear",action='store_true',
+                    help="use linear y axis")
+
+parser.add_argument("-y","--yrange",
+                    default=None,
+                    help="force y range")
+
+parser.add_argument("--title",
+                    default=None,
+                    help="add a title")
+
+parser.add_argument("--fmin",
+                    default=None,
+                    type=float,
+                    help="min fontisize")
+
+
+def get_data(args):
+    from des import files
+    if args.type=='corr-binned':
+        data=files.read_corr_binned(args.run, args.rand_run, args.bin_scheme)
+        epsfile=files.get_corr_binned_file(args.run, args.rand_run,
+                                           args.bin_scheme, ext='eps')
+    elif args.type=='corr-jack':
+        data=files.read_corr_jack(args.run, args.rand_run, args.bin_scheme)
+        epsfile=files.get_corr_jack_file(args.run, args.rand_run,
+                                         args.bin_scheme, ext='eps')
+
+    return data, epsfile
+
+
+def main():
+    args = parser.parse_args()
+
+    data, epsfile = get_data(args)
+
+    yrange=args.yrange
+    if yrange is not None:
+        yrange=[float(v) for v in args.yrange.split(',')]
+
+    binspec=des.files.read_config(args.bin_scheme)
+    labels=[bi['label'] for bi in binspec['bin_info']]
+
+    kw={}
+    if args.fmin is not None:
+        kw['fontsize_min']=args.fmin
+
+
+    plt=des.plotting.plot_dsig(data['r'],
+                               data['boost']-1,
+                               data['boost_err'],
+                               ylabel='boost-1',
+                               labels=labels,
+                               ylog=(args.linear==False),
+                               yrange=yrange,
+                               title=args.title,
+                               minval=1.0e-5,
+                               visible=False,
+                               type=['solid','filled circle'],
+                               **kw)
+
+    print("writing:",epsfile)
+    plt.write_eps(epsfile)
+
+    if args.visible:
+        plt.show(width=800, height=800)
+
+main()

@@ -30,8 +30,6 @@ import converter
 parser=OptionParser(__doc__)
 parser.add_option("-t",dest="bintype",default=None,
                   help="The type of binning, default %default")
-parser.add_option("-n",dest="nbin",default=None,
-                  help="The number of bins, default %default")
 
 parser.add_option("-s",dest="subtract_rand",action='store_true',default=False,
                   help="Subtract the randoms.  default %default")
@@ -46,6 +44,9 @@ parser.add_option("--show",action='store_true',default=False,
 
 def doplot(binned_data, corr_data, rand, label, show=False):
     tab = biggles.Table(2,2)
+    print("radii")
+    print(binned_data['r'])
+    print(rand['r'])
     arr=lensing.plotting.plot2dsig(binned_data['r'], 
                                    binned_data['dsig'], 
                                    binned_data['dsigerr'],
@@ -128,26 +129,29 @@ def main():
     randrun=args[1]
 
     bintype=options.bintype
-    nbin=int(options.nbin)
+
     minrad=float(options.minrad)
     subtract_rand = bool(options.subtract_rand)
 
-    if bintype is None or nbin is None:
+    #if bintype is None or nbin is None:
+    #    raise ValueError("currently demand some kind of binning")
+    if bintype is None:
         raise ValueError("currently demand some kind of binning")
 
     if subtract_rand:
         print("Will subtract randoms")
 
-    b = lensing.binning.instantiate_binner(bintype, nbin)
+    b = lensing.binning.instantiate_binner(bintype)
+    nbin=b.get_nbin()
 
-    binned_data = lensing.files.sample_read(type='binned', sample=lensrun, name=b.name())
+    binned_data = lensing.files.sample_read(type='binned', sample=lensrun, name=b.get_name())
 
     extra = 'randmatch-%s' % randrun
 
 
     allrand = lensing.files.sample_read(type='binned',
                                         sample=lensrun,
-                                        name=b.name(),
+                                        name=b.get_name(),
                                         extra=extra)
 
     alldata = lensing.correct.correct(binned_data, allrand, 
@@ -157,7 +161,7 @@ def main():
     lensing.files.sample_write(data=alldata,
                                type='corrected',
                                sample=lensrun,
-                               name=b.name(),
+                               name=b.get_name(),
                                extra=extra) 
 
 
@@ -172,31 +176,31 @@ def main():
         eps_corr_extra='correction-%02d' % binnum
         eps_corr=lensing.files.sample_file(type='corrected-plots',
                                            sample=lensrun,
-                                           name=b.name(),
+                                           name=b.get_name(),
                                            extra=eps_corr_extra, ext='eps')
 
         eps_rand_extra='randcomp-%02d' % binnum
         eps_rand=lensing.files.sample_file(type='corrected-plots',
                                            sample=lensrun,
-                                           name=b.name(),
+                                           name=b.get_name(),
                                            extra=eps_rand_extra, ext='eps')
         eps_rand_extra='randcomp-o-%02d' % binnum
         eps_orand=lensing.files.sample_file(type='corrected-plots',
                                             sample=lensrun,
-                                            name=b.name(),
+                                            name=b.get_name(),
                                             extra=eps_rand_extra, ext='eps')
 
 
         eps_dsigcorr_extra='dsigcorr-%02d' % binnum
         eps_dsigcorr=lensing.files.sample_file(type='corrected-plots',
                                                sample=lensrun,
-                                               name=b.name(),
+                                               name=b.get_name(),
                                                extra=eps_dsigcorr_extra, ext='eps')
 
         eps_all_extra='allcorr-%02d' % binnum
         eps_all=lensing.files.sample_file(type='corrected-plots',
                                           sample=lensrun,
-                                          name=b.name(),
+                                          name=b.get_name(),
                                           extra=eps_all_extra, ext='eps')
 
 

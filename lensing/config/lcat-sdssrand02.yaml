@@ -23,7 +23,7 @@ strict_edgecut: true
 zmin:          0.04
 zmax:          0.41
 
-masktype: sdss
+mask_type: sdss
 
 # redmapper catalog for lambda > 10 is 66150, so this is
 # a factor of 75

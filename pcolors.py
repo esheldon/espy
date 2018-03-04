@@ -1,4 +1,8 @@
 import colorsys
+try:
+    xrange
+except:
+    xrange = range
 
 def rainbow(num, type='hex'):
     """
@@ -18,7 +22,7 @@ def rainbow(num, type='hex'):
     maxh = 285.0
 
     hstep = (maxh-minh)/(num-1)
-    hex_colors=[]
+    colors=[]
     for i in xrange(num):
         h = minh + i*hstep
 
@@ -28,13 +32,53 @@ def rainbow(num, type='hex'):
         g *= 255
         b *= 255
         if type == 'rgb':
-            hex_colors.append(rgb)
+            colors.append( (r,g,b) )
         elif type == 'hex':
-            hex_colors.append( rgb_to_hex( (r,g,b) ) )
+
+            rgb = (int(r), int(g), int(b))
+            colors.append( rgb_to_hex(rgb) )
         else:
             raise ValueError("color type should be 'rgb' or 'hex'")
 
-    return hex_colors
+    return colors
+
+
+def heat(num, type='hex'):
+    """
+    make range from blue to red
+
+    parameters
+    ----------
+    num: integer
+        number of colors
+    type: string, optional
+        'hex' or 'rgb', default hex
+    """
+    # not going to 360
+    minh = 0.0
+    # 270 would go to pure blue
+    #maxh = 270.0
+    maxh = 250.0
+
+    hstep = (maxh-minh)/(num-1)
+    colors=[]
+    for i in xrange(num):
+        h = minh + i*hstep
+
+        # just change the hue
+        r,g,b = colorsys.hsv_to_rgb(h/360.0, 1.0, 1.0)
+        r *= 255
+        g *= 255
+        b *= 255
+        if type == 'rgb':
+            colors.append( (r,g,b) )
+        elif type == 'hex':
+            colors.append( rgb_to_hex( (r,g,b) ) )
+        else:
+            raise ValueError("color type should be 'rgb' or 'hex'")
+
+    return list(reversed(colors))
+
 
 def rgb_to_hex(rgb):
     return '#%02x%02x%02x' % rgb

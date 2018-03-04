@@ -1,4 +1,9 @@
 from __future__ import print_function
+try:
+    xrange
+except:
+    xrange=range
+
 import os
 import numpy
 from numpy import array, arcsinh, zeros,where
@@ -66,19 +71,7 @@ def view(image, **keys):
     if 'title' in keys:
         plt.title=keys['title']
 
-    s = im.shape
-    if 'xdr' in keys and 'ydr' in keys:
-        xdr=keys['xdr']
-        ydr=keys['ydr']
-        ranges = ((xdr[0], ydr[0]), (xdr[1], ydr[1]))
-
-        x=numpy.linspace(xdr[0],xdr[1],s[0])
-        y=numpy.linspace(ydr[0],ydr[1],s[1])
-    else:
-        # this is a difference from Contours which can be alarming
-        ranges = ((-0.5, -0.5), (s[0]-0.5, s[1]-0.5))
-        x=None
-        y=None
+    x, y, ranges = _extract_data_ranges(im.shape, **keys)
 
     def_contour_color='black'
     if 'dens' in type:
@@ -89,10 +82,20 @@ def view(image, **keys):
     if 'cont' in type:
         levels=keys.get('levels',8)
         if levels is not None:
+            if 'zrange' in keys:
+                zrange=keys['zrange']
+            else:
+                zrange=numpy.percentile(im, [1.0,100.0])
+
             ccolor = keys.get('ccolor',def_contour_color)
-            c = biggles.Contours(im,x=x,y=y,color=ccolor)
+            c = biggles.Contours(im,x=x,y=y,color=ccolor,zrange=zrange)
             c.levels = levels
             plt.add(c)
+
+    if 'xrange' in keys:
+        plt.xrange=keys['xrange']
+    if 'yrange' in keys:
+        plt.yrange=keys['yrange']
 
     # make sure the pixels look square
     plt.aspect_ratio = im.shape[1]/float(im.shape[0])
@@ -102,21 +105,130 @@ def view(image, **keys):
     if 'ylabel' in keys:
         plt.ylabel=keys['ylabel']
 
+    _writefile_maybe(plt, **keys)
+    _show_maybe(plt, **keys)
+
+    return plt
+
+
+def view_profile(image, **keys): 
+    """
+    View the image as a radial profile vs radius from the center.
+
+    If show=False just return the plot object.
+
+    Values below zero are clipped, so pre-subtract any background as
+    necessary.
+
+    parameters
+    ----------
+    image or r,g,b: ndarray
+        The image(s) as a 2-d array or 
+    cen: [c1,c2], optional
+        Optional center
+    show: bool
+        Set False to not show the image in an X window.
+    file: string
+        Write the image to the intput file name.  .png will be written
+        as a png file, else an eps file.
+    width, height: integers
+        Size for output
+    **kw:
+        keywords for the FramedPlot and for the output image dimensions
+        width
+    """
+    import biggles
+
+    plt=keys.pop('plt',None)
+    show=keys.pop('show',True)
+    cen=keys.pop('cen',None)
+
+    if cen is None:
+        cen=(numpy.array(image.shape)-1.0)/2.0
+    else:
+        assert len(cen)==2,"cen must have two elements"
+
+    rows,cols=numpy.mgrid[
+        0:image.shape[0],
+        0:image.shape[1],
+    ]
+
+    rows = rows.astype('f8')-cen[0]
+    cols = cols.astype('f8')-cen[1]
+
+    r = numpy.sqrt(rows**2 + cols**2).ravel()
+    s = r.argsort()
+    r=r[s]
+    imravel = image.ravel()[s]
+
+    #pts = biggles.Points(r, imravel, size=size, type=type, **keys)
+    keys['visible']=False
+    plt = biggles.plot(r, imravel, plt=plt, **keys)
+
+    _writefile_maybe(plt, **keys)
+    _show_maybe(plt, show=show,**keys)
+
+    return plt
+
+
+
+def _writefile_maybe(plt, **keys):
     if 'file' in keys and keys['file'] is not None:
         file=os.path.expandvars(keys['file'])
         file=os.path.expanduser(file)
         if '.png' in file:
-            png_dims=keys.get('dims',[800,800])
-            plt.write_img(dims[0],dims[1],pngfile)
+            dims=keys.get('dims',[800,800])
+            plt.write_img(dims[0],dims[1],file)
         else:
             plt.write_eps(file)
 
-    show=keys.get('show',True)
+def _show_maybe(plt, **keys):
+    show=keys.get('show',None)
+    if show is None:
+        if 'file' in keys and keys['file'] is not None:
+            # don't show anything if show not explicitly
+            # sent and we are writing a file
+            show=False
+        else:
+            show=True
+    else:
+        show=keys['show']
+
     if show:
-        plt.show()
+        dims=keys.get('dims',None)
+        if dims is None:
+            width=keys.get('width',None)
+            height=keys.get('height',None)
+            if width is None:
+                dims=[800,800]
+            else:
+                dims=[width,height]
 
-    return plt
+        plt.show(width=dims[0], height=dims[1])
 
+
+def _extract_data_ranges(imshape, **keys):
+    if 'xdr' in keys and 'ydr' in keys:
+        xdr=keys['xdr']
+        ydr=keys['ydr']
+        ranges = ((xdr[0], ydr[0]), (xdr[1], ydr[1]))
+
+        x=numpy.linspace(xdr[0],xdr[1],imshape[0])
+        y=numpy.linspace(ydr[0],ydr[1],imshape[1])
+    elif 'ranges' in keys:
+        ranges = keys['ranges']
+        xmin,ymin = ranges[0]
+        xmax,ymax = ranges[1]
+        x=numpy.linspace(xmin, xmax, imshape[0])
+        y=numpy.linspace(ymin, ymax, imshape[1])
+    else:
+        # this is a difference from Contours which can be alarming
+        ranges = ((-0.5, -0.5), (imshape[0]-0.5, imshape[1]-0.5))
+        x=None
+        y=None
+
+    return x, y, ranges
+ 
 def make_combined_mosaic(imlist):
     """
     only works if all images are same size
@@ -146,7 +258,7 @@ def make_combined_mosaic(imlist):
     return imtot
 
 
-def view_mosaic(imlist, combine=False, **keys):
+def view_mosaic(imlist, titles=None, combine=False, **keys):
     import biggles
 
     if combine:
@@ -166,27 +278,65 @@ def view_mosaic(imlist, combine=False, **keys):
         row=i/ncol
         col=i % ncol
 
-        implt=view(im, **tkeys)
+        if titles is not None:
+            title=titles[i]
+        else:
+            title=None
+
+        implt=view(im, title=title, **tkeys)
         tab[row,col] = implt
 
-    show=keys.get('show',True)
-    if show:
-        tab.show()
-    
+    # aspect is ysize/xsize
+    aspect=keys.get('aspect',None)
+    if aspect is None:
+        aspect = float(nrow)/ncol
+    tab.aspect_ratio=aspect
+
+    _writefile_maybe(tab, **keys)
+    _show_maybe(tab, **keys)
+
     return tab
 
-def get_grid(ntot):
+def get_grid(nplot):
     """
-    get nrow,ncol
+    get nrow,ncol given the number of plots
+
+    parameters
+    ----------
+    nplot: int
+        Number of plots in the grid
     """
     from math import sqrt
-    sq=int(sqrt(ntot))
-    if ntot==sq*sq:
+    sq=int(sqrt(nplot))
+    if nplot==sq*sq:
         return (sq,sq)
-    elif ntot <= sq*(sq+1):
+    elif nplot <= sq*(sq+1):
         return (sq,sq+1)
     else:
         return (sq+1,sq+1)
+
+def get_grid_rowcol(nplot, index):
+    """
+    get the grid position given the number of plots
+
+    move along columns first
+
+    example
+    -------
+    nplot=7
+    nrow, ncol = get_grid(nplot)
+    arr=biggles.FramedArray(nrow, ncol)
+
+    for i in xrange(nplot):
+        row,col=get_grid_rowcol(nplot, i)
+        arr[row,col].add( ... )
+    """
+
+    nrow, ncol = get_grid(nplot)
+    row = index/ncol
+    col = index % ncol
+
+    return row,col
 
 
 def bytescale(im):
@@ -228,21 +378,39 @@ def multiview(image, **keys):
     cen = keys.get('cen', None)
     if cen is None:
         # use the middle as center
-        cen = [(image.shape[0]-1)/2., (image.shape[1]-1)/2.]
+        cen = [
+            int(round( (image.shape[0]-1)/2. )),
+            int(round( (image.shape[1]-1)/2. )),
+        ]
 
     keys2 = copy.copy(keys)
     keys2['show'] = False
+    keys2['file'] = None
+
     imp = view(image, **keys2)
 
     # cross-section across rows
     imrows = image[:, cen[1]]
     imcols = image[cen[0], :]
     
+    # in case xdr, ydr were sent
+    x, y, ranges = _extract_data_ranges(image.shape, **keys)
+    if x is not None:
+        x0 = ranges[0][0]
+        y0 = ranges[0][1]
+        xbinsize=x[1]-x[0]
+        ybinsize=y[1]-y[0]
+    else:
+        x0=0
+        y0=0
+        xbinsize=1
+        ybinsize=1
+
 
     crossplt = biggles.FramedPlot()
-    hrows = biggles.Histogram(imrows, color='blue')
+    hrows = biggles.Histogram(imrows, x0=y0, binsize=ybinsize, color='blue')
     hrows.label = 'Center rows'
-    hcols = biggles.Histogram(imcols, color='red')
+    hcols = biggles.Histogram(imcols, x0=x0, binsize=xbinsize, color='red')
     hcols.label = 'Center columns'
 
     key = biggles.PlotKey(0.1, 0.9, [hrows, hcols])
@@ -259,13 +427,9 @@ def multiview(image, **keys):
     tab[0,0] = imp
     tab[0,1] = crossplt
 
-    #title=keys.get('title',None)
-    #if title:
-    #    tab.title=title
 
-    show = keys.get('show', True)
-    if show:
-        tab.show()
+    _writefile_maybe(tab, **keys)
+    _show_maybe(tab, **keys)
     return tab
 
 def compare_images(im1, im2, **keys):
@@ -277,6 +441,10 @@ def compare_images(im1, im2, **keys):
     cross_sections=keys.get('cross_sections',True)
     ymin=keys.get('min',None)
     ymax=keys.get('max',None)
+
+    color1=keys.get('color1','blue')
+    color2=keys.get('color2','orange')
+    colordiff=keys.get('colordiff','red')
 
     nrow=2
     if cross_sections:
@@ -308,6 +476,7 @@ def compare_images(im1, im2, **keys):
 
     tkeys=copy.deepcopy(keys)
     tkeys['show']=False
+    tkeys['file']=None
     im1plt=view(im1, **tkeys)
     im2plt=view(im2, **tkeys)
 
@@ -342,19 +511,21 @@ def compare_images(im1, im2, **keys):
 
     # cross-sections
     if cross_sections:
-        im1rows = im1[:,cen[1]]
-        im1cols = im1[cen[0],:]
-        im2rows = im2[:,cen[1]]
-        im2cols = im2[cen[0],:]
-        resrows = resid[:,cen[1]]
-        rescols = resid[cen[0],:]
+        cen0=int(cen[0])
+        cen1=int(cen[1])
+        im1rows = im1[:,cen1]
+        im1cols = im1[cen0,:]
+        im2rows = im2[:,cen1]
+        im2cols = im2[cen0,:]
+        resrows = resid[:,cen1]
+        rescols = resid[cen0,:]
 
-        him1rows = biggles.Histogram(im1rows, color='blue')
-        him1cols = biggles.Histogram(im1cols, color='blue')
-        him2rows = biggles.Histogram(im2rows, color='orange')
-        him2cols = biggles.Histogram(im2cols, color='orange')
-        hresrows = biggles.Histogram(resrows, color='red')
-        hrescols = biggles.Histogram(rescols, color='red')
+        him1rows = biggles.Histogram(im1rows, color=color1)
+        him1cols = biggles.Histogram(im1cols, color=color1)
+        him2rows = biggles.Histogram(im2rows, color=color2)
+        him2cols = biggles.Histogram(im2cols, color=color2)
+        hresrows = biggles.Histogram(resrows, color=colordiff)
+        hrescols = biggles.Histogram(rescols, color=colordiff)
 
         him1rows.label = label1
         him2rows.label = label2
@@ -382,10 +553,8 @@ def compare_images(im1, im2, **keys):
         tab[0,1] = im2plt
         tab[1,0] = residplt
 
-    if show:
-        tab.show()
-
-    biggles.configure( 'default', 'fontsize_min', 1.25)
+    _writefile_maybe(tab, **keys)
+    _show_maybe(tab, **keys)
 
     return tab
 

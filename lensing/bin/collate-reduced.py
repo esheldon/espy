@@ -10,6 +10,7 @@ Description:
 from __future__ import print_function
 
 import sys
+import numpy
 import lensing
 import esutil as eu
 from esutil.hdfs import HDFSFile
@@ -26,6 +27,41 @@ parser.add_option("-s",dest="lens_split",default=None,
 parser.add_option("--fs",default='nfs',
                   help="file system. %default")
 
+def add_im3_dt(dt):
+    dt += [('pT','f8'),('pe1','f8'),('pe2','f8'),('pe','f8')]
+    return dt
+
+def add_ellip(data):
+    data['pe']  =  9999.0
+    data['pe1'] = -9999.0
+    data['pe2'] = -9999.0
+    #w,=numpy.where(data['totpairs'] > 10)
+    #if w.size > 0:
+    #    ninv  = 1.0/(data['totpairs'][w]-1)
+    w,=numpy.where( (data['totpairs'] > 10) & (data['weight'] > 0.0) )
+    if w.size > 0:
+        print("%s/%s had enough for ellip calculation" % (w.size,data.size))
+        # weight is also wsum
+        winv  = 1.0/data['weight'][w]
+        T     = data['x2sum'][w] + data['y2sum'][w]
+        x2my2 = data['x2sum'][w] - data['y2sum'][w]
+        xy    = data['xysum'][w]
+
+        T     *= winv
+        x2my2 *= winv
+        xy    *= winv
+
+        data['pT'][w] = T
+
+        w2,=numpy.where(T > 0.0)
+        if w2.size > 0:
+
+            pe1 = x2my2[w2]/T[w2]
+            pe2 = 2.0*xy[w2]/T[w2]
+
+            data['pe1'][w[w2]] = pe1
+            data['pe2'][w[w2]] = pe2
+            data['pe'][w[w2]] = numpy.sqrt(pe1**2 + pe2**2)
 
 def main():
     options,args = parser.parse_args(sys.argv[1:])
@@ -103,9 +139,14 @@ def main():
             catsub = cat[ reduced['zindex'] ]
 
         add_dt = [d for d in reduced.dtype.descr if d[0] != 'zindex']
+        if 'im3' in run:
+            add_dt = add_im3_dt(add_dt)
 
         data = eu.numpy_util.add_fields(catsub, add_dt)
         eu.numpy_util.copy_fields(reduced, data)
+
+        if 'im3' in run:
+            add_ellip(data)
 
         print("writing")
         fits.write(data)

@@ -1,0 +1,52 @@
+#!/usr/bin/env python
+
+from argparse import ArgumentParser
+
+parser=ArgumentParser()
+parser.add_argument("nchunks",type=int,help="number of chunks")
+parser.add_argument("filename",help="file to split by lines into chunks")
+
+parser.add_argument("--prefix","-p",dest="prefix",
+                  default="./chunk",
+                  help="prefix for file names.")
+parser.add_argument("--suffix","-s",dest="suffix",
+                  default=".txt",
+                  help="suffix for file names.")
+
+def split_list(els, args):
+
+    nel = len(els)
+
+    chunksize = nel//args.nchunks
+
+    cformat = '%0'+str(len(str(args.nchunks)))+'i'
+    name_format = args.prefix+cformat+args.suffix
+
+    for i in range(args.nchunks):
+        # loop over chunks
+        i1 = i*chunksize
+
+        if i==(args.nchunks-1):
+            i2=nel
+        else:
+            i2 = (i+1)*chunksize
+
+        thischunk = els[i1:i2]
+
+        fname = name_format % i
+
+        print fname
+
+        with open(fname,'w') as fobj:
+            for el in thischunk:
+                fobj.write(el)
+
+def main():
+    args = parser.parse_args()
+
+    with open(args.filename) as fobj:
+        lines=fobj.readlines()
+
+    split_list(lines, args)
+
+main()

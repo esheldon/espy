@@ -99,6 +99,7 @@ def combine_pqr_sums(P_sum, Q_sum, Cinv_sum):
 
 
 def pqr_jackknife(P, Q, R,
+                  is_ring=True,
                   chunksize=1,
                   get_sums=False,
                   get_shears=False,
@@ -106,6 +107,91 @@ def pqr_jackknife(P, Q, R,
                   show=False,
                   eps=None,
                   png=None):
+    """
+    Get the shear covariance matrix using jackknife resampling.
+
+    The trick is that this must be done in pairs for ring tests
+
+    chunksize is the number of *pairs* to remove for each chunk
+    """
+
+    if is_ring:
+        return pqr_jackknife_ring(P, Q, R,
+                                  chunksize=chunksize,
+                                  get_sums=get_sums,
+                                  get_shears=get_shears,
+                                  progress=progress,
+                                  show=show,
+                                  eps=eps,
+                                  png=png)
+
+    if progress:
+        import progressbar
+        pg=progressbar.ProgressBar(width=70)
+
+    # some may not get used
+    ntot=P.size
+    nchunks = ntot/chunksize
+
+    print 'getting overall sums'
+    P_sum, Q_sum, Cinv_sum = get_pqr_sums(P,Q,R)
+    C = numpy.linalg.inv(Cinv_sum)
+    shear = numpy.dot(C,Q_sum)
+
+    print 'doing jackknife'
+    shears = numpy.zeros( (nchunks, 2) )
+    for i in xrange(nchunks):
+
+        beg = i*chunksize
+        end = (i+1)*chunksize
+        
+        if progress:
+            frac=float(i+1)/nchunks
+            pg.update(frac=frac)
+
+        Ptmp = P[beg:end]
+        Qtmp = Q[beg:end,:]
+        Rtmp = R[beg:end,:,:]
+
+        P_sum, Q_sum_tmp, Cinv_sum_tmp = \
+                get_pqr_sums(Ptmp,Qtmp,Rtmp)
+        
+        Q_sum_tmp    = Q_sum - Q_sum_tmp
+        Cinv_sum_tmp = Cinv_sum - Cinv_sum_tmp
+
+        Ctmp = numpy.linalg.inv(Cinv_sum_tmp)
+        shear_tmp = numpy.dot(C,Q_sum_tmp)
+
+        shears[i, :] = shear_tmp
+
+    shear_cov = numpy.zeros( (2,2) )
+    fac = (nchunks-1)/float(nchunks)
+
+    shear = shears.mean(axis=0)
+
+    shear_cov[0,0] = fac*( ((shear[0]-shears[:,0])**2).sum() )
+    shear_cov[0,1] = fac*( ((shear[0]-shears[:,0]) * (shear[1]-shears[:,1])).sum() )
+    shear_cov[1,0] = shear_cov[0,1]
+    shear_cov[1,1] = fac*( ((shear[1]-shears[:,1])**2).sum() )
+
+    if show or eps or png:
+        _plot_shears(shears, show=show, eps=eps, png=png)
+
+    if get_sums:
+        return shear, shear_cov, Q_sum, Cinv_sum
+    elif get_shears:
+        return shear, shear_cov, shears
+    else:
+        return shear, shear_cov
+
+def pqr_jackknife_ring(P, Q, R,
+                       chunksize=1,
+                       get_sums=False,
+                       get_shears=False,
+                       progress=False,
+                       show=False,
+                       eps=None,
+                       png=None):
     """
     Get the shear covariance matrix using jackknife resampling.
 
@@ -176,6 +262,8 @@ def pqr_jackknife(P, Q, R,
         return shear, shear_cov, shears
     else:
         return shear, shear_cov
+
+
 
 def pqr_in_chunks(P, Q, R, chunksize):
     """

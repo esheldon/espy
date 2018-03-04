@@ -1,0 +1,37 @@
+comments: "dec range limited to spt-e"
+
+lcat_name: "redmapper-6.2.12-random-erase"
+type: "random"
+
+cosmo_vers: "cosmo-01"
+
+nchunk: 50
+
+nbin: 17
+rmin: 0.055
+rmax: 35.15
+
+zmin: 0.2
+zmax: 0.8
+
+# this is "eq" or "sdss"
+mask_style: "equatorial"
+mask_type: "healpix"
+mask_file: "/astro/u/esheldon/masks/des/neff/sva1_gold_1.0_nside4096-64_ring_i_neff.fits"
+mask_ellip_max: 0.05
+
+index_col:  "rand_index"
+ra_col:     "ra"
+dec_col:    "dec"
+#z_col:      "ztrue"
+z_col:      "z_lambda"
+#lambda_col: "lambda_in"
+lambda_col: "lambda_chisq"
+
+extra_weight_col: "rand_weight"
+
+# for matching to lens catalogs.
+# Can be "z" or "selection", or "selection-and-z"
+match_type: "selection-and-z"
+
+zmatch_method: "weight"

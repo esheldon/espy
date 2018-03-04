@@ -1,0 +1,32 @@
+# not used yet because mask is not right
+comments: |
+    6.2.15 with ra dec range limited to spt-e
+    trim to mask
+
+lcat_name: "redmapper-6.2.15-lgt05"
+type: "lenses"
+
+cosmo_vers: "cosmo-01"
+
+nchunk: 1
+
+nbin: 17
+rmin: 0.055
+rmax: 35.15
+
+zmin: 0.2
+zmax: 0.8
+
+# corresponds to a config file
+mask_vers: "mask-sva1-i-01"
+
+index_col:  "mem_match_id"
+ra_col:     "ra"
+dec_col:    "dec"
+z_col:      "z_lambda"
+lambda_col: "lambda_chisq"
+
+#jackreg_col: "jack_region40"
+#jackreg_col: "jack_region60"
+#jackreg_col: "jack_region80"
+jackreg_col: "jack_region100"

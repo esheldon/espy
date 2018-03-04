@@ -20,7 +20,7 @@ rmax:          36.567
 zmin:          0.04
 zmax:          0.32
 
-masktype: sdss
+mask_type: sdss
 
 # maxbcg that mass cuts is <~ 200,000
 # this is about 20 times

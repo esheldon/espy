@@ -196,6 +196,9 @@ def shear_fracdiff(e, em, deriv=1.0):
 
 
 def lens_wmom(data, tag, ind=None, sdev=False):
+    """
+    average a tag from a lensum struct using the lensing weights
+    """
     if ind is None:
         wts = data['weight']
         tdata = data[tag]

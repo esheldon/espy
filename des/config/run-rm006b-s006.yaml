@@ -1,0 +1,12 @@
+# redmapper 6.3.3, lambda > 5 with spt-e ra,dec cut
+lcat_vers: "lcat-rm006b"
+
+# ngmix011, pz v0.1.7, skynet_mag_auto, Matt's cuts, peter's mask
+# ubermem removed by probability
+scat_vers: "scat-006"
+
+# this is used in xshear, not for the maskflags
+healpix_nside: 64
+
+# only applies if using point photoz
+#zdiff_min: 0.2

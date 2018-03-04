@@ -1,0 +1,524 @@
+#!/usr/bin/env python
+"""
+    %prog [options] config
+
+Make color jpg files of all ccds and a mosaic of all images.  Also make a web
+page with an image map pointing to the individual images.
+
+All are aligned with the r band
+
+name in the config is a label for the outputs.  The ccd files will be called
+name_{ccd}.jpg, etc. this is because the run identifiers are so long the file
+name would be ridiculous.
+
+On the web page for the pointing the full info will be written
+
+"""
+
+import sys
+import os
+import glob
+import yaml
+import esutil as eu
+from esutil import wcsutil
+from numpy import zeros, array, flipud
+import images
+
+from PIL import Image
+
+import des
+import desdb
+import fitsio
+
+from optparse import OptionParser
+parser=OptionParser(__doc__)
+
+parser.add_option('-r','--rebin',default='24',
+                  help="rebin factor")
+parser.add_option('-c','--clobber',action='store_true',
+                  help="write files even if they already exist")
+
+class RGBMosaicMaker(object):
+    def __init__(self,config_name,clobber=False):
+
+        self.config=yaml.load(open(config_name))
+        self.name=self.config['name']
+        self.rebin_vals=self.config['rebin']
+
+        self.clobber=clobber
+
+        self.outdir=os.path.dirname(config_name)
+
+        self._df=desdb.files.DESFiles()
+
+        # show the pixel layout
+        self.show=False
+
+        print 'out dir:     ',self.outdir
+
+    def go(self):
+
+        if not self.clobber:
+            if self.mosaic_jpg_all_exist():
+                print 'all mosaic images already exist'
+                return
+
+        print 'getting pixel ranges'
+        self.set_pixel_ranges()
+
+        print 'making mosaic'
+        self.make_mosaic()
+
+        for rebin in self.rebin_vals:
+
+            jpg_file=self.mosaic_jpg_name(rebin)
+            if os.path.exists(jpg_file) and not self.clobber:
+                print 'mosaic already exists:',jpg_file
+                continue
+
+            print '  rebinning by:',rebin
+            imrebin=self.do_rebin(rebin)
+
+            cim_mod=flipud(imrebin).transpose((1,0,2))
+            cim_mod = images.bytescale(cim_mod)
+            pim=Image.fromarray(cim_mod)
+
+            print '  writing jpg:',jpg_file
+            pim.save(jpg_file, quality=90)
+
+            jpg_shape=cim_mod.shape[0:0+2]
+            self.make_html(rebin, jpg_shape)
+
+
+    def make_mosaic(self):
+
+        nrows=self.rowmax.max()
+        ncols=self.colmax.max()
+
+        image=zeros( (nrows, ncols, 3), dtype='f4' )
+
+        scales= array([1.0, 1.1, 2.0])
+        scales = des.makeimage.pretty.SCALE*scales
+        nonlinear=des.makeimage.pretty.NONLINEAR
+        satval=100.0 # should play with this
+
+        rowmin,rowmax,colmin,colmax=self.rowmin,self.rowmax,self.colmin,self.colmax
+        info=[]
+        nccd=62
+        for ccd in xrange(1,nccd+1):
+
+            i=ccd-1
+
+            data=self.get_images_and_headers(ccd)
+
+            colorim=images.get_color_image(data['i'], data['r'], data['g'], 
+                                           scales=scales,
+                                           nonlinear=nonlinear,
+                                           satval=satval)
+
+            # sometimes there is a slight mismatch in inferred size
+            image[rowmin[i]:rowmax[i], colmin[i]:colmax[i],:] = colorim[:,:,:]
+
+
+            jpg_file=self.get_jpg_name(ccd)
+            print '  ',jpg_file
+
+            cim_mod=flipud(colorim).transpose((1,0,2))
+            cim_mod = images.bytescale(cim_mod)
+            pim=Image.fromarray(cim_mod)
+            pim.save(jpg_file, quality=90)
+
+            info.append({'jpg_file':jpg_file,
+                         'jpg_local':os.path.join('./',os.path.basename(jpg_file)),
+                         'exptimes':[data['gh']['exptime'],data['rh']['exptime'],data['ih']['exptime']],
+                         'crval1':data['rh']['crval1'],
+                         'crval2':data['rh']['crval2'],
+                         'ccd':ccd})
+
+
+        self.image=image
+        self.infolist=info
+
+    def get_jpg_name(self, ccd):
+        jpg_name='%s_irg_%02d.jpg' % (self.name,ccd)
+        jpg_file=os.path.join(self.outdir,jpg_name)
+        return jpg_file
+
+    def get_layout_name(self, ccd):
+        name='%s_grid.png' % (self.name,ccd)
+        path=os.path.join(self.outdir,name)
+        return path
+
+
+    def mosaic_jpg_name(self, rebin):
+        jpg_file=os.path.join(self.outdir,'%s_irg_mosaic%02d.jpg' % (self.name,rebin))
+        return jpg_file
+
+    def mosaic_html_name(self, rebin):
+        html_file=os.path.join(self.outdir,'%s_irg_mosaic%02d.html' % (self.name,rebin))
+        return html_file
+
+    def mosaic_jpg_all_exist(self):
+        # continue only if one of them not found
+        nfound=0
+        for rebin in self.rebin_vals:
+            jpg_file=self.mosaic_jpg_name(rebin)
+            if os.path.exists(jpg_file):
+                nfound += 1
+
+        if nfound==len(self.rebin_vals):
+            return True
+        else:
+            return False
+
+    def get_images_and_headers(self, ccd):
+        gpath=self._df.name(type='red_image',
+                            run=self.config['grun'],
+                            expname=self.config['gexposure'],
+                            ccd=ccd)
+        gfits=fitsio.FITS(gpath)
+        gh=gfits[1].read_header()
+        g=gfits[1][:,:]
+
+        rpath=self._df.name(type='red_image',
+                            run=self.config['rrun'],
+                            expname=self.config['rexposure'],
+                            ccd=ccd)
+        rfits=fitsio.FITS(rpath)
+        rh=rfits[1].read_header()
+        r=rfits[1][:,:]
+
+        ipath=self._df.name(type='red_image',
+                            run=self.config['irun'],
+                            expname=self.config['iexposure'],
+                            ccd=ccd)
+        ifits=fitsio.FITS(ipath)
+        ih=ifits[1].read_header()
+        i=ifits[1][:,:]
+
+        g -= gh['skybrite']
+        r -= rh['skybrite']
+        i -= ih['skybrite']
+
+        g *= (des.makeimage.pretty.NOMINAL_EXPTIME/gh['exptime'])
+        r *= (des.makeimage.pretty.NOMINAL_EXPTIME/rh['exptime'])
+        i *= (des.makeimage.pretty.NOMINAL_EXPTIME/ih['exptime'])
+
+        g,i=shift_images(gh,rh,ih,g,i)
+
+        return {'g':g,
+                'gh':gh,
+                'r':r,
+                'rh':rh,
+                'i':i,
+                'ih':ih}
+
+
+    def set_pixel_ranges(self):
+        """
+        Use r-band
+        """
+        import biggles
+        import pcolors
+
+        nccd=62
+        rowmin=zeros(nccd,dtype='i8')
+        rowmax=zeros(nccd,dtype='i8')
+        colmin=zeros(nccd,dtype='i8')
+        colmax=zeros(nccd,dtype='i8')
+        names=zeros(nccd, dtype='S5')
+
+        for ccd in xrange(1,nccd+1):
+            i=ccd-1
+            path=self._df.name(type='red_image',
+                               run=self.config['rrun'],
+                               expname=self.config['rexposure'],
+                               ccd=ccd)
+            f=fitsio.FITS(path)
+
+            h=f[1].read_header()
+
+            ncol=h['znaxis1']
+            nrow=h['znaxis2']
+            ccd_name=h['detpos']
+            names[i] = ccd_name
+
+            print os.path.basename(path),names[i]
+
+            wcs=wcsutil.WCS(h)
+
+            rowmin[i]=0-wcs['crpix2']
+            colmin[i]=0-wcs['crpix1']
+
+            # note +1 for idl slices
+            rowmax[i]=rowmin[i] + nrow
+            colmax[i]=colmin[i] + ncol
+
+        rmin0 = rowmin.min()
+        cmin0 = colmin.min()
+
+        rowmin -= rmin0
+        rowmax -= rmin0
+        colmin -= cmin0
+        colmax -= cmin0
+
+        # plot the pixel grid
+        cmax=colmax.max()
+        rmax=rowmax.max()
+        colors=pcolors.rainbow(nccd,'hex')
+        plt=biggles.FramedPlot()
+
+        for i in xrange(rowmin.size):
+            box=eu.plotting.bbox(colmin[i],colmax[i]-1,
+                                 rowmin[i],rowmax[i]-1,
+                                 color=colors[i])
+
+            cavg = (colmin[i]+colmax[i])/2.
+            ravg = (rowmin[i]+rowmax[i])/2.
+            lab=biggles.PlotLabel(cavg/cmax, ravg/rmax,
+                                  names[i].strip(),
+                                  halign='left',
+                                  size=1.5,
+                                  color=colors[i])
+            plt.add(box,lab)
+
+        plt.xlabel='columns'
+        plt.ylabel='rows'
+        if self.show:
+            plt.show()
+
+        self.rowmin=rowmin
+        self.rowmax=rowmax
+        self.colmin=colmin
+        self.colmax=colmax
+
+    def make_html(self, rebin, jpg_shape):
+
+        mosaic_jpg=self.mosaic_jpg_name(rebin)
+        mosaic_local=os.path.join('./', os.path.basename(mosaic_jpg))
+
+        jpg_rmin, jpg_rmax, jpg_cmin, jpg_cmax = \
+                self.get_jpg_coords(jpg_shape,rebin)
+        html_name=self.mosaic_html_name(rebin)
+        print 'writing html:',html_name
+        with open(html_name,'w') as fobj:
+            head=_head % {'name':self.name,
+                          'gexp':self.infolist[0]['exptimes'][0],
+                          'rexp':self.infolist[0]['exptimes'][1],
+                          'iexp':self.infolist[0]['exptimes'][2],
+                          'ra':self.infolist[0]['crval1'],
+                          'dec':self.infolist[0]['crval2'],
+                          'mosaic':mosaic_local}
+            fobj.write(head)
+
+            for i,info in enumerate(self.infolist):
+                area='      <area shape="rect" coords="{coords}" href="{ccdimage}" alt="CCD {ccd}" title="CCD {ccd}">\n'
+
+                coords=[jpg_cmin[i],jpg_rmin[i],jpg_cmax[i],jpg_rmax[i]]
+                coords_str=[str(c) for c in coords]
+                coords_str=','.join(coords_str)
+
+                area=area.format(coords=coords_str,
+                                 ccdimage=info['jpg_local'],
+                                 ccd=info['ccd'])
+
+                fobj.write(area)
+            fobj.write(_foot)
+
+    def do_rebin(self, rebin):
+        image=self.image
+        nrows,ncols=image.shape[0:0+2]
+
+        # pad nrows,ncols for rebin
+        row_remain=(nrows % rebin)
+        if row_remain != 0:
+            nrows += (rebin-row_remain)
+        col_remain=(ncols % rebin)
+        if col_remain != 0:
+            ncols += (rebin-col_remain)
+
+        impad =zeros( (nrows, ncols, 3), dtype='f4' )
+
+        impad[0:image.shape[0], 0:image.shape[1],:] = image[:,:,:]
+
+        imi=impad[:,:,0]
+        imr=impad[:,:,1]
+        img=impad[:,:,2]
+
+        check_rebin(imi, rebin)
+
+        print '  rebin i'
+        imi = images.rebin(imi, rebin)
+
+        imrebin=zeros( (imi.shape[0], imi.shape[1], 3), dtype='f4')
+
+        imrebin[:,:,0] = imi
+        del imi
+
+        print '  rebin r'
+        imr = images.rebin(imr, rebin)
+        imrebin[:,:,1] = imr
+        del imr
+
+        print '  rebin g'
+        img = images.rebin(img, rebin)
+        imrebin[:,:,2] = img
+        del img
+
+        return imrebin
+
+
+
+
+    def get_jpg_coords(self,jpg_shape,rebin):
+        """
+        jpg coordinates start in the upper left corner
+
+        We did a flip up down and a transpose to get north up 
+        and east left in the jpg and to account for the flip
+        caused by jpg
+
+        html image maps also start in upper left, so match jpg
+        """
+        rminbin=self.rowmin/rebin
+        rmaxbin=self.rowmax/rebin
+        cminbin=self.colmin/rebin
+        cmaxbin=self.colmax/rebin
+
+        # flip up down and transpose.  Note using cols (shape[1]) because
+        # we transposed
+        rminbin = jpg_shape[1]-rminbin
+        rmaxbin = jpg_shape[1]-rmaxbin
+
+        # transpose, y becomes x and x becomes y
+        jpg_rmin = cminbin
+        jpg_rmax = cmaxbin
+        jpg_cmin = rminbin
+        jpg_cmax = rmaxbin
+
+        return jpg_rmin, jpg_rmax, jpg_cmin, jpg_cmax
+
+
+def shift_image(image, shift):
+    """
+    Shift the image
+
+    bi-linear interpolation is used
+
+    parameters
+    ----------
+    shift: sequence[2]
+        shift in row,column directions.  Can be non-integer
+
+    outputs
+    -------
+    the shifted image
+
+    dependencies
+    ------------
+    scipy.ndimage
+    """
+    import scipy.ndimage
+
+    output = scipy.ndimage.interpolation.shift(image, shift, 
+                                               output='f4',
+                                               order=1,
+                                               mode='constant',
+                                               cval=0.0)
+
+    return output
+
+
+def shift_images(gh, rh, ih, img, imi):
+    gwcs=eu.wcsutil.WCS(gh)
+    rwcs=eu.wcsutil.WCS(rh)
+    iwcs=eu.wcsutil.WCS(ih)
+
+    rowcen_r,colcen_r=img.shape[0]/2., img.shape[1]/2.
+
+    racen_r,deccen_r = rwcs.image2sky(colcen_r, rowcen_r)
+
+    print '(ra,dec) center:',racen_r,deccen_r
+
+    # now see where that falls in the g and i images
+    gcol,grow=gwcs.sky2image(racen_r, deccen_r)
+    icol,irow=iwcs.sky2image(racen_r, deccen_r)
+
+    gshift=[rowcen_r-grow, colcen_r-gcol]
+    ishift=[rowcen_r-irow, colcen_r-icol]
+    #gshift=[grow-rowcen_r, gcol-colcen_r]
+    #ishift=[irow-rowcen_r, icol-colcen_r]
+
+    g = shift_image(img, gshift)
+    i = shift_image(imi, ishift)
+
+    return g,i
+
+
+
+def check_rebin(image, rebin):
+    nrows=image.shape[0]
+    ncols=image.shape[1]
+
+    if ( (nrows % rebin) != 0
+            or (ncols % rebin) != 0 ):
+        raise ValueError("dims = (%d,%d) not multiple of "
+                         "rebin %d" % (nrows,ncols,rebin))
+
+
+
+_head="""
+<html>
+  <head>
+      <style type="text/css">
+          table.simple {
+              border-color: green;
+              border-width: 1px;
+              border-collapse: collapse;
+          }   
+           table.simple th {
+                padding: 2px;
+                border-width: 1px;
+                border-style: inset;
+           }   
+           table.simple td {
+                padding: 2px;
+                border-width: 1px;
+                border-style: inset;
+           }   
+
+
+      </style>
+  </head>
+
+  <body bgcolor="black" text="#888888"> 
+
+   <table class=simple>
+       <tr><th>Name</th>    <th>RA</th>      <th>DEC</th>      <th>g exp time</th><th>r exp time</th><th>i exp time</th><th>Orientation</th></tr>
+       <tr><td>%(name)s</td><td>%(ra).6f</td><td>%(dec).6f</td><td>%(gexp)d</td>  <td>%(rexp)d</td>  <td>%(iexp)d</td>  <td> North up, East left</td></tr>
+   </table>
+
+   <img src="%(mosaic)s" usemap="#expmap">
+   <map name="expmap">
+"""
+_foot="""
+    </map> 
+  </body>
+</html>
+"""
+
+
+def main():
+    options,args = parser.parse_args(sys.argv[1:])
+
+    if len(args) < 1:
+        parser.print_help()
+        sys.exit(45)
+
+    config_name=args[0]
+    clobber=options.clobber
+
+    maker=RGBMosaicMaker(config_name, clobber=clobber)
+    maker.go()
+
+main()

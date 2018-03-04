@@ -14,7 +14,7 @@ import lensing
 try:
     import sdsspy
 except:
-    print("lensing.rotation: could not import sdsspy")
+    pass
 
 def read_rotfile(run, type='eq'):
     f = rotfile(run, type)

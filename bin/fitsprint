@@ -199,7 +199,12 @@ def main():
             nrows=nrows2print
 
     nperchunk = 1000
-    nchunk = nrows/nperchunk
+    nchunk = nrows//nperchunk
+
+    nmod = nrows % nperchunk
+    if nmod > 0:
+        nchunk += 1
+
     if nchunk==0:
         nchunk=1
    

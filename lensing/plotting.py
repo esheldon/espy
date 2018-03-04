@@ -16,8 +16,8 @@ except:
 
 labels={}
 labels['rproj'] = r'$R$ [$h^{-1}$ Mpc]'
-labels['dsig'] = r'$\Delta\Sigma ~[M_{sun} pc^{-2}]$'
-labels['osig'] = r'$\Delta\Sigma_\times ~ [M_{sun} pc^{-2}]$'
+labels['dsig'] = r'$\Delta\Sigma ~[M_{\odot} pc^{-2}]$'
+labels['osig'] = r'$\Delta\Sigma_\times ~ [M_{\odot} pc^{-2}]$'
 
 
 def plot2dsig(r1, dsig1, dsig1err, r2, dsig2, dsig2err, **keys):
@@ -427,7 +427,7 @@ def plot_drho(comb=None, r=None, drho=None, drhoerr=None,
 
     if not nolabel:
         plt.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-        plt.ylabel = r'$\delta\rho ~ [M_{sun} pc^{-3}]$'
+        plt.ylabel = r'$\delta\rho ~ [M_{\odot} pc^{-3}]$'
 
 
     od=add_to_log_plot(plt, r, drho, drhoerr, 
@@ -467,7 +467,7 @@ def plot_mass(comb=None, r=None, mass=None, masserr=None,
 
     if not nolabel:
         plt.xlabel = r'$r$ [$h^{-1}$ Mpc]'
-        plt.ylabel = r'$M(<r) ~ [h^{-1} M_{sun}]$'
+        plt.ylabel = r'$M(<r) ~ [h^{-1} M_{\odot}]$'
 
 
     od=add_to_log_plot(plt, r, mass, masserr, 

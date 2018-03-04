@@ -1,3 +1,10 @@
+"""
+ScinvCalculator, a class to calculate the mean inverse
+critical density as a function of lens redshift from
+a source p(z)
+
+Erin Sheldon, BNL
+"""
 from __future__ import print_function
 import os
 import numpy
@@ -7,112 +14,74 @@ from esutil.ostools import path_join
 from esutil.numpy_util import where1
 from math import pi as PI
 
-try:
-    import zphot
-except:
-    print("could not load module zphot")
-
-def make_zlvals(dzl, zlmin, zlmax):
-    """
-
-    Given the input, generate the zlvals for the <scinv> as a function of zl.
-    Make sure the last point is >= zlmax
-
-    """
-
-    n_zlens = int( (zlmax-zlmin)/dzl ) + 1
-    while True:
-        zlvals = zlmin + dzl*numpy.arange(n_zlens, dtype='f8')
-        if zlvals[-1] >= zlmax:
-            return zlvals
-        else:
-            n_zlens += 1
-
-
 class ScinvCalculator:
-    def __init__(self, zsvals, dzl, zlmin, zlmax,
+    def __init__(self,
+                 zlmin,
+                 zlmax,
+                 nzl,
+                 zsmin,
+                 zsmax,
                  npts=100, 
                  omega_m=0.3, 
                  omega_l=0.7,
                  omega_k=0.0,
                  H0=100.0, 
-                 h=None,
                  flat=True):
         """
-
         Specialized calculator for integrating over a p(zs) to get a mean
         inverse critical density on a pre-determined grid of zlens.
             
-            NOTE: npts for the distance calculations is always 5, which is
+        parameters
+        ----------
+        zlmin: float
+            Minimum zlens point
+        zlmax: float
+            Maximum zlens point
+        nzl: int
+            Number of points in zlens grid
+        zsmin: float
+            Min val over which to integrate p(zs)
+        zsmax: float
+            Max val over which to integrate p(zs)
+        npts: int, optional
+            Number of points for integration over p(zs)
+        omega_m: float, optional
+            default 0.3
+        omega_l: float, optional
+            default 0.7
+        omega_k: float, optional
+            default 0.0
+        flat: bool, optional
+            default True, flat universe
+
+        NOTE: npts for the distance calculations is always 5, which is
             good to 1.e-8 to redshift 1
 
-        The input zsvals are used for the integration.  Each call to
-        calc_mean_scinv must send a p(z) on that input grid. 
-
-        The dzl,zlmin,zlmax are used to create a grid in zlens, and it is on
-        this grid that the final mean inverse critical density will be
-        computed.  It seems a dzl of 0.015 works pretty well.  This results
-        in 19 lens z vals between 0.02 and 0.30
-
         usage:
-            # initialize for 
-            #  dzl=0.015
-            #  zlmin=0.02
-            #  zlmax=0.6
-            #  npts=100 # integration of p(z)
-            scalc=ScinvCalculator(zs, 0.015, 0.02, 0.6, npts=100)
+            nzl=65
+            zlmin=0.09
+            zlmax=0.95
+            zsmin=0.0
+            zsmax=1.5
+            npts=100 # integration of p(z)
+            scalc=ScinvCalculator(zlmin, zlmax, nzl, zsmin, zsmax, npts=npts)
 
-            # now for a given function p(zsource) evaluated at points
-            # zs, return the scinv(zlens).
-
-            mean_scinv = scalc.calc_mean_scinv(pzsource)
+            mean_scinv = scalc.calc_mean_scinv(zs, pzs)
         """
 
-        if h is not None:
-            H0 = 100.0*h
+        self.omega_m=omega_m
+        self.omega_l=omega_l
+        self.omega_k=omega_k
+        self.flat=flat
+        self.H0=H0
 
-        self.zsvals = zsvals
-        zsmax=zsvals.max()
-        zsmin=zsvals.min()
+        self.setup_cosmology()
+        self.setup_gauleg(zsmin, zsmax, npts)
+        self.setup_zl(zlmin, zlmax, nzl)
+        self.setup_scinv_grid()
 
-        self.npts = npts
-
-        self.zlvals = make_zlvals(dzl, zlmin, zlmax)
-        self.n_zlens = self.zlvals.size
-
-        # now gauss-legendre weights and x vals used for integration
-        # over zs
-        self.xii, self.wii = esutil.integrate.gauleg(-1.0, 1.0, npts)
-
-        self.f1 = (zsmax - zsmin)/2.0
-        self.f2 = (zsmax + zsmin)/2.0
-
-        self.zsvals_int = self.xii*self.f1 + self.f2
-
-
-        print("Precomputing scinv on a grid of dzl: %0.3f nzl: %d npts: %d... " % \
-              (dzl,self.n_zlens,npts),end='')
-        self.scinv = numpy.zeros((self.n_zlens, npts),dtype='f8')
-
-        c = cosmo.Cosmo(omega_m=omega_m, 
-                        omega_l=omega_l, 
-                        omega_k=omega_k, 
-                        H0=H0, flat=flat)
-
-        for i in range(self.n_zlens):
-            zl = self.zlvals[i]
-            self.scinv[i,:] = c.sigmacritinv(zl,self.zsvals_int)
-        print("done")
-
-
-    def interpolate_pofz(self, z, pz):
-        """
-        pz must be evaluated at the same locations as self.zsvals
-        """
-        pzvals = esutil.stat.interplin(pz, z, self.zsvals_int)
-        return pzvals
        
-    def calc_mean_scinv(self, pz):
+    def calc_mean_scinv(self, zs, pz):
         """
         pz must correspond exactly to the zsvals input
 
@@ -120,15 +89,17 @@ class ScinvCalculator:
         abcissa
 
         """
-        if pz.size != self.zsvals.size:
-            raise ValueError("pz must be same size as zsvals")
 
-        mean_scinv = numpy.zeros(self.zlvals.size, dtype='f8')
+        if pz.size != zs.size:
+            raise ValueError("pz(%d) and zs(%d) must be same "
+                             "size" % (pz.size, zs.size))
 
-        # get p(z) interpolated to the zsvals_int points
-        pzinterp = self.interpolate_pofz(self.zsvals, pz)
+        mean_scinv = numpy.zeros(self.nzl, dtype='f8')
 
-        for i in range(self.zlvals.size):
+        # get p(z) interpolated to the gauleg integration points
+        pzinterp = self.interpolate_pofz(zs, pz)
+
+        for i in range(self.nzl):
             # we've pre-computed scinv at zl,zs locations of relevance
             # now just multiply by the interpolated p(z) and do the
             # integral
@@ -139,7 +110,73 @@ class ScinvCalculator:
 
         return mean_scinv
 
+    def interpolate_pofz(self, z, pz):
+        """
+        interpolate p(z) onto the points used for gauleg integration
+        """
 
+        if self.zsmin < z[0] or self.zsmax > z[-1]:
+            tup=(z[0],z[-1],self.zsmin,self.zsmax)
+            raise ValueError("attempt to interpolate outside of range "
+                             "[%g,%g] <-> [%g,%g] " % tup)
+
+        pzvals = esutil.stat.interplin(pz, z, self.zsvals_int)
+
+        pzvals.clip(min=0.0, out=pzvals)
+        return pzvals
+
+    def setup_cosmology(self):
+        """
+        Create the cosmology object used for sigmacrit calculations
+        """
+        self.cosmo = cosmo.Cosmo(omega_m=self.omega_m, 
+                                 omega_l=self.omega_l, 
+                                 omega_k=self.omega_k, 
+                                 H0=self.H0,
+                                 flat=self.flat)
+
+    def setup_scinv_grid(self):
+        """
+        Set up the pre-computed grid of scinv(zl) over which we will interpolate
+        """
+        #print("Precomputing scinv on a grid of "
+        #      "zlmin: %g zlmax: %g nzl: %d "
+        #      "npts: %d" % (self.zlmin, self.zlmax, self.nzl, self.npts))
+
+        self.scinv = numpy.zeros((self.nzl, self.npts),dtype='f8')
+
+        c=self.cosmo
+        for i in range(self.nzl):
+            zl = self.zlvals[i]
+            self.scinv[i,:] = c.sigmacritinv(zl,self.zsvals_int)
+
+    def setup_zl(self, zlmin, zlmax, nzl):
+        """
+        the points where inverse sigmacrit will be evaluated
+        """
+        self.zlmin=zlmin
+        self.zlmax=zlmax
+        self.nzl = nzl
+        self.zlvals = numpy.linspace(zlmin, zlmax, nzl)
+
+    def setup_gauleg(self, zsmin, zsmax, npts):
+        """
+        set up the gauss-legendre weights and x vals used for integration over
+        zs
+        """
+
+        self.zsmin=zsmin
+        self.zsmax=zsmax
+        self.npts = npts
+
+        self.xii, self.wii = esutil.integrate.gauleg(-1.0, 1.0, npts)
+
+        self.f1 = (zsmax - zsmin)/2.0
+        self.f2 = (zsmax + zsmin)/2.0
+
+        # the gauss-legendre integration points: must interpolate the 
+        # input p(zs) to this grid
+        self.zsvals_int = self.xii*self.f1 + self.f2
 
 
 
@@ -201,69 +238,99 @@ python ~esheldon/python/zphot/bin/add-scinv.py %s &> "$logf"
         fobj.close()
 
 
+def load_test_data(pzrun):
+    chunk=0
+    z_file = zphot.weighting.z_file(pzrun,chunk=chunk)
+    zsfull = zphot.weighting.read_z(z_file)
+    zs = (zsfull['zmin']+zsfull['zmax'])/2
+    data = zphot.weighting.read_pofz(pzrun,chunk)
 
-class Tester:
-    def __init__(self, pzrun):
-        self.pzrun = pzrun
-        self.wo = zphot.weighting.WeightedOutputs()
+    return zs, data
 
-        # get the zs values
-        # the z values for the histogram
-        z_file = self.wo.z_file(pzrun,chunk=0)
-        zsfull = zphot.weighting.read_z(z_file)
-        self.zs = (zsfull['zmin']+zsfull['zmax'])/2
+def test_with_pzrun(pzrun, beg, end):
+    zs, data=load_test_data(pzrun)
+
+    tester=Tester(zs, data, label=pzrun)
+    tester.test_scinv_dz(beg, end)
+
+def test_des(version, type, beg, end):
+    import des
+    dpofz=des.pz.DESPofz(version, type)
+
+    data=dpofz[beg:end]
+
+    label='%s-%s' % (version,type)
+
+    tester=Tester(dpofz.zvals, data, label=label)
+    tester.test_scinv_dz(beg, end, yrange=[0,3e-4])
 
 
-        self.data=None
+class Tester(object):
+    def __init__(self, zs, data, label='test'):
+        self.data=data
+        self.zs=zs
+        self.label=label
 
-    def load_example_data(self, chunk=0):
-        self.data = zphot.weighting.read_pofz_byrun(self.pzrun,chunk)
+        d=self.plot_dir()
+        if not os.path.exists(d):
+            os.makedirs(d)
 
-    def test_scinv_dz(self, nplot, show=False, reload=False, type='png'):
+    def test_scinv_dz(self, beg, end, yrange=[0,2.1e-4], show=False, reload=False, type='png'):
         """
 
         Test accuracy of interpolating scinv as a function of dzl, the
         lens redshift spacing.
 
-
         """
-
-        zlmin = 0.02
-        zlmax = 0.6
-
+        import biggles
         from biggles import Points,FramedPlot,PlotKey, Table,Histogram,Curve
         from time import time
         import lensing
         import pcolors
 
-        if self.data is None or reload:
-            self.load_example_data()
+        biggles.configure('default','fontface','HersheySans')
+        biggles.configure('default','fontsize_min',1.3)
 
+        zsmin=self.zs[0]
+        zsmax=self.zs[-1]
 
-        dzl_vals = numpy.linspace(0.001,0.015,10)
+        zlmin = 0.00
+        zlmax = 1.0
+
+        #dzl_vals = numpy.linspace(0.001,0.015,10)
+        dzl_vals = numpy.linspace(0.001,0.015,4)
+        nzl_vals = ( (zlmax-zlmin)/dzl_vals ).astype('i8')
+
         numcheck = len(dzl_vals)
         colors=pcolors.rainbow(numcheck, 'hex')
         scalc = []
-        for dzl in dzl_vals:
-            scalc.append(ScinvCalculator(self.zs, dzl, zlmin, zlmax, npts=100))
+        for nzl in nzl_vals:
+            s=ScinvCalculator(zlmin, zlmax, nzl, 
+                              zsmin, zsmax, npts=100)
+            scalc.append(s)
 
         times = numpy.zeros(numcheck, dtype='f8')
          
         # we'll fill this in
         #scinv_all = numpy.zeros( (numcheck, scalc[0].zlvals.size) )
 
-
-        xlim = [0, scalc[0].zsvals.max()]
-        for i in xrange(nplot):
+        xlim = [0, zsmax]
+        for i in xrange(beg,end):
             scinv_all = []
             pz = self.data['pofz'][i]
 
+            #print(pz)
+
             for j in xrange(numcheck):
                 dzl = dzl_vals[j]
-                print("%f " % dzl,end='')
+                nzl = nzl_vals[j]
+                print("    nzl: %s dzl: %g" % (nzl, dzl))
                 tm0=time()
                 #scinv_all[j,:] = scalc[j].calc_mean_scinv(pz)
-                scinv_all.append( scalc[j].calc_mean_scinv(pz) )
+                sc=scalc[j].calc_mean_scinv(self.zs, pz)
+                #sc=sc.clip(min=0.0)
+                #print("sc",j,sc)
+                scinv_all.append(sc)
                 times[j] += time()-tm0
 
             print("\nplotting")
@@ -272,8 +339,8 @@ class Tester:
             # plot the p(z)
             tab = Table(3,1)
 
-            binsize=scalc[0].zsvals[1]-scalc[0].zsvals[0]
-            pzh = Histogram(pz, x0=scalc[0].zsvals[0], binsize=binsize)
+            binsize=self.zs[1]-self.zs[0]
+            pzh = Histogram(pz, x0=self.zs[0], binsize=binsize)
             plt_pzh = FramedPlot()
             plt_pzh.xrange = xlim
 
@@ -281,6 +348,7 @@ class Tester:
             plt_pzh.ytitle=r'$P(z_s)$'
             plt_pzh.add(pzh)
             tab[0,0] = plt_pzh
+            #plt_pzh.show()
 
             # plot scinv for each dzl
             plt_scinv = FramedPlot()
@@ -289,9 +357,10 @@ class Tester:
             scinv_plots=[]
             for j in xrange(numcheck):
                 dzl = dzl_vals[j]
+                nzl = nzl_vals[j]
                 p = Curve(scalc[j].zlvals, scinv_all[j], type='solid',
                           color=colors[j])
-                p.label = r'$dz_{lens}: %0.3f$' % dzl
+                p.label = r'$nz_{lens}: %s dz_{lens}: %0.3f$' % (nzl,dzl)
                 
                 plt_scinv.add(p)
                 scinv_plots.append(p)
@@ -299,10 +368,11 @@ class Tester:
             scinv_key = PlotKey(0.95,0.9,scinv_plots,halign='right')
             plt_scinv.add(scinv_key)
 
-            plt_scinv.ylabel=r'$\langle \Sigma_{crit}^{-1}(z_{lens})\rangle$'
+            plt_scinv.ylabel=r'$\Sigma_{crit}^{-1}(z_{lens})$'
             plt_scinv.xlabel=r'$z_{lens}$'
-            plt_scinv.yrange = [0,2.1e-4]
+            plt_scinv.yrange = yrange
 
+            #plt_scinv.show()
             tab[1,0] = plt_scinv
 
             # %diff to best dz
@@ -318,13 +388,18 @@ class Tester:
             w=where1(scinv_interp_best > 0)
             for j in xrange(numcheck):
                 dzl = dzl_vals[j]
+                nzl = nzl_vals[j]
 
                 scinv_interp = esutil.stat.interplin(scinv_all[j], scalc[j].zlvals, zl_interp)
 
-                pdiff = scinv_interp[w]/scinv_interp_best[w] - 1.0
+                if w.size > 0:
+                    pdiff = scinv_interp[w]/scinv_interp_best[w] - 1.0
+                    p = Curve(zl_interp[w], pdiff, type='solid',color=colors[j])
+                else:
+                    pdiff = numpy.ones(scinv_interp.size)
+                    p = Curve(zl_interp, pdiff, type='solid',color=colors[j])
 
-                p = Curve(zl_interp[w], pdiff, type='solid',color=colors[j])
-                p.label = r'$dz_{lens}: %0.3f$' % dzl
+                p.label = r'$nz_{lens}: %s dz_{lens}: %0.3f$' % (nzl,dzl)
 
                 plt_pdiff.add(p)
                 pdiff_plots.append(p)
@@ -332,7 +407,7 @@ class Tester:
             key = PlotKey(0.95,0.9,pdiff_plots,halign='right')
             plt_pdiff.add(key)
 
-            plt_pdiff.ylabel=r'$\langle \Sigma_{crit}^{-1} \rangle / \langle \Sigma_{crit}^{-1} \rangle_{best} - 1$'
+            plt_pdiff.ylabel=r'$\Sigma_{crit}^{-1} /  \Sigma_{crit}^{-1}_{best} - 1$'
             plt_pdiff.xlabel=r'$z_{lens}$'
 
             tab[2,0] = plt_pdiff
@@ -483,6 +558,7 @@ class Tester:
             if show:
                 tab.show()
 
+
             plotfile=self.npts_plot_file(i, type)
             print("writing to file:",plotfile)
             if type == 'png':
@@ -497,18 +573,18 @@ class Tester:
 
     def plot_dir(self):
         d=os.environ['LENSDIR']
-        d = path_join(d,'sigmacrit-tests')
+        d = path_join(d,'sigmacrit-tests',self.label)
         return d
 
     def npts_plot_file(self, index, type='png'):
         dir=self.plot_dir()
-        f='sigmacrit-%s-test-npts-%06i.png' % (self.pzrun,index)
+        f='sigmacrit-%s-test-npts-%06i.png' % (self.label,index)
         f=path_join(dir,f)
         return f
 
     def dzl_plot_file(self, index, type='png'):
         dir=self.plot_dir()
-        f='sigmacrit-%s-test-dzl-%06i.png' % (self.pzrun,index)
+        f='sigmacrit-%s-test-dzl-%06i.png' % (self.label,index)
         f=path_join(dir,f)
         return f
 

@@ -35,7 +35,7 @@ except:
     import curses.wrapper as curses_wrapper
 
 parser=OptionParser(__doc__)
-parser.add_option("-r","--refresh",default=120, 
+parser.add_option("-r","--refresh",default=300, 
     help="refresh rate in seconds.  default is %default")
 parser.add_option("-d","--dark",action="store_true", 
     help="Use a color scheme appropriate for dark backgrounds")

@@ -96,8 +96,7 @@ def make_output_array(num):
 class LcatBase(dict):
     def __init__(self, sample, **keys):
 
-        for k in keys:
-            self[k] = keys[k]
+        self.update(keys)
 
         conf = lensing.files.read_config('lcat',sample)
         self.update(conf)
@@ -110,7 +109,7 @@ class LcatBase(dict):
         return lensing.files.lcat_read(sample=self['sample'])
 
 
-    def z_logic(self, z):
+    def get_z_logic(self, z):
         print("Cutting z to [%f, %f]" % (self['zmin'],self['zmax']))
         logic = (z > self['zmin']) & (z < self['zmax']) 
 
@@ -653,9 +652,13 @@ class RedMapperDES(LcatBase):
         zindex = numpy.arange(orig_size,dtype='i4')
 
         # trim z for speed
-        z_logic = self.z_logic(data[z_field])
+        z_logic = self.get_z_logic(data[z_field])
 
         good=where1(z_logic)
+
+        maskflags = self.get_maskflags(data['ra'][good],
+                                       data['dec'][good],
+                                       data[z_field][good])
 
         # make sure in the tycho window and two adjacent quadrants
         # not hitting edge (or no edge if strict=True)
@@ -668,9 +671,44 @@ class RedMapperDES(LcatBase):
         output['ra']        = data['ra'][good]
         output['dec']       = data['dec'][good]
         output['z']         = data[z_field][good]
-        output['maskflags'] = 0 # not currently used
+        output['maskflags'] = maskflags
         lensing.files.lcat_write(sample=self['sample'], data=output,
                                  lens_split=0)
+    def get_maskflags(self, ra, dec, z):
+        mask_type=self.get('mask_type',None)
+        if mask_type is None:
+            maskflags = numpy.zeros(ra.size)
+        else:
+            import healpix_util as hu
+            if mask_type != 'healpix':
+                raise ValueError("only healpix supported for now")
+
+            # Da and rmax in Mpc
+            print("max radius for maskflags: %0.1f" % self['rmax'])
+
+            Da = self.cosmo.Da(0.0, z)
+
+            rmax = self['rmax']
+            radius_degrees = rmax/Da*180./PI
+
+            print("reading healpix map:",self['mask_file'])
+            hmap=hu.readDensityMap(self['mask_file'])
+            
+            maskflags=numpy.zeros(ra.size, dtype='i8')
+            for i in xrange(ra.size):
+                if (i % 1000) == 0:
+                    print("%d/%d" % (i,ra.size))
+
+                maskflags[i] = hmap.check_quad(ra[i],
+                                               dec[i],
+                                               radius_degrees[i],
+                                               self['ellip_max'])
+
+            w,=numpy.where(maskflags > 1)
+            print("%d/%d had good quadrant pairs" % (w.size, ra.size))
+        return maskflags
+
+
 
 class LRGDES(LcatBase):
     def __init__(self, sample, **keys):
@@ -694,7 +732,7 @@ class LRGDES(LcatBase):
         zindex = numpy.arange(orig_size,dtype='i4')
 
         # trim z for speed
-        z_logic = self.z_logic(data[z_field])
+        z_logic = self.get_z_logic(data[z_field])
 
         good=where1(z_logic)
 
@@ -757,7 +795,7 @@ class RedMapper(LcatBase):
         zindex = numpy.arange(orig_size,dtype='i4')
 
         # trim z for speed
-        z_logic = self.z_logic(data[z_field])
+        z_logic = self.get_z_logic(data[z_field])
 
         w=where1(z_logic)
         data = data[w]
@@ -1095,7 +1133,7 @@ class RedMapperRandom(LcatBase):
         print('    keeping: %d/%d' % (data.size,ntot))
 
         # trim z for speed was not implemented in rmrand01
-        z_logic = self.z_logic(data['z'])
+        z_logic = self.get_z_logic(data['z'])
         w=where1(z_logic)
         data=data[w]
 
@@ -1160,7 +1198,7 @@ class MaxBCG(LcatBase):
         ngals_logic = self.ngals_logic(data['ngals_r200'])
 
         # trim z for speed
-        z_logic = self.z_logic(data['photoz_cts'])
+        z_logic = self.get_z_logic(data['photoz_cts'])
 
         good = where1(ngals_logic & z_logic)
         print("Finally kept: %d/%d" % (good.size,data.size))
@@ -1188,7 +1226,7 @@ class MaxBCG(LcatBase):
         return logic
 
 
-    def z_logic(self, z):
+    def get_z_logic(self, z):
         print("Cutting z to [%f, %f]" % (self['zmin'],self['zmax']))
         logic = (z > self['zmin']) & (z < self['zmax']) 
 

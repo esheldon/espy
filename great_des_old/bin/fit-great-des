@@ -1,0 +1,623 @@
+#!/usr/bin/env python
+"""
+    %prog [options] config_file meds_file truth_file psf_file out_file
+
+Process the input meds file.
+"""
+from __future__ import print_function
+
+import os,sys
+import shutil
+import numpy
+import yaml
+import fitsio
+import meds
+import pprint
+
+from optparse import OptionParser
+parser = OptionParser(__doc__)
+
+
+parser.add_option("--obj-range",default=None,
+                  help=("Inclusive, zero-offset range of objects to "
+                        "process"))
+
+parser.add_option("--make-plots",action="store_true",
+                  help="make some plots")
+
+parser.add_option("--work-dir", default=None,
+                  help=("copy files local for processing.  "
+                        "Also write to local files and copy out."
+                        "The local files are not removed."))
+
+parser.add_option("--profile", action='store_true',
+                  help=("Profile the code using cProfile"))
+
+
+class TempFile(object):
+    def __init__(self, fname):
+        self.fname=fname
+
+    def cleanup(self):
+        if os.path.exists(self.fname):
+            print('removing temp file:',self.fname)
+            os.remove(self.fname)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.cleanup()
+    def __del__(self):
+        self.cleanup()
+
+
+class RemoteFile(object):
+    def __init__(self, remote_file, local_dir='/tmp'):
+        self.local_dir=local_dir
+        self.remote_file=remote_file
+        self.local_file=self._generate_local_filename()
+
+        if self.local_file==self.remote_file:
+            raise ValueError("local file equals remote file: '%s'" % remote_file)
+
+        if not os.path.exists(self.local_dir):
+            os.makedirs(self.localdir)
+
+    def _generate_local_filename(self):
+        bname=os.path.basename(self.remote_file)
+        local_file=os.path.join(self.local_dir, bname)
+
+
+        return local_file
+
+    def stage(self):
+        import shutil
+
+        self.cleanup()
+        print('copying to local file:',self.remote_file, self.local_file)
+        shutil.copy2(self.remote_file, self.local_file)
+
+    def cleanup(self):
+        if os.path.exists(self.local_file):
+            print('removing local file:',self.local_file)
+            os.remove(self.local_file)
+
+    def __enter__(self):
+        self.stage()
+        return self
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.cleanup()
+    def __del__(self):
+        self.cleanup()
+
+
+def load_config(fname):
+    with open(fname) as fobj:
+        data=yaml.load(fobj)
+    return data
+
+def makedir_fromfile(fname):
+    dname=os.path.dirname(fname)
+    if not os.path.exists(dname):
+        try:
+            os.makedirs(dname)
+        except:
+            # probably a race condition
+            pass
+
+
+def make_mcmc_meta(conf, meds_meta, meds_file):
+
+    raise ValueError("fix for multi-band")
+
+    dt = meds_meta.dtype.descr
+
+    config_file=conf['config_file']
+    clen=len(config_file)
+    flen=len(meds_file)
+    mlen=len(conf['psf_model'])
+    rlen=len(conf['region'])
+
+    gtlen = len(conf['gprior_type'])
+
+    dt += [('gmix_meds_config','S%d' % clen),
+           ('meds_file','S%d' % flen),
+           ('psf_ntry','i2'),
+
+           ('nwalkers','i2'),
+           ('burnin','i2'),
+           ('nstep','i2'),
+           ('mca_a','f8'),
+
+           ('do_pqr','i2'),
+
+           ('psf_model','S%d' % mlen),
+
+           ('gprior_type','S%d' % gtlen),
+
+           ('psf_offset_max','f8'),
+           ('region','S%d' % rlen)]
+
+    meta=numpy.zeros(1, dtype=dt)
+    for n in meds_meta.dtype.names:
+        meta[n] = meds_meta[n]
+
+    meta['gmix_meds_config'] = config_file
+    meta['meds_file'] = meds_file
+
+    meta['psf_ntry'] = conf['psf_ntry']
+
+    meta['nwalkers'] = conf['nwalkers']
+    meta['burnin'] = conf['burnin']
+    meta['nstep'] = conf['nstep']
+    meta['mca_a'] = conf['mca_a']
+
+    if conf['do_pqr']:
+        meta['do_pqr']=1
+    else:
+        meta['do_pqr']=0
+
+    meta['gprior_type'] = conf['gprior_type']
+
+    meta['psf_model'] = conf['psf_model']
+    meta['psf_offset_max'] = conf['psf_offset_max']
+    meta['region'] = conf['region']
+
+    return meta
+
+
+def get_T_prior_ngmix(conf):
+    import ngmix
+
+    T_prior_type=conf['T_prior_type']
+
+    if T_prior_type is None:
+        return None
+
+    if T_prior_type=='Normal':
+        pars=conf['T_prior_pars']
+        T_prior=ngmix.priors.Normal(pars[0], pars[1])
+    elif T_prior_type == 'flat':
+        pars=conf['T_prior_pars']
+        T_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
+
+    elif T_prior_type =='TwoSidedErf':
+        pars=conf['T_prior_pars']
+        T_prior=ngmix.priors.TwoSidedErf(*pars)
+
+    else:
+        raise ValueError("bad T prior type: %s" % T_prior_type)
+
+
+    return T_prior
+
+def get_counts_prior_ngmix(conf):
+    import ngmix
+
+    counts_prior_type=conf['counts_prior_type']
+
+    if counts_prior_type is None:
+        return None
+
+    if counts_prior_type == 'TruncatedNormal':
+        pars=conf['counts_prior_pars']
+        counts_prior=ngmix.priors.TruncatedGaussian(*pars)
+
+    elif counts_prior_type == 'flat':
+        pars=conf['counts_prior_pars']
+        counts_prior=ngmix.priors.FlatPrior(pars[0], pars[1])
+
+    elif counts_prior_type =='TwoSidedErf':
+        pars=conf['counts_prior_pars']
+        counts_prior=ngmix.priors.TwoSidedErf(*pars)
+
+
+    else:
+        raise ValueError("bad counts prior type: %s" % counts_prior_type)
+
+    return counts_prior
+
+def get_g_prior(conf):
+    import ngmix
+    g_prior_type=conf['g_prior_type']
+
+    if g_prior_type is None:
+        return None
+
+    if g_prior_type=='cosmos-sersic':
+        g_prior=ngmix.priors.make_gprior_cosmos_sersic(type='erf')
+
+    elif g_prior_type=='great-des':
+        g_prior=ngmix.priors.GPriorGreatDES(conf['g_prior_pars'],
+                                            gmax=conf['g_prior_max'])
+
+    elif g_prior_type=='zdiskerf':
+        g_prior=ngmix.priors.ZDisk2DErf()
+
+    elif g_prior_type=='ba':
+        sigma=conf["g_prior_sigma"]
+        g_prior=ngmix.priors.GPriorBA(sigma)
+
+    else:
+        raise ValueError("implement gprior '%s'" % g_prior_type)
+
+    return g_prior
+
+def get_cen_prior_ngmix(conf):
+    import ngmix
+    width=conf.get('cen_width',1.0)
+    return ngmix.priors.CenPrior(0.0, 0.0, width,width)
+
+def get_sub_fname(fname, rng, work_dir):
+    rng_string = '%s-%s' % (rng[0], rng[1])
+
+    bname = os.path.basename(fname)
+
+    bname = bname.replace('.fits.fz','').replace('.fits','')
+    bname = '%s-%s.fits' % (bname, rng_string)
+
+    newf = os.path.join(work_dir, bname)
+
+    return newf
+
+def get_sub(meds_file, rng, work_dir):
+    """
+    Local files will get cleaned up
+    """
+
+    print(meds_file)
+    newf = get_sub_fname(meds_file, rng, work_dir)
+    extracted=meds.MEDSExtractor(meds_file, rng[0], rng[1], newf,
+                                 cleanup=True)
+
+    return extracted
+
+def get_truth_sub_fname(fname, rng, work_dir):
+    """
+    local file holding subset
+    """
+    rng_string = '%s-%s' % (rng[0], rng[1])
+
+    bname = os.path.basename(fname)
+    bname = bname.replace('.fits','')
+
+    bname = '%s-%s.fits' % (bname, rng_string)
+
+    newf = os.path.join(work_dir, bname)
+
+    return newf
+
+def get_truth_sub(truth_file, rng, work_dir):
+    """
+    Local files will get cleaned up
+    """
+
+    print(truth_file)
+    newf = get_truth_sub_fname(truth_file, rng, work_dir)
+    with fitsio.FITS(truth_file) as fits:
+        data=fits[1][rng[0]:rng[1]+1]
+
+    print("writing truth sub:",newf)
+    fitsio.write(newf, data, clobber=True)
+
+    return TempFile(newf)
+
+
+def get_range(rng_string):
+    if rng_string is not None:
+        rng = rng_string.split(',')
+        rng = [int(i) for i in rng]
+    else:
+        rng=None
+
+    return rng
+
+
+def cleanup_checkpoint(checkpoint_file):
+    """
+    if we get this far, we have succeeded in writing the data. We can remove
+    the checkpoint file
+    """
+    if os.path.exists(checkpoint_file):
+        print('removing checkpoint file',checkpoint_file)
+        os.remove(checkpoint_file)
+
+
+def get_checkpoint_data(out_file):
+    """
+    See if the code was checkpointed in a previous run
+    """
+    checkpoint_file=out_file.replace('.fits','-checkpoint.fits')
+    data=None
+
+    if os.path.exists(checkpoint_file):
+        data={}
+        print('reading checkpoint data:',checkpoint_file)
+        with fitsio.FITS(checkpoint_file) as fobj:
+            data['data']=fobj['model_fits'][:]
+
+    return checkpoint_file, data
+
+def run_fitter(files, conf, options, checkpoint_data=None):
+    """
+    Do the fit
+    """
+    import great_des
+    import ngmix
+    from ngmix.joint_prior import PriorSimpleSep
+    from ngmix.priors import ZDisk2D
+    
+    g_prior_flat=ZDisk2D(1.0)
+    g_prior  = get_g_prior(conf)
+    cen_prior = get_cen_prior_ngmix(conf)
+    T_prior  = get_T_prior_ngmix(conf)
+    counts_prior  = get_counts_prior_ngmix(conf)
+
+    prior = PriorSimpleSep(cen_prior,
+                           g_prior,
+                           T_prior,
+                           counts_prior)
+
+    if conf['g_prior_during']:
+        g_search_prior = g_prior
+    else:
+        g_search_prior = g_prior_flat
+
+    search_prior = PriorSimpleSep(cen_prior,
+                                  g_search_prior,
+                                  T_prior,
+                                  counts_prior)
+
+
+
+    if conf['fitter']=='mcmc':
+        fitclass=great_des.nfit.MedsFit
+    elif conf['fitter']=='max':
+        fitclass=great_des.nfit.MedsFitMax
+    elif conf['fitter']=='isample':
+        fitclass=great_des.nfit.MedsFitISample
+    else:
+        raise ValueError("bad fitter: '%s'" % conf['fitter'])
+
+    # for fitter=='max' only the flat prior is used
+    gm=fitclass(files['meds'],
+                files['truth'],
+                files['psf'],
+                checkpoint_data=checkpoint_data,
+                prior=prior,
+                search_prior=search_prior,
+                **conf)
+
+    gm.do_fits()
+    data=gm.get_data()
+
+    return data
+
+def run_sfitter(files, conf, options, checkpoint_data=None):
+    """
+    Do the fit
+    """
+    import great_des
+    import great3
+    import ngmix
+    from ngmix.joint_prior import PriorSimpleSep, JointPriorSimpleHybrid
+    from ngmix.priors import ZDisk2D, CenPrior
+
+    #if options.work_dir is not None:
+    #    raise RuntimeError("no work dir supported for sfit")
+
+    mpars=conf['model_pars']
+    if 'joint_prior' in mpars:
+        jp=mpars['joint_prior']
+        cen_width=jp['cen_width']
+
+        cen_prior = CenPrior(0.0, 0.0, cen_width, cen_width)
+
+        g_prior_pars=jp['g_prior_pars']
+        g_prior = ngmix.priors.GPriorGreatDES(pars=jp['g_prior_pars'],
+                                              gmax=1.0)
+
+        TF_prior=great_des.files.read_prior(run=jp['TF_prior_run'],
+                                            partype=jp['TF_partype'])
+
+        conf['prior']=JointPriorSimpleHybrid(cen_prior, g_prior, TF_prior)
+
+        if 'fracdev_prior_run' in jp:
+            conf['fracdev_prior']=great_des.files.read_prior(run=jp['fracdev_prior_run'],
+                                                             partype=jp['fracdev_partype'])
+    else:
+        cen_prior=great3.nfit.get_cen_prior(mpars['cen_prior_type'],
+                                            pars=mpars['cen_prior_pars'])
+
+        g_prior=great3.nfit.get_g_prior(mpars['g_prior_type'],
+                                        pars=mpars['g_prior_pars'])
+        T_prior=great3.nfit.get_T_prior(mpars['T_prior_type'],
+                                        pars=mpars['T_prior_pars'])
+        counts_prior=great3.nfit.get_counts_prior(mpars['counts_prior_type'],
+                                                  pars=mpars['counts_prior_pars'])
+
+        print("g_prior:",g_prior)
+        print("T_prior:",T_prior)
+        print("counts_prior:",counts_prior)
+        conf['prior']=PriorSimpleSep(cen_prior,
+                                     g_prior,
+                                     T_prior,
+                                     counts_prior)
+
+
+    
+    mpars=conf['model_pars']
+    if conf['fitter']=='max':
+        if mpars['model']=='cm':
+            fitclass=great_des.sfit.CompositeMedsFitMax
+        else:
+            fitclass=great_des.sfit.MedsFitMax
+    elif conf['fitter']=='isample':
+        if mpars['model']=='cm':
+            fitclass=great_des.sfit.CompositeMedsFitISample
+        else:
+            fitclass=great_des.sfit.MedsFitISample
+    else:
+        raise ValueError("bad fitter: '%s'" % conf['fitter'])
+
+    # for fitter=='max' only the flat prior is used
+    gm=fitclass(files['meds'],
+                files['truth'],
+                files['psf'],
+                checkpoint_data=checkpoint_data,
+                **conf)
+
+    gm.do_fits()
+    data=gm.get_data()
+
+    return data
+
+
+def setup_work_files(options, meds_file, truth_file):
+    """
+    Set up local, possibly sub-range meds files
+    """
+
+    meds_file_full=meds_file
+    truth_file_full=truth_file
+
+    extracted=None
+    truth_extracted=None
+    rng=get_range( options.obj_range )
+    rng_send=None
+
+    if rng is not None:
+        if options.work_dir is not None:
+            # note variable extracted is cleaned up when MedsExtractors get
+            # garbage collected
+            extracted=get_sub(meds_file_full, rng, options.work_dir)
+            meds_file= extracted.sub_file
+
+            truth_extracted=get_truth_sub(truth_file_full, rng, options.work_dir)
+            truth_file=truth_extracted.fname
+
+            rng_send=None
+        else:
+            rng_send=rng
+
+    return rng_send, meds_file, meds_file_full, extracted, truth_file, truth_file_full, truth_extracted
+
+def setup_work_files_old(options, meds_file, psf_file):
+    """
+    Set up local, possibly sub-range meds files
+    """
+
+    meds_file_full=meds_file
+    extracted=None
+    rng=get_range( options.obj_range )
+    rng_send=None
+
+    if rng is not None:
+        if options.work_dir is not None:
+            # note variable extracted is cleaned up when MedsExtractors get
+            # garbage collected
+            extracted=get_sub(meds_file, rng, options.work_dir)
+            meds_file_full=meds_file
+            meds_file= extracted.sub_file
+            rng_send=None
+        else:
+            rng_send=rng
+
+    if options.work_dir is not None:
+        tmp_psf = RemoteFile(psf_file, local_dir=options.work_dir)
+        tmp_psf.stage()
+    else:
+        tmp_psf=None
+    return rng_send, meds_file, meds_file_full, extracted, tmp_psf
+
+
+def write_data(data, out_file):
+    """
+    write the actual data.  clobber existing
+    """
+    makedir_fromfile(out_file)
+    print('writing:',out_file)
+    with fitsio.FITS(out_file,'rw',clobber=True) as fobj:
+        fobj.write(data,extname="model_fits")
+
+def go_profile(files, options):
+    # don't want to see the JIT
+    import cProfile
+    import pstats
+    import ngmix
+
+    go(files, options)
+
+    # run twice to avoid jit stuff
+    print("--- profiling ---")
+    cProfile.runctx('go(files, options)',
+                    globals(),locals(),
+                    'profile_stats')
+    
+    p = pstats.Stats('profile_stats')
+    p.sort_stats('time').print_stats()
+
+
+def go(files, options):
+
+    checkpoint_file, checkpoint_data=get_checkpoint_data(files['out'])
+
+    conf=load_config(files['config'])
+    conf['make_plots'] = options.make_plots
+
+    pprint.pprint(conf)
+
+    #rng_send,meds_file,meds_file_full,extracted,tmp_psf=\
+    #                    setup_work_files(options,files['meds'],files['psf'])
+    rng_send,meds_file,meds_file_full,extracted,truth_file,truth_file_full,truth_extracted=\
+                        setup_work_files(options,files['meds'],files['truth'])
+
+    files['meds'] = meds_file
+    files['meds_full'] = meds_file_full
+    files['truth'] = truth_file
+    files['truth_full'] = truth_file_full
+
+    # if work_dir is sent, we do range by extracting it, see above, so
+    # rng_send would be None
+
+    conf['obj_range'] = rng_send
+    conf['config_file']=files['config']
+    conf['checkpoint_file']=checkpoint_file
+
+    if 'sfit' in files['config']:
+        data=run_sfitter(files, conf, options, checkpoint_data=checkpoint_data)
+    else:
+        data=run_fitter(files, conf, options, checkpoint_data=checkpoint_data)
+
+    write_data(data, files['out'])
+
+    cleanup_checkpoint(checkpoint_file)
+  
+    
+def main():
+    options, args = parser.parse_args(sys.argv[1:])
+    if len(args) < 5:
+        parser.print_help()
+        sys.exit(45)
+
+    config_file=args[0]
+    meds_file=args[1]
+    truth_file=args[2]
+    psf_file=args[3]
+    out_file=args[4]
+
+    files={'config':config_file,
+           'meds':meds_file,
+           'truth':truth_file,
+           'psf':psf_file,
+           'out':out_file}
+
+    if options.profile:
+        go_profile(files, options)
+    else:
+        go(files, options)
+
+if __name__=="__main__":
+    main()

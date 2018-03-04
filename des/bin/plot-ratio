@@ -1,0 +1,155 @@
+#!/usr/bin/env python
+"""
+plot ratio of dsig1/dsig2 for two different runs
+
+jackknife (singly) the errors so shape noise is not in the errors
+"""
+from __future__ import print_function
+import os,sys
+import argparse
+import numpy
+from numpy import sqrt, diag, zeros
+import des
+import esutil as eu
+import biggles
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("run1", help="run identifier")
+parser.add_argument("run2", help="run identifier")
+parser.add_argument("bin_scheme", help="bin scheme, e.g. bin-lgt05-zwide")
+
+
+parser.add_argument("--eps",default=None,
+                    help="write to the specified eps file")
+
+parser.add_argument("-v","--visible",action='store_true',
+                    help="show plot on screen")
+parser.add_argument("--run-labels",
+                    default=None,
+                    help="alternate labels for each run")
+
+parser.add_argument("-y","--yrange",
+                    default=None,
+                    help="force y range")
+
+parser.add_argument("-c","--color",
+                    default='black',
+                    help="color for points")
+
+parser.add_argument("--rad-range",
+                    default=None,
+                    help="min,max radius to use")
+
+
+
+def main():
+    args = parser.parse_args()
+
+    data1=des.files.read_collated(args.run1)
+    data2=des.files.read_collated(args.run2)
+
+    binner=des.binning.Binner(args.bin_scheme)
+    comb1=binner.bin(data1)
+
+    # to get right shape
+    r=comb1['r'].copy()
+    ratio=comb1['r']*0
+    ratio_err=comb1['r']*0
+
+    nrad=r.shape[1]
+
+    if args.rad_range is not None:
+        rad_range=[float(tr) for tr in args.rad_range.split(',')]
+    else:
+        rad_range=[-9999.0,9999.0]
+
+    rmeans=r.mean(axis=0)
+    rad_index,=numpy.where( (rmeans > rad_range[0])
+                           &(rmeans < rad_range[1]) )
+    nrad=rad_index.size
+
+    r=r[:,rad_index]
+    ratio=r*0
+    ratio_err=r*0
+
+    nbin=binner.get_nbin()
+
+    grid, arr = des.plotting.get_framed_array(nbin)
+
+    ratmean=numpy.zeros(nbin)
+    ratmean_err=numpy.zeros(nbin)
+
+    for binnum in xrange(nbin):
+        print('-'*70)
+        w1=binner.select_bin(data1, binnum)
+        w2=binner.select_bin(data2, binnum)
+        print(w1.size, w2.size)
+
+        t1=data1[w1]
+        t2=data2[w2]
+        
+        # average over all radii
+        print("getting ratio over all radii")
+        rall, rall_err=des.averaging.average_ratio_allrad(t1, t2,
+                                                          rad_index=rad_index)
+
+        print("getting ratio, resampled errors")
+        tr, tratio, tcov = des.averaging.average_ratio(t1, t2,
+                                                       rad_index=rad_index)
+
+        terr=sqrt(diag(tcov))
+
+        ratio[binnum,:] = tratio
+        ratio_err[binnum,:] = terr
+
+        wt=1.0/terr**2
+        wm,we=eu.stat.wmom(tratio, wt)
+        #ratmean[binnum]=wm
+        #ratmean_err[binnum]=we
+
+        #ratmean[binnum]=rall
+        ratmean[binnum]=wm
+        ratmean_err[binnum]=rall_err
+
+        print("wmean:",wm,"rall:",rall,"straight mean:",tratio.mean())
+
+    binspec=des.files.read_config(args.bin_scheme)
+    labels=[bi['label'] for bi in binspec['bin_info']]
+
+    if args.run_labels is None:
+        run_labels=args.run1,args.run2
+    else:
+        run_labels=tuple(args.run_labels.split(','))
+        print("run labels:",run_labels)
+    ylabel='%s/%s' % run_labels
+
+    arr=des.plotting.plot_dsig(r,
+                               ratio,
+                               ratio_err,
+                               ylog=False,
+                               ylabel=ylabel,
+                               lineval=1.0,
+                               visible=False,
+                               color=args.color,
+                               labels=labels)
+
+    # add labels for mean ratio
+    for binnum in xrange(nbin):
+        row,col=grid.get_rowcol(binnum)
+        plt=arr[row,col]
+
+        ls='<r>=%.3f +/- %.3f' % (ratmean[binnum],ratmean_err[binnum])
+        lab=biggles.PlotLabel(0.1,0.9, ls,halign='left')
+        plt.add(lab)
+
+    if args.yrange is not None:
+        yrange=[float(v) for v in args.yrange.split(',')]
+        arr.yrange=yrange
+
+    if args.eps is not None:
+        print("writing:",args.eps)
+        arr.write_eps(args.eps)
+        
+    if args.visible:
+        arr.show()
+main()

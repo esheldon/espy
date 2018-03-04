@@ -1,5 +1,6 @@
 from __future__ import print_function
 import numpy
+from numpy import linspace
 import os,sys
 from sys import stdout
 
@@ -135,9 +136,7 @@ class DR8GMixCatalog(GenericSrcCatalog):
         keep = self.select()
 
         sconf=self['scinv_config']
-        zlvals=lensing.sigmacrit.make_zlvals(sconf['dzl'], 
-                                             sconf['zlmin'], 
-                                             sconf['zlmax'])
+        zlvals=linspace(sconf['zlmin'], sconf['zlmax'], sconf['nzl'])
         nzl = zlvals.size
 
         print("creating output struct")
@@ -222,7 +221,6 @@ class DR8GMixCatalog(GenericSrcCatalog):
 
 class DR8RegaussCatalog(GenericSrcCatalog):
     """
-
     Before using, make sure you have matched the regauss cols with your chosen
     photoz sample using lensing.regauss.zphot_match()
     """
@@ -261,9 +259,7 @@ class DR8RegaussCatalog(GenericSrcCatalog):
 
     def create_objshear_input(self):
         filter=self['filter']
-        zlvals=lensing.sigmacrit.make_zlvals(self['dzl'], 
-                                             self['zlmin'], 
-                                             self['zlmax'])
+        zlvals=linspace(self['zlmin'], self['zlmax'], self['nzl'])
         nzl = zlvals.size
 
         keep,zphot_matches = self.select()
@@ -404,9 +400,7 @@ class DR8RegaussCatalog(GenericSrcCatalog):
         For joseph clampett.  Note nfs
         """
         filter=self['filter']
-        zlvals=lensing.sigmacrit.make_zlvals(self['dzl'], 
-                                             self['zlmin'], 
-                                             self['zlmax'])
+        zlvals=linspace(self['zlmin'], self['zlmax'], self['nzl'])
         nzl = zlvals.size
 
         pzcols = self.pzcols
@@ -474,6 +468,165 @@ class DR8RegaussCatalog(GenericSrcCatalog):
         print("  #rows:",self.pzcols['photoid'].size)
 
 
+class DR8RMandCatalog(GenericSrcCatalog):
+    """
+    Rachel's shapes collated with p(z) 12
+
+    the photoz are already in the catalog, we just specify cosmology in the source sample file
+
+    So we just run split() instead of create-objshear-input
+    """
+    def __init__(self, sample):
+
+        conf = lensing.files.read_config('scat', sample)
+        self.update(conf)
+        for k in conf:
+            self[k] = conf[k]
+
+        self['cosmo'] = lensing.files.read_config('cosmo',self['cosmo_sample'])
+
+        if 'dr8rmand' not in self['catalog']:
+            raise ValueError("Expected dr8regauss as catalog")
+
+    def original_file(self, with_scinv=False):
+        dir=os.environ['LENSDIR']
+        if with_scinv:
+            fname='photoz-matched-scinv.fits'
+        else:
+            fname='photoz-matched.fits'
+        fname=os.path.join(dir, 'catalogs','rachel-catalogs',fname)
+        return fname
+
+    def read_original(self, with_scinv=False, for_output=False):
+        """
+        catalog matched to photozs
+        """
+        import fitsio
+        fname=self.original_file(with_scinv=with_scinv)
+        print("reading:",fname)
+
+        if for_output:
+            columns=['ra','dec','e1','e2','err','mag','R']
+            if self['sigmacrit_style'] == 2:
+                columns.append('scinv')
+            else:
+                columns.append('pz')
+            print("    reading columns:",columns)
+        else:
+            columns=None
+
+        data=fitsio.read(fname, columns=columns)
+
+        return data
+
+
+    def split(self):
+        """
+        Split the source file into nsplit parts
+        """
+        
+        nsplit = self['nsplit']
+        if nsplit == 0:
+            return
+
+        print('splitting into:',self['nsplit'])
+
+        data = self.read_original(with_scinv=True, for_output=True)
+
+        print("multiplying by 0.5 and changing sign of e1")
+        data['e1'] *= -0.5
+        data['e2'] *=  0.5
+
+        ntot = data.size
+        nper = ntot/nsplit
+        nleft = ntot % nsplit
+
+        for i in xrange(nsplit):
+
+            beg = i*nper
+            end = (i+1)*nper
+            if i == (nsplit-1):
+                end += nleft
+            sdata = data[beg:end]
+
+            lensing.files.scat_write_ascii(sample=self['sample'],
+                                           data=sdata,
+                                           src_split=i)
+
+    def _extract(self, data):
+        """
+        pull out the columns we want
+        """
+        if self['sigmacrit_style']==2:
+            names += ['scinv']
+        pass
+
+    def get_zsvals(self):
+        import columns
+        dir=os.path.expanduser('~/photoz/weighting/dr8/pofz-12.cols/')
+        cols=columns.Columns(dir)
+
+        zbins=cols['zbins'][:]
+
+        zs = (zbins['zmax']+zbins['zmin'])/2
+        return zs
+
+    def add_scinv(self, show=False):
+        import fitsio
+        import zphot
+        from . import sigmacrit
+        import biggles
+
+        zsvals = self.get_zsvals()
+        cosmo=self['cosmo']
+        scalc = sigmacrit.ScinvCalculator(self['zlmin'],
+                                          self['zlmax'],
+                                          self['nzl'], 
+                                          zsvals[0],
+                                          zsvals[-1],
+                                          H0=cosmo['H0'],
+                                          omega_m=cosmo['omega_m'])
+
+        n_zlens=scalc.nzl
+        
+        data = self.read_original()
+        dt=data.dtype.descr
+        new_dtype=[]
+        for d in dt:
+            if d[0] != 'pofz':
+                new_dtype.append(d)
+
+        new_dtype += [('scinv','f8',n_zlens)]
+
+        out = numpy.zeros(data.size, dtype=new_dtype)
+        eu.numpy_util.ahelp(out)
+
+        print("copying common fields")
+        eu.numpy_util.copy_fields(data, out)
+
+
+        print('adding scinv to each')
+        for i in xrange(data.size):
+            if ((i+1) % 1000) == 0:
+                print("%s/%s  %.1f%%" % (i+1,data.size,float(i+1)/data.size*100.))
+
+            out['scinv'][i,:] = scalc.calc_mean_scinv(zsvals, data['pofz'][i])
+
+            if show:
+                biggles.plot(scalc.zlvals, out['scinv'][i], type='solid')
+                key=raw_input('hit a key (q to quit): ')
+                if key=='q':
+                    return
+
+        h=copy.deepcopy(cosmo)
+        h['zlvals'] = list(scalc.zlvals)
+
+        outf=self.original_file(with_scinv=True)
+        print("writing scinv file:",outf)
+
+        fitsio.write(outf, out, header=h, clobber=True)
+
+
 class DESMockCatalog(dict):
     """
     This is just for reading the original catalog
@@ -502,7 +655,7 @@ class DESMockCatalog(dict):
         data = eu.io.read(infile, lower=True, verbose=True)
         return data
 
-def im3daniel_to_columns(version):
+def daniel_to_columns(shear_version):
     import columns
     import fitsio
 
@@ -917,32 +1070,14 @@ class DESMockSrcCatalog(dict):
                            "this.  see gmix_sdss/bin/add-scinv.py")
         from . import sigmacrit
         import zphot
-        if 'zlmin' not in self or 'zlmax' not in self or 'dzl' not in self:
-            raise ValueError("You must have zlmin,zlmax,dzl in config")
-
-
-        """
-        note we don't really need this because we have perfect zs, but this
-        is what you would do with a real sample
-
-        wo = zphot.WeightedOutputs()
-        z_file = wo.z_file(self['pzrun'], chunk=0)
-        zscols = zphot.weighting.read_z(z_file)
-        zsvals = (zscols['zmax']+zscols['zmin'])/2.0
-        
-        sc = sigmacrit.ScinvCalculator(zsvals, 
-                                       self['dzl'],
-                                       self['zlmin'],
-                                       self['zlmax'])
-        """
+        if 'zlmin' not in self or 'zlmax' not in self or 'nzl' not in self:
+            raise ValueError("You must have zlmin,zlmax,nzl in config")
 
         # ok, now read the original file and add to it
         # the man scinv as a function of zlens
         # for now just using exact z
 
-        zlvals = sigmacrit.make_zlvals(self['dzl'],
-                                       self['zlmin'],
-                                       self['zlmax'])
+        zlvals=linspace(self['zlmin'], self['zlmax'], self['nzl'])
         n_zlens=zlvals.size
         
         data = self.read_original()

@@ -1,5 +1,27 @@
+from __future__ import print_function, division
 import numpy
 import scipy.optimize
+from pprint import pprint
+
+def histogauss(data, guess=None, **keys):
+    fitter=GaussFitter(data, **keys)
+
+    if guess is None:
+        mn=data.mean()
+        sig=data.std()
+        A=float(data.size)
+        guess=[mn, sig, A]
+
+        print("generated guess:",guess)
+
+    fitter.dofit(guess)
+    res=fitter.get_result()
+    pprint(res)
+
+    plt=fitter.doplot(**keys)
+
+    return plt, res
+
 
 class GaussFitter(object):
     """
@@ -24,13 +46,15 @@ class GaussFitter(object):
     def dofit(self, guess):
         """
         Run the lm fitter
+
+        guess is [mean, sigma, amp]
         """
 
         self._make_hist()
 
-        print 'running leastsq'
         res=scipy.optimize.leastsq(self._errfunc,
                                    guess,
+                                   maxfev=4000,
                                    full_output=1)
 
         self.pars, self.pcov0, self.infodict, self.errmsg, self.ier = res
@@ -91,7 +115,7 @@ class GaussFitter(object):
         import esutil as eu
 
         if not hasattr(self, 'x'):
-            print 'histogramming'
+            print('histogramming')
             self.conf['more']=True
             h=eu.stat.histogram(self.data, **self.conf)
 
@@ -101,7 +125,7 @@ class GaussFitter(object):
             if self.use_error:
                 self.yerr=numpy.sqrt(h['hist'])
 
-    def make_plot(self, show=False):
+    def doplot(self, **keys):
         """
         compare fit to data
         """
@@ -109,11 +133,11 @@ class GaussFitter(object):
 
         model=self.eval_pars(self.pars)
 
-        plt=biggles.FramedPlot()
+        plt=biggles.FramedPlot(**keys)
 
         x0=self.x[0]
         binsize=self.x[1]-self.x[0]
-        h=biggles.Histogram(self.y, x0=x0, binsize=binsize, color='black')
+        h=biggles.Histogram(self.y, x0=x0, binsize=binsize)
         h.label='data'
 
         plt.add(h)
@@ -129,7 +153,7 @@ class GaussFitter(object):
         key=biggles.PlotKey(0.1, 0.9, [h, fh], halign='left')
         plt.add(key)
 
-        mnstr='mn: %g +/- %g' % (self.pars[0],self.perr[0])
+        mnstr=r'$\mu: %g +/- %g$' % (self.pars[0],self.perr[0])
         sigstr=r'$\sigma: %g +/- %g$' % (self.pars[1],self.perr[1])
         ampstr='amp: %g +/- %g' % (self.pars[2],self.perr[2])
 
@@ -139,24 +163,183 @@ class GaussFitter(object):
 
         plt.add(mnlab, siglab, amplab)
 
+        show=keys.get('show',True)
         if show:
             plt.show()
 
         return plt
 
-class LineFitter:
-    def __init__(self, x, y, yerr=None):
-        self.x=x
-        self.y=y
-        self.yerr=yerr
-        self.set_guess()
-        self.dofit()
+class LogNormalFitter(GaussFitter):
+    def eval_pars(self, pars):
+        """
+        [cen, sigma, amp]
+        """
+        import ngmix
+        p=ngmix.priors.LogNormal(pars[0],pars[1])
 
-    def set_guess(self):
-        self.guess=numpy.polyfit(self.x, self.y, 1)
+        return pars[2]*p.get_prob_array(self.x)
+
+
+def fit_line(x, y, yerr=None, **kw):
+    lf=LineFitter(x, y, yerr=yerr, **kw)
+    lf.dofit()
+    return lf
+
+class LineFitter(object):
+    def __init__(self, x, y, yerr=None, method='max', **kw):
+
+        self.x=numpy.array(x,dtype='f8',ndmin=1)
+        self.y=numpy.array(y,dtype='f8',ndmin=1)
+        if yerr is not None:
+            yerr=numpy.array(yerr,dtype='f8',ndmin=1)
+        self.yerr=yerr
+
+        self.method=method
+
+        self.npars=2
+
+        if self.method=='mcmc':
+            if self.yerr is None:
+                raise RuntimeError("send yerr= for mcmc")
+            self.nwalkers=kw['nwalkers']
+            self.burnin=kw['burnin']
+            self.nstep=kw['nstep']
+            self.a = kw.get("a",2.0)
+
+        self._set_guess(**kw)
+
+    def doplot(self, **keys):
+        import biggles
+
+        show=keys.pop('show',False)
+        file=keys.pop('file',None)
+
+        res=self.get_result()
+        ply = self.get_poly()
+
+        plt=biggles.FramedPlot()
+
+        pts = biggles.Points(
+            self.x, self.y,
+            type='filled circle',
+            size=2,
+        )
+        pts.label='data'
+
+        plt.add(pts)
+        if self.yerr is not None:
+            err = biggles.SymmetricErrorBarsY(
+                self.x, self.y, self.yerr,
+            )
+            plt.add(err)
+
+        line = biggles.Curve(
+            self.x, ply(self.x),
+            color='blue',
+        )
+        line.label='%.3g x + %.3g' % tuple(res['pars'])
+        plt.add(line)
+
+        key=biggles.PlotKey(
+            0.1,0.9,[pts,line],
+            halign='left',
+        )
+        plt.add(key)
+
+        if show:
+            plt.show(**keys)
+        if file is not None:
+            print("writing:",file)
+            if '.eps' in file:
+                plt.write_eps(file)
+            elif '.png' in file:
+                width=keys.pop('width',800)
+                height=keys.pop('height',800)
+                plt.write_img(width,height,file)
+
+        return plt
+
+
+    def get_result(self):
+        return self._result
+
+    def dofit(self):
+        if self.method=='max':
+            self._dofit_max()
+        elif self.method=='mcmc':
+            self._dofit_mcmc()
+        else:
+            raise ValueError("bad method: '%s'" % self.method)
+
+    def _dofit_mcmc(self):
+        import emcee
+        import mcmc
+        sampler = emcee.EnsembleSampler(self.nwalkers, 
+                                        self.npars, 
+                                        self._get_lnprob,
+                                        a=self.a)
+
+        pos_burn, prob, state = sampler.run_mcmc(self.guess, self.burnin)
+        pos, prob, state = sampler.run_mcmc(pos_burn, self.nstep)
+
+        trials  = sampler.flatchain
+        pars, pcov = mcmc.extract_stats(trials)
+
+        self.sampler=sampler
+        self.trials=trials
+        perr=numpy.sqrt(numpy.diag(pcov))
+
+        self._result={'pars':pars, 'pcov':pcov, 'perr':perr}
+
+    def _dofit_max(self):
+        res=scipy.optimize.leastsq(self._errfunc, self.guess,
+                                   full_output=1)
+        pars, pcov0, infodict, errmsg, ier = res
+        if ier == 0:
+            # wrong args, this is a bug
+            raise ValueError(errmsg)
+
+        numiter = infodict['nfev']
+        pcov=None
+        perr=None
+
+        if pcov0 is not None:
+            pcov = self._scale_leastsq_cov(pars, pcov0)
+
+            d=numpy.diag(pcov)
+            w,=numpy.where(d < 0)
+
+            if w.size == 0:
+                # only do if non negative
+                perr = numpy.sqrt(d)
+        
+        self._result={'pars':pars, 'pcov':pcov, 'perr':perr}
+
+
+    def _set_guess(self, **kw):
+        best_fit=numpy.polyfit(self.x, self.y, 1)
+        
+        if self.method=='mcmc':
+            guess = numpy.zeros( (self.nwalkers, self.npars) )
+
+            rnums = 2.0*(numpy.random.random(self.nwalkers)-0.5)
+            guess[:,0] += 0.01*rnums
+            rnums = 2.0*(numpy.random.random(self.nwalkers)-0.5)
+            guess[:,1] += 0.01*rnums
+
+            self.guess=guess
+        else:
+            self.guess=best_fit
 
     def eval_pars(self, pars):
         return pars[0]*self.x + pars[1]
+
+    def _get_lnprob(self, pars):
+        model = self.eval_pars(pars)
+
+        chi2 = ( (model-self.y)/self.yerr )**2
+
+        return -0.5*chi2.sum()
 
     def _errfunc(self, pars):
         model = self.eval_pars(pars)
@@ -167,32 +350,6 @@ class LineFitter:
 
         return diff
 
-    def dofit(self):
-        res=scipy.optimize.leastsq(self._errfunc, self.guess,
-                                   full_output=1)
-        self.pars, self.pcov0, self.infodict, self.errmsg, self.ier = res
-        if self.ier == 0:
-            # wrong args, this is a bug
-            raise ValueError(self.errmsg)
-
-        self.numiter = self.infodict['nfev']
-        self.pcov=None
-        self.perr=None
-
-        if self.pcov0 is not None:
-            self.pcov = self._scale_leastsq_cov(self.pars, self.pcov0)
-
-            d=numpy.diag(self.pcov)
-            w,=numpy.where(d < 0)
-
-            if w.size == 0:
-                # only do if non negative
-                self.perr = numpy.sqrt(d)
-
-    def get_result(self):
-        return {'pars':self.pars,
-                'pcov':self.pcov,
-                'perr':self.perr}
     def _scale_leastsq_cov(self, pars, pcov):
         """
         Scale the covariance matrix returned from leastsq; this will
@@ -204,23 +361,72 @@ class LineFitter:
 
 
     def get_poly(self):
-        return numpy.poly1d(self.pars)
+        res=self.get_result()
+        return numpy.poly1d(res['pars'])
 
     def __call__(self, x):
         """
         pars order same as for numpy.poly1d
         """
-        return self.pars[0]*self.x + self.pars[1]
+        res=self.get_result()
+        pars=res['pars']
+        return pars[0]*x + pars[1]
 
     def __repr__(self):
-        if self.perr is not None:
-            return """y = p0*x + p1
-p0: %s +/- %s
-p1: %s +/- %s""" % (self.pars[0],self.perr[0],self.pars[1],self.perr[1])
+        if hasattr(self,'_result'):
+            pars=self._result['pars']
+            perr=self._result['perr']
+
+            if perr is not None:
+                rep = """y = p0*x + p1
+    p0: %s +/- %s
+    p1: %s +/- %s""" % (pars[0],perr[0],pars[1],perr[1])
+            else:
+                rep = """y = p0*x + p1
+    p0: %s +/- None
+    p1: %s +/- None""" % (pars[0],pars[1])
+
         else:
-            return """y = p0*x + p1
-p0: %s +/- None
-p1: %s +/- None""" % (self.pars[0],self.pars[1])
+            rep=""
+        return rep
+
+
+class PowerLawFitter(LineFitter):
+    def _set_guess(self, **kw):
+        if 'guess' not in kw:
+            raise ValueError("send guess= for power law fit")
+
+        self.guess=numpy.array(kw['guess'], dtype='f8')
+        if self.guess.size != self.npars:
+            raise ValueError("guess should have size "
+                             "%d, got %d" % (self.npars,self.guess.size))
+
+    def eval_pars(self, pars):
+        return pars[0]*self.x**pars[1]
+
+    def __call__(self, x):
+        res=self.get_result()
+        pars=res['pars']
+        return pars[0]*x**pars[1]
+
+    def __repr__(self):
+        if hasattr(self,'_result'):
+            pars=self._result['pars']
+            perr=self._result['perr']
+
+            if perr is not None:
+                rep = """y = p0*x^p1
+    p0: %s +/- %s
+    p1: %s +/- %s""" % (pars[0],perr[0],pars[1],perr[1])
+            else:
+                rep = """y = p0*x^p1
+    p0: %s +/- None
+    p1: %s +/- None""" % (pars[0],pars[1])
+
+        else:
+            rep=""
+        return rep
+
 
 def test_line(show=False):
     pars = [1,3]
@@ -230,8 +436,8 @@ def test_line(show=False):
     y += yerr*numpy.random.randn(len(x))
 
     lf = LineFitter(x, y, yerr=yerr)
-    print 'guess:',lf.guess
-    print lf
+    print('guess:',lf.guess)
+    print(lf)
 
     if show:
         import biggles

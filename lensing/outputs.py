@@ -12,31 +12,6 @@ from esutil.numpy_util import where1
 
 import jackknife
 
-def add_lensums(l1, l2):
-    """
-
-    Add the sums from l2 to l1.
-
-    The rows of l1 must correspond to those of l2; zindex must match
-
-    Note we now do the combination from the splits using the c program
-    redshear, but this could still be useful
-
-    """
-
-    w=where1(l1['zindex'] != l2['zindex'])
-    if w.size > 0:
-        raise ValueError("zindex do not line up")
-    names = ['weight','sshsum','npair','rsum','wsum','dsum','osum']
-    if 'totpairs' in l1.dtype.names:
-        names.append('totpairs')
-    for n in names:
-        if n in l1.dtype.names and n in l2.dtype.names:
-            l1[n] += l2[n]
-
-
-
-
 #
 # Codes for combining the lensout "lensum" data and
 # getting averages
@@ -80,7 +55,6 @@ def average_lensums(lout, weights=None):
         npair = lout['npair'][:,i].sum()
         rsum  = lout['rsum'][:,i].sum()
 
-
         wsum = lout['wsum'][:,i].sum()
         wsum2 = (lout['wsum'][:,i]**2).sum()
         dsum = lout['dsum'][:,i].sum()
@@ -93,7 +67,13 @@ def average_lensums(lout, weights=None):
         comb['osum'][0,i] = osum
 
         # averages
-        comb['r'][0,i] = rsum/npair
+        tr = rsum/wsum
+        if tr > 100:
+            # old style probably
+            comb['r'][0,i] = rsum/npair
+        else:
+            comb['r'][0,i] = tr
+
         comb['dsig'][0,i] = dsum/wsum
         comb['osig'][0,i] = osum/wsum
 
@@ -162,7 +142,6 @@ def average_lensums_weighted(lout, weights):
 
         npair = lout['npair'][:,i].sum()
 
-        # not weighting?
         rsum  = lout['rsum'][:,i].sum()
 
         w_wsum = (lout['wsum'][:,i]*weights).sum()
@@ -177,7 +156,12 @@ def average_lensums_weighted(lout, weights):
         comb['osum'][0,i]  = w_osum
 
         # averages
-        comb['r'][0,i] = rsum/npair
+        tr = rsum/w_wsum
+        if tr > 100:
+            # probably old way
+            comb['r'][0,i] = rsum/weights.sum()
+        else:
+            comb['r'][0,i] = tr
 
         comb['dsig'][0,i] = w_dsum/w_wsum
         comb['osig'][0,i] = w_osum/w_wsum
@@ -236,20 +220,30 @@ def averaged_dtype(nbin):
         ('osum','f8',nbin)]
     return dt
 
+def add_lensums(l1, l2):
+    """
+
+    Add the sums from l2 to l1.
+
+    The rows of l1 must correspond to those of l2; zindex must match
+
+    Note we now do the combination from the splits using the c program
+    redshear, but this could still be useful
+
+    """
+
+    w=where1(l1['zindex'] != l2['zindex'])
+    if w.size > 0:
+        raise ValueError("zindex do not line up")
+    names = ['weight','sshsum','npair','rsum','wsum','dsum','osum']
+    if 'totpairs' in l1.dtype.names:
+        names.append('totpairs')
+    for n in names:
+        if n in l1.dtype.names and n in l2.dtype.names:
+            l1[n] += l2[n]
 
 
-def averaged_dtype_old():
-    dt=[('r','f8'),
-        ('dsig','f8'),
-        ('dsigerr','f8'),
-        ('osig','f8'),
-        ('npair','i8'),
-        ('weight','f8'),
-        ('rsum','f8'),
-        ('wsum','f8'),
-        ('dsum','f8'),
-        ('osum','f8')]
-    return numpy.dtype(dt)
+
 
 
 def compare_hist_match(binsize, binnum=9, l=None, r=None):
@@ -258,12 +252,6 @@ def compare_hist_match(binsize, binnum=9, l=None, r=None):
     """
     import weighting
     import lensing
-    """
-    import biggles
-    biggles.configure('screen','width', 1140)
-    biggles.configure('screen','height', 1140)
-    """
-
 
     if l is None or r is None:
         l,r = load_test_data()
