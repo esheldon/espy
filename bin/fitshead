@@ -8,6 +8,8 @@ Print out the fits header.  Defaults to extension 0
 Requires fitsio or pyfits
 """
 
+from __future__ import print_function
+
 import sys
 try:
     import fitsio
@@ -20,8 +22,8 @@ except:
         raise ImportError("Could not import fitsio or pyfits")
 
 def usage():
-    print 'usage: fitshead filename [extension]'
-    print '    default extension is 0'
+    print('usage: fitshead filename [extension]')
+    print('    default extension is 0')
 
 if len(sys.argv) < 2:
     usage()
@@ -38,4 +40,4 @@ if type == 'fitsio':
 else:
     hdr = pyfits.getheader(fname, ext=ext)
 
-print hdr
+print(hdr)
