@@ -9,6 +9,8 @@ Requires fitsio or pyfits
 """
 from __future__ import print_function
 
+from __future__ import print_function
+
 import sys
 try:
     import fitsio

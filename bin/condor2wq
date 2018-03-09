@@ -35,6 +35,8 @@ parser.add_option("--outdir",default=None,
 
 parser.add_option("--extra-commands",default="",
                   help=("extra shell comments to run, e.g. source a file"))
+parser.add_option("--req",default="",
+                  help=("requirements for the wq job"))
 
 
 
@@ -79,10 +81,25 @@ command: |
     {exec_file} {args}
 
 job_name: "{job_name}"
+{requirements}
 """
 
-def write_jobs(exec_file,job_names, args_list, outdir, extra_commands):
+def write_jobs(exec_file,
+               job_names,
+               args_list,
+               outdir,
+               extra_commands,
+               requirements):
 
+    requirements=requirements.split(';')
+    req=[]
+
+    for r in requirements:
+        rs = r.split(':')
+        if len(rs) >1:
+            req.append( '%s: %s' % (n,v))
+    
+    req= '\n'.join(req)
     outdir=os.path.abspath(outdir)
 
     if not os.path.exists(outdir):
@@ -99,10 +116,13 @@ def write_jobs(exec_file,job_names, args_list, outdir, extra_commands):
             print(args)
             print()
 
-        wqtext = _wq_template.format(exec_file=exec_file,
-                                     args=args,
-                                     job_name=job_name,
-                                     extra_commands=extra_commands)
+        wqtext = _wq_template.format(
+            exec_file=exec_file,
+            args=args,
+            job_name=job_name,
+            extra_commands=extra_commands,
+            requirements=req,
+        )
 
         with open(fname,'w') as fobj:
             fobj.write(wqtext)
@@ -124,7 +144,14 @@ def main():
         else:
             outdir=options.outdir
 
-        write_jobs(exec_file, job_names, args_list, outdir, options.extra_commands)
+        write_jobs(
+            exec_file,
+            job_names,
+            args_list,
+            outdir,
+            options.extra_commands,
+            requirements=options.req,
+        )
     
 if __name__=="__main__":
     main()

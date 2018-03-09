@@ -209,7 +209,7 @@ class Submitter(object):
                         break
 
                 else:
-                    print("%d jobs is plenty (> %d)" % (njobs,self.nmax))
+                    #print("%d jobs is plenty (> %d)" % (njobs,self.nmax))
                     time.sleep(self.poll)
 
     def _print_subline(self, script, i, ntot):
