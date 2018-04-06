@@ -1,0 +1,36 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+import numpy
+from argparse import ArgumentParser
+
+parser = ArgumentParser()
+parser.add_argument('-f',type=float,help="farenheit value")
+parser.add_argument('-c',type=float,help="celcius value")
+
+def f2c(Tf):
+    return (5.0/9.0) * (Tf - 32.0)
+
+def c2f(Tc):
+    return (9.0/5.0) * Tc + 32.0
+
+def print_chart():
+
+    step = 4.0
+    Tfvals = numpy.arange(-40.0, 100.0+step-1, step)
+
+    print("%5s %5s" % ("Tf","Tc"))
+    print("  " + "-"*9)
+    for Tf in Tfvals:
+        Tc = f2c(Tf)
+        print("%5i %5i" % (Tf, Tc))
+
+if __name__=="__main__":
+    args = parser.parse_args()
+
+    if args.f is not None:
+        print( f2c(args.f) )
+    elif args.c is not None:
+        print( c2f(args.c) )
+    else:
+        print_chart()
