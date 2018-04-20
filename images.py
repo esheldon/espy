@@ -726,7 +726,8 @@ def linear_scale(im, **keys):
 
     if autoscale:
         maxval=I.max()
-        I  *= (1.0/I.max())
+        if maxval != 0.0:
+            I  *= (1.0/maxval)
 
     I.clip(0.0, 1.0, I)
 
