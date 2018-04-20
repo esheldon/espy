@@ -11,6 +11,7 @@ Description:
     All thumbnails, reduced images, and html files html are stored there.
     There is a main gallery/index.html file that is the first index.
 """
+from __future__ import print_function
 import os
 import sys
 import re
@@ -390,10 +391,10 @@ def make_reduced_image(imfile, dims, newfile):
 
     if totpix > new_totpix:
         image.thumbnail(dims, Image.ANTIALIAS ) 
-        print 'writing',newfile
+        print('writing',newfile)
         image.save(newfile)
     else:
-        print 'Image',imfile,' is smaller than requested size. Linking'
+        print('Image',imfile,' is smaller than requested size. Linking')
         os.symlink(imfile, newfile)
 
 
