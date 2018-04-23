@@ -111,6 +111,27 @@ def view(image, **keys):
     return plt
 
 
+def get_profile(image, cen=None):
+    if cen is None:
+        cen=(numpy.array(image.shape)-1.0)/2.0
+    else:
+        assert len(cen)==2,"cen must have two elements"
+
+    rows,cols=numpy.mgrid[
+        0:image.shape[0],
+        0:image.shape[1],
+    ]
+
+    rows = rows.astype('f8')-cen[0]
+    cols = cols.astype('f8')-cen[1]
+
+    r = numpy.sqrt(rows**2 + cols**2).ravel()
+    s = r.argsort()
+    r=r[s]
+    pim = image.ravel()[s]
+
+    return r, pim
+
 def view_profile(image, **keys): 
     """
     View the image as a radial profile vs radius from the center.
@@ -144,30 +165,13 @@ def view_profile(image, **keys):
     cen=keys.pop('cen',None)
     keys['xlabel']=keys.get('xlabel','radius')
 
-    if cen is None:
-        cen=(numpy.array(image.shape)-1.0)/2.0
-    else:
-        assert len(cen)==2,"cen must have two elements"
+    r, pim = get_profile(image, cen=cen)
 
-    rows,cols=numpy.mgrid[
-        0:image.shape[0],
-        0:image.shape[1],
-    ]
-
-    rows = rows.astype('f8')-cen[0]
-    cols = cols.astype('f8')-cen[1]
-
-    r = numpy.sqrt(rows**2 + cols**2).ravel()
-    s = r.argsort()
-    r=r[s]
-    imravel = image.ravel()[s]
-
-    #pts = biggles.Points(r, imravel, size=size, type=type, **keys)
     keys['visible']=False
-    plt = biggles.plot(r, imravel, plt=plt, **keys)
+    plt = biggles.plot(r, pim, plt=plt, **keys)
 
     _writefile_maybe(plt, **keys)
-    _show_maybe(plt, show=show,**keys)
+    _show_maybe(plt, show=show, **keys)
 
     return plt
 
