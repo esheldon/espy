@@ -111,6 +111,27 @@ def view(image, **keys):
     return plt
 
 
+def get_profile(image, cen=None):
+    if cen is None:
+        cen=(numpy.array(image.shape)-1.0)/2.0
+    else:
+        assert len(cen)==2,"cen must have two elements"
+
+    rows,cols=numpy.mgrid[
+        0:image.shape[0],
+        0:image.shape[1],
+    ]
+
+    rows = rows.astype('f8')-cen[0]
+    cols = cols.astype('f8')-cen[1]
+
+    r = numpy.sqrt(rows**2 + cols**2).ravel()
+    s = r.argsort()
+    r=r[s]
+    pim = image.ravel()[s]
+
+    return r, pim
+
 def view_profile(image, **keys): 
     """
     View the image as a radial profile vs radius from the center.
@@ -142,31 +163,15 @@ def view_profile(image, **keys):
     plt=keys.pop('plt',None)
     show=keys.pop('show',True)
     cen=keys.pop('cen',None)
+    keys['xlabel']=keys.get('xlabel','radius')
 
-    if cen is None:
-        cen=(numpy.array(image.shape)-1.0)/2.0
-    else:
-        assert len(cen)==2,"cen must have two elements"
+    r, pim = get_profile(image, cen=cen)
 
-    rows,cols=numpy.mgrid[
-        0:image.shape[0],
-        0:image.shape[1],
-    ]
-
-    rows = rows.astype('f8')-cen[0]
-    cols = cols.astype('f8')-cen[1]
-
-    r = numpy.sqrt(rows**2 + cols**2).ravel()
-    s = r.argsort()
-    r=r[s]
-    imravel = image.ravel()[s]
-
-    #pts = biggles.Points(r, imravel, size=size, type=type, **keys)
     keys['visible']=False
-    plt = biggles.plot(r, imravel, plt=plt, **keys)
+    plt = biggles.plot(r, pim, plt=plt, **keys)
 
     _writefile_maybe(plt, **keys)
-    _show_maybe(plt, show=show,**keys)
+    _show_maybe(plt, show=show, **keys)
 
     return plt
 
@@ -387,49 +392,55 @@ def multiview(image, **keys):
             int(round( (image.shape[1]-1)/2. )),
         ]
 
+    assert len(cen)==2
+
     keys2 = copy.copy(keys)
     keys2['show'] = False
     keys2['file'] = None
 
-    imp = view(image, **keys2)
-
-    # cross-section across rows
-    imrows = image[:, cen[1]]
-    imcols = image[cen[0], :]
-    
-    # in case xdr, ydr were sent
-    x, y, ranges = _extract_data_ranges(image.shape, **keys)
-    if x is not None:
-        x0 = ranges[0][0]
-        y0 = ranges[0][1]
-        xbinsize=x[1]-x[0]
-        ybinsize=y[1]-y[0]
-    else:
-        x0=0
-        y0=0
-        xbinsize=1
-        ybinsize=1
-
-
-    crossplt = biggles.FramedPlot()
-    hrows = biggles.Histogram(imrows, x0=y0, binsize=ybinsize, color='blue')
-    hrows.label = 'Center rows'
-    hcols = biggles.Histogram(imcols, x0=x0, binsize=xbinsize, color='red')
-    hcols.label = 'Center columns'
-
-    key = biggles.PlotKey(0.1, 0.9, [hrows, hcols])
-
-    crossplt.add(hrows, hcols, key)
-    crossplt.aspect_ratio=1
-    yr = crossplt._limits1().yrange()
-    yrange = (yr[0], yr[1]*1.2)
-    crossplt.yrange = yrange
-
+    do_profile=keys2.pop('profile',False)
 
     tab = biggles.Table( 1, 2 )
 
+    imp = view(image, **keys2)
     tab[0,0] = imp
-    tab[0,1] = crossplt
+
+    if do_profile:
+        tab[0,1] = view_profile(image, **keys2)
+    else:
+        # cross-section across rows
+        imrows = image[:, cen[1]]
+        imcols = image[cen[0], :]
+        
+        # in case xdr, ydr were sent
+        x, y, ranges = _extract_data_ranges(image.shape, **keys)
+        if x is not None:
+            x0 = ranges[0][0]
+            y0 = ranges[0][1]
+            xbinsize=x[1]-x[0]
+            ybinsize=y[1]-y[0]
+        else:
+            x0=0
+            y0=0
+            xbinsize=1
+            ybinsize=1
+
+
+        crossplt = biggles.FramedPlot()
+        hrows = biggles.Histogram(imrows, x0=y0, binsize=ybinsize, color='blue')
+        hrows.label = 'Center rows'
+        hcols = biggles.Histogram(imcols, x0=x0, binsize=xbinsize, color='red')
+        hcols.label = 'Center columns'
+
+        key = biggles.PlotKey(0.1, 0.9, [hrows, hcols])
+
+        crossplt.add(hrows, hcols, key)
+        crossplt.aspect_ratio=1
+        yr = crossplt._limits1().yrange()
+        yrange = (yr[0], yr[1]*1.2)
+        crossplt.yrange = yrange
+
+        tab[0,1] = crossplt
 
 
     _writefile_maybe(tab, **keys)
@@ -730,7 +741,8 @@ def linear_scale(im, **keys):
 
     if autoscale:
         maxval=I.max()
-        I  *= (1.0/I.max())
+        if maxval != 0.0:
+            I  *= (1.0/maxval)
 
     I.clip(0.0, 1.0, I)
 
