@@ -407,6 +407,7 @@ def multiview(image, **keys):
 
     if do_profile:
         tab[0,1] = view_profile(image, **keys2)
+        tab[0,1].aspect_ratio=1
     else:
         # cross-section across rows
         imrows = image[:, cen[1]]
