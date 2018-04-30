@@ -195,16 +195,18 @@ def _show_maybe(plt, **keys):
         show=keys['show']
 
     if show:
+        wkeys={}
         dims=keys.get('dims',None)
         if dims is None:
             width=keys.get('width',None)
             height=keys.get('height',None)
-            if width is None:
-                dims=[800,800]
-            else:
+            if width is not None:
                 dims=[width,height]
 
-        plt.show(width=dims[0], height=dims[1])
+        if dims is not None:
+            wkeys['width']=dims[0]
+            wkeys['height']=dims[1]
+        plt.show(**wkeys)
 
 
 def _extract_data_ranges(imshape, **keys):
