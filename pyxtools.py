@@ -1827,7 +1827,6 @@ def example4():
 
 
     g.writePDFfile("example4.pdf")
-    g.writeGSfile("example4.png")
 
 def example5():
 

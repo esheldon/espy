@@ -72,6 +72,16 @@ def execute_command(cmd):
     sout, serr = pobj.communicate()
     exit_status = pobj.returncode
 
+    # yay for python3... :(
+    try:
+        sout = str(sout,'utf-8')
+    except:
+        pass
+    try:
+        serr = str(serr,'utf-8')
+    except:
+        pass
+
     return sout, serr, exit_status
 
 
