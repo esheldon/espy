@@ -27,12 +27,20 @@ import sys
 import subprocess
 from optparse import OptionParser
 
+try:
+    xrange
+except:
+    xrange=range
+
 import curses
 try:
     # newer version 
     import curses.wrapper.wrapper as curses_wrapper
 except:
-    import curses.wrapper as curses_wrapper
+    try:
+        import curses.wrapper as curses_wrapper
+    except:
+        from curses import wrapper as curses_wrapper
 
 parser=OptionParser(__doc__)
 parser.add_option("-r","--refresh",default=300, 
@@ -307,7 +315,7 @@ class CondorWatcher:
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               shell=True)
         stdout_ret, stderr_ret = pobj.communicate()
-        return stdout_ret
+        return stdout_ret.decode('utf-8')
 
 
 
