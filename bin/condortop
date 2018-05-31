@@ -34,13 +34,9 @@ except:
 
 import curses
 try:
-    # newer version 
     import curses.wrapper.wrapper as curses_wrapper
 except:
-    try:
-        import curses.wrapper as curses_wrapper
-    except:
-        from curses import wrapper as curses_wrapper
+    from curses import wrapper as curses_wrapper
 
 parser=OptionParser(__doc__)
 parser.add_option("-r","--refresh",default=300, 

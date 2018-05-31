@@ -22,12 +22,17 @@ from sys import stderr
 import subprocess
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 
+try:
+    xrange
+except:
+    xrange=range
+
 import curses
 try:
-    # newer version 
     import curses.wrapper.wrapper as curses_wrapper
 except:
-    import curses.wrapper as curses_wrapper
+    from curses import wrapper as curses_wrapper
+
 
 DEFAULT_REFRESH=120
 
@@ -258,7 +263,7 @@ class LSFWatcher(dict):
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               shell=True)
         stdout_ret, stderr_ret = pobj.communicate()
-        return stdout_ret
+        return stdout_ret.decode('utf-8')
 
     def set_defaults(self):
         """
