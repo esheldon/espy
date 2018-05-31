@@ -477,7 +477,7 @@ def compare_images(im1, im2, **keys):
     if cen is None:
         cen = [(im1.shape[0]-1)/2., (im1.shape[1]-1)/2.]
 
-    labelres='%s-%s' % (label2,label1)
+    labelres='%s-%s' % (label1,label2)
 
     biggles.configure( 'default', 'fontsize_min', 1.)
 
@@ -485,7 +485,8 @@ def compare_images(im1, im2, **keys):
         raise ValueError("images must be the same shape")
 
 
-    resid = im2-im1
+    #resid = im2-im1
+    resid = im1-im2
 
     # will only be used if type is contour
     tab=biggles.Table(nrow,ncol)
