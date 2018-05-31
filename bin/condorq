@@ -239,8 +239,7 @@ class CondorPrinter:
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               shell=True)
         stdout_ret, stderr_ret = pobj.communicate()
-        return stdout_ret
-
+        return stdout_ret.decode('utf-8')
 
 # 
 # main program

@@ -129,7 +129,7 @@ class JobLister(dict):
                 print("error listing jobs, trying again after 30 seconds")
                 time.sleep(30)
 
-        self.jobs = [r for r in resp['response'] if r['user'] == self.user]
+        self.jobs = [r for r in resp['response'] if ('user' in r and r['user'] == self.user)]
         self.njobs = len(self.jobs)
 
 def get_log_fname(fname):
