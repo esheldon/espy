@@ -11,7 +11,7 @@ Description:
     not removed recursively.  That's a TODO
 
 """
-
+from __future__ import print_function
 import os
 import sys
 import subprocess
@@ -104,7 +104,7 @@ def main():
                 "--reject='index.html*'",
                 url]
 
-    print command
+    print(command)
     retcode = subprocess.call(command)
     cleanup()
 
