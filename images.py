@@ -58,7 +58,8 @@ def view(image, **keys):
     import biggles
 
     # we need to transpose for biggles to display properly
-    trans = keys.get('transpose',True)
+    trans = keys.pop('transpose',True)
+    doscale = keys.pop('scale',False)
 
     im=scale_image(image, **keys)
 
@@ -68,6 +69,7 @@ def view(image, **keys):
     type=keys.get('type','dens')
 
     plt = biggles.FramedPlot()
+
     if 'title' in keys:
         plt.title=keys['title']
 
@@ -98,13 +100,56 @@ def view(image, **keys):
         plt.yrange=keys['yrange']
 
     # make sure the pixels look square
-    plt.aspect_ratio = im.shape[1]/float(im.shape[0])
+    aratio=im.shape[1]/float(im.shape[0])
+    plt.aspect_ratio = aratio
 
     if 'xlabel' in keys:
         plt.xlabel=keys['xlabel']
     if 'ylabel' in keys:
         plt.ylabel=keys['ylabel']
 
+    if doscale and 'dens' in type:
+        # the following all works as long as the font size doesn't
+        # get to small on the scale.  Making sure the biggles
+        # fontsize_min is less than about 0.75 works even in
+        # some bad cases
+        immin, immax = image.min(), image.max()
+        num=100
+
+        tab_aratio = (im.shape[1] * 0.8)/float(im.shape[0])
+        tab=biggles.Table(
+            1,2,
+            aspect_ratio=tab_aratio,
+            col_fractions=[0.1,0.9],
+        )
+        tab.cellpadding=0.0
+        tab.cellspacing=0.0
+
+        scale_plt=biggles.FramedPlot(
+            yrange=[immin,immax],
+            xrange=[0.0,1],
+        )
+
+        scale_im = numpy.linspace(0, 1, num).reshape(1,num)
+        drngs = ((0,immin),(1,immax))
+        d = biggles.Density(scale_im, drngs)
+        scale_plt.add(d)
+
+        scale_plt.x1.draw_ticks=False
+        scale_plt.x1.draw_ticklabels=False
+        scale_plt.x2.draw_ticks=False
+        scale_plt.x2.draw_ticklabels=False
+
+        scale_plt.y1.draw_ticks=False
+        scale_plt.y1.draw_ticklabels=False
+        scale_plt.y2.draw_ticks=False
+        scale_plt.y2.draw_ticklabels=True
+
+
+        tab[0,0] = plt
+        tab[0,1] = scale_plt
+        plt=tab
+        
     _writefile_maybe(plt, **keys)
     _show_maybe(plt, **keys)
 
