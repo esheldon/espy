@@ -61,10 +61,15 @@ def view(image, **keys):
     trans = keys.pop('transpose',True)
     doscale = keys.pop('scale',False)
 
-    im=scale_image(image, **keys)
+    if len(image.shape) == 2:
+        im=scale_image(image, **keys)
+        if trans:
+            im = im.transpose()
+    else:
+        # for 3 d we need to trust the input to
+        # be properly scaled and transposed
+        im=image
 
-    if trans:
-        im = im.transpose()
 
     type=keys.get('type','dens')
 
@@ -73,7 +78,7 @@ def view(image, **keys):
     if 'title' in keys:
         plt.title=keys['title']
 
-    x, y, ranges = _extract_data_ranges(im.shape, **keys)
+    x, y, ranges = _extract_data_ranges(im.shape[0:0+2], **keys)
 
     def_contour_color='black'
     if 'dens' in type:
