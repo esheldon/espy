@@ -293,16 +293,16 @@ def make_combined_mosaic(imlist):
     Also should be "sky subtracted" for best
     effect when the grid is not fully packed
     """
+    import plotting
     nimage=len(imlist)
-    nrow,ncol=get_grid(nimage)
+    grid=plotting.Grid(nimage)
     shape=imlist[0].shape
 
-    imtot=numpy.zeros( (nrow*shape[0], ncol*shape[1]) )
+    imtot=numpy.zeros( (grid.nrow*shape[0], grid.ncol*shape[1]) )
 
     for i in xrange(nimage):
         im=imlist[i]
-        row=i/ncol
-        col=i % ncol
+        row,col=grid(i)
 
         rstart = row*shape[0]
         rend   = (row+1)*shape[0]
@@ -328,7 +328,6 @@ def view_mosaic(imlist, titles=None, combine=False, **keys):
     nimage=len(imlist)
     grid=plotting.Grid(nimage)
 
-    #nrow,ncol=get_grid(nimage)
     tab=biggles.Table(grid.nrow,grid.ncol)
 
     tkeys={}
@@ -339,8 +338,6 @@ def view_mosaic(imlist, titles=None, combine=False, **keys):
         im=imlist[i]
 
         row,col = grid(i)
-        #row=i/ncol
-        #col=i % ncol
 
         if titles is not None:
             title=titles[i]
@@ -362,48 +359,6 @@ def view_mosaic(imlist, titles=None, combine=False, **keys):
     _show_maybe(tab, **keys)
 
     return tab
-
-def get_grid(nplot):
-    """
-    get nrow,ncol given the number of plots
-
-    parameters
-    ----------
-    nplot: int
-        Number of plots in the grid
-    """
-    from math import sqrt
-    sq=int(sqrt(nplot))
-    if nplot==sq*sq:
-        return (sq,sq)
-    elif nplot <= sq*(sq+1):
-        return (sq,sq+1)
-    else:
-        return (sq+1,sq+1)
-
-def get_grid_rowcol(nplot, index):
-    """
-    get the grid position given the number of plots
-
-    move along columns first
-
-    example
-    -------
-    nplot=7
-    nrow, ncol = get_grid(nplot)
-    arr=biggles.FramedArray(nrow, ncol)
-
-    for i in xrange(nplot):
-        row,col=get_grid_rowcol(nplot, i)
-        arr[row,col].add( ... )
-    """
-
-    nrow, ncol = get_grid(nplot)
-    row = index/ncol
-    col = index % ncol
-
-    return row,col
-
 
 def bytescale(im):
     """ 
