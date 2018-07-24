@@ -317,6 +317,7 @@ def make_combined_mosaic(imlist):
 
 def view_mosaic(imlist, titles=None, combine=False, **keys):
     import biggles
+    import plotting
 
     tabtitle=keys.pop('title',None)
 
@@ -325,8 +326,10 @@ def view_mosaic(imlist, titles=None, combine=False, **keys):
         return view(imtot, **keys)
 
     nimage=len(imlist)
-    nrow,ncol=get_grid(nimage)
-    tab=biggles.Table(nrow,ncol)
+    grid=plotting.Grid(nimage)
+
+    #nrow,ncol=get_grid(nimage)
+    tab=biggles.Table(grid.nrow,grid.ncol)
 
     tkeys={}
     tkeys.update(keys)
@@ -334,8 +337,10 @@ def view_mosaic(imlist, titles=None, combine=False, **keys):
 
     for i in xrange(nimage):
         im=imlist[i]
-        row=i/ncol
-        col=i % ncol
+
+        row,col = grid(i)
+        #row=i/ncol
+        #col=i % ncol
 
         if titles is not None:
             title=titles[i]
@@ -348,7 +353,7 @@ def view_mosaic(imlist, titles=None, combine=False, **keys):
     # aspect is ysize/xsize
     aspect=keys.get('aspect',None)
     if aspect is None:
-        aspect = float(nrow)/ncol
+        aspect = float(grid.nrow)/grid.ncol
     tab.aspect_ratio=aspect
 
     tab.title=tabtitle
