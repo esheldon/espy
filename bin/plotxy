@@ -1,0 +1,107 @@
+#!/usr/bin/env python
+
+import sys
+import argparse
+import numpy as np
+import biggles
+
+parser=argparse.ArgumentParser()
+
+parser.add_argument('pos',nargs='+',
+                    help=('index for x y and possibly yerr.  '
+                          'e.g. 1 2 for just x and y, and '
+                          '3 4 8 for x y yerr'))
+
+parser.add_argument('-f','--file',help='file from which to read (default stdin)')
+parser.add_argument('-o','--output',help='file from which to read (default stdin)')
+
+parser.add_argument('--xrange',help='comman separated list for xmin,xmax in plot')
+parser.add_argument('--yrange',help='comman separated list for ymin,ymax in plot')
+
+parser.add_argument('-t','--type',help='type for symbols or line')
+parser.add_argument('-c','--color',help='color for symbols or line')
+
+parser.add_argument('--xlog',action='store_true',help='use log axis for x')
+parser.add_argument('--ylog',action='store_true',help='use log axis for y')
+
+parser.add_argument('--xlabel',help='label for x axis')
+parser.add_argument('--ylabel',help='label for y axis')
+parser.add_argument('--title',help='title for plot')
+
+parser.add_argument('-d','--dpi',type=int,help='dpi when writing images like png')
+parser.add_argument('-a','--aspect',type=float,help='aspect ratio ysize/xsize for plot')
+
+
+def main():
+    args=parser.parse_args()
+
+    if args.xrange is not None:
+        xrng=[float(el) for el in args.xrange.split(',')]
+        assert len(xrng)==2,'xrange should have form "xmin,xmax"'
+    else:
+        xrng=None
+
+    if args.yrange is not None:
+        yrng=[float(el) for el in args.yrange.split(',')]
+        assert len(yrng)==2,'yrange should have form "ymin,ymay"'
+    else:
+        yrng=None
+
+    if len(args.pos) < 2:
+        raise ValueError('give index for x y as parameters. can also give x y yerr')
+
+    xpos = int(args.pos[0])
+    ypos = int(args.pos[1])
+
+    x=[]
+    y=[]
+    if len(args.pos) > 2:
+        doerr=True
+        yerrpos = int(args.pos[2])
+        yerr=[]
+    else:
+        doerr=False
+
+    if args.file is not None:
+        fobj=open(args.file)
+    else:
+        fobj=sys.stdin
+
+    for line in fobj:
+        ls=line.split(' ')
+        x.append( float( ls[xpos] ) )
+        y.append( float( ls[ypos] ) )
+        if doerr:
+            yerr.append(float(ls[yerrpos]))
+
+
+    x=np.array(x)
+    y=np.array(y)
+
+    if doerr:
+        yerr=np.array(yerr)
+    else:
+        yerr=None
+
+    plt=biggles.plot(
+        x, y, yerr=yerr,
+        type=args.type,
+        color=args.color,
+        xrange=xrng,
+        yrange=yrng,
+        xlog=args.xlog,
+        ylog=args.ylog,
+        xlabel=args.xlabel,
+        ylabel=args.ylabel,
+        title=args.title,
+        aspect_ratio=args.aspect,
+        visible=False,
+    )
+
+    if args.output is not None:
+        plt.write(args.output, dpi=args.dpi)
+    else:
+        plt.show()
+
+if __name__=='__main__':
+    main()

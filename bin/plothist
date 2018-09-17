@@ -1,0 +1,104 @@
+#!/usr/bin/env python
+
+import sys
+import argparse
+import numpy as np
+import biggles
+
+parser=argparse.ArgumentParser()
+
+parser.add_argument('-f','--file',help='file from which to read (default stdin)')
+parser.add_argument('-o','--output',help='file from which to read (default stdin)')
+
+parser.add_argument('-b','--bsize',type=float,help='binsize for histogram')
+parser.add_argument('-n','--nbin',type=int,help='number of bins for histogram')
+parser.add_argument('--min',type=float,help='min allowed data in histogram')
+parser.add_argument('--max',type=float,help='max allowed data in histogram')
+
+
+parser.add_argument('--xrange',help='comman separated list for xmin,xmax in plot')
+parser.add_argument('--yrange',help='comman separated list for ymin,ymax in plot')
+
+parser.add_argument('-t','--type',help='type for line')
+parser.add_argument('-c','--color',help='color for symbols or line')
+
+parser.add_argument('--ylog',action='store_true',help='use log axis for y')
+
+parser.add_argument('--xlabel',help='label for x axis')
+parser.add_argument('--ylabel',help='label for y axis')
+parser.add_argument('--title',help='title for plot')
+
+parser.add_argument('-d','--dpi',type=int,help='dpi when writing images like png')
+parser.add_argument('-a','--aspect',type=float,help='aspect ratio ysize/xsize for plot')
+
+def main():
+    args=parser.parse_args()
+
+    kw={}
+    if args.type is not None:
+        kw['type']=args.type
+    if args.color is not None:
+        kw['color']=args.color
+
+    if args.xrange is not None:
+        xrng=[float(el) for el in args.xrange.split(',')]
+        assert len(xrng)==2,'xrange should have form "xmin,xmax"'
+    else:
+        xrng=None
+
+    if args.yrange is not None:
+        yrng=[float(el) for el in args.yrange.split(',')]
+        assert len(yrng)==2,'yrange should have form "ymin,ymay"'
+    else:
+        yrng=None
+
+    if args.file is not None:
+        fobj=open(args.file)
+    else:
+        fobj=sys.stdin
+
+    data=[]
+    for line in fobj:
+        line=line.strip()
+        data.append(float(line))
+
+    data=np.array(data)
+
+    assert args.bsize is not None or args.nbin is not None,'send wither binsize or nbin'
+    if args.bsize is not None:
+        bsize=args.bsize
+        nbin=None
+    else:
+        nbin=args.nbin
+        bsize=None
+
+    plt=biggles.plot_hist(
+        data,
+        binsize=bsize,
+        nbin=nbin,
+        min=args.min,
+        max=args.max,
+
+        xrange=xrng,
+        yrange=yrng,
+
+        ylog=args.ylog,
+
+        xlabel=args.xlabel,
+        ylabel=args.ylabel,
+        title=args.title,
+
+        aspect_ratio=args.aspect,
+
+        visible=False,
+        **kw
+    )
+
+    if args.output is not None:
+        plt.write(args.output, dpi=args.dpi)
+    else:
+        plt.show()
+
+
+if __name__=='__main__':
+    main()
