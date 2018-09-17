@@ -7,8 +7,8 @@ import biggles
 
 parser=argparse.ArgumentParser()
 
-parser.add_argument('pos',nargs='+',
-                    help=('index for x y and possibly yerr.  '
+parser.add_argument('index',nargs='+',
+                    help=('column index for x y and possibly yerr.  '
                           'e.g. 1 2 for just x and y, and '
                           '3 4 8 for x y yerr'))
 
@@ -47,17 +47,17 @@ def main():
     else:
         yrng=None
 
-    if len(args.pos) < 2:
+    if len(args.index) < 2:
         raise ValueError('give index for x y as parameters. can also give x y yerr')
 
-    xpos = int(args.pos[0])
-    ypos = int(args.pos[1])
+    xindex = int(args.index[0])
+    yindex = int(args.index[1])
 
     x=[]
     y=[]
-    if len(args.pos) > 2:
+    if len(args.index) > 2:
         doerr=True
-        yerrpos = int(args.pos[2])
+        yerr_index = int(args.index[2])
         yerr=[]
     else:
         doerr=False
@@ -69,10 +69,10 @@ def main():
 
     for line in fobj:
         ls=line.split(' ')
-        x.append( float( ls[xpos] ) )
-        y.append( float( ls[ypos] ) )
+        x.append( float( ls[xindex] ) )
+        y.append( float( ls[yindex] ) )
         if doerr:
-            yerr.append(float(ls[yerrpos]))
+            yerr.append(float(ls[yerr_index]))
 
 
     x=np.array(x)

@@ -7,6 +7,10 @@ import biggles
 
 parser=argparse.ArgumentParser()
 
+parser.add_argument('-i','--index',type=int,default=0,
+                    help=('column index for the data, '
+                          'default 0 or the first column'))
+
 parser.add_argument('-f','--file',help='file from which to read (default stdin)')
 parser.add_argument('-o','--output',help='file from which to read (default stdin)')
 
@@ -59,8 +63,8 @@ def main():
 
     data=[]
     for line in fobj:
-        line=line.strip()
-        data.append(float(line))
+        ls=line.split()
+        data.append(float(ls[args.index]))
 
     data=np.array(data)
 
