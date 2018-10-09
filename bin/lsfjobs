@@ -51,7 +51,7 @@ class LSFLister(dict):
             lengths[h.lower()] = len(h)
 
         line_splits = []
-        for ii in xrange(len(out)):
+        for ii in range(len(out)):
             line = out[ii]
 
             if len(line) > 0:
@@ -92,7 +92,7 @@ class LSFLister(dict):
 
             #self.win2.addstr(0,0,header[0:self.maxx2-1])
 
-            for ii in xrange(len(line_splits)):
+            for ii in range(len(line_splits)):
                 ls = line_splits[ii]
                 line = fmt % ls
                 print(line)
@@ -159,7 +159,7 @@ class LSFLister(dict):
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               shell=True)
         stdout_ret, stderr_ret = pobj.communicate()
-        return stdout_ret
+        return str(stdout_ret,'utf-8')
 
     def set_defaults(self):
         """

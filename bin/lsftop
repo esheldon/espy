@@ -33,7 +33,6 @@ try:
 except:
     from curses import wrapper as curses_wrapper
 
-
 DEFAULT_REFRESH=120
 
 parser=ArgumentParser(formatter_class=RawDescriptionHelpFormatter,

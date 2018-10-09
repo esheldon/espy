@@ -68,6 +68,8 @@ def multihist(data, binfac=0.1, **kw):
         array with shape [npoints, ndim]
     binfac: float
         The binsize for each dimension will be chosen as binfac*std(dimdata)
+    labels: optional
+        A sequence of labels for each dimension
     """
     import biggles
 
@@ -75,6 +77,11 @@ def multihist(data, binfac=0.1, **kw):
         raise ValueError("data should have shape [npoints,ndim]")
 
     ndim=data.shape[1]
+
+    labels=kw.pop('labels',None)
+    if labels is not None:
+        nl=len(labels)
+        assert len(labels)==ndim,"len(labels) = %d != %d" % (nl,ndim)
 
     grid=Grid(ndim)
 
@@ -115,7 +122,11 @@ def multihist(data, binfac=0.1, **kw):
             tab[row,col]=plt
 
         
-        tab[row,col].xlabel='dim %d' % dim
+        if labels is not None:
+            lab=labels[dim]
+        else:
+            lab='dim %d' % dim
+        tab[row,col].xlabel=lab
     return tab
         
 class Grid(object):
