@@ -890,3 +890,17 @@ def expand(image, new_dims, padval=0, verbose=False):
 
 
 
+def ds9(im):
+    """
+    view the image in ds9
+    """
+    import fitsio
+    import os
+    import tempfile
+    tmpdir=os.environ.get('TMPDIR','/tmp')
+    tfile = tempfile.mktemp(suffix='.fits')
+    tfile=os.path.join(tmpdir, tfile)
+    fitsio.write(tfile, im, clobber=True)
+    os.system('ds9 %s' % tfile)
+    if os.path.exists(tfile):
+        os.remove(tfile)
