@@ -205,4 +205,22 @@ class Grid(object):
     def __call__(self, index):
         return self.get_rowcol(index)
 
+def get_corner_data(*args):
+    """
+    get corner data array from inputs
+    """
 
+    ndim=len(args)
+    if ndim == 0:
+        raise ValueError('no args sent')
+
+    np = len(args[0])
+    
+    data=numpy.zeros( (np, ndim) )
+
+    for dim,arg in enumerate(args):
+        assert len(arg) == np,'all arrays must be same size'
+
+        data[:,dim] = arg
+
+    return data
