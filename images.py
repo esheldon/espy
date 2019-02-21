@@ -687,14 +687,16 @@ def get_color_image(imr, img, imb, **keys):
     nonlinear=keys.get('nonlinear',1.0)
     scales=keys.get('scales',None)
     satval=keys.get('satval',None)
+    clip=keys.get('clip',None)
 
     r = imr.astype('f4')
     g = img.astype('f4')
     b = imb.astype('f4')
 
-    r.clip(0.,r.max(),r)
-    g.clip(0.,g.max(),g)
-    b.clip(0.,b.max(),b)
+    if clip is not None:
+        r.clip(clip,r.max(),r)
+        g.clip(clip,g.max(),g)
+        b.clip(clip,b.max(),b)
 
     if scales is not None:
         r *= scales[0]
