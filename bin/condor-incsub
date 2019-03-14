@@ -14,7 +14,7 @@ from argparse import ArgumentParser
 import esutil as eu
 
 DEF_POLL=30
-DEF_NJOBS=10000
+DEF_NJOBS=9000
 
 
 parser=ArgumentParser(__doc__)
