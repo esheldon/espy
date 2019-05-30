@@ -32,6 +32,8 @@ parser.add_option("-s", "--sleep-time", default=.2,
 parser.add_option("-f", "--force", action="store_true",
                   help="force starting of all jobs, even if a log file is present.")
 
+parser.add_option("-F", "--isfile", action="store_true",
+                  help="the argument is a file holding a list rather than a list of files")
 parser.add_option("-d", "--dryrun", action='store_true', 
                   help="dry run.  Just print number of jobs and exit.")
 
@@ -225,6 +227,11 @@ def main():
         if len(flist) == 0:
             parser.print_help()
             sys.exit(1)
+
+        if options.isfile:
+            fname = flist[0]
+            with open(fname) as fobj:
+                flist = fobj.read().split('\n')
 
         if options.port is not None:
             pars['port'] = int(options.port)
