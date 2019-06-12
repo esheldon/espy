@@ -1,0 +1,35 @@
+import numpy as np
+import fitsio
+from PIL import Image
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--fliplr', action='store_true', help='flip image lr')
+parser.add_argument('--infile', help='input fits file')
+parser.add_argument('--outfile', help='output jpg file')
+
+args = parser.parse_args()
+
+assert '.fits' in args.infile
+assert '.jpg' in args.outfile
+assert args.infile != args.outfile
+
+im = fitsio.read(args.infile)
+
+im = np.flipud(im)
+if args.fliplr:
+    im = np.fliplr(im)
+
+im.clip(min=1.0e-1, out=im)
+
+np.log(im, out=im)
+im -= im.min()
+im *= 255.0/im.max()
+
+byteim = im.astype('u1')
+
+pim=Image.fromarray(byteim)
+
+
+print('writing:',args.outfile)
+pim.save(args.outfile, quality=90)
