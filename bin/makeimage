@@ -9,13 +9,22 @@ parser.add_argument('--fliplr', action='store_true', help='flip image lr')
 parser.add_argument('--infile', help='input fits file')
 parser.add_argument('--outfile', help='output jpg file')
 
+parser.add_argument('--ext', default=None, help='extension to read')
+
 args = parser.parse_args()
+
+ext = None
+if args.ext is not None:
+    try:
+        ext=int(args.ext)
+    except ValueError:
+        ext=args.ext
 
 assert '.fits' in args.infile
 assert '.jpg' in args.outfile
 assert args.infile != args.outfile
 
-im = fitsio.read(args.infile)
+im = fitsio.read(args.infile, ext=ext)
 
 im = np.flipud(im)
 if args.fliplr:
