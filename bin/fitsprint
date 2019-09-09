@@ -1,116 +1,103 @@
 #!/usr/bin/env python
-"""
-    %prog [options] filename extension
-
-Description:
-
-    Print columns from a fits binary table.  By default, all columns are
-    printed.  Specify -c/--columns to print a subset.  By default, the
-    delimiter is a space but this can be specified using the -d/--delim
-    keyword.
-
-    Complex selections can be made using the -w/--where option. e.g.
-        fitsprint -w 'ra > 27 && ra < 35' filename ext
-    
-    The extension can be numerical, starting from zero, or a name.
-
-"""
 
 import sys
-from sys import stderr,stdout
+from sys import stderr, stdout
 import numpy
 import fitsio
+import argparse
 
-from optparse import OptionParser
+parser = argparse.ArgumentParser()
+parser.add_argument('filename')
 
-parser=OptionParser(__doc__)
+parser.add_argument(
+    '-e', '--ext',
+    help=('print the given extension'),
+)
 
-parser.add_option("-c","--columns",default=None, 
-    help="A comma-separated list of columns to print.  "
-         "Can be numerical or strings.")
-parser.add_option("-n","--nrows",default=None, 
-    help="The number of rows to print.")
+parser.add_argument(
+    '-c', '--columns',
+    help=('A comma-separated list of columns to print. '
+          'Can be numerical or strings.')
+)
+parser.add_argument(
+    '-n', '--nrows',
+    type=int,
+    help='The number of rows to print.',
+)
 
-parser.add_option("-d","--delim",default=' ', 
-    help="The delimiter to be used between fields.  Default is a space.")
-parser.add_option('-q','--quote',action="store_true",
-                  help="quote strings")
-parser.add_option('-H','--header',action="store_true",
-                  help="Write a simple header with column names")
+parser.add_argument(
+    '-d', '--delim',
+    default=' ',
+    help=('The delimiter to be used between fields.  '
+          'Default is a space.'),
+)
+parser.add_argument(
+    '-H', '--header',
+    action='store_true',
+    help='Write a simple header with column names',
+)
 
-parser.add_option('-w','--where',default=None,
-                  help=("limit to rows that satisfy the input expression "
-                       "note this requires running through the entire table first "
-                       "and enough memory to hold the corresponding index array"))
+parser.add_argument(
+    '-w', '--where',
+    default=None,
+    help=('limit to rows that satisfy the input expression '
+          'note this requires running through the entire table first '
+          'and enough memory to hold the corresponding index array'),
+)
+
 
 def get_ext(extin):
-    try:
-        ext=int(extin)
-    except:
-        ext=extin
+    """
+    get the extension to read
+    """
+    if extin is None:
+        ext = 0
+    else:
+        try:
+            ext = int(extin)
+        except ValueError:
+            ext = extin
+
     return ext
 
-def get_columns(columns_in):
-    columns=columns_in
+
+def get_columns(hdu, columns):
+    """
+    get the column names or numbers
+    """
     if columns is not None:
         columns = columns.split(',')
-        try:
-            cnum=int(columns[0])
-            have_cnums=True
-        except:
-            have_cnums=False
-
-        if have_cnums:
-            columns = [int(c) for c in columns]
-        else:
-            columns = [c.lower() for c in columns]
+        columns = [c.lower() for c in columns]
+    else:
+        columns = hdu.get_colnames()
 
     return columns
 
-def get_colnames(hdu, columns):
-    allnames=[c.lower() for c in hdu.get_colnames()]
-    if columns is None:
-        return allnames
 
-    colnames=[]
-    if isinstance(columns[0],basestring):
-        for name in columns:
-            try:
-                i=allnames.index(name)
-            except:
-                raise ValueError("column '%s' not found" % name)
-            colnames.append(allnames[i])
-    else:
-        ncols=len(allnames)
-        for cnum in columns:
-            if cnum < 0 or cnum > (ncols-1):
-                raise ValueError("column %s is out of bounds" % cnum)
-            colnames.append(allnames[cnum])
-    return colnames
-
-def format_val(val, quote_strings=False):
-    if isinstance(val, basestring):
-        if quote_strings:
-            out='"%s"' % val
-        else:
-            out='%s' % val
+def format_val(val):
+    """
+    format a value for printing
+    """
+    if isinstance(val, str):
+        out = '"%s"' % val
     else:
         if 'float' in val.dtype.name:
             if val.dtype.itemsize >= 8:
-                out='%.16g' % val
+                out = '%.16g' % val
             else:
-                out='%.7g' % val
+                out = '%.7g' % val
         else:
-            out='%s' % val
+            out = '%s' % val
 
     return out
 
-def print_val(val, quote_strings=False):
-    if isinstance(val, basestring):
-        if quote_strings:
-            stdout.write('"%s"' % val)
-        else:
-            stdout.write('%s' % val)
+
+def print_val(val):
+    """
+    print a value
+    """
+    if isinstance(val, str):
+        stdout.write('"%s"' % val)
     else:
         if 'float' in val.dtype.name:
             if val.dtype.itemsize >= 8:
@@ -120,122 +107,119 @@ def print_val(val, quote_strings=False):
         else:
             stdout.write('%s' % val)
 
-def print_header(data, names, delim, quote_strings=False):
-    ncol=len(names)
-    for j,n in enumerate(names):
+
+def print_header(data, names, delim):
+    """
+    print a simple header
+    """
+    ncol = len(names)
+    for j, n in enumerate(names):
         if data[n][0].ndim > 0:
             nv = data[n][0].size
-            for k in xrange(nv):
-                np = '%s%d' % (n,k)
-                print_val(np, quote_strings=quote_strings)
+            for k in range(nv):
+                np = '%s%d' % (n, k)
+                print_val(np)
                 if k < (nv-1):
                     stdout.write('%s' % delim)
         else:
-            print_val(n, quote_strings=quote_strings)
+            print_val(n)
         if j < (ncol-1):
             stdout.write('%s' % delim)
     stdout.write('\n')
 
 
-def print_simple(data, names, delim, quote_strings=False, do_header=False):
+def print_simple(data, names, delim, do_header=False):
     """
-    A bit faster to generate the lines first then print
+    print the table
     """
-    ncol=len(names)
 
     if do_header:
-        print_header(data, names, delim, quote_strings=quote_strings)
+        print_header(data, names, delim)
 
-    for i in xrange(data.size):
-        row=[]
-        for j,n in enumerate(names):
+    for i in range(data.size):
+        row = []
+        for j, n in enumerate(names):
             if data[n][i].ndim > 0:
-                nv = len(data[n][0])
-                for v in data[n][i,:].flat:
-                    fval = format_val(v, quote_strings=quote_strings)
+                for v in data[n][i, :].flat:
+                    fval = format_val(v)
                     row.append(fval)
             else:
-                fval=format_val(data[n][i], quote_strings=quote_strings)
+                fval = format_val(data[n][i])
                 row.append(fval)
 
         row[-1] += '\n'
-        line=delim.join(row)
+        line = delim.join(row)
         stdout.write(line)
 
+
 def main():
-    options, args = parser.parse_args(sys.argv[1:])
+    args = parser.parse_args(sys.argv[1:])
 
-    if len(args) < 2:
-        parser.print_help()
-        sys.exit(45)
+    ext = get_ext(args.ext)
 
-    fname=args[0]
-    ext = get_ext(args[1])
+    do_header = args.header
+    wstring = args.where
+    nrows2print = args.nrows
 
-    columns = options.columns
-    do_header = options.header
-    delim = options.delim
-    quote_strings = options.quote
-    wstring = options.where
+    with fitsio.FITS(args.filename, lower=True) as fobj:
+        hdu = fobj[ext]
+        nrows = hdu.get_nrows()
 
-    nrows2print = options.nrows
-
-
-    fobj=fitsio.FITS(fname, lower=True)
-    nrows=fobj[ext].get_nrows()
-
-    if wstring is not None:
-        w=fobj[ext].where(wstring)
-        if w.size == 0:
-            return
-        nrows = w.size
-
-    columns = get_columns(columns)
-    colnames=get_colnames(fobj[ext], columns)
-
-    if nrows2print is not None:
-        nrows2print = int(nrows2print)
-        if nrows2print < nrows:
-            nrows=nrows2print
-
-    nperchunk = 1000
-    nchunk = nrows//nperchunk
-
-    nmod = nrows % nperchunk
-    if nmod > 0:
-        nchunk += 1
-
-    if nchunk==0:
-        nchunk=1
-   
-    for i in xrange(nchunk):
-        i1 = i*nperchunk
-        i2=(i+1)*nperchunk
-        if i2 > nrows:
-            i2 = nrows
-
-        rows = numpy.arange(i1,i2)
         if wstring is not None:
-            rows = w[rows]
+            w = hdu.where(wstring)
+            if w.size == 0:
+                return
+            nrows = w.size
 
-        data=fobj[ext].read(rows=rows, columns=columns)
+        colnames = get_columns(hdu, args.columns)
 
-        if i > 0:
-            do_header=False
+        if nrows2print is not None:
+            nrows2print = int(nrows2print)
+            if nrows2print < nrows:
+                nrows = nrows2print
 
-        # catch a particular type of error: broken pipe.
-        # this is a python bug which occurs when sending
-        # the output through a pipe
-        try:
-            print_simple(data, colnames, delim, 
-                         quote_strings=quote_strings, 
-                         do_header=do_header)
-        except IOError as (errno, strerror):
-            if errno == 32:
-                pass
-            else:
-                stderr.write("Unexpected error:%s\n" % sys.exc_info()[0])
-                sys.exit(1)
-        del data
+        nperchunk = 1000
+        nchunk = nrows//nperchunk
+
+        nmod = nrows % nperchunk
+        if nmod > 0:
+            nchunk += 1
+
+        if nchunk == 0:
+            nchunk = 1
+
+        for i in range(nchunk):
+            i1 = i*nperchunk
+            i2 = (i+1)*nperchunk
+            if i2 > nrows:
+                i2 = nrows
+
+            rows = numpy.arange(i1, i2)
+            if wstring is not None:
+                rows = w[rows]
+
+            data = hdu.read(rows=rows, columns=colnames)
+
+            if i > 0:
+                do_header = False
+
+            # catch a particular type of error: broken pipe.
+            # this is a python bug which occurs when sending
+            # the output through a pipe
+            try:
+                print_simple(
+                    data,
+                    colnames,
+                    args.delim,
+                    do_header=do_header,
+                )
+            except IOError as err:
+                if err.errno == 32:
+                    pass
+                else:
+                    stderr.write("Unexpected error:%s\n" % sys.exc_info()[0])
+                    sys.exit(1)
+            del data
+
 
 main()
