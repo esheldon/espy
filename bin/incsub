@@ -1,53 +1,59 @@
 #!/usr/bin/env python
-"""
-    %prog [options] script1 script2 script3 ...
-"""
-from __future__ import print_function
-
 import socket
 import sys
 import yaml
 import os
 import time
 import datetime
-from optparse import OptionParser
-
+import argparse
+import random
 import wq
-
-
-parser = OptionParser(__doc__)
-parser.add_option("-p", "--port",
-                  default=None, help="port for socket")
-parser.add_option("--poll", default=30,
-                  help=('time between polls of wq status when '
-                        'we are at max allowed obs, default %default'))
-
-parser.add_option("-r", "--req", default=None,
-                  help="over-ride requirements")
-parser.add_option("-n", "--njobs", default=1000,
-                  help="max number of jobs, default %default")
-parser.add_option("-s", "--sleep-time", default=.2,
-                  help=("minimum time to sleep between individual submisions."
-                        "default %default"))
-parser.add_option("-f", "--force", action="store_true",
-                  help=("force starting of all jobs, even if "
-                        "a log file is present."))
-
-parser.add_option("-F", "--isfile", action="store_true",
-                  help=("the argument is a file holding a list "
-                        "rather than a list of files"))
-
-parser.add_option("-d", "--dryrun", action='store_true',
-                  help="dry run.  Just print number of jobs and exit.")
-
-parser.add_option("--rand", action="store_true",
-                  help="randomize the order of files")
 
 pars = {
     'host': wq.DEFAULT_HOST,  # Symbolic name meaning all available interfaces
     'port': wq.DEFAULT_PORT,
     'max_buffsize': wq.DEFAULT_MAX_BUFFSIZE,
 }
+
+
+def get_args():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('flist', nargs='+')
+
+    parser.add_argument('-F', '--isfile', action='store_true',
+                        help=('the argument is a file holding a list '
+                              'rather than a list of files'))
+
+    parser.add_argument('-p', '--port',
+                        type=int, help='port for socket')
+    parser.add_argument('--poll', type=int, default=30,
+                        help=('time between polls of wq status when '
+                              'we are at max allowed obs'))
+
+    parser.add_argument('-r', '--req', default=None,
+                        help='over-ride requirements')
+
+    parser.add_argument('-n', '--njobs',
+                        type=int, default=1000,
+                        help='max number of jobs')
+
+    parser.add_argument('-s', '--sleep-time', default=.2,
+                        type=float,
+                        help=('minimum time to sleep between individual '
+                              'submisions.'))
+
+    parser.add_argument('-f', '--force', action='store_true',
+                        help=('force starting of all jobs, even if '
+                              'a log file is present.'))
+
+    parser.add_argument('-d', '--dryrun', action='store_true',
+                        help='dry run.  Just print number of jobs and exit.')
+
+    parser.add_argument('--rand', action='store_true',
+                        help='randomize the order of files')
+
+    return parser.parse_args()
 
 
 def socket_connect(sock, conninfo, crash_on_timeout=False):
@@ -113,7 +119,7 @@ def send_message(message, timeout=None, crash_on_timeout=False):
 
 class JobLister(dict):
     """
-    usage: wq ls [options]
+    usage: wq ls [args]
 
     print the job list to stdout.
 
@@ -133,7 +139,9 @@ class JobLister(dict):
         while True:
             try:
                 resp = send_message(message)
-                break
+
+                if resp is not None and resp['response'] is not None:
+                    break
             except:
                 print("error listing jobs, trying again after 30 seconds")
                 time.sleep(30)
@@ -164,40 +172,32 @@ def submit_job(job_fname, req):
     os.system(command)
 
 
-def get_req(options):
-    if options.req:
-        req = """ -r "%s" """ % options.req
+def get_req(args):
+    if args.req:
+        req = """ -r "%s" """ % args.req
     else:
         req = ""
 
     return req
 
 
-def randomize_flist(flist):
-    import random
-    d = {}
-    for f in flist:
-        d[random.randint(0, 2000000000)] = f
-    return [d[k] for k in d]
-
-
-def go(flist, options):
+def go(flist, args):
 
     nfiles = len(flist)
-    maxjobs = int(options.njobs)
-    polltime = int(options.poll)
-    sleep_time = float(options.sleep_time)
+    maxjobs = args.njobs
+    polltime = args.poll
+    sleep_time = args.sleep_time
 
-    req = get_req(options)
-    if options.rand:
-        flist = randomize_flist(flist)
+    req = get_req(args)
+    if args.rand:
+        random.shuffle(flist)
 
     user = os.environ['USER']
 
     print("submitting jobs for user: %s" % user)
     print("number in list:           %s" % len(flist))
     print("will limit to maxjobs:    %s" % maxjobs)
-    if options.dryrun:
+    if args.dryrun:
         return
 
     diffjobs = 0
@@ -205,7 +205,7 @@ def go(flist, options):
         perc = 100.*(i+1)/float(nfiles)
 
         logf = get_log_fname(fname)
-        if not os.path.exists(logf) or options.force:
+        if not os.path.exists(logf) or args.force:
             if diffjobs <= 0:
                 lister = JobLister(user)
                 diffjobs = maxjobs - lister.njobs
@@ -235,13 +235,10 @@ def main():
     """
 
     try:
-        options, flist = parser.parse_args(sys.argv[1:])
+        args = get_args()
+        flist = args.flist
 
-        if len(flist) == 0:
-            parser.print_help()
-            sys.exit(1)
-
-        if options.isfile:
+        if args.isfile:
             fname = flist[0]
             with open(fname) as fobj:
                 flist = []
@@ -250,10 +247,10 @@ def main():
                     if line != '':
                         flist.append(line)
 
-        if options.port is not None:
-            pars['port'] = int(options.port)
+        if args.port is not None:
+            pars['port'] = args.port
 
-        go(flist, options)
+        go(flist, args)
     except KeyboardInterrupt:
         sys.exit(1)
 
