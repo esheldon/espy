@@ -45,7 +45,7 @@ def split_list(els, chunksize, prefix, suffix, pbs=False):
 
         fname = name_format % i
 
-        print fname
+        print(fname)
         fobj = open(fname, 'w')
 
         # now write elements for this chunk to the file

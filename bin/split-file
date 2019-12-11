@@ -35,7 +35,7 @@ def split_list(els, args):
 
         fname = name_format % i
 
-        print fname
+        print(fname)
 
         with open(fname,'w') as fobj:
             for el in thischunk:
