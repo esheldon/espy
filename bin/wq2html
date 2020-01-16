@@ -38,6 +38,8 @@ def get_ls():
                                shell=True)
 
     ls_stdout, ls_stderr = ls_pobj.communicate()
+    ls_stdout = str(ls_stdout, 'utf-8')
+
     ls_stdout=ls_stdout.split('\n')
     ls_summary_line = ls_stdout[-2]
 
@@ -54,6 +56,8 @@ def get_stat():
                                  shell=True)
 
     stat_stdout, stat_stderr = stat_pobj.communicate()
+    stat_stdout = str(stat_stdout, 'utf-8')
+
     stat_stdout=stat_stdout.split('\n')
     stat_summary_line = stat_stdout[-2]
 
@@ -70,6 +74,7 @@ def get_users():
                                  shell=True)
 
     stat_stdout, stat_stderr = stat_pobj.communicate()
+    stat_stdout = str(stat_stdout, 'utf-8')
     return stat_stdout
 
 def print_wrapper(refresh):
@@ -121,7 +126,7 @@ def print_wrapper(refresh):
   </body>
 </html>
     """ % refresh
-    print text
+    print(text)
 
 def print_table():
     ls_data = get_ls()
@@ -157,7 +162,7 @@ def print_table():
 
     """ % {'ls_data':ls_data,'stat_data':stat_data,'user_data':user_data}
 
-    print table
+    print(table)
 
 def main():
     options, args = parser.parse_args(sys.argv[1:])
