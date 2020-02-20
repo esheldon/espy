@@ -207,29 +207,38 @@ def go(flist, args):
     for i, fname in enumerate(flist):
         perc = 100.*(i+1)/float(nfiles)
 
-        logf = get_log_fname(fname)
-        if not os.path.exists(logf) or args.force:
-            if diffjobs <= 0:
+        if diffjobs <= 0:
+            lister = JobLister(user)
+            diffjobs = maxjobs - lister.njobs
+            while diffjobs <= 0:
+                time.sleep(polltime)
                 lister = JobLister(user)
                 diffjobs = maxjobs - lister.njobs
-                while diffjobs <= 0:
-                    time.sleep(polltime)
-                    lister = JobLister(user)
-                    diffjobs = maxjobs - lister.njobs
-                print("Found %s jobs diffjobs: %s" % (lister.njobs, diffjobs))
+            print("Found %s jobs diffjobs: %s" % (lister.njobs, diffjobs))
 
-            date = datetime.datetime.now().strftime('%H:%M:%S')
-            tup = (fname, date, i+1, nfiles, perc)
-            print("    submitting %s %s %s/%s (%i%%)" % tup)
-            submit_job(fname, req)
+        date = datetime.datetime.now().strftime('%H:%M:%S')
+        tup = (fname, date, i+1, nfiles, perc)
+        print("    submitting %s %s %s/%s (%i%%)" % tup)
+        submit_job(fname, req)
 
-            diffjobs -= 1
+        diffjobs -= 1
 
-            # this helps when the file system is slow
-            # os.system('wq 1> /dev/null 2> /dev/null')
+        # this helps when the file system is slow
+        # os.system('wq 1> /dev/null 2> /dev/null')
 
-            # minimum time in case above is fast
-            time.sleep(sleep_time)
+        # minimum time in case above is fast
+        time.sleep(sleep_time)
+
+
+def trim_flist(flist):
+    print('trimming to unsubmitted jobs...', end='')
+    trimmed_flist = []
+    for f in flist:
+        logf = get_log_fname(f)
+        if not os.path.exists(logf):
+            trimmed_flist.append(f)
+    print('kept %d/%d' % (len(trimmed_flist), len(flist)))
+    return trimmed_flist
 
 
 def main():
@@ -252,6 +261,9 @@ def main():
 
         if args.port is not None:
             pars['port'] = args.port
+
+        if not args.force:
+            flist = trim_flist(flist)
 
         go(flist, args)
     except KeyboardInterrupt:
