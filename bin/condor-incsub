@@ -201,7 +201,7 @@ class Submitter(object):
                 if not self.suball:
                     njobs=counter()
 
-                if self.suball or njobs <= self.nmax:
+                if self.suball or njobs < self.nmax:
                     self._print_subline(script,iscript,nscript)
 
                     status=submit_condor_script(script)
