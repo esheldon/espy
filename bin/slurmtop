@@ -156,7 +156,7 @@ class SlurmWatcher:
     def set_colors(self):
         self.colors = {}
         self.colors['njobs'] = curses.color_pair(cyan)
-        self.colors['running'] = curses.color_pair(magenta)
+        self.colors['running'] = curses.color_pair(green)
         self.colors['pending'] = curses.color_pair(yellow)
 
 
