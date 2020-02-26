@@ -1,0 +1,184 @@
+#!/usr/bin/env python
+"""
+Display statistics about the slurm queue, refreshing at regular intervals.
+"""
+import subprocess
+import argparse
+
+import curses
+try:
+    import curses.wrapper.wrapper as curses_wrapper
+except ImportError:
+    from curses import wrapper as curses_wrapper
+
+default = 1
+black = 0+2
+red = 1+2
+green = 2+2
+yellow = 3+2
+blue = 4+2
+magenta = 5+2
+cyan = 6+2
+white = 7+2
+
+COMMAND = (
+    'squeue -u ${USER} -o "%.18i %.9P %j %.8u %.8T %.10M %.9l %.6D %R" | column -t'  # noqa
+)
+
+
+class SlurmWatcher:
+    def __init__(self, *, refresh_rate):
+
+        self.refresh_rate = refresh_rate
+
+    def go(self):
+        curses_wrapper(self.slurm_watch)
+
+    def slurm_watch(self, stdscr):
+
+        self.setup_windows(stdscr)
+
+        # wait for refresh seconds for user input before refreshing.  If the
+        # user input is anything but 'q' then refresh again
+
+        tout_ms = self.refresh_rate*1000
+        self.win1.timeout(tout_ms)
+        while 1:
+            self.win1.erase()
+            self.win2.erase()
+
+            out = self.get_squeue_output()
+            lines = out.split('\n')
+
+            stats = {
+                'njobs': 0,
+                'running': 0,
+                'pending': 0,
+            }
+
+            nprint = min(len(lines), self.maxy2-1)
+            lines = lines[:nprint]
+
+            for line in lines:
+                if len(line) > 0 and 'JOBID' not in line:
+                    stats['njobs'] += 1
+
+                    ls = line.split()
+                    status = ls[4]
+
+                    if 'PEND' in status:
+                        stats['pending'] += 1
+                    elif 'RUN' in status:
+                        stats['running'] += 1
+
+            self.write_statline(stats)
+            self.write_job_listing(lines)
+
+            c = self.win1.getch()
+            if c == ord('q'):
+                break
+
+    def write_job_listing(self, lines):
+        for ii, line in enumerate(lines):
+            self.win2.addstr(ii, 0, line[0:self.maxx2-1])
+        self.win2.refresh()
+
+    def setup_windows(self, stdscr):
+        self.make_color_pairs()
+        self.set_colors()
+
+        self.maxy, self.maxx = stdscr.getmaxyx()
+
+        x0 = 1
+
+        # the stats
+        y1 = 0
+        sizey1 = 3
+        self.win1 = curses.newwin(
+            sizey1,
+            self.maxx,
+            y1,
+            x0,
+        )
+
+        # the job listing
+        self.win2 = curses.newwin(
+            self.maxy-sizey1,
+            self.maxx,
+            sizey1,
+            x0,
+        )
+        self.maxy2, self.maxx2 = self.win2.getmaxyx()
+
+    def write_statline(self, stats):
+        win = self.win1
+
+        win.erase()
+        colors = self.colors
+
+        win.addstr(1, 0, '')
+        win.addstr('Jobs: ', colors['njobs'])
+
+        win.addstr('%s ' % stats['njobs'])
+
+        win.addstr('Running: ', colors['running'])
+        win.addstr('%s ' % stats['running'])
+        win.addstr('Pending: ', colors['pending'])
+        win.addstr('%s ' % stats['pending'])
+
+        win.refresh()
+
+    def get_squeue_output(self):
+
+        pobj = subprocess.Popen(
+            COMMAND,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+        )
+        stdout_ret, stderr_ret = pobj.communicate()
+        return stdout_ret.decode('utf-8')
+
+    def make_color_pairs(self):
+        curses.use_default_colors()
+        curses.init_pair(default, -1, -1)
+        bkgd_color = -1
+
+        curses.init_pair(black, curses.COLOR_BLACK, bkgd_color)
+        curses.init_pair(red, curses.COLOR_RED, bkgd_color)
+        curses.init_pair(green, curses.COLOR_GREEN, bkgd_color)
+        curses.init_pair(yellow, curses.COLOR_YELLOW, bkgd_color)
+        curses.init_pair(blue, curses.COLOR_BLUE, bkgd_color)
+        curses.init_pair(magenta, curses.COLOR_MAGENTA, bkgd_color)
+        curses.init_pair(cyan, curses.COLOR_CYAN, bkgd_color)
+        curses.init_pair(white, curses.COLOR_WHITE, bkgd_color)
+
+    def set_colors(self):
+        self.colors = {}
+        self.colors['njobs'] = curses.color_pair(cyan)
+        self.colors['running'] = curses.color_pair(magenta)
+        self.colors['pending'] = curses.color_pair(yellow)
+
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-r", "--refresh",
+                        type=int,
+                        default=30,
+                        help="refresh rate in seconds.  default is 30")
+    return parser.parse_args()
+
+
+def main():
+
+    try:
+        args = get_args()
+        watcher = SlurmWatcher(refresh_rate=args.refresh)
+        watcher.go()
+
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == '__main__':
+    main()
