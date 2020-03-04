@@ -282,13 +282,17 @@ class Plotter(object):
         ydiff = yrng[1]-yrng[0]
 
         if 'xmin' not in kw:
-            kw['xmin'] = _get_prng(xrng[0], xdiff, 'low', log=self.xlog)
+            # kw['xmin'] = _get_prng(xrng[0], xdiff, 'low', log=self.xlog)
+            kw['xmin'] = _get_prng(self.xmin, xdiff, 'low', log=self.xlog)
         if 'xmax' not in kw:
-            kw['xmax'] = _get_prng(xrng[1], xdiff, 'high', log=self.xlog)
+            # kw['xmax'] = _get_prng(xrng[1], xdiff, 'high', log=self.xlog)
+            kw['xmax'] = _get_prng(self.xmax, xdiff, 'high', log=self.xlog)
         if 'ymin' not in kw:
-            kw['ymin'] = _get_prng(yrng[0], ydiff, 'low', log=self.ylog)
+            # kw['ymin'] = _get_prng(yrng[0], ydiff, 'low', log=self.ylog)
+            kw['ymin'] = _get_prng(self.ymin, ydiff, 'low', log=self.ylog)
         if 'ymax' not in kw:
-            kw['ymax'] = _get_prng(yrng[1], ydiff, 'high', log=self.ylog)
+            # kw['ymax'] = _get_prng(yrng[1], ydiff, 'high', log=self.ylog)
+            kw['ymax'] = _get_prng(self.ymax, ydiff, 'high', log=self.ylog)
 
         xaxis, xlog, yaxis, ylog = _get_axes(kw)
         g = graph.graphxy(x=xaxis, y=yaxis, **gkw)
@@ -385,27 +389,6 @@ _graphxy_kw = [
     'key', 'backgroundattrs', 'axesdist', 'flipped',
     'xaxisat', 'yaxisat', 'axes',
 ]
-
-
-def _get_prngold(x, type, log=False):
-    if log:
-        if type == 'low':
-            r = 0.5*x
-        else:
-            r = 1.5*x
-    else:
-        if type == 'low':
-            if x < 0:
-                r = 1.2*x
-            else:
-                r = 0.8*x
-        else:
-            if x < 0:
-                r = 0.8*x
-            else:
-                r = 1.2*x
-
-    return r
 
 
 def _get_prng(x, diff, type, log=False):
