@@ -1587,6 +1587,20 @@ class PlotBase(object):
 
         return g
 
+    @property
+    def xmin(self):
+        return self.kw.get('xmin', None)
+    @xmin.setter
+    def xmin(self, xmin):
+        self.kw['xmin'] = xmin
+
+    @property
+    def xmax(self):
+        return self.kw.get('xmax', None)
+    @xmax.setter
+    def xmax(self, xmax):
+        self.kw['xmax'] = xmax
+
 
 class Plot(PlotBase):
     def get_plot(self, **kw):
