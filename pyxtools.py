@@ -1,10 +1,15 @@
-from __future__ import print_function
 import os
-import numpy
-from numpy import log10
+import numpy as np
 import tempfile
-import copy
-from pyx import *
+from pyx import (
+    graph,
+    color,
+    deco,
+    style,
+    canvas,
+    text,
+    trafo,
+)
 from pyx.graph import axis
 
 
@@ -38,10 +43,10 @@ def plot(x, y, dx=None, dy=None, **kw):
     keywords for graphxy
     """
 
-    plt=kw.pop('plt',None)
+    plt = kw.pop('plt', None)
 
     if plt is None:
-        plt=Plotter(**kw)
+        plt = Plotter(**kw)
 
     plt.plot(x, y, dx=dx, dy=dy, **kw)
 
@@ -49,6 +54,7 @@ def plot(x, y, dx=None, dy=None, **kw):
     _show_maybe(plt.g, **kw)
 
     return plt
+
 
 def imview(image_in, **kw):
     """
@@ -64,8 +70,8 @@ def imview(image_in, **kw):
 
     image = image_in.transpose()
 
-    width=kw.pop('width',8)
-    height=kw.pop('height',None)
+    width = kw.pop('width', 8)
+    height = kw.pop('height', None)
     if height is None:
         # pyx transposes apparently
         height = width*float(image.shape[1])/image.shape[0]
@@ -75,21 +81,20 @@ def imview(image_in, **kw):
     xmax = image.shape[0]-1
     ymin = 0
     ymax = image.shape[1]-1
-    x, y = numpy.mgrid[
+    x, y = np.mgrid[
         0:image.shape[0],
         0:image.shape[1],
     ]
 
-
     # need to convert to lists for pyx
     data = list(zip(x.flat, y.flat, image.flat))
 
-    kw['xmin']=xmin
-    kw['xmax']=xmax
-    kw['ymin']=ymin
-    kw['ymax']=ymax
-    xaxis, xlog, yaxis, ylog=_get_axes(kw)
-    assert xlog==False and ylog==False,"no log axes for images"
+    kw['xmin'] = xmin
+    kw['xmax'] = xmax
+    kw['ymin'] = ymin
+    kw['ymax'] = ymax
+    xaxis, xlog, yaxis, ylog = _get_axes(kw)
+    assert xlog is False and ylog is False, "no log axes for images"
 
     g = graph.graphxy(
         width=width,
@@ -98,18 +103,18 @@ def imview(image_in, **kw):
         y=yaxis,
     )
 
-    scale_title=kw.get('scale_title','')
-    coloraxis=graph.axis.linear(
+    scale_title = kw.get('scale_title', '')
+    coloraxis = graph.axis.linear(
         min=image.min(),
         max=image.max(),
-        title=scale_title
+        title=scale_title,
     )
 
     # make a keyword for the color scheme
-    gradient=color.gradient.ReverseGrey
-    pstyle=graph.style.density(gradient=gradient, coloraxis=coloraxis)
+    gradient = color.gradient.ReverseGrey
+    pstyle = graph.style.density(gradient=gradient, coloraxis=coloraxis)
 
-    pdata=graph.data.points(data, x=1, y=2, color=3)
+    pdata = graph.data.points(data, x=1, y=2, color=3)
     g.plot(pdata, styles=[pstyle])
 
     _writefile_maybe(g, **kw)
@@ -134,41 +139,39 @@ def write(g, fname, **kw):
     """
     _writefile_maybe(g, file=fname, **kw)
 
+
 def _writefile_maybe(g, **kw):
-    fname=kw.get('file',None)
+    fname = kw.get('file', None)
     if fname is not None:
         if 'png' in fname or 'jpg' in fname:
 
             if 'dpi' in kw:
-                res=kw['dpi']
+                res = kw['dpi']
             else:
-                res=kw.get('resolution',100)
+                res = kw.get('resolution', 100)
 
             g.writeGSfile(fname, resolution=res)
         else:
             g.writetofile(fname)
 
+
 def _show_maybe(g, **kw):
-    if True==kw.get('show',False):
+    if kw.get('show', False) is True:
         _do_show(g, **kw)
 
 
 def _do_show(g, **kw):
-    import time
     fname = tempfile.mktemp(suffix='.png')
-
-
 
     kw['file'] = fname
     _writefile_maybe(g, **kw)
 
     _tflist.add(fname)
 
-
-    viewer=_config['viewer']
-    #cmd='{viewer} {fname} &> /dev/null &'
-    cmd='{viewer} {fname}  &'
-    cmd=cmd.format(viewer=viewer,fname=fname)
+    viewer = _config['viewer']
+    # cmd='{viewer} {fname} &> /dev/null &'
+    cmd = '{viewer} {fname}  &'
+    cmd = cmd.format(viewer=viewer, fname=fname)
     os.system(cmd)
 
 
@@ -177,43 +180,42 @@ class Plotter(object):
     for use with the interactive plot() command
     """
     def __init__(self, **kw):
-        self.value_sets=[]
-        self.style_sets=[]
+        self.value_sets = []
+        self.style_sets = []
 
-        self.graph_kw=kw
-        self.xlog=kw.get('xlog',False)
-        self.ylog=kw.get('ylog',False)
-        self.g=None
+        self.graph_kw = kw
+        self.xlog = kw.get('xlog', False)
+        self.ylog = kw.get('ylog', False)
+        self.g = None
 
-        self.xmin=None
-        self.xmax=None
-        self.ymin=None
-        self.ymax=None
+        self.xmin = None
+        self.xmax = None
+        self.ymin = None
+        self.ymax = None
 
     def plot(self, x, y, dx=None, dy=None, **kw):
         """
         add values to the plot
         """
-        styles=[]
+        styles = []
 
-        values, xrng, yrng =self._get_values(x, y, dx=dx, dy=dy)
-
+        values, xrng, yrng = self._get_values(x, y, dx=dx, dy=dy)
 
         self._set_ranges(xrng, yrng)
 
-        #if self.g is None:
-        #    self.g=self._get_graph_and_axes(xrng, yrng, **self.graph_kw)
-        self.g=self._get_graph_and_axes(xrng, yrng, **self.graph_kw)
+        # if self.g is None:
+        #     self.g=self._get_graph_and_axes(xrng, yrng, **self.graph_kw)
+        self.g = self._get_graph_and_axes(xrng, yrng, **self.graph_kw)
 
-        styles=self._set_symbol(styles, dx=dx, dy=dy, **kw)
+        styles = self._set_symbol(styles, dx=dx, dy=dy, **kw)
 
         self.value_sets.append(values)
         self.style_sets.append(styles)
 
-        for i in xrange(len(self.value_sets)):
+        for i in range(len(self.value_sets)):
             self.g.plot(
                 self.value_sets[i],
-                styles=self.style_sets[i]
+                styles=self.style_sets[i],
             )
 
     def write(self, filename, **kw):
@@ -245,41 +247,39 @@ class Plotter(object):
         if self.g is None:
             raise RuntimeError("plot some data first")
 
-        kw['show']=True
+        kw['show'] = True
         _show_maybe(self.g, **kw)
 
     def _set_ranges(self, xrng, yrng):
         if self.xmin is None:
-            self.xmin=xrng[0]
+            self.xmin = xrng[0]
         else:
-            self.xmin=min(self.xmin, xrng[0])
+            self.xmin = min(self.xmin, xrng[0])
 
         if self.xmax is None:
-            self.xmax=xrng[1]
+            self.xmax = xrng[1]
         else:
-            self.xmax=max(self.xmax, xrng[1])
-
+            self.xmax = max(self.xmax, xrng[1])
 
         if self.ymin is None:
-            self.ymin=yrng[0]
+            self.ymin = yrng[0]
         else:
-            self.ymin=min(self.ymin, yrng[0])
+            self.ymin = min(self.ymin, yrng[0])
 
         if self.ymax is None:
-            self.ymax=yrng[1]
+            self.ymax = yrng[1]
         else:
-            self.ymax=max(self.ymax, yrng[1])
-
+            self.ymax = max(self.ymax, yrng[1])
 
     def _get_graph_and_axes(self, xrng, yrng, **kw):
-        gkw=_unpack_graphxy_keywords(kw)
-        gkw['width'] = gkw.get('width',8)
+        gkw = _unpack_graphxy_keywords(kw)
+        gkw['width'] = gkw.get('width', 8)
 
-        self.xlog=kw.get('xlog',False)
-        self.ylog=kw.get('ylog',False)
+        self.xlog = kw.get('xlog', False)
+        self.ylog = kw.get('ylog', False)
 
-        xdiff=xrng[1]-xrng[0]
-        ydiff=yrng[1]-yrng[0]
+        xdiff = xrng[1]-xrng[0]
+        ydiff = yrng[1]-yrng[0]
 
         if 'xmin' not in kw:
             kw['xmin'] = _get_prng(xrng[0], xdiff, 'low', log=self.xlog)
@@ -290,7 +290,7 @@ class Plotter(object):
         if 'ymax' not in kw:
             kw['ymax'] = _get_prng(yrng[1], ydiff, 'high', log=self.ylog)
 
-        xaxis,xlog,yaxis,ylog = _get_axes(kw)
+        xaxis, xlog, yaxis, ylog = _get_axes(kw)
         g = graph.graphxy(x=xaxis, y=yaxis, **gkw)
 
         return g
@@ -298,54 +298,58 @@ class Plotter(object):
     def _set_symbol(self, styles, dx=None, dy=None, **kw):
 
         if 'sym' in kw:
-            sym=symbols.get_symbol(kw['sym'])
+            sym = symbols.get_symbol(kw['sym'])
         else:
-            sym=symbols.get_symbol('circle')
+            sym = symbols.get_symbol('circle')
 
         if 'color' in kw:
-            clr=colors(kw['color'])
+            clr = colors(kw['color'])
         else:
-            clr=colors('black')
+            clr = colors('black')
 
-        symbolattrs=[clr,deco.filled([clr])]
+        symbolattrs = [clr, deco.filled([clr])]
 
-        symbol=graph.style.symbol(
+        symbol = graph.style.symbol(
             symbol=sym,
-            size=kw.get('size',0.1),
+            size=kw.get('size', 0.1),
             symbolattrs=symbolattrs,
         )
         styles += [symbol]
 
         if dx is not None or dy is not None:
             if 'errcolor' in kw:
-                errclr=colors(kw['errcolor'])
+                errclr = colors(kw['errcolor'])
             else:
-                errclr=clr
+                errclr = clr
             styles += [graph.style.errorbar(errorbarattrs=[errclr])]
 
         return styles
 
-    def _get_values(self, x, y, dx=None, dy=None):
-        args={'x':list(x), 'y':list(y)}
+    def _get_values(self, inx, iny, dx=None, dy=None):
 
-        xrng=[x.min(), x.max()]
-        yrng=[y.min(), y.max()]
+        x = np.array(inx, ndmin=1, copy=False)
+        y = np.array(iny, ndmin=1, copy=False)
+
+        args = {'x': list(inx), 'y': list(iny)}
+
+        xrng = [x.min(), x.max()]
+        yrng = [y.min(), y.max()]
 
         if dx is not None:
             if self.xlog:
                 # clip way below the value
-                w,=numpy.where(x > 0)
+                w, = np.where(x > 0)
                 if w.size > 0:
                     # need something better than this
-                    lowest=1.0e-6*x[w].min()
-                    xlower=(x-dx).clip(lowest)
-                    xupper=(x+dx).clip(lowest)
+                    lowest = 1.0e-6*x[w].min()
+                    xlower = (x-dx).clip(lowest)
+                    xupper = (x+dx).clip(lowest)
 
                     args['xmin'] = xlower
                     args['xmax'] = xupper
 
-                    xrng[0]=xlower.min()
-                    xrng[1]=xupper.max()
+                    xrng[0] = xlower.min()
+                    xrng[1] = xupper.max()
             else:
                 xrng[0] = (x-dx).min()
                 xrng[1] = (x+dx).max()
@@ -354,65 +358,68 @@ class Plotter(object):
         if dy is not None:
             if self.ylog:
                 # clip way below the value
-                w,=numpy.where(y > 0)
+                w, = np.where(y > 0)
                 if w.size > 0:
                     # need something better than this
-                    lowest=1.0e-6*y[w].min()
-                    ylower=(y-dy).clip(lowest)
-                    yupper=(y+dy).clip(lowest)
+                    lowest = 1.0e-6*y[w].min()
+                    ylower = (y-dy).clip(lowest)
+                    yupper = (y+dy).clip(lowest)
 
                     args['ymin'] = ylower
                     args['ymax'] = yupper
 
-                    yrng[0]=ylower.min()
-                    yrng[1]=yupper.max()
+                    yrng[0] = ylower.min()
+                    yrng[1] = yupper.max()
             else:
                 yrng[0] = (y-dy).min()
                 yrng[1] = (y+dy).max()
                 args['dy'] = dy
 
-
-        values=graph.data.values(**args)
+        values = graph.data.values(**args)
 
         return values, xrng, yrng
 
-_graphxy_kw=[
-    'xpos','ypos','width', 'height', 'ratio',
-    'key','backgroundattrs','axesdist', 'flipped',
-    'xaxisat', 'yaxisat', 'axes']
+
+_graphxy_kw = [
+    'xpos', 'ypos', 'width', 'height', 'ratio',
+    'key', 'backgroundattrs', 'axesdist', 'flipped',
+    'xaxisat', 'yaxisat', 'axes',
+]
+
 
 def _get_prngold(x, type, log=False):
     if log:
-        if type=='low':
-            r=0.5*x
+        if type == 'low':
+            r = 0.5*x
         else:
-            r=1.5*x
+            r = 1.5*x
     else:
-        if type=='low':
+        if type == 'low':
             if x < 0:
-                r=1.2*x
+                r = 1.2*x
             else:
-                r=0.8*x
+                r = 0.8*x
         else:
             if x < 0:
-                r=0.8*x
+                r = 0.8*x
             else:
-                r=1.2*x
+                r = 1.2*x
 
     return r
 
+
 def _get_prng(x, diff, type, log=False):
 
-    frac=0.075
+    frac = 0.075
     if log:
-        if type=='low':
-            r=0.5*x
+        if type == 'low':
+            r = 0.5*x
         else:
-            r=1.5*x
+            r = 1.5*x
     else:
 
-        fdiff=diff*frac
-        if type=='low':
+        fdiff = diff*frac
+        if type == 'low':
             r = x - fdiff
         else:
             r = x + fdiff
@@ -421,36 +428,37 @@ def _get_prng(x, diff, type, log=False):
 
 
 def _unpack_graphxy_keywords(kwin):
-    kw={}
+    kw = {}
     for key in kwin:
         if key in _graphxy_kw:
             kw[key] = kwin[key]
 
     return kw
 
+
 def _get_axes(kw):
-    xlog=kw.get('xlog',False)
-    ylog=kw.get('ylog',False)
+    xlog = kw.get('xlog', False)
+    ylog = kw.get('ylog', False)
 
-    xkw=dict(
-        title=kw.get('xlabel',None),
+    xkw = dict(
+        title=kw.get('xlabel', None),
 
-        min=kw.get('xmin',None),
-        max=kw.get('xmax',None),
+        min=kw.get('xmin', None),
+        max=kw.get('xmax', None),
 
         # density of ticks
-        density=kw.get('xdensity',1),
-        reverse=kw.get('xreverse',0),
+        density=kw.get('xdensity', 1),
+        reverse=kw.get('xreverse', 0),
     )
-    ykw=dict(
-        title=kw.get('ylabel',None),
+    ykw = dict(
+        title=kw.get('ylabel', None),
 
-        min=kw.get('ymin',None),
-        max=kw.get('ymax',None),
+        min=kw.get('ymin', None),
+        max=kw.get('ymax', None),
 
         # density of ticks
-        density=kw.get('ydensity',1),
-        reverse=kw.get('yreverse',0),
+        density=kw.get('ydensity', 1),
+        reverse=kw.get('yreverse', 0),
     )
 
     if xlog:
@@ -465,50 +473,52 @@ def _get_axes(kw):
 
     return xaxis, xlog, yaxis, ylog
 
+
 def test_log():
-    import numpy
-    from numpy import log10
-    x=numpy.logspace(log10(0.1), log10(30.0), 10)
-    y=1.0/x
+    x = np.logspace(np.log10(0.1), np.log10(30.0), 10)
+    y = 1.0/x
 
-    # we here use parters and texters which are explained in the examples below
-    #log2parter = axis.parter.log([axis.parter.preexp([axis.tick.rational(1)], 4),
-    #                              axis.parter.preexp([axis.tick.rational(1)], 2)])
-    #log2texter = axis.texter.exponential(nomantissaexp=r"{2^{%s}}",
-    #                                     mantissamax=axis.tick.rational(2))
-
-    fac=2.0
+    fac = 2.0
     g = graph.graphxy(
         width=8,
         height=8,
-        #ratio=1.0,
-        x=axis.log(min=x.min()/fac,max=fac*x.max(),title=r'$R~ [h^{-1}$ Mpc]'),
-        y=axis.log(min=y.min()/fac,max=fac*y.max(),title=r'$\Delta\Sigma ~[h~$M$_\odot~$pc$^{-2}]$'),
+        # ratio=1.0,
+        x=axis.log(
+            min=x.min()/fac,
+            max=fac*x.max(),
+            title=r'$R~ [h^{-1}$ Mpc]',
+        ),
+        y=axis.log(
+            min=y.min()/fac,
+            max=fac*y.max(),
+            title=r'$\Delta\Sigma ~[h~$M$_\odot~$pc$^{-2}]$',
+        ),
     )
 
-    symbol=graph.style.symbol(
+    symbol = graph.style.symbol(
         symbol=graph.style._circlesymbol,
         size=0.1,
         symbolattrs=[deco.filled([color.rgb.black])],
     )
 
-    values=graph.data.values(x=list(x),y=list(y))
-    g.plot(values,[symbol])
+    values = graph.data.values(x=list(x), y=list(y))
+    g.plot(values, [symbol])
 
-    #g.writeEPSfile("log")
-    #g.writePDFfile("log")
+    # g.writeEPSfile("log")
+    # g.writePDFfile("log")
     g.writetofile("log-test.pdf")
     g.writetofile("log-test.eps")
+
 
 def test_basic():
 
     # can define by hex string or rgb value, normalized to 1
-    #yellow=color.rgbfromhexstring('#FFFF00')
-    yellow=color.rgb(r=1.0, g=1.0, b=0.0)
+    # yellow=color.rgbfromhexstring('#FFFF00')
+    yellow = color.rgb(r=1.0, g=1.0, b=0.0)
 
     # need to specify one or both of width, height
-    #key=graph.key.key(pos="br", dist=0.1)
-    key=graph.key.key(pos='tl')
+    # key=graph.key.key(pos="br", dist=0.1)
+    key = graph.key.key(pos='tl')
     g = graph.graphxy(
         width=8,
         height=8,
@@ -517,31 +527,30 @@ def test_basic():
         y=axis.lin(title=r"$y$-axis"),
     )
 
-
     # either provide lists of the individual coordinates
-    factor=1.2343
-    x=list(range(10))
-    y=[factor*xx**2 for xx in x]
-    values=graph.data.values(x=x, y=y,title='points')
-    symbol1=graph.style.symbol(
-        #symbol=graph.style._circlesymbol,
+    factor = 1.2343
+    x = list(range(10))
+    y = [factor*xx**2 for xx in x]
+    values = graph.data.values(x=x, y=y, title='points')
+    symbol1 = graph.style.symbol(
+        # symbol=graph.style._circlesymbol,
         symbol=graph.style.symbol.circle,
         symbolattrs=[deco.filled([yellow])],
     )
-    symbol2=graph.style.symbol(
-        #symbol=graph.style._circlesymbol,
+    symbol2 = graph.style.symbol(
+        # symbol=graph.style._circlesymbol,
         symbol=graph.style.symbol.circle,
         symbolattrs=[color.rgb.red],
     )
 
-    g.plot(values,[symbol1,symbol2])
+    g.plot(values, [symbol1, symbol2])
 
     # or provide one list containing the whole points
-    #values2=graph.data.points(list(zip(range(10), range(10))), x=1, y=2)
-    #g.plot(values2)
+    # values2=graph.data.points(list(zip(range(10), range(10))), x=1, y=2)
+    # g.plot(values2)
 
     # also a function
-    c=graph.data.function(
+    c = graph.data.function(
         "y(x)=%g * x**2" % factor,
         min=0, max=9,
         title=r'$y=x^2$'
@@ -550,46 +559,40 @@ def test_basic():
 
     g.writeEPSfile("points-and-line")
     g.writePDFfile("points-and-line")
-    #g.writeSVGfile("points")
+    # g.writeSVGfile("points")
+
 
 def test_image(**kw):
-    import numpy
-    from pyx import color, graph
 
-    xmax = 1.6
-    xmin = -xmax
-    ymax = 1.6
-    ymin = -ymax
+    dims = [25, 33]
+    x, y = np.mgrid[0:dims[0], 0:dims[1]]
 
-    dims=[25,33]
-    x, y = numpy.mgrid[0:dims[0], 0:dims[1]]
+    cen1 = (np.array(dims)-1.0)/2.0
+    sigma1 = 2.0
 
-    cen1 = (numpy.array(dims)-1.0)/2.0
-    sigma1=2.0
-
-    xd1=x-cen1[0]
-    yd1=y-cen1[1]
-    z1 = numpy.exp( -(xd1**2 + 0.2*xd1*yd1 + 0.8*yd1**2)/(2*sigma1**2) )
+    xd1 = x-cen1[0]
+    yd1 = y-cen1[1]
+    z1 = np.exp(-(xd1**2 + 0.2*xd1*yd1 + 0.8*yd1**2)/(2*sigma1**2))
 
     cen2 = cen1 + [5.5, 0]
-    sigma2=1.5
+    sigma2 = 1.5
 
-    xd2=x-cen2[0]
-    yd2=y-cen2[1]
-    z2 = numpy.exp( -(0.7*xd2**2 + 0.2*xd2*yd2 + 0.2*yd2**2)/(2*sigma2**2) )
+    xd2 = x-cen2[0]
+    yd2 = y-cen2[1]
+    z2 = np.exp(-(0.7*xd2**2 + 0.2*xd2*yd2 + 0.2*yd2**2)/(2*sigma2**2))
 
     z = z1+0.2*z2
 
-
-    z += numpy.random.normal(
+    z += np.random.normal(
         scale=0.02,
         size=z.shape,
     )
 
-    g=imview(z, **kw)
+    g = imview(z, **kw)
     return g
 
-_symdict={
+
+_symdict = {
     'circle': graph.style.symbol.circle,
     'cross': graph.style.symbol.cross,
     'diamond': graph.style.symbol.diamond,
@@ -598,33 +601,38 @@ _symdict={
     'triangle': graph.style.symbol.triangle,
 }
 
+
 class Symbols(object):
     def get_symbol(self, symname):
         if isinstance(symname,  graph.style.symbol):
             return symname
 
-        sym=_symdict.get(symname,None)
+        sym = _symdict.get(symname, None)
         if sym is None:
             raise ValueError("bad symbol name: '%s'" % symname)
         return sym
 
-symbols=Symbols()
 
-_linedict={
+symbols = Symbols()
+
+
+_linedict = {
     'solid': style.linestyle.solid,
     'dashed': style.linestyle.dashed,
     'dotted': style.linestyle.dotted,
     'dashdotted': style.linestyle.dashdotted,
 }
 
+
 class Linestyles(object):
     def get_style(self, linename):
-        line=_linedict.get(linename,None)
+        line = _linedict.get(linename, None)
         if line is None:
             raise ValueError("bad line style name: '%s'" % linename)
         return line
 
-linestyles=Linestyles()
+
+linestyles = Linestyles()
 
 
 class Color(object):
@@ -638,18 +646,18 @@ class Color(object):
         if isinstance(name_in, color.rgb):
             return name_in
 
-        name=name_in.lower()
-        rgb=_rgbdict.get(name,None)
+        name = name_in.lower()
+        rgb = _rgbdict.get(name, None)
         if rgb is None:
             raise ValueError("bad color name: '%s'" % name_in)
 
-        r=rgb[0]/255.0
-        g=rgb[1]/255.0
-        b=rgb[2]/255.0
+        r = rgb[0]/255.0
+        g = rgb[1]/255.0
+        b = rgb[2]/255.0
         return color.rgb(r=r, g=g, b=b)
 
-colors=Color()
 
+colors = Color()
 
 
 def _make_rgb_colors_dict(fname):
@@ -659,24 +667,24 @@ def _make_rgb_colors_dict(fname):
     255 228 196             bisque
     """
 
-    rgbdict={}
+    rgbdict = {}
     with open(fname) as fobj:
-        for i,line in enumerate(fobj):
-            if i==0:
+        for i, line in enumerate(fobj):
+            if i == 0:
                 continue
 
-            ls=line.split()
+            ls = line.split()
 
             # skip names with blank spaces
             if len(ls) > 4:
                 continue
 
-            r=int(ls[0])
-            g=int(ls[1])
-            b=int(ls[2])
-            name=ls[3].lower()
+            r = int(ls[0])
+            g = int(ls[1])
+            b = int(ls[2])
+            name = ls[3].lower()
 
-            rgbdict[name] = (r,g,b)
+            rgbdict[name] = (r, g, b)
 
     return rgbdict
 
@@ -1345,7 +1353,7 @@ _rgbdict = {
 
 class TempFileList(object):
     def __init__(self):
-        self.flist=[]
+        self.flist = []
 
     def add(self, fname):
         self.flist.append(fname)
@@ -1353,35 +1361,40 @@ class TempFileList(object):
     def cleanup(self):
         for f in self.flist:
             try:
-                #print("removing:",f)
                 os.remove(f)
-            except:
+            except FileNotFoundError:
                 pass
 
     def __enter__(self):
         return self
+
     def __exit__(self, exception_type, exception_value, traceback):
         self.cleanup()
+
     def __del__(self):
         self.cleanup()
 
-_default_conf={
-    'viewer':'feh -B white', # probably available on most systems
+
+_default_conf = {
+    'viewer': 'feh -B white',  # probably available on most systems
 }
+
+
 def _load_config():
     import yaml
 
-    conf=_default_conf
-    fname=os.path.expanduser('~/.pyxtools')
+    conf = _default_conf
+    fname = os.path.expanduser('~/.pyxtools')
 
     if os.path.exists(fname):
         with open(fname) as fobj:
-            tconf=yaml.load(fobj)
+            tconf = yaml.load(fobj)
         conf.update(tconf)
     return conf
 
-_tflist=TempFileList()
-_config=_load_config()
+
+_tflist = TempFileList()
+_config = _load_config()
 
 
 class Points(object):
@@ -1395,96 +1408,92 @@ class Points(object):
         self._set_styles(**kw)
 
     def _set_data(self, x, y, **kw):
-        args={'x':x, 'y':y}
+        args = {'x': x, 'y': y}
 
-        title=kw.get('label',None)
-        xerr=kw.pop('xerr',None)
-        yerr=kw.pop('yerr',None)
+        title = kw.get('label', None)
+        xerr = kw.pop('xerr', None)
+        yerr = kw.pop('yerr', None)
 
         if title is not None:
-            args['title']=title
+            args['title'] = title
         if xerr is not None:
             args['dx'] = xerr
         if yerr is not None:
             args['dy'] = yerr
 
-        self.data=graph.data.values(**args)
+        self.data = graph.data.values(**args)
 
     def _set_styles(self, **kw):
 
-        styles=[]
+        styles = []
 
-        symbolattrs=[]
+        symbolattrs = []
 
-        color=kw.pop('color',None)
+        color = kw.pop('color', None)
         if color is not None:
-            color=colors(color)
+            color = colors(color)
         else:
-            color=colors('black')
+            color = colors('black')
 
-        sym=kw.pop('sym',None)
-        line=kw.pop('line',None)
+        sym = kw.pop('sym', None)
+        line = kw.pop('line', None)
 
         # default to a symbol if nothing is specified
 
         if sym is None and line is None:
-            sym='circle'
-
+            sym = 'circle'
 
         # line styles first, since if we have both we usually
         # prefer the curve under the points
 
         if line is not None:
             line = linestyles.get_style(line)
-            lineattrs=[]
 
-            linecolor=kw.pop('linecolor',None)
+            linecolor = kw.pop('linecolor', None)
             if linecolor is not None:
-                linecolor=colors(linecolor)
+                linecolor = colors(linecolor)
             else:
-                linecolor=color
+                linecolor = color
 
-            linest=graph.style.line(
-                lineattrs=[linecolor,line],
+            linest = graph.style.line(
+                lineattrs=[linecolor, line],
             )
             styles += [linest]
 
-
         if sym is not None:
-            sym=symbols.get_symbol(sym)
+            sym = symbols.get_symbol(sym)
 
-            symcolor=kw.pop('symcolor',None)
+            symcolor = kw.pop('symcolor', None)
             if symcolor is not None:
-                symcolor=colors(symcolor)
+                symcolor = colors(symcolor)
             else:
-                symcolor=color
+                symcolor = color
 
-            filled=kw.get('filled',False)
-            stroked=kw.get('stroked',False)
+            filled = kw.get('filled', False)
+            stroked = kw.get('stroked', False)
 
             if not filled and not stroked:
-                filled=True
+                filled = True
 
             if filled:
-                symbolattrs += [symcolor,deco.filled([symcolor])]
+                symbolattrs += [symcolor, deco.filled([symcolor])]
             if stroked:
-                symbolattrs += [symcolor,deco.stroked([symcolor])]
+                symbolattrs += [symcolor, deco.stroked([symcolor])]
 
-            symbol=graph.style.symbol(
+            symbol = graph.style.symbol(
                 symbol=sym,
-                size=kw.get('size',0.1),
+                size=kw.get('size', 0.1),
                 symbolattrs=symbolattrs,
             )
             styles += [symbol]
 
-
-        cols=self.data.columns
+        cols = self.data.columns
 
         if 'dx' in cols or 'dy' in cols:
             if 'errcolor' in kw:
-                errclr=colors(kw['errcolor'])
+                errclr = colors(kw['errcolor'])
             else:
-                errclr=color
+                errclr = color
             styles += [graph.style.errorbar(errorbarattrs=[errclr])]
 
         self.styles = styles
@@ -1503,14 +1512,14 @@ class Function(Points):
 
     def _set_data(self, eq_def, **kw):
 
-        keys={}
-        title=kw.pop('label',None)
+        keys = {}
+        title = kw.pop('label', None)
         if title is not None:
-            keys['title']=title
+            keys['title'] = title
 
-        keys['min']=kw.pop('min',None)
-        keys['max']=kw.pop('max',None)
-        keys['points']=kw.pop('points',100)
+        keys['min'] = kw.pop('min', None)
+        keys['max'] = kw.pop('max', None)
+        keys['points'] = kw.pop('points', 100)
         self.data = graph.data.function(
             eq_def,
             **keys
@@ -1518,38 +1527,39 @@ class Function(Points):
 
     def _set_styles(self, **kw):
 
-        styles=[]
+        styles = []
 
-        color=kw.pop('color',None)
+        color = kw.pop('color', None)
         if color is not None:
-            color=colors(color)
+            color = colors(color)
         else:
-            color=colors('black')
+            color = colors('black')
 
-        line=kw.pop('line','solid')
+        line = kw.pop('line', 'solid')
 
         line = linestyles.get_style(line)
 
-        linecolor=kw.pop('linecolor',None)
+        linecolor = kw.pop('linecolor', None)
         if linecolor is not None:
-            linecolor=colors(linecolor)
+            linecolor = colors(linecolor)
         else:
-            linecolor=color
+            linecolor = color
 
-        linest=graph.style.line(
-            lineattrs=[linecolor,line],
+        linest = graph.style.line(
+            lineattrs=[linecolor, line],
         )
         styles += [linest]
 
-        cols=self.data.columns
+        # cols = self.data.columns
 
         self.styles = styles
 
+
 class PlotBase(object):
     def __init__(self, **kw):
-        self.kw=kw
+        self.kw = kw
 
-        self._content=[]
+        self._content = []
 
     def add(self, *args):
         """
@@ -1568,8 +1578,8 @@ class PlotBase(object):
         **kw:
             extra keywords
         """
-        
-        keywords={}
+
+        keywords = {}
         keywords.update(self.kw)
         keywords.update(kw)
 
@@ -1584,16 +1594,16 @@ class PlotBase(object):
         """
         show in an x window
         """
-        import time
-        from subprocess import Popen, PIPE
+        from subprocess import Popen
 
         fname = tempfile.mktemp(suffix='.png')
         print(fname)
         g = self.write(fname, **kw)
 
-        p = Popen(['feh','-B','white',fname])
+        Popen(['feh', '-B', 'white', fname])
 
         return g
+
 
 class Plot(PlotBase):
     def get_plot(self, **kw):
@@ -1623,36 +1633,36 @@ class Plot(PlotBase):
         if 'aspect_ratio' in kw:
             kw['ratio'] = kw['aspect_ratio']
 
-        key = kw.pop('key',None)
+        key = kw.pop('key', None)
 
+        gkw = _unpack_graphxy_keywords(kw)
+        gkw['width'] = gkw.get('width', 8)
+        # height = gkw.get('height', None)
+        # if height is None:
+        #     aspect_ratio = gkw
 
-        gkw=_unpack_graphxy_keywords(kw)
-        gkw['width'] = gkw.get('width',8)
-        height=gkw.get('height',None)
-        if height is None:
-            aspect_ratio = gkw
-
-
-        xaxis,xlog,yaxis,ylog = _get_axes(kw)
+        xaxis, xlog, yaxis, ylog = _get_axes(kw)
         g = graph.graphxy(
             x=xaxis,
             y=yaxis,
             key=key,
-            #title='blah',
-            **gkw)
+            # title='blah',
+            **gkw
+        )
 
         return g
 
-FramedPlot=Plot
+
+FramedPlot = Plot
+
 
 def test_framed_plot():
-    #x=numpy.logspace(log10(1), log10(9.0), 10)
-    x=numpy.linspace(2, 19, 10)
+    x = np.linspace(2, 19, 10)
     ytrue = x**2
 
     yerr = 0.2*ytrue
 
-    y = ytrue + yerr*numpy.random.normal(size=ytrue.size)
+    y = ytrue + yerr*np.random.normal(size=ytrue.size)
 
     pts = Points(
         x, y, yerr=yerr,
@@ -1663,7 +1673,7 @@ def test_framed_plot():
         label='data',
     )
 
-    key=graph.key.key(pos='br')
+    key = graph.key.key(pos='br')
     plt = Plot(
         xlog=False,
         ylog=True,
@@ -1683,48 +1693,52 @@ def test_framed_plot():
     plt.add(pts, eq)
 
     plt.write("test.pdf")
-    #plt.show(dpi=150)
+    # plt.show(dpi=150)
+
 
 def example1():
 
-    x = numpy.arange( 0, 3*numpy.pi, numpy.pi/30 )
-    c = numpy.cos(x)
-    s = numpy.sin(x)
+    x = np.arange(0, 3*np.pi, np.pi/30)
+    c = np.cos(x)
+    s = np.sin(x)
 
     p = Plot(
-        title = "title",
-        xlabel = r"$x$",
-        ylabel = r"$\Theta$",
+        title="title",
+        xlabel=r"$x$",
+        ylabel=r"$\Theta$",
         ratio=1.0,
     )
 
-    #p.add( biggles.FillBetween(x, c, x, s) )
-    p.add( Points(x, c, line='solid', color="red") )
-    p.add( Points(x, s, line='solid', color="blue") )
+    # p.add( biggles.FillBetween(x, c, x, s) )
+    p.add(Points(x, c, line='solid', color="red"))
+    p.add(Points(x, s, line='solid', color="blue"))
 
     p.write("example1.png")
     p.write("example1.eps")
     p.write("example1.pdf")
     p.show()
 
+
 def example2():
 
-    key=graph.key.key(pos='tl')
+    key = graph.key.key(pos='tl')
     p = Plot(
-        xmin=0,xmax=100,
-        ymin=0,ymax=100,
-        ratio = 1,
+        xmin=0,
+        xmax=100,
+        ymin=0,
+        ymax=100,
+        ratio=1,
         key=key,
     )
 
-    x = numpy.arange( 0, 100, 5 )
-    yA = numpy.random.normal( 40, 10, (len(x),) )
-    yB = x + numpy.random.normal( 0, 5, (len(x),) )
+    x = np.arange(0, 100, 5)
+    yA = np.random.normal(40, 10, (len(x),))
+    yB = x + np.random.normal(0, 5, (len(x),))
 
     a = Points(
         x, yA,
         sym="circle", stroked=True,
-        label = "a points",
+        label="a points",
     )
 
     b = Points(
@@ -1733,14 +1747,15 @@ def example2():
         label='b points',
     )
 
-    l = Function('y(x) = x', line='dotted', label='slope')
+    lineobj = Function('y(x) = x', line='dotted', label='slope')
 
-    p.add( a, b, l )
+    p.add(a, b, lineobj)
 
     p.write("example2.png")
     p.write("example2.eps")
     p.write("example2.pdf")
     p.show()
+
 
 def example3():
     """
@@ -1748,7 +1763,7 @@ def example3():
     "first" to be upper left
     """
     c = canvas.canvas()
-    
+
     g1 = graph.graphxy(
         width=8,
         x=axis.lin(title=r'$x_1$'),
@@ -1756,7 +1771,7 @@ def example3():
     )
     g1.plot(
         [graph.data.function("y(x)=0", min=0, max=1),
-        graph.data.function("y(x)=2*exp(-30*x)-exp(-3*x)", min=0, max=1)],
+         graph.data.function("y(x)=2*exp(-30*x)-exp(-3*x)", min=0, max=1)],
     )
 
     c.insert(g1)
@@ -1769,7 +1784,13 @@ def example3():
     )
 
     c.insert(g2)
-    g2.plot(graph.data.function("y(x)=cos(20*x)*exp(-2*x)",min=0,max=2))
+    g2.plot(
+        graph.data.function(
+            "y(x)=cos(20*x)*exp(-2*x)",
+            min=0,
+            max=2,
+        ),
+    )
 
     g3 = graph.graphxy(
         width=8,
@@ -1778,29 +1799,37 @@ def example3():
         x=axis.lin(title=r'$x_3$'),
         y=axis.lin(title=r'$y_3$'),
     )
-    g3.plot(graph.data.function("y(x)=cos(20*x)*exp(-2*x)",min=0,max=2))
+    g3.plot(
+        graph.data.function(
+            "y(x)=cos(20*x)*exp(-2*x)",
+            min=0,
+            max=2,
+        ),
+    )
     c.insert(g3)
 
     g4 = graph.graphxy(
         width=8,
-        #ypos=g1.height,
+        # ypos=g1.height,
         xpos=g1.width+2.0,
         x=axis.lin(title=r'$x_4$'),
         y=axis.lin(title=r'$y_4$'),
     )
-    g4.plot(graph.data.function("y(x)=cos(20*x)*exp(-2*x)",min=0,max=2))
+    g4.plot(
+        graph.data.function("y(x)=cos(20*x)*exp(-2*x)", min=0, max=2),
+    )
     c.insert(g4)
-
 
     c.writePDFfile("example3.pdf")
     c.writeGSfile("example3.png")
 
+
 def example4():
-    
+
     g = graph.graphxy(
         width=8,
         x=axis.lin(title=r'$x_1$'),
-        y=axis.lin(min=-1,max=1.5,title=r'$y_1$'),
+        y=axis.lin(min=-1, max=1.5, title=r'$y_1$'),
     )
     g.plot(
         graph.data.function("y(x)=2*exp(-30*x)-exp(-3*x)",
@@ -1808,34 +1837,32 @@ def example4():
     )
 
     insetparams = dict(
-        #height = width*float(image.shape[0])/image.shape[1]
+        # height = width*float(image.shape[0])/image.shape[1]
         labeldist=0.2,
         labelattrs=[text.size.footnotesize],
     )
 
-    p=axis.painter.regular(**insetparams)
+    p = axis.painter.regular(**insetparams)
     gi = graph.graphxy(
         width=3,
         x=axis.lin(min=0, max=2, painter=p),
         y=axis.lin(painter=p),
     )
     gi.plot(graph.data.function("y(x)=cos(20*x)*exp(-2*x)",
-                                min=0,max=2))
+                                min=0, max=2))
 
     x, y = g.vpos(0.9, 0.9)
     g.insert(gi, [trafo.translate(x-gi.bbox().right(), y-gi.bbox().top())])
 
-
     g.writePDFfile("example4.pdf")
+
 
 def example5():
 
-    data = numpy.random.normal(loc=0.2, scale=1.2, size=1000)
+    x = np.linspace(-3.5, 3.5, 30)
+    y = np.exp(- 0.5*(x-0.1)**2)
 
-    x = numpy.linspace(-3.5, 3.5, 30)
-    y = numpy.exp( - 0.5*(x-0.1)**2 )
-
-    key=graph.key.key(pos='tl')
+    key = graph.key.key(pos='tl')
     g = graph.graphxy(
         width=8,
         x=axis.lin(title=r'$score$'),
@@ -1849,11 +1876,10 @@ def example5():
         title='data',
     )
 
-    lineattrs=[colors('blue')]
-    styles=[
-        graph.style.histogram(lineattrs=lineattrs,steps=1),
+    lineattrs = [colors('blue')]
+    styles = [
+        graph.style.histogram(lineattrs=lineattrs, steps=1),
     ]
     g.plot(d, styles=styles)
     g.writePDFfile("example5.pdf")
     g.writeGSfile("example5.png")
-
