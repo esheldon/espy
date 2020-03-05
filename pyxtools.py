@@ -157,10 +157,10 @@ def _writefile_maybe(g, **kw):
 
 def _show_maybe(g, **kw):
     if kw.get('show', False) is True:
-        _do_show(g, **kw)
+        gshow(g, **kw)
 
 
-def _do_show(g, **kw):
+def gshow(g, **kw):
     fname = tempfile.mktemp(suffix='.png')
 
     kw['file'] = fname
@@ -422,6 +422,18 @@ def _unpack_graphxy_keywords(kwin):
 def _get_axes(kw):
     xlog = kw.get('xlog', False)
     ylog = kw.get('ylog', False)
+
+    if 'xrange' in kw:
+        xrange = kw['xrange']
+        assert len(xrange) == 2
+        kw['xmin'] = xrange[0]
+        kw['xmax'] = xrange[1]
+
+    if 'yrange' in kw:
+        yrange = kw['xrange']
+        assert len(yrange) == 2
+        kw['ymin'] = yrange[0]
+        kw['ymax'] = yrange[1]
 
     xkw = dict(
         title=kw.get('xlabel', None),
@@ -1588,8 +1600,25 @@ class PlotBase(object):
         return g
 
     @property
+    def xlabel(self):
+        return self.kw.get('xlabel', None)
+
+    @xlabel.setter
+    def xlabel(self, xlabel):
+        self.kw['xlabel'] = xlabel
+
+    @property
+    def ylabel(self):
+        return self.kw.get('ylabel', None)
+
+    @ylabel.setter
+    def ylabel(self, ylabel):
+        self.kw['ylabel'] = ylabel
+
+    @property
     def xmin(self):
         return self.kw.get('xmin', None)
+
     @xmin.setter
     def xmin(self, xmin):
         self.kw['xmin'] = xmin
@@ -1597,9 +1626,79 @@ class PlotBase(object):
     @property
     def xmax(self):
         return self.kw.get('xmax', None)
+
     @xmax.setter
     def xmax(self, xmax):
         self.kw['xmax'] = xmax
+
+    @property
+    def xrange(self):
+        kw = self.kw
+        if 'xrange' in kw:
+            return kw['xrange']
+        elif 'xmin' in kw and 'xmax' in kw:
+            return [kw['xmin'], kw['xmax']]
+        else:
+            raise ValueError('x range not set')
+
+    @xrange.setter
+    def xrange(self, xrange):
+        assert len(xrange) == 2
+        self.kw['xmin'] = xrange[0]
+        self.kw['xmax'] = xrange[1]
+
+    @property
+    def ymin(self):
+        return self.kw.get('ymin', None)
+
+    @ymin.setter
+    def ymin(self, ymin):
+        self.kw['ymin'] = ymin
+
+    @property
+    def ymax(self):
+        return self.kw.get('ymax', None)
+
+    @ymax.setter
+    def ymax(self, ymax):
+        self.kw['ymax'] = ymax
+
+    @property
+    def yrange(self):
+        kw = self.kw
+        if 'yrange' in kw:
+            return kw['yrange']
+        elif 'ymin' in kw and 'ymax' in kw:
+            return [kw['ymin'], kw['ymax']]
+        else:
+            raise ValueError('y range not set')
+
+    @yrange.setter
+    def yrange(self, yrange):
+        assert len(yrange) == 2
+        self.kw['ymin'] = yrange[0]
+        self.kw['ymax'] = yrange[1]
+
+
+    def _repr_png_(self):
+        """
+        Automatically represent as PNG graphic when evaluated in IPython notebook.
+        """
+        keywords = {}
+        keywords.update(self.kw)
+
+        g = self.get_plot(**keywords)
+        return g._repr_png_()
+
+    def _repr_svg_(self):
+        """
+        Automatically represent as PNG graphic when evaluated in IPython notebook.
+        """
+        keywords = {}
+        keywords.update(self.kw)
+
+        g = self.get_plot(**keywords)
+        return g._repr_svg_()
 
 
 class Plot(PlotBase):
