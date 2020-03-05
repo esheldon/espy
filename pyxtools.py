@@ -1690,16 +1690,19 @@ class PlotBase(object):
         g = self.get_plot(**keywords)
         return g._repr_png_()
 
+    '''
     def _repr_svg_(self):
         """
         Automatically represent as PNG graphic when evaluated in IPython notebook.
+
+        this is nice for transparency, but much slower
         """
         keywords = {}
         keywords.update(self.kw)
 
         g = self.get_plot(**keywords)
         return g._repr_svg_()
-
+    '''
 
 class Plot(PlotBase):
     def get_plot(self, **kw):
