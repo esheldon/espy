@@ -173,8 +173,9 @@ def submit_job(job_fname, req):
 
     dirname, fname_local = os.path.split(job_fname)
 
-    ds = eu.ostools.DirStack()
-    ds.push(dirname)
+    if dirname != '':
+        ds = eu.ostools.DirStack()
+        ds.push(dirname)
 
     log_local = get_log_fname(fname_local)
 
@@ -187,6 +188,9 @@ def submit_job(job_fname, req):
         req=req,
     )
     os.system(command)
+
+    if dirname != '':
+        ds.pop()
 
 
 def get_req(args):
