@@ -159,8 +159,28 @@ class JobLister(dict):
         self.njobs = len(self.jobs)
 
 
+def get_njobs(user):
+    lister = JobLister(user)
+    return lister.njobs
+
+
+def get_diffjobs(user, maxjobs):
+    njobs = get_njobs(user)
+    diffjobs = maxjobs - njobs
+    return diffjobs, njobs
+
+
 def get_log_fname(fname):
     return fname+'.wqlog'
+
+
+def get_req(args):
+    if args.req:
+        req = """ -r "%s" """ % args.req
+    else:
+        req = ""
+
+    return req
 
 
 def submit_job(job_fname, req):
@@ -193,18 +213,32 @@ def submit_job(job_fname, req):
         ds.pop()
 
 
-def get_req(args):
-    if args.req:
-        req = """ -r "%s" """ % args.req
-    else:
-        req = ""
+def submit_jobs(flist, num, total, req, sleep_time):
 
-    return req
+    for i in range(num):
+        if len(flist) == 0:
+            break
+
+        nleft = len(flist)
+
+        fname = flist.pop()
+
+        date = datetime.datetime.now().strftime('%H:%M:%S')
+
+        thisnum = total-nleft+1
+        perc = 100.*thisnum/float(total)
+        tup = (fname, date, thisnum, total, perc)
+
+        print("    submitting %s %s %s/%s (%i%%)" % tup)
+        submit_job(fname, req)
+
+        time.sleep(sleep_time)
 
 
 def go(flist, args):
 
     nfiles = len(flist)
+
     maxjobs = args.njobs
     polltime = args.poll
     sleep_time = args.sleep_time
@@ -212,43 +246,37 @@ def go(flist, args):
     req = get_req(args)
     if args.rand:
         random.shuffle(flist)
+    else:
+        # we reverse since we will treat like a stack
+        flist = list(reversed(flist))
 
     user = os.environ['USER']
 
     print("submitting jobs for user: %s" % user)
     print("number in list:           %s" % len(flist))
     print("will limit to maxjobs:    %s" % maxjobs)
+
     if args.dryrun:
         return
 
-    diffjobs = 0
-    for i, fname in enumerate(flist):
-        perc = 100.*(i+1)/float(nfiles)
+    diffjobs, njobs = get_diffjobs(user, maxjobs)
 
-        if diffjobs <= 0:
-            lister = JobLister(user)
-            diffjobs = maxjobs - lister.njobs
-            while diffjobs <= 0:
-                time.sleep(polltime)
-                lister = JobLister(user)
-                diffjobs = maxjobs - lister.njobs
-            print("Found %s jobs diffjobs: %s" % (lister.njobs, diffjobs))
+    while len(flist) > 0:
 
-        date = datetime.datetime.now().strftime('%H:%M:%S')
-        tup = (fname, date, i+1, nfiles, perc)
-        print("    submitting %s %s %s/%s (%i%%)" % tup)
-        submit_job(fname, req)
+        while diffjobs <= 0:
+            time.sleep(polltime)
+            diffjobs, njobs = get_diffjobs(user, maxjobs)
 
-        diffjobs -= 1
+        print("Found %s jobs diffjobs: %s" % (njobs, diffjobs))
 
-        # this helps when the file system is slow
-        # os.system('wq 1> /dev/null 2> /dev/null')
+        submit_jobs(flist, diffjobs, nfiles, req, sleep_time)
 
-        # minimum time in case above is fast
-        time.sleep(sleep_time)
+        # we set diffjobs to zero so we will sleep for the poll time before
+        # checking again
+        diffjobs = 0
 
 
-def trim_flist(flist):
+def remove_submitted(flist):
     print('trimming to unsubmitted jobs...', end='')
     trimmed_flist = []
     for f in flist:
@@ -281,7 +309,7 @@ def main():
             pars['port'] = args.port
 
         if not args.force:
-            flist = trim_flist(flist)
+            flist = remove_submitted(flist)
 
         go(flist, args)
     except KeyboardInterrupt:
