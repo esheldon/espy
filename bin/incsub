@@ -7,6 +7,7 @@ import time
 import datetime
 import argparse
 import random
+import esutil as eu
 import wq
 
 pars = {
@@ -56,6 +57,10 @@ def get_args():
     return parser.parse_args()
 
 
+def yaml_load(obj):
+    return yaml.load(obj, Loader=yaml.SafeLoader)
+
+
 def socket_connect(sock, conninfo, crash_on_timeout=False):
     # crash will only happen if timeouts have been enabled, otherwise we just
     # wait
@@ -92,7 +97,7 @@ def send_message(message, timeout=None, crash_on_timeout=False):
         sock.close()
 
         try:
-            rdict = yaml.load(data)
+            rdict = yaml_load(data)
         except:
             print('YAML err:')
             print(data)
@@ -165,13 +170,22 @@ def submit_job(job_fname, req):
     Use os.system because it disconnects from
     the python script
     """
-    log_fname = get_log_fname(job_fname)
+
+    dirname, fname_local = os.path.split(job_fname)
+
+    ds = eu.ostools.DirStack()
+    ds.push(dirname)
+
+    log_local = get_log_fname(fname_local)
+
     command = """
         nohup wq -p "{port}" sub {req} "{jobf}" 2>&1 > "{logf}" &
-    """.format(port=pars['port'],
-               jobf=job_fname,
-               logf=log_fname,
-               req=req)
+    """.format(
+        port=pars['port'],
+        jobf=fname_local,
+        logf=log_local,
+        req=req,
+    )
     os.system(command)
 
 
