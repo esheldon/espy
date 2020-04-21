@@ -5,7 +5,6 @@
 Concatenate the tables from the input fits files into one big new table
 in a new file.
 """
-from __future__ import print_function
 
 import os
 import sys
