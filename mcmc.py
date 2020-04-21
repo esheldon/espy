@@ -54,14 +54,14 @@ def _extract_stats(data):
     means = zeros(npar,dtype='f8')
     cov = zeros( (npar,npar), dtype='f8')
 
-    for i in xrange(npar):
+    for i in range(npar):
         means[i] = data[:, i].mean()
 
     num=ntrials
 
-    for i in xrange(npar):
+    for i in range(npar):
         idiff = data[:,i]-means[i]
-        for j in xrange(i,npar):
+        for j in range(i,npar):
             if i == j:
                 jdiff = idiff
             else:
@@ -86,13 +86,13 @@ def _extract_weighted_stats(data, weights):
     means = zeros(npar,dtype='f8')
     cov = zeros( (npar,npar), dtype='f8')
 
-    for i in xrange(npar):
+    for i in range(npar):
         dsum = (data[:, i]*weights).sum()
         means[i] = dsum/wsum
 
-    for i in xrange(npar):
+    for i in range(npar):
         idiff = data[:,i]-means[i]
-        for j in xrange(i,npar):
+        for j in range(i,npar):
             if i == j:
                 jdiff = idiff
             else:
@@ -133,7 +133,7 @@ def plot_results(trials, **keys):
 
     ind = numpy.arange(trials.shape[0])
 
-    for i in xrange(npars):
+    for i in range(npars):
         if names is not None:
             name=names[i]
         else:
@@ -220,7 +220,7 @@ def plot_results_separate(trials, **keys):
 
     prow=0
     pcol=0
-    for i in xrange(npars):
+    for i in range(npars):
 
         prow=i/ncols
         pcol=i % ncols
@@ -360,7 +360,7 @@ class MH(object):
         
         self._init_data(pars_start, nstep)
 
-        for i in xrange(1,nstep):
+        for i in range(1,nstep):
             self._step()
 
         self._arate=self._accepted.sum()/float(self._accepted.size)
@@ -478,12 +478,12 @@ class GaussStepper(object):
     
 def print_stats(means, cov, names=None):
     npar=len(means)
-    for i in xrange(npar):
+    for i in range(npar):
         if names is not None:
             name=names[i]
         else:
             name='%s' % i
-        print '%s: %.16g +/- %.16g' % (name,means[i],sqrt(cov[i,i]))
+        print('%s: %.16g +/- %.16g' % (name,means[i],sqrt(cov[i,i])))
 
 def extract_maxlike_stats(data, burnin):
     nuse = data.size-burnin
@@ -494,7 +494,7 @@ def extract_maxlike_stats(data, burnin):
     max_like = zeros(npar,dtype='f8')
     error    = zeros(npar,dtype='f8')
 
-    for i in xrange(npar):
+    for i in range(npar):
         max_like[i] = data['pars'][burnin+maxi, i]
 
         # variance around this point
@@ -601,7 +601,7 @@ class MHTester:
         """
         self.meanvals = zeros(ntrial, dtype='f4')
 
-        for i in xrange(ntrial):
+        for i in range(ntrial):
             # create a new realization
             self.setup()
             self.run_test(nstep)
@@ -748,7 +748,7 @@ def test(burnin=1000, nstep=10000, doplot=False, hardcopy=False):
     """
     tc = MHTester("constant")
     tc.run_test(nstep)
-    print 'acceptance rate:',tc.arate
+    print('acceptance rate:',tc.arate)
     tc.compare_results(doplot=doplot, hardcopy=hardcopy)
 
 def testmany(ntrial, **keys):
@@ -1013,7 +1013,7 @@ class EmceeFitter(object):
         npars=len(pars)
 
         rep=[]
-        for i in xrange(npars):
+        for i in range(npars):
             r= "  p%d: %.4g +/- %.4g" % (i,pars[i],perr[i])
             rep.append(r)
         
@@ -1198,7 +1198,7 @@ class LogNormalFitter(EmceeFitter):
         nwalkers=self._nwalkers
         guess=zeros((nwalkers,npars))
 
-        for i in xrange(npars):
+        for i in range(npars):
             if guess0[i]==0:
                 guess[:,i] = guess0[i]+0.1*srandu(nwalkers)
             else:
@@ -1235,11 +1235,11 @@ def test_lognormal():
            sigma*(1. + .1*srandu())]
     guess=[n*binsize,mean,sigma]
 
-    print 'guess:',guess
+    print('guess:',guess)
     nlf=LogNormalFitter(h['center'], h['hist'], guess, nwalkers, burnin, nstep,
                         yerr=herr)
 
-    print nlf
+    print(nlf)
 
     res=nlf.get_result()
     
@@ -1345,7 +1345,7 @@ class PolyFitter(object):
         nwalkers=self.nwalkers
         guess=zeros((nwalkers,npars))
 
-        for i in xrange(npars):
+        for i in range(npars):
             if guess0[i]==0:
                 guess[:,i] = guess0[i]+0.1*srandu(nwalkers)
             else:
@@ -1407,7 +1407,7 @@ class PolyFitter(object):
         try:
             self._ply=numpy.poly1d(res['pars'])
         except:
-            print 'could not set poly'
+            print('could not set poly')
             self._ply=None
 
 
@@ -1432,7 +1432,7 @@ class PolyFitter(object):
 
         trials=self.trials
 
-        for i in xrange(npars):
+        for i in range(npars):
             row=i/ncol
             col=i % ncol
 
@@ -1451,7 +1451,7 @@ class PolyFitter(object):
 
         rep=[]
         header=[]
-        for i in xrange(npars):
+        for i in range(npars):
             h="p%d" % i
             power=npars-i-1
             if power>0:

@@ -162,7 +162,7 @@ def MakeWebpages(conf):
     firstIndex = '<a href="%s">First</a>' % firstIndex
     lastIndex = '<a href="%s">Last</a>' % lastIndex
 
-    for page in xrange(npage):
+    for page in range(npage):
 
         prevIndex = index_name(dir, page-1, npage, znum)
         iname=index_name(dir, page, npage, znum)

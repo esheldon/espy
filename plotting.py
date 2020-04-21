@@ -1,9 +1,3 @@
-from __future__ import print_function
-try:
-    xrange
-except:
-    xrange=range
-
 import numpy
 import esutil as eu
 
@@ -98,7 +92,7 @@ def multihist(data, binfac=0.1, **kw):
             tup = ((grid.nrow,grid.ncol),(tab.rows,tab.cols))
             raise ValueError(m % tup)
 
-    for dim in xrange(ndim):
+    for dim in range(ndim):
 
         ddata = data[:,dim]
 
@@ -138,7 +132,7 @@ class Grid(object):
     -------
     grid=Grid(n)
 
-    for i in xrange(n):
+    for i in range(n):
         row,col = grid(i)
 
         # equivalently grid.get_rowcol(i)
@@ -188,7 +182,7 @@ class Grid(object):
         grid=Grid(nplot)
         arr=biggles.FramedArray(grid.nrow, grid.ncol)
 
-        for i in xrange(nplot):
+        for i in range(nplot):
             row,col=grid.get_rowcol(nplot, i)
             arr[row,col].add( ... )
         """

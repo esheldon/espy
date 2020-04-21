@@ -1,9 +1,3 @@
-from __future__ import print_function
-try:
-    xrange
-except:
-    xrange=range
-
 import os
 import numpy
 from numpy import array, arcsinh, zeros,where
@@ -300,7 +294,7 @@ def make_combined_mosaic(imlist):
 
     imtot=numpy.zeros( (grid.nrow*shape[0], grid.ncol*shape[1]) )
 
-    for i in xrange(nimage):
+    for i in range(nimage):
         im=imlist[i]
         row,col=grid(i)
 
@@ -334,7 +328,7 @@ def view_mosaic(imlist, titles=None, combine=False, **keys):
     tkeys.update(keys)
     tkeys['show']=False
 
-    for i in xrange(nimage):
+    for i in range(nimage):
         im=imlist[i]
 
         row,col = grid(i)
@@ -817,8 +811,8 @@ def imprint(im, stream=stdout, fmt=None):
     nrow = im.shape[0]
     ncol = im.shape[1]
 
-    for row in xrange(nrow):
-        for col in xrange(ncol):
+    for row in range(nrow):
+        for col in range(ncol):
             stream.write(fmt % im[row,col] )
             if col < (ncol-1):
                 stream.write(" ")

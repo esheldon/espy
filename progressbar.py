@@ -18,7 +18,7 @@ Draws an animated terminal progress bar
 Usage:
     n = 100
     with ProgressBar(n) as pbar:
-        for i in xrange(n):
+        for i in range(n):
             # do something
             p.update()
 """
@@ -263,7 +263,7 @@ def _test(message='frac', block='=', empty=' ', color=None):
         color=color,
         message=message,
     )
-    for i in xrange(n):
+    for i in range(n):
         bar.update()
         time.sleep(0.1)
 
@@ -281,7 +281,7 @@ def test_with(message='frac'):
 
     n=100
     with ProgressBar(n, message='frac') as pbar:
-        for i in xrange(n):
+        for i in range(n):
             pbar.update()
             time.sleep(0.1)
 

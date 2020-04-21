@@ -1,8 +1,4 @@
 import colorsys
-try:
-    xrange
-except:
-    xrange = range
 
 def rainbow(num, type='hex'):
     """
@@ -23,7 +19,7 @@ def rainbow(num, type='hex'):
 
     hstep = (maxh-minh)/(num-1)
     colors=[]
-    for i in xrange(num):
+    for i in range(num):
         h = minh + i*hstep
 
         # just change the hue
@@ -62,7 +58,7 @@ def heat(num, type='hex'):
 
     hstep = (maxh-minh)/(num-1)
     colors=[]
-    for i in xrange(num):
+    for i in range(num):
         h = minh + i*hstep
 
         # just change the hue
@@ -96,7 +92,7 @@ def test_rainbow():
 
     colors = rainbow(num, 'hex')
 
-    for i in xrange(num):
+    for i in range(num):
         p = Points([x[i]], [y[i]], type='filled circle', 
                    color=colors[i])
         c = Curve([x[i]],[y[i]], color=colors[i])
