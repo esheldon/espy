@@ -50,6 +50,6 @@ def main():
             try:
                 f[ext].verify_checksum()
             except:
-                print 'Checksum failed for %s[%s]: %s' % (fname,ext,sys.exc_info()[1])
+                print('Checksum failed for %s[%s]: %s' % (fname,ext,sys.exc_info()[1]))
 
 main()
