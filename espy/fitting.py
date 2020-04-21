@@ -1,4 +1,3 @@
-from __future__ import print_function, division
 import numpy
 import scipy.optimize
 from pprint import pprint
