@@ -24,7 +24,7 @@ def format_defvars():
     indent=' '*8
     defvars_fmt = indent
 
-    for i in xrange(len(_default_vars)):
+    for i in range(len(_default_vars)):
         v = _default_vars[i]
         if ((i+1) % 4) == 0:
             defvars_fmt += '\n'+indent
@@ -111,17 +111,17 @@ class EnvCache:
 
     def print_vars(self, shell):
 
-        print _head
+        print(_head)
         if shell in ['csh','tcsh']:
             for v in self.existvars:
-                print 'setenv %s %s' % (v,self.existvars[v])
+                print('setenv %s %s' % (v,self.existvars[v]))
             for v in self.noexistvars:
-                print '#setenv %s ' % v
+                print('#setenv %s ' % v)
         else:
             for v in self.existvars:
-                print 'export %s=%s' % (v,self.existvars[v])
+                print('export %s=%s' % (v,self.existvars[v]))
             for v in self.noexistvars:
-                print '#export %s=' % v
+                print('#export %s=' % v)
 
 def csv2list(csv):
     return csv.split(',')
