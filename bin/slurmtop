@@ -56,9 +56,6 @@ class SlurmWatcher:
                 'pending': 0,
             }
 
-            nprint = min(len(lines), self.maxy2-1)
-            lines = lines[:nprint]
-
             for line in lines:
                 if len(line) > 0 and 'JOBID' not in line:
                     stats['njobs'] += 1
@@ -70,6 +67,9 @@ class SlurmWatcher:
                         stats['pending'] += 1
                     elif 'RUN' in status:
                         stats['running'] += 1
+
+            nprint = min(len(lines), self.maxy2-1)
+            lines = lines[:nprint]
 
             self.write_statline(stats)
             self.write_job_listing(lines)

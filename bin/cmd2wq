@@ -78,7 +78,7 @@ def main():
         conv=CmdConverter(command,job_name,extra=args.extra)
         text=conv.get_wq_script() 
 
-        print fname
+        print(fname)
         with open(fname,'w') as fobj:
             fobj.write(text)
 
