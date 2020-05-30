@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-import socket
 import sys
-import yaml
 import os
 import time
 import datetime
@@ -36,7 +34,7 @@ def get_args():
                         help='over-ride requirements')
 
     parser.add_argument('-n', '--njobs',
-                        type=int, default=1000,
+                        type=int, default=300,
                         help='max number of jobs')
 
     parser.add_argument('-s', '--sleep-time', default=.2,
@@ -57,111 +55,30 @@ def get_args():
     return parser.parse_args()
 
 
-def yaml_load(obj):
-    return yaml.load(obj, Loader=yaml.SafeLoader)
-
-
-def socket_connect(sock, conninfo, crash_on_timeout=False):
-    # crash will only happen if timeouts have been enabled, otherwise we just
-    # wait
-    if crash_on_timeout:
-        sock.connect(conninfo)
-    else:
-        while True:
-            try:
-                sock.connect(conninfo)
-                break
-            except socket.timeout:
-                pass
-
-
-def send_message(message, timeout=None, crash_on_timeout=False):
-    if len(message) == 0:
-        raise ValueError("message must have len > 0")
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # make sure to set timeout *before* calling connect()
-    if timeout is not None:
-        sock.settimeout(timeout)
-
-    conninfo = (pars['host'], pars['port'])
-    socket_connect(sock, conninfo, crash_on_timeout=crash_on_timeout)
-
-    rdict = None
-    try:
-        jmess = yaml.dump(message)
-
-        wq.server.socket_send(sock, jmess)
-        data = wq.server.socket_recieve(sock, pars['max_buffsize'])
-
-        sock.close()
-
-        try:
-            rdict = yaml_load(data)
-        except:
-            print('YAML err:')
-            print(data)
-            sys.exit(1)
-
-        if 'error' in rdict:
-            raise RuntimeError("Error reported by server: %s" % rdict['error'])
-
-        if 'response' not in rdict:
-            raise RuntimeError("Internal error. Expected a response")
-
-    except:
-        es = sys.exc_info()
-        print('caught exception type:', es[0], 'details:', es[1])
-        rdict = None
-    finally:
-        sock.close()
-
-    if rdict is None:
-        sys.exit(1)
-
-    return rdict
-
-
-class JobLister(dict):
-    """
-    usage: wq ls [args]
-
-    print the job list to stdout.
-
-    If -u/--user is sent, the listing is restricted to that user/users.
-
-    If -f/--full is sent, the full job listing is given.  This is a yaml
-    document that can be read and processed to provide a customised listing.
-    """
-
-    def __init__(self, user):
-        self.user = user
-        self.execute()
-
-    def execute(self):
-        message = {}
-        message['command'] = 'ls'
-        while True:
-            try:
-                resp = send_message(message)
-
-                if resp is not None and resp['response'] is not None:
-                    break
-                else:
-                    print("error listing jobs, trying again after 30 seconds")
-                    time.sleep(30)
-            except:
-                print("error listing jobs, trying again after 30 seconds")
-                time.sleep(30)
-
-        self.jobs = [r for r in resp['response']
-                     if ('user' in r and r['user'] == self.user)]
-        self.njobs = len(self.jobs)
-
-
 def get_njobs(user):
-    lister = JobLister(user)
-    return lister.njobs
+    import subprocess
+
+    cmd = "wq ls -u %s | tail -n 1 | awk '{print $4}'" % user
+    while True:
+        proc = subprocess.Popen(
+            cmd,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        stdout, stderr = proc.communicate()
+        stdout = str(stdout, 'utf-8')
+        if proc.returncode != 0 or stdout == '':
+            err = str(stderr, 'utf-8')
+            print("error listing jobs '%s' trying again "
+                  "after 30 seconds" % err)
+            time.sleep(30)
+        else:
+            njobs = int(stdout)
+            break
+
+    return njobs
 
 
 def get_diffjobs(user, maxjobs):
