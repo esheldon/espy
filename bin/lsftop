@@ -4,28 +4,18 @@
 
     This program runs `bjobs -w` and parses the output.
 
-    The job listing is refreshed regularly, by default every 120 seconds.   Hit
-    any key to update immediately.  Hit 'q' or control-c to quit.
+    The job listing is refreshed regularly, by default every 120 seconds.
+    Hit any key to update immediately.  Hit 'q' or control-c to quit.
 
-    By default no colors are used. Use -d or -l to use colors for a dark or light
-    background
+    By default no colors are used. Use -d or -l to use colors for a dark
+    or light background
 
-    A file ~/.lsftoprc can be used to change the default configuration.  E.g.
-
-        background: dark
-        refresh_rate: 60
 """
-from __future__ import print_function
 import os
 import sys
 from sys import stderr
 import subprocess
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
-
-try:
-    xrange
-except:
-    xrange=range
 
 import curses
 try:
@@ -62,13 +52,11 @@ white=7+2
 # formats since we will process the results anyway
 
 _command="bjobs -w"
-_config_file='~/.lsftoprc'
 
 
 class LSFWatcher(dict):
     def __init__(self, **keys):
 
-        self.load_config()
         self.update(keys)
         self.set_defaults()
 
@@ -108,7 +96,7 @@ class LSFWatcher(dict):
             #nprint = min(len(out), self.maxy3-1)
             nprint = min(len(out), self.maxy3)
             line_splits = []
-            for ii in xrange(len(out)):
+            for ii in range(len(out)):
                 line = out[ii]
 
                 if len(line) > 0:
@@ -150,7 +138,7 @@ class LSFWatcher(dict):
             header = fmt % self.hdict
             self.win2.addstr(0,0,header[0:self.maxx2-1])
 
-            for ii in xrange(len(line_splits)):
+            for ii in range(len(line_splits)):
                 ls = line_splits[ii]
                 line = fmt % ls
                 self.win3.addstr(ii,0,line[0:self.maxx3-1])
@@ -271,14 +259,6 @@ class LSFWatcher(dict):
         self['refresh_rate']=self.get('refresh_rate',DEFAULT_REFRESH)
         self['background']=self.get('background',None)
         self['pattern']=self.get('pattern',None)
- 
-    def load_config(self):
-        cfile=os.path.expanduser(_config_file)
-        if os.path.exists(cfile):
-            import yaml
-            with open(cfile) as f:
-                tc = yaml.load(f)
-                self.update(tc)
 
     def make_color_pairs(self):
         curses.use_default_colors()
