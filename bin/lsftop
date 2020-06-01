@@ -51,7 +51,8 @@ white=7+2
 # don't have to be too careful about things like widths of fields in the
 # formats since we will process the results anyway
 
-_command="bjobs -w"
+# _command="bjobs -w"
+_command="bjobs -o 'jobid user stat run_time queue exec_host job_name submit_time'"
 
 
 class LSFWatcher(dict):
@@ -62,7 +63,7 @@ class LSFWatcher(dict):
 
         self.command=_command
 
-        self.headers=('JOBID','USER','STAT','QUEUE','FROM_HOST','EXEC_HOST','JOB_NAME','SUBMIT_TIME')
+        self.headers=('JOBID','USER','STAT','RUN_TIME','QUEUE','EXEC_HOST','JOB_NAME','SUBMIT_TIME')
         self.hdict={}
         for h in self.headers:
             self.hdict[h.lower()] = h
@@ -129,8 +130,8 @@ class LSFWatcher(dict):
             fmt  = ' %(jobid)-' + str(lengths['jobid']) +'s  '
             fmt += '%(user)-'  + str(lengths['user']) + 's  '
             fmt += '%(stat)-'  + str(lengths['stat']) + 's  '
+            fmt += '%(run_time)-'  + str(lengths['run_time']) + 's  '
             fmt += '%(queue)-'  + str(lengths['queue']) + 's  '
-            fmt += '%(from_host)-'  + str(lengths['from_host']) + 's  '
             fmt += '%(exec_host)-'  + str(lengths['exec_host']) + 's  '
             fmt += '%(job_name)-'  + str(lengths['job_name']) + 's  '
             fmt += '%(submit_time)-'  + str(lengths['submit_time']) + 's'
@@ -209,8 +210,9 @@ class LSFWatcher(dict):
             (res['jobid'],
              res['user'],
              res['stat'],
+             res['run_time'],
+             res['junk'],
              res['queue'],
-             res['from_host'],
              res['exec_host'],
              res['job_name'],
              res['mon'],
@@ -220,6 +222,12 @@ class LSFWatcher(dict):
         else:
             raise ValueError("Expected %d results from "
                              "listing, got %d: %s" % (self.nperline,len(ls),' '.join(ls)))
+
+        # this is the string second(s)
+        del res['junk']
+
+        res['run_time'] = float(res['run_time'])/60  # minutes
+        res['run_time'] = '%.1f min' % res['run_time']
 
         res['submit_time'] = ' '.join([res['mon'],res['day'],res['time']])
         del res['mon']
