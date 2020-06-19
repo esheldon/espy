@@ -6,13 +6,6 @@ import datetime
 import argparse
 import random
 import esutil as eu
-import wq
-
-pars = {
-    'host': wq.HOST,  # Symbolic name meaning all available interfaces
-    'port': wq.DEFAULT_PORT,
-    'max_buffsize': wq.MAX_BUFFSIZE,
-}
 
 
 def get_args():
@@ -24,8 +17,6 @@ def get_args():
                         help=('the argument is a file holding a list '
                               'rather than a list of files'))
 
-    parser.add_argument('-p', '--port',
-                        type=int, help='port for socket')
     parser.add_argument('--poll', type=int, default=30,
                         help=('time between polls of wq status when '
                               'we are at max allowed obs'))
@@ -104,7 +95,7 @@ def get_req(args):
     return req
 
 
-def submit_job(job_fname, req):
+def submit_job(args, job_fname, req):
     """
     Put the job in the background
 
@@ -120,11 +111,9 @@ def submit_job(job_fname, req):
 
     log_local = get_log_fname(fname_local)
 
-    #    nohup wq -p "{port}" sub {req} "{jobf}" 2>&1 > "{logf}" &
     command = """
-        nohup wq -p "{port}" sub {req} "{jobf}" > "{logf}" 2>&1 &
+        nohup wq sub {req} "{jobf}" > "{logf}" 2>&1 &
     """.format(
-        port=pars['port'],
         jobf=fname_local,
         logf=log_local,
         req=req,
@@ -226,9 +215,6 @@ def main():
                     line = line.strip()
                     if line != '':
                         flist.append(line)
-
-        if args.port is not None:
-            pars['port'] = args.port
 
         if not args.force:
             flist = remove_submitted(flist)
