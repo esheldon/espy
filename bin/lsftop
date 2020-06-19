@@ -4,84 +4,74 @@
 
     This program runs `bjobs -w` and parses the output.
 
-    The job listing is refreshed regularly, by default every 120 seconds.   Hit
-    any key to update immediately.  Hit 'q' or control-c to quit.
+    The job listing is refreshed regularly, by default every 120 seconds.
+    Hit any key to update immediately.  Hit 'q' or control-c to quit.
 
-    By default no colors are used. Use -d or -l to use colors for a dark or light
-    background
+    By default no colors are used. Use -d or -l to use colors for a dark
+    or light background
 
-    A file ~/.lsftoprc can be used to change the default configuration.  E.g.
-
-        background: dark
-        refresh_rate: 60
 """
-from __future__ import print_function
-import os
-import sys
-from sys import stderr
 import subprocess
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
-
-try:
-    xrange
-except:
-    xrange=range
+import re
 
 import curses
 try:
     import curses.wrapper.wrapper as curses_wrapper
-except:
+except ImportError:
     from curses import wrapper as curses_wrapper
 
-DEFAULT_REFRESH=120
+DEFAULT_REFRESH = 120
 
-parser=ArgumentParser(formatter_class=RawDescriptionHelpFormatter,
-                      description=__doc__)
-parser.add_argument("-r","--refresh",
-    help="refresh rate in seconds, default %d." % DEFAULT_REFRESH)
-parser.add_argument("-d","--dark",action="store_true",
-    help="Use a color scheme appropriate for dark backgrounds")
-parser.add_argument("-l","--light",action="store_true",
-    help="Use a color scheme appropriate for light backgrounds")
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter,
+                        description=__doc__)
+parser.add_argument(
+    "-r", "--refresh",
+    type=int, default=DEFAULT_REFRESH,
+    help="refresh rate in seconds, default %d." % DEFAULT_REFRESH,
+)
+parser.add_argument(
+    "-p", "--pattern",
+    help="only show jobs that mach the input regular expression.",
+)
 
-parser.add_argument("-p","--pattern",
-    help="only show jobs that contain the input pattern. Currently this is a straight string match, not a regex")
+default = 1
+black = 0+2
+red = 1+2
+green = 2+2
+yellow = 3+2
+blue = 4+2
+magenta = 5+2
+cyan = 6+2
+white = 7+2
 
-
-default=1
-black=0+2
-red=1+2
-green=2+2
-yellow=3+2
-blue=4+2
-magenta=5+2
-cyan=6+2
-white=7+2
-
-# don't have to be too careful about things like widths of fields in the
-# formats since we will process the results anyway
-
-_command="bjobs -w"
-_config_file='~/.lsftoprc'
+_command = (
+    "bjobs -o 'jobid user stat run_time queue exec_host job_name submit_time'"
+)
 
 
-class LSFWatcher(dict):
-    def __init__(self, **keys):
+class LSFWatcher(object):
+    def __init__(self, *, pattern, refresh_rate):
 
-        self.load_config()
-        self.update(keys)
-        self.set_defaults()
+        self.pattern = pattern
+        self.refresh_rate = refresh_rate
+        if self.pattern is not None:
+            self.matcher = re.compile(self.pattern)
 
-        self.command=_command
+        self.command = _command
 
-        self.headers=('JOBID','USER','STAT','QUEUE','FROM_HOST','EXEC_HOST','JOB_NAME','SUBMIT_TIME')
-        self.hdict={}
+        self.headers = (
+            'JOBID', 'USER', 'STAT', 'RUN_TIME', 'QUEUE',
+            'EXEC_HOST', 'JOB_NAME', 'SUBMIT_TIME',
+        )
+        self.hdict = {}
         for h in self.headers:
             self.hdict[h.lower()] = h
 
-        self.nperline=len(self.headers) + 2
-        curses_wrapper(self.watch)
+        self.nperline = len(self.headers) + 2
 
+    def go(self):
+        curses_wrapper(self.watch)
 
     def watch(self, stdscr):
 
@@ -90,7 +80,7 @@ class LSFWatcher(dict):
         # wait for refresh seconds for user input before refreshing.  If the
         # user input is anything but 'q' then refresh again
 
-        tout_ms = self['refresh_rate']*1000
+        tout_ms = self.refresh_rate*1000
         self.win1.timeout(tout_ms)
         while 1:
             self.win1.erase()
@@ -100,15 +90,17 @@ class LSFWatcher(dict):
             out = self.get_listing()
             out = out.split('\n')
 
-            stats={'njobs':0,'run':0,'pending':0,'suspended':0,'unknown':0}
-            lengths={}
+            stats = {
+                'njobs': 0, 'run': 0, 'pending': 0,
+                'suspended': 0, 'unknown': 0,
+            }
+            lengths = {}
             for h in self.headers:
                 lengths[h.lower()] = len(h)
 
-            #nprint = min(len(out), self.maxy3-1)
             nprint = min(len(out), self.maxy3)
             line_splits = []
-            for ii in xrange(len(out)):
+            for ii in range(len(out)):
                 line = out[ii]
 
                 if len(line) > 0:
@@ -118,13 +110,15 @@ class LSFWatcher(dict):
                         # this is the header
                         continue
 
-                    if self['pattern'] is not None:
-                        if self['pattern'] not in line:
+                    if self.pattern is not None:
+                        if self.matcher.match(line) is None:
                             continue
 
                     stats['njobs'] += 1
-                    lsplit = self.process_line(ls,stats,lengths, dolengths=(stats['njobs'] < nprint))
-                    #if ii < nprint:
+                    lsplit = self.process_line(
+                        ls, stats, lengths,
+                        dolengths=(stats['njobs'] < nprint),
+                    )
                     if stats['njobs'] < nprint:
                         line_splits.append(lsplit)
 
@@ -138,22 +132,22 @@ class LSFWatcher(dict):
     def write_job_listing(self, line_splits, lengths):
 
         if len(line_splits) > 0:
-            fmt  = ' %(jobid)-' + str(lengths['jobid']) +'s  '
-            fmt += '%(user)-'  + str(lengths['user']) + 's  '
-            fmt += '%(stat)-'  + str(lengths['stat']) + 's  '
-            fmt += '%(queue)-'  + str(lengths['queue']) + 's  '
-            fmt += '%(from_host)-'  + str(lengths['from_host']) + 's  '
-            fmt += '%(exec_host)-'  + str(lengths['exec_host']) + 's  '
-            fmt += '%(job_name)-'  + str(lengths['job_name']) + 's  '
-            fmt += '%(submit_time)-'  + str(lengths['submit_time']) + 's'
+            fmt = ' %(jobid)-' + str(lengths['jobid']) + 's  '
+            fmt += '%(user)-' + str(lengths['user']) + 's  '
+            fmt += '%(stat)-' + str(lengths['stat']) + 's  '
+            fmt += '%(run_time)-' + str(lengths['run_time']) + 's  '
+            fmt += '%(queue)-' + str(lengths['queue']) + 's  '
+            fmt += '%(exec_host)-' + str(lengths['exec_host']) + 's  '
+            fmt += '%(job_name)-' + str(lengths['job_name']) + 's  '
+            fmt += '%(submit_time)-' + str(lengths['submit_time']) + 's'
 
             header = fmt % self.hdict
-            self.win2.addstr(0,0,header[0:self.maxx2-1])
+            self.win2.addstr(0, 0, header[0:self.maxx2-1])
 
-            for ii in xrange(len(line_splits)):
+            for ii in range(len(line_splits)):
                 ls = line_splits[ii]
                 line = fmt % ls
-                self.win3.addstr(ii,0,line[0:self.maxx3-1])
+                self.win3.addstr(ii, 0, line[0:self.maxx3-1])
         self.win2.refresh()
         self.win3.refresh()
 
@@ -187,11 +181,11 @@ class LSFWatcher(dict):
         win = self.win1
 
         win.erase()
-        colors=self.colors
+        colors = self.colors
 
         win.addstr(1, 0, ' ')
 
-        win.addstr('Jobs: ', colors['njobs'] )
+        win.addstr('Jobs: ', colors['njobs'])
         win.addstr('%s ' % stats['njobs'])
 
         win.addstr('Running: ', colors['run'])
@@ -205,7 +199,6 @@ class LSFWatcher(dict):
         win.addstr('Unknown: ', colors['unknown'])
         win.addstr('%s ' % stats['unknown'])
 
-
         win.refresh()
 
     def process_line(self, ls, stats, lengths, dolengths=True):
@@ -217,12 +210,13 @@ class LSFWatcher(dict):
         """
 
         if len(ls) >= self.nperline:
-            res={}
+            res = {}
             (res['jobid'],
              res['user'],
              res['stat'],
+             res['run_time'],
+             res['junk'],
              res['queue'],
-             res['from_host'],
              res['exec_host'],
              res['job_name'],
              res['mon'],
@@ -230,10 +224,18 @@ class LSFWatcher(dict):
              res['time']) = ls
 
         else:
-            raise ValueError("Expected %d results from "
-                             "listing, got %d: %s" % (self.nperline,len(ls),' '.join(ls)))
+            raise ValueError(
+                "Expected %d results from "
+                "listing, got %d: %s" % (self.nperline, len(ls), ' '.join(ls))
+            )
 
-        res['submit_time'] = ' '.join([res['mon'],res['day'],res['time']])
+        # this is the string second(s)
+        del res['junk']
+
+        res['run_time'] = float(res['run_time'])/60  # minutes
+        res['run_time'] = '%.1f min' % res['run_time']
+
+        res['submit_time'] = ' '.join([res['mon'], res['day'], res['time']])
         del res['mon']
         del res['day']
         del res['time']
@@ -258,32 +260,18 @@ class LSFWatcher(dict):
 
     def get_listing(self):
 
-        pobj=subprocess.Popen(self.command,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              shell=True)
+        pobj = subprocess.Popen(
+            self.command,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            shell=True,
+        )
         stdout_ret, stderr_ret = pobj.communicate()
         return stdout_ret.decode('utf-8')
-
-    def set_defaults(self):
-        """
-        set options not set in the config or command line
-        """
-        self['refresh_rate']=self.get('refresh_rate',DEFAULT_REFRESH)
-        self['background']=self.get('background',None)
-        self['pattern']=self.get('pattern',None)
- 
-    def load_config(self):
-        cfile=os.path.expanduser(_config_file)
-        if os.path.exists(cfile):
-            import yaml
-            with open(cfile) as f:
-                tc = yaml.load(f)
-                self.update(tc)
 
     def make_color_pairs(self):
         curses.use_default_colors()
         curses.init_pair(default, -1, -1)
-        bkgd_color=-1
+        bkgd_color = -1
 
         curses.init_pair(black, curses.COLOR_BLACK, bkgd_color)
         curses.init_pair(red, curses.COLOR_RED, bkgd_color)
@@ -295,57 +283,51 @@ class LSFWatcher(dict):
         curses.init_pair(white, curses.COLOR_WHITE, bkgd_color)
 
     def set_colors(self):
-        self.colors={}
-        if self['background']=='light':
-            self.colors['njobs'] = curses.color_pair(blue)
+        self.colors = {}
 
-            self.colors['run'] = curses.color_pair(green)
-            self.colors['pending'] = curses.color_pair(magenta)
-            self.colors['suspended'] = curses.color_pair(red)
-            self.colors['unknown'] = curses.color_pair(red)
+        self.colors['njobs'] = curses.color_pair(magenta)
 
-        elif self['background']=='dark':
+        self.colors['run'] = curses.color_pair(green)
+        self.colors['pending'] = curses.color_pair(yellow)
+        self.colors['suspended'] = curses.color_pair(red)
+        self.colors['unknown'] = curses.color_pair(red)
 
-            self.colors['njobs'] = curses.color_pair(magenta)
+        # if self['background'] == 'light':
+        #     self.colors['njobs'] = curses.color_pair(blue)
+        #
+        #     self.colors['run'] = curses.color_pair(green)
+        #     self.colors['pending'] = curses.color_pair(magenta)
+        #     self.colors['suspended'] = curses.color_pair(red)
+        #     self.colors['unknown'] = curses.color_pair(red)
+        #
+        # elif self['background'] == 'dark':
+        #
+        #     self.colors['njobs'] = curses.color_pair(magenta)
+        #
+        #     self.colors['run'] = curses.color_pair(green)
+        #     self.colors['pending'] = curses.color_pair(yellow)
+        #     self.colors['suspended'] = curses.color_pair(red)
+        #     self.colors['unknown'] = curses.color_pair(red)
+        #
+        # else:
+        #
+        #     self.colors['njobs'] = curses.color_pair(default)
+        #
+        #     self.colors['run'] = curses.color_pair(default)
+        #     self.colors['pending'] = curses.color_pair(default)
+        #     self.colors['suspended'] = curses.color_pair(default)
+        #     self.colors['unknown'] = curses.color_pair(default)
 
-            self.colors['run'] = curses.color_pair(green)
-            self.colors['pending'] = curses.color_pair(yellow)
-            self.colors['suspended'] = curses.color_pair(red)
-            self.colors['unknown'] = curses.color_pair(red)
-
-
-        else:
-
-            self.colors['njobs'] = curses.color_pair(default)
-
-            self.colors['run'] = curses.color_pair(default)
-            self.colors['pending'] = curses.color_pair(default)
-            self.colors['suspended'] = curses.color_pair(default)
-            self.colors['unknown'] = curses.color_pair(default)
-
-
-# 
-# main program
-#
 
 def main():
 
     try:
-        args=parser.parse_args()
-
-        keys={}
-        if args.dark:
-            keys['background']='dark'
-        elif args.light:
-            keys['background']='light'
-
-        if args.pattern is not None:
-            keys['pattern'] = args.pattern
-
-        if args.refresh is not None:
-            keys['refresh_rate'] = int(args.refresh)
-
-        watcher = LSFWatcher(**keys)
+        args = parser.parse_args()
+        watcher = LSFWatcher(
+            pattern=args.pattern,
+            refresh_rate=args.refresh,
+        )
+        watcher.go()
         return
 
     except KeyboardInterrupt:

@@ -19,7 +19,7 @@ parser.add_argument('--xrange',help='comman separated list for xmin,xmax in plot
 parser.add_argument('--yrange',help='comman separated list for ymin,ymax in plot')
 
 parser.add_argument('-t','--type',help='type for symbols or line')
-parser.add_argument('-c','--color',help='color for symbols or line')
+parser.add_argument('-c','--color', default='black', help='color for symbols or line')
 
 parser.add_argument('--xlog',action='store_true',help='use log axis for x')
 parser.add_argument('--ylog',action='store_true',help='use log axis for y')

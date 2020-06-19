@@ -9,9 +9,9 @@ import esutil as eu
 import wq
 
 pars = {
-    'host': wq.DEFAULT_HOST,  # Symbolic name meaning all available interfaces
+    'host': wq.HOST,  # Symbolic name meaning all available interfaces
     'port': wq.DEFAULT_PORT,
-    'max_buffsize': wq.DEFAULT_MAX_BUFFSIZE,
+    'max_buffsize': wq.MAX_BUFFSIZE,
 }
 
 
