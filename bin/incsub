@@ -95,7 +95,7 @@ def get_req(args):
     return req
 
 
-def submit_job(args, job_fname, req):
+def submit_job(job_fname, req):
     """
     Put the job in the background
 
