@@ -84,24 +84,32 @@ class Points(object):
 
 class Curve(Points):
     """
-    Same as Points but defaults to marker None
+    Same as Points but defaults to marker None and now support for
+    error bars
     """
     def __init__(
         self, x, y,
-        marker=None,
         linestyle='-',
         linewidth=None,
         color=None,
         alpha=None,
+        marker=None,
+        size=None,
+        edgecolor=None,
+        edgewidth=None,
     ):
 
         super().__init__(
             x, y,
-            marker=marker,
             linestyle=linestyle,
             linewidth=linewidth,
             color=color,
             alpha=alpha,
+
+            marker=marker,
+            size=size,
+            edgecolor=edgecolor,
+            edgewidth=edgewidth,
         )
 
 
