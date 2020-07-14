@@ -1,10 +1,14 @@
 """
+requirements
+    - matplotli
+    - pillow
+    - Tkinter (always comes with conda? not sure)
+
 TODO:
     - non-symmetric error bars
 """
 import numpy as np
 import tempfile
-import subprocess
 import matplotlib.pyplot as plt
 
 
@@ -156,8 +160,7 @@ class Plot(object):
             fname = tempfile.mktemp(dir=dir, suffix='.png')
             self.write(fname, dpi=dpi)
 
-            command = ['feh', fname]
-            subprocess.check_call(command)
+            _show_tkinter(fname)
 
     def get_fig(self):
         if self.fig is None or self.ax is None:
@@ -172,52 +175,51 @@ class Plot(object):
         if self._ylabel is not None:
             self.ax.set_ylabel(self._ylabel)
 
-
         for obj in self.objlist:
             obj._add_to_axes(self.ax)
-
-    """
-    def _add_points(self, pts):
-
-        linestyle = 'none' if pts.linestyle is None else pts.linestyle
-        self.ax.errorbar(
-            pts.x, pts.y,
-            xerr=pts.xerr,
-            yerr=pts.yerr,
-            marker=pts.marker,
-            markersize=pts.size,
-            linestyle=linestyle,
-            linewidth=pts.linewidth,
-            color=pts.color,
-            capsize=pts.capsize,
-            ecolor=pts.color,
-            elinewidth=pts.linewidth,
-            alpha=pts.alpha,
-        )
-        self.ax.scatter(
-            pts.x, pts.y,
-            s=pts.size,
-            c=pts.color,
-            edgecolors=pts.edgecolor,
-            linewidths=pts.edgewidth,
-            marker=pts.type,
-            alpha=pts.alpha,
-        )
-
-        if pts.xerr is not None or pts.yerr is not None:
-            self.ax.errorbar(
-                pts.x, pts.y,
-                xerr=pts.xerr,
-                yerr=pts.yerr,
-                fmt='none',  # no points just error bars
-                ecolor=pts.color,
-                alpha=pts.alpha,
-            )
-        """
 
     def _reset_fig(self):
         self.fig = None
         self.ax = None
+
+
+def _show_viewer(fname, viewer='feh'):
+    import subprocess
+    command = [viewer, fname]
+    subprocess.check_call(command)
+
+
+class _TkinterWindow(object):
+    def __init__(self, fname):
+        from tkinter import Tk, Canvas, NW
+        from PIL import ImageTk, Image
+
+        img = Image.open(fname)
+        w, h = img.size
+
+        self.root = Tk()
+        self.root.bind('q', self.destroy)
+
+        canvas = Canvas(self.root, width=w, height=h)
+        canvas.pack()
+
+        self.imgtk = ImageTk.PhotoImage(img)
+        canvas.create_image(0, 0, anchor=NW, image=self.imgtk)
+        self.root.mainloop()
+
+    def destroy(self, even):
+        self.root.destroy()
+
+
+def _show_tkinter(fname):
+    """
+    requires pillow
+    """
+
+    try:
+        _ = _TkinterWindow(fname)
+    except KeyboardInterrupt:
+        pass
 
 
 def plot(x, y, xerr=None, yerr=None,
