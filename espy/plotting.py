@@ -218,3 +218,68 @@ def get_corner_data(*args):
         data[:,dim] = arg
 
     return data
+
+
+def color_color(
+    gmr, rmi, imz,
+    marker='dot',
+    show=True, file=None,
+    dpi=100,
+    figsize=(11, 5),
+    **kw
+):
+    """
+    make a color color plot
+
+    Parameters
+    ----------
+    gmr: array
+        Array of g-r
+    rmi: array
+        Array of r-i
+    imz: array
+        Array of i-z
+    show: bool
+        If True, show a plot on the screen, default True unless file= is
+        sent
+    file: string
+        Filename to write for figure
+    dpi: int
+        dpi for non-pdf/eps type figures
+    figsize: sequence
+        Default (11, 5)
+    **kw: keywords
+        Extra keywords for the plot markers
+
+    Returns
+    -------
+    the hickory plot object
+    """
+    import hickory
+
+    plt = hickory.Table(
+        nrows=1, ncols=2,
+        figsize=figsize,
+    )
+
+    plt[0].set(
+        xlim=(-1, 3),
+        ylim=(-1, 3),
+        xlabel=r'$g - r$',
+        ylabel=r'$r - i$',
+    )
+    plt[0].plot(gmr, rmi, marker=marker, **kw)
+    plt[1].set(
+        xlim=(-1, 3),
+        ylim=(-1, 2),
+        xlabel=r'$r - i$',
+        ylabel=r'$i - z$',
+    )
+    plt[1].plot(rmi, imz, marker=marker, **kw)
+
+    if file is not None:
+        plt.savefig(file, **kw)
+    elif show:
+        plt.show()
+
+    return plt
