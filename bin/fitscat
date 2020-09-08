@@ -6,64 +6,130 @@ Concatenate the tables from the input fits files into one big new table
 in a new file.
 """
 
-import os
 import sys
-
-from optparse import OptionParser
+import os
+from argparse import ArgumentParser
 
 import fitsio
 
-parser=OptionParser(__doc__)
-parser.add_option("-e","--ext",default=1,
-                  help="zero-offset extension. Default %default")
-parser.add_option("--clobber",action='store_true',
-                  help="clobber existing file")
+
+def get_args():
+    parser = ArgumentParser()
+
+    parser.add_argument('-o', '--output', required=True,
+                        help="output file")
+
+    parser.add_argument('-i', '--input', nargs='+', required=True,
+                        help="input files")
+
+    parser.add_argument("-e", "--ext", nargs='+',
+                        help=("one or more extensions to process.  "
+                              "Default is to copy all"))
+
+    parser.add_argument("--clobber", action='store_true',
+                        help="clobber existing file")
+
+    return parser.parse_args()
 
 
-def check(outf, options):
-    if not options.clobber and os.path.exists(outf):
-        mess="error: file exists: `%s' send --clobber to over-write"
-        mess=mess % outf
-
-        print(mess)
+def check(args):
+    if not args.clobber and os.path.exists(args.output):
+        mess = "error: file exists: `%s' send --clobber to overwrite"
+        mess = mess % args.output
+        print(mess, file=sys.stderr)
         sys.exit(1)
 
-def cat_files(outf, flist, options):
-    ext=get_ext( options.ext )
 
-    print("    writing to:",outf)
-    with fitsio.FITS(outf, 'rw', clobber=options.clobber) as fobj:
-        for i,fname in enumerate(flist):
-            print("   ",fname)
-            tmp = fitsio.read(fname, ext=ext)
+def get_exts(args):
+    if args.ext is None:
+        with fitsio.FITS(args.input[0]) as fits:
+            exts = []
+            for i, hdu in enumerate(fits):
+                extname = hdu.get_extname()
+                if extname == '':
+                    exts.append(i)
+                else:
+                    exts.append(extname)
+    else:
+        exts = [get_ext(es) for es in args.ext]
 
-            if i==0:
-                fobj.write(tmp)
-            else:
-                fobj[-1].append(tmp)
+    return exts
+
 
 def get_ext(ext_string):
     try:
-        ext=int(ext_string)
-    except:
-        ext=ext_string
+        ext = int(ext_string)
+    except ValueError:
+        ext = ext_string
 
     return ext
 
+
+def cat_files(args):
+    exts = get_exts(args)
+
+    print("writing to:", args.output)
+
+    with fitsio.FITS(args.output, 'rw', clobber=True) as fobj:
+        for ext in exts:
+
+            print('ext %s' % ext)
+            if isinstance(ext, str):
+                extname = ext
+            else:
+                extname = None
+
+            for i, fname in enumerate(args.input):
+                print('    %s' % fname)
+
+                with fitsio.FITS(fname) as infits:
+
+                    if not infits[ext].has_data():
+                        continue
+
+                    tmp = infits[ext].read()
+
+                    if ext not in fobj:
+                        fobj.write(tmp, extname=extname)
+                    else:
+                        fobj[ext].append(tmp)
+
+
+def cat_files_old(args):
+    exts = get_exts(args)
+
+    print("writing to:", args.output)
+
+    with fitsio.FITS(args.output, 'rw', clobber=True) as fobj:
+        for i, fname in enumerate(args.input):
+            print('    %s' % fname)
+
+            with fitsio.FITS(fname) as infits:
+
+                for ext in exts:
+                    if not infits[ext].has_data():
+                        continue
+
+                    print('    ext %s' % ext)
+                    if isinstance(ext, str):
+                        extname = ext
+                    else:
+                        extname = None
+
+                    tmp = fitsio.read(fname, ext=ext)
+
+                    if ext not in fobj:
+                        fobj.write(tmp, extname=extname)
+                    else:
+                        fobj[ext].append(tmp)
+
+
 def main():
-    options, args = parser.parse_args(sys.argv[1:])
+    args = get_args()
 
-    if len(args) < 2:
-        parser.print_help()
-        sys.exit(45)
-
-
-    outf=args[0]
-
-    check(outf, options)
+    check(args)
+    cat_files(args)
 
 
-    flist=args[1:]
-    cat_files(outf, flist, options)
-
-main()
+if __name__ == '__main__':
+    main()
