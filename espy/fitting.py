@@ -2,22 +2,29 @@ import numpy
 import scipy.optimize
 from pprint import pprint
 
-def histogauss(data, guess=None, **keys):
-    fitter=GaussFitter(data, **keys)
+
+def histogauss(
+    data, guess=None, nbin=None, binsize=None, min=None, max=None,
+    **plot_keys,
+):
+    fitter = GaussFitter(
+        data,
+        nbin=nbin, binsize=binsize, min=min, max=max,
+    )
 
     if guess is None:
-        mn=data.mean()
-        sig=data.std()
-        A=float(data.size)
-        guess=[mn, sig, A]
+        mn = data.mean()
+        sig = data.std()
+        A = float(data.size)
+        guess = [mn, sig, A]
 
-        print("generated guess:",guess)
+        print("generated guess:", guess)
 
     fitter.dofit(guess)
-    res=fitter.get_result()
+    res = fitter.get_result()
     pprint(res)
 
-    plt=fitter.doplot(**keys)
+    plt = fitter.doplot(**plot_keys)
 
     return plt, res
 
@@ -31,16 +38,17 @@ class GaussFitter(object):
         The data are histogrammed and fit according to the keywords
         """
 
-        self.data=data
-        self.conf=keys
+        self.data = data
+        self.conf = keys
 
-        self.use_error = keys.get('use_error',False)
-
+        self.use_error = keys.get('use_error', False)
 
     def get_result(self):
-        return {'pars':self.pars,
-                'pcov':self.pcov,
-                'perr':self.perr}
+        return {
+            'pars': self.pars,
+            'pcov': self.pcov,
+            'perr': self.perr,
+        }
 
     def dofit(self, guess):
         """
@@ -51,10 +59,10 @@ class GaussFitter(object):
 
         self._make_hist()
 
-        res=scipy.optimize.leastsq(self._errfunc,
-                                   guess,
-                                   maxfev=4000,
-                                   full_output=1)
+        res = scipy.optimize.leastsq(self._errfunc,
+                                     guess,
+                                     maxfev=4000,
+                                     full_output=1)
 
         self.pars, self.pcov0, self.infodict, self.errmsg, self.ier = res
 
@@ -63,14 +71,14 @@ class GaussFitter(object):
             raise ValueError(self.errmsg)
 
         self.numiter = self.infodict['nfev']
-        self.pcov=None
-        self.perr=None
+        self.pcov = None
+        self.perr = None
 
         if self.pcov0 is not None:
             self.pcov = self._scale_leastsq_cov(self.pars, self.pcov0)
 
-            d=numpy.diag(self.pcov)
-            w,=numpy.where(d < 0)
+            d = numpy.diag(self.pcov)
+            w, = numpy.where(d < 0)
 
             if w.size == 0:
                 # only do if non negative
@@ -81,25 +89,24 @@ class GaussFitter(object):
         [cen, sigma, amp]
         """
         from numpy import exp, sqrt, pi
-        mean=pars[0]
-        sigma=pars[1]
-        amp=pars[2]
+        mean = pars[0]
+        sigma = pars[1]
+        amp = pars[2]
 
         norm = 1.0/sqrt(2*pi)/sigma
 
-        modvals = amp*norm*exp( -0.5*(self.x-mean)**2/sigma**2 )
+        modvals = amp*norm*exp(-0.5*(self.x-mean)**2/sigma**2)
 
         return modvals
 
     def _errfunc(self, pars):
         model = self.eval_pars(pars)
-        if not self.use_error is None:
+        if self.use_error is not None:
             diff = model-self.y
         else:
             diff = (model-self.y)/self.yerr
 
         return diff
-
 
     def _scale_leastsq_cov(self, pars, pcov):
         """
@@ -108,65 +115,58 @@ class GaussFitter(object):
         """
         dof = (self.x.size-len(pars))
         s_sq = (self._errfunc(pars)**2).sum()/dof
-        return pcov * s_sq 
+        return pcov * s_sq
 
     def _make_hist(self):
         import esutil as eu
 
         if not hasattr(self, 'x'):
             print('histogramming')
-            self.conf['more']=True
-            h=eu.stat.histogram(self.data, **self.conf)
+            self.conf['more'] = True
+            h = eu.stat.histogram(self.data, **self.conf)
 
-            self.x=h['center']
-            self.y=h['hist']
+            self.x = h['center']
+            self.y = h['hist']
 
             if self.use_error:
-                self.yerr=numpy.sqrt(h['hist'])
+                self.yerr = numpy.sqrt(h['hist'])
 
-    def doplot(self, **keys):
+    def doplot(self, show=True, file=None, dpi=100, **keys):
         """
         compare fit to data
         """
-        import biggles
+        import hickory
 
-        model=self.eval_pars(self.pars)
+        model = self.eval_pars(self.pars)
 
-        plt=biggles.FramedPlot(**keys)
+        if 'legend' not in keys:
+            keys['legend'] = True
 
-        x0=self.x[0]
-        binsize=self.x[1]-self.x[0]
-        h=biggles.Histogram(self.y, x0=x0, binsize=binsize)
-        h.label='data'
+        plt = hickory.Plot(**keys)
+        bsize = self.x[1] - self.x[0]
+        plt.bar(self.x, self.y, width=bsize, label='data')
 
-        plt.add(h)
         if self.use_error:
-            ep=biggles.SymmetricErrorBarsY(self.x, self.y, self.yerr)
-            plt.add(ep)
+            plt.errorbar(self.x, self.y, self.yerr)
 
-        fh=biggles.Histogram(model, x0=x0, binsize=binsize, color='red')
-        fh.label='fit'
+        plt.curve(self.x, model, label='model', color='red')
 
-        plt.add(fh)
+        mnstr = r'$\mu: %g +/- %g$' % (self.pars[0], self.perr[0])
+        sigstr = r'$\sigma: %g +/- %g$' % (self.pars[1], self.perr[1])
+        ampstr = 'amp: %g +/- %g' % (self.pars[2], self.perr[2])
 
-        key=biggles.PlotKey(0.1, 0.9, [h, fh], halign='left')
-        plt.add(key)
+        plt.ntext(0.9, 0.3, mnstr, ha='right')
+        plt.ntext(0.9, 0.2, sigstr, ha='right')
+        plt.ntext(0.9, 0.1, ampstr, ha='right')
 
-        mnstr=r'$\mu: %g +/- %g$' % (self.pars[0],self.perr[0])
-        sigstr=r'$\sigma: %g +/- %g$' % (self.pars[1],self.perr[1])
-        ampstr='amp: %g +/- %g' % (self.pars[2],self.perr[2])
-
-        mnlab = biggles.PlotLabel(0.9,0.3,mnstr, halign='right')
-        siglab = biggles.PlotLabel(0.9,0.2,sigstr, halign='right')
-        amplab = biggles.PlotLabel(0.9,0.1,ampstr, halign='right')
-
-        plt.add(mnlab, siglab, amplab)
-
-        show=keys.get('show',True)
         if show:
             plt.show()
 
+        if file is not None:
+            plt.savefig(file, dpi=dpi)
+
         return plt
+
 
 class LogNormalFitter(GaussFitter):
     def eval_pars(self, pars):
