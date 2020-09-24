@@ -226,6 +226,7 @@ def color_color(
     show=True, file=None,
     dpi=100,
     figsize=(11, 5),
+    plt=None,
     **kw
 ):
     """
@@ -257,10 +258,11 @@ def color_color(
     """
     import hickory
 
-    plt = hickory.Table(
-        nrows=1, ncols=2,
-        figsize=figsize,
-    )
+    if plt is None:
+        plt = hickory.Table(
+            nrows=1, ncols=2,
+            figsize=figsize,
+        )
 
     plt[0].set(
         xlim=(-1, 3),
