@@ -1,5 +1,7 @@
-import numpy
+import numpy as np
 import esutil as eu
+from esutil.numpy_util import between
+
 
 def plot_hist2d(x, y, **kw):
     """
@@ -31,14 +33,14 @@ def plot_hist2d(x, y, **kw):
     """
     import images
 
-    dolog=kw.pop('log',True)
+    dolog = kw.pop('log', True)
 
-    kw['more']=True
+    kw['more'] = True
     hdict = eu.stat.histogram2d(x, y, **kw)
 
     hist = hdict['hist']
     if dolog:
-        hist = numpy.log10( hist.clip(min=0.1) )
+        hist = np.log10(hist.clip(min=0.1))
 
     kw['transpose'] = False
     kw['ranges'] = hdict['ranges']
@@ -51,6 +53,7 @@ def plot_hist2d(x, y, **kw):
     plt = images.view(hist, **kw)
 
     return plt
+
 
 def multihist(data, binfac=0.1, **kw):
     """
@@ -70,64 +73,65 @@ def multihist(data, binfac=0.1, **kw):
     if len(data.shape) != 2:
         raise ValueError("data should have shape [npoints,ndim]")
 
-    ndim=data.shape[1]
+    ndim = data.shape[1]
 
-    labels=kw.pop('labels',None)
+    labels = kw.pop('labels', None)
     if labels is not None:
-        nl=len(labels)
-        assert len(labels)==ndim,"len(labels) = %d != %d" % (nl,ndim)
+        nl = len(labels)
+        assert len(labels) == ndim, "len(labels) = %d != %d" % (nl, ndim)
 
-    grid=Grid(ndim)
+    grid = Grid(ndim)
 
-    tab = kw.pop('plt',None)
+    tab = kw.pop('plt', None)
     if tab is not None:
-        add_to_existing_plots=True
+        add_to_existing_plots = True
     else:
-        add_to_existing_plots=False
-        tab=biggles.Table(grid.nrow, grid.ncol)
-        tab.aspect_ratio=kw.pop('aspect_ratio',None)
+        add_to_existing_plots = False
+        tab = biggles.Table(grid.nrow, grid.ncol)
+        tab.aspect_ratio = kw.pop('aspect_ratio', None)
 
         if tab.cols != grid.ncol or tab.rows != grid.nrow:
-            m="input table has wrong dims.  Expected %s got %s"
-            tup = ((grid.nrow,grid.ncol),(tab.rows,tab.cols))
+            m = "input table has wrong dims.  Expected %s got %s"
+            tup = ((grid.nrow, grid.ncol), (tab.rows, tab.cols))
             raise ValueError(m % tup)
 
     for dim in range(ndim):
 
-        ddata = data[:,dim]
+        ddata = data[:, dim]
 
         mn, std = eu.stat.sigma_clip(ddata)
 
-        binsize=binfac*std
+        binsize = binfac*std
 
         hc = biggles.make_histc(
             ddata,
             binsize=binsize,
             **kw
         )
-        
-        row,col=grid(dim)
+
+        row, col = grid(dim)
         if add_to_existing_plots:
-            plt = tab[row,col]
+            plt = tab[row, col]
             plt.add(hc)
         else:
             plt = biggles.FramedPlot(aspect_ratio=1, **kw)
             plt.add(hc)
-            tab[row,col]=plt
+            tab[row, col] = plt
 
-        
         if labels is not None:
-            lab=labels[dim]
+            lab = labels[dim]
         else:
-            lab='dim %d' % dim
-        tab[row,col].xlabel=lab
+            lab = 'dim %d' % dim
+        tab[row, col].xlabel = lab
+
     return tab
-        
+
+
 class Grid(object):
     """
     represent plots in a grid.  The grid is chosen
     based on the number of plots
-    
+
     example
     -------
     grid=Grid(n)
@@ -141,29 +145,29 @@ class Grid(object):
     """
     def __init__(self, nplot):
         self.set_grid(nplot)
-    
+
     def set_grid(self, nplot):
         """
         set the grid given the number of plots
         """
         from math import sqrt
 
-        self.nplot=nplot
+        self.nplot = nplot
 
         # first check some special cases
-        if nplot==8:
-            self.nrow, self.ncol = 2,4
+        if nplot == 8:
+            self.nrow, self.ncol = 2, 4
         else:
 
-            sq=int(sqrt(nplot))
-            if nplot==sq*sq:
-                self.nrow, self.ncol = sq,sq
+            sq = int(sqrt(nplot))
+            if nplot == sq*sq:
+                self.nrow, self.ncol = sq, sq
             elif nplot <= sq*(sq+1):
-                self.nrow, self.ncol = sq,sq+1
+                self.nrow, self.ncol = sq, sq+1
             else:
-                self.nrow, self.ncol = sq+1,sq+1
+                self.nrow, self.ncol = sq+1, sq+1
 
-        self.nplot_tot=self.nrow*self.ncol
+        self.nplot_tot = self.nrow*self.ncol
 
     def get_rowcol(self, index):
         """
@@ -187,35 +191,36 @@ class Grid(object):
             arr[row,col].add( ... )
         """
 
-        imax=self.nplot_tot-1
+        imax = self.nplot_tot-1
         if index > imax:
-            raise ValueError("index too large %d > %d" % (index,imax))
+            raise ValueError("index too large %d > %d" % (index, imax))
 
         row = index//self.ncol
         col = index % self.ncol
 
-        return row,col
+        return row, col
 
     def __call__(self, index):
         return self.get_rowcol(index)
+
 
 def get_corner_data(*args):
     """
     get corner data array from inputs
     """
 
-    ndim=len(args)
+    ndim = len(args)
     if ndim == 0:
         raise ValueError('no args sent')
 
     np = len(args[0])
-    
-    data=numpy.zeros( (np, ndim) )
 
-    for dim,arg in enumerate(args):
-        assert len(arg) == np,'all arrays must be same size'
+    data = np.zeros((np, ndim))
 
-        data[:,dim] = arg
+    for dim, arg in enumerate(args):
+        assert len(arg) == np, 'all arrays must be same size'
+
+        data[:, dim] = arg
 
     return data
 
@@ -282,6 +287,180 @@ def color_color(
     if file is not None:
         plt.savefig(file, **kw)
     elif show:
+        plt.show()
+
+    return plt
+
+
+def color_color_hexbin(
+    gmr, rmi, imz,
+    weights=None,
+    C=None,
+    nbin=100,
+    show=True, file=None,
+    dpi=100,
+    title=None,
+    figsize=(12, 5),
+    plt=None,
+    **kw
+):
+    """
+    make a color color hexbin plot
+
+    Parameters
+    ----------
+    gmr: array
+        Array of g-r
+    rmi: array
+        Array of r-i
+    imz: array
+        Array of i-z
+    weights or C:
+        Weights to accumulate in each bin.
+    show: bool
+        If True, show a plot on the screen, default True unless file= is
+        sent
+    file: string
+        Filename to write for figure
+    dpi: int
+        dpi for non-pdf/eps type figures
+    figsize: sequence
+        Default (11, 5)
+    **kw: keywords
+        Extra keywords for the plot markers
+
+    Returns
+    -------
+    the hickory plot object
+    """
+    import hickory
+
+    if weights is not None:
+        kw['C'] = weights
+    elif C is not None:
+        kw['C'] = C
+    else:
+        kw['C'] = gmr*0 + 1
+
+    kw['reduce_C_function'] = np.sum
+
+    if plt is None:
+        plt = hickory.Table(
+            nrows=1, ncols=2,
+            figsize=figsize,
+        )
+
+    if title is not None:
+        plt.suptitle(title, fontsize=16)
+
+    gmr_min, gmr_max = -1, 3
+    rmi_min, rmi_max = -1, 3
+    imz_min, imz_max = -1, 2
+
+    w, = np.where(
+        between(gmr, -1, 3) &
+        between(rmi, -1, 3) &
+        between(imz, -1, 2)
+    )
+
+    plt[0].set(
+        xlim=(gmr_min, gmr_max),
+        ylim=(rmi_min, rmi_max),
+        xlabel=r'$g - r$',
+        ylabel=r'$r - i$',
+    )
+
+    hb0 = plt[0].hexbin(gmr[w], rmi[w], gridsize=nbin, **kw)
+
+    plt[1].set(
+        xlim=(rmi_min, rmi_max),
+        ylim=(imz_min, imz_max),
+        xlabel=r'$r - i$',
+        ylabel=r'$i - z$',
+    )
+    hb1 = plt[1].hexbin(rmi[w], imz[w], gridsize=nbin, **kw)
+
+    cb0 = plt.colorbar(hb0, ax=plt.axes[0])
+    cb1 = plt.colorbar(hb1, ax=plt.axes[1])
+
+    if file is not None:
+        plt.savefig(file, **kw)
+    elif show:
+        plt.show()
+
+    return plt
+
+
+def whiskers(
+    *,
+    x, y,
+    u=None, v=None,
+    g1=None, g2=None,
+    color='black',
+    scale=1.0,
+    linewidth=0.5,
+    linestyle='-',
+    show=False,
+    plt=None,
+    **plotting_keywords
+):
+    """
+    Name:
+        mwhiskers
+    Calling Sequence:
+        whiskers(plt, x, y, u, v, scale=1, **plotting_keywords)
+    Plotting Context:
+        matplotlib.  Do make whiskers using biggles use the bwhiskers function
+
+    Purpose:
+
+        Using matplotlib, draw lines centered a the input x,y positions, with
+        length
+            sqrt(u**2 + v**2)
+        and angle
+            arctan(v,u)
+
+    plt could be an axes instance
+        ax = pyplot.subplot(1,2,1)
+    or could it self be pyplot or pylab
+
+    """
+
+    if plt is None:
+        import hickory
+        plt = hickory.Plot()
+
+    x = np.array(x, copy=False, ndmin=1)
+    y = np.array(y, copy=False, ndmin=1)
+
+    if g1 is not None and g2 is not None:
+        u, v = eu.plotting.polar2whisker(g1, g2)
+    elif u is not None and v is not None:
+        u = np.array(u, copy=False, ndmin=1)
+        v = np.array(v, copy=False, ndmin=1)
+    else:
+        raise ValueError('send u, v or g1, g2')
+
+    if x.size != y.size or x.size != u.size or x.size != v.size:
+        raise ValueError(
+            "Sizes don't match: %s %s %s %s\n" % (x.size, y.size, u.size, v.size)  # noqa
+        )
+
+    for i in range(x.size):
+        # create the line to draw.
+        xvals = x[i] + np.array([-u[i]/2.0, u[i]/2.0], dtype='f4')*scale
+        yvals = y[i] + np.array([-v[i]/2.0, v[i]/2.0], dtype='f4')*scale
+        # print(xvals, yvals)
+
+        plt.curve(
+            xvals, yvals,
+            color=color,
+            linewidth=linewidth,
+            linestyle=linestyle,
+            **plotting_keywords
+        )
+
+    if show:
         plt.show()
 
     return plt
