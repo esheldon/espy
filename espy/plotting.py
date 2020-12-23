@@ -3,6 +3,89 @@ import esutil as eu
 from esutil.numpy_util import between
 
 
+def plot_residuals(
+    *, x, y, model, yerr=None, frac=0.2, pad=0,
+    data_kw={}, model_kw={},
+    resid_axis_kw={},
+    no_resid_xticklabels=False,
+    no_resid_yticklabels=False,
+    plot_kw={},
+    show=False,
+    plt=None,
+):
+    """
+    plot data and model with a residuals plot below
+
+    Parameters
+    ----------
+    x: array
+        Array of x values
+    y: array
+        Array of y values
+    model: array
+        Array of model values
+    yerr: array, optional
+        Optional array of errors for y
+    frac: float, optional
+        Fraction of figure taken up by residuals plot. Default 0.2
+    pad: float, optional
+        Optional padding, default 0
+    data_kw: dict, optional
+        Optional dict of keywords for the data points, e.g. color
+        and label, etc.
+    model_kw: dict, optional
+        Optional dict of keywords for the model points, e.g. color
+        and label, etc.  Note the model is always plotted as a curve
+    resid_axis_kw: dict, optional
+        Optional dict of keywords for the residuals axis set() method
+    no_resid_xticklabels: bool, optional
+        If True, don't add xticklabels for residuals plot
+    no_resid_yticklabels: bool, optional
+        If True, don't add yticklabels for residuals plot
+    show: bool, optional
+        If True, show the plot on the screen
+    plt: hickory Plot object, optional
+        Used for plotting if sent
+    """
+    import hickory
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    if plt is None:
+        plt = hickory.Plot(**plot_kw)
+
+    divider = make_axes_locatable(plt)
+    size_string = '%d%%' % (frac*100)
+    ax2 = divider.append_axes("bottom", size=size_string, pad=pad)
+    plt.figure.add_axes(ax2, label='%d' % np.random.randint(0, 2**15))
+
+    residuals = model - y
+    residuals_err = yerr
+
+    ax2.set(**resid_axis_kw)
+    ax2.set_xscale('log')
+    ax2.axhline(0, color='black')
+
+    if yerr is not None:
+        plt.errorbar(x, y, yerr, **data_kw)
+        ax2.errorbar(x, residuals, residuals_err, **data_kw)
+    else:
+        plt.plot(x, y, **data_kw)
+        ax2.plot(x, residuals, **data_kw)
+
+    plt.curve(x, model, **model_kw)
+
+    if no_resid_xticklabels:
+        ax2.set_xticklabels([])
+
+    if no_resid_yticklabels:
+        ax2.set_yticklabels([])
+
+    if show:
+        plt.show()
+
+    return plt
+
+
 def plot_hist2d(x, y, **kw):
     """
     create a 2-d histogram of the data and view it
