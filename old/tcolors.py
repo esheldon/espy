@@ -192,7 +192,7 @@ if __name__ == '__main__':
     print('Test basic colors:')
 
     c=Colorizer()
-    c.cprint('Grey color', 'grey')
+    c.cprint('Grey color', 'grey', on_color='on_white')
     c.cprint('Red color', 'red')
     c.cprint('Green color', 'green')
     c.cprint('Yellow color', 'yellow')
@@ -205,16 +205,16 @@ if __name__ == '__main__':
     print('Test highlights:')
     c.cprint('On grey color', on_color='on_grey')
     c.cprint('On red color', on_color='on_red')
-    c.cprint('On green color', on_color='on_green')
-    c.cprint('On yellow color', on_color='on_yellow')
+    c.cprint('On green color', color='grey', on_color='on_green')
+    c.cprint('On yellow color', color='grey', on_color='on_yellow')
     c.cprint('On blue color', on_color='on_blue')
     c.cprint('On magenta color', on_color='on_magenta')
-    c.cprint('On cyan color', on_color='on_cyan')
+    c.cprint('On cyan color', color='grey', on_color='on_cyan')
     c.cprint('On white color', color='grey', on_color='on_white')
     print('-' * 78)
 
     print('Test attributes:')
-    c.cprint('Bold grey color', 'grey', attrs=['bold'])
+    c.cprint('Bold grey color', 'grey', attrs=['bold'], on_color='on_white')
     c.cprint('Dark red color', 'red', attrs=['dark'])
     c.cprint('Underline green color', 'green', attrs=['underline'])
     c.cprint('Blink yellow color', 'yellow', attrs=['blink'])
@@ -229,5 +229,5 @@ if __name__ == '__main__':
     print('Test mixing:')
     c.cprint('Underline red on grey color', 'red', 'on_grey',
             ['underline'])
-    c.cprint('Reversed green on red color', 'green', 'on_red', ['reverse'])
+    c.cprint('Reversed green on grey color', 'green', 'on_grey', ['reverse'])
 
