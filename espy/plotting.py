@@ -36,6 +36,8 @@ def plot_residuals(
     model_kw: dict, optional
         Optional dict of keywords for the model points, e.g. color
         and label, etc.  Note the model is always plotted as a curve
+    plot_kw: dict, optional
+        Keywords to use when constructing the plot object.
     resid_axis_kw: dict, optional
         Optional dict of keywords for the residuals axis set() method
     no_resid_xticklabels: bool, optional
@@ -45,7 +47,7 @@ def plot_residuals(
     show: bool, optional
         If True, show the plot on the screen
     plt: hickory Plot object, optional
-        Used for plotting if sent
+        Used for plotting if sent rather than creating a new one
     """
     import hickory
     from mpl_toolkits.axes_grid1 import make_axes_locatable
