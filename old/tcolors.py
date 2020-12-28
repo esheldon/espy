@@ -206,7 +206,7 @@ if __name__ == '__main__':
     c.cprint('On grey color', on_color='on_grey')
     c.cprint('On red color', on_color='on_red')
     c.cprint('On green color', on_color='on_green')
-    c.cprint('On yellow color', on_color='on_yellow')
+    c.cprint('On yellow color', color='black', on_color='on_yellow')
     c.cprint('On blue color', on_color='on_blue')
     c.cprint('On magenta color', on_color='on_magenta')
     c.cprint('On cyan color', on_color='on_cyan')
