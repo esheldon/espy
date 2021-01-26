@@ -1,12 +1,20 @@
 import os
-import numpy
-from numpy import array, arcsinh, zeros,where
-from sys import stdout, stderr
-import copy
+import numpy as np
+from sys import stdout
 
-def view(image, **keys): 
+
+def view(
+    image,
+    nonlinear=None,
+    autoscale=False,
+    colorbar=False,
+    imshow_kws={},
+    plt=None,
+    plt_kws={},
+    **kws
+):
     """
-    View the image and return the biggles plot object
+    View the image and return the plot object
 
     If show=False just return the plot object.
 
@@ -16,167 +24,122 @@ def view(image, **keys):
     parameters
     ----------
     image or r,g,b: ndarray
-        The image(s) as a 2-d array or 
-    type: string
-        Type of plot, 'dens', 'cont', 'dens-cont'.  (cont is short
-        for contour, dens for density).  Default is 'dens'.
+        The image(s) as a 2-d array or
     nonlinear:
         Non-linear scale for an asinh scaling.  If not sent a linear scale is
         used. See the asinh_scale() function.  For asinh scaling you must scale
         your image so that it does not saturate.
     autoscale:
         For linear scaling, re-scale the image so that the maximum value is
-        1.0.  This guarantees all pixels are shown without saturation.  
+        1.0.  This guarantees all pixels are shown without saturation.
 
         For asinh scaling you are responsible for performing such scalings
         Subtract this value from the image and clip values below zero.
-    xlabel: string
-        Label for the X axis
-    ylabel: string
-        Label for the Y axis
+    colorbar: bool
+        If set to True, a color bar will be drawn next to the image
     show: bool
         Set False to not show the image in an X window.
-    levels: int
-        Number of levels for contours. Default 8
-    ccolor:
-        color for contour, default 'white' unless type is dens-cont
-        then grey.
-    transpose: bool
-        Transpose the image.  Default False.
     file: string
         Write the image to the intput file name.  .png will be written
         as a png file, else an eps file.
-    dims:
-        [width,height] for png output, default 800x800
+    dpi: int
+        Dots per inch for image files or display
+    plt_kws: dict
+        dict of keywords for creating the figure
+    plt: figure
+        If not sent, a new one is created using the plt_kws
     """
-    import biggles
-
-    # we need to transpose for biggles to display properly
-    trans = keys.pop('transpose',True)
-    doscale = keys.pop('scale',False)
+    import hickory
 
     if len(image.shape) == 2:
-        im=scale_image(image, **keys)
-        if trans:
-            im = im.transpose()
-    else:
-        # for 3 d we need to trust the input to
-        # be properly scaled and transposed
-        im=image
+        # for 3D color images we need to trust the input to be properly scaleD
+        image = scale_image(
+            image=image,
+            nonlinear=nonlinear,
+            autoscale=autoscale,
+        )
 
-
-    type=keys.get('type','dens')
-
-    plt = biggles.FramedPlot()
-
-    if 'title' in keys:
-        plt.title=keys['title']
-
-    x, y, ranges = _extract_data_ranges(im.shape[0:0+2], **keys)
-
-    def_contour_color='black'
-    if 'dens' in type:
-        d = biggles.Density(im, ranges)
-        plt.add(d)
-        def_contour_color='grey'
-
-    if 'cont' in type:
-        levels=keys.get('levels',8)
-        if levels is not None:
-            if 'zrange' in keys:
-                zrange=keys['zrange']
+    if plt is None:
+        aratio = image.shape[0] / image.shape[1]
+        add_plt_kws = {"aratio": aratio}
+        if "constrained_layout" not in plt_kws:
+            add_plt_kws["constrained_layout"] = False
+        if "figsize" not in plt_kws:
+            if aratio > 1:
+                add_plt_kws["figsize"] = (8 / aratio, 8)
             else:
-                zrange=numpy.percentile(im, [1.0,100.0])
+                add_plt_kws["figsize"] = (8, 8 * aratio)
 
-            ccolor = keys.get('ccolor',def_contour_color)
-            c = biggles.Contours(im,x=x,y=y,color=ccolor,zrange=zrange)
-            c.levels = levels
-            plt.add(c)
+        if len(add_plt_kws) > 0:
+            plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
 
-    if 'xrange' in keys:
-        plt.xrange=keys['xrange']
-    if 'yrange' in keys:
-        plt.yrange=keys['yrange']
+        plt = hickory.Plot(**plt_kws)
 
-    # make sure the pixels look square
-    aratio=im.shape[1]/float(im.shape[0])
-    plt.aspect_ratio = aratio
+    add_imshow_kws = {}
+    if "cmap" not in imshow_kws:
+        add_imshow_kws["cmap"] = "gray"
 
-    if 'xlabel' in keys:
-        plt.xlabel=keys['xlabel']
-    if 'ylabel' in keys:
-        plt.ylabel=keys['ylabel']
+    if "interpolation" not in imshow_kws:
+        add_imshow_kws["interpolation"] = "none"
 
-    if doscale and 'dens' in type:
-        # the following all works as long as the font size doesn't
-        # get to small on the scale.  Making sure the biggles
-        # fontsize_min is less than about 0.75 works even in
-        # some bad cases
-        immin, immax = image.min(), image.max()
-        num=100
+    if len(add_imshow_kws) > 0:
+        imshow_kws = _get_updated_keywords(imshow_kws, **add_imshow_kws)
 
-        tab_aratio = (im.shape[1] * 0.8)/float(im.shape[0])
-        tab=biggles.Table(
-            1,2,
-            aspect_ratio=tab_aratio,
-            col_fractions=[0.1,0.9],
-        )
-        tab.cellpadding=0.0
-        tab.cellspacing=0.0
+    pim = plt.imshow(image, **imshow_kws)
 
-        scale_plt=biggles.FramedPlot(
-            yrange=[immin,immax],
-            xrange=[0.0,1],
-        )
+    # print(type(super(plt)))
+    if colorbar:
+        import matplotlib.pyplot as mplt
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-        scale_im = numpy.linspace(0, 1, num).reshape(1,num)
-        drngs = ((0,immin),(1,immax))
-        d = biggles.Density(scale_im, drngs)
-        scale_plt.add(d)
+        try:
+            divider = make_axes_locatable(plt.axes[0])
+        except TypeError:
+            divider = make_axes_locatable(plt)
 
-        scale_plt.x1.draw_ticks=False
-        scale_plt.x1.draw_ticklabels=False
-        scale_plt.x2.draw_ticks=False
-        scale_plt.x2.draw_ticklabels=False
+        cax = divider.append_axes("right", size="5%", pad=0.1)
+        # plt.colorbar(pim, cax=cax)
+        mplt.colorbar(pim, cax=cax)
 
-        scale_plt.y1.draw_ticks=False
-        scale_plt.y1.draw_ticklabels=False
-        scale_plt.y2.draw_ticks=False
-        scale_plt.y2.draw_ticklabels=True
+    if hasattr(plt, 'tight_layout'):
+        plt.tight_layout()
 
-
-        tab[0,0] = plt
-        tab[0,1] = scale_plt
-        plt=tab
-        
-    _writefile_maybe(plt, **keys)
-    _show_maybe(plt, **keys)
+    _writefile_maybe(plt=plt, **kws)
+    _show_maybe(plt=plt, **kws)
 
     return plt
 
 
 def get_profile(image, cen=None):
     if cen is None:
-        cen=(numpy.array(image.shape)-1.0)/2.0
+        cen = (np.array(image.shape) - 1.0) / 2.0
     else:
-        assert len(cen)==2,"cen must have two elements"
+        assert len(cen) == 2, "cen must have two elements"
 
-    rows,cols=numpy.mgrid[
-        0:image.shape[0],
-        0:image.shape[1],
+    rows, cols = np.mgrid[
+        0: image.shape[0],
+        0: image.shape[1],
     ]
 
-    rows = rows.astype('f8')-cen[0]
-    cols = cols.astype('f8')-cen[1]
+    rows = rows.astype("f8") - cen[0]
+    cols = cols.astype("f8") - cen[1]
 
-    r = numpy.sqrt(rows**2 + cols**2).ravel()
+    r = np.sqrt(rows ** 2 + cols ** 2).ravel()
     s = r.argsort()
-    r=r[s]
+    r = r[s]
     pim = image.ravel()[s]
 
     return r, pim
 
-def view_profile(image, **keys): 
+
+def view_profile(
+    image,
+    cen=None,
+    plt=None,
+    plt_kws={},
+    pt_kws={},
+    **kws
+):
     """
     View the image as a radial profile vs radius from the center.
 
@@ -188,7 +151,7 @@ def view_profile(image, **keys):
     parameters
     ----------
     image or r,g,b: ndarray
-        The image(s) as a 2-d array or 
+        The image(s) as a 2-d array or
     cen: [c1,c2], optional
         Optional center
     show: bool
@@ -202,84 +165,47 @@ def view_profile(image, **keys):
         keywords for the FramedPlot and for the output image dimensions
         width
     """
-    import biggles
+    import hickory
 
-    plt=keys.pop('plt',None)
-    show=keys.pop('show',True)
-    cen=keys.pop('cen',None)
-    keys['xlabel']=keys.get('xlabel','radius')
+    if plt is None:
+        plt = hickory.Plot(**plt_kws)
 
     r, pim = get_profile(image, cen=cen)
 
-    keys['visible']=False
-    plt = biggles.plot(r, pim, plt=plt, **keys)
+    plt.plot(r, pim, **pt_kws)
 
-    _writefile_maybe(plt, **keys)
-    _show_maybe(plt, show=show, **keys)
+    _writefile_maybe(plt=plt, **kws)
+    _show_maybe(plt=plt, **kws)
 
     return plt
 
 
+def _writefile_maybe(*, plt, **kws):
+    file = kws.pop("file", None)
+    if file is not None:
+        file = os.path.expandvars(file)
+        file = os.path.expanduser(file)
+        plt.savefig(file, **kws)
 
-def _writefile_maybe(plt, **keys):
-    if 'file' in keys and keys['file'] is not None:
-        file=os.path.expandvars(keys['file'])
-        file=os.path.expanduser(file)
-        if '.png' in file:
-            dims=keys.get('dims',[800,800])
-            plt.write_img(dims[0],dims[1],file)
-        else:
-            plt.write_eps(file)
 
-def _show_maybe(plt, **keys):
-    show=keys.get('show',None)
+def _show_maybe(*, plt, **kws):
+    show = kws.pop("show", None)
     if show is None:
-        if 'file' in keys and keys['file'] is not None:
+        if "file" in kws and kws["file"] is not None:
             # don't show anything if show not explicitly
             # sent and we are writing a file
-            show=False
+            show = False
         else:
-            show=True
-    else:
-        show=keys['show']
+            show = True
 
     if show:
-        wkeys={}
-        dims=keys.get('dims',None)
-        if dims is None:
-            width=keys.get('width',None)
-            height=keys.get('height',None)
-            if width is not None:
-                dims=[width,height]
-
-        if dims is not None:
-            wkeys['width']=dims[0]
-            wkeys['height']=dims[1]
-        plt.show(**wkeys)
+        dpi = kws.get("dpi", 100)
+        skws = {}
+        if "dpi" in kws:
+            skws["dpi"] = dpi
+        plt.show(**skws)
 
 
-def _extract_data_ranges(imshape, **keys):
-    if 'xdr' in keys and 'ydr' in keys:
-        xdr=keys['xdr']
-        ydr=keys['ydr']
-        ranges = ((xdr[0], ydr[0]), (xdr[1], ydr[1]))
-
-        x=numpy.linspace(xdr[0],xdr[1],imshape[0])
-        y=numpy.linspace(ydr[0],ydr[1],imshape[1])
-    elif 'ranges' in keys:
-        ranges = keys['ranges']
-        xmin,ymin = ranges[0]
-        xmax,ymax = ranges[1]
-        x=numpy.linspace(xmin, xmax, imshape[0])
-        y=numpy.linspace(ymin, ymax, imshape[1])
-    else:
-        # this is a difference from Contours which can be alarming
-        ranges = ((-0.5, -0.5), (imshape[0]-0.5, imshape[1]-0.5))
-        x=None
-        y=None
-
-    return x, y, ranges
- 
 def make_combined_mosaic(imlist):
     """
     only works if all images are same size
@@ -287,81 +213,110 @@ def make_combined_mosaic(imlist):
     Also should be "sky subtracted" for best
     effect when the grid is not fully packed
     """
-    import plotting
-    nimage=len(imlist)
-    grid=plotting.Grid(nimage)
-    shape=imlist[0].shape
+    from . import plotting
 
-    imtot=numpy.zeros( (grid.nrow*shape[0], grid.ncol*shape[1]) )
+    nimage = len(imlist)
+    grid = plotting.Grid(nimage)
+    shape = imlist[0].shape
+
+    imtot = np.zeros((grid.nrow * shape[0], grid.ncol * shape[1]))
 
     for i in range(nimage):
-        im=imlist[i]
-        row,col=grid(i)
+        im = imlist[i]
+        row, col = grid(i)
 
-        rstart = row*shape[0]
-        rend   = (row+1)*shape[0]
+        rstart = row * shape[0]
+        rend = (row + 1) * shape[0]
 
-        cstart = col*shape[1]
-        cend   = (col+1)*shape[1]
+        cstart = col * shape[1]
+        cend = (col + 1) * shape[1]
 
         imtot[rstart:rend, cstart:cend] = im
 
     return imtot
 
 
-def view_mosaic(imlist, titles=None, combine=False, **keys):
-    import biggles
-    import plotting
-
-    tabtitle=keys.pop('title',None)
+def view_mosaic(
+    imlist,
+    colorbar=False,
+    titles=None,
+    combine=False,
+    title=None,
+    plt_kws={},
+    **kws,
+):
+    import hickory
+    from . import plotting
 
     if combine:
-        imtot=make_combined_mosaic(imlist)
-        return view(imtot, **keys)
+        imtot = make_combined_mosaic(imlist)
+        if title is not None:
+            plt_kws = _get_updated_keywords(plt_kws, title=title)
 
-    nimage=len(imlist)
-    grid=plotting.Grid(nimage)
+        return view(imtot, colorbar=colorbar, plt_kws=plt_kws)
 
-    tab=biggles.Table(grid.nrow,grid.ncol)
+    nimage = len(imlist)
+    grid = plotting.Grid(nimage)
 
-    tkeys={}
-    tkeys.update(keys)
-    tkeys['show']=False
+    aratio = grid.nrow / grid.ncol
+
+    if titles is None:
+        titles = ['im%d' for i in range(nimage)]
+
+    add_plt_kws = {}
+
+    if "constrained_layout" not in plt_kws:
+        add_plt_kws["constrained_layout"] = False
+
+    if "figsize" not in plt_kws:
+        if aratio > 1:
+            add_plt_kws["figsize"] = (8 / aratio, 8)
+        else:
+            add_plt_kws["figsize"] = (8, 8 * aratio)
+
+    if len(add_plt_kws) > 0:
+        plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
+
+    tab = hickory.Table(
+        nrows=grid.nrow, ncols=grid.ncol,
+        **plt_kws,
+    )
 
     for i in range(nimage):
-        im=imlist[i]
+        tmp_plt_kws = _get_updated_keywords(
+            plt_kws,
+            show=False,
+            file=None,
+            title=titles[i],
+            colorbar=colorbar,
+        )
+        view(imlist[i], plt=tab.axes[i], **tmp_plt_kws)
 
-        row,col = grid(i)
+    nax = len(tab.axes)
+    if nax > nimage:
+        for i in range(nimage, nax):
+            tab.axes[i].axis('off')
 
-        if titles is not None:
-            title=titles[i]
-        else:
-            title=None
+    if title is not None:
+        tab.suptitle(title)
 
-        implt=view(im, title=title, **tkeys)
-        tab[row,col] = implt
+    tab.tight_layout()
 
-    # aspect is ysize/xsize
-    aspect=keys.get('aspect',None)
-    if aspect is None:
-        aspect = float(grid.nrow)/grid.ncol
-    tab.aspect_ratio=aspect
-
-    tab.title=tabtitle
-
-    _writefile_maybe(tab, **keys)
-    _show_maybe(tab, **keys)
+    _writefile_maybe(plt=tab, **kws)
+    _show_maybe(plt=tab, **kws)
 
     return tab
 
+
 def bytescale(im):
-    """ 
+    """
     The input should be between [0,1]
 
     output is [0,255] in a unsigned byte array
     """
-    imout = (im*255).astype('u1')
+    imout = (im * 255).astype("u1")
     return imout
+
 
 def write_image(filename, image, **keys):
     """
@@ -375,211 +330,257 @@ def write_image(filename, image, **keys):
     """
     from PIL import Image
 
-    pim=Image.fromarray(image)
+    pim = Image.fromarray(image)
 
-    fname=os.path.expandvars(filename)
-    fname=os.path.expanduser(fname)
+    fname = os.path.expandvars(filename)
+    fname = os.path.expanduser(fname)
     pim.save(fname, **keys)
 
 
-def multiview(image, **keys):
+def multiview(
+    image,
+    cen=None,
+    profile=False,
+    colorbar=False,
+    imshow_kws={},
+    plt_kws={},
+    pt_kws={},
+    title=None,
+    **kws,
+):
     """
     View the image and also some cross-sections through it.  Good for
     postage stamp type images
     """
 
-    import biggles
+    import hickory
 
-    cen = keys.get('cen', None)
+    add_plt_kws = {}
+
+    if "constrained_layout" not in plt_kws:
+        add_plt_kws["constrained_layout"] = False
+
+    if "figsize" not in plt_kws:
+        add_plt_kws["figsize"] = (8*2, 8)
+
+    if len(add_plt_kws) > 0:
+        plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
+
+    tab = hickory.Table(
+        nrows=1,
+        ncols=2,
+        **plt_kws,
+    )
+
     if cen is None:
         # use the middle as center
         cen = [
-            int(round( (image.shape[0]-1)/2. )),
-            int(round( (image.shape[1]-1)/2. )),
+            int(round((image.shape[0] - 1) / 2.0)),
+            int(round((image.shape[1] - 1) / 2.0)),
         ]
 
-    assert len(cen)==2
+    assert len(cen) == 2
 
-    keys2 = copy.copy(keys)
-    keys2['show'] = False
-    keys2['file'] = None
+    add_imshow_kws = {}
+    if "cmap" not in imshow_kws:
+        add_imshow_kws["cmap"] = "gray"
 
-    do_profile=keys2.pop('profile',False)
+    if "interpolation" not in imshow_kws:
+        add_imshow_kws["interpolation"] = "none"
 
-    tab = biggles.Table( 1, 2 )
+    if len(add_imshow_kws) > 0:
+        imshow_kws = _get_updated_keywords(imshow_kws, **add_imshow_kws)
 
-    imp = view(image, **keys2)
-    tab[0,0] = imp
+    tmp_plt_kws = _get_updated_keywords(
+        plt_kws,
+        show=False,
+        file=None,
+        colorbar=colorbar,
+    )
+    view(
+        image, plt=tab[0],
+        imshow_kws=imshow_kws,
+        **tmp_plt_kws,
+    )
 
-    if do_profile:
-        tab[0,1] = view_profile(image, **keys2)
-        tab[0,1].aspect_ratio=1
+    if profile:
+        tab[1].set(xlabel='radius [pixels]')
+        view_profile(
+            image,
+            show=False,
+            plt=tab[1],
+            pt_kws=pt_kws,
+        )
     else:
         # cross-section across rows
         imrows = image[:, cen[1]]
         imcols = image[cen[0], :]
-        
-        # in case xdr, ydr were sent
-        x, y, ranges = _extract_data_ranges(image.shape, **keys)
-        if x is not None:
-            x0 = ranges[0][0]
-            y0 = ranges[0][1]
-            xbinsize=x[1]-x[0]
-            ybinsize=y[1]-y[0]
-        else:
-            x0=0
-            y0=0
-            xbinsize=1
-            ybinsize=1
 
+        yvals = np.arange(image.shape[0])
+        xvals = np.arange(image.shape[1])
 
-        crossplt = biggles.FramedPlot()
-        hrows = biggles.Histogram(imrows, x0=y0, binsize=ybinsize, color='blue')
-        hrows.label = 'Center rows'
-        hcols = biggles.Histogram(imcols, x0=x0, binsize=xbinsize, color='red')
-        hcols.label = 'Center columns'
+        tab[1].step(
+            yvals, imrows,
+            label='rows', linestyle='-', marker=None,
+        )
+        tab[1].step(
+            xvals, imcols,
+            label='cols', linestyle='-', marker=None,
+        )
+        tab[1].legend()
 
-        key = biggles.PlotKey(0.1, 0.9, [hrows, hcols])
+    if title is not None:
+        tab.suptitle(title)
 
-        crossplt.add(hrows, hcols, key)
-        crossplt.aspect_ratio=1
-        yr = crossplt._limits1().yrange()
-        yrange = (yr[0], yr[1]*1.2)
-        crossplt.yrange = yrange
-
-        tab[0,1] = crossplt
-
-
-    _writefile_maybe(tab, **keys)
-    _show_maybe(tab, **keys)
+    _writefile_maybe(plt=tab, **kws)
+    _show_maybe(plt=tab, **kws)
     return tab
 
-def compare_images(im1, im2, **keys):
-    import biggles
 
-    show=keys.get('show',True)
-    skysig=keys.get('skysig',None)
-    dof=keys.get('dof',None)
-    cross_sections=keys.get('cross_sections',True)
-    ymin=keys.get('min',None)
-    ymax=keys.get('max',None)
+def compare_images(
+    im1,
+    im2,
+    cross_sections=True,
+    colorbar=False,
+    color1="blue",
+    color2="orange",
+    label1="im1",
+    label2="im2",
+    colordiff="red",
+    plt_kws={},
+    file_kws={},
+    **kws
+):
 
-    color1=keys.get('color1','blue')
-    color2=keys.get('color2','orange')
-    colordiff=keys.get('colordiff','red')
+    import hickory
 
-    nrow=2
+    nrows = 2
     if cross_sections:
-        ncol=3
+        ncols = 3
     else:
-        ncol=2
+        ncols = 2
 
-    label1=keys.get('label1','im1')
-    label2=keys.get('label2','im2')
+    aratio = nrows / ncols
 
-    cen=keys.get('cen',None)
-    if cen is None:
-        cen = [(im1.shape[0]-1)/2., (im1.shape[1]-1)/2.]
+    add_plt_kws = {}
 
-    labelres='%s-%s' % (label1,label2)
+    if "constrained_layout" not in plt_kws:
+        add_plt_kws["constrained_layout"] = False
 
-    biggles.configure( 'default', 'fontsize_min', 1.)
+    if "figsize" not in plt_kws:
+        if aratio > 1:
+            add_plt_kws["figsize"] = (8 / aratio, 8)
+        else:
+            add_plt_kws["figsize"] = (8, 8 * aratio)
+
+    if len(add_plt_kws) > 0:
+        plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
+
+    tab = hickory.Table(
+        nrows=nrows,
+        ncols=ncols,
+        **plt_kws,
+    )
+    ax1 = tab[0, 0]
+    ax2 = tab[0, 1]
+    if cross_sections:
+        axresid = tab[0, 2]
+        tab[1, 2].axis('off')
+    else:
+        axresid = tab[1, 0]
+        tab[1, 1].axis('off')
+
+    labelres = "%s-%s" % (label1, label2)
 
     if im1.shape != im2.shape:
         raise ValueError("images must be the same shape")
 
+    resid = im1 - im2
 
-    #resid = im2-im1
-    resid = im1-im2
+    tmp_plt_kws = _get_updated_keywords(
+        plt_kws,
+        show=False,
+        file=None,
+        title=label1,
+        colorbar=colorbar,
+    )
+    view(im1, plt=ax1, **tmp_plt_kws)
 
-    # will only be used if type is contour
-    tab=biggles.Table(nrow,ncol)
-    if 'title' in keys:
-        tab.title=keys['title']
+    tmp_plt_kws = _get_updated_keywords(
+        plt_kws,
+        show=False,
+        file=None,
+        title=label2,
+        colorbar=colorbar,
+    )
 
-    tkeys=copy.deepcopy(keys)
-    tkeys['show']=False
-    tkeys['file']=None
-    im1plt=view(im1, **tkeys)
-    im2plt=view(im2, **tkeys)
+    view(im2, plt=ax2, **tmp_plt_kws)
 
-    tkeys['nonlinear']=None
-    # this has no effect
-    tkeys['min'] = resid.min()
-    tkeys['max'] = resid.max()
-    residplt=view(resid, **tkeys)
+    tmp_plt_kws = _get_updated_keywords(
+        plt_kws,
+        show=False,
+        file=None,
+        title=labelres,
+        colorbar=colorbar,
+    )
+    view(resid, plt=axresid, **tmp_plt_kws)
+    # if colorbar:
+    #     for ax in plt.axes[:3]:
+    #         ax.colorbar(
 
-    if skysig is not None:
-        if dof is None:
-            dof=im1.size
-        chi2per = (resid**2).sum()/skysig**2/dof
-        lab = biggles.PlotLabel(0.1,0.1,
-                                r'$\chi^2/dof$: %0.2f' % chi2per,
-                                color='red',
-                                halign='left')
-    else:
-        if dof is None:
-            dof=im1.size
-        chi2per = (resid**2).sum()/dof
-        lab = biggles.PlotLabel(0.1,0.1,
-                                r'$\chi^2/npix$: %.3e' % chi2per,
-                                color='red',
-                                halign='left')
-    residplt.add(lab)
-
-    im1plt.title=label1
-    im2plt.title=label2
-    residplt.title=labelres
-
-
-    # cross-sections
     if cross_sections:
-        cen0=int(cen[0])
-        cen1=int(cen[1])
-        im1rows = im1[:,cen1]
-        im1cols = im1[cen0,:]
-        im2rows = im2[:,cen1]
-        im2cols = im2[cen0,:]
-        resrows = resid[:,cen1]
-        rescols = resid[cen0,:]
+        cen = (np.array(im1.shape) - 1) / 2
+        cen0 = int(cen[0])
+        cen1 = int(cen[1])
+        im1rows = im1[:, cen1]
+        im1cols = im1[cen0, :]
+        im2rows = im2[:, cen1]
+        im2cols = im2[cen0, :]
+        resrows = resid[:, cen1]
+        rescols = resid[cen0, :]
 
-        him1rows = biggles.Histogram(im1rows, color=color1)
-        him1cols = biggles.Histogram(im1cols, color=color1)
-        him2rows = biggles.Histogram(im2rows, color=color2)
-        him2cols = biggles.Histogram(im2cols, color=color2)
-        hresrows = biggles.Histogram(resrows, color=colordiff)
-        hrescols = biggles.Histogram(rescols, color=colordiff)
+        yvals = np.arange(im1.shape[0])
+        xvals = np.arange(im1.shape[1])
+        tab[1, 0].step(
+            yvals, im1rows,
+            # color=color1,
+            label=label1, linestyle='-', marker=None,
+        )
+        tab[1, 0].step(
+            yvals, im2rows,
+            # color=color2,
+            label=label1, linestyle='-', marker=None,
+        )
+        tab[1, 0].step(
+            yvals, resrows,
+            # color=colordiff,
+            label=labelres, linestyle='-', marker=None,
+        )
+        tab[1, 0].legend()
+        tab[1, 0].set(xlabel="center rows")
 
-        him1rows.label = label1
-        him2rows.label = label2
-        hresrows.label = labelres
-        key = biggles.PlotKey(0.1,0.9,[him1rows,him2rows,hresrows]) 
+        tab[1, 1].step(
+            xvals, im1cols, color=color1, label=label1,
+            linestyle='-', marker=None,
+        )
+        tab[1, 1].step(
+            xvals, im2cols, color=color2, label=label1,
+            linestyle='-', marker=None,
+        )
+        tab[1, 1].step(
+            xvals, rescols, color=colordiff, label=labelres,
+            linestyle='-', marker=None,
+        )
+        tab[1, 1].legend()
+        tab[1, 1].set(xlabel="center cols")
 
-        rplt=biggles.FramedPlot()
-        rplt.add( him1rows, him2rows, hresrows,key )
-        rplt.xlabel = 'Center Rows'
+    tab.tight_layout()
 
-        cplt=biggles.FramedPlot()
-        cplt.add( him1cols, him2cols, hrescols )
-        cplt.xlabel = 'Center Columns'
-
-        rplt.aspect_ratio=1
-        cplt.aspect_ratio=1
-
-        tab[0,0] = im1plt
-        tab[0,1] = im2plt
-        tab[0,2] = residplt
-        tab[1,0] = rplt
-        tab[1,1] = cplt
-    else:
-        tab[0,0] = im1plt
-        tab[0,1] = im2plt
-        tab[1,0] = residplt
-
-    _writefile_maybe(tab, **keys)
-    _show_maybe(tab, **keys)
+    _writefile_maybe(plt=tab, **kws)
+    _show_maybe(plt=tab, **kws)
 
     return tab
+
 
 def image_read_text(fname):
     """
@@ -590,65 +591,65 @@ def image_read_text(fname):
     """
 
     with open(fname) as fobj:
-        ls=fobj.readline().split()
-        nrows=int(ls[0])
-        ncols=int(ls[1])
+        ls = fobj.readline().split()
+        nrows = int(ls[0])
+        ncols = int(ls[1])
 
-
-        image=numpy.fromfile(fobj, 
-                             sep=' ', 
-                             count=(nrows*ncols), 
-                             dtype='f8').reshape(nrows,ncols)
+        image = np.fromfile(
+            fobj, sep=" ", count=(nrows * ncols), dtype="f8"
+        ).reshape(nrows, ncols)
     return image
 
 
 def _get_max_image(im1, im2, im3):
-    maximage=im1.copy()
+    maximage = im1.copy()
 
-    w=where(im2 > maximage)
+    w = np.where(im2 > maximage)
     if w[0].size > 1:
         maximage[w] = im2[w]
 
-    w=where(im3 > maximage)
+    w = np.where(im3 > maximage)
     if w[0].size > 1:
         maximage[w] = im3[w]
 
     return maximage
+
 
 def _fix_hard_satur(r, g, b, satval):
     """
     Clip to satval but preserve the color
     """
 
-    # make sure you send scales such that this occurs at 
+    # make sure you send scales such that this occurs at
     # a reasonable place for your images
 
-    maximage=_get_max_image(r,g,b)
+    maximage = _get_max_image(r, g, b)
 
-    w=where(maximage > satval)
+    w = np.where(maximage > satval)
     if w[0].size > 1:
         # this preserves color
-        fac=satval/maximage[w]
+        fac = satval / maximage[w]
         r[w] *= fac
         g[w] *= fac
         b[w] *= fac
-        maximage[w]=satval
+        maximage[w] = satval
 
     return maximage
 
-def _fix_rgb_satur(r,g,b,fac):
+
+def _fix_rgb_satur(r, g, b, fac):
     """
     Fix the factor so we don't saturate the
     RGB image (> 1)
 
     maximage is the
     """
-    maximage=_get_max_image(r,g,b)
+    maximage = _get_max_image(r, g, b)
 
-    w=where( (r*fac > 1) | (g*fac > 1) | (b*fac > 1) )
+    w = np.where((r * fac > 1) | (g * fac > 1) | (b * fac > 1))
     if w[0].size > 1:
         # this preserves color
-        fac[w]=1.0/maximage[w]
+        fac[w] = 1.0 / maximage[w]
 
 
 def get_color_image(imr, img, imb, **keys):
@@ -678,19 +679,19 @@ def get_color_image(imr, img, imb, **keys):
         djs_rgb_make.  Even better, implement an outside function to do this.
     """
 
-    nonlinear=keys.get('nonlinear',1.0)
-    scales=keys.get('scales',None)
-    satval=keys.get('satval',None)
-    clip=keys.get('clip',None)
+    nonlinear = keys.get("nonlinear", 1.0)
+    scales = keys.get("scales", None)
+    satval = keys.get("satval", None)
+    clip = keys.get("clip", None)
 
-    r = imr.astype('f4')
-    g = img.astype('f4')
-    b = imb.astype('f4')
+    r = imr.astype("f4")
+    g = img.astype("f4")
+    b = imb.astype("f4")
 
     if clip is not None:
-        r.clip(clip,r.max(),r)
-        g.clip(clip,g.max(),g)
-        b.clip(clip,b.max(),b)
+        r.clip(clip, r.max(), r)
+        g.clip(clip, g.max(), g)
+        b.clip(clip, b.max(), b)
 
     if scales is not None:
         r *= scales[0]
@@ -700,65 +701,63 @@ def get_color_image(imr, img, imb, **keys):
     if satval is not None:
         # note using rescaled images so the satval
         # means the same thing (e.g. in terms of real flux)
-        maximage=_fix_hard_satur(r,g,b,satval)
-
+        _ = _fix_hard_satur(r, g, b, satval)
 
     # average images and divide by the nonlinear factor
-    fac=1./nonlinear/3.
-    I = fac*(r + g + b)
+    fac = 1.0 / nonlinear / 3.0
+    I = fac * (r + g + b)  # noqa
 
     # make sure we don't divide by zero
     # due to clipping, average value is zero only if all are zero
-    w=where(I <= 0)
+    w = np.where(I <= 0)
     if w[0].size > 0:
-        I[w] = 1./3. # value doesn't matter images are zero
+        I[w] = 1.0 / 3.0  # value doesn't matter images are zero
 
-    f = arcsinh(I)/I
+    f = np.arcsinh(I) / I
 
     # limit to values < 1
-    # make sure you send scales such that this occurs at 
+    # make sure you send scales such that this occurs at
     # a reasonable place for your images
-    _fix_rgb_satur(r,g,b,f)
+    _fix_rgb_satur(r, g, b, f)
 
-    R = r*f
-    G = g*f
-    B = b*f
+    R = r * f
+    G = g * f
+    B = b * f
 
-    st=R.shape
-    colorim=zeros( (st[0], st[1], 3) )
+    st = R.shape
+    colorim = np.zeros((st[0], st[1], 3))
 
-    colorim[:,:,0] = R[:,:]
-    colorim[:,:,1] = G[:,:]
-    colorim[:,:,2] = B[:,:]
+    colorim[:, :, 0] = R[:, :]
+    colorim[:, :, 1] = G[:, :]
+    colorim[:, :, 2] = B[:, :]
 
     return colorim
 
 
+def scale_image(*, image, nonlinear=None, autoscale=False):
 
-
-
-def scale_image(im, **keys):
-    nonlinear=keys.get('nonlinear',None)
     if nonlinear is not None:
-        return asinh_scale(im, nonlinear)
+        return asinh_scale(image=image, nonlinear=nonlinear)
+    elif autoscale:
+        return linear_autoscale(image=image)
     else:
-        return linear_scale(im, **keys)
+        return image
 
-def linear_scale(im, **keys):
-    autoscale=keys.get('autoscale',True)
 
-    I=im.astype('f4')
+def linear_autoscale(*, image):
 
-    if autoscale:
-        maxval=I.max()
-        if maxval != 0.0:
-            I  *= (1.0/maxval)
+    I = image.astype("f4")  # noqa
 
-    I.clip(0.0, 1.0, I)
+    maxval = I.max()
+    if maxval != 0.0:
+        I *= 1.0 / maxval  # noqa
+
+    # I.clip(0.0, 1.0, I)
 
     return I
 
-def asinh_scale(im, nonlinear):
+
+def asinh_scale(*, image, nonlinear):
     """
     Scale the image using and asinh stretch
 
@@ -775,24 +774,23 @@ def asinh_scale(im, nonlinear):
     nonlinear: keyword
         The non-linear scale.
     """
-    from numpy import arcsinh
-    I=im.astype('f4')
 
-    I *= (1./nonlinear)
+    I = image.astype("f4")  # noqa
+
+    I *= 1.0 / nonlinear  # noqa
 
     # make sure we don't divide by zero
-    w=where(I <= 0)
+    w = np.where(I <= 0)
     if w[0].size > 0:
-        I[w] = 1. # value doesn't matter since images is zero
+        I[w] = 1.0  # value doesn't matter since images is zero
 
-    f = arcsinh(I)/I
+    f = np.arcsinh(I) / I
 
-    imout = im*f
+    imout = image * f
 
     imout.clip(0.0, 1.0, imout)
 
     return imout
-
 
 
 def imprint(im, stream=stdout, fmt=None):
@@ -800,60 +798,77 @@ def imprint(im, stream=stdout, fmt=None):
         raise ValueError("image must be 2-dimensional")
 
     if fmt is None:
-        if im.dtype.char in ['f','d']:
-            fmt = '%+e'
+        if im.dtype.char in ["f", "d"]:
+            fmt = "%+e"
         else:
             maxint = im.max()
             minint = im.min()
-            l = max( len(str(maxint)), len(str(minint)) )
-            fmt = '%'+str(l)+'d'
+            ln = max(len(str(maxint)), len(str(minint)))
+            fmt = "%" + str(ln) + "d"
 
     nrow = im.shape[0]
     ncol = im.shape[1]
 
     for row in range(nrow):
         for col in range(ncol):
-            stream.write(fmt % im[row,col] )
-            if col < (ncol-1):
+            stream.write(fmt % im[row, col])
+            if col < (ncol - 1):
                 stream.write(" ")
         stream.write("\n")
+
 
 def rebin(im, factor, dtype=None):
     """
     Rebin the image so there are fewer pixels.  The pixels are simply
     averaged.
     """
-    factor=int(factor)
+    factor = int(factor)
     s = im.shape
-    if ( (s[0] % factor) != 0
-            or (s[1] % factor) != 0):
-        raise ValueError("shape in each dim (%d,%d) must be "
-                   "divisible by factor (%d)" % (s[0],s[1],factor))
+    if (s[0] % factor) != 0 or (s[1] % factor) != 0:
+        raise ValueError(
+            "shape in each dim (%d,%d) must be "
+            "divisible by factor (%d)" % (s[0], s[1], factor)
+        )
 
-    newshape=array(s)/factor
+    newshape = np.array(s) / factor
     if dtype is None:
-        a=im
+        a = im
     else:
-        a=im.astype(dtype)
+        a = im.astype(dtype)
 
-    return a.reshape(newshape[0],factor,newshape[1],factor,).sum(1).sum(2)/factor/factor
+    return (
+        a.reshape(
+            newshape[0],
+            factor,
+            newshape[1],
+            factor,
+        )
+        .sum(1)
+        .sum(2)
+        / factor
+        / factor
+    )
 
-def boost( a, factor):
+
+def boost(a, factor):
     """
     Resize an array to larger shape, simply duplicating values.
     """
     from numpy import mgrid
-    
-    factor=int(factor)
+
+    factor = int(factor)
     if factor < 1:
         raise ValueError("boost factor must be >= 1")
 
-    newshape=array(a.shape)*factor
+    newshape = np.array(a.shape) * factor
 
-    slices = [ slice(0,old, float(old)/new) for old,new in zip(a.shape,newshape) ]
+    slices = [slice(0, old, float(old) / new) for old, new in zip(a.shape, newshape)]  # noqa
     coordinates = mgrid[slices]
-    indices = coordinates.astype('i')   #choose the biggest smaller integer index
+
+    # choose the biggest smaller integer index
+    indices = coordinates.astype("i")
     return a[tuple(indices)]
+
 
 def expand(image, new_dims, padval=0, verbose=False):
     """
@@ -861,7 +876,7 @@ def expand(image, new_dims, padval=0, verbose=False):
     Expand an image to the specified size.  The extra pixels are set to the
     padval value.  Note this does not change the pixel scale, just adds new
     pixels.  See boost to change the pixel scale.
-    
+
     If the new dims are all less than the existing image, the original image is
     returned.
 
@@ -873,17 +888,16 @@ def expand(image, new_dims, padval=0, verbose=False):
         scol = max(sz[1], new_dims[1])
 
         if verbose:
-            print("  expanding image from",sz,"to:",[srow,scol])
+            print("  expanding image from", sz, "to:", [srow, scol])
 
-        new_image = numpy.empty( (srow, scol), dtype=image.dtype )
+        new_image = np.empty((srow, scol), dtype=image.dtype)
         new_image[:] = padval
 
-        new_image[0:sz[0], 0:sz[1]] = image[0:sz[0], 0:sz[1]]
-        
+        new_image[0: sz[0], 0: sz[1]] = image[0: sz[0], 0: sz[1]]
+
         return new_image
     else:
         return image
-
 
 
 def ds9(im):
@@ -893,10 +907,56 @@ def ds9(im):
     import fitsio
     import os
     import tempfile
-    tmpdir=os.environ.get('TMPDIR','/tmp')
-    tfile = tempfile.mktemp(suffix='.fits')
-    tfile=os.path.join(tmpdir, tfile)
+
+    tmpdir = os.environ.get("TMPDIR", "/tmp")
+    tfile = tempfile.mktemp(suffix=".fits")
+    tfile = os.path.join(tmpdir, tfile)
     fitsio.write(tfile, im, clobber=True)
-    os.system('ds9 %s' % tfile)
+    os.system("ds9 %s" % tfile)
     if os.path.exists(tfile):
         os.remove(tfile)
+
+
+def _get_updated_keywords(input_kws, **kws):
+
+    new_kws = input_kws.copy()
+    new_kws.update(kws)
+    return new_kws
+
+
+def _get_demo_image():
+    nx, ny = 32, 32
+
+    cen = (np.array([ny, nx]) - 1)/2
+    sigma = 3.0
+
+    x, y = np.mgrid[
+        0:ny,
+        0:ny,
+    ]
+    y = y - cen[0]
+    x = x - cen[1]
+
+    arg = -0.5 * (x**2 + y**2)/sigma**2
+    image = np.exp(arg)
+
+    return image
+
+
+def demo():
+    colorbar = True
+
+    image0 = _get_demo_image()
+
+    image = image0 + np.random.normal(size=image0.shape, scale=0.05)
+
+    view_profile(image, plt_kws={'title': 'profile'})
+
+    return
+    view(image, colorbar=colorbar, plt_kws={'title': 'image view'})
+    multiview(image, colorbar=colorbar, title='multiview')
+    multiview(image, colorbar=colorbar, profile=True,
+              title='multiview profile')
+    view_mosaic([image]*5, colorbar=colorbar, title='mosaic')
+    view_mosaic([image]*5, colorbar=colorbar, title='mosaic combined',
+                combine=True)
