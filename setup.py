@@ -7,7 +7,7 @@ scripts = [s for s in scripts if '~' not in s]
 
 setup(
     name="espy",
-    version="0.9.0",
+    version="0.9.1",
     packages=find_packages(),
     scripts=scripts,
     author='Erin Sheldon',
