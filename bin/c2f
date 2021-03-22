@@ -29,8 +29,8 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     if args.f is not None:
-        print( f2c(args.f) )
+        print('c:', f2c(args.f))
     elif args.c is not None:
-        print( c2f(args.c) )
+        print('f:', c2f(args.c))
     else:
         print_chart()
