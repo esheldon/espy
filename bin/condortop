@@ -9,7 +9,7 @@ from curses import wrapper as curses_wrapper
 
 def main(refresh, background):
     try:
-        CondorWatcher(refresh_rate=refresh, background=background)
+        CondorWatcher(refresh=refresh, background=background)
     except KeyboardInterrupt:
         pass
 
