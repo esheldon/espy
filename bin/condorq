@@ -1,55 +1,19 @@
 #!/usr/bin/env python
-"""
-Display statistics about the condor queue.
-
-This program runs 
-
-    condor_q
-
-with some customized formatting and displays the jobs along with some summary
-statistics and host machine if available.
-
-Use condortop for a listing that auto-refreshes and has a nice color
-display.
-"""
-
-modification_history="""
-    Created: 2011-07 Erin Sheldon, BNL, erin dot sheldon at gmail dot com
-"""
 
 import os
-import sys
 from sys import stdout
-import subprocess
 
-import argparse
 
-parser=argparse.ArgumentParser(
-    formatter_class=argparse.RawDescriptionHelpFormatter,
-    description=__doc__,
-)
+def main():
+    try:
+        print_queue()
+    except KeyboardInterrupt:
+        pass
+    except BrokenPipeError:
+        pass
 
-parser.add_argument(
-    "-u","--user",
-    default=None,
-    help="The user, defaults to the caller",
-)
 
-parser.add_argument(
-    "-n","--name",
-    default=None,
-    help="Name of queue (scheduler) to use, default is local queue",
-)
-parser.add_argument(
-    "-g","--global",
-    dest='global_queue',action="store_true", 
-    help="query the global job queue",
-)
-
-# don't have to be too careful about things like widths of fields in the
-# formats since we will process the results anyway
-
-_command="""
+COMMAND = """
 condor_q \\
     -format '%d.' ClusterId \\
     -format '%-d,' ProcId \\
@@ -65,201 +29,202 @@ condor_q \\
     -format '%s,' Cmd \\
     -format '%s,' job_name \\
     -format '%s' RemoteHost \\
-    -format '\\n' Owner"""
+    -format '\\n' Owner"""  # noqa
+
+MINUTE = 60
+HOUR = MINUTE * 60
+DAY = HOUR * 24
+
+HEADERS = (
+    "ID", "Owner", "Submitted", "Run Time", "ST", "Pri", "Size", "Cmd",
+    "Host",
+)
 
 
+def print_queue():
+
+    out = get_condor_q_output()
+    out = out.split("\n")
+
+    stats = {"njobs": 0, "R": 0, "I": 0, "H": 0, "C": 0, "X": 0}
+    lengths = {
+        "id": 2,
+        "owner": 5,
+        "qdate": 9,
+        "runtime": 8,
+        "status": 2,
+        "pri": 3,
+        "size": 4,
+        "cmd": 3,
+        "host": 4,
+    }
+
+    line_splits = []
+    for line in out:
+        if len(line) > 0:
+            stats["njobs"] += 1
+            lsplit = process_line(line, stats, lengths, dolengths=True)
+            line_splits.append(tuple(lsplit))
+
+    write_statline(stats)
+    write_job_listing(line_splits, lengths)
+    write_statline(stats)
 
 
+def write_job_listing(line_splits, lengths):
+
+    fmt = " %-" + str(lengths["id"]) + "s  "
+    fmt += "%-" + str(lengths["owner"]) + "s  "
+    fmt += "%-" + str(lengths["qdate"]) + "s  "
+    fmt += "%-" + str(lengths["runtime"]) + "s  "
+    fmt += "%-" + str(lengths["status"]) + "s  "
+    fmt += "%-" + str(lengths["pri"]) + "s  "
+    fmt += "%-" + str(lengths["size"]) + "s  "
+    fmt += "%-" + str(lengths["cmd"]) + "s  "
+    fmt += "%-" + str(lengths["host"]) + "s"
+
+    header = fmt % HEADERS
+    stdout.write(header)
+    stdout.write("\n")
+
+    for ls in line_splits:
+        line = fmt % ls
+        stdout.write(line)
+        stdout.write("\n")
 
 
-class CondorPrinter:
-    def __init__(self, **keys):
+def write_statline(stats):
 
-        self.user=keys.get('user',None)
-        self.scheduler_name=keys.get('scheduler_name',None)
-        self.global_queue=keys.get('global_queue',False)
-        
-        self.command=_command
-        if self.global_queue:
-            self.command += ' -global'
-        elif self.scheduler_name is not None:
-            self.command = self.command + ' -name %s' % self.scheduler_name
+    stdout.write(" ")
 
-        if self.user != None:
-            self.command = self.command + ' ' + self.user
+    stdout.write("Jobs: ")
 
-        self.MINUTE=60
-        self.HOUR=self.MINUTE*60
-        self.DAY=self.HOUR*24
+    stdout.write("%s " % stats["njobs"])
 
-        self.headers=('ID','Owner','Submitted','Run Time','ST','Pri','Size','Cmd','Host')
+    stdout.write("Running: ")
+    stdout.write("%s " % stats["R"])
 
+    stdout.write("Idle: ")
+    stdout.write("%s " % stats["I"])
 
-    def print_queue(self):
+    if stats["H"] > 0:
+        stdout.write("Held: ")
+        stdout.write("%s " % stats["H"])
+    if stats["X"] > 0:
+        stdout.write("Removed: ")
+        stdout.write("%s " % stats["X"])
+    if stats["C"] > 0:
+        stdout.write("Completed: ")
+        stdout.write("%s " % stats["C"])
 
-        out = self.get_condor_q_output()
-        out = out.split('\n')
-
-        stats={'njobs':0,'R':0,'I':0,'H':0,'C':0,'X':0}
-        lengths={'id':2,'owner':5,'qdate':9,'runtime':8,
-                 'status':2,'pri':3,'size':4,'cmd':3,'host':4}
-
-        line_splits = []
-        for line in out:
-            if len(line) > 0:
-                stats['njobs'] += 1
-                lsplit = self.process_line(line,stats,lengths, dolengths=True)
-                line_splits.append(tuple(lsplit))
-
-        self.write_statline(stats)
-        self.write_job_listing(line_splits, lengths)
-        self.write_statline(stats)
-
-    def write_job_listing(self, line_splits, lengths):
-
-        fmt  = ' %-' + str(lengths['id']) +'s  ' 
-        fmt += '%-' + str(lengths['owner']) + 's  '
-        fmt += '%-' + str(lengths['qdate']) + 's  '
-        fmt += '%-'  + str(lengths['runtime']) + 's  '
-        fmt += '%-' + str(lengths['status']) + 's  '
-        fmt += '%-' + str(lengths['pri']) + 's  '
-        fmt += '%-' + str(lengths['size']) + 's  '
-        fmt += '%-' + str(lengths['cmd']) + 's  '
-        fmt += '%-' + str(lengths['host']) + 's'
-
-        header = fmt % self.headers
-        stdout.write(header)
-        stdout.write('\n')
-
-        for ls in line_splits:
-            line = fmt % ls
-            stdout.write(line)
-            stdout.write('\n')
+    stdout.write("\n")
 
 
-    def write_statline(self, stats):
+def process_line(line, stats, lengths, dolengths=True):
+    """
+    process the line and return a new line with
+    the executable represented only as the basname,
+    and rcf.bnl.gov removed from the slot name
 
-        stdout.write(' ')
-        if self.scheduler_name is not None:
-            stdout.write('Queue: ')
-            stdout.write('%s ' % self.scheduler_name)
+    """
+    ls = line.split(",")
 
-        if self.user != None:
-            stdout.write('User: ')
-            stdout.write('%s ' % self.user)
-
-        stdout.write('Jobs: ')
-
-        stdout.write('%s ' % stats['njobs'])
-
-        stdout.write('Running: ')
-        stdout.write('%s ' % stats['R'])
-
-        stdout.write('Idle: ')
-        stdout.write('%s ' % stats['I'])
-
-        if stats['H'] > 0:
-            stdout.write('Held: ')
-            stdout.write('%s ' % stats['H'])
-        if stats['X'] > 0:
-            stdout.write('Removed: ')
-            stdout.write('%s ' % stats['X'])
-        if stats['C'] > 0:
-            stdout.write('Completed: ')
-            stdout.write('%s ' % stats['C'])
-
-        stdout.write('\n')
-
-    def process_line(self, line, stats, lengths, dolengths=True):
-        """
-        process the line and return a new line with
-        the executable represented only as the basname,
-        and rcf.bnl.gov removed from the slot name
-
-        """
-        ls = line.split(',')
-
-        if len(ls) == 11:
-            id,owner,qdate,remotewall,servertime,shadowbday,status,pri,size,cmd,host = ls
-        elif len(ls)==12:
-            # job_name was present
-            id,owner,qdate,remotewall,servertime,shadowbday,status,pri,size,cmd0,job_name,host = ls
-            cmd=job_name
-        else:
-            raise ValueError("Expected 10 or 11 results from condor_q, got %d" % len(ls))
-
-        cmd = os.path.basename(cmd)
-        host = host.split('.')[0]
-
-        total_wall_time = int(float(remotewall))
-
-        if status in stats:
-            stats[status] += 1
-
-        if status == 'R' and shadowbday != "":
-            total_wall_time += int(servertime)-int(shadowbday)
-        runtime = self.format_time(total_wall_time)
-
-        if dolengths:
-            lengths['id']      = max(len(id),lengths['id'])
-            lengths['owner']   = max(len(owner),lengths['owner'])
-            lengths['qdate']   = max(len(qdate),lengths['qdate'])
-            lengths['runtime'] = max(len(runtime),lengths['runtime'])
-            lengths['status']  = max(len(status),lengths['status'])
-            lengths['pri']     = max(len(pri),lengths['pri'])
-            lengths['size']    = max(len(size),lengths['size'])
-            lengths['cmd']     = max(len(cmd),lengths['cmd'])
-            lengths['host']    = max(len(host),lengths['host'])
-        
-        return id,owner,qdate,runtime,status,pri,size,cmd,host
-        return {'id':id,
-                'owner':owner,
-                'qdate':qdate,
-                'runtime':runtime,
-                'status':status,
-                'pri':pri,
-                'size':size,
-                'cmd':cmd,
-                'host':host}
-
-
-    def format_time(self, tot_seconds):
-        import datetime
-        if tot_seconds == 0:
-            return '----------'
-        sec = datetime.timedelta(seconds=tot_seconds)
-        d = datetime.datetime(1,1,1) + sec
-
-        return "%d+%02d:%02d:%02d" % (d.day-1, d.hour, d.minute, d.second)
-
-
-    def get_condor_q_output(self):
-
-        pobj=subprocess.Popen(self.command, 
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              shell=True)
-        stdout_ret, stderr_ret = pobj.communicate()
-        return stdout_ret.decode('utf-8')
-
-# 
-# main program
-#
-
-def main():
-
-    try:
-        args = parser.parse_args()
-        p = CondorPrinter(
-            user=args.user, 
-            global_queue=args.global_queue,
-            scheduler_name=args.name,
+    if len(ls) == 11:
+        (
+            id,
+            owner,
+            qdate,
+            remotewall,
+            servertime,
+            shadowbday,
+            status,
+            pri,
+            size,
+            cmd,
+            host,
+        ) = ls
+    elif len(ls) == 12:
+        # job_name was present
+        (
+            id,
+            owner,
+            qdate,
+            remotewall,
+            servertime,
+            shadowbday,
+            status,
+            pri,
+            size,
+            cmd0,
+            job_name,
+            host,
+        ) = ls
+        cmd = job_name
+    else:
+        raise ValueError(
+            "Expected 10 or 11 results from condor_q, got %d" % len(ls)
         )
-        p.print_queue()
 
-    except KeyboardInterrupt:
-        pass
-    except BrokenPipeError:
-        pass
+    cmd = os.path.basename(cmd)
+    host = host.split(".")[0]
+
+    total_wall_time = int(float(remotewall))
+
+    if status in stats:
+        stats[status] += 1
+
+    if status == "R" and shadowbday != "":
+        total_wall_time += int(servertime) - int(shadowbday)
+    runtime = format_time(total_wall_time)
+
+    if dolengths:
+        lengths["id"] = max(len(id), lengths["id"])
+        lengths["owner"] = max(len(owner), lengths["owner"])
+        lengths["qdate"] = max(len(qdate), lengths["qdate"])
+        lengths["runtime"] = max(len(runtime), lengths["runtime"])
+        lengths["status"] = max(len(status), lengths["status"])
+        lengths["pri"] = max(len(pri), lengths["pri"])
+        lengths["size"] = max(len(size), lengths["size"])
+        lengths["cmd"] = max(len(cmd), lengths["cmd"])
+        lengths["host"] = max(len(host), lengths["host"])
+
+    return id, owner, qdate, runtime, status, pri, size, cmd, host
+    # return {
+    #     "id": id,
+    #     "owner": owner,
+    #     "qdate": qdate,
+    #     "runtime": runtime,
+    #     "status": status,
+    #     "pri": pri,
+    #     "size": size,
+    #     "cmd": cmd,
+    #     "host": host,
+    # }
 
 
-main()
+def format_time(tot_seconds):
+    import datetime
+
+    if tot_seconds == 0:
+        return "----------"
+    sec = datetime.timedelta(seconds=tot_seconds)
+    d = datetime.datetime(1, 1, 1) + sec
+
+    return "%d+%02d:%02d:%02d" % (d.day - 1, d.hour, d.minute, d.second)
+
+
+def get_condor_q_output():
+    import subprocess
+
+    pobj = subprocess.Popen(
+        COMMAND,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        shell=True,
+    )
+    stdout_ret, stderr_ret = pobj.communicate()
+    return stdout_ret.decode("utf-8")
+
+
+if __name__ == '__main__':
+    main()
