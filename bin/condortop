@@ -7,19 +7,20 @@ import curses
 from curses import wrapper as curses_wrapper
 
 
-def main(refresh, background):
+def main(refresh, background, match):
     try:
-        CondorWatcher(refresh=refresh, background=background)
+        CondorWatcher(refresh=refresh, background=background, match=match)
     except KeyboardInterrupt:
         pass
 
 
 class CondorWatcher:
-    def __init__(self, refresh, background):
+    def __init__(self, refresh, background, match):
 
         # in minutes
         self.refresh = refresh
         self.background = background
+        self.match = match
 
         self.command = COMMAND
 
@@ -80,6 +81,11 @@ class CondorWatcher:
             for ii in range(len(out)):
                 line = out[ii]
                 if len(line) > 0:
+
+                    if self.match is not None:
+                        if self.match not in line:
+                            continue
+
                     stats["njobs"] += 1
                     lsplit = self.process_line(
                         line, stats, lengths, dolengths=(ii < nprint)
@@ -376,6 +382,9 @@ def get_args():
         help="refresh rate in minutes.  default is 5",
     )
     parser.add_argument(
+        '-m', '--match', help='only show jobs that contain the input string',
+    )
+    parser.add_argument(
         "-d",
         "--dark",
         action="store_true",
@@ -399,4 +408,4 @@ if __name__ == "__main__":
     else:
         background = None
 
-    main(refresh=args.refresh, background=background)
+    main(refresh=args.refresh, background=background, match=args.match)
