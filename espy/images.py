@@ -422,10 +422,12 @@ def multiview(
         tab[1].step(
             yvals, imrows,
             label='rows', linestyle='-', marker=None,
+            where='mid',
         )
         tab[1].step(
             xvals, imcols,
             label='cols', linestyle='-', marker=None,
+            where='mid',
         )
         tab[1].legend()
 
