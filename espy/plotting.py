@@ -1,3 +1,6 @@
+GOLDEN_RATIO = 1.61803398875
+GOLDEN_ARATIO = 1.0/GOLDEN_RATIO
+
 
 def plot_residuals(
     *, x, y, model, yerr=None, frac=0.2, pad=0,
