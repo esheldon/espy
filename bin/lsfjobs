@@ -189,8 +189,7 @@ def main():
         lister = LSFLister(pattern=args.pattern)
         lister.go()
 
-    except IOError:
-        # to deal with pipes
+    except BrokenPipeError:
         pass
 
 

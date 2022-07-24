@@ -31,8 +31,12 @@ parser.add_argument(
     help="refresh rate in seconds, default %d." % DEFAULT_REFRESH,
 )
 parser.add_argument(
-    "-p", "--pattern",
-    help="only show jobs that mach the input regular expression.",
+    "-m", "--match",
+    help="only show jobs that contain the input string"
+)
+parser.add_argument(
+    "--regex",
+    help="only show jobs that match the input regular expression.",
 )
 
 default = 1
@@ -51,12 +55,19 @@ _command = (
 
 
 class LSFWatcher(object):
-    def __init__(self, *, pattern, refresh_rate):
+    def __init__(
+        self,
+        refresh_rate=DEFAULT_REFRESH,
+        regex=None,
+        match_string=None,
+    ):
 
-        self.pattern = pattern
+        self.regex = regex
+        self.match_string = match_string
         self.refresh_rate = refresh_rate
-        if self.pattern is not None:
-            self.matcher = re.compile(self.pattern)
+
+        if self.regex is not None:
+            self.matcher = re.compile(self.regex)
 
         self.command = _command
 
@@ -110,8 +121,11 @@ class LSFWatcher(object):
                         # this is the header
                         continue
 
-                    if self.pattern is not None:
+                    if self.regex is not None:
                         if self.matcher.match(line) is None:
+                            continue
+                    elif self.match_string is not None:
+                        if self.match_string not in line:
                             continue
 
                     stats['njobs'] += 1
@@ -324,7 +338,8 @@ def main():
     try:
         args = parser.parse_args()
         watcher = LSFWatcher(
-            pattern=args.pattern,
+            regex=args.regex,
+            match_string=args.match,
             refresh_rate=args.refresh,
         )
         watcher.go()

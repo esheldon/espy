@@ -1,112 +1,45 @@
 #!/usr/bin/env python
-"""
-    %prog [options username] 
-
-    Display statistics about the condor queue, refreshing at regular intervals.
-
-Description
-
-    This program runs 
-
-        condor_q
-
-    with some customized formatting and displays the jobs along with some
-    statistics and host machine if available.
-
-    Send the username to restrict the job listing to the specified user.
-    
-    The job listing is refreshed regularly, by default every 120 seconds.   Hit
-    any key to update immediately.  Hit 'q' or control-c to quit."""
-
-modification_history="""
-    Created: 2011-07 Erin Sheldon, BNL, erin dot sheldon at gmail dot com
-"""
 
 import os
-import sys
 import subprocess
-from optparse import OptionParser
-
-try:
-    xrange
-except:
-    xrange=range
 
 import curses
-try:
-    import curses.wrapper.wrapper as curses_wrapper
-except:
-    from curses import wrapper as curses_wrapper
+from curses import wrapper as curses_wrapper
 
-parser=OptionParser(__doc__)
-parser.add_option("-r","--refresh",default=300, 
-    help="refresh rate in seconds.  default is %default")
-parser.add_option("-d","--dark",action="store_true", 
-    help="Use a color scheme appropriate for dark backgrounds")
-parser.add_option("-l","--light",action="store_true", 
-    help="Use a color scheme appropriate for light backgrounds")
-parser.add_option("-n","--name",default=None,
-    help="Name of queue (scheduler) to use, default is local queue")
-parser.add_option("-g","--global",dest='global_queue',action="store_true", 
-    help="query the global job queue")
 
-default=1
-black=0+2
-red=1+2
-green=2+2
-yellow=3+2
-blue=4+2
-magenta=5+2
-cyan=6+2
-white=7+2
-
-# don't have to be too careful about things like widths of fields in the
-# formats since we will process the results anyway
-
-_command="""
-condor_q \\
-    -format '%d.' ClusterId \\
-    -format '%-d,' ProcId \\
-    -format '%-s,' Owner \\
-    -format '%-s,' 'formatTime(QDate,"%m/%d %H:%M:%S")' \\
-    -format '%-s,' 'RemoteWallClockTime' \\
-    -format '%s,' ServerTime \\
-    -format '%s' ShadowBday \\
-    -format ',' Owner \\
-    -format '%-s,' 'ifThenElse(JobStatus==0,"U",ifThenElse(JobStatus==1,"I",ifThenElse(JobStatus==2,"R",ifThenElse(JobStatus==3,"X",ifThenElse(JobStatus==4,"C",ifThenElse(JobStatus==5,"H",ifThenElse(JobStatus==6,"E",string(JobStatus))))))))' \\
-    -format '%-d,' JobPrio \\
-    -format '%-.1f,' ImageSize/1024.0 \\
-    -format '%s,' Cmd \\
-    -format '%s,' job_name \\
-    -format '%s' RemoteHost \\
-    -format '\\n' Owner"""
+def main(refresh, background, match):
+    try:
+        CondorWatcher(refresh=refresh, background=background, match=match)
+    except KeyboardInterrupt:
+        pass
 
 
 class CondorWatcher:
-    def __init__(self, **keys):
+    def __init__(self, refresh, background, match):
 
-        self.user=keys.get('user',None)
-        self.refresh_rate=keys.get('refresh_rate',30)
-        self.background=keys.get('background',None)
-        self.scheduler_name=keys.get('scheduler_name',None)
-        self.global_queue=keys.get('global_queue',False)
-        
-        self.command=_command
-        if self.global_queue:
-            self.command += ' -global'
-        elif self.scheduler_name is not None:
-            self.command = self.command + ' -name %s' % self.scheduler_name
+        # in minutes
+        self.refresh = refresh
+        self.background = background
+        self.match = match
 
-        if self.user != None:
-            self.command = self.command + ' ' + self.user
+        self.command = COMMAND
 
-        self.MINUTE=60
-        self.HOUR=self.MINUTE*60
-        self.DAY=self.HOUR*24
+        self.MINUTE = 60
+        self.HOUR = self.MINUTE * 60
+        self.DAY = self.HOUR * 24
 
-        self.headers=('ID','Owner','Submitted','Run Time','ST','Pri','Size','Cmd','Host')
+        self.headers = (
+            "ID",
+            "Owner",
+            "Submitted",
+            "Run Time",
+            "ST",
+            "Pri",
+            "Size",
+            "Cmd",
+            "Host",
+        )
         curses_wrapper(self.condor_watch)
-
 
     def condor_watch(self, stdscr):
 
@@ -115,7 +48,7 @@ class CondorWatcher:
         # wait for refresh seconds for user input before refreshing.  If the
         # user input is anything but 'q' then refresh again
 
-        tout_ms = self.refresh_rate*1000
+        tout_ms = self.refresh * 60 * 1000
         self.win1.timeout(tout_ms)
         while 1:
             self.win1.erase()
@@ -123,22 +56,40 @@ class CondorWatcher:
             self.win3.erase()
 
             out = self.get_condor_q_output()
-            out = out.split('\n')
+            out = out.split("\n")
 
-            stats={'njobs':0,'R':0,'r':0,'I':0,'H':0,'C':0,'X':0}
-            #lengths={'id':9,'owner':12,'qdate':11,'runtime':12,
+            stats = {
+                "njobs": 0, "R": 0, "r": 0, "I": 0, "H": 0, "C": 0, "X": 0,
+            }
+            # lengths={'id':9,'owner':12,'qdate':11,'runtime':12,
             #         'status':2,'pri':3,'size':7,'cmd':3,'host':4}
-            lengths={'id':2,'owner':5,'qdate':9,'runtime':8,
-                     'status':2,'pri':3,'size':4,'cmd':3,'host':4}
+            lengths = {
+                "id": 2,
+                "owner": 5,
+                "qdate": 9,
+                "runtime": 8,
+                "status": 2,
+                "pri": 3,
+                "size": 4,
+                "cmd": 3,
+                "host": 4,
+            }
 
-            #nprint = min(len(out), self.maxy3)
-            nprint = min(len(out), self.maxy3-1)
+            # nprint = min(len(out), self.maxy3)
+            nprint = min(len(out), self.maxy3 - 1)
             line_splits = []
-            for ii in xrange(len(out)):
+            for ii in range(len(out)):
                 line = out[ii]
                 if len(line) > 0:
-                    stats['njobs'] += 1
-                    lsplit = self.process_line(line,stats,lengths, dolengths=(ii < nprint))
+
+                    if self.match is not None:
+                        if self.match not in line:
+                            continue
+
+                    stats["njobs"] += 1
+                    lsplit = self.process_line(
+                        line, stats, lengths, dolengths=(ii < nprint)
+                    )
                     if ii < nprint:
                         line_splits.append(tuple(lsplit))
 
@@ -146,28 +97,28 @@ class CondorWatcher:
             self.write_job_listing(line_splits, lengths)
 
             c = self.win1.getch()
-            if c == ord('q'): 
+            if c == ord("q"):
                 break
 
     def write_job_listing(self, line_splits, lengths):
 
-        fmt  = ' %-' + str(lengths['id']) +'s  ' 
-        fmt += '%-' + str(lengths['owner']) + 's  '
-        fmt += '%-' + str(lengths['qdate']) + 's  '
-        fmt += '%-'  + str(lengths['runtime']) + 's  '
-        fmt += '%-' + str(lengths['status']) + 's  '
-        fmt += '%-' + str(lengths['pri']) + 's  '
-        fmt += '%-' + str(lengths['size']) + 's  '
-        fmt += '%-' + str(lengths['cmd']) + 's  '
-        fmt += '%-' + str(lengths['host']) + 's'
+        fmt = " %-" + str(lengths["id"]) + "s  "
+        fmt += "%-" + str(lengths["owner"]) + "s  "
+        fmt += "%-" + str(lengths["qdate"]) + "s  "
+        fmt += "%-" + str(lengths["runtime"]) + "s  "
+        fmt += "%-" + str(lengths["status"]) + "s  "
+        fmt += "%-" + str(lengths["pri"]) + "s  "
+        fmt += "%-" + str(lengths["size"]) + "s  "
+        fmt += "%-" + str(lengths["cmd"]) + "s  "
+        fmt += "%-" + str(lengths["host"]) + "s"
 
         header = fmt % self.headers
-        self.win2.addstr(0,0,header[0:self.maxx2-1])
+        self.win2.addstr(0, 0, header[0: self.maxx2 - 1])
 
-        for ii in xrange(len(line_splits)):
+        for ii in range(len(line_splits)):
             ls = line_splits[ii]
             line = fmt % ls
-            self.win3.addstr(ii,0,line[0:self.maxx3-1])
+            self.win3.addstr(ii, 0, line[0: self.maxx3 - 1])
         self.win2.refresh()
         self.win3.refresh()
 
@@ -189,10 +140,9 @@ class CondorWatcher:
         y2 = sizey1
         self.win2 = curses.newwin(sizey2, self.maxx, y2, x0)
 
-        self.win3 = curses.newwin(self.maxy-sizey1-sizey2, 
-                                  self.maxx, 
-                                  sizey1+sizey2, 
-                                  x0)
+        self.win3 = curses.newwin(
+            self.maxy - sizey1 - sizey2, self.maxx, sizey1 + sizey2, x0
+        )
         self.maxy2, self.maxx2 = self.win2.getmaxyx()
         self.maxy3, self.maxx3 = self.win3.getmaxyx()
 
@@ -201,39 +151,31 @@ class CondorWatcher:
         win = self.win1
 
         win.erase()
-        colors=self.colors
+        colors = self.colors
 
+        win.addstr(1, 0, " ")
 
-        win.addstr(1, 0, ' ')
-        if self.scheduler_name is not None:
-            win.addstr('Queue: ', colors['queue'])
-            win.addstr('%s ' % self.scheduler_name)
+        win.addstr("Jobs: ", colors["njobs"])
 
-        if self.user != None:
-            win.addstr('User: ',colors['user'])
-            win.addstr('%s ' % self.user)
+        win.addstr("%s " % stats["njobs"])
 
-        win.addstr('Jobs: ', colors['njobs'] )
+        win.addstr("Running: ", colors["R"])
+        win.addstr("%s " % stats["R"])
+        win.addstr("Reserved: ", colors["r"])
+        win.addstr("%s " % stats["r"])
 
-        win.addstr('%s ' % stats['njobs'])
+        win.addstr("Idle: ", colors["I"])
+        win.addstr("%s " % stats["I"])
 
-        win.addstr('Running: ', colors['R'])
-        win.addstr('%s ' % stats['R'])
-        win.addstr('Reserved: ', colors['r'])
-        win.addstr('%s ' % stats['r'])
-
-        win.addstr('Idle: ', colors['I'])
-        win.addstr('%s ' % stats['I'])
-
-        if stats['H'] > 0:
-            win.addstr('Held: ', colors['H'])
-            win.addstr('%s ' % stats['H'])
-        if stats['X'] > 0:
-            win.addstr('Removed: ', colors['X'])
-            win.addstr('%s ' % stats['X'])
-        if stats['C'] > 0:
-            win.addstr('Completed: ', colors['C'])
-            win.addstr('%s ' % stats['C'])
+        if stats["H"] > 0:
+            win.addstr("Held: ", colors["H"])
+            win.addstr("%s " % stats["H"])
+        if stats["X"] > 0:
+            win.addstr("Removed: ", colors["X"])
+            win.addstr("%s " % stats["X"])
+        if stats["C"] > 0:
+            win.addstr("Completed: ", colors["C"])
+            win.addstr("%s " % stats["C"])
 
         win.refresh()
 
@@ -244,82 +186,110 @@ class CondorWatcher:
         and rcf.bnl.gov removed from the slot name
 
         """
-        ls = line.split(',')
+        ls = line.split(",")
 
         if len(ls) == 11:
-            id,owner,qdate,remotewall,servertime,shadowbday,status,pri,size,cmd,host = ls
-        elif len(ls)==12:
+            (
+                id,
+                owner,
+                qdate,
+                remotewall,
+                servertime,
+                shadowbday,
+                status,
+                pri,
+                size,
+                cmd,
+                host,
+            ) = ls
+        elif len(ls) == 12:
             # job_name was present
-            id,owner,qdate,remotewall,servertime,shadowbday,status,pri,size,cmd0,job_name,host = ls
-            cmd=job_name
+            (
+                id,
+                owner,
+                qdate,
+                remotewall,
+                servertime,
+                shadowbday,
+                status,
+                pri,
+                size,
+                cmd0,
+                job_name,
+                host,
+            ) = ls
+            cmd = job_name
         else:
-            raise ValueError("Expected 10 or 11 results from condor_q, got %d" % len(ls))
+            raise ValueError(
+                "Expected 10 or 11 results from condor_q, got %d" % len(ls)
+            )
 
         cmd = os.path.basename(cmd)
-        host = host.split('.')[0]
+        host = host.split(".")[0]
 
         total_wall_time = int(float(remotewall))
 
-        if status == 'R' and shadowbday != "":
-            total_wall_time += int(servertime)-int(shadowbday)
+        if status == "R" and shadowbday != "":
+            total_wall_time += int(servertime) - int(shadowbday)
         runtime = self.format_time(total_wall_time)
 
-        if status == 'R':
-            if '-' in runtime:
-                stats['r'] += 1
+        if status == "R":
+            if "-" in runtime:
+                stats["r"] += 1
             else:
-                status='R'
-                stats['R'] += 1
+                status = "R"
+                stats["R"] += 1
         else:
             if status in stats:
                 stats[status] += 1
 
         if dolengths:
-            lengths['id']      = max(len(id),lengths['id'])
-            lengths['owner']   = max(len(owner),lengths['owner'])
-            lengths['qdate']   = max(len(qdate),lengths['qdate'])
-            lengths['runtime'] = max(len(runtime),lengths['runtime'])
-            lengths['status']  = max(len(status),lengths['status'])
-            lengths['pri']     = max(len(pri),lengths['pri'])
-            lengths['size']    = max(len(size),lengths['size'])
-            lengths['cmd']     = max(len(cmd),lengths['cmd'])
-            lengths['host']    = max(len(host),lengths['host'])
-        
-        return id,owner,qdate,runtime,status,pri,size,cmd,host
-        return {'id':id,
-                'owner':owner,
-                'qdate':qdate,
-                'runtime':runtime,
-                'status':status,
-                'pri':pri,
-                'size':size,
-                'cmd':cmd,
-                'host':host}
+            lengths["id"] = max(len(id), lengths["id"])
+            lengths["owner"] = max(len(owner), lengths["owner"])
+            lengths["qdate"] = max(len(qdate), lengths["qdate"])
+            lengths["runtime"] = max(len(runtime), lengths["runtime"])
+            lengths["status"] = max(len(status), lengths["status"])
+            lengths["pri"] = max(len(pri), lengths["pri"])
+            lengths["size"] = max(len(size), lengths["size"])
+            lengths["cmd"] = max(len(cmd), lengths["cmd"])
+            lengths["host"] = max(len(host), lengths["host"])
+
+        return id, owner, qdate, runtime, status, pri, size, cmd, host
+        return {
+            "id": id,
+            "owner": owner,
+            "qdate": qdate,
+            "runtime": runtime,
+            "status": status,
+            "pri": pri,
+            "size": size,
+            "cmd": cmd,
+            "host": host,
+        }
 
     def format_time(self, tot_seconds):
         import datetime
-        if tot_seconds == 0:
-            return '----------'
-        sec = datetime.timedelta(seconds=tot_seconds)
-        d = datetime.datetime(1,1,1) + sec
 
-        return "%d+%02d:%02d:%02d" % (d.day-1, d.hour, d.minute, d.second)
+        if tot_seconds == 0:
+            return "----------"
+        sec = datetime.timedelta(seconds=tot_seconds)
+        d = datetime.datetime(1, 1, 1) + sec
+
+        return "%d+%02d:%02d:%02d" % (d.day - 1, d.hour, d.minute, d.second)
 
     def get_condor_q_output(self):
 
-        pobj=subprocess.Popen(self.command, 
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              shell=True)
+        pobj = subprocess.Popen(
+            self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            shell=True
+        )
         stdout_ret, stderr_ret = pobj.communicate()
-        return stdout_ret.decode('utf-8')
-
-
-
+        return stdout_ret.decode("utf-8")
 
     def make_color_pairs(self):
         curses.use_default_colors()
         curses.init_pair(default, -1, -1)
-        bkgd_color=-1
+        bkgd_color = -1
 
         curses.init_pair(black, curses.COLOR_BLACK, bkgd_color)
         curses.init_pair(red, curses.COLOR_RED, bkgd_color)
@@ -331,81 +301,111 @@ class CondorWatcher:
         curses.init_pair(white, curses.COLOR_WHITE, bkgd_color)
 
     def set_colors(self):
-        self.colors={}
-        if self.background=='light':
-            self.colors['njobs'] = curses.color_pair(blue)
-            self.colors['queue'] = curses.color_pair(blue)
-            self.colors['user'] = curses.color_pair(blue)
+        self.colors = {}
+        if self.background == "light":
+            self.colors["njobs"] = curses.color_pair(blue)
+            self.colors["queue"] = curses.color_pair(blue)
 
-            self.colors['R'] = curses.color_pair(green)
-            self.colors['r'] = curses.color_pair(cyan)
+            self.colors["R"] = curses.color_pair(green)
+            self.colors["r"] = curses.color_pair(cyan)
 
-            self.colors['I'] = curses.color_pair(magenta)
-            self.colors['H'] = curses.color_pair(red)
-            self.colors['X'] = curses.color_pair(red)
-            self.colors['C'] = curses.color_pair(green)
-        elif self.background=='dark':
-            self.colors['njobs'] = curses.color_pair(cyan)
-            self.colors['queue'] = curses.color_pair(green)
-            self.colors['user'] = curses.color_pair(green)
+            self.colors["I"] = curses.color_pair(magenta)
+            self.colors["H"] = curses.color_pair(red)
+            self.colors["X"] = curses.color_pair(red)
+            self.colors["C"] = curses.color_pair(green)
+        elif self.background == "dark":
+            self.colors["njobs"] = curses.color_pair(cyan)
+            self.colors["queue"] = curses.color_pair(green)
 
-            self.colors['R'] = curses.color_pair(magenta)
-            self.colors['r'] = curses.color_pair(green)
+            self.colors["R"] = curses.color_pair(magenta)
+            self.colors["r"] = curses.color_pair(green)
 
-            self.colors['I'] = curses.color_pair(yellow)
-            self.colors['H'] = curses.color_pair(red)
-            self.colors['X'] = curses.color_pair(red)
-            self.colors['C'] = curses.color_pair(green)
+            self.colors["I"] = curses.color_pair(yellow)
+            self.colors["H"] = curses.color_pair(red)
+            self.colors["X"] = curses.color_pair(red)
+            self.colors["C"] = curses.color_pair(green)
         else:
             # this should show up on white and black backgrounds pretty well
-            self.colors['njobs'] = curses.color_pair(magenta)
-            self.colors['queue'] = curses.color_pair(green)
-            self.colors['user'] = curses.color_pair(green)
+            self.colors["njobs"] = curses.color_pair(magenta)
+            self.colors["queue"] = curses.color_pair(green)
 
-            self.colors['R'] = curses.color_pair(green)
-            self.colors['r'] = curses.color_pair(cyan)
+            self.colors["R"] = curses.color_pair(green)
+            self.colors["r"] = curses.color_pair(cyan)
 
-            self.colors['I'] = curses.color_pair(red)
-            self.colors['H'] = curses.color_pair(red)
-            self.colors['X'] = curses.color_pair(red)
-            self.colors['C'] = curses.color_pair(green)
-
-
-# 
-# main program
-#
-
-def main():
-
-    try:
-        options, args = parser.parse_args(sys.argv[1:])
-        if len(args) > 0:
-            user=args[0]
-        else:
-            user=None
-
-        global_queue = options.global_queue
-        scheduler_name=options.name
-        dark  = options.dark
-        light = options.light
-
-        if dark:
-            background='dark'
-        elif light:
-            background='light'
-        else:
-            background=None
-
-        watcher = CondorWatcher(user=user, 
-                                global_queue=global_queue,
-                                scheduler_name=scheduler_name,
-                                refresh_rate=int(options.refresh), 
-                                background=background)
-
-        return
-
-    except KeyboardInterrupt:
-        pass
+            self.colors["I"] = curses.color_pair(red)
+            self.colors["H"] = curses.color_pair(red)
+            self.colors["X"] = curses.color_pair(red)
+            self.colors["C"] = curses.color_pair(green)
 
 
-main()
+default = 1
+black = 0 + 2
+red = 1 + 2
+green = 2 + 2
+yellow = 3 + 2
+blue = 4 + 2
+magenta = 5 + 2
+cyan = 6 + 2
+white = 7 + 2
+
+# don't have to be too careful about things like widths of fields in the
+# formats since we will process the results anyway
+
+COMMAND = """
+condor_q \\
+    -format '%d.' ClusterId \\
+    -format '%-d,' ProcId \\
+    -format '%-s,' Owner \\
+    -format '%-s,' 'formatTime(QDate,"%m/%d %H:%M:%S")' \\
+    -format '%-s,' 'RemoteWallClockTime' \\
+    -format '%s,' ServerTime \\
+    -format '%s' ShadowBday \\
+    -format ',' Owner \\
+    -format '%-s,' 'ifThenElse(JobStatus==0,"U",ifThenElse(JobStatus==1,"I",ifThenElse(JobStatus==2,"R",ifThenElse(JobStatus==3,"X",ifThenElse(JobStatus==4,"C",ifThenElse(JobStatus==5,"H",ifThenElse(JobStatus==6,"E",string(JobStatus))))))))' \\
+    -format '%-d,' JobPrio \\
+    -format '%-.1f,' ImageSize/1024.0 \\
+    -format '%s,' Cmd \\
+    -format '%s,' job_name \\
+    -format '%s' RemoteHost \\
+    -format '\\n' Owner"""  # noqa
+
+
+def get_args():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-r",
+        "--refresh",
+        type=int,
+        default=5,
+        help="refresh rate in minutes.  default is 5",
+    )
+    parser.add_argument(
+        '-m', '--match', help='only show jobs that contain the input string',
+    )
+    parser.add_argument(
+        "-d",
+        "--dark",
+        action="store_true",
+        help="Use a color scheme appropriate for dark backgrounds",
+    )
+    parser.add_argument(
+        "-l",
+        "--light",
+        action="store_true",
+        help="Use a color scheme appropriate for light backgrounds",
+    )
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = get_args()
+    if args.dark:
+        background = "dark"
+    elif args.light:
+        background = "light"
+    else:
+        background = None
+
+    main(refresh=args.refresh, background=background, match=args.match)

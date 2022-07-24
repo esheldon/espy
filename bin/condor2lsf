@@ -79,8 +79,8 @@ def process_file(fname):
 
     return exec_file, job_names, args_list
 
-_template="""#!/bin/bash
 #BSUB -q {queue}
+_template="""#!/bin/bash
 #BSUB -J {job_name}
 #BSUB -n {ncores}
 #BSUB -oo ./{job_name}.oe

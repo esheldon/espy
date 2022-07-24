@@ -1,6 +1,5 @@
-import numpy as np
-import esutil as eu
-from esutil.numpy_util import between
+GOLDEN_RATIO = 1.61803398875
+GOLDEN_ARATIO = 1.0/GOLDEN_RATIO
 
 
 def plot_residuals(
@@ -49,6 +48,7 @@ def plot_residuals(
     plt: hickory Plot object, optional
         Used for plotting if sent rather than creating a new one
     """
+    import numpy as np
     import hickory
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -116,7 +116,9 @@ def plot_hist2d(x, y, **kw):
     esutil
     images
     """
+    import numpy as np
     import images
+    import esutil as eu
 
     dolog = kw.pop('log', True)
 
@@ -154,6 +156,7 @@ def multihist(data, binfac=0.1, **kw):
         A sequence of labels for each dimension
     """
     import biggles
+    import esutil as eu
 
     if len(data.shape) != 2:
         raise ValueError("data should have shape [npoints,ndim]")
@@ -293,17 +296,18 @@ def get_corner_data(*args):
     """
     get corner data array from inputs
     """
+    import numpy as np
 
     ndim = len(args)
     if ndim == 0:
         raise ValueError('no args sent')
 
-    np = len(args[0])
+    npts = len(args[0])
 
-    data = np.zeros((np, ndim))
+    data = np.zeros((npts, ndim))
 
     for dim, arg in enumerate(args):
-        assert len(arg) == np, 'all arrays must be same size'
+        assert len(arg) == npts, 'all arrays must be same size'
 
         data[:, dim] = arg
 
@@ -418,6 +422,8 @@ def color_color_hexbin(
     -------
     the hickory plot object
     """
+    import numpy as np
+    from esutil.numpy_util import between
     import hickory
 
     if weights is not None:
@@ -465,8 +471,8 @@ def color_color_hexbin(
     )
     hb1 = plt[1].hexbin(rmi[w], imz[w], gridsize=nbin, **kw)
 
-    cb0 = plt.colorbar(hb0, ax=plt.axes[0])
-    cb1 = plt.colorbar(hb1, ax=plt.axes[1])
+    plt.colorbar(hb0, ax=plt.axes[0])
+    plt.colorbar(hb1, ax=plt.axes[1])
 
     if file is not None:
         plt.savefig(file, **kw)
@@ -510,6 +516,8 @@ def whiskers(
     or could it self be pyplot or pylab
 
     """
+    import numpy as np
+    import esutil as eu
 
     if plt is None:
         import hickory

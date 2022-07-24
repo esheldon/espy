@@ -1,0 +1,133 @@
+#!/usr/bin/env python
+
+
+CONDOR_SUBMIT_HEAD = """
+universe = vanilla
+
+notification = Never
+
+executable = %(script)s
+
+request_memory = %(mem)s
+
+getenv = True
+
+kill_sig = SIGINT
+
+should_transfer_files = YES
+
+# so transfer when the job completes
+when_to_transfer_output = ON_EXIT
+
+environment = "OMP_NUM_THREADS=1"
+"""
+
+# transfer_output_files = %(output)s
+CONDOR_JOB_TEMPLATE = """
++job_name = "%(job_name)s"
+transfer_input_files = %(flist)s
+arguments = %(flist)s %(output)s
+queue
+"""  # noqa
+
+
+def main(script, flist, nchunks, mem, ext):
+    flists = chunk_flist(flist, nchunks)
+
+    nf = len(flist)
+    nchunks = len(flists)
+    chunksize = len(flists[0])
+
+    print(f'processing: {nf}')
+    print(f'nchunks: {nchunks}')
+    print(f'chunksize: {chunksize}')
+
+    condor_file = 'run.condor'
+
+    with open(condor_file, 'w') as condor_fobj:
+        condor_head = CONDOR_SUBMIT_HEAD % {
+            'script': script,
+            'mem': mem,
+        }
+        condor_fobj.write(condor_head)
+
+        for ichunk, chunk in enumerate(flists):
+            job_name = f'chunk-{ichunk:06d}'
+
+            chunk_flist_file = job_name+'-flist.txt'
+            chunk_file = job_name + f'-flist.{ext}'
+
+            with open(chunk_flist_file, 'w') as fobj:
+                for fname in chunk:
+                    fobj.write(f'{fname}\n')
+
+            # we use the basename because it is expected we run the condor
+            # script for that directory
+
+            job = CONDOR_JOB_TEMPLATE % {
+                'job_name': job_name,
+                'output': chunk_file,
+                'flist': chunk_flist_file,
+            }
+            condor_fobj.write(job)
+
+
+def chunk_flist(flist, nchunks):
+
+    nf = len(flist)
+    chunksize = nf // nchunks
+    extra_items = nf % nchunks
+
+    flists = []
+
+    start = 0
+    for i in range(nchunks):
+
+        this_chunksize = chunksize
+        if i <= extra_items:
+            this_chunksize += 1
+
+        end = start + this_chunksize
+
+        chunk = flist[start:end]
+        flists.append(chunk)
+
+        start = start + this_chunksize
+
+    return flists
+
+
+def get_args():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--script', required=True)
+    parser.add_argument('--files', nargs='+')
+    parser.add_argument('--flist')
+    parser.add_argument('-n', '--nchunks', type=int, required=True)
+    parser.add_argument('--limit', type=int)
+
+    parser.add_argument('--ext', default='fits.gz')
+    parser.add_argument('--mem', default='2G')
+
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    args = get_args()
+
+    if args.flist is not None:
+        flist = args.flist
+    elif args.files is not None:
+        flist = args.files
+        if args.limit is not None:
+            flist = flist[:args.limit]
+    else:
+        raise ValueError('send either --files or --flist')
+
+    main(
+        script=args.script,
+        flist=flist,
+        nchunks=args.nchunks,
+        mem=args.mem,
+        ext=args.ext,
+    )
