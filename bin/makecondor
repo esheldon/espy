@@ -25,7 +25,7 @@ environment = "OMP_NUM_THREADS=1"
 # transfer_output_files = %(output)s
 CONDOR_JOB_TEMPLATE = """
 +job_name = "%(job_name)s"
-transfer_input_files = %(flist)s
+transfer_input_files = %(transfer)s
 arguments = %(flist)s %(output)s
 queue
 """  # noqa
@@ -64,10 +64,15 @@ def main(script, flist, nchunks, mem, ext):
             # we use the basename because it is expected we run the condor
             # script for that directory
 
+            transfer_files = [chunk_flist_file]
+            if args.transfer is not None:
+                transfer_files += args.transfer
+            transfer_files = ','.join(transfer_files)
             job = CONDOR_JOB_TEMPLATE % {
                 'job_name': job_name,
                 'output': chunk_file,
                 'flist': chunk_flist_file,
+                'transfer': transfer_files,
             }
             condor_fobj.write(job)
 
@@ -108,6 +113,8 @@ def get_args():
 
     parser.add_argument('--ext', default='fits.gz')
     parser.add_argument('--mem', default='2G')
+    parser.add_argument('--transfer', nargs='+',
+                        help='files to copy')
 
     return parser.parse_args()
 
