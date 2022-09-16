@@ -131,41 +131,50 @@ class GaussFitter(object):
             if self.use_error:
                 self.yerr = numpy.sqrt(h['hist'])
 
-    def doplot(self, show=True, file=None, dpi=100, **keys):
+    def doplot(self, aspect=1.618, alpha=0.5, show=True, file=None, dpi=100, **keys):
         """
         compare fit to data
         """
-        import hickory
+        import proplot as pplt
 
         model = self.eval_pars(self.pars)
 
-        if 'legend' not in keys:
-            keys['legend'] = True
 
-        plt = hickory.Plot(**keys)
-        bsize = self.x[1] - self.x[0]
-        plt.bar(self.x, self.y, width=bsize, label='data')
+        # fig = pplt.figure(refaspect=aspect, **keys)
+        # import IPython; IPython.embed()
+        # ax = fig.subplot()
+        fig, ax = pplt.subplots(refaspect=aspect, **keys)
+        ymax = self.y.max()
+        ax.set(ylim=(0, 1.1*ymax))
+        # bsize = self.x[1] - self.x[0]
+        ax.bar(
+            self.x, self.y,
+            # width=bsize,
+            label='data',
+            alpha=alpha,
+        )
 
         if self.use_error:
-            plt.errorbar(self.x, self.y, self.yerr)
+            ax.errorbar(self.x, self.y, self.yerr)
 
-        plt.curve(self.x, model, label='model', color='red')
+        ax.plot(self.x, model, label='model', color='red')
 
-        mnstr = r'$\mu: %g +/- %g$' % (self.pars[0], self.perr[0])
-        sigstr = r'$\sigma: %g +/- %g$' % (self.pars[1], self.perr[1])
-        ampstr = 'amp: %g +/- %g' % (self.pars[2], self.perr[2])
+        mnstr = r'$\mu: %.3g +/- %.3g$' % (self.pars[0], self.perr[0])
+        sigstr = r'$\sigma: %.3g +/- %.3g$' % (self.pars[1], self.perr[1])
+        ampstr = 'amp: %.3g +/- %.3g' % (self.pars[2], self.perr[2])
 
-        plt.ntext(0.9, 0.3, mnstr, ha='right')
-        plt.ntext(0.9, 0.2, sigstr, ha='right')
-        plt.ntext(0.9, 0.1, ampstr, ha='right')
+        ax.text(0.1, 0.9, mnstr, ha='left', transform=ax.transAxes)
+        ax.text(0.1, 0.8, sigstr, ha='left', transform=ax.transAxes)
+        ax.text(0.1, 0.7, ampstr, ha='left', transform=ax.transAxes)
+        ax.legend()
 
         if show:
-            plt.show()
+            pplt.show()
 
         if file is not None:
-            plt.savefig(file, dpi=dpi)
+            fig.savefig(file, dpi=dpi)
 
-        return plt
+        return fig, ax
 
 
 class LogNormalFitter(GaussFitter):
@@ -273,8 +282,8 @@ class LineFitter(object):
     def _dofit_mcmc(self):
         import emcee
         import mcmc
-        sampler = emcee.EnsembleSampler(self.nwalkers, 
-                                        self.npars, 
+        sampler = emcee.EnsembleSampler(self.nwalkers,
+                                        self.npars,
                                         self._get_lnprob,
                                         a=self.a)
 
@@ -298,7 +307,6 @@ class LineFitter(object):
             # wrong args, this is a bug
             raise ValueError(errmsg)
 
-        numiter = infodict['nfev']
         pcov=None
         perr=None
 
@@ -311,13 +319,13 @@ class LineFitter(object):
             if w.size == 0:
                 # only do if non negative
                 perr = numpy.sqrt(d)
-        
+
         self._result={'pars':pars, 'pcov':pcov, 'perr':perr}
 
 
     def _set_guess(self, **kw):
         best_fit=numpy.polyfit(self.x, self.y, 1)
-        
+
         if self.method=='mcmc':
             guess = numpy.zeros( (self.nwalkers, self.npars) )
 
@@ -356,7 +364,7 @@ class LineFitter(object):
         """
         dof = (self.x.size-len(pars))
         s_sq = (self._errfunc(pars)**2).sum()/dof
-        return pcov * s_sq 
+        return pcov * s_sq
 
 
     def get_poly(self):

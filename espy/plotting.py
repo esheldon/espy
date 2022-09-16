@@ -1,6 +1,131 @@
 GOLDEN_RATIO = 1.61803398875
 GOLDEN_ARATIO = 1.0/GOLDEN_RATIO
 
+def plot(
+    x, y, xerr=None, yerr=None,
+    xlabel=None,
+    ylabel=None,
+    title=None,
+    xlim=None,
+    ylim=None,
+    xlog=False,
+    ylog=False,
+    aspect=1.618,  # golden ratio
+    legend=None,
+    figax=None,
+
+    figsize=None,
+    dpi=None,
+    **kw
+):
+    """
+    make a plot
+
+    Parameters
+    ----------
+    x: array or sequences
+        Array of x values
+    y: array or sequences
+        Array of y values
+    xerr: array or sequence, optional
+        Optional array of x errors
+    yerr: array or sequence, optional
+        Optional array of y errors
+
+    xlabel: str, optional
+        Label for x axis
+    ylabel: str, optional
+        Label for y axis
+    title: str, optional
+        Title string for plot
+    xlim: 2-element sequence, optional
+        Optional limits for the x axis
+    ylim: 2-element sequence, optional
+        Optional limits for the y axis
+    xlog: bool, optional
+        If True, use log x axis
+    ylog: bool, optional
+        If True, use log y axis
+    aratio: float, optional
+        Axis ratio of plot, ysize/xsize
+    legend: bool or Legend instance
+        If True, a legend is created. You can also send a Legend() instance.
+        If None or False, no legend is created
+    plt: Plot instance, optional
+        If sent, a new Plot is not created, the input one
+        is reused
+
+    show: bool, optional
+        If True, show the plot on the screen.  If the file= is
+        not sent, this defaults to True.  If file= is sent
+        this defaults to False
+    file: str, optional
+        Filename to write.
+
+    Keywords for the Plot/matplotlib Figure.  See docs for
+        the matplotlib Figure class
+
+        figsize dpi facecolor edgecolor linewidth
+        frameon subplotpars tight_layout constrained_layout
+
+    Keywords for plot or errorbar, depending if xerr/yerr
+    are sent.  See docs for matplotlib axes.plot and errorbar
+    commands
+
+    Returns
+    -------
+    Plot instance
+    """
+    file = kw.pop('file', None)
+    if file is not None:
+        show = kw.pop('show', False)
+    else:
+        show = kw.pop('show', config['show'])
+
+    if figax is None:
+        axis_kw = {
+            'xlabel': xlabel,
+            'ylabel': ylabel,
+            'title': title,
+        }
+        if xlim is not None:
+            axis_kw['xlim'] = xlim
+        if ylim is not None:
+            axis_kw['ylim'] = ylim
+        if xlog:
+            axis_kw['xscale'] = 'log'
+        if ylog:
+            axis_kw['yscale'] = 'log'
+
+        plt = Plot(
+            aratio=aratio,
+            legend=legend,
+            figsize=figsize,
+            dpi=dpi,
+            facecolor=facecolor,
+            edgecolor=edgecolor,
+            linewidth=linewidth,
+            frameon=frameon,
+            subplotpars=subplotpars,
+            tight_layout=tight_layout,
+            constrained_layout=constrained_layout,  # default to rc
+            **axis_kw
+        )
+
+    if xerr is not None or yerr is not None:
+        plt.errorbar(x, y, xerr=xerr, yerr=yerr, **kw)
+    else:
+        plt.plot(x, y, **kw)
+
+    if file is not None:
+        plt.savefig(file)
+
+    if show:
+        plt.show()
+
+    return plt
+
+
 
 def plot_residuals(
     *, x, y, model, yerr=None, frac=0.2, pad=0,
