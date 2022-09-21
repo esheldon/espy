@@ -155,7 +155,6 @@ class WQWatcher:
         self.scr.refresh()
 
     def get_job_listing(self):
-        # return self._run_cmd(self.ls_command)
         job_listing = wq.job_lister.get_job_listing(
             wq.DEFAULT_PORT, user=self.user,
         )
@@ -189,8 +188,6 @@ class WQWatcher:
         if len(lines) == 0:
             return statline, lines
 
-        if len(lines) == 0:
-            return statline, lines
         statline = lines.pop()
 
         # taking back 3 for the stat line
