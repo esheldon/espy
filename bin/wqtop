@@ -4,6 +4,10 @@ import subprocess
 import argparse
 
 import curses
+import wq
+import wq.status
+import wq.user_lister
+import wq.job_lister
 
 try:
     import curses.wrapper.wrapper as curses_wrapper
@@ -98,23 +102,23 @@ class WQWatcher:
             if self.split:
                 self.draw_separator()
 
-            data = self.get_wq_ls_output()
+            job_listing = self.get_job_listing()
 
-            statline, lines = self.extract_ls_lines(data)
+            statline, lines = self.extract_job_lines(job_listing)
 
             self.write_statline(self.win1, self.maxx1, statline)
             self.write_listing(self.win1, self.maxx1, lines)
 
             if self.split:
-                stat_data = self.get_wq_stat_output()
-                users_data = self.get_wq_users_output()
+                status_data = self.get_status()
+                users_data = self.get_user_data()
 
-                stat_statline, stat_lines = self.extract_stat_lines(
-                    stat_data, users=users_data
+                stat_statline, status_lines = self.extract_stat_lines(
+                    lines=status_data, users=users_data
                 )
 
                 self.write_statline(self.win2, self.maxx2, stat_statline)
-                self.write_listing(self.win2, self.maxx2, stat_lines)
+                self.write_listing(self.win2, self.maxx2, status_lines)
 
             c = self.win1.getch()
             if c == ord("q"):
@@ -150,14 +154,25 @@ class WQWatcher:
             pass
         self.scr.refresh()
 
-    def get_wq_ls_output(self):
-        return self._run_cmd(self.ls_command)
+    def get_job_listing(self):
+        # return self._run_cmd(self.ls_command)
+        job_listing = wq.job_lister.get_job_listing(
+            wq.DEFAULT_PORT, user=self.user,
+        )
+        return wq.job_lister.get_job_lines(
+            job_listing=job_listing,
+            user=self.user,
+        )
 
-    def get_wq_stat_output(self):
-        return self._run_cmd(self.stat_command)
+    def get_status(self):
+        status = wq.status.get_status(wq.DEFAULT_PORT)
+        return wq.status.get_status_lines(status)
 
-    def get_wq_users_output(self):
-        return self._run_cmd(self.users_command)
+    def get_user_data(self):
+        user_data = wq.user_lister.get_user_data(
+            wq.DEFAULT_PORT, user=self.user,
+        )
+        return wq.user_lister.get_user_lines(user_data)
 
     def _run_cmd(self, cmd):
         pobj = subprocess.Popen(
@@ -168,13 +183,12 @@ class WQWatcher:
         stdout_ret = stdout_ret.decode("utf-8")
         return stdout_ret
 
-    def extract_ls_lines(self, data):
+    def extract_job_lines(self, lines):
         statline = ""
 
-        lines = data.split("\n")
         if len(lines) == 0:
             return statline, lines
-        lines.pop()
+
         if len(lines) == 0:
             return statline, lines
         statline = lines.pop()
@@ -184,11 +198,14 @@ class WQWatcher:
 
         return statline, lines
 
-    def extract_stat_lines(self, data, users=None):
+    def extract_stat_lines(
+        self,
+        lines,
+        users,
+    ):
 
         statline = ""
 
-        lines = data.split("\n")
         keeplines = []
 
         if len(lines) == 0:
@@ -210,9 +227,9 @@ class WQWatcher:
             if len(line) > 0:
                 keeplines.append(line)
 
-        keeplines += [""] + users.split("\n")
+        keeplines += [""] + users
 
-        lines = lines[0: self.maxy2 - 2 - 1]
+        keeplines = keeplines[0: self.maxy2 - 2 - 1]
 
         return statline, keeplines
 
