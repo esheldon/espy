@@ -1,6 +1,7 @@
 GOLDEN_RATIO = 1.61803398875
 GOLDEN_ARATIO = 1.0/GOLDEN_RATIO
 
+
 def plot(
     x, y, xerr=None, yerr=None,
     xlabel=None,
@@ -11,10 +12,10 @@ def plot(
     xlog=False,
     ylog=False,
     aspect=1.618,  # golden ratio
+    width=3.5,
     legend=None,
     figax=None,
 
-    figsize=None,
     dpi=None,
     **kw
 ):
@@ -47,84 +48,128 @@ def plot(
     ylog: bool, optional
         If True, use log y axis
     aratio: float, optional
-        Axis ratio of plot, ysize/xsize
-    legend: bool or Legend instance
-        If True, a legend is created. You can also send a Legend() instance.
-        If None or False, no legend is created
-    plt: Plot instance, optional
-        If sent, a new Plot is not created, the input one
-        is reused
-
+        Axis ratio of plot, ysize/xsize, default golden ratio 1.618
+    width: float, optional
+        Optional reference width, default 3.5
+    legend: bool or dicdt
+        If True, a legend is created. If a dict, then the keywords
+        are sent to the legend call
+    figax: (fig, ax)
+        If sent, a new figure and axis is not created, the input one is
+        reused
     show: bool, optional
         If True, show the plot on the screen.  If the file= is
         not sent, this defaults to True.  If file= is sent
         this defaults to False
     file: str, optional
         Filename to write.
+    dpi: int, optional
+        dots-per-inch for a bitmap output
 
-    Keywords for the Plot/matplotlib Figure.  See docs for
-        the matplotlib Figure class
-
-        figsize dpi facecolor edgecolor linewidth
-        frameon subplotpars tight_layout constrained_layout
-
-    Keywords for plot or errorbar, depending if xerr/yerr
-    are sent.  See docs for matplotlib axes.plot and errorbar
-    commands
+    **kw extra keywords for plot call
 
     Returns
     -------
-    Plot instance
+    fig, ax
     """
-    file = kw.pop('file', None)
-    if file is not None:
-        show = kw.pop('show', False)
-    else:
-        show = kw.pop('show', config['show'])
 
-    if figax is None:
-        axis_kw = {
-            'xlabel': xlabel,
-            'ylabel': ylabel,
-            'title': title,
-        }
-        if xlim is not None:
-            axis_kw['xlim'] = xlim
-        if ylim is not None:
-            axis_kw['ylim'] = ylim
-        if xlog:
-            axis_kw['xscale'] = 'log'
-        if ylog:
-            axis_kw['yscale'] = 'log'
-
-        plt = Plot(
-            aratio=aratio,
-            legend=legend,
-            figsize=figsize,
-            dpi=dpi,
-            facecolor=facecolor,
-            edgecolor=edgecolor,
-            linewidth=linewidth,
-            frameon=frameon,
-            subplotpars=subplotpars,
-            tight_layout=tight_layout,
-            constrained_layout=constrained_layout,  # default to rc
-            **axis_kw
-        )
+    fig, ax, file, show = _prep_plot(
+        figax=figax,
+        xlim=xlim, ylim=ylim,
+        title=title, xlabel=xlabel, ylabel=ylabel,
+        xlog=xlog, ylog=ylog,
+        aspect=aspect, width=width,
+        kw=kw,
+    )
 
     if xerr is not None or yerr is not None:
-        plt.errorbar(x, y, xerr=xerr, yerr=yerr, **kw)
+        ax.errorbar(x, y, xerr=xerr, yerr=yerr, **kw)
+    elif 'ls' in kw or 'linestyle' in kw:
+        ax.plot(x, y, **kw)
     else:
-        plt.plot(x, y, **kw)
+        ax.scatter(x, y, **kw)
 
-    if file is not None:
-        plt.savefig(file)
+    _do_legend_maybe(ax=ax, legend=legend)
+    _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
+    return figax
 
-    if show:
-        plt.show()
 
-    return plt
+def plot_hist(
+    x,
+    xlabel=None,
+    ylabel=None,
+    title=None,
+    xlim=None,
+    ylim=None,
+    ylog=False,
+    aspect=1.618,  # golden ratio
+    width=3.5,
+    legend=None,
+    figax=None,
 
+    dpi=None,
+    **kw
+):
+    """
+    make a plot
+
+    Parameters
+    ----------
+    x: array or sequences
+        Array of x values
+    xlabel: str, optional
+        Label for x axis
+    ylabel: str, optional
+        Label for y axis
+    title: str, optional
+        Title string for plot
+    xlim: 2-element sequence, optional
+        Optional limits for the x axis
+    ylim: 2-element sequence, optional
+        Optional limits for the y axis
+    xlog: bool, optional
+        If True, use log x axis
+    ylog: bool, optional
+        If True, use log y axis
+    aratio: float, optional
+        Axis ratio of plot, ysize/xsize, default golden ratio 1.618
+    width: float, optional
+        Optional reference width, default 3.5
+    legend: bool or dicdt
+        If True, a legend is created. If a dict, then the keywords
+        are sent to the legend call
+    figax: (fig, ax)
+        If sent, a new figure and axis is not created, the input one is
+        reused
+    show: bool, optional
+        If True, show the plot on the screen.  If the file= is
+        not sent, this defaults to True.  If file= is sent
+        this defaults to False
+    file: str, optional
+        Filename to write.
+    dpi: int, optional
+        dots-per-inch for a bitmap output
+
+    **kw extra keywords for plot call
+
+    Returns
+    -------
+    fig, ax
+    """
+    fig, ax, file, show = _prep_plot(
+        figax=figax,
+        xlim=xlim, ylim=ylim,
+        title=title, xlabel=xlabel, ylabel=ylabel,
+        xlog=False, ylog=ylog,
+        aspect=aspect, width=width,
+        kw=kw,
+    )
+
+    ax.hist(x, **kw)
+
+    _do_legend_maybe(ax=ax, legend=legend)
+    _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
+    return figax
 
 
 def plot_residuals(
@@ -209,60 +254,6 @@ def plot_residuals(
 
     if show:
         plt.show()
-
-    return plt
-
-
-def plot_hist2d(x, y, **kw):
-    """
-    create a 2-d histogram of the data and view it
-
-
-    parameters
-    ----------
-    x: array
-        x data
-    y: array
-        y data
-
-    log: bool
-        If true, plot the log of the histogram, default
-        True
-    xlabel: string
-        label for x axis
-    ylabel: string
-        label for y axis
-
-    **kw:
-        keywords for the histogram2d routine
-
-    dependencies
-    ------------
-    esutil
-    images
-    """
-    import numpy as np
-    import images
-    import esutil as eu
-
-    dolog = kw.pop('log', True)
-
-    kw['more'] = True
-    hdict = eu.stat.histogram2d(x, y, **kw)
-
-    hist = hdict['hist']
-    if dolog:
-        hist = np.log10(hist.clip(min=0.1))
-
-    kw['transpose'] = False
-    kw['ranges'] = hdict['ranges']
-
-    # we want exact ranges here, to avoid confusing areas
-    # of black where there is no histogram
-    kw['xrange'] = [hdict['ranges'][0][0], hdict['ranges'][1][0]]
-    kw['yrange'] = [hdict['ranges'][0][1], hdict['ranges'][1][1]]
-
-    plt = images.view(hist, **kw)
 
     return plt
 
@@ -682,3 +673,59 @@ def whiskers(
         plt.show()
 
     return plt
+
+
+def _prep_plot(
+    figax, xlim, ylim, xlabel, ylabel, title, xlog, ylog, aspect, width, kw,
+):
+    import proplot as pplt
+
+    file = kw.pop('file', None)
+
+    if file is not None:
+        show = kw.pop('show', False)
+    else:
+        show = kw.pop('show', True)
+
+    if figax is None:
+        figax = pplt.subplots(refaspect=aspect, refwidth=width)
+        fig, ax = figax
+        axis_kw = {
+            'xlabel': xlabel,
+            'ylabel': ylabel,
+            'title': title,
+        }
+        if xlim is not None:
+            axis_kw['xlim'] = xlim
+
+        if ylim is not None:
+            axis_kw['ylim'] = ylim
+
+        ax.set(**axis_kw)
+
+        if xlog:
+            ax.set_xscale('log')
+
+        if ylog:
+            ax.set_yscale('log')
+
+    else:
+        fig, ax = figax
+
+    return fig, ax, file, show
+
+
+def _show_andor_save(fig, file, show, dpi):
+    if file is not None:
+        fig.savefig(file, dpi=dpi)
+
+    if show:
+        fig.show()
+
+
+def _do_legend_maybe(ax, legend):
+    if legend is not None:
+        if legend is True:
+            ax.legend()
+        else:
+            ax.legend(**legend)
