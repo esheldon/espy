@@ -91,7 +91,7 @@ def plot(
 
     _do_legend_maybe(ax=ax, legend=legend)
     _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
-    return figax
+    return fig, ax
 
 
 def plot_hist(
@@ -169,7 +169,7 @@ def plot_hist(
 
     _do_legend_maybe(ax=ax, legend=legend)
     _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
-    return figax
+    return fig, ax
 
 
 def plot_residuals(
