@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+
+
+def get_args():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--hosts', required=True)
+    parser.add_argument('--jobs', required=True)
+    return parser.parse_args()
+
+
+def make_sshlogin(hostfile, sshlogin):
+
+    hdata = {}
+    with open(hostfile) as fobj:
+        for line in fobj:
+            host = line.strip()
+            if host != '':
+                if host in hdata:
+                    hdata[host] += 1
+                else:
+                    hdata[host] = 1
+
+    with open(sshlogin, 'w') as fobj:
+        for host in hdata:
+            ncores = hdata[host]
+            line = f'{ncores}/{host}'
+            print(line)
+            fobj.write(line)
+            fobj.write('\n')
+
+
+def main(args):
+    import tempfile
+    import os
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        sshlogin = os.path.join(tmpdir, 'sshlogin.txt')
+
+        make_sshlogin(args.hosts, sshlogin)
+
+        cmd = [
+            'parallel',
+            '--eta',
+            '--bar',
+            f'--slf {sshlogin}',
+            '--sshdelay 0.1',
+            f'< {args.jobs}',
+        ]
+        cmd = ' '.join(cmd)
+        print(cmd)
+
+        os.system(cmd)
+
+
+if __name__ == '__main__':
+    args = get_args()
+    main(args)
