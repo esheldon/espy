@@ -135,23 +135,19 @@ class GaussFitter(object):
         """
         compare fit to data
         """
-        import proplot as pplt
+        import matplotlib.pyplot as pplt
 
         model = self.eval_pars(self.pars)
 
 
-        # fig = pplt.figure(refaspect=aspect, **keys)
-        # import IPython; IPython.embed()
-        # ax = fig.subplot()
-        fig, ax = pplt.subplots(refaspect=aspect, **keys)
+        fig, ax = pplt.subplots(**keys)
         ymax = self.y.max()
         ax.set(ylim=(0, 1.1*ymax))
-        # bsize = self.x[1] - self.x[0]
-        ax.bar(
+        ax.step(
             self.x, self.y,
-            # width=bsize,
             label='data',
             alpha=alpha,
+            where='mid',
         )
 
         if self.use_error:

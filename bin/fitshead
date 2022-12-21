@@ -1,44 +1,28 @@
 #!/usr/bin/env python
-"""
-usage:
-    fitshead filename [extension]
 
-Print out the fits header.  Defaults to extension 0
+def get_args():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('fname', help='the path to the fits file')
+    parser.add_argument('--ext', help='the extension to read')
+    return parser.parse_args()
 
-Requires fitsio or pyfits
-"""
-from __future__ import print_function
 
-from __future__ import print_function
-
-import sys
-try:
+def main(args):
     import fitsio
-    type='fitsio'
-except:
-    try:
-        import pyfits
-        type='pyfits'
-    except:
-        raise ImportError("Could not import fitsio or pyfits")
 
-def usage():
-    print('usage: fitshead filename [extension]')
-    print('    default extension is 0')
+    if args.ext is None:
+        ext = 0
+    else:
+        try:
+            ext = int(args.ext)
+        except ValueError:
+            ext = args.ext
 
-if len(sys.argv) < 2:
-    usage()
-    sys.exit(45)
+    hdr = fitsio.read_header(args.fname, ext)
+    print(hdr)
 
-fname=sys.argv[1]
 
-ext=0
-if len(sys.argv) >= 3:
-    ext=int(sys.argv[2])
-
-if type == 'fitsio':
-    hdr = fitsio.read_header(fname,ext)
-else:
-    hdr = pyfits.getheader(fname, ext=ext)
-
-print(hdr)
+if __name__ == '__main__':
+    args = get_args()
+    main(args)
