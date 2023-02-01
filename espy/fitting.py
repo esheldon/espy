@@ -1,12 +1,12 @@
-import numpy
-import scipy.optimize
-from pprint import pprint
+import numpy as np
 
 
 def histogauss(
     data, guess=None, nbin=None, binsize=None, min=None, max=None,
     **plot_keys,
 ):
+    from pprint import pprint
+
     fitter = GaussFitter(
         data,
         nbin=nbin, binsize=binsize, min=min, max=max,
@@ -56,6 +56,7 @@ class GaussFitter(object):
 
         guess is [mean, sigma, amp]
         """
+        import scipy.optimize
 
         self._make_hist()
 
@@ -77,12 +78,12 @@ class GaussFitter(object):
         if self.pcov0 is not None:
             self.pcov = self._scale_leastsq_cov(self.pars, self.pcov0)
 
-            d = numpy.diag(self.pcov)
-            w, = numpy.where(d < 0)
+            d = np.diag(self.pcov)
+            w, = np.where(d < 0)
 
             if w.size == 0:
                 # only do if non negative
-                self.perr = numpy.sqrt(d)
+                self.perr = np.sqrt(d)
 
     def eval_pars(self, pars):
         """
@@ -129,16 +130,17 @@ class GaussFitter(object):
             self.y = h['hist']
 
             if self.use_error:
-                self.yerr = numpy.sqrt(h['hist'])
+                self.yerr = np.sqrt(h['hist'])
 
-    def doplot(self, aspect=1.618, alpha=0.5, show=True, file=None, dpi=100, **keys):
+    def doplot(
+        self, aspect=1.618, alpha=0.5, show=True, file=None, dpi=100, **keys,
+    ):
         """
         compare fit to data
         """
         import matplotlib.pyplot as pplt
 
         model = self.eval_pars(self.pars)
-
 
         fig, ax = pplt.subplots(**keys)
         ymax = self.y.max()
@@ -179,98 +181,125 @@ class LogNormalFitter(GaussFitter):
         [cen, sigma, amp]
         """
         import ngmix
-        p=ngmix.priors.LogNormal(pars[0],pars[1])
+        p = ngmix.priors.LogNormal(pars[0], pars[1])
 
         return pars[2]*p.get_prob_array(self.x)
 
 
-def fit_line(x, y, yerr=None, **kw):
-    lf=LineFitter(x, y, yerr=yerr, **kw)
-    lf.dofit()
-    return lf
+def fit_line(x, y, yerr=None):
+    """
+    Fit a line to the input data
 
-class LineFitter(object):
+    Parameters
+    ----------
+    x: array like
+        The independent variable
+    y: array like
+        The dependent variable
+    yerr: array like, optional
+        Uncertainties on y
+
+    Returns
+    -------
+    dict with entries
+        pars: array
+            [slope, offset]
+        perr: array
+            errors on slope/offset
+        slope: float
+            Copy of pars[0]
+        slope_err: float
+            Copy of perr[0]
+        offset: flot
+            Copy of pars[1]
+        offset_err: float
+            Copy of perr[1]
+        poly: np.poly1d(pars)
+    """
+    xsum, ysum, xysum, x2sum, wsum = _get_fit_line_quantities(x, y, yerr)
+
+    slope = (xsum * ysum - xysum * wsum) / (xsum**2 - x2sum * wsum)
+    offset = (xysum - slope * x2sum) / xsum
+
+    slope_var = wsum / (x2sum * wsum - xsum**2)
+    offset_var = x2sum / (x2sum * wsum - xsum**2)
+    slope_err = np.sqrt(slope_var)
+    offset_err = np.sqrt(offset_var)
+
+    pars = np.array([slope, offset])
+    perr = np.array([slope_err, offset_err])
+
+    return {
+        'pars': pars,
+        'perr': perr,
+        'slope': slope,
+        'slope_err': slope_err,
+        'offset': offset,
+        'offset_err': offset_err,
+        'poly': np.poly1d(pars),
+    }
+
+
+def _get_fit_line_quantities(x, y, yerr=None):
+    x = np.array(x, ndmin=1)
+    y = np.array(y, ndmin=1)
+
+    if yerr is None:
+        yerr = np.ones(x.size)
+    else:
+        yerr = np.array(yerr, ndmin=1)
+
+    if x.size != y.size:
+        raise ValueError(
+            f'x[{x.size}] and y[{y.size}] must be same size for line fit'
+        )
+
+    if x.size != yerr.size:
+        raise ValueError(
+            f'x[{x.size}] and yerr[{yerr.size}] must be same size for line fit'
+        )
+
+    wts = 1/yerr**2
+    xsum = (x * wts).sum()
+    ysum = (y * wts).sum()
+    xysum = (x * y * wts).sum()
+    x2sum = (x * x * wts).sum()
+    wsum = wts.sum()
+    return xsum, ysum, xysum, x2sum, wsum
+
+
+class PowerLawFitter(object):
     def __init__(self, x, y, yerr=None, method='max', **kw):
 
-        self.x=numpy.array(x,dtype='f8',ndmin=1)
-        self.y=numpy.array(y,dtype='f8',ndmin=1)
+        self.x = np.array(x, dtype='f8', ndmin=1)
+        self.y = np.array(y, dtype='f8', ndmin=1)
+
         if yerr is not None:
-            yerr=numpy.array(yerr,dtype='f8',ndmin=1)
-        self.yerr=yerr
+            yerr = np.array(yerr, dtype='f8', ndmin=1)
+        self.yerr = yerr
 
-        self.method=method
+        self.method = method
 
-        self.npars=2
+        self.npars = 2
 
-        if self.method=='mcmc':
+        if self.method == 'mcmc':
             if self.yerr is None:
                 raise RuntimeError("send yerr= for mcmc")
-            self.nwalkers=kw['nwalkers']
-            self.burnin=kw['burnin']
-            self.nstep=kw['nstep']
-            self.a = kw.get("a",2.0)
+
+            self.nwalkers = kw['nwalkers']
+            self.burnin = kw['burnin']
+            self.nstep = kw['nstep']
+            self.a = kw.get("a", 2.0)
 
         self._set_guess(**kw)
-
-    def doplot(self, **keys):
-        import biggles
-
-        show=keys.pop('show',False)
-        file=keys.pop('file',None)
-
-        res=self.get_result()
-        ply = self.get_poly()
-
-        plt=biggles.FramedPlot()
-
-        pts = biggles.Points(
-            self.x, self.y,
-            type='filled circle',
-            size=2,
-        )
-        pts.label='data'
-
-        plt.add(pts)
-        if self.yerr is not None:
-            err = biggles.SymmetricErrorBarsY(
-                self.x, self.y, self.yerr,
-            )
-            plt.add(err)
-
-        line = biggles.Curve(
-            self.x, ply(self.x),
-            color='blue',
-        )
-        line.label='%.3g x + %.3g' % tuple(res['pars'])
-        plt.add(line)
-
-        key=biggles.PlotKey(
-            0.1,0.9,[pts,line],
-            halign='left',
-        )
-        plt.add(key)
-
-        if show:
-            plt.show(**keys)
-        if file is not None:
-            print("writing:",file)
-            if '.eps' in file:
-                plt.write_eps(file)
-            elif '.png' in file:
-                width=keys.pop('width',800)
-                height=keys.pop('height',800)
-                plt.write_img(width,height,file)
-
-        return plt
-
 
     def get_result(self):
         return self._result
 
     def dofit(self):
-        if self.method=='max':
+        if self.method == 'max':
             self._dofit_max()
-        elif self.method=='mcmc':
+        elif self.method == 'mcmc':
             self._dofit_mcmc()
         else:
             raise ValueError("bad method: '%s'" % self.method)
@@ -278,71 +307,65 @@ class LineFitter(object):
     def _dofit_mcmc(self):
         import emcee
         import mcmc
-        sampler = emcee.EnsembleSampler(self.nwalkers,
-                                        self.npars,
-                                        self._get_lnprob,
-                                        a=self.a)
+        sampler = emcee.EnsembleSampler(
+            self.nwalkers,
+            self.npars,
+            self._get_lnprob,
+            a=self.a,
+        )
 
         pos_burn, prob, state = sampler.run_mcmc(self.guess, self.burnin)
         pos, prob, state = sampler.run_mcmc(pos_burn, self.nstep)
 
-        trials  = sampler.flatchain
+        trials = sampler.flatchain
         pars, pcov = mcmc.extract_stats(trials)
 
-        self.sampler=sampler
-        self.trials=trials
-        perr=numpy.sqrt(numpy.diag(pcov))
+        self.sampler = sampler
+        self.trials = trials
+        perr = np.sqrt(np.diag(pcov))
 
-        self._result={'pars':pars, 'pcov':pcov, 'perr':perr}
+        self._result = {
+            'pars': pars,
+            'pcov': pcov,
+            'perr': perr,
+        }
+
+    def _get_lnprob(self, pars):
+        model = self.eval_pars(pars)
+
+        chi2 = ((model-self.y) / self.yerr)**2
+
+        return -0.5*chi2.sum()
 
     def _dofit_max(self):
-        res=scipy.optimize.leastsq(self._errfunc, self.guess,
-                                   full_output=1)
+        import scipy.optimize
+        res = scipy.optimize.leastsq(
+            self._errfunc, self.guess,
+            full_output=1,
+        )
         pars, pcov0, infodict, errmsg, ier = res
         if ier == 0:
             # wrong args, this is a bug
             raise ValueError(errmsg)
 
-        pcov=None
-        perr=None
+        pcov = None
+        perr = None
 
         if pcov0 is not None:
             pcov = self._scale_leastsq_cov(pars, pcov0)
 
-            d=numpy.diag(pcov)
-            w,=numpy.where(d < 0)
+            d = np.diag(pcov)
+            w, = np.where(d < 0)
 
             if w.size == 0:
                 # only do if non negative
-                perr = numpy.sqrt(d)
+                perr = np.sqrt(d)
 
-        self._result={'pars':pars, 'pcov':pcov, 'perr':perr}
-
-
-    def _set_guess(self, **kw):
-        best_fit=numpy.polyfit(self.x, self.y, 1)
-
-        if self.method=='mcmc':
-            guess = numpy.zeros( (self.nwalkers, self.npars) )
-
-            rnums = 2.0*(numpy.random.random(self.nwalkers)-0.5)
-            guess[:,0] += 0.01*rnums
-            rnums = 2.0*(numpy.random.random(self.nwalkers)-0.5)
-            guess[:,1] += 0.01*rnums
-
-            self.guess=guess
-        else:
-            self.guess=best_fit
-
-    def eval_pars(self, pars):
-        return pars[0]*self.x + pars[1]
-
-    def _get_lnprob(self, pars):
-        model = self.eval_pars(pars)
-
-        chi2 = ( (model-self.y)/self.yerr )**2
-
-        return -0.5*chi2.sum()
+        self._result = {
+            'pars': pars,
+            'pcov': pcov,
+            'perr': perr,
+        }
 
     def _errfunc(self, pars):
         model = self.eval_pars(pars)
@@ -362,90 +385,90 @@ class LineFitter(object):
         s_sq = (self._errfunc(pars)**2).sum()/dof
         return pcov * s_sq
 
-
-    def get_poly(self):
-        res=self.get_result()
-        return numpy.poly1d(res['pars'])
-
-    def __call__(self, x):
-        """
-        pars order same as for numpy.poly1d
-        """
-        res=self.get_result()
-        pars=res['pars']
-        return pars[0]*x + pars[1]
-
-    def __repr__(self):
-        if hasattr(self,'_result'):
-            pars=self._result['pars']
-            perr=self._result['perr']
-
-            if perr is not None:
-                rep = """y = p0*x + p1
-    p0: %s +/- %s
-    p1: %s +/- %s""" % (pars[0],perr[0],pars[1],perr[1])
-            else:
-                rep = """y = p0*x + p1
-    p0: %s +/- None
-    p1: %s +/- None""" % (pars[0],pars[1])
-
-        else:
-            rep=""
-        return rep
-
-
-class PowerLawFitter(LineFitter):
     def _set_guess(self, **kw):
         if 'guess' not in kw:
             raise ValueError("send guess= for power law fit")
 
-        self.guess=numpy.array(kw['guess'], dtype='f8')
+        self.guess = np.array(kw['guess'], dtype='f8')
         if self.guess.size != self.npars:
             raise ValueError("guess should have size "
-                             "%d, got %d" % (self.npars,self.guess.size))
+                             "%d, got %d" % (self.npars, self.guess.size))
 
     def eval_pars(self, pars):
         return pars[0]*self.x**pars[1]
 
     def __call__(self, x):
-        res=self.get_result()
-        pars=res['pars']
-        return pars[0]*x**pars[1]
+        res = self.get_result()
+        pars = res['pars']
+        return pars[0] * x**pars[1]
 
     def __repr__(self):
-        if hasattr(self,'_result'):
-            pars=self._result['pars']
-            perr=self._result['perr']
+        if hasattr(self, '_result'):
+            pars = self._result['pars']
+            perr = self._result['perr']
 
             if perr is not None:
                 rep = """y = p0*x^p1
     p0: %s +/- %s
-    p1: %s +/- %s""" % (pars[0],perr[0],pars[1],perr[1])
+    p1: %s +/- %s""" % (pars[0], perr[0], pars[1], perr[1])
             else:
                 rep = """y = p0*x^p1
     p0: %s +/- None
-    p1: %s +/- None""" % (pars[0],pars[1])
+    p1: %s +/- None""" % (pars[0], pars[1])
 
         else:
-            rep=""
+            rep = ""
         return rep
 
 
 def test_line(show=False):
-    pars = [1,3]
-    x = numpy.arange(20)
-    y = pars[0]*x + pars[1]
-    yerr = numpy.zeros(len(x)) + 2 + 0.1*numpy.random.random(len(x))
-    y += yerr*numpy.random.randn(len(x))
+    pars = [1.0, 3.0]
 
-    lf = LineFitter(x, y, yerr=yerr)
-    print('guess:',lf.guess)
-    print(lf)
+    npts = 20
+    x = np.arange(npts)
+    y = pars[0]*x + pars[1]
+    yerr = 1 + 0.5*np.random.uniform(size=npts)
+    y += yerr*np.random.normal(size=npts)
+
+    res = fit_line(x, y, yerr=yerr)
+    ply = res['poly']
 
     if show:
-        import biggles
-        plt=biggles.FramedPlot()
-        plt.add(biggles.Points(x, y,type='filled circle'))
-        plt.add(biggles.SymmetricErrorBarsY(x, y, yerr))
-        plt.add(biggles.Curve(x, lf(x),color='blue'))
-        plt.show()
+        from matplotlib import pyplot as mplt
+        fig, ax = mplt.subplots()
+
+        ax.errorbar(x, y, yerr, label='data')
+        ax.plot(x, ply(x), label='fit')
+        ax.legend()
+        mplt.show()
+
+
+def test_line_err(ntrial=10000):
+    pars = [1.0, 3.0]
+
+    npts = 20
+    x = np.arange(npts)
+    y0 = pars[0]*x + pars[1]
+
+    slopes = np.zeros(ntrial)
+    slope_errors = np.zeros(ntrial)
+    offsets = np.zeros(ntrial)
+    offset_errors = np.zeros(ntrial)
+
+    for i in range(ntrial):
+        yerr = 1 + 0.5*np.random.uniform(size=npts)
+        y = y0 + yerr*np.random.normal(size=npts)
+
+        res = fit_line(x, y, yerr=yerr)
+
+        slopes[i] = res['slope']
+        slope_errors[i] = res['slope_err']
+        offsets[i] = res['offset']
+        offset_errors[i] = res['offset_err']
+
+    slope_std = slopes.std()
+    offset_std = offsets.std()
+    med_slope_err = np.median(slope_errors)
+    med_offset_err = np.median(offset_errors)
+    print(f'slope err: {slope_std} predicted: {med_slope_err}')
+    print(f'offset err: {offset_std} predicted: {med_offset_err}')
