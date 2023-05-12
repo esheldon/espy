@@ -840,14 +840,13 @@ def ds9(im):
     import fitsio
     import os
     import tempfile
+    from tempfile import TemporaryDirectory
 
-    tmpdir = os.environ.get("TMPDIR", "/tmp")
-    tfile = tempfile.mktemp(suffix=".fits")
-    tfile = os.path.join(tmpdir, tfile)
-    fitsio.write(tfile, im, clobber=True)
-    os.system("ds9 %s" % tfile)
-    if os.path.exists(tfile):
-        os.remove(tfile)
+    with TemporaryDirectory() as tmpdir:
+        tfile = tempfile.mktemp(suffix=".fits")
+        tfile = os.path.join(tmpdir, tfile)
+        fitsio.write(tfile, im)
+        os.system("ds9 %s" % tfile)
 
 
 def _get_updated_keywords(input_kws, **kws):
