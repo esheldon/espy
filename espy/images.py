@@ -1,6 +1,7 @@
 import os
 import numpy as np
 from sys import stdout
+from .plotting import _show_andor_save
 
 
 def view(
@@ -8,10 +9,13 @@ def view(
     nonlinear=None,
     autoscale=False,
     colorbar=False,
-    imshow_kws={},
-    plt=None,
-    plt_kws={},
-    **kws
+    figax=None,
+    width=3.5,
+    cmap=None,
+    file=None,
+    dpi=None,
+    title=None,
+    **kw
 ):
     """
     View the image and return the plot object
@@ -49,65 +53,28 @@ def view(
     plt: figure
         If not sent, a new one is created using the plt_kws
     """
-    import hickory
+
+    fig, ax, file, show = _prep_plot(
+        figax=figax, title=title, width=width, kw=kw,
+    )
 
     if len(image.shape) == 2:
-        # for 3D color images we need to trust the input to be properly scaleD
+        # for 3D color images we need to trust the input to be properly scaled
         image = scale_image(
             image=image,
             nonlinear=nonlinear,
             autoscale=autoscale,
         )
 
-    if plt is None:
-        aratio = image.shape[0] / image.shape[1]
-        add_plt_kws = {"aratio": aratio}
-        if "constrained_layout" not in plt_kws:
-            add_plt_kws["constrained_layout"] = False
-        if "figsize" not in plt_kws:
-            if aratio > 1:
-                add_plt_kws["figsize"] = (8 / aratio, 8)
-            else:
-                add_plt_kws["figsize"] = (8, 8 * aratio)
-
-        if len(add_plt_kws) > 0:
-            plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
-
-        plt = hickory.Plot(**plt_kws)
-
-    add_imshow_kws = {}
-    if "cmap" not in imshow_kws:
-        add_imshow_kws["cmap"] = "gray"
-
-    if "interpolation" not in imshow_kws:
-        add_imshow_kws["interpolation"] = "none"
-
-    if len(add_imshow_kws) > 0:
-        imshow_kws = _get_updated_keywords(imshow_kws, **add_imshow_kws)
-
-    pim = plt.imshow(image, **imshow_kws)
+    pim = ax.imshow(image, cmap=cmap)
 
     # print(type(super(plt)))
     if colorbar:
-        import matplotlib.pyplot as mplt
-        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        ax.colorbar(pim)
 
-        try:
-            divider = make_axes_locatable(plt.axes[0])
-        except TypeError:
-            divider = make_axes_locatable(plt)
+    _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
 
-        cax = divider.append_axes("right", size="5%", pad=0.1)
-        # plt.colorbar(pim, cax=cax)
-        mplt.colorbar(pim, cax=cax)
-
-    if hasattr(plt, 'tight_layout'):
-        plt.tight_layout()
-
-    _writefile_maybe(plt=plt, **kws)
-    _show_maybe(plt=plt, **kws)
-
-    return plt
+    return fig, ax
 
 
 def get_profile(image, cen=None):
@@ -135,10 +102,17 @@ def get_profile(image, cen=None):
 def view_profile(
     image,
     cen=None,
-    plt=None,
-    plt_kws={},
-    pt_kws={},
-    **kws
+    figax=None,
+    xlim=None,
+    ylim=None,
+    xlabel='radius [pixels]',
+    ylabel=None,
+    xlog=False,
+    ylog=False,
+    title=None,
+    width=3.5,
+    dpi=None,
+    **kw
 ):
     """
     View the image as a radial profile vs radius from the center.
@@ -165,45 +139,20 @@ def view_profile(
         keywords for the FramedPlot and for the output image dimensions
         width
     """
-    import hickory
 
-    if plt is None:
-        plt = hickory.Plot(**plt_kws)
+    fig, ax, file, show = _prep_plot(
+        figax=figax, title=title, width=width, kw=kw,
+        xlim=xlim, ylim=ylim, xlog=xlog, ylog=ylog,
+        xlabel=xlabel, ylabel=ylabel,
+    )
 
     r, pim = get_profile(image, cen=cen)
 
-    plt.plot(r, pim, **pt_kws)
+    ax.scatter(r, pim, **kw)
 
-    _writefile_maybe(plt=plt, **kws)
-    _show_maybe(plt=plt, **kws)
+    _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
 
-    return plt
-
-
-def _writefile_maybe(*, plt, **kws):
-    file = kws.pop("file", None)
-    if file is not None:
-        file = os.path.expandvars(file)
-        file = os.path.expanduser(file)
-        plt.savefig(file, **kws)
-
-
-def _show_maybe(*, plt, **kws):
-    show = kws.pop("show", None)
-    if show is None:
-        if "file" in kws and kws["file"] is not None:
-            # don't show anything if show not explicitly
-            # sent and we are writing a file
-            show = False
-        else:
-            show = True
-
-    if show:
-        dpi = kws.get("dpi", 100)
-        skws = {}
-        if "dpi" in kws:
-            skws["dpi"] = dpi
-        plt.show(**skws)
+    return fig, ax
 
 
 def make_combined_mosaic(imlist):
@@ -236,76 +185,76 @@ def make_combined_mosaic(imlist):
     return imtot
 
 
-def view_mosaic(
-    imlist,
-    colorbar=False,
-    titles=None,
-    combine=False,
-    title=None,
-    plt_kws={},
-    **kws,
-):
-    import hickory
-    from . import plotting
-
-    if combine:
-        imtot = make_combined_mosaic(imlist)
-        if title is not None:
-            plt_kws = _get_updated_keywords(plt_kws, title=title)
-
-        return view(imtot, colorbar=colorbar, plt_kws=plt_kws)
-
-    nimage = len(imlist)
-    grid = plotting.Grid(nimage)
-
-    aratio = grid.nrow / grid.ncol
-
-    if titles is None:
-        titles = ['im%d' for i in range(nimage)]
-
-    add_plt_kws = {}
-
-    if "constrained_layout" not in plt_kws:
-        add_plt_kws["constrained_layout"] = False
-
-    if "figsize" not in plt_kws:
-        if aratio > 1:
-            add_plt_kws["figsize"] = (8 / aratio, 8)
-        else:
-            add_plt_kws["figsize"] = (8, 8 * aratio)
-
-    if len(add_plt_kws) > 0:
-        plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
-
-    tab = hickory.Table(
-        nrows=grid.nrow, ncols=grid.ncol,
-        **plt_kws,
-    )
-
-    for i in range(nimage):
-        tmp_plt_kws = _get_updated_keywords(
-            plt_kws,
-            show=False,
-            file=None,
-            title=titles[i],
-            colorbar=colorbar,
-        )
-        view(imlist[i], plt=tab.axes[i], **tmp_plt_kws)
-
-    nax = len(tab.axes)
-    if nax > nimage:
-        for i in range(nimage, nax):
-            tab.axes[i].axis('off')
-
-    if title is not None:
-        tab.suptitle(title)
-
-    tab.tight_layout()
-
-    _writefile_maybe(plt=tab, **kws)
-    _show_maybe(plt=tab, **kws)
-
-    return tab
+# def view_mosaic(
+#     imlist,
+#     colorbar=False,
+#     titles=None,
+#     combine=False,
+#     title=None,
+#     plt_kws={},
+#     **kws,
+# ):
+#     import hickory
+#     from . import plotting
+#
+#     if combine:
+#         imtot = make_combined_mosaic(imlist)
+#         if title is not None:
+#             plt_kws = _get_updated_keywords(plt_kws, title=title)
+#
+#         return view(imtot, colorbar=colorbar, plt_kws=plt_kws)
+#
+#     nimage = len(imlist)
+#     grid = plotting.Grid(nimage)
+#
+#     aratio = grid.nrow / grid.ncol
+#
+#     if titles is None:
+#         titles = ['im%d' for i in range(nimage)]
+#
+#     add_plt_kws = {}
+#
+#     if "constrained_layout" not in plt_kws:
+#         add_plt_kws["constrained_layout"] = False
+#
+#     if "figsize" not in plt_kws:
+#         if aratio > 1:
+#             add_plt_kws["figsize"] = (8 / aratio, 8)
+#         else:
+#             add_plt_kws["figsize"] = (8, 8 * aratio)
+#
+#     if len(add_plt_kws) > 0:
+#         plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
+#
+#     tab = hickory.Table(
+#         nrows=grid.nrow, ncols=grid.ncol,
+#         **plt_kws,
+#     )
+#
+#     for i in range(nimage):
+#         tmp_plt_kws = _get_updated_keywords(
+#             plt_kws,
+#             show=False,
+#             file=None,
+#             title=titles[i],
+#             colorbar=colorbar,
+#         )
+#         view(imlist[i], plt=tab.axes[i], **tmp_plt_kws)
+#
+#     nax = len(tab.axes)
+#     if nax > nimage:
+#         for i in range(nimage, nax):
+#             tab.axes[i].axis('off')
+#
+#     if title is not None:
+#         tab.suptitle(title)
+#
+#     tab.tight_layout()
+#
+#     _writefile_maybe(plt=tab, **kws)
+#     _show_maybe(plt=tab, **kws)
+#
+#     return tab
 
 
 def bytescale(im):
@@ -339,37 +288,32 @@ def write_image(filename, image, **keys):
 
 def multiview(
     image,
+    nonlinear=None,
+    autoscale=False,
+    colorbar=False,
     cen=None,
     profile=False,
-    colorbar=False,
-    imshow_kws={},
-    plt_kws={},
-    pt_kws={},
+    xlim=None,
+    ylim=None,
+    xlabel=None,
+    ylabel=None,
+    xlog=False,
+    ylog=False,
     title=None,
-    **kws,
+    width=7,
+    dpi=None,
+    figax=None,
+    **kw,
 ):
     """
     View the image and also some cross-sections through it.  Good for
     postage stamp type images
     """
 
-    import hickory
-
-    add_plt_kws = {}
-
-    if "constrained_layout" not in plt_kws:
-        add_plt_kws["constrained_layout"] = False
-
-    if "figsize" not in plt_kws:
-        add_plt_kws["figsize"] = (8*2, 8)
-
-    if len(add_plt_kws) > 0:
-        plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
-
-    tab = hickory.Table(
-        nrows=1,
-        ncols=2,
-        **plt_kws,
+    fig, axs, file, show = _prep_2plot(
+        figax=figax, width=width, kw=kw,
+        xlim=xlim, ylim=ylim, xlog=xlog, ylog=ylog,
+        xlabel=xlabel, ylabel=ylabel,
     )
 
     if cen is None:
@@ -381,35 +325,18 @@ def multiview(
 
     assert len(cen) == 2
 
-    add_imshow_kws = {}
-    if "cmap" not in imshow_kws:
-        add_imshow_kws["cmap"] = "gray"
-
-    if "interpolation" not in imshow_kws:
-        add_imshow_kws["interpolation"] = "none"
-
-    if len(add_imshow_kws) > 0:
-        imshow_kws = _get_updated_keywords(imshow_kws, **add_imshow_kws)
-
-    tmp_plt_kws = _get_updated_keywords(
-        plt_kws,
-        show=False,
-        file=None,
-        colorbar=colorbar,
-    )
     view(
-        image, plt=tab[0],
-        imshow_kws=imshow_kws,
-        **tmp_plt_kws,
+        image, figax=(fig, axs[0]),
+        nonlinear=nonlinear, autoscale=autoscale, colorbar=colorbar,
+        show=False, file=None,
     )
 
     if profile:
-        tab[1].set(xlabel='radius [pixels]')
         view_profile(
             image,
-            show=False,
-            plt=tab[1],
-            pt_kws=pt_kws,
+            show=False, file=None,
+            figax=(fig, axs[1]),
+            **kw
         )
     else:
         # cross-section across rows
@@ -419,169 +346,173 @@ def multiview(
         yvals = np.arange(image.shape[0])
         xvals = np.arange(image.shape[1])
 
-        tab[1].step(
+        # axs[1].plot(yvals, imrows)
+        # axs[1].plot(xvals, imcols)
+
+        axs[1].step(
             yvals, imrows,
             label='rows', linestyle='-', marker=None,
             where='mid',
+            **kw
         )
-        tab[1].step(
+        axs[1].step(
             xvals, imcols,
             label='cols', linestyle='-', marker=None,
             where='mid',
+            **kw
         )
-        tab[1].legend()
+        axs[1].legend()
 
     if title is not None:
-        tab.suptitle(title)
+        fig.format(suptitle=title)
 
-    _writefile_maybe(plt=tab, **kws)
-    _show_maybe(plt=tab, **kws)
-    return tab
+    _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
+    return fig, axs
 
 
-def compare_images(
-    im1,
-    im2,
-    cross_sections=True,
-    colorbar=False,
-    color1="blue",
-    color2="orange",
-    label1="im1",
-    label2="im2",
-    colordiff="red",
-    plt_kws={},
-    file_kws={},
-    **kws
-):
-
-    import hickory
-
-    nrows = 2
-    if cross_sections:
-        ncols = 3
-    else:
-        ncols = 2
-
-    aratio = nrows / ncols
-
-    add_plt_kws = {}
-
-    if "constrained_layout" not in plt_kws:
-        add_plt_kws["constrained_layout"] = False
-
-    if "figsize" not in plt_kws:
-        if aratio > 1:
-            add_plt_kws["figsize"] = (8 / aratio, 8)
-        else:
-            add_plt_kws["figsize"] = (8, 8 * aratio)
-
-    if len(add_plt_kws) > 0:
-        plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
-
-    tab = hickory.Table(
-        nrows=nrows,
-        ncols=ncols,
-        **plt_kws,
-    )
-    ax1 = tab[0, 0]
-    ax2 = tab[0, 1]
-    if cross_sections:
-        axresid = tab[0, 2]
-        tab[1, 2].axis('off')
-    else:
-        axresid = tab[1, 0]
-        tab[1, 1].axis('off')
-
-    labelres = "%s-%s" % (label1, label2)
-
-    if im1.shape != im2.shape:
-        raise ValueError("images must be the same shape")
-
-    resid = im1 - im2
-
-    tmp_plt_kws = _get_updated_keywords(
-        plt_kws,
-        show=False,
-        file=None,
-        title=label1,
-        colorbar=colorbar,
-    )
-    view(im1, plt=ax1, **tmp_plt_kws)
-
-    tmp_plt_kws = _get_updated_keywords(
-        plt_kws,
-        show=False,
-        file=None,
-        title=label2,
-        colorbar=colorbar,
-    )
-
-    view(im2, plt=ax2, **tmp_plt_kws)
-
-    tmp_plt_kws = _get_updated_keywords(
-        plt_kws,
-        show=False,
-        file=None,
-        title=labelres,
-        colorbar=colorbar,
-    )
-    view(resid, plt=axresid, **tmp_plt_kws)
-    # if colorbar:
-    #     for ax in plt.axes[:3]:
-    #         ax.colorbar(
-
-    if cross_sections:
-        cen = (np.array(im1.shape) - 1) / 2
-        cen0 = int(cen[0])
-        cen1 = int(cen[1])
-        im1rows = im1[:, cen1]
-        im1cols = im1[cen0, :]
-        im2rows = im2[:, cen1]
-        im2cols = im2[cen0, :]
-        resrows = resid[:, cen1]
-        rescols = resid[cen0, :]
-
-        yvals = np.arange(im1.shape[0])
-        xvals = np.arange(im1.shape[1])
-        tab[1, 0].step(
-            yvals, im1rows,
-            # color=color1,
-            label=label1, linestyle='-', marker=None,
-        )
-        tab[1, 0].step(
-            yvals, im2rows,
-            # color=color2,
-            label=label1, linestyle='-', marker=None,
-        )
-        tab[1, 0].step(
-            yvals, resrows,
-            # color=colordiff,
-            label=labelres, linestyle='-', marker=None,
-        )
-        tab[1, 0].legend()
-        tab[1, 0].set(xlabel="center rows")
-
-        tab[1, 1].step(
-            xvals, im1cols, color=color1, label=label1,
-            linestyle='-', marker=None,
-        )
-        tab[1, 1].step(
-            xvals, im2cols, color=color2, label=label1,
-            linestyle='-', marker=None,
-        )
-        tab[1, 1].step(
-            xvals, rescols, color=colordiff, label=labelres,
-            linestyle='-', marker=None,
-        )
-        tab[1, 1].legend()
-        tab[1, 1].set(xlabel="center cols")
-
-    tab.tight_layout()
-
-    _writefile_maybe(plt=tab, **kws)
-    _show_maybe(plt=tab, **kws)
-
-    return tab
+# def compare_images(
+#     im1,
+#     im2,
+#     cross_sections=True,
+#     colorbar=False,
+#     color1="blue",
+#     color2="orange",
+#     label1="im1",
+#     label2="im2",
+#     colordiff="red",
+#     plt_kws={},
+#     file_kws={},
+#     **kws
+# ):
+#
+#     import hickory
+#
+#     nrows = 2
+#     if cross_sections:
+#         ncols = 3
+#     else:
+#         ncols = 2
+#
+#     aratio = nrows / ncols
+#
+#     add_plt_kws = {}
+#
+#     if "constrained_layout" not in plt_kws:
+#         add_plt_kws["constrained_layout"] = False
+#
+#     if "figsize" not in plt_kws:
+#         if aratio > 1:
+#             add_plt_kws["figsize"] = (8 / aratio, 8)
+#         else:
+#             add_plt_kws["figsize"] = (8, 8 * aratio)
+#
+#     if len(add_plt_kws) > 0:
+#         plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
+#
+#     tab = hickory.Table(
+#         nrows=nrows,
+#         ncols=ncols,
+#         **plt_kws,
+#     )
+#     ax1 = tab[0, 0]
+#     ax2 = tab[0, 1]
+#     if cross_sections:
+#         axresid = tab[0, 2]
+#         tab[1, 2].axis('off')
+#     else:
+#         axresid = tab[1, 0]
+#         tab[1, 1].axis('off')
+#
+#     labelres = "%s-%s" % (label1, label2)
+#
+#     if im1.shape != im2.shape:
+#         raise ValueError("images must be the same shape")
+#
+#     resid = im1 - im2
+#
+#     tmp_plt_kws = _get_updated_keywords(
+#         plt_kws,
+#         show=False,
+#         file=None,
+#         title=label1,
+#         colorbar=colorbar,
+#     )
+#     view(im1, plt=ax1, **tmp_plt_kws)
+#
+#     tmp_plt_kws = _get_updated_keywords(
+#         plt_kws,
+#         show=False,
+#         file=None,
+#         title=label2,
+#         colorbar=colorbar,
+#     )
+#
+#     view(im2, plt=ax2, **tmp_plt_kws)
+#
+#     tmp_plt_kws = _get_updated_keywords(
+#         plt_kws,
+#         show=False,
+#         file=None,
+#         title=labelres,
+#         colorbar=colorbar,
+#     )
+#     view(resid, plt=axresid, **tmp_plt_kws)
+#     # if colorbar:
+#     #     for ax in plt.axes[:3]:
+#     #         ax.colorbar(
+#
+#     if cross_sections:
+#         cen = (np.array(im1.shape) - 1) / 2
+#         cen0 = int(cen[0])
+#         cen1 = int(cen[1])
+#         im1rows = im1[:, cen1]
+#         im1cols = im1[cen0, :]
+#         im2rows = im2[:, cen1]
+#         im2cols = im2[cen0, :]
+#         resrows = resid[:, cen1]
+#         rescols = resid[cen0, :]
+#
+#         yvals = np.arange(im1.shape[0])
+#         xvals = np.arange(im1.shape[1])
+#         tab[1, 0].step(
+#             yvals, im1rows,
+#             # color=color1,
+#             label=label1, linestyle='-', marker=None,
+#         )
+#         tab[1, 0].step(
+#             yvals, im2rows,
+#             # color=color2,
+#             label=label1, linestyle='-', marker=None,
+#         )
+#         tab[1, 0].step(
+#             yvals, resrows,
+#             # color=colordiff,
+#             label=labelres, linestyle='-', marker=None,
+#         )
+#         tab[1, 0].legend()
+#         tab[1, 0].set(xlabel="center rows")
+#
+#         tab[1, 1].step(
+#             xvals, im1cols, color=color1, label=label1,
+#             linestyle='-', marker=None,
+#         )
+#         tab[1, 1].step(
+#             xvals, im2cols, color=color2, label=label1,
+#             linestyle='-', marker=None,
+#         )
+#         tab[1, 1].step(
+#             xvals, rescols, color=colordiff, label=labelres,
+#             linestyle='-', marker=None,
+#         )
+#         tab[1, 1].legend()
+#         tab[1, 1].set(xlabel="center cols")
+#
+#     tab.tight_layout()
+#
+#     _writefile_maybe(plt=tab, **kws)
+#     _show_maybe(plt=tab, **kws)
+#
+#     return tab
 
 
 def image_read_text(fname):
@@ -909,14 +840,13 @@ def ds9(im):
     import fitsio
     import os
     import tempfile
+    from tempfile import TemporaryDirectory
 
-    tmpdir = os.environ.get("TMPDIR", "/tmp")
-    tfile = tempfile.mktemp(suffix=".fits")
-    tfile = os.path.join(tmpdir, tfile)
-    fitsio.write(tfile, im, clobber=True)
-    os.system("ds9 %s" % tfile)
-    if os.path.exists(tfile):
-        os.remove(tfile)
+    with TemporaryDirectory() as tmpdir:
+        tfile = tempfile.mktemp(suffix=".fits")
+        tfile = os.path.join(tmpdir, tfile)
+        fitsio.write(tfile, im)
+        os.system("ds9 %s" % tfile)
 
 
 def _get_updated_keywords(input_kws, **kws):
@@ -924,6 +854,93 @@ def _get_updated_keywords(input_kws, **kws):
     new_kws = input_kws.copy()
     new_kws.update(kws)
     return new_kws
+
+
+def _prep_plot(
+    figax, width, kw,
+    xlim=None, ylim=None, xlog=False, ylog=False,
+    xlabel=None, ylabel=None, title=None,
+):
+    import proplot as pplt
+
+    file = kw.pop('file', None)
+
+    if file is not None:
+        show = kw.pop('show', False)
+    else:
+        show = kw.pop('show', True)
+
+    if figax is None:
+        figax = pplt.subplots(refwidth=width)
+        fig, ax = figax
+        axis_kw = {
+            'xlabel': xlabel,
+            'ylabel': ylabel,
+            'title': title,
+        }
+        if xlim is not None:
+            axis_kw['xlim'] = xlim
+
+        if ylim is not None:
+            axis_kw['ylim'] = ylim
+
+        ax.set(**axis_kw)
+
+        if xlog:
+            ax.set_xscale('log')
+
+        if ylog:
+            ax.set_yscale('log')
+
+    else:
+        fig, ax = figax
+
+    return fig, ax, file, show
+
+
+def _prep_2plot(
+    figax, width, kw,
+    xlim=None, ylim=None, xlog=False, ylog=False,
+    xlabel=None, ylabel=None, title=None,
+):
+    import proplot as pplt
+
+    file = kw.pop('file', None)
+
+    if file is not None:
+        show = kw.pop('show', False)
+    else:
+        show = kw.pop('show', True)
+
+    if figax is None:
+        fig, axs = pplt.subplots(ncols=2, refwidth=width, share=False)
+
+        if xlabel is None:
+            xlabel = 'radius [pixels]'
+
+        axis_kw = {
+            'xlabel': xlabel,
+            'ylabel': ylabel,
+            'title': title,
+        }
+        if xlim is not None:
+            axis_kw['xlim'] = xlim
+
+        if ylim is not None:
+            axis_kw['ylim'] = ylim
+
+        axs[1].set(**axis_kw)
+
+        if xlog:
+            axs[1].set_xscale('log')
+
+        if ylog:
+            axs[1].set_yscale('log')
+
+    else:
+        fig, axs = figax
+
+    return fig, axs, file, show
 
 
 def _get_demo_image():
@@ -952,13 +969,13 @@ def demo():
 
     image = image0 + np.random.normal(size=image0.shape, scale=0.05)
 
-    view_profile(image, plt_kws={'title': 'profile'})
-
-    return
-    view(image, colorbar=colorbar, plt_kws={'title': 'image view'})
-    multiview(image, colorbar=colorbar, title='multiview')
+    # view_profile(image, title='profile')
+    #
+    # view(image, colorbar=colorbar, title='image view')
+    # multiview(image, colorbar=colorbar, title='multiview')
     multiview(image, colorbar=colorbar, profile=True,
               title='multiview profile')
-    view_mosaic([image]*5, colorbar=colorbar, title='mosaic')
-    view_mosaic([image]*5, colorbar=colorbar, title='mosaic combined',
-                combine=True)
+
+    # view_mosaic([image]*5, colorbar=colorbar, title='mosaic')
+    # view_mosaic([image]*5, colorbar=colorbar, title='mosaic combined',
+    #             combine=True)

@@ -716,11 +716,13 @@ def _prep_plot(
 
 
 def _show_andor_save(fig, file, show, dpi):
+    import proplot as pplt
+
     if file is not None:
         fig.savefig(file, dpi=dpi)
 
     if show:
-        fig.show()
+        pplt.show()
 
 
 def _do_legend_maybe(ax, legend):
