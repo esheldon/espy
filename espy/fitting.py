@@ -268,6 +268,152 @@ def _get_fit_line_quantities(x, y, yerr=None):
     return xsum, ysum, xysum, x2sum, wsum
 
 
+def llsq(X, y, W=None):
+    """
+    Perform generalized linear least squares fitting
+
+    Parameters
+    ----------
+    X: array
+        The independent variables, (nsamples, npars)
+    y: array
+        Data with size nsamples
+    W: array, optional
+        The weights for the data, either shape (nsamples, ) or
+        (nsamples,nsamples).  This would usually be the inverse of the data
+        covariance matrix.
+
+        If not sent, the identity matrix is used. If a 1-D array
+        is sent
+
+    Returns
+    -------
+    A result dictionary.  The entries are
+        pars: The parameter array
+        pcov: The covariance of the parameter array
+        perr: The uncertainty on each parameter, the square root
+          of the covriance matrix pcov
+        ypred: The prediction of the model, shape (nsamples, )
+    """
+
+    W = _check_llsq_shapes(X=X, y=y, W=W)
+
+    pars = np.linalg.inv(X.T @ W @ X) @ X.T @ W @ y
+
+    ypred = X @ pars.T
+
+    pcov = _get_llsq_errors(
+        X=X,
+        y=y,
+        W=W,
+        pars=pars,
+        ypred=ypred,
+        fit_intercept=False,
+    )
+
+    return {
+        'pars': pars,
+        'pcov': pcov,
+        'perr': np.sqrt(np.diag(pcov)),
+        'ypred': ypred,
+    }
+
+
+def _get_llsq_errors(
+    X,
+    y,
+    W,
+    pars,
+    ypred,
+    fit_intercept=True,
+):
+    nsamples = y.size
+    npars = len(pars)
+
+    if fit_intercept:
+        npars += 1
+
+        Xuse = np.zeros(shape=(nsamples, npars))
+        Xuse[:, 0] = 1
+        Xuse[:, 1:npars] = X
+    else:
+        Xuse = X
+
+    residuals = (y - ypred)
+    residual_sum_of_squares = residuals.T @ W @ residuals
+    sigma_squared_hat = residual_sum_of_squares / (nsamples - npars)
+
+    inv = np.linalg.inv(Xuse.T @ W @ Xuse)
+    pcov = inv * sigma_squared_hat
+
+    return pcov
+
+
+def _check_llsq_shapes(X, y, W):
+    nsamples = y.size
+    if X.shape[0] != nsamples:
+        raise ValueError(
+            f'X has shape {X.shape} but should be '
+            f'({nsamples}, {X.shape[1]}) to be compabilty with '
+            f'y shape {y.shape}'
+        )
+
+    if W is None:
+        W = np.ones((nsamples, nsamples))
+    elif W.ndim == 1:
+        if W.size != nsamples:
+            raise ValueError(
+                f'W has shape {W.shape} but should be '
+                f'({nsamples}, ) or ({nsamples}, {nsamples}) to '
+                f'be compatible with y shape {y.shape}'
+            )
+        W = np.diag(W)
+    else:
+        if W.shape[0] != nsamples or W.shape[1] != nsamples:
+            raise ValueError(
+                f'W has shape {W.shape} but should be '
+                f'({nsamples}, {nsamples}) to '
+                f'be incompatible with y shape {y.shape}'
+            )
+
+    return W
+
+
+def cov2cor(cov):
+    """
+    Convert the input covariance matrix to a correlation matrix
+
+    corr[i,j] = cov[i,j]/sqrt(cov[i,i]*cov[j,j])
+
+    Parameters
+    ----------
+    cov: square array
+        An NxN covariance matrix
+
+    Returns
+    -------
+    cor: square array
+        The NxN correlation matrix
+    """
+    cor = np.zeros(cov.shape)
+
+    for ix in range(cov.shape[0]):
+        cxx = cov[ix, ix]
+        if cxx <= 0.0:
+            raise ValueError(
+                "diagonal cov[%d,%d]=%e is not positive" % (ix, ix, cxx)
+            )
+        for iy in range(cov.shape[1]):
+            cyy = cov[iy, iy]
+            if cyy <= 0.0:
+                raise ValueError(
+                    "diagonal cov[%d,%d]=%e is not positive" % (iy, iy, cyy)
+                )
+            cor[ix, iy] = cov[ix, iy] / np.sqrt(cxx * cyy)
+
+    return cor
+
+
 class PowerLawFitter(object):
     def __init__(self, x, y, yerr=None, method='max', **kw):
 
@@ -443,7 +589,8 @@ def test_line(show=False):
         mplt.show()
 
 
-def test_line_err(ntrial=10000):
+def test_line_err(seed=5, ntrial=10000):
+    rng = np.random.RandomState(seed)
     pars = [1.0, 3.0]
 
     npts = 20
@@ -456,8 +603,8 @@ def test_line_err(ntrial=10000):
     offset_errors = np.zeros(ntrial)
 
     for i in range(ntrial):
-        yerr = 1 + 0.5*np.random.uniform(size=npts)
-        y = y0 + yerr*np.random.normal(size=npts)
+        yerr = 1 + 0.5*rng.uniform(size=npts)
+        y = y0 + yerr*rng.normal(size=npts)
 
         res = fit_line(x, y, yerr=yerr)
 
@@ -466,9 +613,60 @@ def test_line_err(ntrial=10000):
         offsets[i] = res['offset']
         offset_errors[i] = res['offset_err']
 
+    slope_mean = slopes.mean()
+    offset_mean = offsets.mean()
+
+    print(f'slope mean: {slope_mean} true: {pars[0]}')
+    print(f'offset mean: {offset_mean} true: {pars[1]}')
+
     slope_std = slopes.std()
     offset_std = offsets.std()
+
     med_slope_err = np.median(slope_errors)
     med_offset_err = np.median(offset_errors)
+
+    print(f'slope err: {slope_std} predicted: {med_slope_err}')
+    print(f'offset err: {offset_std} predicted: {med_offset_err}')
+
+
+def test_line_full(seed=5, ntrial=10000):
+    rng = np.random.RandomState(seed)
+
+    pars = [1.0, 3.0]
+
+    npts = 20
+    X = np.ones((npts, 2))
+    X[:, 0] = np.arange(npts)
+    y0 = pars[0]*X[:, 0] + pars[1]
+
+    slopes = np.zeros(ntrial)
+    slope_errors = np.zeros(ntrial)
+    offsets = np.zeros(ntrial)
+    offset_errors = np.zeros(ntrial)
+
+    for i in range(ntrial):
+        yerr = 1 + 0.5*rng.uniform(size=npts)
+        y = y0 + yerr*rng.normal(size=npts)
+
+        W = 1.0/yerr**2
+        res = llsq(X, y, W=W)
+
+        slopes[i] = res['pars'][0]
+        slope_errors[i] = res['perr'][0]
+        offsets[i] = res['pars'][1]
+        offset_errors[i] = res['perr'][1]
+
+    slope_mean = slopes.mean()
+    offset_mean = offsets.mean()
+
+    print(f'slope mean: {slope_mean} true: {pars[0]}')
+    print(f'offset mean: {offset_mean} true: {pars[1]}')
+
+    slope_std = slopes.std()
+    offset_std = offsets.std()
+
+    med_slope_err = np.median(slope_errors)
+    med_offset_err = np.median(offset_errors)
+
     print(f'slope err: {slope_std} predicted: {med_slope_err}')
     print(f'offset err: {offset_std} predicted: {med_offset_err}')
