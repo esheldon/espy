@@ -294,6 +294,9 @@ def llsq(X, y, W=None):
         perr: The uncertainty on each parameter, the square root
           of the covriance matrix pcov
         ypred: The prediction of the model, shape (nsamples, )
+        chi2: chi^2 including weights
+        dof: degrees of freedom
+        chi2per: chi^2/dof
     """
 
     W = _check_llsq_shapes(X=X, y=y, W=W)
@@ -302,7 +305,7 @@ def llsq(X, y, W=None):
 
     ypred = X @ pars.T
 
-    pcov = _get_llsq_errors(
+    pcov, chi2, dof, chi2per = _get_llsq_errors(
         X=X,
         y=y,
         W=W,
@@ -316,6 +319,9 @@ def llsq(X, y, W=None):
         'pcov': pcov,
         'perr': np.sqrt(np.diag(pcov)),
         'ypred': ypred,
+        'chi2': chi2,
+        'dof': dof,
+        'chi2per': chi2per,
     }
 
 
@@ -340,13 +346,14 @@ def _get_llsq_errors(
         Xuse = X
 
     residuals = (y - ypred)
-    residual_sum_of_squares = residuals.T @ W @ residuals
-    sigma_squared_hat = residual_sum_of_squares / (nsamples - npars)
+    chi2 = residuals.T @ W @ residuals
+    dof = nsamples - npars
+    chi2per = chi2 / dof
 
     inv = np.linalg.inv(Xuse.T @ W @ Xuse)
-    pcov = inv * sigma_squared_hat
+    pcov = inv * chi2per
 
-    return pcov
+    return pcov, chi2, dof, chi2per
 
 
 def _check_llsq_shapes(X, y, W):
