@@ -290,8 +290,9 @@ def llsq(X, y, W=None):
     A result dictionary.  The entries are
         pars: The parameter array
         pcov: The covariance of the parameter array
+        pcor: The correlation matrix of the parameter array
         perr: The uncertainty on each parameter, the square root
-          of the covriance matrix pcov
+          of the covariance matrix (pcov in the result dict)
         ypred: The prediction of the model, shape (nsamples, )
         chi2: chi^2 including weights
         dof: degrees of freedom
@@ -361,6 +362,7 @@ def llsq(X, y, W=None):
     return {
         'pars': pars,
         'pcov': pcov,
+        'pcor': cov2cor(pcov),
         'perr': np.sqrt(np.diag(pcov)),
         'ypred': ypred,
         'chi2': chi2,
