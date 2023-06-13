@@ -283,8 +283,7 @@ def llsq(X, y, W=None):
         (nsamples,nsamples).  This would usually be the inverse of the data
         covariance matrix.
 
-        If not sent, the identity matrix is used. If a 1-D array
-        is sent
+        If not sent, the identity matrix is used.
 
     Returns
     -------
@@ -297,6 +296,52 @@ def llsq(X, y, W=None):
         chi2: chi^2 including weights
         dof: degrees of freedom
         chi2per: chi^2/dof
+
+    Examples
+    --------
+
+    # fit a model y = a * x + b * y
+
+    rng = np.random.RandomState(55)
+    nsamples = 20
+    npars = 2
+    a = 1.0
+    b = 2.0
+    X = np.zeros((nsamples, npars))
+    X[:, 0] = np.linspace(1, 20, nsamples)
+    X[:, 1] = np.linspace(-5, 5, nsamples)
+
+    noise = 5
+    y = a * X[:, 0] + b * X[:, 1]
+    y += rng.normal(scale=noise, size=nsamples)
+    yerr = y * 0 + noise
+
+    res = llsq(X, y)
+    print('pars:', res['pars'])
+    print('perr:', res['perr'])
+
+    # fit a model with an offset and weights
+    # y = a * x + b
+
+    rng = np.random.RandomState(88)
+
+    slope = 1.0
+    offset = 3.0
+
+    nsamples = 20
+    X = np.zeros((nsamples, 2))
+    X[:, 0] = np.arange(nsamples)
+    X[:, 1] = 1.0  # all 1.0 for the constant offset term
+
+    yerr = 1 + 0.5*rng.uniform(size=nsamples)
+    y = slope * X[:, 0] + offset + yerr
+
+    # diagonal covariance, and thus diagonal weights
+    W = 1.0/yerr**2
+    res = llsq(X, y, W=W)
+
+    print('pars:', res['pars'])
+    print('perr:', res['perr'])
     """
 
     W = _check_llsq_shapes(X=X, y=y, W=W)
@@ -311,7 +356,6 @@ def llsq(X, y, W=None):
         W=W,
         pars=pars,
         ypred=ypred,
-        fit_intercept=False,
     )
 
     return {
@@ -331,26 +375,16 @@ def _get_llsq_errors(
     W,
     pars,
     ypred,
-    fit_intercept=True,
 ):
     nsamples = y.size
     npars = len(pars)
-
-    if fit_intercept:
-        npars += 1
-
-        Xuse = np.zeros(shape=(nsamples, npars))
-        Xuse[:, 0] = 1
-        Xuse[:, 1:npars] = X
-    else:
-        Xuse = X
 
     residuals = (y - ypred)
     chi2 = residuals.T @ W @ residuals
     dof = nsamples - npars
     chi2per = chi2 / dof
 
-    inv = np.linalg.inv(Xuse.T @ W @ Xuse)
+    inv = np.linalg.inv(X.T @ W @ X)
     pcov = inv * chi2per
 
     return pcov, chi2, dof, chi2per
@@ -366,7 +400,7 @@ def _check_llsq_shapes(X, y, W):
         )
 
     if W is None:
-        W = np.ones((nsamples, nsamples))
+        W = np.diag(np.ones(nsamples))
     elif W.ndim == 1:
         if W.size != nsamples:
             raise ValueError(
@@ -677,3 +711,40 @@ def test_line_full(seed=5, ntrial=10000):
 
     print(f'slope err: {slope_std} predicted: {med_slope_err}')
     print(f'offset err: {offset_std} predicted: {med_offset_err}')
+
+
+def test_lin2(show=False):
+    seed = 55
+    rng = np.random.RandomState(seed)
+
+    # fit a model y = a * x + b * y
+
+    nsamples = 20
+    npars = 2
+    atrue = 1.0
+    btrue = 2.0
+    X = np.zeros((nsamples, npars))
+    X[:, 0] = np.linspace(1, 20, nsamples)
+    X[:, 1] = np.linspace(-5, 5, nsamples)
+
+    noise = 5
+    y = atrue * X[:, 0] + btrue * X[:, 1]
+    y += rng.normal(scale=noise, size=nsamples)
+    yerr = y * 0 + noise
+
+    res = llsq(X, y)
+    print('pars:', res['pars'])
+    print('pcov:', res['pcov'])
+
+    if show:
+        import proplot as pplt
+        fig, axs = pplt.subplots(nrows=2, share=False)
+
+        kw = {'marker': 'o', 'markersize': 4, 'ls': ''}
+        axs[0].errorbar(X[:, 0], y, yerr, **kw)
+        axs[0].plot(X[:, 0], res['ypred'])
+
+        s = X[:, 1].argsort()
+        axs[1].errorbar(X[s, 1], y[s], yerr[s], **kw)
+        axs[1].plot(X[s, 1], res['ypred'][s])
+        pplt.show()
