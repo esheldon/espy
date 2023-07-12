@@ -351,7 +351,7 @@ def llsq(X, y, W=None):
 
     ypred = X @ pars.T
 
-    pcov, chi2, dof, chi2per = _get_llsq_errors(
+    pcov, chi2, dof, chi2per = get_llsq_errors(
         X=X,
         y=y,
         W=W,
@@ -371,7 +371,7 @@ def llsq(X, y, W=None):
     }
 
 
-def _get_llsq_errors(
+def get_llsq_errors(
     X,
     y,
     W,
