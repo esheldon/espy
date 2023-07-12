@@ -351,7 +351,7 @@ def llsq(X, y, W=None):
 
     ypred = X @ pars.T
 
-    pcov, chi2, dof, chi2per = get_llsq_errors(
+    eres = get_llsq_errors(
         X=X,
         y=y,
         W=W,
@@ -359,16 +359,12 @@ def llsq(X, y, W=None):
         ypred=ypred,
     )
 
-    return {
+    res = {
         'pars': pars,
-        'pcov': pcov,
-        'pcor': cov2cor(pcov),
-        'perr': np.sqrt(np.diag(pcov)),
         'ypred': ypred,
-        'chi2': chi2,
-        'dof': dof,
-        'chi2per': chi2per,
     }
+    res.update(eres)
+    return res
 
 
 def get_llsq_errors(
@@ -378,6 +374,37 @@ def get_llsq_errors(
     pars,
     ypred,
 ):
+    """
+    calculate parameter covariance matrix for the result of llsq
+
+    Parameters
+    ----------
+    X: array
+        The independent variables, (nsamples, npars)
+    y: array
+        Data with size nsamples
+    W: array, optional
+        The weights for the data, either shape (nsamples, ) or
+        (nsamples,nsamples).  This would usually be the inverse of the data
+        covariance matrix.
+
+        If not sent, the identity matrix is used.
+    pars: array
+        Result of running llsq
+    ypred: array
+        Predicted y values from model
+
+    Returns
+    -------
+    A dict with entries
+        pcov: The covariance of the parameter array
+        pcor: The correlation matrix of the parameter array
+        perr: The uncertainty on each parameter, the square root
+          of the covariance matrix (pcov in the result dict)
+        chi2: chi^2 including weights
+        dof: degrees of freedom
+        chi2per: chi^2/dof
+    """
     nsamples = y.size
     npars = len(pars)
 
@@ -389,7 +416,14 @@ def get_llsq_errors(
     inv = np.linalg.inv(X.T @ W @ X)
     pcov = inv * chi2per
 
-    return pcov, chi2, dof, chi2per
+    return {
+        'pcov': pcov,
+        'pcor': cov2cor(pcov),
+        'perr': np.sqrt(np.diag(pcov)),
+        'chi2': chi2,
+        'dof': dof,
+        'chi2per': chi2per,
+    }
 
 
 def _check_llsq_shapes(X, y, W):
