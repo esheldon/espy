@@ -12,7 +12,6 @@ def view(
     figax=None,
     width=3.5,
     cmap=None,
-    file=None,
     dpi=None,
     title=None,
     **kw
@@ -721,7 +720,7 @@ def asinh_scale(*, image, nonlinear):
 
     imout = image * f
 
-    imout.clip(0.0, 1.0, imout)
+    # imout.clip(0.0, 1.0, imout)
 
     return imout
 
