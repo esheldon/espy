@@ -300,6 +300,7 @@ def multiview(
     ylog=False,
     title=None,
     width=7,
+    cmap=None,
     dpi=None,
     figax=None,
     **kw,
@@ -327,6 +328,7 @@ def multiview(
     view(
         image, figax=(fig, axs[0]),
         nonlinear=nonlinear, autoscale=autoscale, colorbar=colorbar,
+        cmap=cmap,
         show=False, file=None,
     )
 
