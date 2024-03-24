@@ -678,7 +678,7 @@ def whiskers(
 def _prep_plot(
     figax, xlim, ylim, xlabel, ylabel, title, xlog, ylog, aspect, width, kw,
 ):
-    import proplot as pplt
+    import matplotlib.pyplot as plt
 
     file = kw.pop('file', None)
 
@@ -688,7 +688,8 @@ def _prep_plot(
         show = kw.pop('show', True)
 
     if figax is None:
-        figax = pplt.subplots(refaspect=aspect, refwidth=width)
+        height = width / aspect
+        figax = plt.subplots(figsize=(width, height))
         fig, ax = figax
         axis_kw = {
             'xlabel': xlabel,
@@ -716,13 +717,13 @@ def _prep_plot(
 
 
 def _show_andor_save(fig, file, show, dpi):
-    import proplot as pplt
+    import matplotlib.pyplot as plt
 
     if file is not None:
         fig.savefig(file, dpi=dpi)
 
     if show:
-        pplt.show()
+        plt.show()
 
 
 def _do_legend_maybe(ax, legend):
