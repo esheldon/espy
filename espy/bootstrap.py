@@ -24,6 +24,9 @@ def bootstrap(data, nrand, weights=None, rng=None):
     if weights is None:
         weights = np.ones(data.size)
 
+    if rng is None:
+        rng = np.random.default_rng()
+
     vals = np.zeros(nrand)
     for i in range(nrand):
         ind = rng.integers(0, data.size, size=data.size)
