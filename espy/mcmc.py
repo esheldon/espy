@@ -140,6 +140,7 @@ def test_line(burnin=1000, nstep=10000, show=False):
 
         _ = corner.corner(
             trials[burnin:], labels=['offset', 'slope'], show_titles=True,
+            bins=20,
         )
         mplt.show()
 
