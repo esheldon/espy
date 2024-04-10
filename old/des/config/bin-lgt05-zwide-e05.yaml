@@ -1,5 +1,0 @@
-bin_info:
-    - label: '$\lambda  > 5 && se < 0.05'
-      bins: [ ["lambda_chisq", [5.0, 1.0e+06], "()"],
-              ["z_lambda", [0.2, 0.8], "()"] ,
-              ["se", [0.0, 0.05], "()"] ]

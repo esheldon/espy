@@ -1,7 +1,0 @@
-{
-    "sample": "02",
-    "catalog": "desmocks-2.13",
-    "cosmo_sample":"01",
-    "nsplit":100,
-    "comment":"same as 01 but 8-byte index"
-}

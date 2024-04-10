@@ -1,6 +1,0 @@
-mask_style: "equatorial"
-mask_type: null
-mask_file: null
-
-# used when the source ellipticities are used directly
-mask_ellip_max: 0.05

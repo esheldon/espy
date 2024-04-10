@@ -1,8 +1,0 @@
-{
-    "train_sample":"09",
-    "photo_sample":"01",
-    "sdss_rmax":19.6,
-    "zmin":-0.001,
-    "zmax":2.0,
-    "comment":"same as 07 but added primus"
-}

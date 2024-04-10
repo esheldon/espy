@@ -1,6 +1,0 @@
-run:           "rmrand01gmix01"
-lens_sample:   "rmrand01"
-src_sample:    "gmix01"
-
-# for healpix
-nside:         64
