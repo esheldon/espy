@@ -37,10 +37,13 @@ jobs:
         with:
           python-version: ${{ matrix.pyver }}
 
+      - name: Install deps
+        run: |
+            pip install matplotlib
+
       - name: Install code
-        env:
-            CC: ${{ matrix.compiler }}
-        run: pip install -e .
+        run: |
+            pip install -e .
 
       - name: lint
         run: |
