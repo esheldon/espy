@@ -40,6 +40,8 @@ jobs:
       - name: Install deps
         run: |
             pip install numpy
+            pip install flake8
+            pip install pytest
 
       - name: Install code
         run: |
@@ -47,10 +49,8 @@ jobs:
 
       - name: lint
         run: |
-          pip install flake8
-          flake8 espy
+            flake8 espy
 
       - name: test
         run: |
-          pip install pytest
-          pytest -vv tests
+            pytest -vv tests
