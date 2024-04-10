@@ -5,7 +5,7 @@ def bootstrap(data, nrand, weights=None, rng=None):
     Parameters
     ----------
     data: array
-        An array of data
+        An array of data.  Can be one dimensional or of shape (npoints, ndim)
     nrand: int
         Number of times to sample the data, e.g. 100.
     weight: array, optional
@@ -23,6 +23,12 @@ def bootstrap(data, nrand, weights=None, rng=None):
 
     if weights is None:
         weights = np.ones(data.shape)
+
+    if weights.shape != data.shape:
+        raise ValueError(
+            f'weights shape {weights.shape} does not match '
+            f'data shape {data.shape}'
+        )
 
     if rng is None:
         rng = np.random.default_rng()
@@ -67,6 +73,12 @@ def bootstrap_sums(sums, wsums, nrand, rng=None):
 
     if rng is None:
         rng = np.random.default_rng()
+
+    if wsums.shape != sums.shape:
+        raise ValueError(
+            f'wsums shape {wsums.shape} does not match '
+            f'sumsshape {sums.shape}'
+        )
 
     if len(sums.shape) > 1:
         nbin = sums.shape[1]
