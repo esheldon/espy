@@ -1,4 +1,0 @@
-envPrepend(PATH,${PRODUCT_DIR}/bin)
-envPrepend(PATH,${PRODUCT_DIR}/des/bin)
-envPrepend(PATH,${PRODUCT_DIR}/desdb/bin)
-envPrepend(PYTHONPATH,${PRODUCT_DIR})

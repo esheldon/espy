@@ -1,9 +1,0 @@
-# generate random points from the neff map
-region: 'spte_subarea'
-
-# for generating the randoms
-mask_file: "/astro/u/esheldon/masks/des/neff/sva1_gold_1.0_nside4096-64_ring_i_neff.fits"
-
-cosmo_vers: "cosmo-01"
-zmin: 0.2
-zmax: 0.8

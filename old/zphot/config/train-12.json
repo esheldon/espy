@@ -1,8 +1,0 @@
-{
-    "train_sample":"12",
-    "photo_sample":"05",
-    "sdss_rmax":19.6,
-    "zmin":-0.001,
-    "zmax":2.0,
-    "comment":"photo sample 05, r < 21.5, new columns, matching multi-epoch"
-}

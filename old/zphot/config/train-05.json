@@ -1,8 +1,0 @@
-{
-    "train_sample":"05",
-    "photo_sample":"01",
-    "sdss_rmax":19.6,
-    "zmin":-0.001,
-    "zmax":2.0,
-    "comment":"using new original-2010-09-19 training sample"
-}

@@ -1,7 +1,0 @@
-# vim: set filetype=python :
-base_url='svn+ssh://howdy.physics.nyu.edu/usr/local/svn/deswl/desfiles'
-get_method = 'svn-checkout'
-source_type = 'svn'
-install_method = 'copy'
-default_version = 'trunk'
-
