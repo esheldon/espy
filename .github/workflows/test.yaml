@@ -39,7 +39,7 @@ jobs:
 
       - name: Install deps
         run: |
-            pip install matplotlib
+            pip install numpy
 
       - name: Install code
         run: |
