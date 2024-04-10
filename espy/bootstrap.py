@@ -16,20 +16,66 @@ def bootstrap(data, nrand, weights=None, rng=None):
 
     Returns
     -------
-    mean, err:  The mean and uncertainty on the mean.
+    err:  The mean and uncertainty on the mean.
     """
 
     import numpy as np
 
     if weights is None:
-        weights = np.ones(data.size)
+        weights = np.ones(data.shape)
 
     if rng is None:
         rng = np.random.default_rng()
 
-    vals = np.zeros(nrand)
-    for i in range(nrand):
-        ind = rng.integers(0, data.size, size=data.size)
-        vals[i] = (data[ind] * weights[ind]).sum() / weights[ind].sum()
+    if len(data.shape) > 1:
+        nbin = data.shape[1]
+        vals = np.zeros((nrand, nbin))
+    else:
+        vals = np.zeros(nrand)
 
-    return vals.mean(), vals.std()
+    for i in range(nrand):
+        ind = rng.integers(0, data.shape[0], size=data.shape[0])
+        dsum = (data[ind] * weights[ind]).sum(axis=0)
+        wsum = weights[ind].sum(axis=0)
+        vals[i] = dsum / wsum
+
+    return vals.std(axis=0)
+
+
+def bootstrap_sums(sums, wsums, nrand, rng=None):
+    """
+    Bootstrap the data to get the error on the mean
+
+    Parameters
+    ----------
+    sums: array
+        An array of data representing sums for the numerator
+    wsums: array
+        An array of data representing sums for the denominator
+    nrand: int
+        Number of times to sample the data, e.g. 100.
+    rng: np.random.default_rng
+        Default random number generator.  If not sent, one will
+        be created, seeded by entropy from the OS
+
+    Returns
+    -------
+    err:  The mean and uncertainty on the mean.
+    """
+
+    import numpy as np
+
+    if rng is None:
+        rng = np.random.default_rng()
+
+    if len(sums.shape) > 1:
+        nbin = sums.shape[1]
+        vals = np.zeros((nrand, nbin))
+    else:
+        vals = np.zeros(nrand)
+
+    for i in range(nrand):
+        ind = rng.integers(0, sums.shape[0], size=sums.shape[0])
+        vals[i] = sums[ind].sum(axis=0) / wsums[ind].sum(axis=0)
+
+    return vals.std(axis=0)
