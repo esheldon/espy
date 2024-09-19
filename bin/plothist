@@ -1,108 +1,105 @@
 #!/usr/bin/env python
 
-import sys
-import argparse
-import numpy as np
-import biggles
+def get_args():
+    import argparse
+    parser = argparse.ArgumentParser()
 
-parser=argparse.ArgumentParser()
+    parser.add_argument(
+        '-o', '--output',
+        help='file to write; default is to show the plot on the screen'
+    )
+    parser.add_argument(
+        '--binsize', type=float, help='size of bins'
+    )
+    parser.add_argument(
+        '--bins', type=int, help='number of bins for histogram'
+    )
 
-parser.add_argument('-i','--index',type=int,default=0,
-                    help=('column index for the data, '
-                          'default 0 or the first column'))
+    parser.add_argument('--xlabel', help='label for x axis')
+    parser.add_argument('--ylabel', help='label for y axis')
+    parser.add_argument('--title', help='title for plot')
+    parser.add_argument('--xlim', nargs=2, help='xmin and xmax')
+    parser.add_argument('--ylim', nargs=2, help='ymin and ymax')
+    parser.add_argument(
+        '--ylog', action='store_true', help='use log axis for y'
+    )
+    parser.add_argument(
+        '--aspect', type=float, default=1.618,
+        help='aspect ratio ysize/xsize for plot'
+    )
+    parser.add_argument(
+        '--width', type=float, default=3.5,
+        help='width of plot'
+    )
+    parser.add_argument(
+        '--dpi', type=int, default=90,
+        help='dpi when writing images like png'
+    )
 
-parser.add_argument('-f','--file',help='file from which to read (default stdin)')
-parser.add_argument('-o','--output',help='file from which to read (default stdin)')
+    parser.add_argument(
+        '--min', type=float, help='min allowed data in histogram'
+    )
+    parser.add_argument(
+        '--max', type=float, help='max allowed data in histogram'
+    )
 
-parser.add_argument('-b','--bsize',type=float,help='binsize for histogram')
-parser.add_argument('-n','--nbin',type=int,help='number of bins for histogram')
-parser.add_argument('--min',type=float,help='min allowed data in histogram')
-parser.add_argument('--max',type=float,help='max allowed data in histogram')
+    parser.add_argument('--color', help='color of histogram')
+
+    return parser.parse_args()
 
 
-parser.add_argument('--xrange',help='comman separated list for xmin,xmax in plot')
-parser.add_argument('--yrange',help='comman separated list for ymin,ymax in plot')
+def read_data(args):
+    import numpy as np
+    import sys
 
-parser.add_argument('-t','--type',help='type for line')
-parser.add_argument('-c','--color',help='color for symbols or line')
+    data = []
+    for line in sys.stdin:
+        ls = line.split()
+        data += [float(val) for val in ls]
 
-parser.add_argument('--ylog',action='store_true',help='use log axis for y')
+    data = np.array(data)
 
-parser.add_argument('--xlabel',help='label for x axis')
-parser.add_argument('--ylabel',help='label for y axis')
-parser.add_argument('--title',help='title for plot')
+    if args.min is not None or args.max is not None:
+        if args.min is not None:
+            logic = (data >= args.min)
+        if args.max is not None:
+            logic = (data <= args.max)
+        data = data[logic]
 
-parser.add_argument('-d','--dpi',type=int,help='dpi when writing images like png')
-parser.add_argument('-a','--aspect',type=float,help='aspect ratio ysize/xsize for plot')
+    return data
 
-def main():
-    args=parser.parse_args()
 
-    kw={}
-    if args.type is not None:
-        kw['type']=args.type
-    if args.color is not None:
-        kw['color']=args.color
+def go(args):
+    from espy.plotting import plot_hist
 
-    if args.xrange is not None:
-        xrng=[float(el) for el in args.xrange.split(',')]
-        assert len(xrng)==2,'xrange should have form "xmin,xmax"'
-    else:
-        xrng=None
+    data = read_data(args)
 
-    if args.yrange is not None:
-        yrng=[float(el) for el in args.yrange.split(',')]
-        assert len(yrng)==2,'yrange should have form "ymin,ymay"'
-    else:
-        yrng=None
+    kw = {'file': args.output}
 
-    if args.file is not None:
-        fobj=open(args.file)
-    else:
-        fobj=sys.stdin
+    if args.bins is not None:
+        kw['bins'] = args.bins
+    elif args.binsize is not None:
+        kw['binsize'] = args.binsize
 
-    data=[]
-    for line in fobj:
-        ls=line.split()
-        data.append(float(ls[args.index]))
-
-    data=np.array(data)
-
-    assert args.bsize is not None or args.nbin is not None,'send wither binsize or nbin'
-    if args.bsize is not None:
-        bsize=args.bsize
-        nbin=None
-    else:
-        nbin=args.nbin
-        bsize=None
-
-    plt=biggles.plot_hist(
+    plot_hist(
         data,
-        binsize=bsize,
-        nbin=nbin,
-        min=args.min,
-        max=args.max,
-
-        xrange=xrng,
-        yrange=yrng,
-
-        ylog=args.ylog,
-
         xlabel=args.xlabel,
         ylabel=args.ylabel,
         title=args.title,
-
-        aspect_ratio=args.aspect,
-
-        visible=False,
+        xlim=args.xlim,
+        ylim=args.ylim,
+        ylog=args.ylog,
+        aspect=args.aspect,
+        width=args.width,
+        dpi=args.dpi,
         **kw
     )
 
-    if args.output is not None:
-        plt.write(args.output, dpi=args.dpi)
-    else:
-        plt.show()
+
+def main():
+    args = get_args()
+    go(args)
 
 
-if __name__=='__main__':
+if __name__ == '__main__':
     main()

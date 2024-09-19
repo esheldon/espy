@@ -156,6 +156,8 @@ def plot_hist(
     -------
     fig, ax
     """
+    import numpy as np
+
     fig, ax, file, show = _prep_plot(
         figax=figax,
         xlim=xlim, ylim=ylim,
@@ -164,6 +166,16 @@ def plot_hist(
         aspect=aspect, width=width,
         kw=kw,
     )
+
+    binsize = kw.pop('binsize', None)
+    if binsize is not None:
+        if 'range' in kw:
+            xmin, xmax = kw['range']
+        else:
+            xmin, xmax = [x.min(), x.max()]
+
+        nbin = int((xmax - xmin) / binsize)
+        kw['bins'] = np.linspace(xmin, xmax, nbin)
 
     ax.hist(x, **kw)
 
