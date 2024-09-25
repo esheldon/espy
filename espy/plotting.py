@@ -156,6 +156,8 @@ def plot_hist(
     -------
     fig, ax
     """
+    import numpy as np
+
     fig, ax, file, show = _prep_plot(
         figax=figax,
         xlim=xlim, ylim=ylim,
@@ -164,6 +166,16 @@ def plot_hist(
         aspect=aspect, width=width,
         kw=kw,
     )
+
+    binsize = kw.pop('binsize', None)
+    if binsize is not None:
+        if 'range' in kw:
+            xmin, xmax = kw['range']
+        else:
+            xmin, xmax = [x.min(), x.max()]
+
+        nbin = int((xmax - xmin) / binsize)
+        kw['bins'] = np.linspace(xmin, xmax, nbin)
 
     ax.hist(x, **kw)
 
@@ -258,20 +270,42 @@ def plot_residuals(
     return plt
 
 
-def multihist(data, binfac=0.1, **kw):
+def multihist(
+    data,
+    binfac=0.1,
+    nsig=5,
+    labels=None,
+    ylog=False,
+    aspect=None,
+    width=6,
+    figax=None,
+    file=None,
+    dpi=150,
+    show=True,
+):
     """
     plot a histogram for each dimension of the data
+
+    For many cases, the corner code is a better option
 
     parameters
     ----------
     data: array
         array with shape [npoints, ndim]
-    binfac: float
+    binfac: float, optional
         The binsize for each dimension will be chosen as binfac*std(dimdata)
+        Default 0.1
+    nsig: float, optional
+        If sent, plot range will be [-nsig*sigma, nsig*sigma].  Otherwise
+        the full range is shown
     labels: optional
         A sequence of labels for each dimension
+    figax: (fig, ax)
+        If sent, a new figure and axis is not created, the input one is
+        reused
     """
-    import biggles
+    import numpy as np
+    import matplotlib.pyplot as mplt
     import esutil as eu
 
     if len(data.shape) != 2:
@@ -279,56 +313,93 @@ def multihist(data, binfac=0.1, **kw):
 
     ndim = data.shape[1]
 
-    labels = kw.pop('labels', None)
     if labels is not None:
         nl = len(labels)
         assert len(labels) == ndim, "len(labels) = %d != %d" % (nl, ndim)
 
+    ndim = data.shape[1]
     grid = Grid(ndim)
+    if aspect is None:
+        aspect = grid.ncol / grid.nrow
 
-    tab = kw.pop('plt', None)
-    if tab is not None:
-        add_to_existing_plots = True
+    if figax is not None:
+        fig, axs = figax
     else:
-        add_to_existing_plots = False
-        tab = biggles.Table(grid.nrow, grid.ncol)
-        tab.aspect_ratio = kw.pop('aspect_ratio', None)
+        height = width / aspect
+        fig, axs = mplt.subplots(
+            nrows=grid.nrow,
+            ncols=grid.ncol,
+            figsize=(width, height),
+        )
+        for ax in axs.ravel():
+            ax.axis('off')
 
-        if tab.cols != grid.ncol or tab.rows != grid.nrow:
-            m = "input table has wrong dims.  Expected %s got %s"
-            tup = ((grid.nrow, grid.ncol), (tab.rows, tab.cols))
-            raise ValueError(m % tup)
-
-    for dim in range(ndim):
+    for dim, ax in enumerate(axs):
 
         ddata = data[:, dim]
 
-        mn, std = eu.stat.sigma_clip(ddata)
+        mn, std, ind = eu.stat.sigma_clip(ddata, get_indices=True)
 
-        binsize = binfac*std
-
-        hc = biggles.make_histc(
-            ddata,
-            binsize=binsize,
-            **kw
-        )
-
-        row, col = grid(dim)
-        if add_to_existing_plots:
-            plt = tab[row, col]
-            plt.add(hc)
+        if nsig is not None:
+            low, high = mn - nsig * std, mn + nsig * std
         else:
-            plt = biggles.FramedPlot(aspect_ratio=1, **kw)
-            plt.add(hc)
-            tab[row, col] = plt
+            low, high = ddata.min(), ddata.max()
+
+        binsize = binfac * std
+        nbin = int((high - low) / binsize)
+        bins = np.linspace(low, high, nbin)
+
+        # row, col = grid(dim)
+        # ax = axs[row, col]
+        ax.axis('on')
 
         if labels is not None:
             lab = labels[dim]
         else:
             lab = 'dim %d' % dim
-        tab[row, col].xlabel = lab
 
-    return tab
+        ax.set(xlabel=lab)
+
+        if ylog:
+            ax.set_yscale('log')
+
+        ax.hist(ddata, bins=bins)
+
+    if show:
+        mplt.show()
+    if file is not None:
+        fig.savefig(file, dpi=dpi)
+
+    return fig, ax
+
+
+def test_multihist(num=100_000, show=False):
+    import numpy as np
+
+    # sigmas = np.array([1, 2, 3])
+    # locs = np.array([1, 2, 3])
+    # labels = ['a', 'b', 'c']
+    #
+    # rng = np.random.default_rng()
+    #
+    # ndim = sigmas.size
+    # data = np.zeros((num, ndim))
+    #
+    # for i in range(ndim):
+    #     data[:, i] = rng.normal(scale=sigmas[i], loc=locs[i], size=num)
+    #
+
+    means = [1, 2]
+    stds = [1, 2]
+    corr = 0.8
+    covs = [[stds[0]**2, stds[0]*stds[1]*corr],
+            [stds[0]*stds[1]*corr, stds[1]**2]]
+
+    data = np.random.multivariate_normal(means, covs, num)
+    print(data.shape)
+    multihist(data, labels=['a', 'b'], show=show)
+
+    return data
 
 
 class Grid(object):
@@ -678,7 +749,7 @@ def whiskers(
 def _prep_plot(
     figax, xlim, ylim, xlabel, ylabel, title, xlog, ylog, aspect, width, kw,
 ):
-    import proplot as pplt
+    import matplotlib.pyplot as plt
 
     file = kw.pop('file', None)
 
@@ -688,7 +759,8 @@ def _prep_plot(
         show = kw.pop('show', True)
 
     if figax is None:
-        figax = pplt.subplots(refaspect=aspect, refwidth=width)
+        height = width / aspect
+        figax = plt.subplots(figsize=(width, height))
         fig, ax = figax
         axis_kw = {
             'xlabel': xlabel,
@@ -716,13 +788,13 @@ def _prep_plot(
 
 
 def _show_andor_save(fig, file, show, dpi):
-    import proplot as pplt
+    import matplotlib.pyplot as plt
 
     if file is not None:
         fig.savefig(file, dpi=dpi)
 
     if show:
-        pplt.show()
+        plt.show()
 
 
 def _do_legend_maybe(ax, legend):

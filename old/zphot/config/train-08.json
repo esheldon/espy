@@ -1,8 +1,0 @@
-{
-    "train_sample":"08",
-    "photo_sample":"02",
-    "sdss_rmax":19.6,
-    "zmin":-0.001,
-    "zmax":2.0,
-    "comment":"original-2010-09-19, with proper cuts this time"
-}

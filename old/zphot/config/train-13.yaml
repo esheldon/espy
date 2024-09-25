@@ -1,7 +1,0 @@
-train_sample:   "13"
-photo_sample:   "06"
-sdss_rmax:      19.6
-zmin:           -0.001
-zmax:           2.0
-comment:        photo sample 06, r < 21.8
-

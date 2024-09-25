@@ -1,5 +1,0 @@
-sample: "04"
-catalog: maxbcg-full
-cosmo_sample: "01"
-comment: 'This is the same catalog used for the 2007(9) papers. It does *not* have
-    edge cuts'

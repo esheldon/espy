@@ -12,7 +12,6 @@ def view(
     figax=None,
     width=3.5,
     cmap=None,
-    file=None,
     dpi=None,
     title=None,
     **kw
@@ -301,6 +300,7 @@ def multiview(
     ylog=False,
     title=None,
     width=7,
+    cmap=None,
     dpi=None,
     figax=None,
     **kw,
@@ -328,6 +328,7 @@ def multiview(
     view(
         image, figax=(fig, axs[0]),
         nonlinear=nonlinear, autoscale=autoscale, colorbar=colorbar,
+        cmap=cmap,
         show=False, file=None,
     )
 
@@ -721,7 +722,7 @@ def asinh_scale(*, image, nonlinear):
 
     imout = image * f
 
-    imout.clip(0.0, 1.0, imout)
+    # imout.clip(0.0, 1.0, imout)
 
     return imout
 

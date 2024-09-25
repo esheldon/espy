@@ -1,5 +1,0 @@
-# this is peter's mask from the actual density of sources
-mask_style: "equatorial"
-mask_type: "healpix"
-mask_file: "$LENSDIR/catalogs/ngmix011-v15/ngmix011-v15-density.fits"
-mask_ellip_max: 0.05

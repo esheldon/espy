@@ -1,5 +1,6 @@
 import colorsys
 
+
 def rainbow(num, type='hex'):
     """
     make rainbow colors
@@ -14,25 +15,25 @@ def rainbow(num, type='hex'):
     # not going to 360
     minh = 0.0
     # 270 would go to pure blue
-    #maxh = 270.0
+    # maxh = 270.0
     maxh = 285.0
 
-    hstep = (maxh-minh)/(num-1)
-    colors=[]
+    hstep = (maxh - minh) / (num - 1)
+    colors = []
     for i in range(num):
         h = minh + i*hstep
 
         # just change the hue
-        r,g,b = colorsys.hsv_to_rgb(h/360.0, 1.0, 1.0)
+        r, g, b = colorsys.hsv_to_rgb(h/360.0, 1.0, 1.0)
         r *= 255
         g *= 255
         b *= 255
         if type == 'rgb':
-            colors.append( (r,g,b) )
+            colors.append((r, g, b))
         elif type == 'hex':
 
             rgb = (int(r), int(g), int(b))
-            colors.append( rgb_to_hex(rgb) )
+            colors.append(rgb_to_hex(rgb))
         else:
             raise ValueError("color type should be 'rgb' or 'hex'")
 
@@ -53,23 +54,23 @@ def heat(num, type='hex'):
     # not going to 360
     minh = 0.0
     # 270 would go to pure blue
-    #maxh = 270.0
+    # maxh = 270.0
     maxh = 250.0
 
-    hstep = (maxh-minh)/(num-1)
-    colors=[]
+    hstep = (maxh - minh) / (num - 1)
+    colors = []
     for i in range(num):
         h = minh + i*hstep
 
         # just change the hue
-        r,g,b = colorsys.hsv_to_rgb(h/360.0, 1.0, 1.0)
+        r, g, b = colorsys.hsv_to_rgb(h/360.0, 1.0, 1.0)
         r *= 255
         g *= 255
         b *= 255
         if type == 'rgb':
-            colors.append( (r,g,b) )
+            colors.append((r, g, b))
         elif type == 'hex':
-            colors.append( rgb_to_hex( (r,g,b) ) )
+            colors.append(rgb_to_hex((r, g, b)))
         else:
             raise ValueError("color type should be 'rgb' or 'hex'")
 
@@ -81,20 +82,20 @@ def rgb_to_hex(rgb):
 
 
 def test_rainbow():
-    import numpy
-    from biggles import FramedPlot, Points, Curve
+    import numpy as np
+    import matplotlib.pyplot as mplt
     num = 20
 
-    plt = FramedPlot()
+    fig, ax = mplt.subplots()
 
-    x = numpy.linspace(0.0, 1.0, num)
+    x = np.linspace(0.0, 1.0, num)
     y = x**2
 
-    colors = rainbow(num, 'hex')
+    colors = rainbow(num)
+    ax.scatter(x, y, c=colors)
 
-    for i in range(num):
-        p = Points([x[i]], [y[i]], type='filled circle', 
-                   color=colors[i])
-        c = Curve([x[i]],[y[i]], color=colors[i])
-        plt.add(p,c)
-    plt.show()
+    mplt.show()
+
+
+if __name__ == '__main__':
+    test_rainbow()

@@ -4,7 +4,6 @@
 """
 from __future__ import print_function
 import sys
-from sys import stderr
 import os
 import time
 import datetime
@@ -13,53 +12,64 @@ from argparse import ArgumentParser
 
 import esutil as eu
 
-DEF_POLL=30
-DEF_NJOBS=9000
+DEF_POLL = 30
+DEF_NJOBS = 9000
 
 
-parser=ArgumentParser(__doc__)
+parser = ArgumentParser(__doc__)
 
 parser.add_argument(
-    'scripts',
-    nargs='+',
-    help='scripts to submit',
+    "scripts",
+    nargs="+",
+    help="scripts to submit",
 )
 parser.add_argument(
-    "-n", "--njobs",
+    "-n",
+    "--njobs",
     type=int,
     default=DEF_NJOBS,
     help="max number of jobs, default %d" % DEF_NJOBS,
 )
 
 parser.add_argument(
-    "-p","--poll",
+    "-p",
+    "--poll",
     type=float,
     default=DEF_POLL,
-    help=("time between polls of the condor queue "
-          "when we are at max allowed jobs, default %s" % DEF_POLL)
+    help=(
+        "time between polls of the condor queue "
+        "when we are at max allowed jobs, default %s" % DEF_POLL
+    ),
 )
 
 parser.add_argument(
-    "-f", "--force",
+    "-f",
+    "--force",
     action="store_true",
-    help=("force starting of all jobs, even if the .submitted "
-          "file is present."),
+    help=(
+        "force starting of all jobs, even if the "
+        ".submitted file is present."
+    ),
 )
 
 parser.add_argument(
-    "-d", "--dryrun",
-    action='store_true',
-    help=("dry run.  Just print number of condor scripts "
-          "that will be submitted and exit."),
+    "-d",
+    "--dryrun",
+    action="store_true",
+    help=(
+        "dry run.  Just print number of condor scripts "
+        "that will be submitted and exit."
+    ),
 )
 
 parser.add_argument(
     "--suball",
-    action='store_true',
-    help=("submit all scripts (not previously submitted) "
-          "without counting the existing jobs"),
+    action="store_true",
+    help=(
+        "submit all scripts (not previously submitted) "
+        "without counting the existing jobs"
+    ),
 )
-
 
 
 def execute_command(cmd):
@@ -72,79 +82,76 @@ def execute_command(cmd):
     sout, serr = pobj.communicate()
     exit_status = pobj.returncode
 
-    # yay for python3... :(
     try:
-        sout = str(sout,'utf-8')
-    except:
+        sout = str(sout, "utf-8")
+    except Exception:
         pass
     try:
-        serr = str(serr,'utf-8')
-    except:
+        serr = str(serr, "utf-8")
+    except Exception:
         pass
 
     return sout, serr, exit_status
 
 
 def get_submitted_sentinel(fname):
-    return fname+'.submitted'
+    return fname + ".submitted"
+
 
 def submit_condor_script(script_path):
     subname = get_submitted_sentinel(script_path)
 
-    dirname,scriptbase=os.path.split(script_path)
-
+    dirname, scriptbase = os.path.split(script_path)
 
     if os.path.exists(subname):
         try:
             os.remove(subname)
-        except:
-            print("could not remove existing submitted file:",subname)
+        except Exception:
+            print("could not remove existing submitted file:", subname)
 
-    if dirname != '':
-        ds=eu.ostools.DirStack()
+    if dirname != "":
+        ds = eu.ostools.DirStack()
         ds.push(dirname)
 
-    cmd=["condor_submit",scriptbase]
-    sout, serr, exit_status=execute_command(cmd)
+    cmd = ["condor_submit", scriptbase]
+    sout, serr, exit_status = execute_command(cmd)
 
-    if dirname != '':
+    if dirname != "":
         ds.pop()
 
     print(sout)
     if serr != "":
         print(serr)
 
-    if exit_status==0:
+    if exit_status == 0:
         try:
-            with open(subname,'w') as fobj:
-                date = datetime.datetime.now().strftime('%H:%M:%S')
+            with open(subname, "w") as fobj:
+                date = datetime.datetime.now().strftime("%H:%M:%S")
                 fobj.write(date)
-        except:
-            print("could not write submitted file:",subname)
-
+        except Exception:
+            print("could not write submitted file:", subname)
 
     return exit_status
 
 
-
 class JobCounter(dict):
     def __init__(self):
-        self.user=os.environ['USER']
+        self.user = os.environ["USER"]
 
     def __call__(self):
-        sout=self._run_condor_q()
+        sout = self._run_condor_q()
         njobs = self._count_jobs(sout)
         return njobs
 
     def _count_jobs(self, sout):
-        slist=sout.split('\n')
+        slist = sout.split("\n")
 
-        njobs=0
+        njobs = 0
         for line in slist:
-            ls=line.strip().split()
+            ls = line.strip().split()
             if len(ls) >= 6:
-                if ls[1] == self.user and ls[5] in ['R','I','H']:
-                    njobs+=1
+                if ls[1] == self.user and ls[5] in ["R", "I", "H"]:
+                    njobs += 1
 
         return njobs
 
@@ -152,97 +159,106 @@ class JobCounter(dict):
         while True:
             try:
                 sout, serr, exit_status = execute_command("condor_q")
-                if exit_status==0:
+                if exit_status == 0:
                     break
-            except:
+            except Exception:
                 print("error listing jobs, trying again after 30 seconds")
                 time.sleep(30)
 
         return sout
 
-class Submitter(object):
-    def __init__(self, script_files_all,
-                 nmax=DEF_NJOBS,
-                 poll=DEF_POLL,
-                 force=False,
-                 dryrun=False,
-                 suball=False):
 
-        self.script_files_all=script_files_all
-        self.nmax=nmax
-        self.poll=poll
-        self.force=force
-        self.dryrun=dryrun
-        self.suball=suball
+class Submitter(object):
+    def __init__(
+        self,
+        script_files_all,
+        nmax=DEF_NJOBS,
+        poll=DEF_POLL,
+        force=False,
+        dryrun=False,
+        suball=False,
+    ):
+
+        self.script_files_all = script_files_all
+        self.nmax = nmax
+        self.poll = poll
+        self.force = force
+        self.dryrun = dryrun
+        self.suball = suball
 
         self._set_scripts_to_submit()
 
     def go(self):
         self._print_preface()
 
-        scripts=self.scripts2submit
-        nscript=len(scripts)
+        scripts = self.scripts2submit
+        nscript = len(scripts)
 
-        if self.dryrun or nscript==0:
+        if self.dryrun or nscript == 0:
             return
 
         if not self.suball:
-            counter=JobCounter()
-            njobs=-1
+            counter = JobCounter()
+            njobs = -1
 
-        for iscript,script in enumerate(scripts):
+        for iscript, script in enumerate(scripts):
 
             if iscript > 0:
                 time.sleep(self.poll)
 
-            ntry=4
-            itry=0
+            ntry = 4
+            itry = 0
             while True:
                 if not self.suball:
-                    njobs=counter()
+                    njobs = counter()
 
                 if self.suball or njobs < self.nmax:
-                    self._print_subline(script,iscript,nscript)
+                    self._print_subline(script, iscript, nscript)
 
-                    status=submit_condor_script(script)
+                    status = submit_condor_script(script)
 
                     if status != 0:
-                        print("error submitting script, trying "
-                              "again after one minute")
+                        print(
+                            "error submitting script, trying "
+                            "again after one minute"
+                        )
                         time.sleep(60.0)
 
                         itry += 1
                         if itry >= ntry:
-                            print("    giving up on this file after",itry,"tries")
+                            print(
+                                "    giving up on this file after", itry,
+                                "tries"
+                            )
                             break
                     else:
                         break
 
                 else:
-                    #print("%d jobs is plenty (> %d)" % (njobs,self.nmax))
                     time.sleep(self.poll)
 
     def _print_subline(self, script, i, ntot):
-        perc=int( 100*i/float(ntot) )
-        date = datetime.datetime.now().strftime('%H:%M:%S')
-        print("submitting %s %d/%d (%i%%): %s" % (date,i+1,ntot,perc,script))
-
+        perc = int(100 * i / float(ntot))
+        date = datetime.datetime.now().strftime("%H:%M:%S")
+        print("submitting %s %d/%d (%i%%): %s" % (
+            date, i + 1, ntot, perc, script
+        ))
 
     def _print_preface(self):
-        print("total condor scripts:",len(self.script_files_all))
-        print("total to submit:",len(self.scripts2submit))
+        print("total condor scripts:", len(self.script_files_all))
+        print("total to submit:", len(self.scripts2submit))
 
     def _set_scripts_to_submit(self):
         if self.force:
             scripts2submit = self.script_files_all
         else:
-            scripts2submit=[]
+            scripts2submit = []
             for script_file in self.script_files_all:
-                subfile=get_submitted_sentinel(script_file)
+                subfile = get_submitted_sentinel(script_file)
                 if not os.path.exists(subfile):
                     scripts2submit.append(script_file)
 
-        self.scripts2submit=scripts2submit
+        self.scripts2submit = scripts2submit
 
 
 def main():
@@ -251,9 +267,9 @@ def main():
     """
 
     try:
-        args=parser.parse_args()
+        args = parser.parse_args()
 
-        submitter=Submitter(
+        submitter = Submitter(
             args.scripts,
             nmax=args.njobs,
             poll=args.poll,
@@ -265,5 +281,6 @@ def main():
 
     except KeyboardInterrupt:
         sys.exit(1)
+
 
 main()
