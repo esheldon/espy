@@ -22,18 +22,20 @@ condor_q \\
     -format ',' Owner \\
     -format '%-s,' 'ifThenElse(JobStatus==0,"U",ifThenElse(JobStatus==1,"I",ifThenElse(JobStatus==2,"R",ifThenElse(JobStatus==3,"X",ifThenElse(JobStatus==4,"C",ifThenElse(JobStatus==5,"H",ifThenElse(JobStatus==6,"E",string(JobStatus))))))))' \\
     -format '%-d,' JobPrio \\
-    -format '%-.1f,' ImageSize/1024.0 \\
+    -format '%-.2f,' MemoryUsage/1024 \\
     -format '%s,' Cmd \\
     -format '%s,' job_name \\
     -format '%s' RemoteHost \\
     -format '\\n' Owner"""  # noqa
+
+#     -format '%-.1f,' ImageSize/1024.0 \\
 
 MINUTE = 60
 HOUR = MINUTE * 60
 DAY = HOUR * 24
 
 HEADERS = (
-    "ID", "Owner", "Submitted", "Run Time", "ST", "Pri", "Size", "Cmd",
+    "ID", "Owner", "Submitted", "Run Time", "ST", "Pri", "Mem", "Cmd",
     "Host",
 )
 
@@ -51,7 +53,7 @@ def print_queue(match=None):
         "runtime": 8,
         "status": 2,
         "pri": 3,
-        "size": 4,
+        "mem": 4,
         "cmd": 3,
         "host": 4,
     }
@@ -80,7 +82,7 @@ def write_job_listing(line_splits, lengths):
     fmt += "%-" + str(lengths["runtime"]) + "s  "
     fmt += "%-" + str(lengths["status"]) + "s  "
     fmt += "%-" + str(lengths["pri"]) + "s  "
-    fmt += "%-" + str(lengths["size"]) + "s  "
+    fmt += "%-" + str(lengths["mem"]) + "s  "
     fmt += "%-" + str(lengths["cmd"]) + "s  "
     fmt += "%-" + str(lengths["host"]) + "s"
 
@@ -143,10 +145,16 @@ def process_line(line, stats, lengths, dolengths=True):
             shadowbday,
             status,
             pri,
-            size,
+            mem,
             cmd,
             host,
         ) = ls
+        if '@' not in host:
+            # we have no job and no memory
+            mem = '----'
+            host = ''
+
+        cmd = os.path.basename(cmd)
     elif len(ls) == 12:
         # job_name was present
         (
@@ -158,7 +166,7 @@ def process_line(line, stats, lengths, dolengths=True):
             shadowbday,
             status,
             pri,
-            size,
+            mem,
             cmd0,
             job_name,
             host,
@@ -169,7 +177,6 @@ def process_line(line, stats, lengths, dolengths=True):
             "Expected 10 or 11 results from condor_q, got %d" % len(ls)
         )
 
-    cmd = os.path.basename(cmd)
     host = host.split(".")[0]
 
     total_wall_time = int(float(remotewall))
@@ -188,22 +195,11 @@ def process_line(line, stats, lengths, dolengths=True):
         lengths["runtime"] = max(len(runtime), lengths["runtime"])
         lengths["status"] = max(len(status), lengths["status"])
         lengths["pri"] = max(len(pri), lengths["pri"])
-        lengths["size"] = max(len(size), lengths["size"])
+        lengths["mem"] = max(len(mem), lengths["mem"])
         lengths["cmd"] = max(len(cmd), lengths["cmd"])
         lengths["host"] = max(len(host), lengths["host"])
 
-    return id, owner, qdate, runtime, status, pri, size, cmd, host
-    # return {
-    #     "id": id,
-    #     "owner": owner,
-    #     "qdate": qdate,
-    #     "runtime": runtime,
-    #     "status": status,
-    #     "pri": pri,
-    #     "size": size,
-    #     "cmd": cmd,
-    #     "host": host,
-    # }
+    return id, owner, qdate, runtime, status, pri, mem, cmd, host
 
 
 def format_time(tot_seconds):

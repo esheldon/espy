@@ -124,12 +124,15 @@ if __name__ == '__main__':
 
     if args.flist is not None:
         flist = args.flist
+        with open(args.flist) as fobj:
+            flist = [line.strip() for line in fobj]
     elif args.files is not None:
         flist = args.files
-        if args.limit is not None:
-            flist = flist[:args.limit]
     else:
         raise ValueError('send either --files or --flist')
+
+    if args.limit is not None:
+        flist = flist[:args.limit]
 
     main(
         script=args.script,
