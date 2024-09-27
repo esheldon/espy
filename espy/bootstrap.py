@@ -45,7 +45,7 @@ def bootstrap(data, nrand, weights=None, rng=None):
         wsum = weights[ind].sum(axis=0)
         vals[i] = dsum / wsum
 
-    err = vals.std()
+    err = vals.std(axis=0)
 
     wsum = weights.sum(axis=0)
     mn = (data * weights).sum(axis=0) / wsum
@@ -156,7 +156,7 @@ def bootstrap_ratio(num, denom, nrand, weights=None, rng=None):
 
         vals[i] = num_sum / denom_sum
 
-    err = vals.std()
+    err = vals.std(axis=0)
 
     num_sum = (num * weights).sum(axis=0)
     denom_sum = (denom * weights).sum(axis=0)
