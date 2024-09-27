@@ -16,7 +16,7 @@ def bootstrap(data, nrand, weights=None, rng=None):
 
     Returns
     -------
-    err:  The mean and uncertainty on the mean.
+    mean, err:  The mean and uncertainty on the mean.
     """
 
     import numpy as np
@@ -45,7 +45,11 @@ def bootstrap(data, nrand, weights=None, rng=None):
         wsum = weights[ind].sum(axis=0)
         vals[i] = dsum / wsum
 
-    return vals.std(axis=0)
+    err = vals.std()
+
+    wsum = weights.sum(axis=0)
+    mn = (data * weights).sum(axis=0) / wsum
+    return mn, err
 
 
 def bootstrap_sums(sums, wsums, nrand, rng=None):
@@ -66,7 +70,7 @@ def bootstrap_sums(sums, wsums, nrand, rng=None):
 
     Returns
     -------
-    err:  The mean and uncertainty on the mean.
+    mean, err:  The mean and uncertainty on the mean.
     """
 
     import numpy as np
@@ -90,7 +94,10 @@ def bootstrap_sums(sums, wsums, nrand, rng=None):
         ind = rng.integers(0, sums.shape[0], size=sums.shape[0])
         vals[i] = sums[ind].sum(axis=0) / wsums[ind].sum(axis=0)
 
-    return vals.std(axis=0)
+    mn = sums.sum(axis=0) / wsums.sum(axis=0)
+    err = vals.std(axis=0)
+
+    return mn, err
 
 
 def bootstrap_ratio(num, denom, nrand, weights=None, rng=None):
@@ -149,4 +156,10 @@ def bootstrap_ratio(num, denom, nrand, weights=None, rng=None):
 
         vals[i] = num_sum / denom_sum
 
-    return vals.std(axis=0)
+    err = vals.std()
+
+    num_sum = (num * weights).sum(axis=0)
+    denom_sum = (denom * weights).sum(axis=0)
+    mn = num_sum / denom_sum
+
+    return mn, err
