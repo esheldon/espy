@@ -18,7 +18,7 @@ def test_bootstrap_1d():
 
         data = rng.normal(scale=sigma, size=num)
 
-        err = bootstrap(data=data, nrand=NRAND, rng=rng)
+        mn, err = bootstrap(data=data, nrand=NRAND, rng=rng)
 
         expected_err = sigma / np.sqrt(num)
 
@@ -43,11 +43,13 @@ def test_bootstrap_dims():
     for i in range(10):
         data = rng.normal(scale=sigmas, size=(num, sigmas.size))
 
-        errs = bootstrap(data=data, nrand=NRAND, rng=rng)
+        mns, errs = bootstrap(data=data, nrand=NRAND, rng=rng)
 
         expected_errs = sigmas / np.sqrt(num)
 
         fracdiff = errs / expected_errs - 1
+        print('expected_errs:', expected_errs)
+        print('bootstrap errs:', errs)
         print('fracdiff:', fracdiff)
         assert np.all(fracdiff < 0.1)
 
@@ -80,7 +82,7 @@ def test_bootstrap_sums():
                 sums[i, ibin] = data.sum()
                 wsums[i, ibin] = num
 
-        errs = bootstrap_sums(sums=sums, wsums=wsums, nrand=NRAND, rng=rng)
+        mns, errs = bootstrap_sums(sums=sums, wsums=wsums, nrand=NRAND, rng=rng)
 
         expected_errs = sigmas / np.sqrt(wsums.sum(axis=0))
 
