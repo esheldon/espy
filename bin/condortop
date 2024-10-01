@@ -203,6 +203,32 @@ class CondorWatcher:
                 cmd,
                 host,
             ) = ls
+
+            if '@' not in host:
+                # we have no job and no memory
+                mem = '----'
+                host = ''
+            else:
+                try:
+                    float(mem)
+                except Exception:
+                    (
+                        id,
+                        owner,
+                        qdate,
+                        remotewall,
+                        servertime,
+                        shadowbday,
+                        status,
+                        pri,
+                        cmd0,
+                        job_name,
+                        host,
+                    ) = ls
+                    mem = '----'
+
+            cmd = os.path.basename(cmd)
+
         elif len(ls) == 12:
             # job_name was present
             (
@@ -371,6 +397,7 @@ condor_q \\
     -format '\\n' Owner"""  # noqa
 
 #    -format '%-.1f,' ImageSize/1024.0 \\
+
 
 def get_args():
     import argparse
