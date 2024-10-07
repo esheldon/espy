@@ -22,7 +22,7 @@ condor_q \\
     -format ',' Owner \\
     -format '%-s,' 'ifThenElse(JobStatus==0,"U",ifThenElse(JobStatus==1,"I",ifThenElse(JobStatus==2,"R",ifThenElse(JobStatus==3,"X",ifThenElse(JobStatus==4,"C",ifThenElse(JobStatus==5,"H",ifThenElse(JobStatus==6,"E",string(JobStatus))))))))' \\
     -format '%-d,' JobPrio \\
-    -format '%-.2f,' MemoryUsage/1024 \\
+    -format '%-.2f,' MemoryUsage/1024.0 \\
     -format '%s,' Cmd \\
     -format '%s,' job_name \\
     -format '%s' RemoteHost \\
