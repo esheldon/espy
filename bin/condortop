@@ -93,7 +93,7 @@ class CondorWatcher:
                     lsplit = self.process_line(
                         line, stats, lengths, dolengths=(nkeep < nprint)
                     )
-                    if nkeep < nprint:
+                    if nkeep <= nprint:
                         line_splits.append(tuple(lsplit))
 
             self.write_statline(stats)
