@@ -79,6 +79,7 @@ class CondorWatcher:
             # nprint = min(len(out), self.maxy3)
             nprint = min(len(out), self.maxy3 - 1)
             line_splits = []
+            nkeep = 0
             for ii in range(len(out)):
                 line = out[ii]
                 if len(line) > 0:
@@ -88,10 +89,11 @@ class CondorWatcher:
                             continue
 
                     stats["njobs"] += 1
+                    nkeep += 1
                     lsplit = self.process_line(
-                        line, stats, lengths, dolengths=(ii < nprint)
+                        line, stats, lengths, dolengths=(nkeep < nprint)
                     )
-                    if ii < nprint:
+                    if nkeep < nprint:
                         line_splits.append(tuple(lsplit))
 
             self.write_statline(stats)
