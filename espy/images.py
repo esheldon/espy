@@ -764,7 +764,7 @@ def rebin(im, factor, dtype=None):
             "divisible by factor (%d)" % (s[0], s[1], factor)
         )
 
-    newshape = np.array(s) / factor
+    newshape = np.array(s) // factor
     if dtype is None:
         a = im
     else:
