@@ -862,7 +862,7 @@ def _prep_plot(
     xlim=None, ylim=None, xlog=False, ylog=False,
     xlabel=None, ylabel=None, title=None,
 ):
-    import proplot as pplt
+    import matplotlib.pyplot as mplt
 
     file = kw.pop('file', None)
 
@@ -872,7 +872,7 @@ def _prep_plot(
         show = kw.pop('show', True)
 
     if figax is None:
-        figax = pplt.subplots(refwidth=width)
+        figax = mplt.subplots(width=width)
         fig, ax = figax
         axis_kw = {
             'xlabel': xlabel,
@@ -904,7 +904,7 @@ def _prep_2plot(
     xlim=None, ylim=None, xlog=False, ylog=False,
     xlabel=None, ylabel=None, title=None,
 ):
-    import proplot as pplt
+    import matplotlib.pyplot as mplt
 
     file = kw.pop('file', None)
 
@@ -914,7 +914,7 @@ def _prep_2plot(
         show = kw.pop('show', True)
 
     if figax is None:
-        fig, axs = pplt.subplots(ncols=2, refwidth=width, share=False)
+        fig, axs = mplt.subplots(ncols=2)
 
         if xlabel is None:
             xlabel = 'radius [pixels]'
