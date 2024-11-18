@@ -803,3 +803,50 @@ def _do_legend_maybe(ax, legend):
             ax.legend()
         else:
             ax.legend(**legend)
+
+
+def zenburn():
+    from cycler import cycler
+    colors = [
+        '#8cd0d3', '#cc9393', '#7f9f7f', '#f0dfaf', '#dcdccc',
+        '#4A7274', '#466F46', '#A55D5D', '#A35E2E', 'white',
+    ]
+
+    colorcyc = cycler('color', colors)
+
+    return {
+        'axes.axisbelow': True,
+        'axes.edgecolor': 'CFCFCF',
+        'axes.facecolor': '3F3F3F',
+
+        'axes.grid': True,
+
+        'axes.labelcolor': 'white',
+
+        'axes.labelsize': 'large',
+
+        'axes.prop_cycle': colorcyc,
+        'axes.titlesize': 'x-large',
+
+        'figure.edgecolor': 'FFFFEF',
+        'figure.facecolor': '3F3F3F',
+
+        'grid.color': '6F6F6F',
+        'grid.linestyle': '-',
+
+        'legend.facecolor': '9F9F9F',
+        'legend.fancybox': True,
+
+        'lines.color': '3F3F3F',
+
+        'patch.antialiased': True,
+        'patch.facecolor': '8cd0d3',
+
+        'savefig.edgecolor': 'CFCFCF',
+        'savefig.facecolor': '3F3F3F',
+
+        'text.color': 'white',
+
+        'xtick.color': 'CFCFCF',
+        'ytick.color': 'CFCFCF',
+    }
