@@ -3,6 +3,8 @@
 
 def main(match=None):
     import esutil as eu
+    import random
+
     args = get_args()
 
     with open(args.infile) as fobj:
@@ -10,6 +12,10 @@ def main(match=None):
         jobs = get_jobs(fobj)
 
     print('found', len(jobs), 'jobs')
+
+    if args.shuffle:
+        print('shuffling jobs')
+        random.shuffle(jobs)
 
     nchunks = len(jobs) // args.nper
     if len(jobs) % args.nper != 0:
@@ -81,6 +87,7 @@ def get_args():
         required=True,
     )
     parser.add_argument('--nper', type=int, default=1000)
+    parser.add_argument('--shuffle', action='store_true')
 
     return parser.parse_args()
 
