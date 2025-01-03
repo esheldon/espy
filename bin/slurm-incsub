@@ -179,8 +179,6 @@ def submit_batch(args, flist, current, njobs_to_submit):
     nfiles = len(flist)
     nsubmitted = 0
 
-    dirstack = eu.ostools.DirStack(verbose=False)
-
     while nsubmitted < njobs_to_submit:
         if current >= nfiles:
             break
@@ -192,10 +190,7 @@ def submit_batch(args, flist, current, njobs_to_submit):
 
             perc = 100.0 * (current + 1) / float(nfiles)
 
-            dirname, bname = os.path.split(fname)
-
-            if dirname != '':
-                dirstack.push(dirname)
+            bname = os.path.basename(fname)
 
             date = datetime.datetime.now().strftime('%H:%M:%S')
             print(
@@ -203,10 +198,7 @@ def submit_batch(args, flist, current, njobs_to_submit):
                 % (bname, date, current + 1, nfiles, perc)
             )
 
-            submit(bname)
-
-            if dirname != '':
-                dirstack.pop()
+            submit(fname)
 
             touch_subf(subf)
 
@@ -226,11 +218,11 @@ def touch_subf(subf):
             fobj.write('submitted')
 
 
-def submit(bname):
-    cmd = 'sbatch %s' % bname
+def submit(fname):
+    cmd = 'sbatch %s' % fname
     status, stdout_ret, stderr_ret = eu.ostools.exec_process(cmd)
     if status != 0:
-        raise RuntimeError('error subitting job %s' % bname)
+        raise RuntimeError('error subitting job %s' % fname)
 
 
 def main():
