@@ -190,12 +190,10 @@ def submit_batch(args, flist, current, njobs_to_submit):
 
             perc = 100.0 * (current + 1) / float(nfiles)
 
-            bname = os.path.basename(fname)
-
             date = datetime.datetime.now().strftime('%H:%M:%S')
             print(
                 '    submitting %s %s %s/%s (%i%%)'
-                % (bname, date, current + 1, nfiles, perc)
+                % (fname, date, current + 1, nfiles, perc)
             )
 
             submit(fname)
