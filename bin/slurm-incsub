@@ -28,6 +28,7 @@ def get_args():
     parser.add_argument(
         '-p',
         '--poll',
+        type=int,
         default=30,
         help=(
             'time between polls of running jobs when we are at max allowed'
@@ -124,7 +125,7 @@ def submit_jobs(args):
                 break
 
         time.sleep(args.poll)
-        njobs, diffjobs = get_diffjobs()
+        njobs, diffjobs = get_diffjobs(args)
 
 
 def get_submitted_fname(fname):
