@@ -1,0 +1,96 @@
+#!/usr/bin/env python
+
+
+def main(match=None):
+    import esutil as eu
+    import random
+
+    args = get_args()
+
+    with open(args.infile) as fobj:
+        header = get_header(fobj)
+        jobs = get_jobs(fobj)
+
+    print('found', len(jobs), 'jobs')
+
+    if args.shuffle:
+        print('shuffling jobs')
+        random.shuffle(jobs)
+
+    nchunks = len(jobs) // args.nper
+    if len(jobs) % args.nper != 0:
+        nchunks += 1
+
+    print('will break into', nchunks, 'chunks of size ~', args.nper)
+
+    subs = eu.algorithm.isplit(num=len(jobs), nchunks=nchunks)
+    assert subs.size == nchunks
+
+    for isub, sub in enumerate(subs):
+
+        outfile = args.infile + f'.{isub:02d}'
+        assert outfile != args.infile
+
+        start = sub['start']
+        end = sub['end']
+        subjobs = jobs[start:end]
+
+        print(f'{isub+1} / {subs.size} {outfile}')
+        with open(outfile, 'w') as outfobj:
+            outfobj.write(header)
+
+            for subjob in subjobs:
+                for subline in subjob:
+                    outfobj.write(subline)
+                outfobj.write('\n')
+
+
+def get_jobs(fobj):
+    fobj.seek(0)
+
+    jobs = []
+
+    in_job = False
+    for line in fobj:
+        if 'job_name' in line:
+            # starting a new job
+            in_job = True
+            job = []
+            job.append(line)
+        elif in_job:
+            job.append(line)
+            if 'Queue' in line:
+                jobs.append(job)
+                in_job = False
+
+    return jobs
+
+
+def get_header(fobj):
+    lines = []
+    for line in fobj:
+        line = line.strip()
+        if 'job_name' in line:
+            break
+        lines.append(line)
+
+    header = '\n'.join(lines)
+    return header
+
+
+def get_args():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--infile',
+        help='the input condor file',
+        required=True,
+    )
+    parser.add_argument('--nper', type=int, default=1000)
+    parser.add_argument('--shuffle', action='store_true')
+
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    main()
