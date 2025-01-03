@@ -1,0 +1,243 @@
+#!/usr/bin/env python
+
+import sys
+import os
+import random
+import time
+import datetime
+import esutil as eu
+
+
+def get_args():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        'files',
+        nargs='+',
+        help='list of files or a file holding the flist if -F is set'
+    )
+
+    parser.add_argument(
+        '--pattern',
+        default=None,
+        help=('Only count jobs that match the pattern')
+    )
+
+    parser.add_argument(
+        '-p',
+        '--poll',
+        default=30,
+        help=(
+            'time between polls of running jobs when we are at max allowed'
+            'jobs, default 30 seconds'
+        ),
+    )
+    parser.add_argument(
+        '-s',
+        '--sleep',
+        type=float,
+        default=None,
+        help=(
+            'time to sleep between job submissions; default '
+            'is not to sleep at all'
+        ),
+    )
+
+    parser.add_argument(
+        '-n',
+        '--njobs',
+        type=int,
+        default=5000,
+        help='max number of jobs, default 5000'
+    )
+
+    parser.add_argument(
+        '-f',
+        '--force',
+        action='store_true',
+        help=(
+            'force starting of all jobs, even if '
+            'a .submitted file is present.'
+        ),
+    )
+    parser.add_argument(
+        '-F',
+        '--isfile',
+        action='store_true',
+        help=(
+            'The argument is a list of files to submit, '
+            'rather than the list being the arguments'
+        ),
+    )
+
+    parser.add_argument(
+        '-d',
+        '--dryrun',
+        action='store_true',
+        help='dry run.  Just print number of jobs and exit.',
+    )
+
+    parser.add_argument(
+        '--rand',
+        action='store_true',
+        help='randomize the order of files',
+    )
+    return parser.parse_args()
+
+
+def submit_jobs(args):
+    if args.isfile:
+        flist = load_flist(args.files[0])
+    else:
+        flist = args.files
+
+    nfiles = len(flist)
+    if args.rand:
+        random.shuffle(flist)
+
+    print('number in list:           %s' % len(flist))
+    print('will limit to maxjobs:    %s' % args.njobs)
+
+    if args.dryrun:
+        print('ending dryrun')
+        return
+
+    diffjobs = 0
+
+    current = 0
+    njobs, diffjobs = get_diffjobs(args)
+
+    while True:
+        if diffjobs > 0:
+            print('Found %s jobs  diffjobs: %s' % (njobs, diffjobs))
+
+            current = submit_batch(
+                args=args,
+                flist=flist,
+                current=current,
+                njobs_to_submit=diffjobs,
+            )
+
+            if current >= nfiles:
+                break
+
+        time.sleep(args.poll)
+        njobs, diffjobs = get_diffjobs()
+
+
+def get_submitted_fname(fname):
+    return fname + '.submitted'
+
+
+def load_flist(fname):
+    flist = []
+    with open(fname) as fobj:
+        for line in fobj:
+            f = line.strip()
+
+            flist.append(f)
+
+    return flist
+
+
+def get_diffjobs(args):
+    njobs = get_njobs(args)
+    diffjobs = args.njobs - njobs
+    return njobs, diffjobs
+
+
+def get_njobs(args):
+    cmd = [
+        'squeue -u esheldon',
+        'grep -v NODELIST',
+    ]
+    if args.pattern is not None:
+        cmd += ['grep %s' % args.pattern]
+
+    cmd += ['wc -l']
+
+    cmd = ' | '.join(cmd)
+
+    status, stdout_ret, stderr_ret = eu.ostools.exec_process(cmd)
+
+    if status != 0:
+        raise RuntimeError('erro executing squeue: %d' % status)
+
+    try:
+        njobs = int(stdout_ret)
+    except Exception:
+        njobs = 0
+
+    return njobs
+
+
+def submit_batch(args, flist, current, njobs_to_submit):
+
+    nfiles = len(flist)
+    nsubmitted = 0
+
+    dirstack = eu.ostools.DirStack(verbose=False)
+
+    while nsubmitted < njobs_to_submit:
+        if current >= nfiles:
+            break
+
+        fname = flist[current]
+        subf = get_submitted_fname(fname)
+
+        if not os.path.exists(subf) or args.force:
+
+            perc = 100.0 * (current + 1) / float(nfiles)
+
+            dirname, bname = os.path.split(fname)
+
+            if dirname != '':
+                dirstack.push(dirname)
+
+            date = datetime.datetime.now().strftime('%H:%M:%S')
+            print(
+                '    submitting %s %s %s/%s (%i%%)'
+                % (bname, date, current + 1, nfiles, perc)
+            )
+
+            submit(bname)
+
+            if dirname != '':
+                dirstack.pop()
+
+            touch_subf(subf)
+
+            if args.sleep is not None:
+                time.sleep(args.sleep)
+
+            nsubmitted += 1
+
+        current += 1
+
+    return current
+
+
+def touch_subf(subf):
+    if not os.path.exists(subf):
+        with open(subf, 'w') as fobj:
+            fobj.write('submitted')
+
+
+def submit(bname):
+    cmd = 'sbatch %s' % bname
+    status, stdout_ret, stderr_ret = eu.ostools.exec_process(cmd)
+    if status != 0:
+        raise RuntimeError('error subitting job %s' % bname)
+
+
+def main():
+    try:
+        args = get_args()
+        submit_jobs(args=args)
+    except KeyboardInterrupt:
+        sys.exit(1)
+
+
+main()
