@@ -50,38 +50,55 @@ def plot(
     yerr: array or sequence, optional
         Optional array of y errors
 
+    minor_tick_num: int
+        Default 3
+    scaled_ticks: bool
+        Default True
     xlabel: str, optional
         Label for x axis
     ylabel: str, optional
         Label for y axis
     title: str, optional
         Title string for plot
-    xlim: 2-element sequence, optional
-        Optional limits for the x axis
-    ylim: 2-element sequence, optional
-        Optional limits for the y axis
+    xmin: float
+        Optional lower limit
+    xmax: float
+        Optional lower limit
+    ymin: float
+        Optional lower limit
+    ymax: float
+        Optional lower limit
     xlog: bool, optional
         If True, use log x axis
     ylog: bool, optional
         If True, use log y axis
-    aratio: float, optional
-        Axis ratio of plot, ysize/xsize, default golden ratio 1.618
+    cyhcle_list_name: str
+        Default 'exotic'
     width: float, optional
-        Optional reference width, default 3.5
-    legend: bool or dicdt
-        If True, a legend is created. If a dict, then the keywords
-        are sent to the legend call
-    figax: (fig, ax)
+        Optional width
+    height: float
+        Optional height
+    grid: bool
+        If set to True, add grid
+    grid_style: dict
+        Style for grid
+    enlarge_limits: bool
+        Defaul True
+    axis_equal_image: bool
+        Default False
+    colormap: str
+        Name for colormap, default None
+    dpi: int, optional
+        dots-per-inch for a bitmap output, default 150
+    plt: (fig, ax)
         If sent, a new figure and axis is not created, the input one is
         reused
+    file: str, optional
+        Filename to write.
     show: bool, optional
         If True, show the plot on the screen.  If the file= is
         not sent, this defaults to True.  If file= is sent
         this defaults to False
-    file: str, optional
-        Filename to write.
-    dpi: int, optional
-        dots-per-inch for a bitmap output
 
     **kw extra keywords for plot call
 
