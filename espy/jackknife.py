@@ -6,13 +6,40 @@ from numba import njit
 
 
 def jackknife(
-    *, data, weights=None, chunksize=1,
+    *, data, weights=None, chunksize=1, err_err=False,
 ):
     if weights is not None:
         assert data.size == weights.size, "weights and data must be same size"
-        return _wjackknife(data, weights, chunksize)
+        mn, err = _wjackknife(data, weights, chunksize)
     else:
-        return _jackknife(data, chunksize)
+        mn, err = _jackknife(data, chunksize)
+
+    if err_err:
+        nchunks = data.size // chunksize
+        errors = np.zeros(nchunks)
+        logic = np.ones(data.size, dtype=bool)
+
+        for i in range(nchunks):
+            logic[:] = True
+
+            start = i * chunksize
+            end = (i + 1) * chunksize
+
+            logic[start:end] = False
+
+            if weights is not None:
+                imn, ierr = _wjackknife(data[logic], weights[logic], chunksize)
+            else:
+                imn, ierr = _jackknife(data[logic], chunksize)
+            errors[i] = ierr
+
+        fac = (nchunks - 1) / nchunks
+
+        err_err_cov = fac * ((err - errors)**2).sum()
+        err_err = np.sqrt(err_err_cov)
+        return mn, err, err_err
+    else:
+        return mn, err
 
 
 def jackknife_ratio(
@@ -213,6 +240,29 @@ def test_jackknife():
     print('jack 100:', jmn100, jerr100)
 
 
+def test_jackknife_err_err():
+    rng = np.random.RandomState()
+
+    nper = 100000
+    def make_data():
+        return rng.normal(size=100000)
+
+    _, err, err_err_predicted = jackknife(
+        data=make_data(), chunksize=100, err_err=True,
+    )
+
+    ntrials = 100
+    errors = np.zeros(ntrials)
+    for i in range(ntrials):
+        _, errors[i] = jackknife(data=make_data(), chunksize=100)
+
+    err_err_measured = errors.std()
+    print(f'err: {err:g}')
+    print(f'err_err predicted: {err_err_predicted:g}')
+    print(f'err_err measured: {err_err_measured:g}')
+    print(f'err_err sqrt: {err / np.sqrt(2 * nper):g}')
+
+
 def test_wjackknife():
     import esutil as eu
     seed = 800
@@ -310,3 +360,7 @@ if __name__ == '__main__':
     print('-'*70)
     print('jackknife ratio')
     test_jackknife_ratio()
+
+    print('-'*70)
+    print('jackknife err_err')
+    test_jackknife_err_err()
