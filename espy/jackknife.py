@@ -244,6 +244,7 @@ def test_jackknife_err_err():
     rng = np.random.RandomState()
 
     nper = 100000
+
     def make_data():
         return rng.normal(size=100000)
 

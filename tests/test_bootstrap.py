@@ -82,7 +82,9 @@ def test_bootstrap_sums():
                 sums[i, ibin] = data.sum()
                 wsums[i, ibin] = num
 
-        mns, errs = bootstrap_sums(sums=sums, wsums=wsums, nrand=NRAND, rng=rng)
+        mns, errs = bootstrap_sums(
+            sums=sums, wsums=wsums, nrand=NRAND, rng=rng,
+        )
 
         expected_errs = sigmas / np.sqrt(wsums.sum(axis=0))
 

@@ -1,56 +1,50 @@
-name: tests
+name: espy CI
 
 on:
-  push:
-  pull_request: null
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - main
+            - releases/*
 
 jobs:
-  tests:
-    name: tests
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        pyver: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-        compiler: [gcc]
-        include:
-            - os: macos-latest
-              pyver: "3.9"
-              compiler: clang
-            - os: macos-latest
-              pyver: "3.10"
-              compiler: clang
-            - os: macos-latest
-              pyver: "3.11"
-              compiler: clang
-            - os: macos-latest
-              pyver: "3.12"
-              compiler: clang
+    tests:
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                os: [ ubuntu-latest ]
+                py: ["3.11", "3.12"]
 
-    runs-on: ${{ matrix.os }}
+        defaults:
+            run:
+                # cf. https://github.com/conda-incubator/setup-miniconda#important
+                shell: bash -l {0}
 
-    steps:
-      - uses: actions/checkout@v2
+        steps:
+            - uses: actions/checkout@v2
+            - uses: conda-incubator/setup-miniconda@v2
+              with:
+                  python-version: ${{ matrix.pyver }}
+                  channels: conda-forge,defaults
+                  channel-priority: strict
+                  show-channel-urls: true
+                  miniforge-version: latest
 
-      - name: Set up Python ${{ matrix.pyver }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.pyver }}
+            - name: Install deps
+              run: |
+                conda config --set always_yes yes
+                conda install numpy flake8 pytest
 
-      - name: Install deps
-        run: |
-            pip install numpy
-            pip install flake8
-            pip install pytest
+            - name: Install espy
+              run:
+                pip install .
 
-      - name: Install code
-        run: |
-            pip install -e .
+            - name: lint
+              run: |
+                flake8
 
-      - name: lint
-        run: |
-            flake8 espy
-
-      - name: test
-        run: |
-            pytest -vv tests
+            - name: Run tests
+              run: |
+                pytest -vv tests/
