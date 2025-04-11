@@ -10,57 +10,12 @@ def jackknife(
 ):
     if weights is not None:
         assert data.size == weights.size, "weights and data must be same size"
-        mn, err = _wjackknife(data, weights, chunksize)
+        mn, err, err_err_ = _wjackknife(data, weights, chunksize)
     else:
-        mn, err = _jackknife(data, chunksize)
+        mn, err, err_err_ = _jackknife(data, chunksize)
 
     if err_err:
-        if True:
-            if rng is None:
-                rng = np.random.RandomState()
-            nrand = 1000
-            errs = np.zeros(nrand)
-            for irand in range(nrand):
-                ind = rng.choice(data.size, size=data.size)
-                if weights is not None:
-                    _, errs[irand] = _jackknife(
-                        data[ind],
-                        weights=weights[ind],
-                        chunksize=chunksize,
-                    )
-                else:
-                    _, errs[irand] = _jackknife(
-                        data[ind],
-                        chunksize=chunksize,
-                    )
-
-            err_err = errs.std()
-        else:
-            nchunks = data.size // chunksize
-            errors = np.zeros(nchunks)
-            logic = np.ones(data.size, dtype=bool)
-
-            for i in range(nchunks):
-                logic[:] = True
-
-                start = i * chunksize
-                end = (i + 1) * chunksize
-
-                logic[start:end] = False
-
-                if weights is not None:
-                    imn, ierr = _wjackknife(
-                        data[logic], weights[logic], chunksize,
-                    )
-                else:
-                    imn, ierr = _jackknife(data[logic], chunksize)
-                errors[i] = ierr
-
-            fac = (nchunks - 1) / nchunks
-
-            err_err_cov = fac * ((err - errors)**2).sum()
-            err_err = np.sqrt(err_err_cov)
-        return mn, err, err_err
+        return mn, err, err_err_
     else:
         return mn, err
 
@@ -113,7 +68,8 @@ def _jackknife(data, chunksize):
     var = fac*(((mns - mn)**2).sum())
 
     err = np.sqrt(var)
-    return mn, err
+    err_err = err / np.sqrt(2 * nchunks)
+    return mn, err, err_err
 
 
 @njit
@@ -148,7 +104,8 @@ def _wjackknife(data, weights, chunksize):
     var = fac*(((mns - mn)**2).sum())
 
     err = np.sqrt(var)
-    return mn, err
+    err_err = err / np.sqrt(2 * nchunks)
+    return mn, err, err_err
 
 
 @njit
@@ -269,7 +226,7 @@ def test_jackknife_err_err():
     nper = 100000
 
     def make_data():
-        return rng.normal(size=100000)
+        return rng.normal(size=nper)
 
     _, err, err_err_predicted = jackknife(
         data=make_data(), chunksize=100, err_err=True,
@@ -284,7 +241,6 @@ def test_jackknife_err_err():
     print(f'err: {err:g}')
     print(f'err_err predicted: {err_err_predicted:g}')
     print(f'err_err measured: {err_err_measured:g}')
-    print(f'err_err sqrt(n): {err / np.sqrt(2 * nper):g}')
 
 
 def test_wjackknife():
