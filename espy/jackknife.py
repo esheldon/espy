@@ -6,7 +6,7 @@ from numba import njit
 
 
 def jackknife(
-    *, data, weights=None, chunksize=1, err_err=False,
+    data, weights=None, chunksize=1, err_err=False, rng=None,
 ):
     if weights is not None:
         assert data.size == weights.size, "weights and data must be same size"
@@ -15,35 +15,58 @@ def jackknife(
         mn, err = _jackknife(data, chunksize)
 
     if err_err:
-        nchunks = data.size // chunksize
-        errors = np.zeros(nchunks)
-        logic = np.ones(data.size, dtype=bool)
+        if True:
+            if rng is None:
+                rng = np.random.RandomState()
+            nrand = 1000
+            errs = np.zeros(nrand)
+            for irand in range(nrand):
+                ind = rng.choice(data.size, size=data.size)
+                if weights is not None:
+                    _, errs[irand] = _jackknife(
+                        data[ind],
+                        weights=weights[ind],
+                        chunksize=chunksize,
+                    )
+                else:
+                    _, errs[irand] = _jackknife(
+                        data[ind],
+                        chunksize=chunksize,
+                    )
 
-        for i in range(nchunks):
-            logic[:] = True
+            err_err = errs.std()
+        else:
+            nchunks = data.size // chunksize
+            errors = np.zeros(nchunks)
+            logic = np.ones(data.size, dtype=bool)
 
-            start = i * chunksize
-            end = (i + 1) * chunksize
+            for i in range(nchunks):
+                logic[:] = True
 
-            logic[start:end] = False
+                start = i * chunksize
+                end = (i + 1) * chunksize
 
-            if weights is not None:
-                imn, ierr = _wjackknife(data[logic], weights[logic], chunksize)
-            else:
-                imn, ierr = _jackknife(data[logic], chunksize)
-            errors[i] = ierr
+                logic[start:end] = False
 
-        fac = (nchunks - 1) / nchunks
+                if weights is not None:
+                    imn, ierr = _wjackknife(
+                        data[logic], weights[logic], chunksize,
+                    )
+                else:
+                    imn, ierr = _jackknife(data[logic], chunksize)
+                errors[i] = ierr
 
-        err_err_cov = fac * ((err - errors)**2).sum()
-        err_err = np.sqrt(err_err_cov)
+            fac = (nchunks - 1) / nchunks
+
+            err_err_cov = fac * ((err - errors)**2).sum()
+            err_err = np.sqrt(err_err_cov)
         return mn, err, err_err
     else:
         return mn, err
 
 
 def jackknife_ratio(
-    *, data1, data2, weights1=None, weights2=None, chunksize=1,
+    data1, data2, weights1=None, weights2=None, chunksize=1,
 ):
     assert data1.size == data2.size, "data1 and data2 must be same size"
 
@@ -252,7 +275,7 @@ def test_jackknife_err_err():
         data=make_data(), chunksize=100, err_err=True,
     )
 
-    ntrials = 100
+    ntrials = 1000
     errors = np.zeros(ntrials)
     for i in range(ntrials):
         _, errors[i] = jackknife(data=make_data(), chunksize=100)
@@ -261,7 +284,7 @@ def test_jackknife_err_err():
     print(f'err: {err:g}')
     print(f'err_err predicted: {err_err_predicted:g}')
     print(f'err_err measured: {err_err_measured:g}')
-    print(f'err_err sqrt: {err / np.sqrt(2 * nper):g}')
+    print(f'err_err sqrt(n): {err / np.sqrt(2 * nper):g}')
 
 
 def test_wjackknife():
