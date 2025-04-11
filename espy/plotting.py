@@ -571,7 +571,7 @@ def color_color(
 def color_color_hexbin(
     gmr, rmi, imz,
     weights=None,
-    C=None,
+    C=None,  # noqa
     nbin=100,
     show=True, file=None,
     dpi=100,
@@ -744,6 +744,159 @@ def whiskers(
         plt.show()
 
     return plt
+
+
+def plot_ranges(
+    list_of_ranges,
+    labels=None,
+    xlabel=None,
+    ylabel=None,
+    title=None,
+    xlim=None,
+    ylim=None,
+    xlog=False,
+    ylog=False,
+    aspect=1.618,  # golden ratio
+    width=3.5,
+    # legend=None,
+    figax=None,
+
+    dpi=None,
+    **kw
+):
+    """
+    make a plot
+
+    Parameters
+    ----------
+    x: array or sequences
+        Array of x values
+    y: array or sequences
+        Array of y values
+    xerr: array or sequence, optional
+        Optional array of x errors
+    yerr: array or sequence, optional
+        Optional array of y errors
+
+    xlabel: str, optional
+        Label for x axis
+    ylabel: str, optional
+        Label for y axis
+    title: str, optional
+        Title string for plot
+    xlim: 2-element sequence, optional
+        Optional limits for the x axis
+    ylim: 2-element sequence, optional
+        Optional limits for the y axis
+    xlog: bool, optional
+        If True, use log x axis
+    ylog: bool, optional
+        If True, use log y axis
+    aratio: float, optional
+        Axis ratio of plot, ysize/xsize, default golden ratio 1.618
+    width: float, optional
+        Optional reference width, default 3.5
+    legend: bool or dicdt
+        If True, a legend is created. If a dict, then the keywords
+        are sent to the legend call
+    figax: (fig, ax)
+        If sent, a new figure and axis is not created, the input one is
+        reused
+    show: bool, optional
+        If True, show the plot on the screen.  If the file= is
+        not sent, this defaults to True.  If file= is sent
+        this defaults to False
+    file: str, optional
+        Filename to write.
+    dpi: int, optional
+        dots-per-inch for a bitmap output
+
+    **kw extra keywords for plot call
+
+    Returns
+    -------
+    fig, ax
+    """
+    import numpy as np
+    import matplotlib.pyplot as mplt
+
+    fig, axs = mplt.subplots(ncols=2)
+
+    _, _, file, show = _prep_plot(
+        figax=(fig, axs),
+        xlim=xlim, ylim=ylim,
+        title=title, xlabel=xlabel, ylabel=ylabel,
+        xlog=xlog, ylog=ylog,
+        aspect=aspect, width=width,
+        kw=kw,
+    )
+
+    nr = len(list_of_ranges)
+    if labels is not None:
+        nlab = len(labels)
+        if nlab != nr:
+            raise ValueError(f'got {nlab} labels and {nr} ranges')
+
+    lowest = np.inf
+    highest = -np.inf
+
+    biggest = 0.0
+    for range_ in list_of_ranges:
+        low, high = range_
+        size = (high - low)
+        if size > biggest:
+            biggest = size
+        if low < lowest:
+            lowest = low
+        if high > highest:
+            highest = high
+
+    # text_x = low - biggest * 0.1
+
+    ystep = 1
+    ylim = [-(nr - 1) * ystep - 0.1, 0.1]
+    fac = 0.2
+    xlim = [lowest - fac * biggest, highest + fac * biggest]
+    for ax in axs:
+        ax.set(xlim=xlim, ylim=ylim)
+
+    ystart = 0
+
+    for i, range_ in enumerate(list_of_ranges):
+        low, high = range_
+        y = ystart - i * ystep
+
+        mid = (high + low) * 0.5
+        bar = (high - low) * 0.5
+
+        if labels is None:
+            ekw = {}
+        else:
+            ekw = {'label': labels[i]}
+
+        axs[1].errorbar(
+            mid,
+            y,
+            xerr=bar,
+            capsize=5,
+            **ekw
+        )
+        axs[0].text(
+            mid, y, labels[i],
+            horizontalalignment='left',
+            fontsize='x-large',
+        )
+
+    fig.tight_layout()
+    # if labels is not None:
+    #     legend = True
+    # else:
+    #     legend = False
+    # legend = None
+
+    # _do_legend_maybe(ax=ax, legend=legend)
+    _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
+    return fig, axs
 
 
 def _prep_plot(
