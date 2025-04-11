@@ -748,7 +748,7 @@ def whiskers(
 
 def plot_ranges(
     list_of_ranges,
-    labels=None,
+    labels,
     xlabel=None,
     ylabel=None,
     title=None,
@@ -758,7 +758,6 @@ def plot_ranges(
     ylog=False,
     aspect=1.618,  # golden ratio
     width=3.5,
-    # legend=None,
     figax=None,
 
     dpi=None,
@@ -818,12 +817,9 @@ def plot_ranges(
     fig, ax
     """
     import numpy as np
-    import matplotlib.pyplot as mplt
 
-    fig, axs = mplt.subplots(ncols=2)
-
-    _, _, file, show = _prep_plot(
-        figax=(fig, axs),
+    fig, ax, file, show = _prep_plot(
+        figax=figax,
         xlim=xlim, ylim=ylim,
         title=title, xlabel=xlabel, ylabel=ylabel,
         xlog=xlog, ylog=ylog,
@@ -832,10 +828,9 @@ def plot_ranges(
     )
 
     nr = len(list_of_ranges)
-    if labels is not None:
-        nlab = len(labels)
-        if nlab != nr:
-            raise ValueError(f'got {nlab} labels and {nr} ranges')
+    nlab = len(labels)
+    if nlab != nr:
+        raise ValueError(f'got {nlab} labels and {nr} ranges')
 
     lowest = np.inf
     highest = -np.inf
@@ -854,11 +849,13 @@ def plot_ranges(
     # text_x = low - biggest * 0.1
 
     ystep = 1
-    ylim = [-(nr - 1) * ystep - 0.1, 0.1]
+    buff = 0.2
+    ylim = [-(nr - 1) * ystep - buff, buff]
     fac = 0.2
     xlim = [lowest - fac * biggest, highest + fac * biggest]
-    for ax in axs:
-        ax.set(xlim=xlim, ylim=ylim)
+    ax.set(xlim=xlim, ylim=ylim, yticklabels=[])
+    ax.tick_params(left=False, right=False)
+    ax.tick_params(which='minor', left=False, right=False)
 
     ystart = 0
 
@@ -867,36 +864,24 @@ def plot_ranges(
         y = ystart - i * ystep
 
         mid = (high + low) * 0.5
-        bar = (high - low) * 0.5
 
-        if labels is None:
-            ekw = {}
-        else:
-            ekw = {'label': labels[i]}
-
-        axs[1].errorbar(
-            mid,
-            y,
-            xerr=bar,
-            capsize=5,
-            **ekw
+        ax.plot(
+            [low, high],
+            [y, y],
+            lw=10,
         )
-        axs[0].text(
-            mid, y, labels[i],
-            horizontalalignment='left',
+
+        ax.text(
+            mid,
+            y + 0.05,
+            labels[i],
+            horizontalalignment='center',
             fontsize='x-large',
         )
 
     fig.tight_layout()
-    # if labels is not None:
-    #     legend = True
-    # else:
-    #     legend = False
-    # legend = None
-
-    # _do_legend_maybe(ax=ax, legend=legend)
     _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
-    return fig, axs
+    return fig, ax
 
 
 def _prep_plot(
