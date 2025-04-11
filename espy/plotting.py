@@ -759,6 +759,8 @@ def plot_ranges(
     aspect=1.618,  # golden ratio
     width=3.5,
     figax=None,
+    textoff=0.1,
+    buff=0.5,
 
     dpi=None,
     **kw
@@ -849,7 +851,7 @@ def plot_ranges(
     # text_x = low - biggest * 0.1
 
     ystep = 1
-    buff = 0.2
+    buff = 0.5
     ylim = [-(nr - 1) * ystep - buff, buff]
     fac = 0.2
     xlim = [lowest - fac * biggest, highest + fac * biggest]
@@ -873,7 +875,7 @@ def plot_ranges(
 
         ax.text(
             mid,
-            y + 0.05,
+            y + textoff,
             labels[i],
             horizontalalignment='center',
             fontsize='x-large',
