@@ -10,7 +10,6 @@ def view(
     autoscale=False,
     colorbar=False,
     figax=None,
-    width=3.5,
     cmap=None,
     dpi=None,
     title=None,
@@ -54,7 +53,7 @@ def view(
     """
 
     fig, ax, file, show = _prep_plot(
-        figax=figax, title=title, width=width, kw=kw,
+        figax=figax, title=title, kw=kw,
     )
 
     if len(image.shape) == 2:
@@ -109,7 +108,6 @@ def view_profile(
     xlog=False,
     ylog=False,
     title=None,
-    width=3.5,
     dpi=None,
     **kw
 ):
@@ -132,15 +130,12 @@ def view_profile(
     file: string
         Write the image to the intput file name.  .png will be written
         as a png file, else an eps file.
-    width, height: integers
-        Size for output
     **kw:
         keywords for the FramedPlot and for the output image dimensions
-        width
     """
 
     fig, ax, file, show = _prep_plot(
-        figax=figax, title=title, width=width, kw=kw,
+        figax=figax, title=title, kw=kw,
         xlim=xlim, ylim=ylim, xlog=xlog, ylog=ylog,
         xlabel=xlabel, ylabel=ylabel,
     )
@@ -299,7 +294,6 @@ def multiview(
     xlog=False,
     ylog=False,
     title=None,
-    width=7,
     cmap=None,
     dpi=None,
     figax=None,
@@ -311,7 +305,7 @@ def multiview(
     """
 
     fig, axs, file, show = _prep_2plot(
-        figax=figax, width=width, kw=kw,
+        figax=figax, kw=kw,
         xlim=xlim, ylim=ylim, xlog=xlog, ylog=ylog,
         xlabel=xlabel, ylabel=ylabel,
     )
@@ -858,7 +852,7 @@ def _get_updated_keywords(input_kws, **kws):
 
 
 def _prep_plot(
-    figax, width, kw,
+    figax, kw,
     xlim=None, ylim=None, xlog=False, ylog=False,
     xlabel=None, ylabel=None, title=None,
 ):
@@ -872,7 +866,7 @@ def _prep_plot(
         show = kw.pop('show', True)
 
     if figax is None:
-        figax = mplt.subplots(width=width)
+        figax = mplt.subplots()
         fig, ax = figax
         axis_kw = {
             'xlabel': xlabel,
@@ -900,7 +894,7 @@ def _prep_plot(
 
 
 def _prep_2plot(
-    figax, width, kw,
+    figax, kw,
     xlim=None, ylim=None, xlog=False, ylog=False,
     xlabel=None, ylabel=None, title=None,
 ):
