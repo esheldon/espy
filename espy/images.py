@@ -10,7 +10,7 @@ def view(
     autoscale=False,
     colorbar=False,
     figax=None,
-    cmap=None,
+    cmap='gray',
     dpi=None,
     title=None,
     **kw
@@ -294,7 +294,7 @@ def multiview(
     xlog=False,
     ylog=False,
     title=None,
-    cmap=None,
+    cmap='gray',
     dpi=None,
     figax=None,
     **kw,
