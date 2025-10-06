@@ -183,33 +183,40 @@ def view_mosaic(
     imlist,
     colorbar=False,
     titles=None,
+    suptitle=None,
     combine=False,
-    title=None,
     plt_kws={},
     figax=None,
     dpi=None,
+    nonlinear=None,
+    figsize=None,
     **kws,
 ):
     from . import plotting
 
     if combine:
         imtot = make_combined_mosaic(imlist)
-        if title is not None:
-            plt_kws = _get_updated_keywords(plt_kws, title=title)
-
         return view(
             imtot, figax=figax, colorbar=colorbar, dpi=dpi, plt_kws=plt_kws,
+            nonlinear=nonlinear,
         )
 
     nimage = len(imlist)
     grid = plotting.Grid(nimage)
 
-    fig, axs, file, show = _prep_plot(
-        figax=figax, title=title, kw=kws,
-        nrows=grid.nrow, ncols=grid.ncol,
-    )
-
     aratio = grid.nrow / grid.ncol
+
+    if figsize is None:
+        if aratio > 1:
+            figsize = (8 / aratio, 8)
+        else:
+            figsize = (8, 8 * aratio)
+
+    fig, axs, file, show = _prep_plot(
+        figax=figax, kw=kws,
+        nrows=grid.nrow, ncols=grid.ncol,
+        figsize=figsize,
+    )
 
     if titles is None:
         titles = ['im%d' for i in range(nimage)]
@@ -219,16 +226,11 @@ def view_mosaic(
     if "constrained_layout" not in plt_kws:
         add_plt_kws["constrained_layout"] = False
 
-    if "figsize" not in plt_kws:
-        if aratio > 1:
-            add_plt_kws["figsize"] = (8 / aratio, 8)
-        else:
-            add_plt_kws["figsize"] = (8, 8 * aratio)
-
     if len(add_plt_kws) > 0:
         plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
 
-    for i, ax in enumerate(axs.ravel()):
+    for i in range(nimage):
+        ax = axs.ravel()[i]
         tmp_plt_kws = _get_updated_keywords(
             plt_kws,
             show=False,
@@ -236,15 +238,16 @@ def view_mosaic(
             title=titles[i],
             colorbar=colorbar,
         )
-        view(imlist[i], figax=(fig, ax), **tmp_plt_kws)
+        view(imlist[i], figax=(fig, ax), nonlinear=nonlinear, **tmp_plt_kws)
 
     nax = axs.size
     if nax > nimage:
-        for ax in axs.ravel():
+        for i in range(nimage, axs.size):
+            ax = axs.ravel()[i]
             ax.axis('off')
 
-    if title is not None:
-        axs.suptitle(title)
+    if suptitle is not None:
+        fig.suptitle(suptitle)
 
     fig.tight_layout()
 
@@ -871,7 +874,12 @@ def _prep_plot(
         figax = mplt.subplots(**subplots_kws)
         fig, axs = figax
 
-        for ax in axs.ravel():
+        if isinstance(axs, np.ndarray):
+            axlist = axs.ravel()
+        else:
+            axlist = [axs]
+
+        for ax in axlist:
             axis_kw = {
                 'xlabel': xlabel,
                 'ylabel': ylabel,
