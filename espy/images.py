@@ -235,10 +235,13 @@ def view_mosaic(
             plt_kws,
             show=False,
             file=None,
-            title=titles[i],
             colorbar=colorbar,
         )
-        view(imlist[i], figax=(fig, ax), nonlinear=nonlinear, **tmp_plt_kws)
+        ax.set_title(titles[i])
+        view(
+            imlist[i], figax=(fig, ax), nonlinear=nonlinear,
+            **tmp_plt_kws,
+        )
 
     nax = axs.size
     if nax > nimage:
@@ -883,7 +886,6 @@ def _prep_plot(
             axis_kw = {
                 'xlabel': xlabel,
                 'ylabel': ylabel,
-                'title': title,
             }
             if xlim is not None:
                 axis_kw['xlim'] = xlim
@@ -892,6 +894,9 @@ def _prep_plot(
                 axis_kw['ylim'] = ylim
 
             ax.set(**axis_kw)
+
+            if title is not None:
+                ax.set_title(title)
 
             if xlog:
                 ax.set_xscale('log')
