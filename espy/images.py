@@ -10,8 +10,7 @@ def view(
     autoscale=False,
     colorbar=False,
     figax=None,
-    width=3.5,
-    cmap=None,
+    cmap='gray',
     dpi=None,
     title=None,
     **kw
@@ -54,7 +53,7 @@ def view(
     """
 
     fig, ax, file, show = _prep_plot(
-        figax=figax, title=title, width=width, kw=kw,
+        figax=figax, title=title, kw=kw,
     )
 
     if len(image.shape) == 2:
@@ -109,7 +108,6 @@ def view_profile(
     xlog=False,
     ylog=False,
     title=None,
-    width=3.5,
     dpi=None,
     **kw
 ):
@@ -132,15 +130,12 @@ def view_profile(
     file: string
         Write the image to the intput file name.  .png will be written
         as a png file, else an eps file.
-    width, height: integers
-        Size for output
     **kw:
         keywords for the FramedPlot and for the output image dimensions
-        width
     """
 
     fig, ax, file, show = _prep_plot(
-        figax=figax, title=title, width=width, kw=kw,
+        figax=figax, title=title, kw=kw,
         xlim=xlim, ylim=ylim, xlog=xlog, ylog=ylog,
         xlabel=xlabel, ylabel=ylabel,
     )
@@ -184,76 +179,83 @@ def make_combined_mosaic(imlist):
     return imtot
 
 
-# def view_mosaic(
-#     imlist,
-#     colorbar=False,
-#     titles=None,
-#     combine=False,
-#     title=None,
-#     plt_kws={},
-#     **kws,
-# ):
-#     import hickory
-#     from . import plotting
-#
-#     if combine:
-#         imtot = make_combined_mosaic(imlist)
-#         if title is not None:
-#             plt_kws = _get_updated_keywords(plt_kws, title=title)
-#
-#         return view(imtot, colorbar=colorbar, plt_kws=plt_kws)
-#
-#     nimage = len(imlist)
-#     grid = plotting.Grid(nimage)
-#
-#     aratio = grid.nrow / grid.ncol
-#
-#     if titles is None:
-#         titles = ['im%d' for i in range(nimage)]
-#
-#     add_plt_kws = {}
-#
-#     if "constrained_layout" not in plt_kws:
-#         add_plt_kws["constrained_layout"] = False
-#
-#     if "figsize" not in plt_kws:
-#         if aratio > 1:
-#             add_plt_kws["figsize"] = (8 / aratio, 8)
-#         else:
-#             add_plt_kws["figsize"] = (8, 8 * aratio)
-#
-#     if len(add_plt_kws) > 0:
-#         plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
-#
-#     tab = hickory.Table(
-#         nrows=grid.nrow, ncols=grid.ncol,
-#         **plt_kws,
-#     )
-#
-#     for i in range(nimage):
-#         tmp_plt_kws = _get_updated_keywords(
-#             plt_kws,
-#             show=False,
-#             file=None,
-#             title=titles[i],
-#             colorbar=colorbar,
-#         )
-#         view(imlist[i], plt=tab.axes[i], **tmp_plt_kws)
-#
-#     nax = len(tab.axes)
-#     if nax > nimage:
-#         for i in range(nimage, nax):
-#             tab.axes[i].axis('off')
-#
-#     if title is not None:
-#         tab.suptitle(title)
-#
-#     tab.tight_layout()
-#
-#     _writefile_maybe(plt=tab, **kws)
-#     _show_maybe(plt=tab, **kws)
-#
-#     return tab
+def view_mosaic(
+    imlist,
+    colorbar=False,
+    titles=None,
+    suptitle=None,
+    combine=False,
+    plt_kws={},
+    figax=None,
+    dpi=None,
+    nonlinear=None,
+    figsize=None,
+    **kws,
+):
+    from . import plotting
+
+    if combine:
+        imtot = make_combined_mosaic(imlist)
+        return view(
+            imtot, figax=figax, colorbar=colorbar, dpi=dpi, plt_kws=plt_kws,
+            nonlinear=nonlinear,
+        )
+
+    nimage = len(imlist)
+    grid = plotting.Grid(nimage)
+
+    aratio = grid.nrow / grid.ncol
+
+    if figsize is None:
+        if aratio > 1:
+            figsize = (8 / aratio, 8)
+        else:
+            figsize = (8, 8 * aratio)
+
+    fig, axs, file, show = _prep_plot(
+        figax=figax, kw=kws,
+        nrows=grid.nrow, ncols=grid.ncol,
+        figsize=figsize,
+    )
+
+    if titles is None:
+        titles = ['im%d' for i in range(nimage)]
+
+    add_plt_kws = {}
+
+    if "constrained_layout" not in plt_kws:
+        add_plt_kws["constrained_layout"] = False
+
+    if len(add_plt_kws) > 0:
+        plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
+
+    for i in range(nimage):
+        ax = axs.ravel()[i]
+        tmp_plt_kws = _get_updated_keywords(
+            plt_kws,
+            show=False,
+            file=None,
+            colorbar=colorbar,
+        )
+        ax.set_title(titles[i])
+        view(
+            imlist[i], figax=(fig, ax), nonlinear=nonlinear,
+            **tmp_plt_kws,
+        )
+
+    nax = axs.size
+    if nax > nimage:
+        for i in range(nimage, axs.size):
+            ax = axs.ravel()[i]
+            ax.axis('off')
+
+    if suptitle is not None:
+        fig.suptitle(suptitle)
+
+    fig.tight_layout()
+
+    _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
+    return fig, axs
 
 
 def bytescale(im):
@@ -299,8 +301,7 @@ def multiview(
     xlog=False,
     ylog=False,
     title=None,
-    width=7,
-    cmap=None,
+    cmap='gray',
     dpi=None,
     figax=None,
     **kw,
@@ -311,7 +312,7 @@ def multiview(
     """
 
     fig, axs, file, show = _prep_2plot(
-        figax=figax, width=width, kw=kw,
+        figax=figax, kw=kw,
         xlim=xlim, ylim=ylim, xlog=xlog, ylog=ylog,
         xlabel=xlabel, ylabel=ylabel,
     )
@@ -858,9 +859,10 @@ def _get_updated_keywords(input_kws, **kws):
 
 
 def _prep_plot(
-    figax, width, kw,
+    figax, kw,
     xlim=None, ylim=None, xlog=False, ylog=False,
     xlabel=None, ylabel=None, title=None,
+    **subplots_kws
 ):
     import matplotlib.pyplot as mplt
 
@@ -872,35 +874,44 @@ def _prep_plot(
         show = kw.pop('show', True)
 
     if figax is None:
-        figax = mplt.subplots(width=width)
-        fig, ax = figax
-        axis_kw = {
-            'xlabel': xlabel,
-            'ylabel': ylabel,
-            'title': title,
-        }
-        if xlim is not None:
-            axis_kw['xlim'] = xlim
+        figax = mplt.subplots(**subplots_kws)
+        fig, axs = figax
 
-        if ylim is not None:
-            axis_kw['ylim'] = ylim
+        if isinstance(axs, np.ndarray):
+            axlist = axs.ravel()
+        else:
+            axlist = [axs]
 
-        ax.set(**axis_kw)
+        for ax in axlist:
+            axis_kw = {
+                'xlabel': xlabel,
+                'ylabel': ylabel,
+            }
+            if xlim is not None:
+                axis_kw['xlim'] = xlim
 
-        if xlog:
-            ax.set_xscale('log')
+            if ylim is not None:
+                axis_kw['ylim'] = ylim
 
-        if ylog:
-            ax.set_yscale('log')
+            ax.set(**axis_kw)
+
+            if title is not None:
+                ax.set_title(title)
+
+            if xlog:
+                ax.set_xscale('log')
+
+            if ylog:
+                ax.set_yscale('log')
 
     else:
-        fig, ax = figax
+        fig, axs = figax
 
-    return fig, ax, file, show
+    return fig, axs, file, show
 
 
 def _prep_2plot(
-    figax, width, kw,
+    figax, kw,
     xlim=None, ylim=None, xlog=False, ylog=False,
     xlabel=None, ylabel=None, title=None,
 ):
