@@ -411,12 +411,17 @@ class Grid(object):
     -------
     grid=Grid(n)
 
+    for row, col in grid:
+        axs[row, col].plot(...)
+
     for i in range(n):
-        row,col = grid(i)
+        row, col = grid(i)
 
-        # equivalently grid.get_rowcol(i)
+        axs[row, col].plot(...)
 
-        plot_table[row,col] = plot(...)
+    for row, col in grid:
+        index = grid.get_index(row, col)
+        axs[row, col].plot(images[index])
     """
     def __init__(self, nplot):
         self.set_grid(nplot)
@@ -431,18 +436,20 @@ class Grid(object):
 
         # first check some special cases
         if nplot == 8:
-            self.nrow, self.ncol = 2, 4
+            self._nrows, self._ncols = 2, 4
         else:
 
             sq = int(sqrt(nplot))
             if nplot == sq*sq:
-                self.nrow, self.ncol = sq, sq
+                self.nrows, self.ncols = sq, sq
             elif nplot <= sq*(sq+1):
-                self.nrow, self.ncol = sq, sq+1
+                self.nrows, self.ncols = sq, sq+1
             else:
-                self.nrow, self.ncol = sq+1, sq+1
+                self.nrows, self.ncols = sq+1, sq+1
 
-        self.nplot_tot = self.nrow*self.ncol
+        self.nrow = self.nrows
+        self.ncol = self.ncols
+        self.nplot_tot = self.nrows * self.ncols
 
     def get_rowcol(self, index):
         """
@@ -457,13 +464,12 @@ class Grid(object):
 
         example
         -------
-        nplot=7
-        grid=Grid(nplot)
-        arr=biggles.FramedArray(grid.nrow, grid.ncol)
+        nplot = 7
+        grid = Grid(nplot)
 
         for i in range(nplot):
-            row,col=grid.get_rowcol(nplot, i)
-            arr[row,col].add( ... )
+            row, col = grid.get_rowcol(nplot, i)
+            axs[row, col].plot(...)
         """
 
         imax = self.nplot_tot-1
@@ -474,6 +480,24 @@ class Grid(object):
         col = index % self.ncol
 
         return row, col
+
+    def __len__(self):
+        return self.nplot
+
+    def __iter__(self):
+        for i in range(self.nplot):
+            yield self(i)
+    #     self._current = -1
+    #     return self
+    #
+    # def __next__(self):
+    #     self._current += 1
+    #     if self._current >= self.nplot:
+    #         raise StopIteration
+    #     return self(self._current)
+
+    def index(self, row, col):
+        return row * self.ncols + col
 
     def __call__(self, index):
         return self.get_rowcol(index)
