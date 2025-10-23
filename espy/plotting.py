@@ -279,9 +279,10 @@ def multihist(
     aspect=None,
     width=6,
     figax=None,
-    file=None,
     dpi=150,
-    show=True,
+    **kw,
+    # file=None,
+    # show=True,
 ):
     """
     plot a histogram for each dimension of the data
@@ -308,6 +309,13 @@ def multihist(
     import matplotlib.pyplot as mplt
     import esutil as eu
 
+    file = kw.pop('file', None)
+
+    if file is not None:
+        show = kw.pop('show', False)
+    else:
+        show = kw.pop('show', True)
+
     if len(data.shape) != 2:
         raise ValueError("data should have shape [npoints,ndim]")
 
@@ -318,7 +326,9 @@ def multihist(
         assert len(labels) == ndim, "len(labels) = %d != %d" % (nl, ndim)
 
     ndim = data.shape[1]
+
     grid = Grid(ndim)
+
     if aspect is None:
         aspect = grid.ncol / grid.nrow
 
@@ -330,11 +340,14 @@ def multihist(
             nrows=grid.nrow,
             ncols=grid.ncol,
             figsize=(width, height),
+            layout='constrained',
         )
         for ax in axs.ravel():
             ax.axis('off')
 
-    for dim, ax in enumerate(axs):
+    for dim in range(ndim):
+        ax = axs.ravel()[dim]
+        ax.ticklabel_format(axis='x', style='sci', scilimits=(0, 0))
 
         ddata = data[:, dim]
 
@@ -365,10 +378,13 @@ def multihist(
 
         ax.hist(ddata, bins=bins)
 
-    if show:
-        mplt.show()
-    if file is not None:
-        fig.savefig(file, dpi=dpi)
+    # fig.tight_layout()
+
+    _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
+    # if show:
+    #     mplt.show()
+    # if file is not None:
+    #     fig.savefig(file, dpi=dpi)
 
     return fig, ax
 
