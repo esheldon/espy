@@ -190,6 +190,7 @@ def view_mosaic(
     dpi=None,
     nonlinear=None,
     figsize=None,
+    cmap='gray',
     **kws,
 ):
     from . import plotting
@@ -199,6 +200,7 @@ def view_mosaic(
         return view(
             imtot, figax=figax, colorbar=colorbar, dpi=dpi, plt_kws=plt_kws,
             nonlinear=nonlinear,
+            cmap=cmap,
         )
 
     nimage = len(imlist)
@@ -240,6 +242,7 @@ def view_mosaic(
         ax.set_title(titles[i])
         view(
             imlist[i], figax=(fig, ax), nonlinear=nonlinear,
+            cmap=cmap,
             **tmp_plt_kws,
         )
 
