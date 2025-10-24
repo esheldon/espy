@@ -279,6 +279,8 @@ def multihist(
     aspect=None,
     width=6,
     figax=None,
+    alpha=1,
+    density=False,
     dpi=150,
     **kw,
     # file=None,
@@ -362,8 +364,6 @@ def multihist(
         nbin = int((high - low) / binsize)
         bins = np.linspace(low, high, nbin)
 
-        # row, col = grid(dim)
-        # ax = axs[row, col]
         ax.axis('on')
 
         if labels is not None:
@@ -376,7 +376,7 @@ def multihist(
         if ylog:
             ax.set_yscale('log')
 
-        ax.hist(ddata, bins=bins)
+        ax.hist(ddata, bins=bins, alpha=alpha, density=density)
 
     # fig.tight_layout()
 
@@ -386,7 +386,7 @@ def multihist(
     # if file is not None:
     #     fig.savefig(file, dpi=dpi)
 
-    return fig, ax
+    return fig, axs
 
 
 def test_multihist(num=100_000, show=False):
@@ -452,7 +452,7 @@ class Grid(object):
 
         # first check some special cases
         if nplot == 8:
-            self._nrows, self._ncols = 2, 4
+            self.nrows, self.ncols = 2, 4
         else:
 
             sq = int(sqrt(nplot))
