@@ -375,149 +375,85 @@ def multiview(
     return fig, axs
 
 
-# def compare_images(
-#     im1,
-#     im2,
-#     cross_sections=True,
-#     colorbar=False,
-#     color1="blue",
-#     color2="orange",
-#     label1="im1",
-#     label2="im2",
-#     colordiff="red",
-#     plt_kws={},
-#     file_kws={},
-#     **kws
-# ):
-#
-#     import hickory
-#
-#     nrows = 2
-#     if cross_sections:
-#         ncols = 3
-#     else:
-#         ncols = 2
-#
-#     aratio = nrows / ncols
-#
-#     add_plt_kws = {}
-#
-#     if "constrained_layout" not in plt_kws:
-#         add_plt_kws["constrained_layout"] = False
-#
-#     if "figsize" not in plt_kws:
-#         if aratio > 1:
-#             add_plt_kws["figsize"] = (8 / aratio, 8)
-#         else:
-#             add_plt_kws["figsize"] = (8, 8 * aratio)
-#
-#     if len(add_plt_kws) > 0:
-#         plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
-#
-#     tab = hickory.Table(
-#         nrows=nrows,
-#         ncols=ncols,
-#         **plt_kws,
-#     )
-#     ax1 = tab[0, 0]
-#     ax2 = tab[0, 1]
-#     if cross_sections:
-#         axresid = tab[0, 2]
-#         tab[1, 2].axis('off')
-#     else:
-#         axresid = tab[1, 0]
-#         tab[1, 1].axis('off')
-#
-#     labelres = "%s-%s" % (label1, label2)
-#
-#     if im1.shape != im2.shape:
-#         raise ValueError("images must be the same shape")
-#
-#     resid = im1 - im2
-#
-#     tmp_plt_kws = _get_updated_keywords(
-#         plt_kws,
-#         show=False,
-#         file=None,
-#         title=label1,
-#         colorbar=colorbar,
-#     )
-#     view(im1, plt=ax1, **tmp_plt_kws)
-#
-#     tmp_plt_kws = _get_updated_keywords(
-#         plt_kws,
-#         show=False,
-#         file=None,
-#         title=label2,
-#         colorbar=colorbar,
-#     )
-#
-#     view(im2, plt=ax2, **tmp_plt_kws)
-#
-#     tmp_plt_kws = _get_updated_keywords(
-#         plt_kws,
-#         show=False,
-#         file=None,
-#         title=labelres,
-#         colorbar=colorbar,
-#     )
-#     view(resid, plt=axresid, **tmp_plt_kws)
-#     # if colorbar:
-#     #     for ax in plt.axes[:3]:
-#     #         ax.colorbar(
-#
-#     if cross_sections:
-#         cen = (np.array(im1.shape) - 1) / 2
-#         cen0 = int(cen[0])
-#         cen1 = int(cen[1])
-#         im1rows = im1[:, cen1]
-#         im1cols = im1[cen0, :]
-#         im2rows = im2[:, cen1]
-#         im2cols = im2[cen0, :]
-#         resrows = resid[:, cen1]
-#         rescols = resid[cen0, :]
-#
-#         yvals = np.arange(im1.shape[0])
-#         xvals = np.arange(im1.shape[1])
-#         tab[1, 0].step(
-#             yvals, im1rows,
-#             # color=color1,
-#             label=label1, linestyle='-', marker=None,
-#         )
-#         tab[1, 0].step(
-#             yvals, im2rows,
-#             # color=color2,
-#             label=label1, linestyle='-', marker=None,
-#         )
-#         tab[1, 0].step(
-#             yvals, resrows,
-#             # color=colordiff,
-#             label=labelres, linestyle='-', marker=None,
-#         )
-#         tab[1, 0].legend()
-#         tab[1, 0].set(xlabel="center rows")
-#
-#         tab[1, 1].step(
-#             xvals, im1cols, color=color1, label=label1,
-#             linestyle='-', marker=None,
-#         )
-#         tab[1, 1].step(
-#             xvals, im2cols, color=color2, label=label1,
-#             linestyle='-', marker=None,
-#         )
-#         tab[1, 1].step(
-#             xvals, rescols, color=colordiff, label=labelres,
-#             linestyle='-', marker=None,
-#         )
-#         tab[1, 1].legend()
-#         tab[1, 1].set(xlabel="center cols")
-#
-#     tab.tight_layout()
-#
-#     _writefile_maybe(plt=tab, **kws)
-#     _show_maybe(plt=tab, **kws)
-#
-#     return tab
+def compare_images(
+    im1, im2, sigma=None, label1=None, label2=None, cmap='inferno',
+):
+    import numpy as np
+    import matplotlib.pyplot as mplt
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    with mplt.style.context('dark_background'):
+        fig, axs = mplt.subplots(ncols=2, nrows=2)
+
+        if label1 is not None:
+            axs[0, 0].set_title(label1)
+        if label2 is not None:
+            axs[0, 1].set_title(label2)
+
+        if label1 is not None and label2 is not None:
+            if sigma is not None:
+                difftit = rf'({label2} - {label1}) / $\sigma$'
+            else:
+                difftit = f'{label2} - {label1}'
+        else:
+            difftit = 'diff'
+
+        axs[1, 0].set_title(difftit)
+        axs[1, 1].set(xlabel=difftit)
+
+        diff = im2 - im1
+        if sigma is not None:
+            diff *= 1.0 / sigma
+
+        dmn = diff.mean()
+        dsig = diff.std()
+        derr = dsig / np.sqrt(diff.size)
+
+        axs[1, 1].set_title(
+            rf'mn: {dmn:.2g} +/- {derr:.2g} $\sigma$: {dsig:.2f}'
+        )
+
+        maxdiff = np.abs(diff).max()
+        diffrng = (-maxdiff, maxdiff)
+
+        for ax, im, rng in zip(
+            [axs[0, 0], axs[0, 1], axs[1, 0]],
+            [im1, im2, diff],
+            [None, None, diffrng],
+        ):
+            kw = {}
+            if rng is not None:
+                kw['vmin'] = rng[0]
+                kw['vmax'] = rng[1]
+                imscale = im
+            elif sigma is not None:
+                # kw['norm'] = 'log'
+                # imscale = im + 20
+                imscale = asinh_scale(image=im, nonlinear=sigma)
+            else:
+                imscale = im
+
+            cim = ax.imshow(imscale, cmap=cmap, **kw)
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            fig.colorbar(cim, cax=cax)
+
+        bins = np.linspace(-maxdiff, maxdiff, 30)
+        if sigma is not None:
+            bins = bins / sigma
+            axs[1, 1].hist(
+                diff.ravel() / sigma,
+                bins=bins, color='sandybrown',
+            )
+        else:
+            axs[1, 1].hist(
+                diff.ravel(), bins=bins, color='sandybrown',
+            )
+
+        fig.tight_layout(h_pad=1)
+        mplt.show()
+
+        mplt.close(fig)
 
 
 def image_read_text(fname):
@@ -695,7 +631,7 @@ def linear_autoscale(*, image):
     return I
 
 
-def asinh_scale(*, image, nonlinear):
+def asinh_scale(image, nonlinear):
     """
     Scale the image using and asinh stretch
 
