@@ -1030,3 +1030,169 @@ def zenburn():
         'xtick.color': 'CFCFCF',
         'ytick.color': 'CFCFCF',
     }
+
+
+def _scatter_hist(
+    x,
+    y,
+    ax,
+    ax_histx,
+    ax_histy,
+    s=None,
+    c=None,
+    alpha=0.5,
+    xbins=50,
+    ybins=50,
+):
+
+    # the scatter plot:
+    ax.scatter(x, y, alpha=alpha, s=s, c=c)
+
+    # bins = np.arange(-lim, lim + binwidth, binwidth)
+    ax_histx.hist(x, bins=xbins, alpha=alpha)
+    ax_histy.hist(y, bins=ybins, alpha=alpha, orientation='horizontal')
+
+
+def _get_bins(arrays, bins):
+    import numpy as np
+    try:
+        len(bins)
+    except TypeError:
+        nbin = bins
+        xmin = min([x_.min() for x_ in arrays])
+        xmax = max([x_.max() for x_ in arrays])
+        bins = np.linspace(xmin, xmax, nbin)
+
+    return bins
+
+
+def scatter_hist(
+    x,
+    y,
+    s=None,
+    c=None,
+    xbins=None,
+    ybins=None,
+    xlabel=None,
+    ylabel=None,
+    show=True,
+    file=None,
+    dpi=120,
+):
+    import matplotlib.pyplot as plt
+
+    # Create a Figure, which doesn't have to be square.
+    fig = plt.figure(layout='constrained')
+
+    # Create the main Axes.
+    ax = fig.add_subplot()
+
+    # The main Axes' aspect can be fixed.
+    ax.set_aspect('equal')
+
+    # Create marginal Axes, which have 25% of the size of the main Axes.  Note
+    # that the inset Axes are positioned *outside* (on the right and the top)
+    # of the main Axes, by specifying axes coordinates greater than 1.  Axes
+    # coordinates less than 0 would likewise specify positions on the left and
+    # the bottom of the main Axes.
+    ax_histx = ax.inset_axes([0, 1.05, 1, 0.25], sharex=ax)
+    ax_histy = ax.inset_axes([1.05, 0, 0.25, 1], sharey=ax)
+
+    if xlabel is not None:
+        ax.set(xlabel=xlabel)
+    if ylabel is not None:
+        ax.set(ylabel=ylabel)
+
+    # no labels
+    ax_histx.tick_params(axis="x", labelbottom=False)
+    ax_histy.tick_params(axis="y", labelleft=False)
+
+    # Draw the scatter plot and marginals.
+
+    xbins = _get_bins([x], xbins)
+    ybins = _get_bins([y], ybins)
+
+    _scatter_hist(
+        x, y, ax, ax_histx, ax_histy, xbins=xbins, ybins=ybins,
+        s=s, c=c,
+    )
+
+    if show:
+        plt.show()
+
+    if file is not None:
+        fig.savefig(file, dpi=dpi)
+
+    return fig, ax
+
+
+def scatter_hist_multi(
+    xs,
+    ys,
+    s=None,
+    c=None,
+    xbins=50,
+    ybins=50,
+    xlabel=None,
+    ylabel=None,
+    show=True,
+    file=None,
+    dpi=120,
+):
+    """
+    Parameters
+    ----------
+    xs: sequence of arrays
+        The x values for each data set. E.g. could be a list
+        of arrays [x1, x2, x3] or an array of shape [n, nx]
+    ys: sequence of arrays
+        The y values for each data set. E.g. could be a list
+        of arrays [y1, y2, y3] or an array of shape [n, ny]
+    """
+    import matplotlib.pyplot as plt
+
+    if len(xs) != len(ys):
+        raise ValueError('xs and ys must be same length')
+
+    # Create a Figure, which doesn't have to be square.
+    fig = plt.figure(layout='constrained')
+
+    # Create the main Axes.
+    ax = fig.add_subplot()
+
+    # The main Axes' aspect can be fixed.
+    ax.set_aspect('equal')
+
+    # Create marginal Axes, which have 25% of the size of the main Axes.  Note
+    # that the inset Axes are positioned *outside* (on the right and the top)
+    # of the main Axes, by specifying axes coordinates greater than 1.  Axes
+    # coordinates less than 0 would likewise specify positions on the left and
+    # the bottom of the main Axes.
+    ax_histx = ax.inset_axes([0, 1.05, 1, 0.25], sharex=ax)
+    ax_histy = ax.inset_axes([1.05, 0, 0.25, 1], sharey=ax)
+
+    if xlabel is not None:
+        ax.set(xlabel=xlabel)
+    if ylabel is not None:
+        ax.set(ylabel=ylabel)
+
+    # no labels
+    ax_histx.tick_params(axis="x", labelbottom=False)
+    ax_histy.tick_params(axis="y", labelleft=False)
+
+    xbins = _get_bins(xs, xbins)
+    ybins = _get_bins(ys, ybins)
+
+    for x_, y_ in zip(xs, ys):
+        _scatter_hist(
+            x_, y_, ax, ax_histx, ax_histy, xbins=xbins, ybins=ybins,
+            s=s, c=c,
+        )
+
+    if show:
+        plt.show()
+
+    if file is not None:
+        fig.savefig(file, dpi=dpi)
+
+    return fig, ax
