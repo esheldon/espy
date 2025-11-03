@@ -221,7 +221,7 @@ def view_mosaic(
     )
 
     if titles is None:
-        titles = ['im%d' for i in range(nimage)]
+        titles = ['im%d' % i for i in range(nimage)]
 
     add_plt_kws = {}
 
