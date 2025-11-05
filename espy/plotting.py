@@ -1078,6 +1078,7 @@ def scatter_hist(
     show=True,
     file=None,
     dpi=120,
+    equal_aspect=False,
 ):
     import matplotlib.pyplot as plt
 
@@ -1088,7 +1089,8 @@ def scatter_hist(
     ax = fig.add_subplot()
 
     # The main Axes' aspect can be fixed.
-    ax.set_aspect('equal')
+    if equal_aspect:
+        ax.set_aspect('equal')
 
     # Create marginal Axes, which have 25% of the size of the main Axes.  Note
     # that the inset Axes are positioned *outside* (on the right and the top)
@@ -1138,6 +1140,7 @@ def scatter_hist_multi(
     show=True,
     file=None,
     dpi=120,
+    equal_aspect=False,
 ):
     """
     Parameters
@@ -1161,7 +1164,8 @@ def scatter_hist_multi(
     ax = fig.add_subplot()
 
     # The main Axes' aspect can be fixed.
-    ax.set_aspect('equal')
+    if equal_aspect:
+        ax.set_aspect('equal')
 
     # Create marginal Axes, which have 25% of the size of the main Axes.  Note
     # that the inset Axes are positioned *outside* (on the right and the top)
