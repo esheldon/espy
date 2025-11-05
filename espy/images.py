@@ -13,6 +13,7 @@ def view(
     cmap='gray',
     dpi=None,
     title=None,
+    layout='constrained',
     **kw
 ):
     """
@@ -51,9 +52,10 @@ def view(
     plt: figure
         If not sent, a new one is created using the plt_kws
     """
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
 
     fig, ax, file, show = _prep_plot(
-        figax=figax, title=title, kw=kw,
+        figax=figax, title=title, kw=kw, layout=layout,
     )
 
     if len(image.shape) == 2:
@@ -68,7 +70,9 @@ def view(
 
     # print(type(super(plt)))
     if colorbar:
-        ax.colorbar(pim)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        fig.colorbar(pim, cax=cax)
 
     _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
 
@@ -191,6 +195,7 @@ def view_mosaic(
     nonlinear=None,
     figsize=None,
     cmap='gray',
+    layout='constrained',
     **kws,
 ):
     from . import plotting
@@ -198,9 +203,14 @@ def view_mosaic(
     if combine:
         imtot = make_combined_mosaic(imlist)
         return view(
-            imtot, figax=figax, colorbar=colorbar, dpi=dpi, plt_kws=plt_kws,
+            imtot,
+            figax=figax,
+            colorbar=colorbar,
+            dpi=dpi,
+            plt_kws=plt_kws,
             nonlinear=nonlinear,
             cmap=cmap,
+            layout=layout,
         )
 
     nimage = len(imlist)
@@ -218,6 +228,7 @@ def view_mosaic(
         figax=figax, kw=kws,
         nrows=grid.nrow, ncols=grid.ncol,
         figsize=figsize,
+        layout=layout,
     )
 
     if titles is None:
@@ -237,12 +248,12 @@ def view_mosaic(
             plt_kws,
             show=False,
             file=None,
-            colorbar=colorbar,
         )
         ax.set_title(titles[i])
         view(
             imlist[i], figax=(fig, ax), nonlinear=nonlinear,
             cmap=cmap,
+            colorbar=colorbar,
             **tmp_plt_kws,
         )
 
@@ -255,7 +266,7 @@ def view_mosaic(
     if suptitle is not None:
         fig.suptitle(suptitle)
 
-    fig.tight_layout()
+    # fig.tight_layout()
 
     _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
     return fig, axs
