@@ -1038,14 +1038,14 @@ def _scatter_hist(
     ax,
     ax_histx,
     ax_histy,
+    xbins,
+    ybins,
     s=None,
     c=None,
     alpha=0.5,
-    xbins=50,
-    ybins=50,
 ):
 
-    # the scatter plot:
+    ax.set(xlim=(xbins[0], xbins[-1]), ylim=(ybins[0], ybins[-1]))
     ax.scatter(x, y, alpha=alpha, s=s, c=c)
 
     # bins = np.arange(-lim, lim + binwidth, binwidth)
@@ -1053,15 +1053,31 @@ def _scatter_hist(
     ax_histy.hist(y, bins=ybins, alpha=alpha, orientation='horizontal')
 
 
-def _get_bins(arrays, bins):
+def _get_bins(arrays, bins, clip=False):
     import numpy as np
-    try:
-        len(bins)
-    except TypeError:
+
+    if clip:
+        import esutil as eu
+        xmins = []
+        xmaxs = []
+
+        for x_ in arrays:
+            mn, sig = eu.stat.sigma_clip(x_)
+            xmins.append(mn - 5*sig)
+            xmaxs.append(mn + 5*sig)
+
+        xmin = min(xmins)
+        xmax = min(xmaxs)
         nbin = bins
-        xmin = min([x_.min() for x_ in arrays])
-        xmax = max([x_.max() for x_ in arrays])
         bins = np.linspace(xmin, xmax, nbin)
+    else:
+        try:
+            len(bins)
+        except TypeError:
+            nbin = bins
+            xmin = min([x_.min() for x_ in arrays])
+            xmax = max([x_.max() for x_ in arrays])
+            bins = np.linspace(xmin, xmax, nbin)
 
     return bins
 
@@ -1073,6 +1089,7 @@ def scatter_hist(
     c=None,
     xbins=50,
     ybins=50,
+    clip=False,
     xlabel=None,
     ylabel=None,
     show=True,
@@ -1111,8 +1128,8 @@ def scatter_hist(
 
     # Draw the scatter plot and marginals.
 
-    xbins = _get_bins([x], xbins)
-    ybins = _get_bins([y], ybins)
+    xbins = _get_bins([x], xbins, clip=clip)
+    ybins = _get_bins([y], ybins, clip=clip)
 
     _scatter_hist(
         x, y, ax, ax_histx, ax_histy, xbins=xbins, ybins=ybins,
