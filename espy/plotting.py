@@ -1053,7 +1053,7 @@ def _scatter_hist(
     ax_histy.hist(y, bins=ybins, alpha=alpha, orientation='horizontal')
 
 
-def _get_bins(arrays, bins, clip=False):
+def _get_bins(arrays, bins, clip=False, nsigma=5):
     import numpy as np
 
     if clip:
@@ -1063,8 +1063,8 @@ def _get_bins(arrays, bins, clip=False):
 
         for x_ in arrays:
             mn, sig = eu.stat.sigma_clip(x_)
-            xmins.append(mn - 5*sig)
-            xmaxs.append(mn + 5*sig)
+            xmins.append(mn - nsigma*sig)
+            xmaxs.append(mn + nsigma*sig)
 
         xmin = min(xmins)
         xmax = min(xmaxs)
@@ -1090,6 +1090,7 @@ def scatter_hist(
     xbins=50,
     ybins=50,
     clip=False,
+    nsigma=5,
     xlabel=None,
     ylabel=None,
     show=True,
@@ -1128,8 +1129,8 @@ def scatter_hist(
 
     # Draw the scatter plot and marginals.
 
-    xbins = _get_bins([x], xbins, clip=clip)
-    ybins = _get_bins([y], ybins, clip=clip)
+    xbins = _get_bins([x], xbins, clip=clip, nsigma=nsigma)
+    ybins = _get_bins([y], ybins, clip=clip, nsigma=nsigma)
 
     _scatter_hist(
         x, y, ax, ax_histx, ax_histy, xbins=xbins, ybins=ybins,
