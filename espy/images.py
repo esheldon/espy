@@ -387,7 +387,13 @@ def multiview(
 
 
 def compare_images(
-    im1, im2, sigma=None, label1=None, label2=None, cmap='inferno',
+    im1,
+    im2,
+    sigma=None,
+    nonlinear=None,
+    label1=None,
+    label2=None,
+    cmap='inferno',
 ):
     import numpy as np
     import matplotlib.pyplot as mplt
@@ -437,10 +443,10 @@ def compare_images(
                 kw['vmin'] = rng[0]
                 kw['vmax'] = rng[1]
                 imscale = im
-            elif sigma is not None:
+            elif nonlinear is not None:
                 # kw['norm'] = 'log'
                 # imscale = im + 20
-                imscale = asinh_scale(image=im, nonlinear=sigma)
+                imscale = asinh_scale(image=im, nonlinear=nonlinear)
             else:
                 imscale = im
 
