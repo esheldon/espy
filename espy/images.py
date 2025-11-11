@@ -243,7 +243,11 @@ def view_mosaic(
         plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
 
     for i in range(nimage):
-        ax = axs.ravel()[i]
+        try:
+            ax = axs.ravel()[i]
+        except AttributeError:
+            ax = axs
+
         tmp_plt_kws = _get_updated_keywords(
             plt_kws,
             show=False,
@@ -257,7 +261,11 @@ def view_mosaic(
             **tmp_plt_kws,
         )
 
-    nax = axs.size
+    try:
+        nax = axs.size
+    except AttributeError:
+        nax = 1
+
     if nax > nimage:
         for i in range(nimage, axs.size):
             ax = axs.ravel()[i]
