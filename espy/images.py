@@ -13,8 +13,9 @@ def view(
     cmap='gray',
     dpi=None,
     title=None,
+    style='dark_background',
     layout='constrained',
-    **kw
+    **kw,
 ):
     """
     View the image and return the plot object
@@ -52,31 +53,37 @@ def view(
     plt: figure
         If not sent, a new one is created using the plt_kws
     """
+    import matplotlib.pyplot as mplt
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-    fig, ax, file, show = _prep_plot(
-        figax=figax, title=title, kw=kw, layout=layout,
-    )
-
     if len(image.shape) == 2:
-        # for 3D color images we need to trust the input to be properly scaled
+        # for 3D color images we need to trust the input to be properly
+        # scaled
         image = scale_image(
             image=image,
             nonlinear=nonlinear,
             autoscale=autoscale,
         )
 
-    pim = ax.imshow(image, cmap=cmap)
+    with mplt.style.context(style):
+        fig, ax, file, show = _prep_plot(
+            figax=figax,
+            title=title,
+            kw=kw,
+            layout=layout,
+        )
 
-    # print(type(super(plt)))
-    if colorbar:
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        fig.colorbar(pim, cax=cax)
+        pim = ax.imshow(image, cmap=cmap)
 
-    _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
+        # print(type(super(plt)))
+        if colorbar:
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            fig.colorbar(pim, cax=cax)
 
-    return fig, ax
+        _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
+
+        return fig, ax
 
 
 def get_profile(image, cen=None):
@@ -86,14 +93,14 @@ def get_profile(image, cen=None):
         assert len(cen) == 2, "cen must have two elements"
 
     rows, cols = np.mgrid[
-        0: image.shape[0],
-        0: image.shape[1],
+        0 : image.shape[0],
+        0 : image.shape[1],
     ]
 
     rows = rows.astype("f8") - cen[0]
     cols = cols.astype("f8") - cen[1]
 
-    r = np.sqrt(rows ** 2 + cols ** 2).ravel()
+    r = np.sqrt(rows**2 + cols**2).ravel()
     s = r.argsort()
     r = r[s]
     pim = image.ravel()[s]
@@ -112,8 +119,10 @@ def view_profile(
     xlog=False,
     ylog=False,
     title=None,
+    style='dark_background',
+    layout='constrained',
     dpi=None,
-    **kw
+    **kw,
 ):
     """
     View the image as a radial profile vs radius from the center.
@@ -137,20 +146,29 @@ def view_profile(
     **kw:
         keywords for the FramedPlot and for the output image dimensions
     """
+    import matplotlib.pyplot as mplt
 
-    fig, ax, file, show = _prep_plot(
-        figax=figax, title=title, kw=kw,
-        xlim=xlim, ylim=ylim, xlog=xlog, ylog=ylog,
-        xlabel=xlabel, ylabel=ylabel,
-    )
+    with mplt.style.context(style):
 
-    r, pim = get_profile(image, cen=cen)
+        fig, ax, file, show = _prep_plot(
+            figax=figax,
+            title=title,
+            kw=kw,
+            xlim=xlim,
+            ylim=ylim,
+            xlog=xlog,
+            ylog=ylog,
+            xlabel=xlabel,
+            ylabel=ylabel,
+        )
 
-    ax.scatter(r, pim, **kw)
+        r, pim = get_profile(image, cen=cen)
 
-    _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
+        ax.scatter(r, pim, **kw)
 
-    return fig, ax
+        _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
+
+        return fig, ax
 
 
 def make_combined_mosaic(imlist):
@@ -165,8 +183,12 @@ def make_combined_mosaic(imlist):
     nimage = len(imlist)
     grid = plotting.Grid(nimage)
     shape = imlist[0].shape
+    if len(shape) == 2:
+        oshape = (grid.nrow * shape[0], grid.ncol * shape[1])
+    else:
+        oshape = (grid.nrow * shape[0], grid.ncol * shape[1], shape[2])
 
-    imtot = np.zeros((grid.nrow * shape[0], grid.ncol * shape[1]))
+    imtot = np.zeros(oshape, dtype=imlist[0].dtype)
 
     for i in range(nimage):
         im = imlist[i]
@@ -178,7 +200,7 @@ def make_combined_mosaic(imlist):
         cstart = col * shape[1]
         cend = (col + 1) * shape[1]
 
-        imtot[rstart:rend, cstart:cend] = im
+        imtot[rstart:rend, cstart:cend, :] = im
 
     return imtot
 
@@ -195,9 +217,11 @@ def view_mosaic(
     nonlinear=None,
     figsize=None,
     cmap='gray',
+    style='dark_background',
     layout='constrained',
     **kws,
 ):
+    import matplotlib.pyplot as mplt
     from . import plotting
 
     if combine:
@@ -210,6 +234,7 @@ def view_mosaic(
             plt_kws=plt_kws,
             nonlinear=nonlinear,
             cmap=cmap,
+            style=style,
             layout=layout,
         )
 
@@ -224,60 +249,65 @@ def view_mosaic(
         else:
             figsize = (8, 8 * aratio)
 
-    fig, axs, file, show = _prep_plot(
-        figax=figax, kw=kws,
-        nrows=grid.nrow, ncols=grid.ncol,
-        figsize=figsize,
-        layout=layout,
-    )
+    with mplt.style.context(style):
+        fig, axs, file, show = _prep_plot(
+            figax=figax,
+            kw=kws,
+            nrows=grid.nrow,
+            ncols=grid.ncol,
+            figsize=figsize,
+            layout=layout,
+        )
 
-    if titles is None:
-        titles = ['im%d' % i for i in range(nimage)]
+        if titles is None:
+            titles = ['im%d' % i for i in range(nimage)]
 
-    add_plt_kws = {}
+        add_plt_kws = {}
 
-    if "constrained_layout" not in plt_kws:
-        add_plt_kws["constrained_layout"] = False
+        if "constrained_layout" not in plt_kws:
+            add_plt_kws["constrained_layout"] = False
 
-    if len(add_plt_kws) > 0:
-        plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
+        if len(add_plt_kws) > 0:
+            plt_kws = _get_updated_keywords(plt_kws, **add_plt_kws)
 
-    for i in range(nimage):
+        for i in range(nimage):
+            try:
+                ax = axs.ravel()[i]
+            except AttributeError:
+                ax = axs
+
+            tmp_plt_kws = _get_updated_keywords(
+                plt_kws,
+                show=False,
+                file=None,
+            )
+            ax.set_title(titles[i])
+            view(
+                imlist[i],
+                figax=(fig, ax),
+                nonlinear=nonlinear,
+                cmap=cmap,
+                colorbar=colorbar,
+                **tmp_plt_kws,
+            )
+
         try:
-            ax = axs.ravel()[i]
+            nax = axs.size
         except AttributeError:
-            ax = axs
+            nax = 1
 
-        tmp_plt_kws = _get_updated_keywords(
-            plt_kws,
-            show=False,
-            file=None,
-        )
-        ax.set_title(titles[i])
-        view(
-            imlist[i], figax=(fig, ax), nonlinear=nonlinear,
-            cmap=cmap,
-            colorbar=colorbar,
-            **tmp_plt_kws,
-        )
+        if nax > nimage:
+            for i in range(nimage, axs.size):
+                ax = axs.ravel()[i]
+                ax.axis('off')
 
-    try:
-        nax = axs.size
-    except AttributeError:
-        nax = 1
+        if suptitle is not None:
+            fig.suptitle(suptitle)
 
-    if nax > nimage:
-        for i in range(nimage, axs.size):
-            ax = axs.ravel()[i]
-            ax.axis('off')
+        # fig.tight_layout()
 
-    if suptitle is not None:
-        fig.suptitle(suptitle)
-
-    # fig.tight_layout()
-
-    _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
-    return fig, axs
+        _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
+        return fig, axs
 
 
 def bytescale(im):
@@ -323,6 +353,8 @@ def multiview(
     xlog=False,
     ylog=False,
     title=None,
+    style='dark_background',
+    layout='constrained',
     cmap='gray',
     dpi=None,
     figax=None,
@@ -332,12 +364,7 @@ def multiview(
     View the image and also some cross-sections through it.  Good for
     postage stamp type images
     """
-
-    fig, axs, file, show = _prep_2plot(
-        figax=figax, kw=kw,
-        xlim=xlim, ylim=ylim, xlog=xlog, ylog=ylog,
-        xlabel=xlabel, ylabel=ylabel,
-    )
+    import matplotlib.pyplot as mplt
 
     if cen is None:
         # use the middle as center
@@ -348,50 +375,70 @@ def multiview(
 
     assert len(cen) == 2
 
-    view(
-        image, figax=(fig, axs[0]),
-        nonlinear=nonlinear, autoscale=autoscale, colorbar=colorbar,
-        cmap=cmap,
-        show=False, file=None,
-    )
+    with mplt.style.context(style):
+        fig, axs, file, show = _prep_2plot(
+            figax=figax,
+            kw=kw,
+            xlim=xlim,
+            ylim=ylim,
+            xlog=xlog,
+            ylog=ylog,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            layout=layout,
+        )
 
-    if profile:
-        view_profile(
+        view(
             image,
-            show=False, file=None,
-            figax=(fig, axs[1]),
-            **kw
+            figax=(fig, axs[0]),
+            nonlinear=nonlinear,
+            autoscale=autoscale,
+            colorbar=colorbar,
+            cmap=cmap,
+            show=False,
+            file=None,
         )
-    else:
-        # cross-section across rows
-        imrows = image[:, cen[1]]
-        imcols = image[cen[0], :]
 
-        yvals = np.arange(image.shape[0])
-        xvals = np.arange(image.shape[1])
+        if profile:
+            view_profile(
+                image, show=False, file=None, figax=(fig, axs[1]), **kw
+            )
+        else:
+            # cross-section across rows
+            imrows = image[:, cen[1]]
+            imcols = image[cen[0], :]
 
-        # axs[1].plot(yvals, imrows)
-        # axs[1].plot(xvals, imcols)
+            yvals = np.arange(image.shape[0])
+            xvals = np.arange(image.shape[1])
 
-        axs[1].step(
-            yvals, imrows,
-            label='rows', linestyle='-', marker=None,
-            where='mid',
-            **kw
-        )
-        axs[1].step(
-            xvals, imcols,
-            label='cols', linestyle='-', marker=None,
-            where='mid',
-            **kw
-        )
-        axs[1].legend()
+            # axs[1].plot(yvals, imrows)
+            # axs[1].plot(xvals, imcols)
 
-    if title is not None:
-        fig.format(suptitle=title)
+            axs[1].step(
+                yvals,
+                imrows,
+                label='rows',
+                linestyle='-',
+                marker=None,
+                where='mid',
+                **kw,
+            )
+            axs[1].step(
+                xvals,
+                imcols,
+                label='cols',
+                linestyle='-',
+                marker=None,
+                where='mid',
+                **kw,
+            )
+            axs[1].legend()
 
-    _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
-    return fig, axs
+        if title is not None:
+            fig.format(suptitle=title)
+
+        _show_andor_save(fig=fig, file=file, show=show, dpi=dpi)
+        return fig, axs
 
 
 def compare_images(
@@ -401,13 +448,14 @@ def compare_images(
     nonlinear=None,
     label1=None,
     label2=None,
+    style='dark_background',
     cmap='inferno',
 ):
     import numpy as np
     import matplotlib.pyplot as mplt
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-    with mplt.style.context('dark_background'):
+    with mplt.style.context(style):
         fig, axs = mplt.subplots(ncols=2, nrows=2)
 
         if label1 is not None:
@@ -468,11 +516,14 @@ def compare_images(
             bins = bins / sigma
             axs[1, 1].hist(
                 diff.ravel() / sigma,
-                bins=bins, color='sandybrown',
+                bins=bins,
+                color='sandybrown',
             )
         else:
             axs[1, 1].hist(
-                diff.ravel(), bins=bins, color='sandybrown',
+                diff.ravel(),
+                bins=bins,
+                color='sandybrown',
             )
 
         fig.tight_layout(h_pad=1)
@@ -634,7 +685,6 @@ def get_color_image(imr, img, imb, **keys):
 
 
 def scale_image(*, image, nonlinear=None, autoscale=False):
-
     if nonlinear is not None:
         return asinh_scale(image=image, nonlinear=nonlinear)
     elif autoscale:
@@ -644,7 +694,6 @@ def scale_image(*, image, nonlinear=None, autoscale=False):
 
 
 def linear_autoscale(*, image):
-
     I = image.astype("f4")  # noqa
 
     maxval = I.max()
@@ -761,7 +810,9 @@ def boost(a, factor):
 
     newshape = np.array(a.shape) * factor
 
-    slices = [slice(0, old, float(old) / new) for old, new in zip(a.shape, newshape)]  # noqa
+    slices = [
+        slice(0, old, float(old) / new) for old, new in zip(a.shape, newshape)
+    ]  # noqa
     coordinates = mgrid[slices]
 
     # choose the biggest smaller integer index
@@ -792,7 +843,7 @@ def expand(image, new_dims, padval=0, verbose=False):
         new_image = np.empty((srow, scol), dtype=image.dtype)
         new_image[:] = padval
 
-        new_image[0: sz[0], 0: sz[1]] = image[0: sz[0], 0: sz[1]]
+        new_image[0 : sz[0], 0 : sz[1]] = image[0 : sz[0], 0 : sz[1]]
 
         return new_image
     else:
@@ -816,17 +867,22 @@ def ds9(im):
 
 
 def _get_updated_keywords(input_kws, **kws):
-
     new_kws = input_kws.copy()
     new_kws.update(kws)
     return new_kws
 
 
 def _prep_plot(
-    figax, kw,
-    xlim=None, ylim=None, xlog=False, ylog=False,
-    xlabel=None, ylabel=None, title=None,
-    **subplots_kws
+    figax,
+    kw,
+    xlim=None,
+    ylim=None,
+    xlog=False,
+    ylog=False,
+    xlabel=None,
+    ylabel=None,
+    title=None,
+    **subplots_kws,
 ):
     import matplotlib.pyplot as mplt
 
@@ -875,9 +931,16 @@ def _prep_plot(
 
 
 def _prep_2plot(
-    figax, kw,
-    xlim=None, ylim=None, xlog=False, ylog=False,
-    xlabel=None, ylabel=None, title=None,
+    figax,
+    kw,
+    xlim=None,
+    ylim=None,
+    xlog=False,
+    ylog=False,
+    xlabel=None,
+    ylabel=None,
+    title=None,
+    layout='constrained',
 ):
     import matplotlib.pyplot as mplt
 
@@ -889,7 +952,7 @@ def _prep_2plot(
         show = kw.pop('show', True)
 
     if figax is None:
-        fig, axs = mplt.subplots(ncols=2)
+        fig, axs = mplt.subplots(ncols=2, layout=layout)
 
         if xlabel is None:
             xlabel = 'radius [pixels]'
@@ -922,7 +985,7 @@ def _prep_2plot(
 def _get_demo_image():
     nx, ny = 32, 32
 
-    cen = (np.array([ny, nx]) - 1)/2
+    cen = (np.array([ny, nx]) - 1) / 2
     sigma = 3.0
 
     x, y = np.mgrid[
@@ -932,7 +995,7 @@ def _get_demo_image():
     y = y - cen[0]
     x = x - cen[1]
 
-    arg = -0.5 * (x**2 + y**2)/sigma**2
+    arg = -0.5 * (x**2 + y**2) / sigma**2
     image = np.exp(arg)
 
     return image
@@ -949,8 +1012,9 @@ def demo():
     #
     # view(image, colorbar=colorbar, title='image view')
     # multiview(image, colorbar=colorbar, title='multiview')
-    multiview(image, colorbar=colorbar, profile=True,
-              title='multiview profile')
+    multiview(
+        image, colorbar=colorbar, profile=True, title='multiview profile'
+    )
 
     # view_mosaic([image]*5, colorbar=colorbar, title='mosaic')
     # view_mosaic([image]*5, colorbar=colorbar, title='mosaic combined',
