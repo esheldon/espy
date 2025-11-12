@@ -199,7 +199,7 @@ def make_combined_mosaic(imlist):
         cstart = col * shape[1]
         cend = (col + 1) * shape[1]
 
-        imtot[rstart:rend, cstart:cend, :] = im
+        imtot[rstart:rend, cstart:cend] = im
 
     return imtot
 
