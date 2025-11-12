@@ -38,6 +38,7 @@ class GaussStepper(object):
 
     def __init__(self, sigmas, rng):
         import numpy as np
+
         self._rng = rng
 
         self._sigmas = np.array(sigmas, dtype='f8')
@@ -126,7 +127,7 @@ def test_line(burnin=1000, nstep=10000, show=False):
         slopeburn_plot.plot(steps[burnin:], trials[burnin:, 1], color="black")
 
         # get status for chain
-        parfit, cov = extract_mcmc_stats(trials[burnin:, :])
+        parfit, _ = extract_mcmc_stats(trials[burnin:, :])
         yfit = parfit[0] * x + parfit[1]
 
         ax = axs[1, 0]
@@ -137,9 +138,12 @@ def test_line(burnin=1000, nstep=10000, show=False):
         axs[1, 1].axis('off')
 
         mplt.show()
+        mplt.close(fig)
 
         _ = corner.corner(
-            trials[burnin:], labels=['offset', 'slope'], show_titles=True,
+            trials[burnin:],
+            labels=['offset', 'slope'],
+            show_titles=True,
             bins=20,
         )
         mplt.show()
@@ -158,7 +162,6 @@ class EmceeFitter(object):
     """
 
     def __init__(self, nwalkers, burnin, nstep, a):
-
         self._nwalkers = nwalkers
         self._burnin = burnin
         self._nstep = nstep
@@ -214,9 +217,9 @@ class EmceeFitter(object):
             self._nwalkers, npars, self.get_lnprob, a=self._a
         )
 
-        pos, prob, state = sampler.run_mcmc(guess, self._burnin)
+        pos, _, _ = sampler.run_mcmc(guess, self._burnin)
         sampler.reset()
-        pos, prob, state = sampler.run_mcmc(pos, self._nstep)
+        pos, _, _ = sampler.run_mcmc(pos, self._nstep)
 
         self._trials = sampler.flatchain
         self._sampler = sampler
@@ -264,10 +267,8 @@ class EmceeFitter(object):
 
     def corner(self, burnin, **keys):
         import corner
-        return corner.corner(
-            self._trials,
-            **keys
-        )
+
+        return corner.corner(self._trials, **keys)
 
     def __repr__(self):
         pars = self._result["pars"]
@@ -285,7 +286,6 @@ class EmceeFitter(object):
 
 class LogNormalFitter(EmceeFitter):
     def __init__(self, x, y, guess, nwalkers, burnin, nstep, a=2, **keys):
-
         super(LogNormalFitter, self).__init__(nwalkers, burnin, nstep, a)
 
         self._x = array(x, dtype="f8", ndmin=1, copy=False)
@@ -391,6 +391,7 @@ class LogNormalFitter(EmceeFitter):
 
     def corner(self, **keys):
         import corner
+
         labels = ["A", "mean", "sigma"]
         return corner.corner(
             self._trials,
@@ -540,7 +541,6 @@ class PolyFitter(object):
         yerr=None,
         ivar=None,
     ):
-
         self.order = order
         self.x = array(x, dtype="f8", ndmin=1, copy=False)
         self.y = array(y, dtype="f8", ndmin=1, copy=False)
@@ -640,9 +640,9 @@ class PolyFitter(object):
             self.nwalkers, npars, self.get_lnprob, a=self.a
         )
 
-        pos, prob, state = sampler.run_mcmc(guess, self.burnin)
+        pos, _, _ = sampler.run_mcmc(guess, self.burnin)
         sampler.reset()
-        pos, prob, state = sampler.run_mcmc(pos, self.nstep)
+        pos, _, _ = sampler.run_mcmc(pos, self.nstep)
 
         self.trials = sampler.flatchain
 
@@ -703,6 +703,7 @@ class PolyFitter(object):
 
     def corner(self, **kw):
         import corner
+
         return corner.corner(self.trials, **kw)
 
     def __repr__(self):
@@ -746,7 +747,6 @@ class LineProb:
 
 
 def noisy_line(pars, xmin, xmax, nx, yerr):
-
     x = np.linspace(xmin, xmax, nx)
     y = pars[0] * x + pars[1]
 
@@ -758,7 +758,6 @@ def noisy_line(pars, xmin, xmax, nx, yerr):
 
 
 def gaussfunc(mean, sigma, xvals):
-
     gnorm = 1.0 / np.sqrt(2.0 * np.pi * sigma**2)
     gauss = np.exp(-0.5 * (xvals - mean) ** 2 / sigma**2)
 

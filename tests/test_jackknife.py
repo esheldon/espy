@@ -17,7 +17,7 @@ def test_jackknife():
 
         data = rng.normal(scale=sigma, size=num)
 
-        mn, err = jackknife(data=data)
+        _, err = jackknife(data=data)
 
         expected_err = sigma / np.sqrt(num)
 

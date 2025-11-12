@@ -2,14 +2,22 @@ import numpy as np
 
 
 def histogauss(
-    data, guess=None, nbin=None, binsize=None, min=None, max=None,
+    data,
+    guess=None,
+    nbin=None,
+    binsize=None,
+    min=None,
+    max=None,
     **plot_keys,
 ):
     from pprint import pprint
 
     fitter = GaussFitter(
         data,
-        nbin=nbin, binsize=binsize, min=min, max=max,
+        nbin=nbin,
+        binsize=binsize,
+        min=min,
+        max=max,
     )
 
     if guess is None:
@@ -33,6 +41,7 @@ class GaussFitter(object):
     """
     Fit a 1-d gaussian
     """
+
     def __init__(self, data, **keys):
         """
         The data are histogrammed and fit according to the keywords
@@ -60,10 +69,9 @@ class GaussFitter(object):
 
         self._make_hist()
 
-        res = scipy.optimize.leastsq(self._errfunc,
-                                     guess,
-                                     maxfev=4000,
-                                     full_output=1)
+        res = scipy.optimize.leastsq(
+            self._errfunc, guess, maxfev=4000, full_output=1
+        )
 
         self.pars, self.pcov0, self.infodict, self.errmsg, self.ier = res
 
@@ -79,7 +87,7 @@ class GaussFitter(object):
             self.pcov = self._scale_leastsq_cov(self.pars, self.pcov0)
 
             d = np.diag(self.pcov)
-            w, = np.where(d < 0)
+            (w,) = np.where(d < 0)
 
             if w.size == 0:
                 # only do if non negative
@@ -90,22 +98,23 @@ class GaussFitter(object):
         [cen, sigma, amp]
         """
         from numpy import exp, sqrt, pi
+
         mean = pars[0]
         sigma = pars[1]
         amp = pars[2]
 
-        norm = 1.0/sqrt(2*pi)/sigma
+        norm = 1.0 / sqrt(2 * pi) / sigma
 
-        modvals = amp*norm*exp(-0.5*(self.x-mean)**2/sigma**2)
+        modvals = amp * norm * exp(-0.5 * (self.x - mean) ** 2 / sigma**2)
 
         return modvals
 
     def _errfunc(self, pars):
         model = self.eval_pars(pars)
         if self.use_error is not None:
-            diff = model-self.y
+            diff = model - self.y
         else:
-            diff = (model-self.y)/self.yerr
+            diff = (model - self.y) / self.yerr
 
         return diff
 
@@ -114,8 +123,8 @@ class GaussFitter(object):
         Scale the covariance matrix returned from leastsq; this will
         recover the covariance of the parameters in the right units.
         """
-        dof = (self.x.size-len(pars))
-        s_sq = (self._errfunc(pars)**2).sum()/dof
+        dof = self.x.size - len(pars)
+        s_sq = (self._errfunc(pars) ** 2).sum() / dof
         return pcov * s_sq
 
     def _make_hist(self):
@@ -133,7 +142,13 @@ class GaussFitter(object):
                 self.yerr = np.sqrt(h['hist'])
 
     def doplot(
-        self, aspect=1.618, alpha=0.5, show=True, file=None, dpi=100, **keys,
+        self,
+        aspect=1.618,
+        alpha=0.5,
+        show=True,
+        file=None,
+        dpi=100,
+        **keys,
     ):
         """
         compare fit to data
@@ -144,9 +159,10 @@ class GaussFitter(object):
 
         fig, ax = pplt.subplots(**keys)
         ymax = self.y.max()
-        ax.set(ylim=(0, 1.1*ymax))
+        ax.set(ylim=(0, 1.1 * ymax))
         ax.step(
-            self.x, self.y,
+            self.x,
+            self.y,
             label='data',
             alpha=alpha,
             where='mid',
@@ -181,9 +197,10 @@ class LogNormalFitter(GaussFitter):
         [cen, sigma, amp]
         """
         import ngmix
+
         p = ngmix.priors.LogNormal(pars[0], pars[1])
 
-        return pars[2]*p.get_prob_array(self.x)
+        return pars[2] * p.get_prob_array(self.x)
 
 
 def fit_line(x, y, yerr=None):
@@ -259,7 +276,7 @@ def _get_fit_line_quantities(x, y, yerr=None):
             f'x[{x.size}] and yerr[{yerr.size}] must be same size for line fit'
         )
 
-    wts = 1/yerr**2
+    wts = 1 / yerr**2
     xsum = (x * wts).sum()
     ysum = (y * wts).sum()
     xysum = (x * y * wts).sum()
@@ -408,7 +425,7 @@ def get_llsq_errors(
     nsamples = y.size
     npars = len(pars)
 
-    residuals = (y - ypred)
+    residuals = y - ypred
     chi2 = residuals.T @ W @ residuals
     dof = nsamples - npars
     chi2per = chi2 / dof
@@ -493,7 +510,6 @@ def cov2cor(cov):
 
 class PowerLawFitter(object):
     def __init__(self, x, y, yerr=None, method='max', **kw):
-
         self.x = np.array(x, dtype='f8', ndmin=1)
         self.y = np.array(y, dtype='f8', ndmin=1)
 
@@ -530,6 +546,7 @@ class PowerLawFitter(object):
     def _dofit_mcmc(self):
         import emcee
         import mcmc
+
         sampler = emcee.EnsembleSampler(
             self.nwalkers,
             self.npars,
@@ -537,8 +554,8 @@ class PowerLawFitter(object):
             a=self.a,
         )
 
-        pos_burn, prob, state = sampler.run_mcmc(self.guess, self.burnin)
-        pos, prob, state = sampler.run_mcmc(pos_burn, self.nstep)
+        pos_burn, _, _ = sampler.run_mcmc(self.guess, self.burnin)
+        _, _, _ = sampler.run_mcmc(pos_burn, self.nstep)
 
         trials = sampler.flatchain
         pars, pcov = mcmc.extract_stats(trials)
@@ -556,17 +573,19 @@ class PowerLawFitter(object):
     def _get_lnprob(self, pars):
         model = self.eval_pars(pars)
 
-        chi2 = ((model-self.y) / self.yerr)**2
+        chi2 = ((model - self.y) / self.yerr) ** 2
 
-        return -0.5*chi2.sum()
+        return -0.5 * chi2.sum()
 
     def _dofit_max(self):
         import scipy.optimize
+
         res = scipy.optimize.leastsq(
-            self._errfunc, self.guess,
+            self._errfunc,
+            self.guess,
             full_output=1,
         )
-        pars, pcov0, infodict, errmsg, ier = res
+        pars, pcov0, _, errmsg, ier = res
         if ier == 0:
             # wrong args, this is a bug
             raise ValueError(errmsg)
@@ -578,7 +597,7 @@ class PowerLawFitter(object):
             pcov = self._scale_leastsq_cov(pars, pcov0)
 
             d = np.diag(pcov)
-            w, = np.where(d < 0)
+            (w,) = np.where(d < 0)
 
             if w.size == 0:
                 # only do if non negative
@@ -593,9 +612,9 @@ class PowerLawFitter(object):
     def _errfunc(self, pars):
         model = self.eval_pars(pars)
         if self.yerr is None:
-            diff = model-self.y
+            diff = model - self.y
         else:
-            diff = (model-self.y)/self.yerr
+            diff = (model - self.y) / self.yerr
 
         return diff
 
@@ -604,8 +623,8 @@ class PowerLawFitter(object):
         Scale the covariance matrix returned from leastsq; this will
         recover the covariance of the parameters in the right units.
         """
-        dof = (self.x.size-len(pars))
-        s_sq = (self._errfunc(pars)**2).sum()/dof
+        dof = self.x.size - len(pars)
+        s_sq = (self._errfunc(pars) ** 2).sum() / dof
         return pcov * s_sq
 
     def _set_guess(self, **kw):
@@ -614,16 +633,18 @@ class PowerLawFitter(object):
 
         self.guess = np.array(kw['guess'], dtype='f8')
         if self.guess.size != self.npars:
-            raise ValueError("guess should have size "
-                             "%d, got %d" % (self.npars, self.guess.size))
+            raise ValueError(
+                "guess should have size "
+                "%d, got %d" % (self.npars, self.guess.size)
+            )
 
     def eval_pars(self, pars):
-        return pars[0]*self.x**pars[1]
+        return pars[0] * self.x ** pars[1]
 
     def __call__(self, x):
         res = self.get_result()
         pars = res['pars']
-        return pars[0] * x**pars[1]
+        return pars[0] * x ** pars[1]
 
     def __repr__(self):
         if hasattr(self, '_result'):
@@ -649,21 +670,23 @@ def test_line(show=False):
 
     npts = 20
     x = np.arange(npts)
-    y = pars[0]*x + pars[1]
-    yerr = 1 + 0.5*np.random.uniform(size=npts)
-    y += yerr*np.random.normal(size=npts)
+    y = pars[0] * x + pars[1]
+    yerr = 1 + 0.5 * np.random.uniform(size=npts)
+    y += yerr * np.random.normal(size=npts)
 
     res = fit_line(x, y, yerr=yerr)
     ply = res['poly']
 
     if show:
         from matplotlib import pyplot as mplt
+
         fig, ax = mplt.subplots()
 
         ax.errorbar(x, y, yerr, label='data')
         ax.plot(x, ply(x), label='fit')
         ax.legend()
         mplt.show()
+        mplt.close(fig)
 
 
 def test_line_err(seed=5, ntrial=10000):
@@ -672,7 +695,7 @@ def test_line_err(seed=5, ntrial=10000):
 
     npts = 20
     x = np.arange(npts)
-    y0 = pars[0]*x + pars[1]
+    y0 = pars[0] * x + pars[1]
 
     slopes = np.zeros(ntrial)
     slope_errors = np.zeros(ntrial)
@@ -680,8 +703,8 @@ def test_line_err(seed=5, ntrial=10000):
     offset_errors = np.zeros(ntrial)
 
     for i in range(ntrial):
-        yerr = 1 + 0.5*rng.uniform(size=npts)
-        y = y0 + yerr*rng.normal(size=npts)
+        yerr = 1 + 0.5 * rng.uniform(size=npts)
+        y = y0 + yerr * rng.normal(size=npts)
 
         res = fit_line(x, y, yerr=yerr)
 
@@ -714,7 +737,7 @@ def test_line_full(seed=5, ntrial=10000):
     npts = 20
     X = np.ones((npts, 2))
     X[:, 0] = np.arange(npts)
-    y0 = pars[0]*X[:, 0] + pars[1]
+    y0 = pars[0] * X[:, 0] + pars[1]
 
     slopes = np.zeros(ntrial)
     slope_errors = np.zeros(ntrial)
@@ -722,10 +745,10 @@ def test_line_full(seed=5, ntrial=10000):
     offset_errors = np.zeros(ntrial)
 
     for i in range(ntrial):
-        yerr = 1 + 0.5*rng.uniform(size=npts)
-        y = y0 + yerr*rng.normal(size=npts)
+        yerr = 1 + 0.5 * rng.uniform(size=npts)
+        y = y0 + yerr * rng.normal(size=npts)
 
-        W = 1.0/yerr**2
+        W = 1.0 / yerr**2
         res = llsq(X, y, W=W)
 
         slopes[i] = res['pars'][0]
@@ -774,7 +797,8 @@ def test_lin2(show=False):
 
     if show:
         import proplot as pplt
-        fig, axs = pplt.subplots(nrows=2, share=False)
+
+        _, axs = pplt.subplots(nrows=2, share=False)
 
         kw = {'marker': 'o', 'markersize': 4, 'ls': ''}
         axs[0].errorbar(X[:, 0], y, yerr, **kw)

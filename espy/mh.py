@@ -32,8 +32,8 @@ def run_mh(func, stepper, rng, start, nstep):
     trials, loglike, accepted = _init_data(func=func, start=start, nstep=nstep)
 
     for i in range(1, nstep):
-        old_state = trials[i-1]
-        old_like = loglike[i-1]
+        old_state = trials[i - 1]
+        old_like = loglike[i - 1]
 
         new_state = stepper(old_state)
         new_like = func(new_state)
@@ -44,11 +44,9 @@ def run_mh(func, stepper, rng, start, nstep):
 
         # we take np.inf or np.nan as a sign we are out of bounds
         # and thus do not accept the point in the chain
-        if (
-            np.isfinite(new_like)
-            and ((new_like > old_like) | (logr < loglike_ratio))
-           ):
-
+        if np.isfinite(new_like) and (
+            (new_like > old_like) | (logr < loglike_ratio)
+        ):
             accepted[i] = True
             loglike[i] = new_like
             trials[i, :] = new_state
