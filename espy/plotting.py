@@ -1,9 +1,12 @@
 GOLDEN_RATIO = 1.61803398875
-GOLDEN_ARATIO = 1.0/GOLDEN_RATIO
+GOLDEN_ARATIO = 1.0 / GOLDEN_RATIO
 
 
 def plot(
-    x, y, xerr=None, yerr=None,
+    x,
+    y,
+    xerr=None,
+    yerr=None,
     xlabel=None,
     ylabel=None,
     title=None,
@@ -15,9 +18,8 @@ def plot(
     width=3.5,
     legend=None,
     figax=None,
-
     dpi=None,
-    **kw
+    **kw,
 ):
     """
     make a plot
@@ -75,10 +77,15 @@ def plot(
 
     fig, ax, file, show = _prep_plot(
         figax=figax,
-        xlim=xlim, ylim=ylim,
-        title=title, xlabel=xlabel, ylabel=ylabel,
-        xlog=xlog, ylog=ylog,
-        aspect=aspect, width=width,
+        xlim=xlim,
+        ylim=ylim,
+        title=title,
+        xlabel=xlabel,
+        ylabel=ylabel,
+        xlog=xlog,
+        ylog=ylog,
+        aspect=aspect,
+        width=width,
         kw=kw,
     )
 
@@ -106,9 +113,8 @@ def plot_hist(
     width=3.5,
     legend=None,
     figax=None,
-
     dpi=None,
-    **kw
+    **kw,
 ):
     """
     make a plot
@@ -160,10 +166,15 @@ def plot_hist(
 
     fig, ax, file, show = _prep_plot(
         figax=figax,
-        xlim=xlim, ylim=ylim,
-        title=title, xlabel=xlabel, ylabel=ylabel,
-        xlog=False, ylog=ylog,
-        aspect=aspect, width=width,
+        xlim=xlim,
+        ylim=ylim,
+        title=title,
+        xlabel=xlabel,
+        ylabel=ylabel,
+        xlog=False,
+        ylog=ylog,
+        aspect=aspect,
+        width=width,
         kw=kw,
     )
 
@@ -185,8 +196,15 @@ def plot_hist(
 
 
 def plot_residuals(
-    *, x, y, model, yerr=None, frac=0.2, pad=0,
-    data_kw={}, model_kw={},
+    *,
+    x,
+    y,
+    model,
+    yerr=None,
+    frac=0.2,
+    pad=0,
+    data_kw={},
+    model_kw={},
     resid_axis_kw={},
     no_resid_xticklabels=False,
     no_resid_yticklabels=False,
@@ -238,7 +256,7 @@ def plot_residuals(
         plt = hickory.Plot(**plot_kw)
 
     divider = make_axes_locatable(plt)
-    size_string = '%d%%' % (frac*100)
+    size_string = '%d%%' % (frac * 100)
     ax2 = divider.append_axes("bottom", size=size_string, pad=pad)
     plt.figure.add_axes(ax2, label='%d' % np.random.randint(0, 2**15))
 
@@ -353,7 +371,7 @@ def multihist(
 
         ddata = data[:, dim]
 
-        mn, std, ind = eu.stat.sigma_clip(ddata, get_indices=True)
+        mn, std, _ = eu.stat.sigma_clip(ddata, get_indices=True)
 
         if nsig is not None:
             low, high = mn - nsig * std, mn + nsig * std
@@ -408,8 +426,10 @@ def test_multihist(num=100_000, show=False):
     means = [1, 2]
     stds = [1, 2]
     corr = 0.8
-    covs = [[stds[0]**2, stds[0]*stds[1]*corr],
-            [stds[0]*stds[1]*corr, stds[1]**2]]
+    covs = [
+        [stds[0] ** 2, stds[0] * stds[1] * corr],
+        [stds[0] * stds[1] * corr, stds[1] ** 2],
+    ]
 
     data = np.random.multivariate_normal(means, covs, num)
     print(data.shape)
@@ -439,6 +459,7 @@ class Grid(object):
         index = grid.get_index(row, col)
         axs[row, col].plot(images[index])
     """
+
     def __init__(self, nplot):
         self.set_grid(nplot)
 
@@ -454,14 +475,13 @@ class Grid(object):
         if nplot == 8:
             self.nrows, self.ncols = 2, 4
         else:
-
             sq = int(sqrt(nplot))
-            if nplot == sq*sq:
+            if nplot == sq * sq:
                 self.nrows, self.ncols = sq, sq
-            elif nplot <= sq*(sq+1):
-                self.nrows, self.ncols = sq, sq+1
+            elif nplot <= sq * (sq + 1):
+                self.nrows, self.ncols = sq, sq + 1
             else:
-                self.nrows, self.ncols = sq+1, sq+1
+                self.nrows, self.ncols = sq + 1, sq + 1
 
         self.nrow = self.nrows
         self.ncol = self.ncols
@@ -488,11 +508,11 @@ class Grid(object):
             axs[row, col].plot(...)
         """
 
-        imax = self.nplot_tot-1
+        imax = self.nplot_tot - 1
         if index > imax:
             raise ValueError("index too large %d > %d" % (index, imax))
 
-        row = index//self.ncol
+        row = index // self.ncol
         col = index % self.ncol
 
         return row, col
@@ -503,6 +523,7 @@ class Grid(object):
     def __iter__(self):
         for i in range(self.nplot):
             yield self(i)
+
     #     self._current = -1
     #     return self
     #
@@ -542,13 +563,16 @@ def get_corner_data(*args):
 
 
 def color_color(
-    gmr, rmi, imz,
+    gmr,
+    rmi,
+    imz,
     marker='dot',
-    show=True, file=None,
+    show=True,
+    file=None,
     dpi=100,
     figsize=(11, 5),
     plt=None,
-    **kw
+    **kw,
 ):
     """
     make a color color plot
@@ -581,7 +605,8 @@ def color_color(
 
     if plt is None:
         plt = hickory.Table(
-            nrows=1, ncols=2,
+            nrows=1,
+            ncols=2,
             figsize=figsize,
         )
 
@@ -609,16 +634,19 @@ def color_color(
 
 
 def color_color_hexbin(
-    gmr, rmi, imz,
+    gmr,
+    rmi,
+    imz,
     weights=None,
     C=None,  # noqa
     nbin=100,
-    show=True, file=None,
+    show=True,
+    file=None,
     dpi=100,
     title=None,
     figsize=(12, 5),
     plt=None,
-    **kw
+    **kw,
 ):
     """
     make a color color hexbin plot
@@ -658,13 +686,14 @@ def color_color_hexbin(
     elif C is not None:
         kw['C'] = C
     else:
-        kw['C'] = gmr*0 + 1
+        kw['C'] = gmr * 0 + 1
 
     kw['reduce_C_function'] = np.sum
 
     if plt is None:
         plt = hickory.Table(
-            nrows=1, ncols=2,
+            nrows=1,
+            ncols=2,
             figsize=figsize,
         )
 
@@ -675,10 +704,8 @@ def color_color_hexbin(
     rmi_min, rmi_max = -1, 3
     imz_min, imz_max = -1, 2
 
-    w, = np.where(
-        between(gmr, -1, 3) &
-        between(rmi, -1, 3) &
-        between(imz, -1, 2)
+    (w,) = np.where(
+        between(gmr, -1, 3) & between(rmi, -1, 3) & between(imz, -1, 2)
     )
 
     plt[0].set(
@@ -711,16 +738,19 @@ def color_color_hexbin(
 
 def whiskers(
     *,
-    x, y,
-    u=None, v=None,
-    g1=None, g2=None,
+    x,
+    y,
+    u=None,
+    v=None,
+    g1=None,
+    g2=None,
     color='black',
     scale=1.0,
     linewidth=0.5,
     linestyle='-',
     show=False,
     plt=None,
-    **plotting_keywords
+    **plotting_keywords,
 ):
     """
     Name:
@@ -748,6 +778,7 @@ def whiskers(
 
     if plt is None:
         import hickory
+
         plt = hickory.Plot()
 
     x = np.array(x, copy=False, ndmin=1)
@@ -763,21 +794,23 @@ def whiskers(
 
     if x.size != y.size or x.size != u.size or x.size != v.size:
         raise ValueError(
-            "Sizes don't match: %s %s %s %s\n" % (x.size, y.size, u.size, v.size)  # noqa
+            "Sizes don't match: %s %s %s %s\n"
+            % (x.size, y.size, u.size, v.size)  # noqa
         )
 
     for i in range(x.size):
         # create the line to draw.
-        xvals = x[i] + np.array([-u[i]/2.0, u[i]/2.0], dtype='f4')*scale
-        yvals = y[i] + np.array([-v[i]/2.0, v[i]/2.0], dtype='f4')*scale
+        xvals = x[i] + np.array([-u[i] / 2.0, u[i] / 2.0], dtype='f4') * scale
+        yvals = y[i] + np.array([-v[i] / 2.0, v[i] / 2.0], dtype='f4') * scale
         # print(xvals, yvals)
 
         plt.curve(
-            xvals, yvals,
+            xvals,
+            yvals,
             color=color,
             linewidth=linewidth,
             linestyle=linestyle,
-            **plotting_keywords
+            **plotting_keywords,
         )
 
     if show:
@@ -801,9 +834,8 @@ def plot_ranges(
     figax=None,
     textoff=0.1,
     buff=0.5,
-
     dpi=None,
-    **kw
+    **kw,
 ):
     """
     make a plot
@@ -862,10 +894,15 @@ def plot_ranges(
 
     fig, ax, file, show = _prep_plot(
         figax=figax,
-        xlim=xlim, ylim=ylim,
-        title=title, xlabel=xlabel, ylabel=ylabel,
-        xlog=xlog, ylog=ylog,
-        aspect=aspect, width=width,
+        xlim=xlim,
+        ylim=ylim,
+        title=title,
+        xlabel=xlabel,
+        ylabel=ylabel,
+        xlog=xlog,
+        ylog=ylog,
+        aspect=aspect,
+        width=width,
         kw=kw,
     )
 
@@ -880,7 +917,7 @@ def plot_ranges(
     biggest = 0.0
     for range_ in list_of_ranges:
         low, high = range_
-        size = (high - low)
+        size = high - low
         if size > biggest:
             biggest = size
         if low < lowest:
@@ -927,7 +964,17 @@ def plot_ranges(
 
 
 def _prep_plot(
-    figax, xlim, ylim, xlabel, ylabel, title, xlog, ylog, aspect, width, kw,
+    figax,
+    xlim,
+    ylim,
+    xlabel,
+    ylabel,
+    title,
+    xlog,
+    ylog,
+    aspect,
+    width,
+    kw,
 ):
     import matplotlib.pyplot as plt
 
@@ -987,9 +1034,18 @@ def _do_legend_maybe(ax, legend):
 
 def zenburn():
     from cycler import cycler
+
     colors = [
-        '#8cd0d3', '#cc9393', '#7f9f7f', '#f0dfaf', '#dcdccc',
-        '#4A7274', '#466F46', '#A55D5D', '#A35E2E', 'white',
+        '#8cd0d3',
+        '#cc9393',
+        '#7f9f7f',
+        '#f0dfaf',
+        '#dcdccc',
+        '#4A7274',
+        '#466F46',
+        '#A55D5D',
+        '#A35E2E',
+        'white',
     ]
 
     colorcyc = cycler('color', colors)
@@ -998,35 +1054,23 @@ def zenburn():
         'axes.axisbelow': True,
         'axes.edgecolor': 'CFCFCF',
         'axes.facecolor': '3F3F3F',
-
         'axes.grid': True,
-
         'axes.labelcolor': 'white',
-
         'axes.labelsize': 'large',
-
         'axes.prop_cycle': colorcyc,
         'axes.titlesize': 'x-large',
-
         'figure.edgecolor': 'FFFFEF',
         'figure.facecolor': '3F3F3F',
-
         'grid.color': '6F6F6F',
         'grid.linestyle': '-',
-
         'legend.facecolor': '9F9F9F',
         'legend.fancybox': True,
-
         'lines.color': '3F3F3F',
-
         'patch.antialiased': True,
         'patch.facecolor': '8cd0d3',
-
         'savefig.edgecolor': 'CFCFCF',
         'savefig.facecolor': '3F3F3F',
-
         'text.color': 'white',
-
         'xtick.color': 'CFCFCF',
         'ytick.color': 'CFCFCF',
     }
@@ -1044,7 +1088,6 @@ def _scatter_hist(
     c=None,
     alpha=0.5,
 ):
-
     ax.set(xlim=(xbins[0], xbins[-1]), ylim=(ybins[0], ybins[-1]))
     ax.scatter(x, y, alpha=alpha, s=s, c=c)
 
@@ -1058,13 +1101,14 @@ def _get_bins(arrays, bins, clip=False, nsigma=5):
 
     if clip:
         import esutil as eu
+
         xmins = []
         xmaxs = []
 
         for x_ in arrays:
             mn, sig = eu.stat.sigma_clip(x_)
-            xmins.append(mn - nsigma*sig)
-            xmaxs.append(mn + nsigma*sig)
+            xmins.append(mn - nsigma * sig)
+            xmaxs.append(mn + nsigma * sig)
 
         xmin = min(xmins)
         xmax = min(xmaxs)
@@ -1133,8 +1177,15 @@ def scatter_hist(
     ybins = _get_bins([y], ybins, clip=clip, nsigma=nsigma)
 
     _scatter_hist(
-        x, y, ax, ax_histx, ax_histy, xbins=xbins, ybins=ybins,
-        s=s, c=c,
+        x,
+        y,
+        ax,
+        ax_histx,
+        ax_histy,
+        xbins=xbins,
+        ybins=ybins,
+        s=s,
+        c=c,
     )
 
     if show:
@@ -1207,8 +1258,15 @@ def scatter_hist_multi(
 
     for x_, y_ in zip(xs, ys):
         _scatter_hist(
-            x_, y_, ax, ax_histx, ax_histy, xbins=xbins, ybins=ybins,
-            s=s, c=c,
+            x_,
+            y_,
+            ax,
+            ax_histx,
+            ax_histy,
+            xbins=xbins,
+            ybins=ybins,
+            s=s,
+            c=c,
         )
 
     if show:

@@ -21,17 +21,16 @@ def rainbow(num, type='hex'):
     hstep = (maxh - minh) / (num - 1)
     colors = []
     for i in range(num):
-        h = minh + i*hstep
+        h = minh + i * hstep
 
         # just change the hue
-        r, g, b = colorsys.hsv_to_rgb(h/360.0, 1.0, 1.0)
+        r, g, b = colorsys.hsv_to_rgb(h / 360.0, 1.0, 1.0)
         r *= 255
         g *= 255
         b *= 255
         if type == 'rgb':
             colors.append((r, g, b))
         elif type == 'hex':
-
             rgb = (int(r), int(g), int(b))
             colors.append(rgb_to_hex(rgb))
         else:
@@ -60,10 +59,10 @@ def heat(num, type='hex'):
     hstep = (maxh - minh) / (num - 1)
     colors = []
     for i in range(num):
-        h = minh + i*hstep
+        h = minh + i * hstep
 
         # just change the hue
-        r, g, b = colorsys.hsv_to_rgb(h/360.0, 1.0, 1.0)
+        r, g, b = colorsys.hsv_to_rgb(h / 360.0, 1.0, 1.0)
         r *= 255
         g *= 255
         b *= 255
@@ -84,6 +83,7 @@ def rgb_to_hex(rgb):
 def test_rainbow():
     import numpy as np
     import matplotlib.pyplot as mplt
+
     num = 20
 
     fig, ax = mplt.subplots()
@@ -95,6 +95,7 @@ def test_rainbow():
     ax.scatter(x, y, c=colors)
 
     mplt.show()
+    mplt.close(fig)
 
 
 if __name__ == '__main__':

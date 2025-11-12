@@ -149,7 +149,6 @@ def view_profile(
     import matplotlib.pyplot as mplt
 
     with mplt.style.context(style):
-
         fig, ax, file, show = _prep_plot(
             figax=figax,
             title=title,
