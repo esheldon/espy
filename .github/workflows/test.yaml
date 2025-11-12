@@ -35,7 +35,7 @@ jobs:
             - name: Install deps
               run: |
                 conda config --set always_yes yes
-                conda install numpy flake8 pytest numba
+                conda install numpy ruff pytest numba
 
             - name: Install espy
               run:
@@ -43,7 +43,7 @@ jobs:
 
             - name: lint
               run: |
-                flake8
+                ruff check
 
             - name: Run tests
               run: |

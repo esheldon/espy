@@ -1,0 +1,14 @@
+exclude = [".git", "build", "dist"]
+
+line-length = 79 
+
+[lint]
+
+select = ["E", "F", "W"]
+fixable = ["ALL"]
+
+preview = true
+
+[format]
+
+quote-style = "preserve"
