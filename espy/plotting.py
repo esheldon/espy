@@ -1087,9 +1087,36 @@ def _scatter_hist(
     s=None,
     c=None,
     alpha=0.5,
+    contour=False,
 ):
+    import numpy as np
+    from matplotlib.colors import LogNorm
+    import matplotlib.pyplot as mplt
+
     ax.set(xlim=(xbins[0], xbins[-1]), ylim=(ybins[0], ybins[-1]))
-    ax.scatter(x, y, alpha=alpha, s=s, c=c)
+
+    if contour:
+        counts, txbins, tybins, image = ax.hist2d(
+            x,
+            y,
+            bins=(xbins, ybins),
+            norm=LogNorm(),
+        )
+        levels = np.logspace(
+            np.log10(10),
+            np.log10(0.9*counts.max()),
+            10,
+        )
+        ax.contour(
+            counts.transpose(),
+            extent=[txbins[0], txbins[-1], tybins[0], tybins[-1]],
+            levels=levels,
+            # cmap=mplt.cm.hot,
+            colors='black',
+            # linewidths=3,
+        )
+    else:
+        ax.scatter(x, y, alpha=alpha, s=s, c=c)
 
     # bins = np.arange(-lim, lim + binwidth, binwidth)
     ax_histx.hist(x, bins=xbins, alpha=alpha)
@@ -1141,6 +1168,7 @@ def scatter_hist(
     file=None,
     dpi=120,
     equal_aspect=False,
+    contour=False,
 ):
     import matplotlib.pyplot as plt
 
@@ -1186,6 +1214,7 @@ def scatter_hist(
         ybins=ybins,
         s=s,
         c=c,
+        contour=contour,
     )
 
     if show:
@@ -1210,6 +1239,7 @@ def scatter_hist_multi(
     file=None,
     dpi=120,
     equal_aspect=False,
+    contour=False,
 ):
     """
     Parameters
@@ -1267,6 +1297,7 @@ def scatter_hist_multi(
             ybins=ybins,
             s=s,
             c=c,
+            contour=contour,
         )
 
     if show:
