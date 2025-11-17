@@ -1104,7 +1104,7 @@ def _scatter_hist(
         )
         levels = np.logspace(
             np.log10(10),
-            np.log10(0.9*counts.max()),
+            np.log10(0.9 * counts.max()),
             10,
         )
         ax.contour(
