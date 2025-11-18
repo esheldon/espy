@@ -1084,43 +1084,64 @@ def _scatter_hist(
     ax_histy,
     xbins,
     ybins,
+    label,
     s=None,
     c=None,
     alpha=0.5,
     contour=False,
+    colors=None,
 ):
     import numpy as np
-    from matplotlib.colors import LogNorm
-    import matplotlib.pyplot as mplt
+    # from matplotlib.colors import LogNorm
+    # import matplotlib.pyplot as mplt
 
     ax.set(xlim=(xbins[0], xbins[-1]), ylim=(ybins[0], ybins[-1]))
 
     if contour:
-        counts, txbins, tybins, image = ax.hist2d(
-            x,
-            y,
-            bins=(xbins, ybins),
-            norm=LogNorm(),
-        )
+        # counts, txbins, tybins, image = ax.hist2d(
+        #     x,
+        #     y,
+        #     bins=(xbins, ybins),
+        #     norm=LogNorm(),
+        # )
+        counts, txbins, tybins = np.histogram2d(x, y, bins=(xbins, ybins))
+
+        # log normalize [0, 1]
+        # with np.errstate(divide="ignore", invalid="ignore"):
+        #     wp = np.where(counts > 0)
+        #
+        #     counts = np.log10(counts)
+        #     counts -= counts[wp].min()
+        #     counts *= 1 / (counts[wp].max() - counts[wp].min())
+        #
+        #     counts = np.where(counts <= 0, 0, counts)
+
+        cmax = counts.max()
         levels = np.logspace(
-            np.log10(10),
-            np.log10(0.9 * counts.max()),
+            # np.log10(0.1 * cmax),
+            np.log10(0.001 * cmax),
+            np.log10(0.9 * cmax),
             10,
         )
-        ax.contour(
+        cntr = ax.contour(
             counts.transpose(),
             extent=[txbins[0], txbins[-1], tybins[0], tybins[-1]],
             levels=levels,
             # cmap=mplt.cm.hot,
-            colors='black',
+            colors=colors,
             # linewidths=3,
+            # label=label,
         )
+        retval = cntr
     else:
-        ax.scatter(x, y, alpha=alpha, s=s, c=c)
+        ax.scatter(x, y, alpha=alpha, s=s, c=c, label=label)
+        retval = None
 
     # bins = np.arange(-lim, lim + binwidth, binwidth)
     ax_histx.hist(x, bins=xbins, alpha=alpha)
     ax_histy.hist(y, bins=ybins, alpha=alpha, orientation='horizontal')
+
+    return retval
 
 
 def _get_bins(arrays, bins, clip=False, nsigma=5):
@@ -1169,6 +1190,7 @@ def scatter_hist(
     dpi=120,
     equal_aspect=False,
     contour=False,
+    colors=None,
 ):
     import matplotlib.pyplot as plt
 
@@ -1215,6 +1237,7 @@ def scatter_hist(
         s=s,
         c=c,
         contour=contour,
+        colors=colors,
     )
 
     if show:
@@ -1233,6 +1256,8 @@ def scatter_hist_multi(
     c=None,
     xbins=50,
     ybins=50,
+    clip=False,
+    nsigma=5,
     xlabel=None,
     ylabel=None,
     show=True,
@@ -1240,6 +1265,9 @@ def scatter_hist_multi(
     dpi=120,
     equal_aspect=False,
     contour=False,
+    colors=None,
+    label1='data1',
+    label2='data2',
 ):
     """
     Parameters
@@ -1255,6 +1283,9 @@ def scatter_hist_multi(
 
     if len(xs) != len(ys):
         raise ValueError('xs and ys must be same length')
+
+    if colors is None:
+        colors = ['red', 'blue']
 
     # Create a Figure, which doesn't have to be square.
     fig = plt.figure(layout='constrained')
@@ -1283,11 +1314,14 @@ def scatter_hist_multi(
     ax_histx.tick_params(axis="x", labelbottom=False)
     ax_histy.tick_params(axis="y", labelleft=False)
 
-    xbins = _get_bins(xs, xbins)
-    ybins = _get_bins(ys, ybins)
+    # xbins = _get_bins(xs, xbins)
+    # ybins = _get_bins(ys, ybins)
+    xbins = _get_bins(xs, xbins, clip=clip, nsigma=nsigma)
+    ybins = _get_bins(ys, ybins, clip=clip, nsigma=nsigma)
 
-    for x_, y_ in zip(xs, ys):
-        _scatter_hist(
+    cntrs = []
+    for x_, y_, colors_, label_ in zip(xs, ys, colors, [label1, label2]):
+        cntr = _scatter_hist(
             x_,
             y_,
             ax,
@@ -1295,10 +1329,22 @@ def scatter_hist_multi(
             ax_histy,
             xbins=xbins,
             ybins=ybins,
+            label=label_,
             s=s,
             c=c,
             contour=contour,
+            colors=colors_,
         )
+        cntrs.append(cntr)
+
+    if contour:
+        cntr1 = cntrs[0]
+        cntr2 = cntrs[1]
+        h1,_ = cntr1.legend_elements()
+        h2,_ = cntr2.legend_elements()
+        ax.legend([h1[0], h2[0]], [label1, label2])
+    else:
+        ax.legend()
 
     if show:
         plt.show()
