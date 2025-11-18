@@ -1340,8 +1340,8 @@ def scatter_hist_multi(
     if contour:
         cntr1 = cntrs[0]
         cntr2 = cntrs[1]
-        h1,_ = cntr1.legend_elements()
-        h2,_ = cntr2.legend_elements()
+        h1, _ = cntr1.legend_elements()
+        h2, _ = cntr2.legend_elements()
         ax.legend([h1[0], h2[0]], [label1, label2])
     else:
         ax.legend()
