@@ -356,6 +356,7 @@ def multiview(
     layout='constrained',
     cmap='gray',
     dpi=None,
+    figsize=None,
     figax=None,
     **kw,
 ):
@@ -385,6 +386,7 @@ def multiview(
             xlabel=xlabel,
             ylabel=ylabel,
             layout=layout,
+            figsize=figsize,
         )
 
         view(
@@ -939,9 +941,13 @@ def _prep_2plot(
     xlabel=None,
     ylabel=None,
     title=None,
+    figsize=None,
     layout='constrained',
 ):
     import matplotlib.pyplot as mplt
+
+    if figsize is None:
+        figsize = (16, 8)
 
     file = kw.pop('file', None)
 
@@ -951,7 +957,7 @@ def _prep_2plot(
         show = kw.pop('show', True)
 
     if figax is None:
-        fig, axs = mplt.subplots(ncols=2, layout=layout)
+        fig, axs = mplt.subplots(ncols=2, layout=layout, figsize=figsize)
 
         if xlabel is None:
             xlabel = 'radius [pixels]'
