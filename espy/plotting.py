@@ -1244,9 +1244,8 @@ def scatter_hist(
 
     if label is not None:
         if contour:
-            cntr2 = cntrs[1]
             h, _ = cntr.legend_elements()
-            ax.legend([h[0]], [label1])
+            ax.legend([h[0]], [label])
         else:
             ax.legend()
 
