@@ -1084,7 +1084,7 @@ def _scatter_hist(
     ax_histy,
     xbins,
     ybins,
-    label,
+    label=None,
     s=None,
     c=None,
     alpha=0.5,
@@ -1185,6 +1185,7 @@ def scatter_hist(
     nsigma=5,
     xlabel=None,
     ylabel=None,
+    label=None,
     show=True,
     file=None,
     dpi=120,
@@ -1226,7 +1227,7 @@ def scatter_hist(
     xbins = _get_bins([x], xbins, clip=clip, nsigma=nsigma)
     ybins = _get_bins([y], ybins, clip=clip, nsigma=nsigma)
 
-    _scatter_hist(
+    cntr = _scatter_hist(
         x,
         y,
         ax,
@@ -1234,11 +1235,20 @@ def scatter_hist(
         ax_histy,
         xbins=xbins,
         ybins=ybins,
+        label=label,
         s=s,
         c=c,
         contour=contour,
         colors=colors,
     )
+
+    if label is not None:
+        if contour:
+            cntr2 = cntrs[1]
+            h, _ = cntr.legend_elements()
+            ax.legend([h[0]], [label1])
+        else:
+            ax.legend()
 
     if show:
         plt.show()
