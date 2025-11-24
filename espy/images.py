@@ -451,6 +451,8 @@ def compare_images(
     label2=None,
     style='dark_background',
     cmap='inferno',
+    symmetric=True,
+    clip=False,
 ):
     import numpy as np
     import matplotlib.pyplot as mplt
@@ -487,8 +489,18 @@ def compare_images(
             rf'mn: {dmn:.2g} +/- {derr:.2g} $\sigma$: {dsig:.2f}'
         )
 
-        maxdiff = np.abs(diff).max()
-        diffrng = (-maxdiff, maxdiff)
+        if clip:
+            import esutil as eu
+            mn_, sig_ = eu.stat.sigma_clip(diff.ravel())
+            maxdiff = 5 * sig_
+            print('maxdiff:', maxdiff)
+        else:
+            maxdiff = np.abs(diff).max()
+
+        if symmetric:
+            diffrng = (-maxdiff, maxdiff)
+        else:
+            diffrng = None
 
         for ax, im, rng in zip(
             [axs[0, 0], axs[0, 1], axs[1, 0]],
@@ -512,7 +524,11 @@ def compare_images(
             cax = divider.append_axes("right", size="5%", pad=0.05)
             fig.colorbar(cim, cax=cax)
 
-        bins = np.linspace(-maxdiff, maxdiff, 30)
+        if symmetric:
+            bins = np.linspace(-maxdiff, maxdiff, 30)
+        else:
+            bins = 30
+
         if sigma is not None:
             bins = bins / sigma
             axs[1, 1].hist(
