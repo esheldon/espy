@@ -250,7 +250,7 @@ class CondorWatcher:
             cmd = job_name
         else:
             raise ValueError(
-                "Expected 10 or 11 results from condor_q, got %d" % len(ls)
+                "Expected 11 or 12 results from condor_q, got %d" % len(ls)
             )
 
         cmd = os.path.basename(cmd)
@@ -386,7 +386,7 @@ condor_q \\
     -format '%-d,' ProcId \\
     -format '%-s,' Owner \\
     -format '%-s,' 'formatTime(QDate,"%m/%d %H:%M:%S")' \\
-    -format '%-s,' 'RemoteWallClockTime' \\
+    -format '%-s,' RemoteWallClockTime \\
     -format '%s,' ServerTime \\
     -format '%s' ShadowBday \\
     -format ',' Owner \\

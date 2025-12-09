@@ -16,7 +16,7 @@ condor_q \\
     -format '%-d,' ProcId \\
     -format '%-s,' Owner \\
     -format '%-s,' 'formatTime(QDate,"%m/%d %H:%M:%S")' \\
-    -format '%-s,' 'RemoteWallClockTime' \\
+    -format '%-s,' RemoteWallClockTime \\
     -format '%s,' ServerTime \\
     -format '%s' ShadowBday \\
     -format ',' Owner \\
@@ -137,6 +137,10 @@ def process_line(line, stats, lengths, dolengths=True):
     # print('len ls:', len(ls))
     # print(ls)
 
+    if len(ls) < 11:
+        import IPython
+        IPython.embed()
+
     if len(ls) == 11:
         (
             id,
@@ -194,7 +198,7 @@ def process_line(line, stats, lengths, dolengths=True):
         cmd = job_name
     else:
         raise ValueError(
-            "Expected 10 or 11 results from condor_q, got %d" % len(ls)
+            "Expected 11 or 12 results from condor_q, got %d" % len(ls)
         )
 
     host = host.split(".")[0]
