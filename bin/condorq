@@ -20,14 +20,15 @@ condor_q \\
     -format '%s,' ServerTime \\
     -format '%s' ShadowBday \\
     -format ',' Owner \\
-    -format '%-s,' 'ifThenElse(JobStatus==0,"U",ifThenElse(JobStatus==1,"I",ifThenElse(JobStatus==2,"R",ifThenElse(JobStatus==3,"X",ifThenElse(JobStatus==4,"C",ifThenElse(JobStatus==5,"H",ifThenElse(JobStatus==6,"E",string(JobStatus))))))))' \\
+    -format '%d,' JobStatus \\
     -format '%-d,' JobPrio \\
     -format '%-.2f,' MemoryUsage/1024.0 \\
     -format '%s,' Cmd \\
-    -format '%s,' job_name \\
+    -format '%s,' 'ifThenElse(job_name =!= undefined, job_name, "-")' \\
     -format '%s' RemoteHost \\
     -format '\\n' Owner"""  # noqa
 
+#    -format '%-s,' 'ifThenElse(JobStatus==0,"U",ifThenElse(JobStatus==1,"I",ifThenElse(JobStatus==2,"R",ifThenElse(JobStatus==3,"X",ifThenElse(JobStatus==4,"C",ifThenElse(JobStatus==5,"H",ifThenElse(JobStatus==6,"E",string(JobStatus))))))))' \\  # noqa
 #     -format '%-.1f,' ImageSize/1024.0 \\
 
 MINUTE = 60
@@ -39,6 +40,15 @@ HEADERS = (
     "Host",
 )
 
+STATUSMAP = {
+    0: "U",
+    1: "I",
+    2: "R",
+    3: "X",
+    4: "C",
+    5: "H",
+    6: "E",
+}
 
 def print_queue(match=None):
 
@@ -141,6 +151,7 @@ def process_line(line, stats, lengths, dolengths=True):
         import IPython
         IPython.embed()
 
+    print('len:', len(ls))
     if len(ls) == 11:
         (
             id,
@@ -195,7 +206,10 @@ def process_line(line, stats, lengths, dolengths=True):
             job_name,
             host,
         ) = ls
-        cmd = job_name
+        if job_name == "-":
+            cmd = os.path.basename(cmd0)
+        else:
+            cmd = job_name
     else:
         raise ValueError(
             "Expected 11 or 12 results from condor_q, got %d" % len(ls)
@@ -205,6 +219,7 @@ def process_line(line, stats, lengths, dolengths=True):
 
     total_wall_time = int(float(remotewall))
 
+    status = STATUSMAP[int(status)]
     if status in stats:
         stats[status] += 1
 
