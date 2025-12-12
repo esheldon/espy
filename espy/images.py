@@ -530,17 +530,11 @@ def compare_images(
 
         if sigma is not None:
             bins = bins / sigma
-            axs[1, 1].hist(
-                diff.ravel() / sigma,
-                bins=bins,
-                color='sandybrown',
-            )
-        else:
-            axs[1, 1].hist(
-                diff.ravel(),
-                bins=bins,
-                color='sandybrown',
-            )
+        axs[1, 1].hist(
+            diff,
+            bins=bins,
+            color='sandybrown',
+        )
 
         if title is not None:
             fig.suptitle(title)
