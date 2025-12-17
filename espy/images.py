@@ -454,6 +454,8 @@ def compare_images(
     symmetric=True,
     clip=False,
     figsize=(8, 8),
+    title=None,
+    show=True,
 ):
     import numpy as np
     import matplotlib.pyplot as mplt
@@ -461,6 +463,8 @@ def compare_images(
 
     with mplt.style.context(style):
         fig, axs = mplt.subplots(ncols=2, nrows=2, figsize=figsize)
+        if title is not None:
+            fig.suptitle(title)
 
         axs[0, 0].set_title(label1)
         axs[0, 1].set_title(label2)
@@ -540,9 +544,10 @@ def compare_images(
             )
 
         fig.tight_layout(h_pad=1)
-        mplt.show()
+        if show:
+            mplt.show()
 
-        mplt.close(fig)
+    return fig, axs
 
 
 def image_read_text(fname):
