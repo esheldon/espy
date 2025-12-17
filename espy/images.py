@@ -462,7 +462,9 @@ def compare_images(
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
     with mplt.style.context(style):
-        fig, axs = mplt.subplots(ncols=2, nrows=2, figsize=figsize)
+        fig, axs = mplt.subplots(
+            ncols=2, nrows=2, figsize=figsize, layout='tight',
+        )
         if title is not None:
             fig.suptitle(title)
 
@@ -531,19 +533,15 @@ def compare_images(
 
         if sigma is not None:
             bins = bins / sigma
-            axs[1, 1].hist(
-                diff.ravel() / sigma,
-                bins=bins,
-                color='sandybrown',
-            )
-        else:
-            axs[1, 1].hist(
-                diff.ravel(),
-                bins=bins,
-                color='sandybrown',
-            )
+        axs[1, 1].hist(
+            diff,
+            bins=bins,
+            color='sandybrown',
+        )
 
-        fig.tight_layout(h_pad=1)
+        if title is not None:
+            fig.suptitle(title)
+
         if show:
             mplt.show()
 
