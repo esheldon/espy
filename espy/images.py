@@ -533,8 +533,9 @@ def compare_images(
 
         if sigma is not None:
             bins = bins / sigma
+
         axs[1, 1].hist(
-            diff,
+            diff.ravel(),
             bins=bins,
             color='sandybrown',
         )
