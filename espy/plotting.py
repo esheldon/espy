@@ -1,5 +1,6 @@
 GOLDEN_RATIO = 1.61803398875
 GOLDEN_ARATIO = 1.0 / GOLDEN_RATIO
+DEFAULT_WIDTH = 8
 
 
 def plot(
@@ -15,7 +16,7 @@ def plot(
     xlog=False,
     ylog=False,
     aspect=1.618,  # golden ratio
-    width=3.5,
+    width=DEFAULT_WIDTH,
     legend=None,
     figax=None,
     dpi=None,
@@ -110,7 +111,7 @@ def plot_hist(
     ylim=None,
     ylog=False,
     aspect=1.618,  # golden ratio
-    width=3.5,
+    width=DEFAULT_WIDTH,
     legend=None,
     figax=None,
     dpi=None,
@@ -295,7 +296,7 @@ def multihist(
     labels=None,
     ylog=False,
     aspect=None,
-    width=6,
+    width=DEFAULT_WIDTH,
     figax=None,
     alpha=1,
     density=False,
@@ -360,7 +361,7 @@ def multihist(
             nrows=grid.nrow,
             ncols=grid.ncol,
             figsize=(width, height),
-            layout='constrained',
+            layout='tight',
         )
         for ax in axs.ravel():
             ax.axis('off')
@@ -830,7 +831,7 @@ def plot_ranges(
     xlog=False,
     ylog=False,
     aspect=1.618,  # golden ratio
-    width=3.5,
+    width=DEFAULT_WIDTH,
     figax=None,
     textoff=0.1,
     buff=0.5,
@@ -987,7 +988,7 @@ def _prep_plot(
 
     if figax is None:
         height = width / aspect
-        figax = plt.subplots(figsize=(width, height))
+        figax = plt.subplots(figsize=(width, height), layout='tight')
         fig, ax = figax
         axis_kw = {
             'xlabel': xlabel,
@@ -1289,7 +1290,7 @@ def scatter_hist_multi(
         colors = ['red', 'blue']
 
     # Create a Figure, which doesn't have to be square.
-    fig = plt.figure(layout='constrained')
+    fig = plt.figure(layout='tight')
 
     # Create the main Axes.
     ax = fig.add_subplot()
