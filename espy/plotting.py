@@ -1,5 +1,6 @@
 GOLDEN_RATIO = 1.61803398875
 GOLDEN_ARATIO = 1.0 / GOLDEN_RATIO
+DEFAULT_WIDTH = 8
 
 
 def plot(
@@ -15,7 +16,7 @@ def plot(
     xlog=False,
     ylog=False,
     aspect=1.618,  # golden ratio
-    width=3.5,
+    width=DEFAULT_WIDTH,
     legend=None,
     figax=None,
     dpi=None,
@@ -110,7 +111,7 @@ def plot_hist(
     ylim=None,
     ylog=False,
     aspect=1.618,  # golden ratio
-    width=3.5,
+    width=DEFAULT_WIDTH,
     legend=None,
     figax=None,
     dpi=None,
@@ -295,7 +296,7 @@ def multihist(
     labels=None,
     ylog=False,
     aspect=None,
-    width=6,
+    width=DEFAULT_WIDTH,
     figax=None,
     alpha=1,
     density=False,
@@ -360,7 +361,7 @@ def multihist(
             nrows=grid.nrow,
             ncols=grid.ncol,
             figsize=(width, height),
-            layout='constrained',
+            layout='tight',
         )
         for ax in axs.ravel():
             ax.axis('off')
@@ -830,7 +831,7 @@ def plot_ranges(
     xlog=False,
     ylog=False,
     aspect=1.618,  # golden ratio
-    width=3.5,
+    width=DEFAULT_WIDTH,
     figax=None,
     textoff=0.1,
     buff=0.5,
@@ -987,7 +988,7 @@ def _prep_plot(
 
     if figax is None:
         height = width / aspect
-        figax = plt.subplots(figsize=(width, height))
+        figax = plt.subplots(figsize=(width, height), layout='tight')
         fig, ax = figax
         axis_kw = {
             'xlabel': xlabel,
@@ -1089,32 +1090,18 @@ def _scatter_hist(
     c=None,
     alpha=0.5,
     contour=False,
+    hist=False,
     colors=None,
 ):
     import numpy as np
+    from matplotlib.colors import LogNorm
     # from matplotlib.colors import LogNorm
     # import matplotlib.pyplot as mplt
 
     ax.set(xlim=(xbins[0], xbins[-1]), ylim=(ybins[0], ybins[-1]))
 
     if contour:
-        # counts, txbins, tybins, image = ax.hist2d(
-        #     x,
-        #     y,
-        #     bins=(xbins, ybins),
-        #     norm=LogNorm(),
-        # )
         counts, txbins, tybins = np.histogram2d(x, y, bins=(xbins, ybins))
-
-        # log normalize [0, 1]
-        # with np.errstate(divide="ignore", invalid="ignore"):
-        #     wp = np.where(counts > 0)
-        #
-        #     counts = np.log10(counts)
-        #     counts -= counts[wp].min()
-        #     counts *= 1 / (counts[wp].max() - counts[wp].min())
-        #
-        #     counts = np.where(counts <= 0, 0, counts)
 
         cmax = counts.max()
         levels = np.logspace(
@@ -1127,19 +1114,23 @@ def _scatter_hist(
             counts.transpose(),
             extent=[txbins[0], txbins[-1], tybins[0], tybins[-1]],
             levels=levels,
-            # cmap=mplt.cm.hot,
             colors=colors,
-            # linewidths=3,
-            # label=label,
         )
         retval = cntr
+    elif hist:
+        ax.hist2d(x, y, bins=(xbins, ybins), cmap='inferno', norm=LogNorm())
+        retval = None
     else:
         ax.scatter(x, y, alpha=alpha, s=s, c=c, label=label)
         retval = None
 
     # bins = np.arange(-lim, lim + binwidth, binwidth)
-    ax_histx.hist(x, bins=xbins, alpha=alpha)
-    ax_histy.hist(y, bins=ybins, alpha=alpha, orientation='horizontal')
+    ax_histx.hist(
+        x, bins=xbins, alpha=alpha, color='C1',
+    )
+    ax_histy.hist(
+        y, bins=ybins, alpha=alpha, orientation='horizontal', color='C1',
+    )
 
     return retval
 
@@ -1189,14 +1180,15 @@ def scatter_hist(
     show=True,
     file=None,
     dpi=120,
+    figsize=None,
     equal_aspect=False,
     contour=False,
+    hist=False,
     colors=None,
 ):
     import matplotlib.pyplot as plt
 
-    # Create a Figure, which doesn't have to be square.
-    fig = plt.figure(layout='constrained')
+    fig = plt.figure(layout='tight', figsize=figsize)
 
     # Create the main Axes.
     ax = fig.add_subplot()
@@ -1239,6 +1231,7 @@ def scatter_hist(
         s=s,
         c=c,
         contour=contour,
+        hist=hist,
         colors=colors,
     )
 
@@ -1297,7 +1290,7 @@ def scatter_hist_multi(
         colors = ['red', 'blue']
 
     # Create a Figure, which doesn't have to be square.
-    fig = plt.figure(layout='constrained')
+    fig = plt.figure(layout='tight')
 
     # Create the main Axes.
     ax = fig.add_subplot()
