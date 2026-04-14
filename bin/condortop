@@ -102,6 +102,27 @@ class CondorWatcher:
             c = self.win1.getch()
             if c == ord("q"):
                 break
+            elif c == curses.KEY_RESIZE:
+                self.handle_resize(stdscr)
+                continue
+
+    def handle_resize(self, stdscr):
+        """
+        Handle terminal resize events by clearing the screen and recreating all
+        windows with the updated dimensions. The timeout on win1 is reset
+        afterward.
+        """
+        # Clear the standard screen to remove any artifacts from the old
+        # layout.
+        stdscr.erase()
+        stdscr.refresh()
+
+        # Recreate the windows using the new terminal size.
+        self.setup_windows(stdscr)
+
+        # Re-apply the refresh timeout to the newly created win1 window.
+        tout_ms = self.refresh * 60 * 1000
+        self.win1.timeout(tout_ms)
 
     def write_job_listing(self, line_splits, lengths):
 

@@ -2,46 +2,44 @@
 """
 Display statistics about the slurm queue, refreshing at regular intervals.
 """
+
 import subprocess
 import argparse
 
 import curses
+
 try:
     import curses.wrapper.wrapper as curses_wrapper
 except ImportError:
     from curses import wrapper as curses_wrapper
 
 default = 1
-black = 0+2
-red = 1+2
-green = 2+2
-yellow = 3+2
-blue = 4+2
-magenta = 5+2
-cyan = 6+2
-white = 7+2
+black = 0 + 2
+red = 1 + 2
+green = 2 + 2
+yellow = 3 + 2
+blue = 4 + 2
+magenta = 5 + 2
+cyan = 6 + 2
+white = 7 + 2
 
-COMMAND = (
-    'squeue -u ${USER} -o "%.18i %.9P %j %.8u %.8T %.10M %.9l %.6D %R" | column -t'  # noqa
-)
+COMMAND = 'squeue -u ${USER} -o "%.18i %.9P %j %.8u %.8T %.10M %.9l %.6D %R" | column -t'  # noqa
 
 
 class SlurmWatcher:
     def __init__(self, *, refresh_rate):
-
         self.refresh_rate = refresh_rate
 
     def go(self):
         curses_wrapper(self.slurm_watch)
 
     def slurm_watch(self, stdscr):
-
         self.setup_windows(stdscr)
 
         # wait for refresh seconds for user input before refreshing.  If the
         # user input is anything but 'q' then refresh again
 
-        tout_ms = self.refresh_rate*1000
+        tout_ms = self.refresh_rate * 1000
         self.win1.timeout(tout_ms)
         while 1:
             self.win1.erase()
@@ -68,7 +66,7 @@ class SlurmWatcher:
                     elif 'RUN' in status:
                         stats['running'] += 1
 
-            nprint = min(len(lines), self.maxy2-1)
+            nprint = min(len(lines), self.maxy2 - 1)
             lines = lines[:nprint]
 
             self.write_statline(stats)
@@ -77,10 +75,31 @@ class SlurmWatcher:
             c = self.win1.getch()
             if c == ord('q'):
                 break
+            elif c == curses.KEY_RESIZE:
+                self.handle_resize(stdscr)
+                continue
+
+    def handle_resize(self, stdscr):
+        """
+        Handle terminal resize events by clearing the screen and recreating all
+        windows with the updated dimensions. The timeout on win1 is reset
+        afterward.
+        """
+        # Clear the standard screen to remove any artifacts from the old
+        # layout.
+        stdscr.erase()
+        stdscr.refresh()
+
+        # Recreate the windows using the new terminal size.
+        self.setup_windows(stdscr)
+
+        # Re-apply the refresh timeout to the newly created win1 window.
+        tout_ms = self.refresh * 60 * 1000
+        self.win1.timeout(tout_ms)
 
     def write_job_listing(self, lines):
         for ii, line in enumerate(lines):
-            self.win2.addstr(ii, 0, line[0:self.maxx2-1])
+            self.win2.addstr(ii, 0, line[0 : self.maxx2 - 1])
         self.win2.refresh()
 
     def setup_windows(self, stdscr):
@@ -103,7 +122,7 @@ class SlurmWatcher:
 
         # the job listing
         self.win2 = curses.newwin(
-            self.maxy-sizey1,
+            self.maxy - sizey1,
             self.maxx,
             sizey1,
             x0,
@@ -129,7 +148,6 @@ class SlurmWatcher:
         win.refresh()
 
     def get_squeue_output(self):
-
         pobj = subprocess.Popen(
             COMMAND,
             stdout=subprocess.PIPE,
@@ -162,15 +180,17 @@ class SlurmWatcher:
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-r", "--refresh",
-                        type=int,
-                        default=30,
-                        help="refresh rate in seconds.  default is 30")
+    parser.add_argument(
+        "-r",
+        "--refresh",
+        type=int,
+        default=30,
+        help="refresh rate in seconds.  default is 30",
+    )
     return parser.parse_args()
 
 
 def main():
-
     try:
         args = get_args()
         watcher = SlurmWatcher(refresh_rate=args.refresh)

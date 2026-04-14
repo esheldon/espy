@@ -1,21 +1,23 @@
 #!/usr/bin/env python
 """
-    Display statistics about the lsf queue, refreshing at regular intervals.
+Display statistics about the lsf queue, refreshing at regular intervals.
 
-    This program runs `bjobs -w` and parses the output.
+This program runs `bjobs -w` and parses the output.
 
-    The job listing is refreshed regularly, by default every 120 seconds.
-    Hit any key to update immediately.  Hit 'q' or control-c to quit.
+The job listing is refreshed regularly, by default every 120 seconds.
+Hit any key to update immediately.  Hit 'q' or control-c to quit.
 
-    By default no colors are used. Use -d or -l to use colors for a dark
-    or light background
+By default no colors are used. Use -d or -l to use colors for a dark
+or light background
 
 """
+
 import subprocess
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 import re
 
 import curses
+
 try:
     import curses.wrapper.wrapper as curses_wrapper
 except ImportError:
@@ -23,16 +25,18 @@ except ImportError:
 
 DEFAULT_REFRESH = 120
 
-parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter,
-                        description=__doc__)
+parser = ArgumentParser(
+    formatter_class=RawDescriptionHelpFormatter, description=__doc__
+)
 parser.add_argument(
-    "-r", "--refresh",
-    type=int, default=DEFAULT_REFRESH,
+    "-r",
+    "--refresh",
+    type=int,
+    default=DEFAULT_REFRESH,
     help="refresh rate in seconds, default %d." % DEFAULT_REFRESH,
 )
 parser.add_argument(
-    "-m", "--match",
-    help="only show jobs that contain the input string"
+    "-m", "--match", help="only show jobs that contain the input string"
 )
 parser.add_argument(
     "--regex",
@@ -40,14 +44,14 @@ parser.add_argument(
 )
 
 default = 1
-black = 0+2
-red = 1+2
-green = 2+2
-yellow = 3+2
-blue = 4+2
-magenta = 5+2
-cyan = 6+2
-white = 7+2
+black = 0 + 2
+red = 1 + 2
+green = 2 + 2
+yellow = 3 + 2
+blue = 4 + 2
+magenta = 5 + 2
+cyan = 6 + 2
+white = 7 + 2
 
 _command = (
     "bjobs -o 'jobid user stat run_time queue exec_host job_name submit_time'"
@@ -61,7 +65,6 @@ class LSFWatcher(object):
         regex=None,
         match_string=None,
     ):
-
         self.regex = regex
         self.match_string = match_string
         self.refresh_rate = refresh_rate
@@ -72,8 +75,14 @@ class LSFWatcher(object):
         self.command = _command
 
         self.headers = (
-            'JOBID', 'USER', 'STAT', 'RUN_TIME', 'QUEUE',
-            'EXEC_HOST', 'JOB_NAME', 'SUBMIT_TIME',
+            'JOBID',
+            'USER',
+            'STAT',
+            'RUN_TIME',
+            'QUEUE',
+            'EXEC_HOST',
+            'JOB_NAME',
+            'SUBMIT_TIME',
         )
         self.hdict = {}
         for h in self.headers:
@@ -85,13 +94,12 @@ class LSFWatcher(object):
         curses_wrapper(self.watch)
 
     def watch(self, stdscr):
-
         self.setup_windows(stdscr)
 
         # wait for refresh seconds for user input before refreshing.  If the
         # user input is anything but 'q' then refresh again
 
-        tout_ms = self.refresh_rate*1000
+        tout_ms = self.refresh_rate * 1000
         self.win1.timeout(tout_ms)
         while 1:
             self.win1.erase()
@@ -102,8 +110,11 @@ class LSFWatcher(object):
             out = out.split('\n')
 
             stats = {
-                'njobs': 0, 'run': 0, 'pending': 0,
-                'suspended': 0, 'unknown': 0,
+                'njobs': 0,
+                'run': 0,
+                'pending': 0,
+                'suspended': 0,
+                'unknown': 0,
             }
             lengths = {}
             for h in self.headers:
@@ -115,7 +126,6 @@ class LSFWatcher(object):
                 line = out[ii]
 
                 if len(line) > 0:
-
                     ls = line.split()
                     if ls[0] == 'JOBID':
                         # this is the header
@@ -130,7 +140,9 @@ class LSFWatcher(object):
 
                     stats['njobs'] += 1
                     lsplit = self.process_line(
-                        ls, stats, lengths,
+                        ls,
+                        stats,
+                        lengths,
                         dolengths=(stats['njobs'] < nprint),
                     )
                     if stats['njobs'] < nprint:
@@ -142,9 +154,29 @@ class LSFWatcher(object):
             c = self.win1.getch()
             if c == ord('q'):
                 break
+            elif c == curses.KEY_RESIZE:
+                self.handle_resize(stdscr)
+                continue
+
+    def handle_resize(self, stdscr):
+        """
+        Handle terminal resize events by clearing the screen and recreating all
+        windows with the updated dimensions. The timeout on win1 is reset
+        afterward.
+        """
+        # Clear the standard screen to remove any artifacts from the old
+        # layout.
+        stdscr.erase()
+        stdscr.refresh()
+
+        # Recreate the windows using the new terminal size.
+        self.setup_windows(stdscr)
+
+        # Re-apply the refresh timeout to the newly created win1 window.
+        tout_ms = self.refresh * 60 * 1000
+        self.win1.timeout(tout_ms)
 
     def write_job_listing(self, line_splits, lengths):
-
         if len(line_splits) > 0:
             fmt = ' %(jobid)-' + str(lengths['jobid']) + 's  '
             fmt += '%(user)-' + str(lengths['user']) + 's  '
@@ -156,12 +188,12 @@ class LSFWatcher(object):
             fmt += '%(submit_time)-' + str(lengths['submit_time']) + 's'
 
             header = fmt % self.hdict
-            self.win2.addstr(0, 0, header[0:self.maxx2-1])
+            self.win2.addstr(0, 0, header[0 : self.maxx2 - 1])
 
             for ii in range(len(line_splits)):
                 ls = line_splits[ii]
                 line = fmt % ls
-                self.win3.addstr(ii, 0, line[0:self.maxx3-1])
+                self.win3.addstr(ii, 0, line[0 : self.maxx3 - 1])
         self.win2.refresh()
         self.win3.refresh()
 
@@ -183,15 +215,13 @@ class LSFWatcher(object):
         y2 = sizey1
         self.win2 = curses.newwin(sizey2, self.maxx, y2, x0)
 
-        self.win3 = curses.newwin(self.maxy-sizey1-sizey2,
-                                  self.maxx,
-                                  sizey1+sizey2,
-                                  x0)
+        self.win3 = curses.newwin(
+            self.maxy - sizey1 - sizey2, self.maxx, sizey1 + sizey2, x0
+        )
         self.maxy2, self.maxx2 = self.win2.getmaxyx()
         self.maxy3, self.maxx3 = self.win3.getmaxyx()
 
     def write_statline(self, stats):
-
         win = self.win1
 
         win.erase()
@@ -225,17 +255,19 @@ class LSFWatcher(object):
 
         if len(ls) >= self.nperline:
             res = {}
-            (res['jobid'],
-             res['user'],
-             res['stat'],
-             res['run_time'],
-             res['junk'],
-             res['queue'],
-             res['exec_host'],
-             res['job_name'],
-             res['mon'],
-             res['day'],
-             res['time']) = ls
+            (
+                res['jobid'],
+                res['user'],
+                res['stat'],
+                res['run_time'],
+                res['junk'],
+                res['queue'],
+                res['exec_host'],
+                res['job_name'],
+                res['mon'],
+                res['day'],
+                res['time'],
+            ) = ls
 
         else:
             raise ValueError(
@@ -246,7 +278,7 @@ class LSFWatcher(object):
         # this is the string second(s)
         del res['junk']
 
-        res['run_time'] = float(res['run_time'])/60  # minutes
+        res['run_time'] = float(res['run_time']) / 60  # minutes
         res['run_time'] = '%.1f min' % res['run_time']
 
         res['submit_time'] = ' '.join([res['mon'], res['day'], res['time']])
@@ -273,10 +305,10 @@ class LSFWatcher(object):
         return res
 
     def get_listing(self):
-
         pobj = subprocess.Popen(
             self.command,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             shell=True,
         )
         stdout_ret, stderr_ret = pobj.communicate()
@@ -334,7 +366,6 @@ class LSFWatcher(object):
 
 
 def main():
-
     try:
         args = parser.parse_args()
         watcher = LSFWatcher(
