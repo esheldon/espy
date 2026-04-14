@@ -151,7 +151,6 @@ def process_line(line, stats, lengths, dolengths=True):
         import IPython
         IPython.embed()
 
-    print('len:', len(ls))
     if len(ls) == 11:
         (
             id,
