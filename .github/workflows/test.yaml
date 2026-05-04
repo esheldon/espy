@@ -39,7 +39,7 @@ jobs:
 
             - name: Install espy
               run:
-                pip install .
+                pip install -e .
 
             - name: lint
               run: |
