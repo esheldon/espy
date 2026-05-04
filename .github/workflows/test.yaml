@@ -39,7 +39,7 @@ jobs:
 
             - name: Install espy
               run:
-                pip install -e .
+                pip install --no-build-isolation -e .
 
             - name: lint
               run: |
