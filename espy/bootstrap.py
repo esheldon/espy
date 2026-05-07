@@ -10,7 +10,7 @@ def bootstrap(data, nrand, weights=None, rng=None):
         Number of times to sample the data, e.g. 100.
     weight: array, optional
         Optional weights for the data
-    rng: np.random.default_rng
+    rng: np.random.RandomState
         Default random number generator.  If not sent, one will
         be created, seeded by entropy from the OS
 
@@ -31,7 +31,7 @@ def bootstrap(data, nrand, weights=None, rng=None):
         )
 
     if rng is None:
-        rng = np.random.default_rng()
+        rng = np.random.RandomState()
 
     if len(data.shape) > 1:
         nbin = data.shape[1]
@@ -40,7 +40,7 @@ def bootstrap(data, nrand, weights=None, rng=None):
         vals = np.zeros(nrand)
 
     for i in range(nrand):
-        ind = rng.integers(0, data.shape[0], size=data.shape[0])
+        ind = rng.choice(data.shape[0], size=data.shape[0])
         dsum = (data[ind] * weights[ind]).sum(axis=0)
         wsum = weights[ind].sum(axis=0)
         vals[i] = dsum / wsum
@@ -64,7 +64,7 @@ def bootstrap_sums(sums, wsums, nrand, rng=None):
         An array of data representing sums for the denominator
     nrand: int
         Number of times to sample the data, e.g. 100.
-    rng: np.random.default_rng
+    rng: np.random.RandomState
         Default random number generator.  If not sent, one will
         be created, seeded by entropy from the OS
 
@@ -76,7 +76,7 @@ def bootstrap_sums(sums, wsums, nrand, rng=None):
     import numpy as np
 
     if rng is None:
-        rng = np.random.default_rng()
+        rng = np.random.RandomState()
 
     if wsums.shape != sums.shape:
         raise ValueError(
@@ -91,7 +91,7 @@ def bootstrap_sums(sums, wsums, nrand, rng=None):
         vals = np.zeros(nrand)
 
     for i in range(nrand):
-        ind = rng.integers(0, sums.shape[0], size=sums.shape[0])
+        ind = rng.choice(sums.shape[0], size=sums.shape[0])
         vals[i] = sums[ind].sum(axis=0) / wsums[ind].sum(axis=0)
 
     mn = sums.sum(axis=0) / wsums.sum(axis=0)
@@ -116,7 +116,7 @@ def bootstrap_ratio(num, denom, nrand, weights=None, rng=None):
         Number of times to sample the data, e.g. 100.
     weight: array, optional
         Optional weights for the data
-    rng: np.random.default_rng
+    rng: np.random.RandomState
         Default random number generator.  If not sent, one will
         be created, seeded by entropy from the OS
 
@@ -141,7 +141,7 @@ def bootstrap_ratio(num, denom, nrand, weights=None, rng=None):
         )
 
     if rng is None:
-        rng = np.random.default_rng()
+        rng = np.random.RandomState()
 
     if len(num.shape) > 1:
         nbin = num.shape[1]
@@ -150,7 +150,7 @@ def bootstrap_ratio(num, denom, nrand, weights=None, rng=None):
         vals = np.zeros(nrand)
 
     for i in range(nrand):
-        ind = rng.integers(0, num.shape[0], size=num.shape[0])
+        ind = rng.choice(num.shape[0], size=num.shape[0])
         num_sum = (num[ind] * weights[ind]).sum(axis=0)
         denom_sum = (denom[ind] * weights[ind]).sum(axis=0)
 
