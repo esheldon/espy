@@ -1089,6 +1089,7 @@ def _scatter_hist(
     s=None,
     c=None,
     alpha=0.5,
+    weights=None,
     contour=False,
     hist=False,
     colors=None,
@@ -1118,7 +1119,9 @@ def _scatter_hist(
         )
         retval = cntr
     elif hist:
-        ax.hist2d(x, y, bins=(xbins, ybins), cmap='inferno', norm=LogNorm())
+        ax.hist2d(
+            x, y, bins=(xbins, ybins), cmap='inferno', norm=LogNorm(), weights=weights,
+        )
         retval = None
     else:
         ax.scatter(x, y, alpha=alpha, s=s, c=c, label=label)
@@ -1168,6 +1171,7 @@ def _get_bins(arrays, bins, clip=False, nsigma=5):
 def scatter_hist(
     x,
     y,
+    weights=None,
     s=None,
     c=None,
     xbins=50,
@@ -1232,6 +1236,7 @@ def scatter_hist(
         c=c,
         contour=contour,
         hist=hist,
+        weights=weights,
         colors=colors,
     )
 
@@ -1254,6 +1259,7 @@ def scatter_hist(
 def scatter_hist_multi(
     xs,
     ys,
+    weights=None,
     s=None,
     c=None,
     xbins=50,
@@ -1336,6 +1342,7 @@ def scatter_hist_multi(
             c=c,
             contour=contour,
             colors=colors_,
+            weights=weights,
         )
         cntrs.append(cntr)
 
