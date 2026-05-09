@@ -439,6 +439,19 @@ def test_multihist(num=100_000, show=False):
     return data
 
 
+def ntext(ax, x, y, text, **kw):
+    """
+    Equivalent to matplotlib text() but uses relative coordinate
+    [0, 1] for locations x, y
+    """
+    ax.text(
+        x, y,
+        text,
+        transform=ax.transAxes,
+        **kw
+    )
+
+
 class Grid(object):
     """
     represent plots in a grid.  The grid is chosen
